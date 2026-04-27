@@ -56,7 +56,7 @@ export async function onParentAttributeUpdate(
       const result = await syncAttributesToChild(
         child.id,
         updatedAttributes,
-        child.lockedAttributes as LockedAttributes | null
+        (child as any).lockedAttributes as LockedAttributes | null
       );
       results.push(result);
     }
@@ -106,7 +106,7 @@ async function syncAttributesToChild(
     const locked = lockedAttributes || {};
 
     // Perform delta check: only update non-locked attributes
-    const currentAttributes = (child.categoryAttributes as Record<string, any>) || {};
+    const currentAttributes = ((child as any).categoryAttributes as Record<string, any>) || {};
     const attributesToUpdate: Record<string, any> = {};
     const attributesSkipped: string[] = [];
 
@@ -134,7 +134,7 @@ async function syncAttributesToChild(
     const updated = await prisma.productVariation.update({
       where: { id: childVariationId },
       data: {
-        categoryAttributes: mergedAttributes,
+        categoryAttributes: mergedAttributes as any,
       },
     });
 
@@ -185,7 +185,7 @@ export async function toggleAttributeLock(
     }
 
     // Parse current locked attributes
-    const currentLocked = (child.lockedAttributes as LockedAttributes) || {};
+    const currentLocked = ((child as any).lockedAttributes as LockedAttributes) || {};
 
     // Update lock status
     const updatedLocked = {
@@ -197,7 +197,7 @@ export async function toggleAttributeLock(
     await prisma.productVariation.update({
       where: { id: childVariationId },
       data: {
-        lockedAttributes: updatedLocked,
+        lockedAttributes: updatedLocked as any,
       },
     });
 
@@ -233,7 +233,7 @@ export async function getLockedAttributes(
       throw new Error(`Child variation not found: ${childVariationId}`);
     }
 
-    return (child.lockedAttributes as LockedAttributes) || {};
+    return ((child as any).lockedAttributes as LockedAttributes) || {};
   } catch (error: any) {
     logger.error('[PHASE30] Get locked attributes failed', {
       childId: childVariationId,

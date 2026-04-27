@@ -307,7 +307,7 @@ export class ImageService {
           dominantColor: color,
           colorConfidence: confidence,
           uploadStatus: 'SUCCESS',
-          storageMetadata,
+          storageMetadata: storageMetadata as any,
         },
       });
 

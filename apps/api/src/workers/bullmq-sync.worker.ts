@@ -108,7 +108,7 @@ async function processOutboundSyncJob(job: Job) {
     }
 
     // If user cancelled during grace period, skip processing
-    if (queueRecord.syncStatus === 'CANCELLED') {
+    if ((queueRecord.syncStatus as any) === 'CANCELLED') {
       logger.info('⏭️ Skipping cancelled sync', {
         queueId,
         productId,
@@ -267,7 +267,7 @@ async function processOutboundSyncJob(job: Job) {
           syncStatus: 'SUCCESS',
           syncedAt: new Date(),
           payload: {
-            ...queueRecord.payload,
+            ...(queueRecord.payload as any),
             processedBy: 'BullMQ',
             jobId: job.id,
           },
@@ -299,7 +299,7 @@ async function processOutboundSyncJob(job: Job) {
           retryCount: (queueRecord.retryCount || 0) + 1,
           nextRetryAt,
           payload: {
-            ...queueRecord.payload,
+            ...(queueRecord.payload as any),
             processedBy: 'BullMQ',
             jobId: job.id,
             lastError: syncResult.error,

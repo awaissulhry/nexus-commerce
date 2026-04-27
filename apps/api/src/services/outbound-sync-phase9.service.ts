@@ -91,9 +91,9 @@ export class OutboundSyncServicePhase9 {
         data: {
           productId,
           channelListingId: listing.id,
-          targetChannel: listing.channel,
+          targetChannel: listing.channel as any,
           targetRegion: listing.region,
-          syncStatus: 'PENDING',
+          syncStatus: 'PENDING' as any,
           syncType,
           // ── PHASE 12a: Grace Period (Undo Sync) ─────────────────────────
           // Set holdUntil to 5 minutes in the future to allow cancellation
@@ -191,9 +191,9 @@ export class OutboundSyncServicePhase9 {
       data: {
         channelListingId,
         productId: listing.productId,
-        targetChannel: listing.channel,
+        targetChannel: listing.channel as any,
         targetRegion: listing.region,
-        syncStatus: 'PENDING',
+        syncStatus: 'PENDING' as any,
         syncType,
         // ── PHASE 12a: Grace Period (Undo Sync) ─────────────────────────
         // Set holdUntil to 5 minutes in the future to allow cancellation
@@ -257,9 +257,9 @@ export class OutboundSyncServicePhase9 {
       data: {
         channelListingId: offer.channelListingId,
         productId: offer.channelListing.productId,
-        targetChannel: offer.channelListing.channel,
+        targetChannel: offer.channelListing.channel as any,
         targetRegion: offer.channelListing.region,
-        syncStatus: 'PENDING',
+        syncStatus: 'PENDING' as any,
         syncType,
         // ── PHASE 12a: Grace Period (Undo Sync) ─────────────────────────
         // Set holdUntil to 5 minutes in the future to allow cancellation
