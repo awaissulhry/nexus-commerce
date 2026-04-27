@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
  * Proxy route that forwards DELETE requests to the backend API
  */
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ queueId: string }> }
 ) {
   try {
