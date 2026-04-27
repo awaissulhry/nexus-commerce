@@ -62,16 +62,17 @@ app.register(inboundRoutes);
 app.register(webhookRoutes);
 app.register(ordersRoutes);
 
-const PORT = Number(process.env.PORT ?? 3001);
+const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 8080;
 
-app.listen({ port: PORT, host: "0.0.0.0" }, async (err, address) => {
-  if (err) {
-    app.log.error(err);
-    process.exit(1);
-  }
-  app.log.info(`API server listening at ${address}`);
-
+async function start() {
   try {
+    await app.listen({
+      port: port,
+      host: '0.0.0.0'
+    });
+    
+    app.log.info(`API server listening at http://0.0.0.0:${port}`);
+
     // ── PHASE 13: Initialize BullMQ Infrastructure ──────────────────────
     // Initialize Redis connection and queue
     await initializeQueue();
@@ -94,12 +95,15 @@ app.listen({ port: PORT, host: "0.0.0.0" }, async (err, address) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
+    app.log.error(error);
     logger.error('❌ Failed to initialize Autopilot', {
       error: error instanceof Error ? error.message : String(error),
     });
     process.exit(1);
   }
-});
+}
+
+start();
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
