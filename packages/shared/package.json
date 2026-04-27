@@ -1,0 +1,14 @@
+{
+  "name": "@nexus/shared",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "vault.ts",
+  "exports": {
+    ".": "./vault.ts"
+  },
+  "scripts": {
+    "dev": "echo \"Add your shared dev command here\"",
+    "build": "echo \"Add your shared build command here\""
+  }
+}

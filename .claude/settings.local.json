@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npx prisma *)",
+      "Bash(docker compose *)",
+      "Bash(docker info *)",
+      "Read(//var/run/**)",
+      "Read(//Users/awais/.docker/run/**)",
+      "Read(//tmp/**)",
+      "Read(//Users/awais/.colima/default/**)",
+      "Bash(DOCKER_HOST=unix:///var/run/docker.sock docker compose *)",
+      "Bash(docker context *)",
+      "Bash(nc -zv localhost 5432)",
+      "Bash(open -a \"Docker Desktop\")",
+      "Bash(npm run *)",
+      "Bash(node -e \"const p=require\\('./packages/database/package.json'\\);console.log\\(JSON.stringify\\({main:p.main,types:p.types,exports:p.exports},null,2\\)\\)\")",
+      "Bash(python3 -c \"import json; p=json.load\\(open\\('/Users/awais/nexus-commerce/packages/database/package.json'\\)\\); print\\(json.dumps\\({k:p[k] for k in ['main','types','exports']},indent=2\\)\\)\")"
+    ]
+  }
+}

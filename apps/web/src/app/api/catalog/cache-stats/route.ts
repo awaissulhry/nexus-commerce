@@ -1,0 +1,38 @@
+export async function GET() {
+  try {
+    const response = await fetch('http://localhost:3001/api/catalog/cache-stats', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      return Response.json(
+        {
+          success: false,
+          error: {
+            code: 'BACKEND_ERROR',
+            message: `Backend returned ${response.status}`,
+          },
+        },
+        { status: response.status }
+      );
+    }
+
+    const data = await response.json();
+    return Response.json(data);
+  } catch (error) {
+    console.error('Error fetching cache stats:', error);
+    return Response.json(
+      {
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Failed to fetch cache stats',
+        },
+      },
+      { status: 500 }
+    );
+  }
+}

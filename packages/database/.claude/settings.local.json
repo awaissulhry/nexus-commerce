@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"^fastify$|^pg$|^@prisma\")",
+      "Bash(npm install *)",
+      "Bash(npx prisma *)"
+    ]
+  }
+}
