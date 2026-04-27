@@ -200,9 +200,10 @@ export async function ebayAuthRoutes(app: FastifyInstance) {
         }
 
         // Exchange code for tokens
+        // @ts-ignore - request.body may contain redirectUri from callback
         const tokenData = await ebayAuthService.exchangeCodeForToken(
           code,
-          request.body.redirectUri || "http://localhost:3000/settings/channels"
+          (request.body as any).redirectUri || "http://localhost:3000/settings/channels"
         );
 
         // Get seller information

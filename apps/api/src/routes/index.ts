@@ -20,15 +20,15 @@ import { errorHandler, notFoundHandler } from '../middleware/error-handler';
 import bulkActionsRouter from './bulk-actions.routes';
 import pricingRulesRouter from './pricing-rules.routes';
 import syncHealthRouter from './sync-health.routes';
-import matrixRouter from './matrix.routes';
-import ordersRouter from './orders.routes';
+import { matrixRoutes } from './matrix.routes';
+import { ordersRoutes } from './orders.routes';
 import attributeInheritanceRouter from './attribute-inheritance.routes.js';
 import imagesRouter from './images';
 
 /**
  * Setup all routes and middleware
  */
-export function setupRoutes(app: Express): void {
+export async function setupRoutes(app: Express): Promise<void> {
   logger.info('Setting up API routes');
 
   // ============================================================================
@@ -81,7 +81,7 @@ export function setupRoutes(app: Express): void {
    * PUT    /api/products/:id/matrix/offer/:offerId     - Update offer
    * DELETE /api/products/:id/matrix/offer/:offerId     - Delete offer
    */
-  app.use('/api', matrixRouter);
+  await matrixRoutes(app as any);
   logger.info('Registered matrix routes');
 
   /**
@@ -90,7 +90,7 @@ export function setupRoutes(app: Express): void {
    * GET    /api/orders                     - Fetch all orders with pagination
    * PATCH  /api/orders/:id/ship            - Update order status to SHIPPED
    */
-  app.use('/api/orders', ordersRouter);
+  await ordersRoutes(app as any);
   logger.info('Registered orders routes');
 
   /**

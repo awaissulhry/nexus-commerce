@@ -13,6 +13,7 @@
  */
 
 import { prisma } from '@nexus/database'
+import { OutboundSyncStatus } from '@prisma/client'
 import { logger } from '../utils/logger.js'
 import { amazonMapperService } from './amazon-mapper.service.js'
 import { outboundSyncQueue } from '../lib/queue.js'

@@ -103,11 +103,12 @@ export class EbayOrdersService {
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(`eBay API error: ${error.message || response.statusText}`)
+        throw new Error(`eBay API error: ${(error as Error).message || response.statusText}`)
       }
 
       const data = await response.json()
-      return data.orders || []
+      const typedData = data as { orders: any[] }
+      return typedData.orders || []
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       logger.error('Error fetching eBay orders', { error: message })

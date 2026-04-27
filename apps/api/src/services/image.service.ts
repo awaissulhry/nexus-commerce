@@ -1,5 +1,4 @@
 import prisma from '../db';
-import type { ProductVariation } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import { v2 as cloudinary } from 'cloudinary';
@@ -552,7 +551,7 @@ export class AutoAssignImages {
   /**
    * Get variants assigned to an image
    */
-  static async getAssignedVariants(imageId: string): Promise<ProductVariation[]> {
+  static async getAssignedVariants(imageId: string): Promise<any[]> {
     const image = await prisma.image.findUnique({
       where: { id: imageId },
     });
