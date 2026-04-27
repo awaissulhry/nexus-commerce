@@ -8,10 +8,10 @@ import { NextRequest, NextResponse } from "next/server";
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { queueId: string } }
+  { params }: { params: Promise<{ queueId: string }> }
 ) {
   try {
-    const { queueId } = params;
+    const { queueId } = await params;
 
     // Forward DELETE request to backend API
     const response = await fetch(
