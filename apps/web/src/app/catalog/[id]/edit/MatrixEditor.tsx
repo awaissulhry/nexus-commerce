@@ -37,7 +37,7 @@ export default function MatrixEditor({ isParent = false, childrenCount = 0, init
   const productId = params.id as string
 
   const [matrixData, setMatrixData] = useState<MatrixData | null>(null)
-  const [originalData, setOriginalData] = useState<MatrixData | null>(null)
+  const [_originalData, _setOriginalData] = useState<MatrixData | null>(null)
   const [activeTab, setActiveTab] = useState('master')
   const [isSaving, setIsSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState<{ success: boolean; message: string } | null>(null)
@@ -61,7 +61,7 @@ export default function MatrixEditor({ isParent = false, childrenCount = 0, init
             masterImages: initialProduct.images || [],
           }
           setMatrixData(data)
-          setOriginalData(JSON.parse(JSON.stringify(data)))
+          _setOriginalData(JSON.parse(JSON.stringify(data)))
           originalDataRef.current = JSON.parse(JSON.stringify(data))
           logger.info('Matrix data loaded from server', { productId, childrenCount: initialProduct.children?.length || 0 })
           return
@@ -74,7 +74,7 @@ export default function MatrixEditor({ isParent = false, childrenCount = 0, init
 
         const data = await response.json()
         setMatrixData(data)
-        setOriginalData(JSON.parse(JSON.stringify(data))) // Deep copy for comparison
+        _setOriginalData(JSON.parse(JSON.stringify(data))) // Deep copy for comparison
         originalDataRef.current = JSON.parse(JSON.stringify(data))
         logger.info('Matrix data loaded', { productId, channelListings: data.channelListings.length })
       } catch (err) {
