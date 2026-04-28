@@ -134,7 +134,7 @@ async function syncAttributesToChild(
     const updated = await prisma.productVariation.update({
       where: { id: childVariationId },
       data: {
-        categoryAttributes: mergedAttributes as any,
+        variationAttributes: mergedAttributes as any,
       },
     });
 

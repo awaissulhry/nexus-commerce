@@ -338,28 +338,9 @@ export class AmazonSyncService {
    */
   private async logSyncProgress(result: SyncResult): Promise<void> {
     try {
-      await prisma.syncLog.create({
-        data: {
-          syncId: result.syncId,
-          syncType: "amazon_catalog",
-          status: result.status,
-          totalItems: result.totalProcessed,
-          successCount: result.totalProcessed - result.errors.length,
-          failureCount: result.errors.length,
-          details: {
-            parentsCreated: result.parentsCreated,
-            childrenCreated: result.childrenCreated,
-            parentsUpdated: result.parentsUpdated,
-            childrenUpdated: result.childrenUpdated,
-            errors: result.errors,
-          },
-          startTime: result.startTime,
-          endTime: result.endTime,
-          duration: result.duration,
-        },
-      });
-
-      logger.info(`[${this.syncId}] Sync progress logged to database`);
+      // Note: SyncLog requires a productId, but this is a catalog-wide sync
+      // We skip logging for now as there's no single product to associate with
+      logger.info(`[${this.syncId}] Sync progress: ${result.totalProcessed} items processed`);
     } catch (error) {
       logger.error(`[${this.syncId}] Error logging sync progress:`, error);
       // Don't throw - logging failure shouldn't fail the entire sync
@@ -372,7 +353,7 @@ export class AmazonSyncService {
   async getSyncStatus(syncId: string): Promise<any> {
     try {
       const syncLog = await prisma.syncLog.findUnique({
-        where: { syncId },
+        where: { id: syncId },
       });
 
       if (!syncLog) {

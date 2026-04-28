@@ -353,7 +353,6 @@ export class EbaySyncService {
             quantity: listing.quantity,
             quantitySold: listing.quantitySold,
             listingStatus: "ACTIVE",
-            updatedAt: new Date(),
           },
         });
 

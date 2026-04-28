@@ -1155,10 +1155,12 @@ export async function catalogRoutes(app: FastifyInstance) {
                 isParent: false,
                 status: "ACTIVE",
                 productType: parent.productType,
-                categoryAttributes: {
-                  ...parent.categoryAttributes,
-                  ...variation.optionValues,
-                },
+                categoryAttributes: parent.categoryAttributes
+                  ? {
+                      ...(typeof parent.categoryAttributes === 'object' ? parent.categoryAttributes : {}),
+                      ...variation.optionValues,
+                    }
+                  : variation.optionValues,
                 syncChannels: parent.syncChannels || ["AMAZON", "EBAY"],
                 validationStatus: "VALID",
               },

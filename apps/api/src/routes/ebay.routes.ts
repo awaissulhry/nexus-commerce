@@ -166,7 +166,7 @@ export async function ebayRoutes(app: FastifyInstance) {
             },
           },
           orderBy: {
-            createdAt: "desc",
+            lastSyncedAt: "desc",
           },
         });
 
@@ -176,8 +176,8 @@ export async function ebayRoutes(app: FastifyInstance) {
           listings: listings.map((listing) => ({
             id: listing.id,
             variantId: listing.variantId,
-            productName: listing.variant?.product?.name,
-            productSku: listing.variant?.product?.sku,
+            productName: listing.variant.product?.name,
+            productSku: listing.variant.product?.sku,
             externalListingId: listing.externalListingId,
             externalSku: listing.externalSku,
             listingUrl: listing.listingUrl,
