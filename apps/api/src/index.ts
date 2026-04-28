@@ -23,6 +23,7 @@ import { matrixRoutes } from "./routes/matrix.routes.js";
 import { inboundRoutes } from "./routes/inbound.routes.js";
 import { webhookRoutes } from "./routes/webhooks.routes.js";
 import { ordersRoutes } from "./routes/orders.routes.js";
+import healthRoutes from "./routes/health.js";
 import { startJobs } from "./jobs/sync.job.js";
 import { initializeBullMQWorker } from "./workers/bullmq-sync.worker.js";
 import { initializeChannelSyncWorker } from "./workers/channel-sync.worker.js";
@@ -61,6 +62,7 @@ app.register(matrixRoutes);
 app.register(inboundRoutes);
 app.register(webhookRoutes);
 app.register(ordersRoutes);
+app.register(healthRoutes, { prefix: '/api' });
 
 const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 8080;
 
