@@ -11,7 +11,7 @@
  * - Cloud storage integration (S3/R2 with local fallback)
  */
 
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -165,8 +165,6 @@ export default function VisualImageMatrix({
   region,
   onValidationChange,
 }: VisualImageMatrixProps) {
-  const [draggedId, setDraggedId] = useState<string | null>(null)
-
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -197,8 +195,6 @@ export default function VisualImageMatrix({
         onImagesChange(updatedImages)
         validateImages(updatedImages)
       }
-
-      setDraggedId(null)
     },
     [images, onImagesChange]
   )
@@ -334,7 +330,6 @@ export default function VisualImageMatrix({
           sensors={sensors}
           collisionDetection={closestCenter}
           onDragEnd={handleDragEnd}
-          onDragStart={(event) => setDraggedId(event.active.id as string)}
         >
           <SortableContext
             items={images.map((img) => img.id)}

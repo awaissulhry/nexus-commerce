@@ -20,7 +20,7 @@ const CHANNELS: { id: Channel; label: string; icon: string }[] = [
   { id: 'SHOPIFY', label: 'Shopify', icon: '🟢' },
 ]
 
-export default function ChannelOverridesTab({ product, channelListings = [] }: ChannelOverridesTabProps) {
+export default function ChannelOverridesTab({ product }: ChannelOverridesTabProps) {
   const [activeChannel, setActiveChannel] = useState<Channel>('AMAZON')
   const [overrides, setOverrides] = useState<Record<Channel, Record<string, any>>>({
     AMAZON: {},
@@ -67,10 +67,7 @@ export default function ChannelOverridesTab({ product, channelListings = [] }: C
     return floorPrice > 0 && calculatedPrice < floorPrice
   }
 
-  // Get the channel listing for the active channel
-  const _currentListing = channelListings.find(
-    (cl) => cl.channel === activeChannel
-  )
+  // TODO: surface active channel listing in UI
 
   // Handle toggle for following master
   const handleToggle = (field: string, isFollowing: boolean) => {

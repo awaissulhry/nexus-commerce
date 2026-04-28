@@ -165,11 +165,6 @@ function MasterCatalogTabComponent({
     }
   }, [childProducts])
 
-  const _handleRemoveChild = useCallback((childId: string) => {
-    setChildProducts((prev) => prev.filter((c) => c.id !== childId))
-    logger.info('Child product removed', { childId })
-  }, [])
-
   const handleCreateVariant = useCallback(async () => {
     try {
       setVariantError(null)

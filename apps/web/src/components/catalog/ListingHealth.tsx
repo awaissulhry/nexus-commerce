@@ -6,10 +6,6 @@ import {
   AlertCircle,
   AlertTriangle,
   TrendingUp,
-  Package,
-  DollarSign,
-  FileText,
-  Image,
   Zap,
 } from "lucide-react";
 
@@ -43,14 +39,6 @@ const CHANNEL_ICONS: Record<string, React.ReactNode> = {
   woocommerce: "🟣",
 };
 
-const _FIELD_ICONS: Record<string, React.ReactNode> = {
-  title: <FileText className="w-4 h-4" />,
-  description: <FileText className="w-4 h-4" />,
-  price: <DollarSign className="w-4 h-4" />,
-  inventory: <Package className="w-4 h-4" />,
-  images: <Image className="w-4 h-4" />,
-  attributes: <Zap className="w-4 h-4" />,
-};
 
 export default function ListingHealth({
   productId,
@@ -122,11 +110,6 @@ export default function ListingHealth({
     return "text-red-600";
   };
 
-  const _getScoreBgColor = (score: number) => {
-    if (score >= 80) return "bg-green-100";
-    if (score >= 60) return "bg-yellow-100";
-    return "bg-red-100";
-  };
 
   if (loading) {
     return (

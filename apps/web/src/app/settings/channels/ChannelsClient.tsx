@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 
 interface ChannelConnection {
   id: string;
@@ -63,7 +62,6 @@ const CHANNELS: ChannelCard[] = [
 ];
 
 export function ChannelsClient() {
-  const _router = useRouter();
   const [connections, setConnections] = useState<Map<string, ChannelConnection>>(
     new Map()
   );

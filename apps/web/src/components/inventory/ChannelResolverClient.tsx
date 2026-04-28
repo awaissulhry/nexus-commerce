@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
 
 // Simple toast notification
 const showToast = (message: string, type: 'success' | 'error') => {
@@ -44,7 +43,6 @@ export default function ChannelResolverClient({
   connectionId,
   products,
 }: ChannelResolverClientProps) {
-  const _router = useRouter()
   const [listings, setListings] = useState<UnmatchedListing[]>(initialListings)
   const [selectedProducts, setSelectedProducts] = useState<Record<string, string>>({})
   const [searchTerms, setSearchTerms] = useState<Record<string, string>>({})

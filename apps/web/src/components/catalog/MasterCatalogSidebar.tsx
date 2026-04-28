@@ -37,21 +37,6 @@ interface FilterState {
   searchTerm: string;
 }
 
-const _MARKETPLACE_COLORS: Record<string, string> = {
-  amazon: "bg-orange-100 text-orange-700 border-orange-300",
-  ebay: "bg-red-100 text-red-700 border-red-300",
-  shopify: "bg-green-100 text-green-700 border-green-300",
-  etsy: "bg-yellow-100 text-yellow-700 border-yellow-300",
-  woocommerce: "bg-purple-100 text-purple-700 border-purple-300",
-};
-
-const _MARKETPLACE_ICONS: Record<string, string> = {
-  amazon: "🔶",
-  ebay: "🔴",
-  shopify: "🟢",
-  etsy: "🟡",
-  woocommerce: "🟣",
-};
 
 export default function MasterCatalogSidebar({
   onFilterChange,

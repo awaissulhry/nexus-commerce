@@ -129,9 +129,8 @@ export function generateShopifyPayload(
     })
 
     payload.metafields = Object.entries(product.categoryAttributes)
-      .filter(([_fieldId, value]) => value !== null && value !== undefined && value !== '')
+      .filter(([, value]) => value !== null && value !== undefined && value !== '')
       .map(([fieldId, value]) => {
-        const _field = schemaMap.get(fieldId)
         return {
           namespace: 'custom',
           key: fieldId,
