@@ -6,16 +6,10 @@
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { Queue } from 'bullmq'
-import Redis from 'ioredis'
+import { redis } from '../lib/queue.js'
 import { checkStockThreshold } from './alert.service.js'
 
-// Initialize Redis connection for BullMQ
-const redis = new Redis({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379'),
-})
-
-// Initialize BullMQ queue for stock updates
+// Initialize BullMQ queue for stock updates (uses shared Redis connection from lib/queue)
 const stockUpdateQueue = new Queue('stock-updates', { connection: redis })
 
 /**
