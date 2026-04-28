@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { ImageService, AutoAssignImages, ColorAnalyzer } from '../services/image.service';
-import prisma from '../db';
+import { ImageService, AutoAssignImages, ColorAnalyzer } from '../services/image.service.js';
+import prisma from '../db.js';
 
 const router = Router();
 

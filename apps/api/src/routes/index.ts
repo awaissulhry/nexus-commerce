@@ -4,7 +4,7 @@
  * 
  * Usage in apps/api/src/index.ts:
  * 
- * import { setupRoutes } from './routes';
+ * import { setupRoutes } from './routes.js';
  * 
  * const app = express();
  * app.use(express.json());
@@ -13,17 +13,17 @@
  */
 
 import { Express } from 'express';
-import { logger } from '../utils/logger';
-import { errorHandler, notFoundHandler } from '../middleware/error-handler';
+import { logger } from '../utils/logger.js';
+import { errorHandler, notFoundHandler } from '../middleware/error-handler.js';
 
 // Import route modules
-import bulkActionsRouter from './bulk-actions.routes';
-import pricingRulesRouter from './pricing-rules.routes';
-import syncHealthRouter from './sync-health.routes';
-import { matrixRoutes } from './matrix.routes';
-import { ordersRoutes } from './orders.routes';
+import bulkActionsRouter from './bulk-actions.routes.js';
+import pricingRulesRouter from './pricing-rules.routes.js';
+import syncHealthRouter from './sync-health.routes.js';
+import { matrixRoutes } from './matrix.routes.js';
+import { ordersRoutes } from './orders.routes.js';
 import attributeInheritanceRouter from './attribute-inheritance.routes.js';
-import imagesRouter from './images';
+import imagesRouter from './images.js';
 
 /**
  * Setup all routes and middleware

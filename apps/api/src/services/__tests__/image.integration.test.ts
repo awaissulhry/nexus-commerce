@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals'
-import prisma from '../../db'
-import { ImageService, AutoAssignImages, ColorAnalyzer } from '../image.service'
+import prisma from '../../db.js'
+import { ImageService, AutoAssignImages, ColorAnalyzer } from '../image.service.js'
 
 describe('Phase 31: Image Management System - Integration Tests', () => {
   let testProductId: string

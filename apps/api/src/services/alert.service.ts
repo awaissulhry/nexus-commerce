@@ -3,8 +3,8 @@
  * Low-stock monitoring and critical inventory alerts
  */
 
-import prisma from '../db'
-import { logger } from '../utils/logger'
+import prisma from '../db.js'
+import { logger } from '../utils/logger.js'
 
 /**
  * Alert event for tracking critical stock situations

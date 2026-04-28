@@ -5,7 +5,7 @@
  */
 
 import { prisma } from '@nexus/database';
-import { logger } from '../utils/logger';
+import { logger } from '../utils/logger.js';
 
 // Type aliases for Prisma types that aren't being generated
 type PrismaClient = any;

@@ -4,8 +4,8 @@
  */
 
 import type { FastifyInstance } from 'fastify'
-import { syncGlobalStock, processSale, getRecentAdjustments } from '../services/inventory-sync.service'
-import { logger } from '../utils/logger'
+import { syncGlobalStock, processSale, getRecentAdjustments } from '../services/inventory-sync.service.js'
+import { logger } from '../utils/logger.js'
 
 interface OrderCreatedPayload {
   sku: string

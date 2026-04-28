@@ -5,8 +5,8 @@
  * Uses JSON Listings Feed for modern price/stock updates
  */
 
-import { MarketplaceProvider, MarketplaceProviderResponse, UpdatePriceInput, UpdateStockInput, SyncListingInput } from './types';
-import { logger } from '../utils/logger';
+import { MarketplaceProvider, MarketplaceProviderResponse, UpdatePriceInput, UpdateStockInput, SyncListingInput } from './types.js';
+import { logger } from '../utils/logger.js';
 
 interface AmazonCredentials {
   appId: string;

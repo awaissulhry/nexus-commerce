@@ -4,12 +4,12 @@
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
-import { logger } from '../utils/logger'
+import { logger } from '../utils/logger.js'
 import {
   ingestMockOrders,
   getOrders,
   shipOrder,
-} from '../services/order-ingestion.service'
+} from '../services/order-ingestion.service.js'
 
 export async function ordersRoutes(app: FastifyInstance) {
   /**

@@ -5,8 +5,8 @@
  * Uses eBay Trading API for inventory and pricing updates
  */
 
-import { MarketplaceProvider, MarketplaceProviderResponse, UpdatePriceInput, UpdateStockInput, SyncListingInput } from './types';
-import { logger } from '../utils/logger';
+import { MarketplaceProvider, MarketplaceProviderResponse, UpdatePriceInput, UpdateStockInput, SyncListingInput } from './types.js';
+import { logger } from '../utils/logger.js';
 
 interface eBayCredentials {
   appId: string;

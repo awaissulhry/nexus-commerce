@@ -4,9 +4,9 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
-import prisma from '../../db'
-import { syncGlobalStock, getRecentAdjustments } from '../inventory-sync.service'
-import { checkStockThreshold, evaluateStockHealth, getRecentAlerts, getCriticalAlerts } from '../alert.service'
+import prisma from '../../db.js'
+import { syncGlobalStock, getRecentAdjustments } from '../inventory-sync.service.js'
+import { checkStockThreshold, evaluateStockHealth, getRecentAlerts, getCriticalAlerts } from '../alert.service.js'
 
 describe('Phase 23.2: Safety Buffers & Low-Stock Alerts', () => {
   let testProductId: string

@@ -5,10 +5,10 @@
  */
 
 import { prisma } from '@nexus/database';
-import { logger } from '../utils/logger';
-import { amazonProvider } from '../providers/amazon.provider';
-import { ebayProvider } from '../providers/ebay.provider';
-import type { MarketplaceProvider } from '../providers/types';
+import { logger } from '../utils/logger.js';
+import { amazonProvider } from '../providers/amazon.provider.js';
+import { ebayProvider } from '../providers/ebay.provider.js';
+import type { MarketplaceProvider } from '../providers/types.js';
 
 // Type aliases for Prisma types that aren't being generated
 type BulkActionJob = any;

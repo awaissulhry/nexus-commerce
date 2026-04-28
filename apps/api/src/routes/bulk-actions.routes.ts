@@ -4,20 +4,20 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { BulkActionService } from '../services/bulk-action.service';
-import prisma from '../db';
-import { logger } from '../utils/logger';
+import { BulkActionService } from '../services/bulk-action.service.js';
+import prisma from '../db.js';
+import { logger } from '../utils/logger.js';
 import {
   CreateBulkJobSchema,
   CreateBulkJobRequest
-} from './validation';
+} from './validation.js';
 import {
   successResponse,
   errorResponse,
   validationErrorResponse,
   notFoundResponse,
   internalErrorResponse
-} from './response';
+} from './response.js';
 
 const router = Router();
 const bulkActionService = new BulkActionService(prisma);

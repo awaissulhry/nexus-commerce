@@ -3,11 +3,11 @@
  * Omni-channel stock synchronization service
  */
 
-import prisma from '../db'
-import { logger } from '../utils/logger'
+import prisma from '../db.js'
+import { logger } from '../utils/logger.js'
 import { Queue } from 'bullmq'
 import Redis from 'ioredis'
-import { checkStockThreshold } from './alert.service'
+import { checkStockThreshold } from './alert.service.js'
 
 // Initialize Redis connection for BullMQ
 const redis = new Redis({

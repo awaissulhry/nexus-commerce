@@ -4,23 +4,23 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { SyncHealthService } from '../services/sync-health.service';
-import prisma from '../db';
-import { logger } from '../utils/logger';
+import { SyncHealthService } from '../services/sync-health.service.js';
+import prisma from '../db.js';
+import { logger } from '../utils/logger.js';
 import {
   LogErrorSchema,
   LogErrorRequest,
   ResolveConflictSchema,
   ResolveConflictRequest,
   HealthScoreQuerySchema
-} from './validation';
+} from './validation.js';
 import {
   successResponse,
   errorResponse,
   validationErrorResponse,
   notFoundResponse,
   internalErrorResponse
-} from './response';
+} from './response.js';
 
 const router = Router();
 const syncHealthService = new SyncHealthService(prisma);

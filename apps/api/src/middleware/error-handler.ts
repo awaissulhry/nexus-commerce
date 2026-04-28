@@ -4,8 +4,8 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { logger } from '../utils/logger';
-import { internalErrorResponse } from '../routes/response';
+import { logger } from '../utils/logger.js';
+import { internalErrorResponse } from '../routes/response.js';
 
 /**
  * Global error handler middleware

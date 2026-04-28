@@ -4,22 +4,22 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { PricingRulesService } from '../services/pricing-rules.service';
-import prisma from '../db';
-import { logger } from '../utils/logger';
+import { PricingRulesService } from '../services/pricing-rules.service.js';
+import prisma from '../db.js';
+import { logger } from '../utils/logger.js';
 import {
   CreatePricingRuleSchema,
   CreatePricingRuleRequest,
   EvaluatePriceSchema,
   EvaluatePriceRequest
-} from './validation';
+} from './validation.js';
 import {
   successResponse,
   errorResponse,
   validationErrorResponse,
   notFoundResponse,
   internalErrorResponse
-} from './response';
+} from './response.js';
 
 const router = Router();
 const pricingRulesService = new PricingRulesService(prisma);

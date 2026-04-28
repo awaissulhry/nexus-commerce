@@ -1,4 +1,4 @@
-import prisma from '../db';
+import prisma from '../db.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { v2 as cloudinary } from 'cloudinary';

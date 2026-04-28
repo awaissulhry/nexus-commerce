@@ -3,9 +3,9 @@
  * Ingests orders from multiple channels and triggers inventory sync
  */
 
-import prisma from '../db'
-import { logger } from '../utils/logger'
-import { processSale } from './inventory-sync.service'
+import prisma from '../db.js'
+import { logger } from '../utils/logger.js'
+import { processSale } from './inventory-sync.service.js'
 import { Prisma } from '@prisma/client'
 
 /**
