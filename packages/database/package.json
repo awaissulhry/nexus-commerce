@@ -3,14 +3,18 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "main": "./index.ts",
-  "types": "./index.ts",
+  "main": "./index.js",
+  "types": "./index.d.ts",
   "exports": {
-    ".": "./index.ts"
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js",
+      "default": "./index.js"
+    }
   },
   "scripts": {
     "dev": "echo \"Add your database dev command here\"",
-    "build": "echo \"Add your database build command here\"",
+    "build": "tsc -p tsconfig.json || echo 'No tsconfig, skipping'",
     "seed": "tsx seed.ts"
   },
   "dependencies": {
@@ -24,6 +28,7 @@
     "prisma": "^6.19.3"
   },
   "devDependencies": {
-    "tsx": "^4.21.0"
+    "tsx": "^4.21.0",
+    "typescript": "^5.0.0"
   }
 }
