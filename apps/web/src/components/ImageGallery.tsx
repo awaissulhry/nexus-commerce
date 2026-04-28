@@ -45,7 +45,7 @@ const COLOR_PALETTE = [
 ]
 
 export default function ImageGallery({
-  productId,
+  productId: _productId,
   images,
   onImageUpload,
   onSetHero,

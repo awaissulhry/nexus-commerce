@@ -63,7 +63,7 @@ const CHANNELS: ChannelCard[] = [
 ];
 
 export function ChannelsClient() {
-  const router = useRouter();
+  const _router = useRouter();
   const [connections, setConnections] = useState<Map<string, ChannelConnection>>(
     new Map()
   );

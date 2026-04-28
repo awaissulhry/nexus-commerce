@@ -5,7 +5,6 @@ import {
   useReactTable,
   getCoreRowModel,
   getExpandedRowModel,
-  ColumnDef,
   flexRender,
 } from "@tanstack/react-table";
 import { OrderWithDetails } from "@/app/orders/manage/page";
@@ -190,7 +189,7 @@ export default function ManageOrdersClient({
                   </td>
                 </tr>
               ) : (
-                table.getRowModel().rows.map((row, rowIdx) => {
+                table.getRowModel().rows.map((row, _rowIdx) => {
                   const isExpanded = row.getIsExpanded();
                   return (
                     <tr
@@ -199,7 +198,7 @@ export default function ManageOrdersClient({
                         isExpanded ? "bg-blue-50" : ""
                       }`}
                     >
-                      {row.getVisibleCells().map((cell, cellIdx) => (
+                      {row.getVisibleCells().map((cell, _cellIdx) => (
                         <td
                           key={cell.id}
                           className="px-4 py-3"

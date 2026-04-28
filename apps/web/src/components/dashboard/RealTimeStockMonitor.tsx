@@ -21,7 +21,7 @@ export default function RealTimeStockMonitor() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [autoRefresh, setAutoRefresh] = useState(true)
-  const [lowStockAlerts, setLowStockAlerts] = useState<Set<string>>(new Set())
+  const [_lowStockAlerts, _setLowStockAlerts] = useState<Set<string>>(new Set())
 
   // Fetch recent adjustments
   const fetchAdjustments = async () => {

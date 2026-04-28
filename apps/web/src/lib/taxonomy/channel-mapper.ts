@@ -129,9 +129,9 @@ export function generateShopifyPayload(
     })
 
     payload.metafields = Object.entries(product.categoryAttributes)
-      .filter(([fieldId, value]) => value !== null && value !== undefined && value !== '')
+      .filter(([_fieldId, value]) => value !== null && value !== undefined && value !== '')
       .map(([fieldId, value]) => {
-        const field = schemaMap.get(fieldId)
+        const _field = schemaMap.get(fieldId)
         return {
           namespace: 'custom',
           key: fieldId,
@@ -174,7 +174,7 @@ export function generateEbayPayload(
     })
 
     payload.item_specifics = Object.entries(product.categoryAttributes)
-      .filter(([fieldId, value]) => value !== null && value !== undefined && value !== '')
+      .filter(([_fieldId, value]) => value !== null && value !== undefined && value !== '')
       .map(([fieldId, value]) => {
         const field = schemaMap.get(fieldId)
         return {

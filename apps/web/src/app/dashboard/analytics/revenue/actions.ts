@@ -13,22 +13,22 @@ export async function getRevenueAnalytics(period: '7d' | '30d' | '90d' | '1y') {
     prevSince.setDate(prevSince.getDate() - days)
 
     const [currentOrders, previousOrders, recentOrders, topOrderItems] = await Promise.all([
-      prisma.order.aggregate({
-        _sum: { totalAmount: true },
+      (prisma.order.aggregate as any)({
+        _sum: { totalPrice: true },
         _count: { id: true },
-        _avg: { totalAmount: true },
+        _avg: { totalPrice: true },
         where: { createdAt: { gte: since } },
       }),
-      prisma.order.aggregate({
-        _sum: { totalAmount: true },
+      (prisma.order.aggregate as any)({
+        _sum: { totalPrice: true },
         _count: { id: true },
         where: { createdAt: { gte: prevSince, lt: since } },
       }),
-      prisma.order.findMany({
+      (prisma.order.findMany as any)({
         where: { createdAt: { gte: since } },
         orderBy: { createdAt: 'desc' },
         take: 100,
-        select: { totalAmount: true, createdAt: true, status: true },
+        select: { totalPrice: true, createdAt: true, status: true },
       }),
       prisma.orderItem.groupBy({
         by: ['sku'],
@@ -38,14 +38,14 @@ export async function getRevenueAnalytics(period: '7d' | '30d' | '90d' | '1y') {
       }),
     ])
 
-    const currentRevenue = Number(currentOrders._sum.totalAmount || 0)
-    const previousRevenue = Number(previousOrders._sum.totalAmount || 0)
+    const currentRevenue = Number(currentOrders._sum?.totalPrice || 0)
+    const previousRevenue = Number(previousOrders._sum?.totalPrice || 0)
     const revenueChange = previousRevenue > 0
       ? ((currentRevenue - previousRevenue) / previousRevenue) * 100
       : 0
 
-    const currentCount = currentOrders._count.id
-    const previousCount = previousOrders._count.id
+    const currentCount = currentOrders._count?.id || 0
+    const previousCount = previousOrders._count?.id || 0
     const ordersChange = previousCount > 0
       ? ((currentCount - previousCount) / previousCount) * 100
       : 0
@@ -55,7 +55,7 @@ export async function getRevenueAnalytics(period: '7d' | '30d' | '90d' | '1y') {
     for (const o of recentOrders) {
       const day = (o as any).createdAt.toISOString().split('T')[0]
       if (!byDay[day]) byDay[day] = { revenue: 0, orders: 0 }
-      byDay[day].revenue += Number((o as any).totalAmount)
+      byDay[day].revenue += Number((o as any).totalPrice)
       byDay[day].orders += 1
     }
 
@@ -67,7 +67,7 @@ export async function getRevenueAnalytics(period: '7d' | '30d' | '90d' | '1y') {
     const byStatus: Record<string, number> = {}
     for (const o of recentOrders) {
       const status = (o as any).status || 'Unknown'
-      byStatus[status] = (byStatus[status] || 0) + Number((o as any).totalAmount)
+      byStatus[status] = (byStatus[status] || 0) + Number((o as any).totalPrice)
     }
     const revenueByStatus = Object.entries(byStatus).map(([status, amount]) => ({ status, amount }))
 
@@ -80,7 +80,7 @@ export async function getRevenueAnalytics(period: '7d' | '30d' | '90d' | '1y') {
         totalOrders: currentCount,
         previousOrders: previousCount,
         ordersChange: Math.round(ordersChange * 10) / 10,
-        avgOrderValue: Number(currentOrders._avg.totalAmount || 0),
+        avgOrderValue: Number(currentOrders._avg?.totalPrice || 0),
         revenueByDay,
         revenueByStatus,
         topRevenueProducts: topOrderItems.map((p: any) => ({

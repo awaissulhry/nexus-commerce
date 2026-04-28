@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getCategorySchema, AttributeField } from '@/lib/taxonomy/schemas'
+import { getCategorySchema } from '@/lib/taxonomy/schemas'
 
 interface DynamicAttributeFormProps {
   category: string

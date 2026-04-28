@@ -23,7 +23,7 @@ interface MarketplaceActionsDropdownProps {
 export function MarketplaceActionsDropdown({
   onImportAmazon,
   onImportEbay,
-  onImportShopify,
+  onImportShopify: _onImportShopify,
   onSyncAmazon,
   onSyncEbay,
   onSyncShopify,

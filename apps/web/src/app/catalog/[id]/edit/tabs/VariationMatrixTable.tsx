@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Trash2, Edit2, Check, X, Lock, Unlock } from 'lucide-react'
+import { Trash2, Edit2, Check, X } from 'lucide-react'
 import AttributeLockToggle from '@/components/catalog/AttributeLockToggle'
 
 interface Child {

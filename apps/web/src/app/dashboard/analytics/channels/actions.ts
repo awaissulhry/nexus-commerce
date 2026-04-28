@@ -6,22 +6,22 @@ export async function getChannelAnalytics() {
   try {
     const channels = await prisma.channel.findMany({
       include: {
-        _count: { select: { listings: true, orders: true } },
+        _count: { select: { listings: true } },
       },
     })
 
     // Get order totals per channel
-    const channelOrderTotals = await prisma.order.groupBy({
-      by: ['channelId'],
-      _sum: { totalAmount: true },
+    const channelOrderTotals = await (prisma.order.groupBy as any)({
+      by: ['channel'],
+      _sum: { totalPrice: true },
       _count: { id: true },
     })
 
     const orderTotalMap: Record<string, { revenue: number; orders: number }> = {}
     for (const cot of channelOrderTotals) {
-      orderTotalMap[cot.channelId] = {
-        revenue: Number(cot._sum.totalAmount || 0),
-        orders: cot._count.id,
+      orderTotalMap[cot.channel] = {
+        revenue: Number(cot._sum?.totalPrice || 0),
+        orders: cot._count?.id || 0,
       }
     }
 

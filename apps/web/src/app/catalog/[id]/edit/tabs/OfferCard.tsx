@@ -19,12 +19,11 @@ interface Offer {
 
 interface OfferCardProps {
   offer: Offer
-  platform: string
   onUpdate: (updatedOffer: Offer) => void
   onDelete: () => void
 }
 
-function OfferCardComponent({ offer, platform, onUpdate, onDelete }: OfferCardProps) {
+function OfferCardComponent({ offer, onUpdate, onDelete }: OfferCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [formData, setFormData] = useState(offer)
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)

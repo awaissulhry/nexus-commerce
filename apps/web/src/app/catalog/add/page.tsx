@@ -152,7 +152,7 @@ export default function AddProductPage() {
     basePrice: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [schemaLoading, setSchemaLoading] = useState(false);
+  const [_schemaLoading, setSchemaLoading] = useState(false);
 
   // Detect hasVariations early - moved before variations step
   const [hasVariations, setHasVariations] = useState(false);

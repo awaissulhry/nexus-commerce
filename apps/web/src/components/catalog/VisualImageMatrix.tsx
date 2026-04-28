@@ -56,8 +56,8 @@ interface VisualImageMatrixProps {
  */
 function DraggableImageCard({
   image,
-  index,
-  platform,
+  index: _index,
+  platform: _platform,
   onDelete,
 }: {
   image: ImageData

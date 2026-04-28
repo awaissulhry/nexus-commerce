@@ -50,7 +50,7 @@ class ClientLogger {
     return styles[level]
   }
 
-  private sendToMonitoring(entry: LogEntry) {
+  private sendToMonitoring(_entry: LogEntry) {
     // Placeholder for sending logs to a monitoring service
     // In production, this would send to Sentry, LogRocket, etc.
   }

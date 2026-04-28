@@ -8,7 +8,6 @@ import {
   Clock,
   Zap,
   TrendingUp,
-  X,
   ChevronDown,
 } from "lucide-react";
 

@@ -1,4 +1,3 @@
-import { prisma } from "@nexus/database";
 import PageHeader from "@/components/layout/PageHeader";
 import SyncStats from "@/components/outbound/SyncStats";
 import SyncQueueTable from "@/components/outbound/SyncQueueTable";

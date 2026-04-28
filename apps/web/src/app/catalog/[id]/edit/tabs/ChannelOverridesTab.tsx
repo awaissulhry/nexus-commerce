@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Product, ChannelListing } from '@prisma/client'
+import { ChannelListing } from '@prisma/client'
 import ChannelOverrideToggle from '@/components/catalog/ChannelOverrideToggle'
 import TabValidationIcon from '@/components/catalog/TabValidationIcon'
 import PayloadPreview from '@/components/catalog/PayloadPreview'
@@ -68,7 +68,7 @@ export default function ChannelOverridesTab({ product, channelListings = [] }: C
   }
 
   // Get the channel listing for the active channel
-  const currentListing = channelListings.find(
+  const _currentListing = channelListings.find(
     (cl) => cl.channel === activeChannel
   )
 

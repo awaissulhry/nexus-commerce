@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Loader2, X, Eye, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Loader2, X, Eye, CheckCircle2, RefreshCw } from 'lucide-react';
 import { PipelineColumn } from './components/PipelineColumn';
 
 interface Product {

@@ -8,7 +8,6 @@ import {
   Trash2,
   Copy,
   AlertCircle,
-  CheckCircle2,
 } from "lucide-react";
 import StatusPill from "@/components/shared/StatusPill";
 import ActionButton from "@/components/shared/ActionButton";

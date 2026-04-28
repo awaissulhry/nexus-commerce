@@ -23,7 +23,7 @@ export default async function ChannelConnectionsPage() {
   const channels = await prisma.channel.findMany({
     include: {
       _count: {
-        select: { listings: true, orders: true },
+        select: { listings: true },
       },
     },
     orderBy: { createdAt: 'asc' },

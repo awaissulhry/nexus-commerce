@@ -16,7 +16,7 @@ export async function getAnalyticsData(period: '7d' | '30d' | '90d' | '1y') {
         where: { createdAt: { gte: since } },
       }),
       prisma.order.aggregate({
-        _sum: { totalAmount: true },
+        _sum: { totalPrice: true },
         _count: { id: true },
         where: { createdAt: { gte: since } },
       }),
@@ -24,7 +24,7 @@ export async function getAnalyticsData(period: '7d' | '30d' | '90d' | '1y') {
         where: { createdAt: { gte: since } },
         orderBy: { createdAt: 'desc' },
         take: 30,
-        select: { totalAmount: true, createdAt: true },
+        select: { totalPrice: true, createdAt: true },
       }),
       prisma.orderItem.groupBy({
         by: ['sku'],
@@ -42,11 +42,11 @@ export async function getAnalyticsData(period: '7d' | '30d' | '90d' | '1y') {
           status: s.status,
           count: s._count.id,
         })),
-        totalRevenue: Number(totalRevenue._sum.totalAmount || 0),
-        totalOrders: totalRevenue._count.id,
+        totalRevenue: Number(totalRevenue._sum?.totalPrice || 0),
+        totalOrders: totalRevenue._count?.id || 0,
         revenueByDay: recentOrders.map((o: any) => ({
           date: o.createdAt.toISOString().split('T')[0],
-          amount: Number(o.totalAmount),
+          amount: Number(o.totalPrice),
         })),
         topProducts: topProducts.map((p: any) => ({
           sku: p.sku,

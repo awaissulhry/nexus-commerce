@@ -23,7 +23,7 @@ function MasterCatalogTabComponent({
   onUpdate,
   onImagesUpdate,
   isParent = false,
-  childrenCount = 0,
+  childrenCount: _childrenCount = 0,
 }: MasterCatalogTabProps) {
   // Use the incoming isParent prop directly, not from product
   const actualIsParent = isParent || product?.isParent || false
@@ -165,7 +165,7 @@ function MasterCatalogTabComponent({
     }
   }, [childProducts])
 
-  const handleRemoveChild = useCallback((childId: string) => {
+  const _handleRemoveChild = useCallback((childId: string) => {
     setChildProducts((prev) => prev.filter((c) => c.id !== childId))
     logger.info('Child product removed', { childId })
   }, [])

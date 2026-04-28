@@ -37,7 +37,7 @@ export default async function BusinessReportsPage() {
   for (const order of orders) {
     const key = order.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     const entry = byDate.get(key) ?? { revenue: 0, orders: 0, units: 0 }
-    entry.revenue += Number(order.totalAmount)
+    entry.revenue += Number(order.totalPrice)
     entry.orders += 1
     entry.units += order.items.reduce((sum: number, item: any) => sum + item.quantity, 0)
     byDate.set(key, entry)

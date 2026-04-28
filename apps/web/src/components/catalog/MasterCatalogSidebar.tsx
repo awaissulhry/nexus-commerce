@@ -7,8 +7,6 @@ import {
   Package,
   Globe,
   TrendingDown,
-  Filter,
-  X,
 } from "lucide-react";
 
 interface MarketplacePresence {
@@ -39,7 +37,7 @@ interface FilterState {
   searchTerm: string;
 }
 
-const MARKETPLACE_COLORS: Record<string, string> = {
+const _MARKETPLACE_COLORS: Record<string, string> = {
   amazon: "bg-orange-100 text-orange-700 border-orange-300",
   ebay: "bg-red-100 text-red-700 border-red-300",
   shopify: "bg-green-100 text-green-700 border-green-300",
@@ -47,7 +45,7 @@ const MARKETPLACE_COLORS: Record<string, string> = {
   woocommerce: "bg-purple-100 text-purple-700 border-purple-300",
 };
 
-const MARKETPLACE_ICONS: Record<string, string> = {
+const _MARKETPLACE_ICONS: Record<string, string> = {
   amazon: "🔶",
   ebay: "🔴",
   shopify: "🟢",

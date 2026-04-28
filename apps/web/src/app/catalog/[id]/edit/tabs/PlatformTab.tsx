@@ -72,6 +72,7 @@ function PlatformTabComponent({
       quantity: product.totalStock || 0,
       syncFromMaster: true,
       syncLocked: false,
+      isPublished: false,
       offers: [],
       images: [],
     }
@@ -663,7 +664,6 @@ function PlatformTabComponent({
                         <OfferCard
                           key={offer.id}
                           offer={offer}
-                          platform={platform}
                           onUpdate={handleOfferUpdate}
                           onDelete={() => handleOfferDelete(offer.id)}
                         />
@@ -871,7 +871,6 @@ function PlatformTabComponent({
                         <OfferCard
                           key={offer.id}
                           offer={offer}
-                          platform={platform}
                           onUpdate={handleOfferUpdate}
                           onDelete={() => handleOfferDelete(offer.id)}
                         />

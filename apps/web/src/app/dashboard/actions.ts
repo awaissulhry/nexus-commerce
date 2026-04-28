@@ -22,10 +22,10 @@ export async function getDashboardStats() {
     ])
 
     const revenueResult = await prisma.order.aggregate({
-      _sum: { totalAmount: true },
+      _sum: { totalPrice: true },
     })
 
-    const totalRevenue = Number(revenueResult._sum.totalAmount || 0)
+    const totalRevenue = Number(revenueResult._sum?.totalPrice || 0)
 
     return {
       success: true,

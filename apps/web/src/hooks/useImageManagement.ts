@@ -129,7 +129,7 @@ export function useImageManagement(productId: string): UseImageManagementReturn 
           throw new Error('Failed to set hero image')
         }
 
-        const data = await response.json()
+        const _data = await response.json()
 
         // Update local state
         setImages((prev) =>
@@ -224,7 +224,7 @@ export function useImageManagement(productId: string): UseImageManagementReturn 
           throw new Error('Failed to update color')
         }
 
-        const data = await response.json()
+        const _data = await response.json()
 
         // Update local state
         setImages((prev) =>

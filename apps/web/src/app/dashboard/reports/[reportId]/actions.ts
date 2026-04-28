@@ -16,11 +16,11 @@ export async function getReportDetail(reportId: string) {
       case 'sales-summary': {
         const [totalOrders, revenueResult, recentOrders] = await Promise.all([
           prisma.order.count(),
-          prisma.order.aggregate({ _sum: { totalAmount: true }, _avg: { totalAmount: true } }),
-          prisma.order.findMany({
+          (prisma.order.aggregate as any)({ _sum: { totalPrice: true }, _avg: { totalPrice: true } }),
+          (prisma.order.findMany as any)({
             take: 20,
             orderBy: { createdAt: 'desc' },
-            select: { id: true, amazonOrderId: true, status: true, totalAmount: true, buyerName: true, createdAt: true },
+            select: { id: true, channelOrderId: true, status: true, totalPrice: true, customerName: true, createdAt: true },
           }),
         ])
 
@@ -29,8 +29,8 @@ export async function getReportDetail(reportId: string) {
           type: 'stat',
           data: {
             totalOrders,
-            totalRevenue: Number(revenueResult._sum.totalAmount || 0),
-            avgOrderValue: Number(revenueResult._avg.totalAmount || 0),
+            totalRevenue: Number(revenueResult._sum?.totalPrice || 0),
+            avgOrderValue: Number(revenueResult._avg?.totalPrice || 0),
           },
         })
 
@@ -40,10 +40,10 @@ export async function getReportDetail(reportId: string) {
           data: {
             columns: ['Order ID', 'Buyer', 'Status', 'Amount', 'Date'],
             rows: recentOrders.map((o: any) => [
-              o.amazonOrderId,
-              o.buyerName || '—',
+              o.channelOrderId,
+              o.customerName || '—',
               o.status,
-              Number(o.totalAmount).toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
+              Number(o.totalPrice).toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
               o.createdAt.toLocaleDateString('en-US'),
             ]),
           },
@@ -87,7 +87,7 @@ export async function getReportDetail(reportId: string) {
 
       case 'channel-performance': {
         const channels = await prisma.channel.findMany({
-          include: { _count: { select: { listings: true, orders: true } } },
+          include: { _count: { select: { listings: true } } },
         })
 
         sections.push({

@@ -74,8 +74,6 @@ export default function ProductEditorForm({ productId, defaultValues, product, i
     channels: 0, // Channel overrides tab doesn't use form validation
   }
 
-  const ActiveComponent = TABS.find((t) => t.id === activeTab)?.component || VitalInfoTab
-
   return (
     <FormProvider {...methods}>
       <form onSubmit={handleSubmit(onSubmit)}>
@@ -135,12 +133,26 @@ export default function ProductEditorForm({ productId, defaultValues, product, i
 
         {/* Tab content */}
         <div className="bg-white rounded-lg shadow p-6">
-          {activeTab === 'vital' ? (
+          {activeTab === 'vital' && (
             <VitalInfoTab isParent={isParent} childrenCount={childrenCount} />
-          ) : activeTab === 'channels' && product ? (
+          )}
+          {activeTab === 'offer' && (
+            <OfferTab />
+          )}
+          {activeTab === 'images' && (
+            <ImagesTab />
+          )}
+          {activeTab === 'description' && (
+            <DescriptionTab />
+          )}
+          {activeTab === 'variations' && (
+            <VariationsTab />
+          )}
+          {activeTab === 'matrix' && (
+            <MatrixEditor isParent={isParent} childrenCount={childrenCount} initialProduct={product} />
+          )}
+          {activeTab === 'channels' && product && (
             <ChannelOverridesTab product={product} channelListings={product.channelListings} />
-          ) : (
-            <ActiveComponent />
           )}
         </div>
       </form>

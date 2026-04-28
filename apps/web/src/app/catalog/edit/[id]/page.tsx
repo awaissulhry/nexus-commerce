@@ -24,6 +24,8 @@ async function getProduct(id: string) {
     return {
       ...product,
       basePrice: product.basePrice.toNumber(),
+      productType: product.productType || '',
+      categoryAttributes: (product.categoryAttributes as Record<string, any>) || {},
     };
   } catch (error) {
     console.error("Error fetching product:", error);

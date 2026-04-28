@@ -44,7 +44,7 @@ export default function ChannelResolverClient({
   connectionId,
   products,
 }: ChannelResolverClientProps) {
-  const router = useRouter()
+  const _router = useRouter()
   const [listings, setListings] = useState<UnmatchedListing[]>(initialListings)
   const [selectedProducts, setSelectedProducts] = useState<Record<string, string>>({})
   const [searchTerms, setSearchTerms] = useState<Record<string, string>>({})
