@@ -3,7 +3,6 @@
 import { useState, useTransition } from 'react'
 import { useForm, FormProvider } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Product, ChannelListing } from '@prisma/client'
 import { productEditorSchema, type ProductEditorFormData } from './schema'
 import { updateProduct } from './actions'
 import VitalInfoTab from './tabs/VitalInfoTab'
