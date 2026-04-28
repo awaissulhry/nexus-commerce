@@ -76,9 +76,22 @@ function sleep(ms: number): Promise<void> {
 /* ------------------------------------------------------------------ */
 
 export class AmazonService {
-  private sp: SellingPartner;
+  private sp: SellingPartner | null = null;
 
   constructor() {
+    // Constructor does nothing — validation is deferred to getClient()
+  }
+
+  /**
+   * Lazy-initialize the SellingPartner client.
+   * Validates env vars only when actually needed (first API call).
+   * Throws if credentials are missing.
+   */
+  private async getClient(): Promise<SellingPartner> {
+    if (this.sp) {
+      return this.sp;
+    }
+
     const clientId = process.env.AMAZON_LWA_CLIENT_ID;
     const clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET;
     const refreshToken = process.env.AMAZON_REFRESH_TOKEN;
@@ -116,6 +129,23 @@ export class AmazonService {
         auto_request_throttled: true,
       },
     } as any);
+
+    return this.sp;
+  }
+
+  /**
+   * Check if Amazon credentials are configured.
+   * Returns true if all required env vars are present.
+   */
+  isConfigured(): boolean {
+    return !!(
+      process.env.AMAZON_LWA_CLIENT_ID &&
+      process.env.AMAZON_LWA_CLIENT_SECRET &&
+      process.env.AMAZON_REFRESH_TOKEN &&
+      process.env.AWS_ACCESS_KEY_ID &&
+      process.env.AWS_SECRET_ACCESS_KEY &&
+      process.env.AWS_ROLE_ARN
+    );
   }
 
   /* ────────────────────────────────────────────────────────────── */
@@ -131,8 +161,10 @@ export class AmazonService {
     try {
       console.log("[Amazon] Requesting GET_MERCHANT_LISTINGS_ALL_DATA report…");
 
+      const sp = await this.getClient();
+
       // Step 1 — Create the report
-      const createRes: any = await this.sp.callAPI({
+      const createRes: any = await sp.callAPI({
         operation: "createReport",
         endpoint: "reports",
         body: {
@@ -153,7 +185,7 @@ export class AmazonService {
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         await sleep(10_000); // 10 seconds between polls
 
-        const statusRes: any = await this.sp.callAPI({
+        const statusRes: any = await sp.callAPI({
           operation: "getReport",
           endpoint: "reports",
           path: { reportId },
@@ -183,7 +215,7 @@ export class AmazonService {
       }
 
       // Step 3 — Download & decompress the report document
-      const docRes: any = await this.sp.callAPI({
+      const docRes: any = await sp.callAPI({
         operation: "getReportDocument",
         endpoint: "reports",
         path: { reportDocumentId },
@@ -194,7 +226,7 @@ export class AmazonService {
       const reportContent: string =
         typeof docRes === "string"
           ? docRes
-          : await (this.sp as any).download(docRes);
+          : await (sp as any).download(docRes);
 
       console.log(
         `[Amazon] Report document downloaded (${reportContent.length} chars)`
@@ -273,11 +305,13 @@ export class AmazonService {
     let quantity: number | null = null;
     let asin: string = "";
 
+    const sp = await this.getClient();
+
     /* ── Listings Items API ─────────────────────────────────── */
     try {
       console.log(`[Amazon] Fetching listings item for SKU "${sku}"…`);
 
-      const listingRes: any = await this.sp.callAPI({
+      const listingRes: any = await sp.callAPI({
         operation: "getListingsItem",
         endpoint: "listingsItems",
         path: {
@@ -444,7 +478,7 @@ export class AmazonService {
           `[Amazon] Enriching via Catalog Items API for ASIN "${asin}"…`
         );
 
-        const catalogRes: any = await this.sp.callAPI({
+        const catalogRes: any = await sp.callAPI({
           operation: "getCatalogItem",
           endpoint: "catalogItems",
           path: { asin },
@@ -580,8 +614,10 @@ export class AmazonService {
     try {
       console.log(`[AmazonService] Updating price for ASIN ${asin} to $${newPrice.toFixed(2)}…`);
 
+      const sp = await this.getClient();
+
       // Update pricing via Pricing API
-      const response = await this.sp.callAPI({
+      const response = await sp.callAPI({
         operation: "updatePricing",
         endpoint: "productPricing",
         body: {
