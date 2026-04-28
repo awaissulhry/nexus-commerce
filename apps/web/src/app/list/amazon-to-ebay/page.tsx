@@ -1,5 +1,6 @@
 import React from 'react';
 import { AmazonToEbayClient } from './AmazonToEbayClient';
+import { prisma } from '@nexus/database';
 
 interface Product {
   id: string;
@@ -13,12 +14,35 @@ interface Product {
 
 async function fetchProducts(): Promise<Product[]> {
   try {
-    const response = await fetch('http://localhost:3001/api/products', {
-      cache: 'no-store',
+    const products = await prisma.product.findMany({
+      where: {
+        status: 'ACTIVE',
+      },
+      select: {
+        id: true,
+        sku: true,
+        name: true,
+        basePrice: true,
+        totalStock: true,
+        ebayItemId: true,
+        images: {
+          select: {
+            url: true,
+          },
+        },
+      },
+      take: 100,
     });
-    if (!response.ok) throw new Error('Failed to fetch products');
-    const data = await response.json();
-    return data.data || [];
+
+    return products.map((p) => ({
+      id: p.id,
+      sku: p.sku,
+      name: p.name,
+      basePrice: Number(p.basePrice),
+      totalStock: p.totalStock,
+      ebayItemId: p.ebayItemId || undefined,
+      images: p.images,
+    }));
   } catch (error) {
     console.error('Error fetching products:', error);
     return [];
@@ -27,12 +51,43 @@ async function fetchProducts(): Promise<Product[]> {
 
 async function fetchPublished(): Promise<Product[]> {
   try {
-    const response = await fetch('http://localhost:3001/api/listings/published', {
-      cache: 'no-store',
+    const listings = await prisma.channelListing.findMany({
+      where: {
+        channel: 'EBAY',
+        isPublished: true,
+      },
+      select: {
+        product: {
+          select: {
+            id: true,
+            sku: true,
+            name: true,
+            basePrice: true,
+            totalStock: true,
+            ebayItemId: true,
+            images: {
+              select: {
+                url: true,
+              },
+            },
+          },
+        },
+      },
+      take: 100,
     });
-    if (!response.ok) throw new Error('Failed to fetch published listings');
-    const data = await response.json();
-    return data.data || [];
+
+    return listings
+      .map((l) => l.product)
+      .filter((p) => p !== null)
+      .map((p) => ({
+        id: p.id,
+        sku: p.sku,
+        name: p.name,
+        basePrice: Number(p.basePrice),
+        totalStock: p.totalStock,
+        ebayItemId: p.ebayItemId || undefined,
+        images: p.images,
+      }));
   } catch (error) {
     console.error('Error fetching published listings:', error);
     return [];
