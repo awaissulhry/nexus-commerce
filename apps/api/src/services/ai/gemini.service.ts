@@ -75,14 +75,37 @@ export interface EbayListingData {
 /* ------------------------------------------------------------------ */
 
 export class GeminiService {
-  private genAI: GoogleGenerativeAI;
+  private genAI: GoogleGenerativeAI | null = null;
 
   constructor() {
+    // Constructor does nothing — validation is deferred to getClient()
+  }
+
+  /**
+   * Lazy-initialize the GoogleGenerativeAI client.
+   * Validates env vars only when actually needed (first API call).
+   * Throws if credentials are missing.
+   */
+  private getClient(): GoogleGenerativeAI {
+    if (this.genAI) {
+      return this.genAI;
+    }
+
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error("GEMINI_API_KEY environment variable is not set");
     }
+
     this.genAI = new GoogleGenerativeAI(apiKey);
+    return this.genAI;
+  }
+
+  /**
+   * Check if Gemini API is configured.
+   * Returns true if GEMINI_API_KEY is present.
+   */
+  isConfigured(): boolean {
+    return !!process.env.GEMINI_API_KEY;
   }
 
   /**
@@ -100,7 +123,7 @@ export class GeminiService {
     categoryId?: string,
     aspects?: CategoryAspect[]
   ): Promise<EbayListingData> {
-    const model = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = this.getClient().getGenerativeModel({ model: "gemini-1.5-flash" });
 
     /* ── Build structured context blocks for the prompt ────────── */
 
