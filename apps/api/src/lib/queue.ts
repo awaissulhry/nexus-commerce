@@ -10,15 +10,6 @@ import Redis from 'ioredis'
 import { logger } from '../utils/logger.js'
 
 // Redis connection configuration
-
-// === DIAGNOSTIC — REMOVE AFTER VERIFICATION ===
-console.log('[REDIS DIAG] REDIS_URL is set:', !!process.env.REDIS_URL)
-console.log('[REDIS DIAG] REDIS_URL starts with rediss://:', process.env.REDIS_URL?.startsWith('rediss://') ?? false)
-console.log('[REDIS DIAG] REDIS_URL length:', process.env.REDIS_URL?.length ?? 0)
-console.log('[REDIS DIAG] REDIS_HOST:', process.env.REDIS_HOST || '(not set)')
-console.log('[REDIS DIAG] REDIS_PORT:', process.env.REDIS_PORT || '(not set)')
-// ==============================================
-
 const redisConfig = process.env.REDIS_URL?.includes('rediss://')
   ? {
       url: process.env.REDIS_URL,
@@ -70,6 +61,24 @@ export const channelSyncQueue = new Queue('channel-sync', {
     },
     removeOnFail: {
       age: 86400, // Keep failed jobs for 24 hours
+    },
+  },
+})
+
+// Initialize the stock-updates queue (inventory sync)
+export const stockUpdateQueue = new Queue('stock-updates', {
+  connection: redis,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: {
+      type: 'exponential',
+      delay: 2000,
+    },
+    removeOnComplete: {
+      age: 3600,
+    },
+    removeOnFail: {
+      age: 86400,
     },
   },
 })

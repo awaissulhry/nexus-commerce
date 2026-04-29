@@ -5,12 +5,8 @@
 
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
-import { Queue } from 'bullmq'
-import { redis } from '../lib/queue.js'
+import { stockUpdateQueue } from '../lib/queue.js'
 import { checkStockThreshold } from './alert.service.js'
-
-// Initialize BullMQ queue for stock updates (uses shared Redis connection from lib/queue)
-const stockUpdateQueue = new Queue('stock-updates', { connection: redis })
 
 /**
  * Stock adjustment event for tracking
@@ -318,7 +314,6 @@ export async function getStockLevel(sku: string): Promise<number | null> {
 export async function closeConnections(): Promise<void> {
   try {
     await stockUpdateQueue.close()
-    await redis.quit()
     logger.info('[INVENTORY SYNC] Connections closed')
   } catch (error: any) {
     logger.error('[INVENTORY SYNC] Error closing connections:', error.message)
