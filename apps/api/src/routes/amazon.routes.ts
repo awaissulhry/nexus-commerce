@@ -66,7 +66,6 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
       const products = await prisma.product.findMany({
         where: { syncChannels: { has: 'AMAZON' } },
         orderBy: { createdAt: 'desc' },
-        take: 100,
       })
 
       return {
