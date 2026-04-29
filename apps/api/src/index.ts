@@ -17,7 +17,9 @@ import { syncRoutes } from "./routes/sync.routes.js";
 import { ebayAuthRoutes } from "./routes/ebay-auth.js";
 import { ebayRoutes } from "./routes/ebay.routes.js";
 import { ebayOrdersRoutes } from "./routes/ebay-orders.routes.js";
-import { catalogRoutes } from "./routes/catalog.routes.js";
+// TEMPORARILY DISABLED - catalog.routes.ts imports channelSyncQueue from lib/queue at module
+// level, which triggers a Redis connection before env vars are loaded on Railway.
+// import { catalogRoutes } from "./routes/catalog.routes.js";
 import { outboundRoutes } from "./routes/outbound.routes.js";
 import { matrixRoutes } from "./routes/matrix.routes.js";
 import { inboundRoutes } from "./routes/inbound.routes.js";
@@ -56,7 +58,7 @@ app.register(syncRoutes);
 app.register(ebayAuthRoutes);
 app.register(ebayRoutes);
 app.register(ebayOrdersRoutes);
-app.register(catalogRoutes, { prefix: '/api/catalog' });
+// app.register(catalogRoutes, { prefix: '/api/catalog' }); // disabled — see import comment above
 app.register(outboundRoutes);
 app.register(matrixRoutes);
 app.register(inboundRoutes);
