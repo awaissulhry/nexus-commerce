@@ -40,6 +40,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
             amazonAsin: item.asin,
             status: 'ACTIVE',
             syncChannels: ['AMAZON'],
+            minMargin: 0,
           },
         })
         syncedProducts.push(product)
