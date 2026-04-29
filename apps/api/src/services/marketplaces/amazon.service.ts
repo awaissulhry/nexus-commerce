@@ -2,6 +2,25 @@ import { SellingPartner } from "amazon-sp-api";
 import { parse } from "csv-parse/sync";
 
 /* ------------------------------------------------------------------ */
+/*  Constants                                                          */
+/* ------------------------------------------------------------------ */
+
+const MARKETPLACE_CURRENCY: Record<string, string> = {
+  APJ6JRA9NG5V4: "EUR", // Italy
+  A1PA6795UKMFR9: "EUR", // Germany
+  A13V1IB3VIYZZH: "EUR", // France
+  A1RKKUPIHCS9HS: "EUR", // Spain
+  A1F83G8C2ARO7P: "GBP", // United Kingdom
+  ATVPDKIKX0DER: "USD",  // United States
+  A2EUQ1WTGCTBG2: "CAD", // Canada
+  A1AM78C64UM0Y8: "MXN", // Mexico
+};
+
+function getCurrencyForMarketplace(marketplaceId: string): string {
+  return MARKETPLACE_CURRENCY[marketplaceId] ?? "EUR";
+}
+
+/* ------------------------------------------------------------------ */
 /*  Public types                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -611,12 +630,17 @@ export class AmazonService {
    * @param newPrice The new price to set
    */
   async updateVariantPrice(asin: string, newPrice: number): Promise<void> {
+    const marketplaceId =
+      process.env.AMAZON_MARKETPLACE_ID ?? "APJ6JRA9NG5V4";
+    const currency = getCurrencyForMarketplace(marketplaceId);
+
     try {
-      console.log(`[AmazonService] Updating price for ASIN ${asin} to $${newPrice.toFixed(2)}…`);
+      console.log(
+        `[AmazonService] Updating price for ASIN ${asin} to ${newPrice.toFixed(2)} ${currency}…`
+      );
 
       const sp = await this.getClient();
 
-      // Update pricing via Pricing API
       const response = await sp.callAPI({
         operation: "updatePricing",
         endpoint: "productPricing",
@@ -625,7 +649,7 @@ export class AmazonService {
             {
               asin,
               standardPrice: {
-                currency: "USD",
+                currency,
                 amount: newPrice.toFixed(2),
               },
             },
@@ -634,13 +658,20 @@ export class AmazonService {
       });
 
       if (response.errors && response.errors.length > 0) {
-        throw new Error(`Failed to update Amazon price: ${response.errors[0].message}`);
+        throw new Error(
+          `Failed to update Amazon price: ${response.errors[0].message}`
+        );
       }
 
-      console.log(`[AmazonService] ✓ Updated price for ASIN ${asin} to $${newPrice.toFixed(2)}`);
+      console.log(
+        `[AmazonService] ✓ Updated price for ASIN ${asin} to ${newPrice.toFixed(2)} ${currency}`
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`[AmazonService] ✗ Failed to update variant price for ${asin}:`, message);
+      console.error(
+        `[AmazonService] ✗ Failed to update variant price for ${asin}:`,
+        message
+      );
       throw error;
     }
   }
