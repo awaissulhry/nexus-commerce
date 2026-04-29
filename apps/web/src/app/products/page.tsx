@@ -327,6 +327,40 @@ export default function ProductsPage() {
     fetchProducts();
   }, [fetchProducts]);
 
+  // Diagnostic: log hierarchy stats whenever data loads
+  useEffect(() => {
+    if (loading || products.length === 0) return;
+    const parentCount = products.filter((p) => p.isParent).length;
+    const childCount = products.filter((p) => p.parentId !== null).length;
+    const standaloneCount = products.filter((p) => !p.isParent && !p.parentId).length;
+    const themes = [...new Set(products.map((p) => p.variationTheme).filter(Boolean))];
+    console.group("[Products] Hierarchy diagnostic");
+    console.table({
+      total: products.length,
+      "isParent=true": parentCount,
+      "has parentId": childCount,
+      standalone: standaloneCount,
+      variationThemes: themes.length,
+    });
+    if (themes.length) console.log("Themes:", themes);
+    console.log(
+      "Sample (first 5):",
+      products.slice(0, 5).map((p) => ({
+        sku: p.sku,
+        isParent: p.isParent,
+        parentId: p.parentId,
+        variationTheme: p.variationTheme,
+      }))
+    );
+    if (parentCount === 0 && childCount === 0) {
+      console.warn(
+        "[Products] No hierarchy found — all products are standalone. " +
+          "Run POST /api/amazon/products/reindex-hierarchy to enrich via Catalog Items API."
+      );
+    }
+    console.groupEnd();
+  }, [products, loading]);
+
   /* ── Derived stats ────────────────────────────────────────── */
   const stats = useMemo(() => {
     const total = products.length;

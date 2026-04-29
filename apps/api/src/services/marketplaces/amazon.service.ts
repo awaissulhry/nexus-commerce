@@ -28,6 +28,10 @@ function getCurrencyForMarketplace(marketplaceId: string): string {
 export interface CatalogItem {
   sku: string;
   asin: string;
+  /** Parent ASIN if this is a variation child; null for standalone products. */
+  parentAsin: string | null;
+  /** Variation theme extracted from the report (e.g. "SizeColor"); null if not present. */
+  variationTheme: string | null;
   price: number;
   quantity: number;
   title: string;
@@ -259,19 +263,65 @@ export class AmazonService {
         relax_column_count: true,
       });
 
+      // Log all column names from the first row so we can see what Amazon sends
+      if (records.length > 0) {
+        console.log(
+          "[Amazon] Report columns:",
+          Object.keys(records[0]).join(" | ")
+        );
+      }
+
+      // Amazon uses different column name variants across marketplaces/report versions
+      const PARENT_ASIN_COLS = [
+        "parent-asin",
+        "parent_asin",
+        "Parent ASIN",
+        "parentasin",
+        "parent-asin1",
+      ];
+      const VARIATION_THEME_COLS = [
+        "variation-theme",
+        "variation_theme",
+        "Variation Theme",
+        "variationtheme",
+      ];
+
+      const findCol = (
+        row: Record<string, string>,
+        candidates: string[]
+      ): string | null => {
+        for (const col of candidates) {
+          const val = row[col];
+          if (val && val.trim() !== "") return val.trim();
+        }
+        return null;
+      };
+
       const items: CatalogItem[] = records
         .filter((row) => row["seller-sku"] && row["asin1"])
-        .map((row) => ({
-          sku: row["seller-sku"],
-          asin: row["asin1"],
-          price: parseFloat(row["price"] ?? "0") || 0,
-          quantity: parseInt(row["quantity"] ?? "0", 10) || 0,
-          title: row["item-name"] ?? "",
-          status: row["status"] ?? "Unknown",
-        }));
+        .map((row) => {
+          const rawParentAsin = findCol(row, PARENT_ASIN_COLS);
+          // Ignore parent-asin if it equals the child's own ASIN (some reports do this)
+          const parentAsin =
+            rawParentAsin && rawParentAsin !== row["asin1"]
+              ? rawParentAsin
+              : null;
+          return {
+            sku: row["seller-sku"],
+            asin: row["asin1"],
+            parentAsin,
+            variationTheme: findCol(row, VARIATION_THEME_COLS),
+            price: parseFloat(row["price"] ?? "0") || 0,
+            quantity: parseInt(row["quantity"] ?? "0", 10) || 0,
+            title: row["item-name"] ?? "",
+            status: row["status"] ?? "Unknown",
+          };
+        });
 
+      const parentCount = items.filter((i) => i.parentAsin).length;
       console.log(
-        `[Amazon] Parsed ${items.length} active listing(s) from report.`
+        `[Amazon] Parsed ${items.length} active listing(s) from report. ` +
+          `${parentCount} have a parent ASIN (variation children).`
       );
 
       return items;
