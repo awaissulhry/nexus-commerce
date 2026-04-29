@@ -44,28 +44,29 @@ app.register(cors, {
   credentials: true,
 });
 
-app.register(listingsRoutes);
-app.register(inventoryRoutes);
-app.register(aiRoutes);
-app.register(marketplaceRoutes);
-app.register(adminRoutes);
-app.register(monitoringRoutes);
-app.register(shopifyRoutes);
-app.register(shopifyWebhookRoutes);
-app.register(woocommerceRoutes);
-app.register(woocommerceWebhookRoutes);
-app.register(estyRoutes);
-app.register(estyWebhookRoutes);
-app.register(syncRoutes);
-app.register(ebayAuthRoutes);
-app.register(ebayRoutes);
-app.register(ebayOrdersRoutes);
-// app.register(catalogRoutes, { prefix: '/api/catalog' }); // disabled — see import comment above
-app.register(outboundRoutes);
-app.register(matrixRoutes);
-app.register(inboundRoutes);
-// app.register(webhookRoutes); // disabled — see import comment above
-app.register(ordersRoutes);
+// TEMP: All routes disabled to isolate queue import chain (Redis env var issue on Railway)
+// app.register(listingsRoutes);
+// app.register(inventoryRoutes);
+// app.register(aiRoutes);
+// app.register(marketplaceRoutes);
+// app.register(adminRoutes);
+// app.register(monitoringRoutes);
+// app.register(shopifyRoutes);
+// app.register(shopifyWebhookRoutes);
+// app.register(woocommerceRoutes);
+// app.register(woocommerceWebhookRoutes);
+// app.register(estyRoutes);
+// app.register(estyWebhookRoutes);
+// app.register(syncRoutes);
+// app.register(ebayAuthRoutes);
+// app.register(ebayRoutes);
+// app.register(ebayOrdersRoutes);
+// app.register(catalogRoutes, { prefix: '/api/catalog' });
+// app.register(outboundRoutes);
+// app.register(matrixRoutes);
+// app.register(inboundRoutes);
+// app.register(webhookRoutes);
+// app.register(ordersRoutes);
 app.register(healthRoutes, { prefix: '/api' });
 
 const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 8080;
