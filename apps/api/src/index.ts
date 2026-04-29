@@ -23,7 +23,9 @@ import { ebayOrdersRoutes } from "./routes/ebay-orders.routes.js";
 import { outboundRoutes } from "./routes/outbound.routes.js";
 import { matrixRoutes } from "./routes/matrix.routes.js";
 import { inboundRoutes } from "./routes/inbound.routes.js";
-import { webhookRoutes } from "./routes/webhooks.routes.js";
+// TEMP: webhooks.routes.ts imports inventory-sync.service which imports redis from lib/queue
+// at module level, triggering a Redis connection before env vars load on Railway.
+// import { webhookRoutes } from "./routes/webhooks.routes.js";
 import { ordersRoutes } from "./routes/orders.routes.js";
 import healthRoutes from "./routes/health.js";
 import { startJobs } from "./jobs/sync.job.js";
@@ -62,7 +64,7 @@ app.register(ebayOrdersRoutes);
 app.register(outboundRoutes);
 app.register(matrixRoutes);
 app.register(inboundRoutes);
-app.register(webhookRoutes);
+// app.register(webhookRoutes); // disabled — see import comment above
 app.register(ordersRoutes);
 app.register(healthRoutes, { prefix: '/api' });
 
