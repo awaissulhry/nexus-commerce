@@ -15,7 +15,13 @@
       "Bash(open -a \"Docker Desktop\")",
       "Bash(npm run *)",
       "Bash(node -e \"const p=require\\('./packages/database/package.json'\\);console.log\\(JSON.stringify\\({main:p.main,types:p.types,exports:p.exports},null,2\\)\\)\")",
-      "Bash(python3 -c \"import json; p=json.load\\(open\\('/Users/awais/nexus-commerce/packages/database/package.json'\\)\\); print\\(json.dumps\\({k:p[k] for k in ['main','types','exports']},indent=2\\)\\)\")"
+      "Bash(python3 -c \"import json; p=json.load\\(open\\('/Users/awais/nexus-commerce/packages/database/package.json'\\)\\); print\\(json.dumps\\({k:p[k] for k in ['main','types','exports']},indent=2\\)\\)\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(railway logs *)",
+      "Bash(npx @railway/cli logs --tail)",
+      "Bash(npx *)"
     ]
   }
 }

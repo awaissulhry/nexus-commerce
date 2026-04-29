@@ -168,7 +168,7 @@ export function initializeBulkListWorker() {
       return result
     },
     {
-      connection: redis,
+      connection: redis.connection,
       concurrency: 1,
     }
   )

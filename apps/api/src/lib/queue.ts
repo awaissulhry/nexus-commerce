@@ -33,11 +33,15 @@ function getRedisConnection(): Redis {
   return _redis
 }
 
-export const redis = getRedisConnection()
+export const redis = {
+  get connection() {
+    return getRedisConnection()
+  }
+}
 
 // Initialize the outbound-sync queue
 export const outboundSyncQueue = new Queue('outbound-sync', {
-  connection: redis,
+  connection: redis.connection,
   defaultJobOptions: {
     attempts: 3,
     backoff: {
@@ -55,7 +59,7 @@ export const outboundSyncQueue = new Queue('outbound-sync', {
 
 // Initialize the channel-sync queue (Phase 25)
 export const channelSyncQueue = new Queue('channel-sync', {
-  connection: redis,
+  connection: redis.connection,
   defaultJobOptions: {
     attempts: 3,
     backoff: {
@@ -73,7 +77,7 @@ export const channelSyncQueue = new Queue('channel-sync', {
 
 // Initialize the stock-updates queue (inventory sync)
 export const stockUpdateQueue = new Queue('stock-updates', {
-  connection: redis,
+  connection: redis.connection,
   defaultJobOptions: {
     attempts: 3,
     backoff: {
@@ -91,12 +95,12 @@ export const stockUpdateQueue = new Queue('stock-updates', {
 
 // Queue events for monitoring
 export const queueEvents = new QueueEvents('outbound-sync', {
-  connection: redis,
+  connection: redis.connection,
 })
 
 // Channel sync queue events for monitoring
 export const channelSyncQueueEvents = new QueueEvents('channel-sync', {
-  connection: redis,
+  connection: redis.connection,
 })
 
 // Event listeners for queue monitoring
@@ -150,7 +154,7 @@ export async function closeQueue() {
   try {
     await outboundSyncQueue.close()
     await queueEvents.close()
-    await redis.quit()
+    await redis.connection.quit()
     logger.info('✅ Queue and Redis connection closed')
   } catch (error) {
     logger.error('Error closing queue', {

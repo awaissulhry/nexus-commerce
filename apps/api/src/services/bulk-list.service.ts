@@ -30,7 +30,7 @@ export interface BulkListJobResult {
  * Create and export the bulk-ebay-listing queue
  */
 export const bulkListQueue = new Queue<BulkListJobData>('bulk-ebay-listing', {
-  connection: redis,
+  connection: redis.connection,
   defaultJobOptions: {
     attempts: 1, // No retries for bulk jobs - one failure shouldn't kill the entire job
     removeOnComplete: {

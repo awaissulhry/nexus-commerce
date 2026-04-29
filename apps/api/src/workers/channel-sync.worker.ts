@@ -26,7 +26,7 @@ export function initializeChannelSyncWorker() {
   logger.info('🚀 Initializing Channel Sync Worker...')
 
   const worker = new Worker('channel-sync', processChannelSyncJob, {
-    connection: redis,
+    connection: redis.connection,
     concurrency: 3, // Process 3 syncs concurrently
   })
 

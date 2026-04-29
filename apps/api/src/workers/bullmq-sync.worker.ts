@@ -29,7 +29,7 @@ export function initializeBullMQWorker() {
   logger.info('🚀 Initializing BullMQ Autopilot Worker...')
 
   const worker = new Worker('outbound-sync', processOutboundSyncJob, {
-    connection: redis,
+    connection: redis.connection,
     concurrency: 5, // Respect Amazon rate limits
   })
 
