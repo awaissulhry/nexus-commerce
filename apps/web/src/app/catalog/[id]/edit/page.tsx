@@ -37,7 +37,7 @@ export default async function EditProductPage({ params }: PageProps) {
     isParent: product.isParent,
     categoryAttributes: product.categoryAttributes,
     // CRITICAL: Include the children array with serialized data
-    children: product.children ? product.children.map(child => ({
+    children: product.children ? product.children.map((child: any) => ({
       id: child.id,
       sku: child.sku,
       name: child.name,
