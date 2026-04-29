@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useMemo } from "react";
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'https://nexusapi-production-b7bb.up.railway.app'
 import Link from "next/link";
 import { Search } from "lucide-react";
+import { getBackendUrl } from "@/lib/backend-url";
+
+const BACKEND_URL = getBackendUrl();
 import type { InventoryItem } from "@/types/inventory";
 import InventoryTable from "@/components/inventory/InventoryTable";
 import InventoryDrawer from "@/components/inventory/InventoryDrawer";

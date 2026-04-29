@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getBackendUrl } from '@/lib/backend-url';
 
 export async function DELETE(
   _request: NextRequest,
@@ -15,7 +16,7 @@ export async function DELETE(
     }
 
     // Forward the DELETE request to the Fastify backend
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:3001';
+    const backendUrl = getBackendUrl();
     const response = await fetch(`${backendUrl}/api/catalog/products/${id}`, {
       method: 'DELETE',
     });

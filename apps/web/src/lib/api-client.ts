@@ -5,6 +5,7 @@
  */
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
+import { getBackendUrl } from '@/lib/backend-url';
 
 // ============================================================================
 // Response Types (matching backend ApiResponse<T>)
@@ -138,7 +139,7 @@ class ApiClient {
   private client: AxiosInstance;
   private baseURL: string;
 
-  constructor(baseURL: string = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001') {
+  constructor(baseURL: string = getBackendUrl()) {
     this.baseURL = baseURL;
 
     this.client = axios.create({

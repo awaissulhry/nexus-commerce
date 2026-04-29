@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react'
 import * as XLSX from 'xlsx'
+import { getBackendUrl } from '@/lib/backend-url'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -185,7 +186,7 @@ export default function InventoryUploadPage() {
         manufacturer: r.manufacturer || undefined,
       }))
 
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+      const apiBase = getBackendUrl()
       const response = await fetch(`${apiBase}/inventory/bulk-upload`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

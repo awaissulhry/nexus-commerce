@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'https://nexusapi-production-b7bb.up.railway.app'
+import { getBackendUrl } from '@/lib/backend-url'
 
 // GET /api/inventory?limit=1000
 export async function GET(request: NextRequest) {
   const limit = parseInt(request.nextUrl.searchParams.get('limit') ?? '1000', 10)
 
   try {
-    const response = await fetch(`${BACKEND_URL}/api/amazon/products/list`, {
+    const response = await fetch(`${getBackendUrl()}/api/amazon/products/list`, {
       cache: 'no-store',
     })
 
