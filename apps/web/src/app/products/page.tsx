@@ -36,6 +36,7 @@ interface Product {
   syncChannels: string[];
   status: string;
   brand: string | null;
+  marketplace?: string | null;
   images?: Array<{ url: string; type: string }>;
   createdAt: string;
   updatedAt: string;
@@ -49,6 +50,21 @@ type SortDir = "asc" | "desc";
 /* ─────────────────────────────────────────────────────────────
    Helpers
 ───────────────────────────────────────────────────────────────*/
+function getAmazonUrl(asin: string, marketplace?: string | null): string {
+  const domain = marketplace?.includes("DE")
+    ? "amazon.de"
+    : marketplace?.includes("UK")
+    ? "amazon.co.uk"
+    : marketplace?.includes("FR")
+    ? "amazon.fr"
+    : marketplace?.includes("ES")
+    ? "amazon.es"
+    : marketplace?.includes("US")
+    ? "amazon.com"
+    : "amazon.it";
+  return `https://www.${domain}/dp/${asin}`;
+}
+
 function formatPrice(val: string | number): string {
   const n = typeof val === "string" ? parseFloat(val) : val;
   if (isNaN(n)) return "—";
@@ -804,7 +820,7 @@ export default function ProductsPage() {
                           {/* View on Amazon */}
                           {product.amazonAsin ? (
                             <a
-                              href={`https://www.amazon.com/dp/${product.amazonAsin}`}
+                              href={getAmazonUrl(product.amazonAsin, product.marketplace)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
