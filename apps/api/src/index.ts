@@ -4,7 +4,7 @@ import cors from "@fastify/cors";
 // TEMP: All route imports disabled — registrations are commented out, importing them still
 // executes their module-level code which transitively pulls in lib/queue (Redis).
 // import { listingsRoutes } from "./routes/listings.js";
-// import { inventoryRoutes } from "./routes/inventory.js";
+import { inventoryRoutes } from "./routes/inventory.js";
 // import { aiRoutes } from "./routes/ai.js";
 // import { marketplaceRoutes } from "./routes/marketplaces.js";
 // import { adminRoutes } from "./routes/admin.js";
@@ -15,16 +15,17 @@ import cors from "@fastify/cors";
 // import { woocommerceWebhookRoutes } from "./routes/woocommerce-webhooks.js";
 // import { estyRoutes } from "./routes/etsy.js";
 // import { estyWebhookRoutes } from "./routes/etsy-webhooks.js";
-// import { syncRoutes } from "./routes/sync.routes.js";
+import { syncRoutes } from "./routes/sync.routes.js";
 // import { ebayAuthRoutes } from "./routes/ebay-auth.js";
 // import { ebayRoutes } from "./routes/ebay.routes.js";
 // import { ebayOrdersRoutes } from "./routes/ebay-orders.routes.js";
-// import { catalogRoutes } from "./routes/catalog.routes.js";
+// import { catalogRoutes } from "./routes/catalog.routes.js";  // disabled: imports channelSyncQueue (Redis)
 // import { outboundRoutes } from "./routes/outbound.routes.js";
 // import { matrixRoutes } from "./routes/matrix.routes.js";
 // import { inboundRoutes } from "./routes/inbound.routes.js";
 // import { webhookRoutes } from "./routes/webhooks.routes.js";
 // import { ordersRoutes } from "./routes/orders.routes.js";
+import { catalogSafeRoutes } from "./routes/catalog-safe.routes.js";
 import healthRoutes from "./routes/health.js";
 import amazonRoutes from "./routes/amazon.routes.js";
 // TEMP: All queue/worker imports disabled to prevent module-level Redis connection
@@ -48,9 +49,9 @@ app.register(cors, {
   credentials: true,
 });
 
-// TEMP: All routes disabled to isolate queue import chain (Redis env var issue on Railway)
+// TEMP: Queue-dependent routes remain disabled (Redis env var issue on Railway)
 // app.register(listingsRoutes);
-// app.register(inventoryRoutes);
+app.register(inventoryRoutes);
 // app.register(aiRoutes);
 // app.register(marketplaceRoutes);
 // app.register(adminRoutes);
@@ -61,16 +62,17 @@ app.register(cors, {
 // app.register(woocommerceWebhookRoutes);
 // app.register(estyRoutes);
 // app.register(estyWebhookRoutes);
-// app.register(syncRoutes);
+app.register(syncRoutes);
 // app.register(ebayAuthRoutes);
 // app.register(ebayRoutes);
 // app.register(ebayOrdersRoutes);
-// app.register(catalogRoutes, { prefix: '/api/catalog' });
+// app.register(catalogRoutes, { prefix: '/api/catalog' });  // disabled: channelSyncQueue (Redis)
 // app.register(outboundRoutes);
 // app.register(matrixRoutes);
 // app.register(inboundRoutes);
 // app.register(webhookRoutes);
 // app.register(ordersRoutes);
+app.register(catalogSafeRoutes, { prefix: '/api/catalog' });
 app.register(healthRoutes, { prefix: '/api' });
 app.register(amazonRoutes, { prefix: '/api/amazon' });
 
