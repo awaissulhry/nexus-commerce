@@ -39,7 +39,11 @@ const app = Fastify({ logger: true });
 
 // Register CORS to allow cross-origin requests from frontend (Port 3000)
 app.register(cors, {
-  origin: 'http://localhost:3000',
+  origin: [
+    'http://localhost:3000',
+    'https://nexus-commerce-three.vercel.app',
+    'https://nexus-commerce-web.vercel.app',
+  ],
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT', 'OPTIONS'],
   credentials: true,
 });
