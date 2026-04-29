@@ -27,7 +27,7 @@ import healthRoutes from "./routes/health.js";
 import { startJobs } from "./jobs/sync.job.js";
 import { initializeBullMQWorker } from "./workers/bullmq-sync.worker.js";
 import { initializeChannelSyncWorker } from "./workers/channel-sync.worker.js";
-import { bulkListWorker } from "./workers/bulk-list.worker.js";
+import { initializeBulkListWorker } from "./workers/bulk-list.worker.js";
 import { initializeQueue, closeQueue } from "./lib/queue.js";
 import { logger } from "./utils/logger.js";
 
@@ -88,7 +88,7 @@ async function start() {
 
     // ── Bulk Listing Worker ──────────────────────────────────────────
     // Initialize the bulk listing worker for sequential eBay publishing
-    logger.info('Initializing bulk listing worker...');
+    initializeBulkListWorker();
 
     // Start the cron-based sync scheduler for other jobs
     startJobs();
