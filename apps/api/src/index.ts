@@ -87,8 +87,8 @@ async function start() {
     // initializeChannelSyncWorker();
     // initializeBulkListWorker();
 
-    // Start the cron-based sync scheduler for other jobs
-    startJobs();
+    // TEMP: Disabled - imports services that import queues
+    // startJobs();
 
     logger.info('✅ Autopilot infrastructure initialized', {
       timestamp: new Date().toISOString(),
