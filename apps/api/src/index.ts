@@ -26,6 +26,7 @@ import cors from "@fastify/cors";
 // import { webhookRoutes } from "./routes/webhooks.routes.js";
 // import { ordersRoutes } from "./routes/orders.routes.js";
 import healthRoutes from "./routes/health.js";
+import amazonRoutes from "./routes/amazon.routes.js";
 // TEMP: All queue/worker imports disabled to prevent module-level Redis connection
 // import { startJobs } from "./jobs/sync.job.js";
 // import { initializeBullMQWorker } from "./workers/bullmq-sync.worker.js";
@@ -67,6 +68,7 @@ app.register(cors, {
 // app.register(webhookRoutes);
 // app.register(ordersRoutes);
 app.register(healthRoutes, { prefix: '/api' });
+app.register(amazonRoutes, { prefix: '/api/amazon' });
 
 const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 8080;
 
