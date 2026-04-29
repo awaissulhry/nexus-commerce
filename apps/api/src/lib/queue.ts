@@ -1,33 +1,39 @@
 /**
  * BullMQ Queue Configuration
- * 
+ *
  * Enterprise-grade Redis message broker for the Autopilot
  * Replaces node-cron database polling with event-driven architecture
  */
 
-import { Queue, Worker, QueueEvents } from 'bullmq'
+import { Queue, QueueEvents } from 'bullmq'
 import Redis from 'ioredis'
 import { logger } from '../utils/logger.js'
 
-// Redis connection configuration
-const redisConfig = process.env.REDIS_URL?.includes('rediss://')
-  ? {
-      url: process.env.REDIS_URL,
-      tls: {
-        rejectUnauthorized: false,
-      },
-      maxRetriesPerRequest: null,
-      enableReadyCheck: false,
-    }
-  : {
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
-      maxRetriesPerRequest: null,
-      enableReadyCheck: false,
-    }
+// Lazy-initialized Redis singleton — reads env vars on first access, not at module load
+let _redis: Redis | null = null
 
-// Create Redis connection
-export const redis = new Redis(redisConfig)
+function getRedisConnection(): Redis {
+  if (!_redis) {
+    const redisConfig = process.env.REDIS_URL?.includes('rediss://')
+      ? {
+          url: process.env.REDIS_URL,
+          tls: { rejectUnauthorized: false },
+          maxRetriesPerRequest: null as null,
+          enableReadyCheck: false,
+        }
+      : {
+          host: process.env.REDIS_HOST || 'localhost',
+          port: parseInt(process.env.REDIS_PORT || '6379'),
+          maxRetriesPerRequest: null as null,
+          enableReadyCheck: false,
+        }
+
+    _redis = new Redis(redisConfig)
+  }
+  return _redis
+}
+
+export const redis = getRedisConnection()
 
 // Initialize the outbound-sync queue
 export const outboundSyncQueue = new Queue('outbound-sync', {
@@ -39,10 +45,10 @@ export const outboundSyncQueue = new Queue('outbound-sync', {
       delay: 2000,
     },
     removeOnComplete: {
-      age: 3600, // Keep completed jobs for 1 hour
+      age: 3600,
     },
     removeOnFail: {
-      age: 86400, // Keep failed jobs for 24 hours
+      age: 86400,
     },
   },
 })
@@ -57,10 +63,10 @@ export const channelSyncQueue = new Queue('channel-sync', {
       delay: 2000,
     },
     removeOnComplete: {
-      age: 3600, // Keep completed jobs for 1 hour
+      age: 3600,
     },
     removeOnFail: {
-      age: 86400, // Keep failed jobs for 24 hours
+      age: 86400,
     },
   },
 })
@@ -111,14 +117,14 @@ queueEvents.on('error', (error) => {
  */
 export async function initializeQueue() {
   try {
-    // Test Redis connection
-    await redis.ping()
+    const conn = getRedisConnection()
+    await conn.ping()
     logger.info('✅ Redis connection established', {
-      host: redisConfig.host,
-      port: redisConfig.port,
+      url: process.env.REDIS_URL ? '[rediss://***]' : undefined,
+      host: !process.env.REDIS_URL ? (process.env.REDIS_HOST || 'localhost') : undefined,
+      port: !process.env.REDIS_URL ? parseInt(process.env.REDIS_PORT || '6379') : undefined,
     })
 
-    // Get queue stats
     const counts = await outboundSyncQueue.getJobCounts()
     logger.info('📊 Queue initialized', {
       waiting: counts.waiting,
@@ -160,7 +166,7 @@ export async function getQueueStats() {
   try {
     const counts = await outboundSyncQueue.getJobCounts()
     const isPaused = await outboundSyncQueue.isPaused()
-    
+
     return {
       waiting: counts.waiting,
       active: counts.active,
