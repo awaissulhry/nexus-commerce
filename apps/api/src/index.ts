@@ -76,19 +76,11 @@ async function start() {
     app.log.info(`API server listening at http://0.0.0.0:${port}`);
 
     // ── PHASE 13: Initialize BullMQ Infrastructure ──────────────────────
-    // Initialize Redis connection and queue
-    await initializeQueue();
-
-    // Initialize the BullMQ Autopilot Worker (replaces node-cron)
-    initializeBullMQWorker();
-
-    // ── PHASE 25: Initialize Channel Sync Worker ──────────────────────
-    // Initialize the channel-sync worker for marketplace sync execution
-    initializeChannelSyncWorker();
-
-    // ── Bulk Listing Worker ──────────────────────────────────────────
-    // Initialize the bulk listing worker for sequential eBay publishing
-    initializeBulkListWorker();
+    // TEMPORARILY DISABLED - Redis env var loading issue
+    // await initializeQueue();
+    // initializeBullMQWorker();
+    // initializeChannelSyncWorker();
+    // initializeBulkListWorker();
 
     // Start the cron-based sync scheduler for other jobs
     startJobs();
