@@ -51,7 +51,7 @@ app.register(cors, {
 
 // TEMP: Queue-dependent routes remain disabled (Redis env var issue on Railway)
 // app.register(listingsRoutes);
-app.register(inventoryRoutes);
+app.register(inventoryRoutes, { prefix: '/api' });
 // app.register(aiRoutes);
 // app.register(marketplaceRoutes);
 // app.register(adminRoutes);
@@ -62,7 +62,7 @@ app.register(inventoryRoutes);
 // app.register(woocommerceWebhookRoutes);
 // app.register(estyRoutes);
 // app.register(estyWebhookRoutes);
-app.register(syncRoutes);
+app.register(syncRoutes, { prefix: '/api' });
 // app.register(ebayAuthRoutes);
 // app.register(ebayRoutes);
 // app.register(ebayOrdersRoutes);
