@@ -1,38 +1,37 @@
 import "./db.js"; // ensure dotenv loads before anything else
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import { listingsRoutes } from "./routes/listings.js";
-import { inventoryRoutes } from "./routes/inventory.js";
-import { aiRoutes } from "./routes/ai.js";
-import { marketplaceRoutes } from "./routes/marketplaces.js";
-import { adminRoutes } from "./routes/admin.js";
-import { monitoringRoutes } from "./routes/monitoring.js";
-import { shopifyRoutes } from "./routes/shopify.js";
-import { shopifyWebhookRoutes } from "./routes/shopify-webhooks.js";
-import { woocommerceRoutes } from "./routes/woocommerce.js";
-import { woocommerceWebhookRoutes } from "./routes/woocommerce-webhooks.js";
-import { estyRoutes } from "./routes/etsy.js";
-import { estyWebhookRoutes } from "./routes/etsy-webhooks.js";
-import { syncRoutes } from "./routes/sync.routes.js";
-import { ebayAuthRoutes } from "./routes/ebay-auth.js";
-import { ebayRoutes } from "./routes/ebay.routes.js";
-import { ebayOrdersRoutes } from "./routes/ebay-orders.routes.js";
-// TEMPORARILY DISABLED - catalog.routes.ts imports channelSyncQueue from lib/queue at module
-// level, which triggers a Redis connection before env vars are loaded on Railway.
+// TEMP: All route imports disabled — registrations are commented out, importing them still
+// executes their module-level code which transitively pulls in lib/queue (Redis).
+// import { listingsRoutes } from "./routes/listings.js";
+// import { inventoryRoutes } from "./routes/inventory.js";
+// import { aiRoutes } from "./routes/ai.js";
+// import { marketplaceRoutes } from "./routes/marketplaces.js";
+// import { adminRoutes } from "./routes/admin.js";
+// import { monitoringRoutes } from "./routes/monitoring.js";
+// import { shopifyRoutes } from "./routes/shopify.js";
+// import { shopifyWebhookRoutes } from "./routes/shopify-webhooks.js";
+// import { woocommerceRoutes } from "./routes/woocommerce.js";
+// import { woocommerceWebhookRoutes } from "./routes/woocommerce-webhooks.js";
+// import { estyRoutes } from "./routes/etsy.js";
+// import { estyWebhookRoutes } from "./routes/etsy-webhooks.js";
+// import { syncRoutes } from "./routes/sync.routes.js";
+// import { ebayAuthRoutes } from "./routes/ebay-auth.js";
+// import { ebayRoutes } from "./routes/ebay.routes.js";
+// import { ebayOrdersRoutes } from "./routes/ebay-orders.routes.js";
 // import { catalogRoutes } from "./routes/catalog.routes.js";
-import { outboundRoutes } from "./routes/outbound.routes.js";
-import { matrixRoutes } from "./routes/matrix.routes.js";
-import { inboundRoutes } from "./routes/inbound.routes.js";
-// TEMP: webhooks.routes.ts imports inventory-sync.service which imports redis from lib/queue
-// at module level, triggering a Redis connection before env vars load on Railway.
+// import { outboundRoutes } from "./routes/outbound.routes.js";
+// import { matrixRoutes } from "./routes/matrix.routes.js";
+// import { inboundRoutes } from "./routes/inbound.routes.js";
 // import { webhookRoutes } from "./routes/webhooks.routes.js";
-import { ordersRoutes } from "./routes/orders.routes.js";
+// import { ordersRoutes } from "./routes/orders.routes.js";
 import healthRoutes from "./routes/health.js";
-import { startJobs } from "./jobs/sync.job.js";
-import { initializeBullMQWorker } from "./workers/bullmq-sync.worker.js";
-import { initializeChannelSyncWorker } from "./workers/channel-sync.worker.js";
-import { initializeBulkListWorker } from "./workers/bulk-list.worker.js";
-import { initializeQueue, closeQueue } from "./lib/queue.js";
+// TEMP: All queue/worker imports disabled to prevent module-level Redis connection
+// import { startJobs } from "./jobs/sync.job.js";
+// import { initializeBullMQWorker } from "./workers/bullmq-sync.worker.js";
+// import { initializeChannelSyncWorker } from "./workers/channel-sync.worker.js";
+// import { initializeBulkListWorker } from "./workers/bulk-list.worker.js";
+// import { initializeQueue, closeQueue } from "./lib/queue.js";
 import { logger } from "./utils/logger.js";
 
 const app = Fastify({ logger: true });
@@ -107,12 +106,12 @@ start();
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully...');
-  await closeQueue();
+  // await closeQueue(); // TEMP: disabled with queue imports
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   logger.info('SIGINT received, shutting down gracefully...');
-  await closeQueue();
+  // await closeQueue(); // TEMP: disabled with queue imports
   process.exit(0);
 });
