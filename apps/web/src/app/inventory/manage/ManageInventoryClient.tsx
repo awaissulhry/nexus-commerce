@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'https://nexusapi-production-b7bb.up.railway.app'
 import Link from "next/link";
 import { Search } from "lucide-react";
 import type { InventoryItem } from "@/types/inventory";
@@ -142,7 +144,7 @@ export default function ManageInventoryClient({
         <MarketplaceActionsDropdown
           onImportAmazon={async () => {
             try {
-              const response = await fetch('http://localhost:3001/api/catalog/amazon/import', {
+              const response = await fetch(`${BACKEND_URL}/api/catalog/amazon/import`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({}),
@@ -165,7 +167,7 @@ export default function ManageInventoryClient({
           }}
           onImportEbay={async () => {
             try {
-              const response = await fetch('http://localhost:3001/api/catalog/ebay/import', {
+              const response = await fetch(`${BACKEND_URL}/api/catalog/ebay/import`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({}),
@@ -188,7 +190,7 @@ export default function ManageInventoryClient({
           }}
           onSyncAll={async () => {
             try {
-              const response = await fetch('http://localhost:3001/api/catalog/sync/bulk', {
+              const response = await fetch(`${BACKEND_URL}/api/catalog/sync/bulk`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ targetChannel: 'ALL' }),
