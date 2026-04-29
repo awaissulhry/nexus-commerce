@@ -14,7 +14,8 @@
   },
   "scripts": {
     "dev": "echo \"Add your database dev command here\"",
-    "build": "tsc -p tsconfig.json || echo 'No tsconfig, skipping'",
+    "build": "prisma generate",
+    "postinstall": "prisma generate",
     "seed": "tsx seed.ts"
   },
   "dependencies": {
