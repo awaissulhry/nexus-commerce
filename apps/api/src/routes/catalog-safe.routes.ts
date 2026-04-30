@@ -1,12 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import prisma from "../db.js";
-import { importEbayCatalog, getEbayImportStats } from "../services/ebay-import.service.js";
 import { logger } from "../utils/logger.js";
 
 /**
- * Queue-free subset of catalog routes.
- * Contains only the import endpoints — no channelSyncQueue dependency.
- * Registered with prefix '/api/catalog'.
+ * Supplemental catalog routes that are NOT covered by catalog.routes.ts.
+ * Registered with prefix '/api/catalog'. Keep this file minimal — every route
+ * here must be unique (i.e. not redeclared in catalog.routes.ts) to avoid
+ * Fastify FST_ERR_DUPLICATED_ROUTE crashes at boot.
  */
 export async function catalogSafeRoutes(app: FastifyInstance) {
   /**
@@ -36,85 +36,6 @@ export async function catalogSafeRoutes(app: FastifyInstance) {
         error: {
           code: "IMPORT_FAILED",
           message: error.message || "Failed to read Amazon catalog",
-        },
-      });
-    }
-  });
-
-  /**
-   * POST /api/catalog/ebay/import
-   * Imports eBay catalog into the database.
-   */
-  app.post("/ebay/import", async (_request, reply) => {
-    try {
-      logger.info("[EBAY IMPORT] Starting import…");
-
-      const result = await importEbayCatalog();
-
-      logger.info("[EBAY IMPORT] Import complete:", result);
-
-      return reply.status(201).send({
-        success: true,
-        data: {
-          created: result.created,
-          updated: result.updated,
-          total: result.total,
-          products: result.products,
-        },
-        message: `Successfully imported ${result.total} products from eBay (${result.created} created, ${result.updated} updated)`,
-      });
-    } catch (error: any) {
-      logger.error("[EBAY IMPORT] Error:", error);
-      return reply.status(500).send({
-        success: false,
-        error: {
-          code: "IMPORT_FAILED",
-          message: error.message || "Failed to import eBay catalog",
-        },
-      });
-    }
-  });
-
-  /**
-   * GET /api/catalog/ebay/stats
-   */
-  app.get("/ebay/stats", async (_request, reply) => {
-    try {
-      const stats = await getEbayImportStats();
-      return reply.status(200).send({ success: true, data: stats });
-    } catch (error: any) {
-      logger.error("[EBAY STATS] Error:", error);
-      return reply.status(500).send({
-        success: false,
-        error: {
-          code: "STATS_FAILED",
-          message: error.message || "Failed to get eBay import statistics",
-        },
-      });
-    }
-  });
-
-  /**
-   * DELETE /api/catalog/products/:id
-   * Deletes a product from the database.
-   */
-  app.delete<{ Params: { id: string } }>("/products/:id", async (request, reply) => {
-    try {
-      const { id } = request.params;
-
-      await prisma.product.delete({ where: { id } });
-
-      return reply.status(200).send({
-        success: true,
-        message: `Product ${id} deleted`,
-      });
-    } catch (error: any) {
-      logger.error("[DELETE PRODUCT] Error:", error);
-      return reply.status(500).send({
-        success: false,
-        error: {
-          code: "DELETE_FAILED",
-          message: error.message || "Failed to delete product",
         },
       });
     }

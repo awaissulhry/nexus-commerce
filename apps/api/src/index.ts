@@ -1,34 +1,32 @@
 import "./db.js"; // ensure dotenv loads before anything else
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-// TEMP: All route imports disabled — registrations are commented out, importing them still
-// executes their module-level code which transitively pulls in lib/queue (Redis).
-// import { listingsRoutes } from "./routes/listings.js";
+import { listingsRoutes } from "./routes/listings.js";
 import { inventoryRoutes } from "./routes/inventory.js";
-// import { aiRoutes } from "./routes/ai.js";
-// import { marketplaceRoutes } from "./routes/marketplaces.js";
-// import { adminRoutes } from "./routes/admin.js";
-// import { monitoringRoutes } from "./routes/monitoring.js";
-// import { shopifyRoutes } from "./routes/shopify.js";
-// import { shopifyWebhookRoutes } from "./routes/shopify-webhooks.js";
-// import { woocommerceRoutes } from "./routes/woocommerce.js";
-// import { woocommerceWebhookRoutes } from "./routes/woocommerce-webhooks.js";
-// import { estyRoutes } from "./routes/etsy.js";
-// import { estyWebhookRoutes } from "./routes/etsy-webhooks.js";
+import { aiRoutes } from "./routes/ai.js";
+import { marketplaceRoutes } from "./routes/marketplaces.js";
+import { adminRoutes } from "./routes/admin.js";
+import { monitoringRoutes } from "./routes/monitoring.js";
+import { shopifyRoutes } from "./routes/shopify.js";
+import { shopifyWebhookRoutes } from "./routes/shopify-webhooks.js";
+import { woocommerceRoutes } from "./routes/woocommerce.js";
+import { woocommerceWebhookRoutes } from "./routes/woocommerce-webhooks.js";
+import { estyRoutes } from "./routes/etsy.js";
+import { estyWebhookRoutes } from "./routes/etsy-webhooks.js";
 import { syncRoutes } from "./routes/sync.routes.js";
-// import { ebayAuthRoutes } from "./routes/ebay-auth.js";
-// import { ebayRoutes } from "./routes/ebay.routes.js";
-// import { ebayOrdersRoutes } from "./routes/ebay-orders.routes.js";
-// import { catalogRoutes } from "./routes/catalog.routes.js";  // disabled: imports channelSyncQueue (Redis)
-// import { outboundRoutes } from "./routes/outbound.routes.js";
-// import { matrixRoutes } from "./routes/matrix.routes.js";
-// import { inboundRoutes } from "./routes/inbound.routes.js";
-// import { webhookRoutes } from "./routes/webhooks.routes.js";
-// import { ordersRoutes } from "./routes/orders.routes.js";
+import { ebayAuthRoutes } from "./routes/ebay-auth.js";
+import { ebayRoutes } from "./routes/ebay.routes.js";
+import { ebayOrdersRoutes } from "./routes/ebay-orders.routes.js";
+import { catalogRoutes } from "./routes/catalog.routes.js";
+import { outboundRoutes } from "./routes/outbound.routes.js";
+import { matrixRoutes } from "./routes/matrix.routes.js";
+import { inboundRoutes } from "./routes/inbound.routes.js";
+import { webhookRoutes } from "./routes/webhooks.routes.js";
+import { ordersRoutes } from "./routes/orders.routes.js";
 import { catalogSafeRoutes } from "./routes/catalog-safe.routes.js";
 import healthRoutes from "./routes/health.js";
 import amazonRoutes from "./routes/amazon.routes.js";
-// TEMP: All queue/worker imports disabled to prevent module-level Redis connection
+// Queue/worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS — Phase 2 will flip it on.
 // import { startJobs } from "./jobs/sync.job.js";
 // import { initializeBullMQWorker } from "./workers/bullmq-sync.worker.js";
 // import { initializeChannelSyncWorker } from "./workers/channel-sync.worker.js";
@@ -49,29 +47,30 @@ app.register(cors, {
   credentials: true,
 });
 
-// TEMP: Queue-dependent routes remain disabled (Redis env var issue on Railway)
-// app.register(listingsRoutes);
+// HTTP routes — all queue references are lazy (see lib/queue.ts), so registering
+// these does not open Redis connections. Workers/jobs remain disabled (Phase 2).
+app.register(listingsRoutes);
 app.register(inventoryRoutes, { prefix: '/api' });
-// app.register(aiRoutes);
-// app.register(marketplaceRoutes);
-// app.register(adminRoutes);
-// app.register(monitoringRoutes);
-// app.register(shopifyRoutes);
-// app.register(shopifyWebhookRoutes);
-// app.register(woocommerceRoutes);
-// app.register(woocommerceWebhookRoutes);
-// app.register(estyRoutes);
-// app.register(estyWebhookRoutes);
+app.register(aiRoutes);
+app.register(marketplaceRoutes);
+app.register(adminRoutes);
+app.register(monitoringRoutes);
+app.register(shopifyRoutes);
+app.register(shopifyWebhookRoutes);
+app.register(woocommerceRoutes);
+app.register(woocommerceWebhookRoutes);
+app.register(estyRoutes);
+app.register(estyWebhookRoutes);
 app.register(syncRoutes, { prefix: '/api' });
-// app.register(ebayAuthRoutes);
-// app.register(ebayRoutes);
-// app.register(ebayOrdersRoutes);
-// app.register(catalogRoutes, { prefix: '/api/catalog' });  // disabled: channelSyncQueue (Redis)
-// app.register(outboundRoutes);
-// app.register(matrixRoutes);
-// app.register(inboundRoutes);
-// app.register(webhookRoutes);
-// app.register(ordersRoutes);
+app.register(ebayAuthRoutes);
+app.register(ebayRoutes);
+app.register(ebayOrdersRoutes);
+app.register(catalogRoutes, { prefix: '/api/catalog' });
+app.register(outboundRoutes);
+app.register(matrixRoutes);
+app.register(inboundRoutes);
+app.register(webhookRoutes);
+app.register(ordersRoutes);
 app.register(catalogSafeRoutes, { prefix: '/api/catalog' });
 app.register(healthRoutes, { prefix: '/api' });
 app.register(amazonRoutes, { prefix: '/api/amazon' });
@@ -84,25 +83,23 @@ async function start() {
       port: port,
       host: '0.0.0.0'
     });
-    
+
     app.log.info(`API server listening at http://0.0.0.0:${port}`);
 
     // ── PHASE 13: Initialize BullMQ Infrastructure ──────────────────────
-    // TEMPORARILY DISABLED - Redis env var loading issue
+    // TEMPORARILY DISABLED - Phase 2 will re-enable workers
     // await initializeQueue();
     // initializeBullMQWorker();
     // initializeChannelSyncWorker();
     // initializeBulkListWorker();
-
-    // TEMP: Disabled - imports services that import queues
     // startJobs();
 
-    logger.info('✅ Autopilot infrastructure initialized', {
+    logger.info('✅ API server initialized (workers disabled — Phase 2)', {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
     app.log.error(error);
-    logger.error('❌ Failed to initialize Autopilot', {
+    logger.error('❌ Failed to start API', {
       error: error instanceof Error ? error.message : String(error),
     });
     process.exit(1);
@@ -114,12 +111,12 @@ start();
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully...');
-  // await closeQueue(); // TEMP: disabled with queue imports
+  // await closeQueue(); // re-enable in Phase 2 when workers are bootstrapped
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   logger.info('SIGINT received, shutting down gracefully...');
-  // await closeQueue(); // TEMP: disabled with queue imports
+  // await closeQueue(); // re-enable in Phase 2 when workers are bootstrapped
   process.exit(0);
 });

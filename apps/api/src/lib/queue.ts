@@ -2,15 +2,25 @@
  * BullMQ Queue Configuration
  *
  * Enterprise-grade Redis message broker for the Autopilot
- * Replaces node-cron database polling with event-driven architecture
+ *
+ * IMPORTANT: every Redis-touching object (Redis client, Queue, QueueEvents)
+ * is lazy-initialized. Module load must NEVER open a Redis connection — that
+ * caused boot failures on Railway when REDIS_URL wasn't yet in env. Queues
+ * are created on first property access via the getters below.
  */
 
 import { Queue, QueueEvents } from 'bullmq'
 import Redis from 'ioredis'
 import { logger } from '../utils/logger.js'
 
-// Lazy-initialized Redis singleton — reads env vars on first access, not at module load
+// ── Lazy singletons ──────────────────────────────────────────────────────
 let _redis: Redis | null = null
+let _outboundSyncQueue: Queue | null = null
+let _channelSyncQueue: Queue | null = null
+let _stockUpdateQueue: Queue | null = null
+let _queueEvents: QueueEvents | null = null
+let _channelSyncQueueEvents: QueueEvents | null = null
+let _eventListenersAttached = false
 
 function getRedisConnection(): Redis {
   if (!_redis) {
@@ -33,88 +43,114 @@ function getRedisConnection(): Redis {
   return _redis
 }
 
+const defaultJobOptions = {
+  attempts: 3,
+  backoff: {
+    type: 'exponential' as const,
+    delay: 2000,
+  },
+  removeOnComplete: { age: 3600 },
+  removeOnFail: { age: 86400 },
+}
+
+function getOutboundSyncQueue(): Queue {
+  if (!_outboundSyncQueue) {
+    _outboundSyncQueue = new Queue('outbound-sync', {
+      connection: getRedisConnection(),
+      defaultJobOptions,
+    })
+  }
+  return _outboundSyncQueue
+}
+
+function getChannelSyncQueue(): Queue {
+  if (!_channelSyncQueue) {
+    _channelSyncQueue = new Queue('channel-sync', {
+      connection: getRedisConnection(),
+      defaultJobOptions,
+    })
+  }
+  return _channelSyncQueue
+}
+
+function getStockUpdateQueue(): Queue {
+  if (!_stockUpdateQueue) {
+    _stockUpdateQueue = new Queue('stock-updates', {
+      connection: getRedisConnection(),
+      defaultJobOptions,
+    })
+  }
+  return _stockUpdateQueue
+}
+
+function getQueueEvents(): QueueEvents {
+  if (!_queueEvents) {
+    _queueEvents = new QueueEvents('outbound-sync', {
+      connection: getRedisConnection(),
+    })
+    attachEventListeners(_queueEvents)
+  }
+  return _queueEvents
+}
+
+function getChannelSyncQueueEvents(): QueueEvents {
+  if (!_channelSyncQueueEvents) {
+    _channelSyncQueueEvents = new QueueEvents('channel-sync', {
+      connection: getRedisConnection(),
+    })
+  }
+  return _channelSyncQueueEvents
+}
+
+function attachEventListeners(events: QueueEvents) {
+  if (_eventListenersAttached) return
+  _eventListenersAttached = true
+  events.on('completed', ({ jobId }) => {
+    logger.debug('Job completed', { jobId })
+  })
+  events.on('failed', ({ jobId, failedReason }) => {
+    logger.warn('Job failed', { jobId, failedReason })
+  })
+  events.on('error', (error) => {
+    logger.error('Queue error', { error: error instanceof Error ? error.message : String(error) })
+  })
+}
+
+// ── Public proxy exports ─────────────────────────────────────────────────
+// These wrap the lazy getters so existing call sites (e.g. `outboundSyncQueue.add(...)`)
+// keep working unchanged. The first method invocation triggers initialization.
+
+function makeQueueProxy(getter: () => Queue): Queue {
+  return new Proxy({} as Queue, {
+    get(_target, prop, receiver) {
+      const q = getter()
+      const value = Reflect.get(q, prop, receiver)
+      return typeof value === 'function' ? value.bind(q) : value
+    },
+  })
+}
+
+function makeQueueEventsProxy(getter: () => QueueEvents): QueueEvents {
+  return new Proxy({} as QueueEvents, {
+    get(_target, prop, receiver) {
+      const e = getter()
+      const value = Reflect.get(e, prop, receiver)
+      return typeof value === 'function' ? value.bind(e) : value
+    },
+  })
+}
+
 export const redis = {
   get connection() {
     return getRedisConnection()
-  }
+  },
 }
 
-// Initialize the outbound-sync queue
-export const outboundSyncQueue = new Queue('outbound-sync', {
-  connection: redis.connection,
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: {
-      type: 'exponential',
-      delay: 2000,
-    },
-    removeOnComplete: {
-      age: 3600,
-    },
-    removeOnFail: {
-      age: 86400,
-    },
-  },
-})
-
-// Initialize the channel-sync queue (Phase 25)
-export const channelSyncQueue = new Queue('channel-sync', {
-  connection: redis.connection,
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: {
-      type: 'exponential',
-      delay: 2000,
-    },
-    removeOnComplete: {
-      age: 3600,
-    },
-    removeOnFail: {
-      age: 86400,
-    },
-  },
-})
-
-// Initialize the stock-updates queue (inventory sync)
-export const stockUpdateQueue = new Queue('stock-updates', {
-  connection: redis.connection,
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: {
-      type: 'exponential',
-      delay: 2000,
-    },
-    removeOnComplete: {
-      age: 3600,
-    },
-    removeOnFail: {
-      age: 86400,
-    },
-  },
-})
-
-// Queue events for monitoring
-export const queueEvents = new QueueEvents('outbound-sync', {
-  connection: redis.connection,
-})
-
-// Channel sync queue events for monitoring
-export const channelSyncQueueEvents = new QueueEvents('channel-sync', {
-  connection: redis.connection,
-})
-
-// Event listeners for queue monitoring
-queueEvents.on('completed', ({ jobId }) => {
-  logger.debug('Job completed', { jobId })
-})
-
-queueEvents.on('failed', ({ jobId, failedReason }) => {
-  logger.warn('Job failed', { jobId, failedReason })
-})
-
-queueEvents.on('error', (error) => {
-  logger.error('Queue error', { error: error instanceof Error ? error.message : String(error) })
-})
+export const outboundSyncQueue: Queue = makeQueueProxy(getOutboundSyncQueue)
+export const channelSyncQueue: Queue = makeQueueProxy(getChannelSyncQueue)
+export const stockUpdateQueue: Queue = makeQueueProxy(getStockUpdateQueue)
+export const queueEvents: QueueEvents = makeQueueEventsProxy(getQueueEvents)
+export const channelSyncQueueEvents: QueueEvents = makeQueueEventsProxy(getChannelSyncQueueEvents)
 
 /**
  * Initialize queue and verify Redis connection
@@ -129,7 +165,9 @@ export async function initializeQueue() {
       port: !process.env.REDIS_URL ? parseInt(process.env.REDIS_PORT || '6379') : undefined,
     })
 
-    const counts = await outboundSyncQueue.getJobCounts()
+    // Force queue creation + attach event listeners
+    getQueueEvents()
+    const counts = await getOutboundSyncQueue().getJobCounts()
     logger.info('📊 Queue initialized', {
       waiting: counts.waiting,
       active: counts.active,
@@ -152,9 +190,12 @@ export async function initializeQueue() {
  */
 export async function closeQueue() {
   try {
-    await outboundSyncQueue.close()
-    await queueEvents.close()
-    await redis.connection.quit()
+    if (_outboundSyncQueue) await _outboundSyncQueue.close()
+    if (_channelSyncQueue) await _channelSyncQueue.close()
+    if (_stockUpdateQueue) await _stockUpdateQueue.close()
+    if (_queueEvents) await _queueEvents.close()
+    if (_channelSyncQueueEvents) await _channelSyncQueueEvents.close()
+    if (_redis) await _redis.quit()
     logger.info('✅ Queue and Redis connection closed')
   } catch (error) {
     logger.error('Error closing queue', {
@@ -168,8 +209,9 @@ export async function closeQueue() {
  */
 export async function getQueueStats() {
   try {
-    const counts = await outboundSyncQueue.getJobCounts()
-    const isPaused = await outboundSyncQueue.isPaused()
+    const queue = getOutboundSyncQueue()
+    const counts = await queue.getJobCounts()
+    const isPaused = await queue.isPaused()
 
     return {
       waiting: counts.waiting,
