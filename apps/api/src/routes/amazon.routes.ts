@@ -480,6 +480,51 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // GET /api/amazon/test-catalog-api?asin=XXXXXXXXXX
+  fastify.get('/test-catalog-api', async (request, reply) => {
+    try {
+      const asin = (request.query as any).asin || 'B0DYXSQP18'
+
+      console.log('Testing Catalog Items API...')
+      console.log('ASIN:', asin)
+      console.log('Marketplace:', process.env.AMAZON_MARKETPLACE_ID)
+
+      const result = await (amazonService as any).sp.callAPI({
+        operation: 'getCatalogItem',
+        endpoint: 'catalog',
+        path: {
+          version: '2022-04-01',
+          asin: asin
+        },
+        query: {
+          marketplaceIds: process.env.AMAZON_MARKETPLACE_ID,
+          includedData: 'relationships'
+        }
+      })
+
+      console.log('✅ Success! Got catalog data')
+
+      return {
+        success: true,
+        asin,
+        hasRelationships: !!result.relationships,
+        parentAsins: result.relationships?.parentAsins || [],
+        childAsins: result.relationships?.childAsins || [],
+        fullData: result
+      }
+    } catch (error: any) {
+      console.error('❌ Catalog Items API Error:', error.message)
+      console.error('Response:', error.response?.data)
+
+      return reply.code(500).send({
+        success: false,
+        error: error.message,
+        errorCode: error.response?.data?.errors?.[0]?.code,
+        details: error.response?.data
+      })
+    }
+  })
+
   /**
    * POST /api/amazon/products/reindex-hierarchy
    *
