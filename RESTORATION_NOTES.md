@@ -118,3 +118,89 @@ to the queue refactor.
 2. Hit `/api/health`, `/api/inventory`, `/api/catalog/...` to confirm 200s.
 3. Phase 2: re-enable workers and `initializeQueue()` once Railway env is
    confirmed.
+
+---
+
+## Phase 2: Parent/Child Hierarchy (2026-04-30)
+
+### What was attempted, what worked
+- **Catalog Items API path** — abandoned. The SP-API app is missing the
+  Catalog Items API role, which is a Restricted Role on the Italian
+  Seller Central account and not visible to grant. Re-authorizing did not
+  unlock it. `/api/amazon/products/test-catalog-api` confirms:
+  `CATALOG_ITEMS_API_BLOCKED: even summaries failed`.
+- **Reports API path** — partial. `GET_MERCHANT_LISTINGS_DATA` works (no
+  scope issue) but its 30 columns do not include parent SKU or parent
+  ASIN. `asin2` and `asin3` columns exist but are entirely empty (0/247
+  rows). 18 listings share an `asin1` value, but those are just
+  duplicate FBA/FBM listings of the same product, not parent groupings.
+- **Title-based grouping** — works. Amazon listings for variation
+  children are titled identically to the parent + `" (Size, Color)"`
+  appended at the end (and the parent record exists in the DB with the
+  full description, no parenthetical). This is the actual signal.
+
+### Solution shipped
+A new endpoint `POST /api/amazon/products/auto-group` parses each
+product's name with `/^(.+?)\s*\(([^()]+)\)\s*$/`. Children are products
+whose name had a trailing parenthetical with short variation attrs
+(<60 chars, comma-separated). Parents are products whose full name
+matches a child's stripped baseTitle. The `?dryRun=1` flag previews
+the plan; `?reset=1` clears the prior (incorrect) SKU-prefix groupings
+first. Stock is rolled up child→parent automatically.
+
+### Results — first run on production data
+| Metric | Value |
+|---|---|
+| Total Amazon products | 278 |
+| Children with variation parens | 235 |
+| Parents found | 12 |
+| Children linked | 199 |
+| Standalone (no parens or no match) | 67 |
+| Orphan children (no parent record) | 36 |
+
+Top groupings (the previously-failing cases now correct):
+
+| Parent SKU | Children | Theme | Notes |
+|---|---|---|---|
+| `xracing` | 49 | Size/Color | X-Tuta racing suit |
+| `GALE-JACKET` | 38 | Size/Color | Black + Yellow merged ✓ |
+| `IT-MOSS-JACKET` | 21 | Size/Color | Black + Yellow + Green merged ✓ |
+| `3K-HP05-BH9I` | 15 | Size/Color | MISANO leather jacket |
+| `VENTRA-JACKET` | 12 | Size/Color | Red + Yellow merged ✓ |
+| `REGAL-JACKET` | 12 | Size/Color | Black + Grey merged ✓ |
+| `AIRMESH-JACKET` | 12 | Size/Color | Black + Yellow merged ✓ |
+| `AIREON` | 12 | Size/Color | Crema + Nero Neo merged ✓ |
+| `xavia-knee-slider` | 8 | Size | 8 colors |
+| `normal-knee-slider` | 8 | Size | 8 colors |
+| `AIR-MESH-JACKET-MEN` | 6 | Size/Color | |
+| `WATERPROOF-OVERJACKET-BLACK-MEN` | 6 | Size/Color | |
+
+### 36 orphan children to follow up on
+Mostly women's variants (`REGAL-JACKET-*-WOMEN`, `VENTRA-JACKET-*-WOMEN`)
+whose parent record (`Da Donna` description) does not exist in the DB —
+only the men's parent is imported. Two ways to fix:
+1. Import the women's parent records from Amazon Seller Central, then
+   re-run `/products/auto-group?reset=1`.
+2. Manually merge them via `POST /api/amazon/products/merge` with body
+   `{ parentSku, childSkus[], variationTheme }`. (`/products/unmerge` is
+   also available to undo a merge.)
+
+### Frontend
+- `/api/inventory/top-level` now exposes `childCount` (computed from
+  inline children) and `variationTheme` on each parent row. The
+  `apps/web/src/components/inventory/columns.tsx` chevron rendering is
+  gated on `item.childCount > 0` and was already wired up correctly.
+- `apps/web/src/components/inventory/InventoryTable.tsx` lazy-loads
+  children via `/api/inventory/{id}/children` (Next.js proxy →
+  backend `/api/amazon/products/{id}/children`). Verified: returns the
+  expected count for each parent (8, 12, 21, 38 children, etc.).
+
+### Why we did not migrate to a proper hierarchy at the SP-API level
+The Catalog Items API role is gated by Amazon's Restricted Role process
+in the Italian marketplace. Title-based matching is the pragmatic path.
+If the role becomes available later, `/api/amazon/products/reindex-hierarchy`
+(already built, blocked on auth right now) will use the real Amazon
+parent ASINs and supersede this title heuristic — the existing
+parent/child records can be cleared with `?reset=1` on auto-group, then
+the reindex re-builds from authoritative data.
+
