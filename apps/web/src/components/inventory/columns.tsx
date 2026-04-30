@@ -2,15 +2,12 @@
 
 import React from "react";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ChevronRight, ChevronDown } from "lucide-react";
+import { ChevronRight, ChevronDown, Loader2 } from "lucide-react";
 import type { InventoryItem } from "@/types/inventory";
 import Link from "next/link";
 
 const col = createColumnHelper<InventoryItem>();
 
-/* ================================================================== */
-/*  Helper: Format Currency (EUR)                                     */
-/* ================================================================== */
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("de-DE", {
     style: "currency",
@@ -19,12 +16,8 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-/* ================================================================== */
-/*  Helper: Actions Dropdown Button                                   */
-/* ================================================================== */
 function ActionsButton({ item }: { item: InventoryItem }) {
   const [isOpen, setIsOpen] = React.useState(false);
-
   return (
     <div className="relative inline-block">
       <button
@@ -34,7 +27,6 @@ function ActionsButton({ item }: { item: InventoryItem }) {
         Edit
         <ChevronDown className="w-3.5 h-3.5" />
       </button>
-
       {isOpen && (
         <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded shadow-lg z-10">
           <Link
@@ -55,10 +47,6 @@ function ActionsButton({ item }: { item: InventoryItem }) {
   );
 }
 
-/* ================================================================== */
-/*  Column Definitions — Amazon Seller Central 1:1 Exact Replication  */
-/* ================================================================== */
-
 export const inventoryColumns = [
   // ── 1. Select & Expand ──────────────────────────────────────────
   col.display({
@@ -69,79 +57,98 @@ export const inventoryColumns = [
         type="checkbox"
         className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
         checked={table.getIsAllPageRowsSelected()}
-        ref={(el) => {
-          if (el) el.indeterminate = table.getIsSomePageRowsSelected();
-        }}
+        ref={(el) => { if (el) el.indeterminate = table.getIsSomePageRowsSelected(); }}
         onChange={table.getToggleAllPageRowsSelectedHandler()}
         aria-label="Select all"
       />
     ),
-    cell: ({ row }) => (
-      <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-          checked={row.getIsSelected()}
-          disabled={!row.getCanSelect()}
-          onChange={row.getToggleSelectedHandler()}
-          aria-label={`Select ${row.original.sku}`}
-        />
-        {row.original.isParent === true ? (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              row.toggleExpanded();
-            }}
-            className="p-0.5 rounded hover:bg-slate-200 transition-colors text-slate-400 hover:text-slate-700"
-          >
-            {row.getIsExpanded() ? (
-              <ChevronDown className="w-4 h-4" />
-            ) : (
-              <ChevronRight className="w-4 h-4" />
-            )}
-          </button>
-        ) : null}
-      </div>
-    ),
+    cell: ({ row, table }) => {
+      const item = row.original;
+      const meta = table.options.meta as any;
+      const isLoading = meta?.loadingIds?.has(item.id);
+      const isExpanded = meta?.expandedIds?.has(item.id);
+      const hasChildren = (item.childCount ?? 0) > 0;
+
+      return (
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+            checked={row.getIsSelected()}
+            disabled={!row.getCanSelect()}
+            onChange={row.getToggleSelectedHandler()}
+            aria-label={`Select ${item.sku}`}
+          />
+          {hasChildren ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                meta?.onExpandRow?.(item.id);
+              }}
+              className="p-0.5 rounded hover:bg-slate-200 transition-colors text-slate-400 hover:text-slate-700"
+              title={isExpanded ? "Collapse variants" : "Expand variants"}
+            >
+              {isLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+              ) : isExpanded ? (
+                <ChevronDown className="w-4 h-4 text-blue-600" />
+              ) : (
+                <ChevronRight className="w-4 h-4" />
+              )}
+            </button>
+          ) : null}
+        </div>
+      );
+    },
   }),
 
-  // ── 2. Product (ASIN | SKU) ─────────────────────────────────────
+  // ── 2. Product (ASIN | SKU | childCount | variationTheme) ────────
   col.accessor("name", {
     id: "product",
     header: "Product",
     size: 380,
     cell: ({ row }) => {
       const item = row.original;
-      const isParent = item.isParent;
-      const variationCount = item.subRows?.length || 0;
+      const isChild = !!item.parentId;
+      const hasChildren = (item.childCount ?? 0) > 0;
 
       return (
         <div className="min-w-0">
-          {/* Product Name */}
           <p className="text-[13px] font-bold text-[#007185] line-clamp-2 leading-snug">
             {item.name}
           </p>
 
-          {/* ASIN | SKU */}
-          <div className="mt-1 flex items-center gap-1 text-[13px] text-gray-600">
-            {item.asin ? (
+          <div className="mt-1 flex items-center gap-1 text-[13px] text-gray-600 flex-wrap">
+            {item.asin && (
               <>
                 <span className="font-semibold">{item.asin}</span>
                 <span>|</span>
               </>
-            ) : null}
+            )}
             <span>{item.sku}</span>
           </div>
 
-          {/* TRUE Parent: Show Variations count only if isParent === true */}
-          {isParent === true && variationCount > 0 && (
-            <p className="text-[11px] text-gray-500 mt-1">
-              {variationCount} Variations
-            </p>
+          {/* Parent: show variation count + theme */}
+          {hasChildren && (
+            <div className="mt-1 flex items-center gap-2">
+              <span className="text-[11px] text-gray-500">
+                {item.childCount} variation{item.childCount !== 1 ? "s" : ""}
+              </span>
+              {item.variationTheme && (
+                <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded font-medium">
+                  by {item.variationTheme}
+                </span>
+              )}
+            </div>
           )}
 
-          {/* Standalone: Show Variation details link only if NOT a parent */}
-          {isParent === false && item.variationName && (
+          {/* Child: show variant attribute */}
+          {isChild && item.variationName && (
+            <p className="text-[11px] text-slate-400 mt-0.5">{item.variationName}</p>
+          )}
+
+          {/* Standalone (non-parent, non-child): variation details link */}
+          {!hasChildren && !isChild && item.variationName && (
             <Link
               href={`/catalog/${item.id}/edit`}
               className="text-[11px] text-[#007185] hover:text-[#0066a1] font-medium mt-1 inline-block"
@@ -154,27 +161,20 @@ export const inventoryColumns = [
     },
   }),
 
-  // ── 3. Listing Status (Next steps) ──────────────────────────────
+  // ── 3. Listing Status ────────────────────────────────────────────
   col.accessor("status", {
     id: "listingStatus",
     header: "Listing status",
     size: 140,
     cell: ({ row }) => {
       const item = row.original;
+      if ((item.childCount ?? 0) > 0) return null; // Parent row: empty
 
-      // Parent rows: render empty
-      if (item.isParent) {
-        return null;
-      }
-
-      const status = item.status;
-      const isOutOfStock = status === "Out of Stock";
-      const textColor = isOutOfStock ? "text-red-600" : "text-emerald-600";
-
+      const isOutOfStock = item.status === "Out of Stock";
       return (
         <div className="min-w-0">
-          <p className={`text-[13px] font-medium ${textColor}`}>
-            {status}
+          <p className={`text-[13px] font-medium ${isOutOfStock ? "text-red-600" : "text-emerald-600"}`}>
+            {item.status}
           </p>
           {isOutOfStock && (
             <Link
@@ -189,65 +189,39 @@ export const inventoryColumns = [
     },
   }),
 
-  // ── 4. Sales (Last 30 days) ─────────────────────────────────────
+  // ── 4. Sales (Last 30 days) ──────────────────────────────────────
   col.display({
     id: "sales",
     header: "Sales (Last 30 days)",
     size: 140,
     cell: ({ row }) => {
-      const item = row.original;
-
-      // Parent rows: render empty
-      if (item.isParent) {
-        return null;
-      }
-
-      // Mock sales data — in production, fetch from analytics
-      const sales = 0;
-
+      if ((row.original.childCount ?? 0) > 0) return null;
       return (
         <p className="text-[13px] font-semibold text-slate-900 tabular-nums">
-          {formatCurrency(sales)}
+          {formatCurrency(0)}
         </p>
       );
     },
   }),
 
-  // ── 5. Inventory (Available units) ──────────────────────────────
+  // ── 5. Inventory ─────────────────────────────────────────────────
   col.accessor("stock", {
     id: "inventory",
     header: "Inventory",
     size: 160,
     cell: ({ row }) => {
       const item = row.original;
+      if ((item.childCount ?? 0) > 0) return null;
 
-      // Parent rows: render empty
-      if (item.isParent) {
-        return null;
-      }
-
-      // Use fulfillmentChannel field directly from database
-      const fulfillmentChannel = item.fulfillmentChannel || "FBM";
-      const isFBA = fulfillmentChannel === "FBA";
-
+      const isFBA = (item.fulfillmentChannel || "FBM") === "FBA";
       return (
         <div className="min-w-0">
-          {/* Stock number */}
-          <p className="text-[13px] font-semibold text-slate-900 tabular-nums">
-            {item.stock}
-          </p>
-
-          {/* Fulfillment type and sub-label */}
+          <p className="text-[13px] font-semibold text-slate-900 tabular-nums">{item.stock}</p>
           <div className="text-[11px] text-gray-500 mt-1">
             {isFBA ? (
               <>
                 <p>Available (Fulfilment by Amazon)</p>
-                <Link
-                  href="#"
-                  className="text-[#007185] hover:text-[#0066a1] font-medium"
-                >
-                  View inventory
-                </Link>
+                <Link href="#" className="text-[#007185] hover:text-[#0066a1] font-medium">View inventory</Link>
               </>
             ) : (
               <>
@@ -261,40 +235,21 @@ export const inventoryColumns = [
     },
   }),
 
-  // ── 6. Price + shipping (Featured Offer) ────────────────────────
+  // ── 6. Price + shipping ──────────────────────────────────────────
   col.accessor("price", {
     id: "price",
     header: "Price + shipping",
     size: 180,
     cell: ({ row }) => {
       const item = row.original;
+      if ((item.childCount ?? 0) > 0) return null;
 
-      // Parent rows: render empty
-      if (item.isParent) {
-        return null;
-      }
-
-      const shippingCost = 0; // Mock shipping cost
-      const formattedPrice = formatCurrency(item.price);
-      const formattedShipping = formatCurrency(shippingCost);
-
+      const formatted = formatCurrency(item.price);
       return (
         <div className="min-w-0">
-          {/* Base price */}
-          <p className="text-[13px] font-semibold text-slate-900">
-            {formattedPrice}
-          </p>
-
-          {/* Price + shipping breakdown */}
-          <p className="text-[11px] text-gray-500 mt-1">
-            {formattedPrice} + {formattedShipping}
-          </p>
-
-          {/* Action Link: Edit prices */}
-          <Link
-            href={`/catalog/${item.id}/edit`}
-            className="text-[11px] text-[#007185] hover:text-[#0066a1] font-medium mt-1 inline-block"
-          >
+          <p className="text-[13px] font-semibold text-slate-900">{formatted}</p>
+          <p className="text-[11px] text-gray-500 mt-1">{formatted} + {formatCurrency(0)}</p>
+          <Link href={`/catalog/${item.id}/edit`} className="text-[11px] text-[#007185] hover:text-[#0066a1] font-medium mt-1 inline-block">
             Edit prices
           </Link>
         </div>
@@ -302,30 +257,18 @@ export const inventoryColumns = [
     },
   }),
 
-  // ── 7. Estimated fees (Per unit) ────────────────────────────────
+  // ── 7. Estimated fees ────────────────────────────────────────────
   col.display({
     id: "fees",
     header: "Estimated fees",
     size: 140,
     cell: ({ row }) => {
       const item = row.original;
-
-      // Parent rows: render empty
-      if (item.isParent) {
-        return null;
-      }
-
-      // Mock fee calculation — in production, calculate based on category/price
-      const estimatedFee = item.price * 0.15; // 15% placeholder
+      if ((item.childCount ?? 0) > 0) return null;
 
       return (
         <div className="min-w-0">
-          {/* Fee amount */}
-          <p className="text-[13px] font-semibold text-slate-900">
-            {formatCurrency(estimatedFee)}
-          </p>
-
-          {/* Action Link: Calculate revenue */}
+          <p className="text-[13px] font-semibold text-slate-900">{formatCurrency(item.price * 0.15)}</p>
           <button className="text-[11px] text-[#007185] hover:text-[#0066a1] font-medium mt-1">
             Calculate revenue
           </button>
@@ -334,16 +277,11 @@ export const inventoryColumns = [
     },
   }),
 
-  // ── 8. Actions ──────────────────────────────────────────────────
+  // ── 8. Actions ───────────────────────────────────────────────────
   col.display({
     id: "actions",
     header: "Actions",
     size: 120,
-    cell: ({ row }) => {
-      const item = row.original;
-
-      // Both parent and child rows show the Edit button
-      return <ActionsButton item={item} />;
-    },
+    cell: ({ row }) => <ActionsButton item={row.original} />,
   }),
 ];

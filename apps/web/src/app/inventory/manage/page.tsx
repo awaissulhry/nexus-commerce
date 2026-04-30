@@ -15,121 +15,77 @@ interface ApiProduct {
   totalStock: number;
   isParent: boolean;
   parentId: string | null;
+  variationTheme: string | null;
   fulfillmentChannel: string | null;
   fulfillmentMethod: string | null;
   shippingTemplate: string | null;
   brand: string | null;
   createdAt: string;
-  updatedAt: string;
 }
 
 async function getInventoryData(): Promise<InventoryItem[]> {
   try {
-    const res = await fetch(
-      `${getBackendUrl()}/api/amazon/products/list`,
-      { cache: "no-store" }
-    );
-
+    const res = await fetch(`${getBackendUrl()}/api/amazon/products/list`, {
+      cache: "no-store",
+    });
     if (!res.ok) {
       console.error(`[Inventory/Manage] API returned ${res.status}`);
       return [];
     }
-
     const data = await res.json();
     const raw: ApiProduct[] = data.products ?? [];
 
-    console.log(`[Inventory/Manage] API returned ${raw.length} products`);
-
-    const deriveStatus = (stock: number): InventoryItem["status"] => {
-      if (stock <= 0) return "Out of Stock";
-      return "Active";
-    };
-
-    const childMap = new Map<string, ApiProduct[]>();
+    const childCountMap = new Map<string, number>();
     for (const p of raw) {
       if (p.parentId) {
-        const arr = childMap.get(p.parentId) ?? [];
-        arr.push(p);
-        childMap.set(p.parentId, arr);
+        childCountMap.set(p.parentId, (childCountMap.get(p.parentId) ?? 0) + 1);
       }
     }
 
-    const topLevel = raw.filter((p) => !p.parentId);
+    const deriveStatus = (stock: number): InventoryItem["status"] =>
+      stock <= 0 ? "Out of Stock" : "Active";
 
-    return topLevel.map((product): InventoryItem => {
-      const children = childMap.get(product.id) ?? [];
-
-      const subRows: InventoryItem[] = children.map((child): InventoryItem => ({
-        id: child.id,
-        sku: child.sku,
-        name: child.name,
-        asin: child.amazonAsin || null,
-        ebayItemId: child.ebayItemId || null,
+    return raw
+      .filter((p) => !p.parentId)
+      .map((p): InventoryItem => ({
+        id: p.id,
+        sku: p.sku,
+        name: p.name,
+        asin: p.amazonAsin || null,
+        ebayItemId: p.ebayItemId || null,
         imageUrl: null,
-        price: Number(child.basePrice),
-        stock: child.totalStock,
-        status: deriveStatus(child.totalStock),
-        isParent: false,
-        variationName: child.name || null,
-        variationValue: null,
-        brand: product.brand || null,
-        fulfillment: child.fulfillmentMethod || product.fulfillmentMethod || null,
-        fulfillmentChannel: (child.fulfillmentChannel as "FBA" | "FBM" | null) || null,
-        shippingTemplate: child.shippingTemplate || null,
-        createdAt: child.createdAt ? new Date(child.createdAt).toISOString() : null,
-        condition: "New",
-        channels: undefined,
-        channelData: undefined,
-      }));
-
-      return {
-        id: product.id,
-        sku: product.sku,
-        name: product.name,
-        asin: product.amazonAsin || null,
-        ebayItemId: product.ebayItemId || null,
-        imageUrl: null,
-        price: Number(product.basePrice),
-        stock: product.totalStock,
-        status: deriveStatus(product.totalStock),
-        isParent: product.isParent === true,
+        price: Number(p.basePrice),
+        stock: p.totalStock,
+        status: deriveStatus(p.totalStock),
+        isParent: p.isParent === true,
+        childCount: childCountMap.get(p.id) ?? 0,
+        variationTheme: p.variationTheme || null,
         variationName: null,
         variationValue: null,
-        brand: product.brand || null,
-        fulfillment: product.fulfillmentChannel || product.fulfillmentMethod || null,
-        fulfillmentChannel: (product.fulfillmentChannel as "FBA" | "FBM" | null) || null,
-        shippingTemplate: product.shippingTemplate || null,
-        createdAt: product.createdAt ? new Date(product.createdAt).toISOString() : null,
+        brand: p.brand || null,
+        fulfillment: p.fulfillmentChannel || p.fulfillmentMethod || null,
+        fulfillmentChannel: (p.fulfillmentChannel as "FBA" | "FBM" | null) || null,
+        shippingTemplate: p.shippingTemplate || null,
+        createdAt: p.createdAt ? new Date(p.createdAt).toISOString() : null,
         condition: "New",
-        channels: undefined,
-        subRows: product.isParent === true && subRows.length > 0 ? subRows : undefined,
-      };
-    });
+      }));
   } catch (error) {
-    console.error("[Inventory/Manage] Failed to fetch inventory data:", error);
+    console.error("[Inventory/Manage] Failed to fetch:", error);
     return [];
   }
 }
 
 export default async function ManageInventoryPage() {
   const data = await getInventoryData();
-
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Master Catalog
-          </h1>
-          <p className="text-xs text-slate-500 mt-1 tracking-tight">
-            Amazon Seller Central 1:1 Replication
-          </p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Master Catalog</h1>
+          <p className="text-xs text-slate-500 mt-1 tracking-tight">Amazon Seller Central 1:1 Replication</p>
         </div>
         <div className="flex items-center gap-3">
-          <a
-            href="/inventory/upload"
-            className="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors tracking-tight"
-          >
+          <a href="/inventory/upload" className="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors tracking-tight">
             📤 Bulk Upload
           </a>
           <button className="px-4 py-2 text-xs font-medium text-white bg-slate-900 rounded-md hover:bg-slate-800 transition-colors tracking-tight">
@@ -137,7 +93,6 @@ export default async function ManageInventoryPage() {
           </button>
         </div>
       </div>
-
       <ManageInventoryClient data={data} />
     </div>
   );

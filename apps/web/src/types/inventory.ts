@@ -51,6 +51,12 @@ export interface InventoryItem {
    /** Whether this row is a parent (product) or child (variation) */
    isParent: boolean;
 
+   /** Number of child variants (populated on parent rows, 0 for standalone/children) */
+   childCount?: number;
+
+   /** Variation theme from Amazon (e.g. "Size", "Color", "SizeColor") */
+   variationTheme?: string | null;
+
    /** Variation attribute name (e.g. "Color") — children only */
    variationName: string | null;
 

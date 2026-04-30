@@ -300,6 +300,20 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // GET /api/amazon/products/:id/children - Fetch children of a parent product
+  fastify.get<{ Params: { id: string } }>('/products/:id/children', async (request, reply) => {
+    try {
+      const { id } = request.params
+      const children = await prisma.product.findMany({
+        where: { parentId: id },
+        orderBy: { sku: 'asc' },
+      })
+      return { success: true, children }
+    } catch (error) {
+      return reply.code(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' })
+    }
+  })
+
   // GET /api/amazon/products/count - Quick count + sample for debugging
   fastify.get('/products/count', async (_request, reply) => {
     try {
