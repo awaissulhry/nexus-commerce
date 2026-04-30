@@ -1045,6 +1045,261 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   )
 
   // ────────────────────────────────────────────────────────────────────────
+  // POST /api/amazon/products/sync-hierarchy
+  //
+  // Source-of-truth hierarchy sync: for every Amazon SKU in the DB, calls
+  // Listings Items API getListingsItem with includedData=[summaries,
+  // attributes, relationships] and persists Amazon's actual data:
+  //
+  //   - parentage_level                     → isParent
+  //   - child_parent_sku_relationship.parent_sku  → parentId (resolved by SKU)
+  //   - variation_theme[0].name              → variationTheme (prettified)
+  //   - relationships[].variationTheme.attributes → exact attr names per child
+  //   - attributes[<name>][0].value          → variation values per child
+  //
+  // No heuristics. No title parsing. No SKU pattern matching.
+  //
+  // Query:
+  //   ?offset=0&limit=25 → batch over 247 SKUs (5–10 batches typical)
+  //   ?reset=1           → before processing, clear ALL existing parent/child
+  //                        links and variation-attribute JSON so the sync
+  //                        starts from a clean slate.
+  //
+  // Returns: { processed, parents, children, standalone, orphans, errors,
+  //            nextOffset, done }.
+  // ────────────────────────────────────────────────────────────────────────
+  fastify.post('/products/sync-hierarchy', async (request, reply) => {
+    try {
+      if (!amazonService.isConfigured()) {
+        return reply.code(503).send({ success: false, error: 'Amazon SP-API not configured' })
+      }
+      const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+      if (!sellerId) {
+        return reply
+          .code(503)
+          .send({ success: false, error: 'AMAZON_SELLER_ID env var required for Listings API' })
+      }
+      const marketplaceId = process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
+
+      const q = request.query as { offset?: string; limit?: string; reset?: string }
+      const offset = parseInt(q.offset ?? '0', 10) || 0
+      const limit = Math.min(parseInt(q.limit ?? '25', 10) || 25, 100)
+      const reset = (q.reset === '1' || q.reset === 'true') && offset === 0
+
+      // On the very first call (offset=0 + reset=1), wipe prior heuristic
+      // groupings so we re-build cleanly from Amazon.
+      if (reset) {
+        await prisma.product.updateMany({
+          where: { syncChannels: { has: 'AMAZON' }, parentId: { not: null } },
+          data: { parentId: null, parentAsin: null },
+        })
+        await prisma.product.updateMany({
+          where: { syncChannels: { has: 'AMAZON' }, isParent: true },
+          data: { isParent: false, variationTheme: null },
+        })
+        // Strip the heuristic .variations key from categoryAttributes for
+        // every Amazon-synced product so the new sync writes Amazon's data.
+        const all = await prisma.product.findMany({
+          where: { syncChannels: { has: 'AMAZON' } },
+          select: { id: true, categoryAttributes: true },
+        })
+        for (const p of all) {
+          const ca = p.categoryAttributes
+          if (ca && typeof ca === 'object' && !Array.isArray(ca) && (ca as any).variations) {
+            const { variations: _drop, ...rest } = ca as any
+            // Always write back an object (possibly empty) — avoids needing
+            // Prisma.JsonNull to nullify a JSON column.
+            await prisma.product.update({
+              where: { id: p.id },
+              data: { categoryAttributes: rest },
+            })
+          }
+        }
+      }
+
+      const products = await prisma.product.findMany({
+        where: { syncChannels: { has: 'AMAZON' } },
+        select: { id: true, sku: true, amazonAsin: true, totalStock: true },
+        orderBy: { createdAt: 'asc' },
+        skip: offset,
+        take: limit,
+      })
+
+      if (products.length === 0) {
+        // Roll up child stock to parents now that we're done
+        const allParents = await prisma.product.findMany({
+          where: { isParent: true },
+          select: { id: true },
+        })
+        for (const parent of allParents) {
+          const children = await prisma.product.findMany({
+            where: { parentId: parent.id },
+            select: { totalStock: true },
+          })
+          if (children.length > 0) {
+            const totalStock = children.reduce((s, c) => s + (c.totalStock ?? 0), 0)
+            await prisma.product.update({
+              where: { id: parent.id },
+              data: { totalStock },
+            })
+          }
+        }
+        return { success: true, done: true, processed: 0, message: 'sync complete; stock rolled up' }
+      }
+
+      const sp = await (amazonService as any).getClient()
+
+      // Pretty-print: SIZE_NAME → "Size Name", TEAM_NAME → "Team Name"
+      const prettyAttrName = (raw: string) =>
+        raw
+          .toLowerCase()
+          .split('_')
+          .map((w) => (w.length === 0 ? w : w[0].toUpperCase() + w.slice(1)))
+          .join(' ')
+
+      let parentsCount = 0
+      let childrenCount = 0
+      let standaloneCount = 0
+      let orphanCount = 0
+      const errors: Array<{ sku: string; error: string }> = []
+
+      for (const product of products) {
+        try {
+          const res: any = await sp.callAPI({
+            operation: 'getListingsItem',
+            endpoint: 'listingsItems',
+            path: { sellerId, sku: product.sku },
+            query: {
+              marketplaceIds: [marketplaceId],
+              includedData: ['summaries', 'attributes', 'relationships'],
+            },
+          })
+
+          const attrs = res.attributes ?? {}
+          const parentageLevel: string | null =
+            attrs.parentage_level?.[0]?.value ?? attrs.parentage_level?.[0]?.name ?? null
+          const variationThemeRaw: string | null = attrs.variation_theme?.[0]?.name ?? null
+          const variationThemePretty = variationThemeRaw
+            ? variationThemeRaw.split('/').map(prettyAttrName).join(' / ')
+            : null
+
+          if (parentageLevel === 'parent') {
+            // Mark as parent. Children will be linked when they're processed.
+            await prisma.product.update({
+              where: { id: product.id },
+              data: { isParent: true, variationTheme: variationThemePretty },
+            })
+            parentsCount++
+          } else if (parentageLevel === 'child') {
+            const cpsr = attrs.child_parent_sku_relationship?.[0]
+            const parentSku: string | undefined = cpsr?.parent_sku
+
+            // Find the variation attribute names from relationships (canonical)
+            const relGroup = res.relationships?.[0]?.relationships?.[0]
+            const themeAttrNames: string[] =
+              relGroup?.variationTheme?.attributes ??
+              variationThemeRaw?.toLowerCase().split('/') ??
+              []
+
+            // Extract per-attribute variation values
+            const variations: Record<string, string> = {}
+            for (const rawName of themeAttrNames) {
+              const v = attrs[rawName]?.[0]
+              const val: string | undefined =
+                v?.value ?? v?.name ?? v?.standardized_values?.[0]
+              if (val) variations[prettyAttrName(rawName)] = String(val)
+            }
+
+            if (!parentSku) {
+              // Child but no parent_sku reported — leave it alone, log
+              standaloneCount++
+              errors.push({ sku: product.sku, error: 'child without parent_sku from Amazon' })
+            } else {
+              const parent = await prisma.product.findUnique({
+                where: { sku: parentSku },
+                select: { id: true, amazonAsin: true },
+              })
+              // Build the update data; skip categoryAttributes when there's
+              // nothing to write so we don't need Prisma.JsonNull.
+              const updateData: any = {
+                isParent: false,
+                variationTheme: variationThemePretty,
+              }
+              if (!parent) {
+                // Amazon reports a parent SKU we don't have in DB — orphan
+                orphanCount++
+                errors.push({
+                  sku: product.sku,
+                  error: `parent SKU "${parentSku}" not in DB`,
+                })
+                updateData.parentAsin = null
+              } else {
+                updateData.parentId = parent.id
+                updateData.parentAsin = parent.amazonAsin
+                childrenCount++
+              }
+
+              if (Object.keys(variations).length > 0) {
+                const existing = await prisma.product.findUnique({
+                  where: { id: product.id },
+                  select: { categoryAttributes: true },
+                })
+                const baseCa =
+                  existing?.categoryAttributes &&
+                  typeof existing.categoryAttributes === 'object' &&
+                  !Array.isArray(existing.categoryAttributes)
+                    ? (existing.categoryAttributes as any)
+                    : {}
+                updateData.categoryAttributes = { ...baseCa, variations }
+              }
+
+              await prisma.product.update({
+                where: { id: product.id },
+                data: updateData,
+              })
+            }
+          } else {
+            // No parentage_level — standalone
+            await prisma.product.update({
+              where: { id: product.id },
+              data: { isParent: false, parentId: null, parentAsin: null },
+            })
+            standaloneCount++
+          }
+        } catch (err: any) {
+          const msg = err?.body?.errors?.[0]?.message ?? err?.message ?? String(err)
+          errors.push({ sku: product.sku, error: msg })
+          fastify.log.warn({ sku: product.sku, err }, '[sync-hierarchy] getListingsItem failed')
+        }
+      }
+
+      const remaining = await prisma.product.count({
+        where: { syncChannels: { has: 'AMAZON' } },
+      })
+
+      return {
+        success: true,
+        done: offset + products.length >= remaining,
+        processed: products.length,
+        parentsCount,
+        childrenCount,
+        standaloneCount,
+        orphanCount,
+        nextOffset: offset + products.length,
+        totalAmazonProducts: remaining,
+        errorCount: errors.length,
+        sampleErrors: errors.slice(0, 5),
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[sync-hierarchy] failed')
+      return reply.code(500).send({
+        success: false,
+        error: error?.message ?? String(error),
+      })
+    }
+  })
+
+  // ────────────────────────────────────────────────────────────────────────
   // GET /api/amazon/products/probe-listing?sku=XXX
   //
   // Calls getListingsItem on a single SKU with includedData=[
