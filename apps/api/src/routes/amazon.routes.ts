@@ -32,6 +32,8 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
             totalStock: item.quantity || 0,
             amazonAsin: item.asin,
             status: 'ACTIVE',
+            ...(item.parentAsin ? { parentAsin: item.parentAsin } : {}),
+            ...(item.variationTheme ? { variationTheme: item.variationTheme } : {}),
           },
           create: {
             sku: item.sku,
@@ -42,6 +44,8 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
             status: 'ACTIVE',
             syncChannels: ['AMAZON'],
             minMargin: 0,
+            ...(item.parentAsin ? { parentAsin: item.parentAsin } : {}),
+            ...(item.variationTheme ? { variationTheme: item.variationTheme } : {}),
           },
         })
         syncedProducts.push(product)
@@ -137,6 +141,158 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
       }
     } catch (error) {
       fastify.log.error({ err: error }, 'Amazon product sync failed')
+      return reply.code(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      })
+    }
+  })
+
+  // GET /api/amazon/products/debug-hierarchy
+  fastify.get('/products/debug-hierarchy', async (_request, reply) => {
+    try {
+      const [parents, children, standalone] = await Promise.all([
+        prisma.product.count({ where: { isParent: true } }),
+        prisma.product.count({ where: { parentId: { not: null } } }),
+        prisma.product.count({ where: { isParent: false, parentId: null } }),
+      ])
+      const sampleParent = await (prisma as any).product.findFirst({
+        where: { isParent: true },
+        include: { children: { take: 3 } },
+      })
+      return {
+        total: parents + children + standalone,
+        parents,
+        children,
+        standalone,
+        sampleParent,
+      }
+    } catch (error) {
+      return reply.code(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' })
+    }
+  })
+
+  /**
+   * POST /api/amazon/products/group-by-sku
+   *
+   * Detects parent/child variation groups purely from SKU naming patterns
+   * (e.g. GALE-JACKET-BLACK-MEN-XL → child of GALE-JACKET-BLACK-MEN)
+   * and writes isParent / parentId / variationTheme to the database.
+   *
+   * Safe to run multiple times — idempotent.
+   */
+  fastify.post('/products/group-by-sku', async (_request, reply) => {
+    try {
+      const SIZE_SUFFIX_RE =
+        /[-_](xxs|xs|s|m|l|xl|xxl|xxxl|3xl|4xl|5xl|6xl|one-?size|\d{2,3})$/i
+
+      const allProducts = await prisma.product.findMany({
+        where: { syncChannels: { has: 'AMAZON' } },
+        select: { id: true, sku: true, name: true, totalStock: true },
+      })
+
+      const skuToId = new Map(allProducts.map((p) => [p.sku.toLowerCase(), p.id]))
+
+      // Group products by the prefix obtained by stripping the size suffix
+      const groups = new Map<string, Array<{ id: string; sku: string }>>()
+      for (const p of allProducts) {
+        const match = p.sku.match(SIZE_SUFFIX_RE)
+        if (!match) continue
+        const prefix = p.sku.slice(0, p.sku.length - match[0].length)
+        const arr = groups.get(prefix.toLowerCase()) ?? []
+        arr.push({ id: p.id, sku: p.sku })
+        groups.set(prefix.toLowerCase(), arr)
+      }
+
+      let parentsCreated = 0
+      let parentsFound = 0
+      let childrenLinked = 0
+
+      for (const [prefixLower, children] of groups) {
+        // Only treat as a group if 2+ children share the same prefix
+        if (children.length < 2) continue
+
+        // Find if a product with this exact prefix SKU already exists
+        const existingParentId = skuToId.get(prefixLower)
+
+        let parentDbId: string
+
+        if (existingParentId) {
+          // Promote existing product to parent
+          await prisma.product.update({
+            where: { id: existingParentId },
+            data: { isParent: true },
+          })
+          parentDbId = existingParentId
+          parentsFound++
+        } else {
+          // Reconstruct the original-case prefix from one of the children
+          const originalPrefix = children[0].sku.replace(SIZE_SUFFIX_RE, '')
+          // Pick a representative child for the name
+          const refChild = allProducts.find((p) => p.id === children[0].id)!
+          const parentName = refChild.name.replace(
+            /\s*[-–]?\s*(taglia|misura|size|mis\.)?\s*(xxs|xs|s|m|l|xl|xxl|xxxl|3xl|4xl|5xl|6xl)\b.*/i,
+            ''
+          ).trim()
+
+          const parent = await prisma.product.upsert({
+            where: { sku: originalPrefix },
+            update: { isParent: true },
+            create: {
+              sku: originalPrefix,
+              name: parentName || originalPrefix,
+              basePrice: 0,
+              totalStock: 0,
+              isParent: true,
+              status: 'ACTIVE',
+              syncChannels: ['AMAZON'],
+              minMargin: 0,
+            },
+          })
+          parentDbId = parent.id
+          parentsCreated++
+          // Add to lookup so siblings can find it
+          skuToId.set(prefixLower, parentDbId)
+        }
+
+        // Link all size-children to this parent
+        for (const child of children) {
+          await prisma.product.update({
+            where: { id: child.id },
+            data: {
+              parentId: parentDbId,
+              variationTheme: 'Size',
+            },
+          })
+          childrenLinked++
+        }
+
+        // Roll up stock to parent
+        const childStocks = await prisma.product.findMany({
+          where: { parentId: parentDbId },
+          select: { totalStock: true },
+        })
+        await prisma.product.update({
+          where: { id: parentDbId },
+          data: {
+            totalStock: childStocks.reduce((s, c) => s + c.totalStock, 0),
+          },
+        })
+      }
+
+      fastify.log.info(
+        `[SKU-GROUP] parentsCreated=${parentsCreated} parentsFound=${parentsFound} childrenLinked=${childrenLinked}`
+      )
+
+      return {
+        success: true,
+        parentsCreated,
+        parentsFound,
+        childrenLinked,
+        groupsDetected: [...groups.values()].filter((v) => v.length >= 2).length,
+      }
+    } catch (error) {
+      fastify.log.error({ err: error }, 'group-by-sku failed')
       return reply.code(500).send({
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
