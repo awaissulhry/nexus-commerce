@@ -485,21 +485,28 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const asin = (request.query as any).asin || 'B0DYXSQP18'
 
-      console.log('Testing Catalog Items API...')
-      console.log('ASIN:', asin)
-      console.log('Marketplace:', process.env.AMAZON_MARKETPLACE_ID)
+      if (!amazonService.isConfigured()) {
+        return reply.code(503).send({
+          success: false,
+          error: 'Amazon SP-API client not initialized',
+          message: 'Check that all Amazon credentials are configured on Railway',
+        })
+      }
 
-      const result = await (amazonService as any).sp.callAPI({
+      console.log('Testing Catalog Items API for ASIN:', asin)
+      const marketplaceId = process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
+
+      const sp = await (amazonService as any).getClient()
+
+      const result = await sp.callAPI({
         operation: 'getCatalogItem',
-        endpoint: 'catalog',
-        path: {
-          version: '2022-04-01',
-          asin: asin
-        },
+        endpoint: 'catalogItems',
+        version: '2022-04-01',
+        path: { asin },
         query: {
-          marketplaceIds: process.env.AMAZON_MARKETPLACE_ID,
-          includedData: 'relationships'
-        }
+          marketplaceIds: [marketplaceId],
+          includedData: ['relationships', 'summaries'],
+        },
       })
 
       console.log('✅ Success! Got catalog data')
@@ -510,17 +517,15 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
         hasRelationships: !!result.relationships,
         parentAsins: result.relationships?.parentAsins || [],
         childAsins: result.relationships?.childAsins || [],
-        fullData: result
+        data: result,
       }
     } catch (error: any) {
       console.error('❌ Catalog Items API Error:', error.message)
-      console.error('Response:', error.response?.data)
 
       return reply.code(500).send({
         success: false,
         error: error.message,
-        errorCode: error.response?.data?.errors?.[0]?.code,
-        details: error.response?.data
+        details: error.response?.data || error,
       })
     }
   })
