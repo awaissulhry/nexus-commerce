@@ -336,6 +336,110 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   /**
+  /**
+   * GET /api/amazon/products/test-catalog-api
+   * Calls getCatalogItem for one ASIN and returns the raw response or full error.
+   * Use this to diagnose why reindex-hierarchy returns linked=0.
+   */
+  fastify.get('/products/test-catalog-api', async (_request, reply) => {
+    try {
+      if (!amazonService.isConfigured()) {
+        return reply.code(503).send({ success: false, error: 'Amazon SP-API not configured' })
+      }
+
+      const product = await prisma.product.findFirst({
+        where: { amazonAsin: { not: null }, syncChannels: { has: 'AMAZON' } },
+        select: { id: true, sku: true, amazonAsin: true },
+      })
+
+      if (!product) return { success: false, error: 'No Amazon products in DB' }
+
+      const sp = await (amazonService as any).getClient()
+      const marketplaceId = process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
+
+      try {
+        const res = await sp.callAPI({
+          operation: 'getCatalogItem',
+          endpoint: 'catalogItems',
+          path: { asin: product.amazonAsin },
+          query: { marketplaceIds: [marketplaceId], includedData: ['relationships', 'summaries'] },
+        })
+        return {
+          success: true,
+          asin: product.amazonAsin,
+          sku: product.sku,
+          relationships: (res as any)?.relationships ?? [],
+          rawResponse: res,
+        }
+      } catch (apiErr: any) {
+        return {
+          success: false,
+          asin: product.amazonAsin,
+          sku: product.sku,
+          error: apiErr?.message ?? String(apiErr),
+          errorBody: apiErr?.body ?? null,
+          errorCode: apiErr?.code ?? null,
+          errors: apiErr?.errors ?? null,
+        }
+      }
+    } catch (error) {
+      return reply.code(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' })
+    }
+  })
+
+  /**
+   * POST /api/amazon/products/reset-sku-grouping
+   * Removes the fake SKU-based parent records and resets parentId on their children.
+   * Safe to run: only touches products where isParent=true AND amazonAsin IS NULL
+   * (which is the signature of a SKU-generated parent, not a real Amazon parent).
+   */
+  fastify.post('/products/reset-sku-grouping', async (_request, reply) => {
+    try {
+      const fakeParents = await prisma.product.findMany({
+        where: { isParent: true, amazonAsin: null },
+        select: { id: true, sku: true },
+      })
+
+      let childrenReset = 0
+      for (const fp of fakeParents) {
+        const updated = await prisma.product.updateMany({
+          where: { parentId: fp.id },
+          data: { parentId: null, variationTheme: null },
+        })
+        childrenReset += updated.count
+      }
+
+      const deleted = await prisma.product.deleteMany({
+        where: { isParent: true, amazonAsin: null },
+      })
+
+      // Also reset the 1 existing product that was promoted to isParent via group-by-sku
+      // (it has amazonAsin set but has children pointing to it from SKU grouping).
+      // Those children were already reset above via parentId reset.
+      // Reset isParent on products that now have 0 children.
+      const promotedParents = await prisma.product.findMany({
+        where: { isParent: true, amazonAsin: { not: null } },
+        select: { id: true },
+      })
+      for (const pp of promotedParents) {
+        const childCount = await prisma.product.count({ where: { parentId: pp.id } })
+        if (childCount === 0) {
+          await prisma.product.update({ where: { id: pp.id }, data: { isParent: false } })
+        }
+      }
+
+      return {
+        success: true,
+        fakeParentsDeleted: deleted.count,
+        childrenReset,
+        message: `Removed ${deleted.count} SKU-based fake parents, reset ${childrenReset} children`,
+      }
+    } catch (error) {
+      return reply.code(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' })
+    }
+  })
+
+  /**
    * POST /api/amazon/products/reindex-hierarchy
    *
    * Retroactively builds parent/child relationships for products already in the
@@ -358,7 +462,6 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
       const limit = Math.min(parseInt(query.limit ?? '50', 10) || 50, 100)
       const marketplaceId = process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
 
-      // Fetch the batch of products that still lack hierarchy data
       const products = await (prisma as any).product.findMany({
         where: {
           syncChannels: { has: 'AMAZON' },
@@ -378,6 +481,8 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
 
       const sp = await (amazonService as any).getClient()
       let linked = 0
+      let parentsCreated = 0
+      const errors: Array<{ asin: string; error: string }> = []
 
       for (const product of products) {
         try {
@@ -396,14 +501,16 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
           for (const rel of relationships) {
             if (rel.type !== 'VARIATION') continue
 
-            // This product is a CHILD — it has a parentAsin
+            // Child product: has parentAsins
             const parentAsins: string[] = rel.parentAsins ?? []
             if (parentAsins.length > 0) {
               const parentAsin = parentAsins[0]
               const variationTheme: string | null =
-                rel.variationTheme?.name ?? rel.variationTheme?.attributes?.join('') ?? null
+                rel.variationTheme?.name ??
+                (Array.isArray(rel.variationTheme?.attributes)
+                  ? rel.variationTheme.attributes.join('')
+                  : null)
 
-              // Find or create the parent product
               let parentRecord = await (prisma as any).product.findFirst({
                 where: { amazonAsin: parentAsin },
                 select: { id: true },
@@ -426,6 +533,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
                     minMargin: 0,
                   },
                 })
+                parentsCreated++
               } else {
                 await prisma.product.update({
                   where: { id: parentRecord.id },
@@ -437,6 +545,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
                 where: { id: product.id },
                 data: {
                   parentId: parentRecord.id,
+                  parentAsin,
                   ...(variationTheme ? { variationTheme } : {}),
                 },
               })
@@ -444,7 +553,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
               break
             }
 
-            // This product is a PARENT — it has childAsins
+            // Parent product: has childAsins
             const childAsins: string[] = rel.childAsins ?? []
             if (childAsins.length > 0) {
               await prisma.product.update({
@@ -454,29 +563,30 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
               break
             }
           }
-        } catch (err) {
-          fastify.log.warn(
-            { asin: product.amazonAsin, err },
-            '[Amazon] reindex-hierarchy: getCatalogItem failed, skipping'
-          )
+        } catch (err: any) {
+          const msg = err?.body?.errors?.[0]?.message ?? err?.message ?? String(err)
+          errors.push({ asin: product.amazonAsin, error: msg })
+          fastify.log.warn({ asin: product.amazonAsin, err }, '[Amazon] reindex-hierarchy: getCatalogItem failed')
         }
       }
 
-      // Update totalStock on any parents that gained children
-      const parents = await (prisma as any).product.findMany({
-        where: { isParent: true },
-        select: { id: true },
-      })
-      for (const parent of parents) {
-        const children = await prisma.product.findMany({
-          where: { parentId: parent.id },
-          select: { totalStock: true },
+      // Roll up stock to any parents that gained children this batch
+      if (linked > 0 || parentsCreated > 0) {
+        const parents = await (prisma as any).product.findMany({
+          where: { isParent: true },
+          select: { id: true },
         })
-        if (children.length > 0) {
-          await prisma.product.update({
-            where: { id: parent.id },
-            data: { totalStock: children.reduce((s: number, c: any) => s + c.totalStock, 0) },
+        for (const parent of parents) {
+          const children = await prisma.product.findMany({
+            where: { parentId: parent.id },
+            select: { totalStock: true },
           })
+          if (children.length > 0) {
+            await prisma.product.update({
+              where: { id: parent.id },
+              data: { totalStock: children.reduce((s: number, c: any) => s + c.totalStock, 0) },
+            })
+          }
         }
       }
 
@@ -489,8 +599,12 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
         done: remaining === 0,
         processed: products.length,
         linked,
+        parentsCreated,
         remaining,
         nextOffset: offset + limit,
+        // Return first 3 errors so callers can diagnose without reading server logs
+        sampleErrors: errors.slice(0, 3),
+        totalErrors: errors.length,
       }
     } catch (error) {
       fastify.log.error({ err: error }, 'reindex-hierarchy failed')
