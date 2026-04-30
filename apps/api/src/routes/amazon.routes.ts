@@ -877,6 +877,163 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   )
 
   // ────────────────────────────────────────────────────────────────────────
+  // GET /api/amazon/analyze-report/:reportId
+  //
+  // Downloads an already-generated merchant-listings TSV and probes whether
+  // any column secretly carries parent/child info: are there repeating
+  // values in asin1/2/3 (suggesting a parent ASIN)?  Any duplicate seller-skus
+  // (none expected, but useful as a sanity check).  Detects SKU naming
+  // patterns like {prefix}-{size} that imply hierarchy.
+  //
+  // Response is intentionally compact so it fits in one screen.
+  // ────────────────────────────────────────────────────────────────────────
+  fastify.get<{ Params: { reportId: string } }>(
+    '/analyze-report/:reportId',
+    async (request, reply) => {
+      try {
+        const { reportId } = request.params
+        if (!amazonService.isConfigured()) {
+          return reply.code(503).send({ success: false, error: 'Amazon SP-API not configured' })
+        }
+        const sp = await (amazonService as any).getClient()
+
+        const status: any = await sp.callAPI({
+          operation: 'getReport',
+          endpoint: 'reports',
+          version: '2021-06-30',
+          path: { reportId },
+        })
+
+        if (status.processingStatus !== 'DONE') {
+          return reply
+            .code(409)
+            .send({ success: false, error: `Report not DONE (${status.processingStatus})` })
+        }
+
+        const docMeta: any = await sp.callAPI({
+          operation: 'getReportDocument',
+          endpoint: 'reports',
+          version: '2021-06-30',
+          path: { reportDocumentId: status.reportDocumentId },
+        })
+        const docResp = await fetch(docMeta.url)
+        if (!docResp.ok) {
+          return reply
+            .code(502)
+            .send({ success: false, error: `Failed to download document: HTTP ${docResp.status}` })
+        }
+
+        let text: string
+        if (docMeta.compressionAlgorithm === 'GZIP') {
+          const buf = Buffer.from(await docResp.arrayBuffer())
+          const { gunzipSync } = await import('node:zlib')
+          text = gunzipSync(buf).toString('utf8')
+        } else {
+          text = await docResp.text()
+        }
+
+        const lines = text.split(/\r?\n/).filter((l) => l.length > 0)
+        const header = lines[0].split('\t')
+        const dataRows = lines.slice(1)
+
+        const colIdx = (name: string) => header.findIndex((h) => h.toLowerCase() === name.toLowerCase())
+        const skuIdx = colIdx('seller-sku')
+        const asin1Idx = colIdx('asin1')
+        const asin2Idx = colIdx('asin2')
+        const asin3Idx = colIdx('asin3')
+
+        const allCols: string[][] = header.map(() => [])
+        for (const row of dataRows) {
+          const cells = row.split('\t')
+          for (let i = 0; i < header.length; i++) allCols[i].push((cells[i] ?? '').trim())
+        }
+
+        const summarizeCol = (idx: number) => {
+          if (idx < 0) return null
+          const vals = allCols[idx]
+          const nonEmpty = vals.filter((v) => v !== '')
+          const unique = new Set(nonEmpty)
+          // Count duplicates (values that appear more than once)
+          const counts = new Map<string, number>()
+          for (const v of nonEmpty) counts.set(v, (counts.get(v) ?? 0) + 1)
+          const dups = [...counts.entries()].filter(([, c]) => c > 1)
+          return {
+            column: header[idx],
+            totalRows: vals.length,
+            nonEmpty: nonEmpty.length,
+            empty: vals.length - nonEmpty.length,
+            unique: unique.size,
+            duplicateValueCount: dups.length,
+            sampleDuplicates: dups
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 5)
+              .map(([v, c]) => ({ value: v, count: c })),
+          }
+        }
+
+        // SKU naming pattern analysis
+        const skus = skuIdx >= 0 ? allCols[skuIdx] : []
+        const sizeSuffixRe = /[-_](xxs|xs|s|m|l|xl|xxl|xxxl|3xl|4xl|5xl|6xl|one-?size|\d{2,3})$/i
+        const skuPrefixGroups = new Map<string, string[]>()
+        for (const sku of skus) {
+          const m = sku.match(sizeSuffixRe)
+          if (!m) continue
+          const prefix = sku.slice(0, sku.length - m[0].length)
+          const arr = skuPrefixGroups.get(prefix) ?? []
+          arr.push(sku)
+          skuPrefixGroups.set(prefix, arr)
+        }
+        const groupsWithMultipleVariants = [...skuPrefixGroups.entries()]
+          .filter(([, arr]) => arr.length >= 2)
+          .sort((a, b) => b[1].length - a[1].length)
+
+        return {
+          reportId,
+          reportType: status.reportType,
+          rowCount: dataRows.length,
+          columns: header,
+          asinAnalysis: {
+            asin1: summarizeCol(asin1Idx),
+            asin2: summarizeCol(asin2Idx),
+            asin3: summarizeCol(asin3Idx),
+          },
+          skuAnalysis: summarizeCol(skuIdx),
+          skuPatternAnalysis: {
+            groupsDetected: skuPrefixGroups.size,
+            groupsWithMultipleVariants: groupsWithMultipleVariants.length,
+            top10Groups: groupsWithMultipleVariants.slice(0, 10).map(([prefix, arr]) => ({
+              prefix,
+              variantCount: arr.length,
+              sampleSkus: arr.slice(0, 5),
+            })),
+          },
+          verdict: (() => {
+            const a2 = summarizeCol(asin2Idx)
+            const a3 = summarizeCol(asin3Idx)
+            if (a2 && a2.duplicateValueCount > 0) {
+              return `asin2 has ${a2.duplicateValueCount} repeating values — likely PARENT ASIN.`
+            }
+            if (a3 && a3.duplicateValueCount > 0) {
+              return `asin3 has ${a3.duplicateValueCount} repeating values — likely PARENT ASIN.`
+            }
+            if (a2 && a2.nonEmpty === 0 && a3 && a3.nonEmpty === 0) {
+              return 'asin2 and asin3 are entirely empty — no parent info in this report. Use SKU patterns or manual merge.'
+            }
+            return 'Inconclusive — inspect asinAnalysis manually.'
+          })(),
+        }
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[analyze-report] failed')
+        return reply.code(500).send({
+          success: false,
+          error: error?.message ?? String(error),
+          code: error?.body?.errors?.[0]?.code ?? error?.code,
+        })
+      }
+    }
+  )
+
+  // ────────────────────────────────────────────────────────────────────────
   // Manual hierarchy merge — last-resort fallback when Catalog Items API and
   // Reports API both don't expose parent/child info. Lets the operator group
   // products manually via the UI.
