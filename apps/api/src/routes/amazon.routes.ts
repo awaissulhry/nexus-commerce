@@ -1034,6 +1034,190 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   )
 
   // ────────────────────────────────────────────────────────────────────────
+  // POST /api/amazon/products/auto-group
+  //
+  // Builds parent/child hierarchy by parsing product names — NOT SKU
+  // patterns. Amazon listings for variation children are titled identically
+  // to the parent + " (Size, Color)" appended at the end. e.g.:
+  //   parent: "XAVIA GALE Giacca... | Per Tutte Le Stagioni"
+  //   child:  "XAVIA GALE Giacca... | Per Tutte Le Stagioni (3XL, Nero)"
+  //
+  // Algorithm:
+  //   1. For every product, strip a trailing parenthetical "(...)" → baseTitle
+  //   2. Children = products that had a stripped paren (variation attrs)
+  //   3. Parents = products whose name == some child's baseTitle exactly
+  //   4. Variation theme inferred from attr count (1=Size, 2+=Size/Color)
+  //
+  // Query params:
+  //   ?dryRun=1   → preview the plan without writing
+  //   ?reset=1    → clear existing parentId / isParent first
+  // ────────────────────────────────────────────────────────────────────────
+  fastify.post('/products/auto-group', async (request, reply) => {
+    try {
+      const q = request.query as { dryRun?: string; reset?: string }
+      const dryRun = q.dryRun === '1' || q.dryRun === 'true'
+      const reset = q.reset === '1' || q.reset === 'true'
+
+      // Optionally clear current hierarchy (children & parents) before re-grouping
+      if (reset && !dryRun) {
+        await prisma.product.updateMany({
+          where: { parentId: { not: null } },
+          data: { parentId: null, parentAsin: null },
+        })
+        await prisma.product.updateMany({
+          where: { isParent: true },
+          data: { isParent: false, variationTheme: null },
+        })
+      }
+
+      const products = await prisma.product.findMany({
+        where: { syncChannels: { has: 'AMAZON' } },
+        select: { id: true, sku: true, name: true, amazonAsin: true },
+      })
+
+      // Parse name → { baseTitle, attrs }
+      // Match the LAST parenthetical at the end of the name. Allow trailing whitespace.
+      const TRAILING_PAREN = /^(.+?)\s*\(([^()]+)\)\s*$/
+      type Parsed = {
+        id: string
+        sku: string
+        name: string
+        amazonAsin: string | null
+        baseTitle: string
+        attrs: string[] | null
+      }
+      const parsed: Parsed[] = products.map((p) => {
+        const name = (p.name ?? '').trim()
+        const m = name.match(TRAILING_PAREN)
+        if (!m) return { ...p, name, baseTitle: name, attrs: null }
+        const inside = m[2].trim()
+        // Reject very long parentheticals — those are descriptive, not variation attrs
+        // (real variation attrs are short: "3XL", "Nero", "3XL, Nero", "S, Black, Men")
+        if (inside.length > 60) return { ...p, name, baseTitle: name, attrs: null }
+        const attrs = inside
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+        return { ...p, name, baseTitle: m[1].trim(), attrs }
+      })
+
+      // Index potential parents by baseTitle (products with no trailing parenthetical)
+      const parentByBase = new Map<string, Parsed>()
+      for (const p of parsed) {
+        if (p.attrs === null && !parentByBase.has(p.baseTitle)) {
+          parentByBase.set(p.baseTitle, p)
+        }
+      }
+
+      // For each child (has attrs), find its parent by baseTitle
+      const groupsByParent = new Map<string, { parent: Parsed; children: Parsed[] }>()
+      const orphanChildren: Array<{ sku: string; name: string; baseTitle: string }> = []
+      for (const p of parsed) {
+        if (p.attrs === null) continue
+        const parent = parentByBase.get(p.baseTitle)
+        if (!parent) {
+          orphanChildren.push({ sku: p.sku, name: p.name, baseTitle: p.baseTitle })
+          continue
+        }
+        const g = groupsByParent.get(parent.id) ?? { parent, children: [] }
+        g.children.push(p)
+        groupsByParent.set(parent.id, g)
+      }
+
+      // Build the plan: only groups with 2+ children make sense
+      const plan = [...groupsByParent.values()]
+        .filter((g) => g.children.length >= 2)
+        .map(({ parent, children }) => {
+          const attrCounts = children.map((c) => c.attrs!.length)
+          const minAttrs = Math.min(...attrCounts)
+          const theme = minAttrs === 1 ? 'Size' : minAttrs >= 2 ? 'Size/Color' : 'Variation'
+          return {
+            parentId: parent.id,
+            parentSku: parent.sku,
+            parentName: parent.name,
+            parentAsin: parent.amazonAsin,
+            variationTheme: theme,
+            childCount: children.length,
+            childIds: children.map((c) => c.id),
+            sampleChildren: children.slice(0, 5).map((c) => ({ sku: c.sku, attrs: c.attrs })),
+          }
+        })
+        .sort((a, b) => b.childCount - a.childCount)
+
+      const totalChildren = plan.reduce((s, g) => s + g.childCount, 0)
+
+      if (dryRun) {
+        return {
+          dryRun: true,
+          summary: {
+            totalProducts: products.length,
+            childrenWithVariations: parsed.filter((p) => p.attrs !== null).length,
+            potentialParents: parentByBase.size,
+            groupsToCreate: plan.length,
+            childrenToLink: totalChildren,
+            orphanChildren: orphanChildren.length,
+          },
+          plan: plan.map((g) => ({ ...g, childIds: undefined })),
+          orphanSamples: orphanChildren.slice(0, 10),
+        }
+      }
+
+      // Apply
+      let parentsUpdated = 0
+      let childrenLinked = 0
+      for (const g of plan) {
+        await prisma.product.update({
+          where: { id: g.parentId },
+          data: { isParent: true, variationTheme: g.variationTheme },
+        })
+        parentsUpdated++
+
+        const res = await prisma.product.updateMany({
+          where: { id: { in: g.childIds } },
+          data: {
+            parentId: g.parentId,
+            parentAsin: g.parentAsin,
+            isParent: false,
+          },
+        })
+        childrenLinked += res.count
+      }
+
+      // Roll up child stock to parents
+      for (const g of plan) {
+        const children = await prisma.product.findMany({
+          where: { parentId: g.parentId },
+          select: { totalStock: true },
+        })
+        const totalStock = children.reduce((s, c) => s + (c.totalStock ?? 0), 0)
+        await prisma.product.update({
+          where: { id: g.parentId },
+          data: { totalStock },
+        })
+      }
+
+      return {
+        applied: true,
+        summary: {
+          parentsUpdated,
+          childrenLinked,
+          groupsApplied: plan.length,
+          orphanChildren: orphanChildren.length,
+        },
+        plan: plan.map((g) => ({ ...g, childIds: undefined })),
+        orphanSamples: orphanChildren.slice(0, 10),
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[auto-group] failed')
+      return reply.code(500).send({
+        success: false,
+        error: error?.message ?? String(error),
+        code: error?.code,
+      })
+    }
+  })
+
+  // ────────────────────────────────────────────────────────────────────────
   // Manual hierarchy merge — last-resort fallback when Catalog Items API and
   // Reports API both don't expose parent/child info. Lets the operator group
   // products manually via the UI.
