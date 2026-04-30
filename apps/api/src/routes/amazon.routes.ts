@@ -1201,13 +1201,28 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
               variationThemeRaw?.toLowerCase().split('/') ??
               []
 
-            // Extract per-attribute variation values
+            // Extract per-attribute variation values. Amazon stores size
+            // inconsistently across product types: most use top-level
+            // `size` / `size_name`, some use nested `apparel_size[0].size`.
+            // Same idea for color (`color` vs `color_map[0].name`).
+            const extractValue = (key: string): string | undefined => {
+              const v = attrs[key]?.[0]
+              const direct = v?.value ?? v?.name ?? v?.standardized_values?.[0]
+              if (direct) return String(direct)
+              if (key === 'size' || key === 'size_name') {
+                const ap = attrs.apparel_size?.[0]
+                if (ap?.size) return String(ap.size).toUpperCase()
+              }
+              if (key === 'color' || key === 'color_name') {
+                const cm = attrs.color_map?.[0]
+                if (cm?.name) return String(cm.name)
+              }
+              return undefined
+            }
             const variations: Record<string, string> = {}
             for (const rawName of themeAttrNames) {
-              const v = attrs[rawName]?.[0]
-              const val: string | undefined =
-                v?.value ?? v?.name ?? v?.standardized_values?.[0]
-              if (val) variations[prettyAttrName(rawName)] = String(val)
+              const val = extractValue(rawName)
+              if (val) variations[prettyAttrName(rawName)] = val
             }
 
             if (!parentSku) {
