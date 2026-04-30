@@ -547,9 +547,10 @@ export class AmazonService {
           `[Amazon] Enriching via Catalog Items API for ASIN "${asin}"…`
         );
 
-        const catalogRes: any = await sp.callAPI({
+        const catalogRes: any = await (sp as any).callAPI({
           operation: "getCatalogItem",
           endpoint: "catalogItems",
+          version: "2022-04-01",
           path: { asin },
           query: {
             marketplaceIds: [marketplaceId],

@@ -351,47 +351,65 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
 
   /**
   /**
-   * GET /api/amazon/products/test-catalog-api
-   * Calls getCatalogItem for one ASIN and returns the raw response or full error.
-   * Use this to diagnose why reindex-hierarchy returns linked=0.
+   * GET /api/amazon/products/test-catalog-api?asin=XXXXXXXXXX
+   * Calls getCatalogItem (v2022-04-01) for an ASIN and returns the raw response or full error.
+   * Pass ?asin= to test a specific ASIN; defaults to the first product in the DB.
    */
-  fastify.get('/products/test-catalog-api', async (_request, reply) => {
+  fastify.get('/products/test-catalog-api', async (request, reply) => {
     try {
       if (!amazonService.isConfigured()) {
         return reply.code(503).send({ success: false, error: 'Amazon SP-API not configured' })
       }
 
-      const product = await prisma.product.findFirst({
-        where: { amazonAsin: { not: null }, syncChannels: { has: 'AMAZON' } },
-        select: { id: true, sku: true, amazonAsin: true },
-      })
+      const { asin: queryAsin } = request.query as { asin?: string }
+      const marketplaceId = process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
 
-      if (!product) return { success: false, error: 'No Amazon products in DB' }
+      let testAsin = queryAsin
+      let testSku = queryAsin ? '(from query param)' : ''
+
+      if (!testAsin) {
+        const product = await prisma.product.findFirst({
+          where: { amazonAsin: { not: null }, syncChannels: { has: 'AMAZON' } },
+          select: { id: true, sku: true, amazonAsin: true },
+        })
+        if (!product) return { success: false, error: 'No Amazon products in DB' }
+        testAsin = product.amazonAsin!
+        testSku = product.sku
+      }
+
+      fastify.log.info({ asin: testAsin, marketplaceId }, '[test-catalog-api] Calling getCatalogItem v2022-04-01')
 
       const sp = await (amazonService as any).getClient()
-      const marketplaceId = process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
 
       try {
         const res = await sp.callAPI({
           operation: 'getCatalogItem',
           endpoint: 'catalogItems',
-          path: { asin: product.amazonAsin },
+          version: '2022-04-01',          // ← explicitly use the version that supports relationships
+          path: { asin: testAsin },
           query: { marketplaceIds: [marketplaceId], includedData: ['relationships', 'summaries'] },
         })
         return {
           success: true,
-          asin: product.amazonAsin,
-          sku: product.sku,
+          asin: testAsin,
+          sku: testSku,
+          marketplaceId,
+          apiVersion: '2022-04-01',
           relationships: (res as any)?.relationships ?? [],
+          summaries: (res as any)?.summaries ?? [],
           rawResponse: res,
         }
       } catch (apiErr: any) {
+        const errBody = apiErr?.body ?? null
+        fastify.log.error({ asin: testAsin, err: apiErr, errBody }, '[test-catalog-api] getCatalogItem failed')
         return {
           success: false,
-          asin: product.amazonAsin,
-          sku: product.sku,
+          asin: testAsin,
+          sku: testSku,
+          marketplaceId,
+          apiVersion: '2022-04-01',
           error: apiErr?.message ?? String(apiErr),
-          errorBody: apiErr?.body ?? null,
+          errorBody: errBody,
           errorCode: apiErr?.code ?? null,
           errors: apiErr?.errors ?? null,
         }
@@ -503,6 +521,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
           const res: any = await sp.callAPI({
             operation: 'getCatalogItem',
             endpoint: 'catalogItems',
+            version: '2022-04-01',
             path: { asin: product.amazonAsin },
             query: {
               marketplaceIds: [marketplaceId],
