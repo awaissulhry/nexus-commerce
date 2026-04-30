@@ -248,7 +248,12 @@ export async function ingestMockOrders(): Promise<IngestionStats> {
 
     return stats
   } catch (error: any) {
-    logger.error('[ORDER INGESTION] Error during mock order ingestion:', error.message)
+    logger.error('[ORDER INGESTION] Error during mock order ingestion', {
+      message: error.message,
+      code: error.code,
+      meta: error.meta,
+      stack: error.stack?.split('\n').slice(0, 5).join(' | '),
+    })
     throw error
   }
 }
@@ -289,7 +294,12 @@ export async function getOrders(
       pages: Math.ceil(total / limit),
     }
   } catch (error: any) {
-    logger.error('[ORDER INGESTION] Error fetching orders:', error.message)
+    logger.error('[ORDER INGESTION] Error fetching orders', {
+      message: error.message,
+      code: error.code,
+      meta: error.meta,
+      stack: error.stack?.split('\n').slice(0, 5).join(' | '),
+    })
     throw error
   }
 }
@@ -313,7 +323,12 @@ export async function shipOrder(orderId: string): Promise<any> {
     logger.info(`[ORDER INGESTION] Order ${orderId} marked as SHIPPED`)
     return order
   } catch (error: any) {
-    logger.error(`[ORDER INGESTION] Error shipping order ${orderId}:`, error.message)
+    logger.error(`[ORDER INGESTION] Error shipping order ${orderId}`, {
+      message: error.message,
+      code: error.code,
+      meta: error.meta,
+      stack: error.stack?.split('\n').slice(0, 5).join(' | '),
+    })
     throw error
   }
 }

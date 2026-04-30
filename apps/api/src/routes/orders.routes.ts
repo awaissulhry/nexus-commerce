@@ -28,10 +28,12 @@ export async function ordersRoutes(app: FastifyInstance) {
         data: stats,
       })
     } catch (error: any) {
-      logger.error('[ORDERS API] Error ingesting orders:', error.message)
+      logger.error('[ORDERS API] Error ingesting orders', { message: error.message, code: error.code, meta: error.meta })
       reply.status(500).send({
         success: false,
         error: error.message,
+        code: error.code,
+        meta: error.meta,
       })
     }
   })
@@ -54,10 +56,12 @@ export async function ordersRoutes(app: FastifyInstance) {
         data: result,
       })
     } catch (error: any) {
-      logger.error('[ORDERS API] Error fetching orders:', error.message)
+      logger.error('[ORDERS API] Error fetching orders', { message: error.message, code: error.code, meta: error.meta })
       reply.status(500).send({
         success: false,
         error: error.message,
+        code: error.code,
+        meta: error.meta,
       })
     }
   })

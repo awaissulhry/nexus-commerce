@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "npx prisma generate --schema=../../packages/database/prisma/schema.prisma && tsc",
+    "prestart": "cd ../../packages/database && npx prisma migrate deploy",
     "start": "node dist/index.js",
-    "start:prod": "NODE_ENV=production node dist/index.js"
+    "start:prod": "cd ../../packages/database && npx prisma migrate deploy && cd ../../apps/api && NODE_ENV=production node dist/index.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1037.0",
