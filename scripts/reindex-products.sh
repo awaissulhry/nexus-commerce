@@ -17,11 +17,18 @@ while true; do
 
   RESPONSE=$(curl -s -X POST \
     "$BACKEND/api/amazon/products/reindex-hierarchy?offset=$OFFSET&limit=$LIMIT" \
-    -H "Content-Type: application/json")
+    -H "Content-Type: application/json" \
+    -d '{}')
 
   echo "$RESPONSE" | jq '.'
 
-  # Extract fields (fall back to 0 / false if jq can't find them)
+  # Stop immediately on any non-success response
+  SUCCESS=$(echo "$RESPONSE" | jq -r '.success // false')
+  if [ "$SUCCESS" != "true" ]; then
+    echo "❌ Error response — stopping. Check the endpoint."
+    exit 1
+  fi
+
   DONE=$(echo "$RESPONSE"      | jq -r '.done      // false')
   PROCESSED=$(echo "$RESPONSE" | jq -r '.processed // 0')
   LINKED=$(echo "$RESPONSE"    | jq -r '.linked    // 0')
@@ -36,15 +43,20 @@ while true; do
   echo ""
 
   if [ "$DONE" = "true" ]; then
-    echo "✅ All products reindexed!"
+    echo "✅ Reindex complete!"
     echo "   Total processed : $TOTAL_PROCESSED"
     echo "   Total linked    : $TOTAL_LINKED"
     break
   fi
 
-  OFFSET=$((OFFSET + LIMIT))
-  BATCH=$((BATCH + 1))
+  # Use the nextOffset the server tells us, not our own increment
+  NEXT=$(echo "$RESPONSE" | jq -r '.nextOffset // empty')
+  if [ -z "$NEXT" ]; then
+    OFFSET=$((OFFSET + LIMIT))
+  else
+    OFFSET=$NEXT
+  fi
 
-  echo "   Waiting 2 s before next batch…"
+  BATCH=$((BATCH + 1))
   sleep 2
 done
