@@ -1,86 +1,86 @@
-import { prisma } from "@nexus/database";
 import type { InventoryItem } from "@/types/inventory";
 import ManageInventoryClient from "./ManageInventoryClient";
+import { getBackendUrl } from "@/lib/backend-url";
 
-// Force dynamic rendering and disable caching
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-/**
- * Fetch inventory data from database using TRUE relational hierarchy.
- *
- * Product (Parent) → children[] (Child Products)
- *
- * Query ONLY top-level products (parentId: null) and eagerly load their children.
- */
+interface ApiProduct {
+  id: string;
+  sku: string;
+  name: string;
+  amazonAsin: string | null;
+  ebayItemId: string | null;
+  basePrice: string | number;
+  totalStock: number;
+  isParent: boolean;
+  parentId: string | null;
+  fulfillmentChannel: string | null;
+  fulfillmentMethod: string | null;
+  shippingTemplate: string | null;
+  brand: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 async function getInventoryData(): Promise<InventoryItem[]> {
   try {
-    // Fetch ONLY top-level products (Master Parents and True Standalones)
-    // Use raw SQL to bypass Prisma client type issues
-    const products = (await (prisma as any).$queryRaw`
-      SELECT
-        p.id, p.sku, p.name, p."amazonAsin", p."ebayItemId",
-        p."basePrice", p."totalStock", p."isParent", p."fulfillmentChannel",
-        p."fulfillmentMethod", p.brand, p."createdAt", p."updatedAt",
-        COALESCE(json_agg(
-          json_build_object(
-            'id', c.id,
-            'sku', c.sku,
-            'name', c.name,
-            'amazonAsin', c."amazonAsin",
-            'ebayVariationId', c."ebayItemId",
-            'price', c."basePrice",
-            'stock', c."totalStock",
-            'fulfillmentMethod', c."fulfillmentMethod",
-            'value', c.name
-          ) ORDER BY c.sku
-        ) FILTER (WHERE c.id IS NOT NULL), '[]'::json) as children
-      FROM "Product" p
-      LEFT JOIN "Product" c ON c."parentId" = p.id
-      WHERE p."parentId" IS NULL
-      GROUP BY p.id, p.sku, p.name, p."amazonAsin", p."ebayItemId",
-               p."basePrice", p."totalStock", p."isParent", p."fulfillmentChannel",
-               p."fulfillmentMethod", p.brand, p."createdAt", p."updatedAt"
-      ORDER BY p."updatedAt" DESC
-    `) as any[];
+    const res = await fetch(
+      `${getBackendUrl()}/api/amazon/products/list`,
+      { cache: "no-store" }
+    );
+
+    if (!res.ok) {
+      console.error(`[Inventory/Manage] API returned ${res.status}`);
+      return [];
+    }
+
+    const data = await res.json();
+    const raw: ApiProduct[] = data.products ?? [];
+
+    console.log(`[Inventory/Manage] API returned ${raw.length} products`);
 
     const deriveStatus = (stock: number): InventoryItem["status"] => {
       if (stock <= 0) return "Out of Stock";
       return "Active";
     };
 
-    // Map each Product into an InventoryItem with nested subRows
-    return products.map((product): InventoryItem => {
-      // Handle children from raw SQL result (array of objects)
-      const children = (product.children && Array.isArray(product.children) && product.children.length > 0)
-        ? product.children.filter((c: any) => c && c.id)
-        : [];
+    const childMap = new Map<string, ApiProduct[]>();
+    for (const p of raw) {
+      if (p.parentId) {
+        const arr = childMap.get(p.parentId) ?? [];
+        arr.push(p);
+        childMap.set(p.parentId, arr);
+      }
+    }
 
-      // Build child rows from the children relation
-      const subRows: InventoryItem[] = children.map((child: any): InventoryItem => {
-        return {
-          id: child.id,
-          sku: child.sku,
-          name: child.name,
-          asin: child.amazonAsin || null,
-          ebayItemId: child.ebayVariationId || null,
-          imageUrl: null,
-          price: Number(child.price),
-          stock: child.stock,
-          status: deriveStatus(child.stock),
-          isParent: false,
-          variationName: child.name || null,
-          variationValue: child.value || null,
-          brand: product.brand || null,
-          fulfillment: child.fulfillmentMethod || product.fulfillmentMethod || null,
-          createdAt: child.createdAt
-            ? new Date(child.createdAt).toISOString()
-            : null,
-          condition: "New",
-          channels: undefined,
-          channelData: undefined,
-        };
-      });
+    const topLevel = raw.filter((p) => !p.parentId);
+
+    return topLevel.map((product): InventoryItem => {
+      const children = childMap.get(product.id) ?? [];
+
+      const subRows: InventoryItem[] = children.map((child): InventoryItem => ({
+        id: child.id,
+        sku: child.sku,
+        name: child.name,
+        asin: child.amazonAsin || null,
+        ebayItemId: child.ebayItemId || null,
+        imageUrl: null,
+        price: Number(child.basePrice),
+        stock: child.totalStock,
+        status: deriveStatus(child.totalStock),
+        isParent: false,
+        variationName: child.name || null,
+        variationValue: null,
+        brand: product.brand || null,
+        fulfillment: child.fulfillmentMethod || product.fulfillmentMethod || null,
+        fulfillmentChannel: (child.fulfillmentChannel as "FBA" | "FBM" | null) || null,
+        shippingTemplate: child.shippingTemplate || null,
+        createdAt: child.createdAt ? new Date(child.createdAt).toISOString() : null,
+        condition: "New",
+        channels: undefined,
+        channelData: undefined,
+      }));
 
       return {
         id: product.id,
@@ -97,16 +97,16 @@ async function getInventoryData(): Promise<InventoryItem[]> {
         variationValue: null,
         brand: product.brand || null,
         fulfillment: product.fulfillmentChannel || product.fulfillmentMethod || null,
-        createdAt: product.createdAt
-          ? new Date(product.createdAt).toISOString()
-          : null,
+        fulfillmentChannel: (product.fulfillmentChannel as "FBA" | "FBM" | null) || null,
+        shippingTemplate: product.shippingTemplate || null,
+        createdAt: product.createdAt ? new Date(product.createdAt).toISOString() : null,
         condition: "New",
         channels: undefined,
-        subRows: product.isParent === true ? subRows : undefined,
+        subRows: product.isParent === true && subRows.length > 0 ? subRows : undefined,
       };
     });
   } catch (error) {
-    console.error("Failed to fetch inventory data:", error);
+    console.error("[Inventory/Manage] Failed to fetch inventory data:", error);
     return [];
   }
 }

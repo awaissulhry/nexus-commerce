@@ -144,6 +144,19 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // GET /api/amazon/products/count - Quick count + sample for debugging
+  fastify.get('/products/count', async (_request, reply) => {
+    try {
+      const [count, sample] = await Promise.all([
+        prisma.product.count(),
+        prisma.product.findFirst({ orderBy: { createdAt: 'desc' } }),
+      ])
+      return { count, sample }
+    } catch (error) {
+      return reply.code(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' })
+    }
+  })
+
   // GET /api/amazon/products/list - List Amazon-synced products from the database
   fastify.get('/products/list', async (request, reply) => {
     try {
