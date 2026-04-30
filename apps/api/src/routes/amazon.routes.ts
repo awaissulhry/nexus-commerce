@@ -1211,7 +1211,9 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
               if (direct) return String(direct)
               if (key === 'size' || key === 'size_name') {
                 const ap = attrs.apparel_size?.[0]
-                if (ap?.size) return String(ap.size).toUpperCase()
+                // Amazon's apparel_size uses underscored alpha codes:
+                // "m" → "M", "x_l" → "XL", "3x_l" → "3XL", "xx_l" → "XXL"
+                if (ap?.size) return String(ap.size).toUpperCase().replace(/_/g, '')
               }
               if (key === 'color' || key === 'color_name') {
                 const cm = attrs.color_map?.[0]
