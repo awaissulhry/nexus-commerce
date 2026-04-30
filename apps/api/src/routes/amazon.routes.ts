@@ -1082,7 +1082,9 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
         path: { sellerId, sku },
         query: {
           marketplaceIds: [marketplaceId],
-          includedData: ['summaries', 'attributes', 'relationships', 'identifiers', 'productTypes'],
+          // Documented values for v2021-08-01: summaries, attributes, issues,
+          // offers, fulfillmentAvailability, procurement, relationships.
+          includedData: ['summaries', 'attributes', 'relationships'],
         },
       })
 
@@ -1131,7 +1133,6 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
           productType: s.productType,
           mainImage: s.mainImage?.link,
         })),
-        productTypes: res.productTypes,
         relationships: res.relationships,
         hierarchy: {
           parentageLevel,
