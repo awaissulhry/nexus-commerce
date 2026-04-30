@@ -210,17 +210,51 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // GET /api/amazon/products/list - List Amazon-synced products from the database
+  // Query params:
+  //   ?limit=50        — max rows to return (default: all)
+  //   ?offset=0        — skip N rows
+  //   ?topLevelOnly=1  — only products where parentId IS NULL; includes childCount per row
   fastify.get('/products/list', async (request, reply) => {
     try {
-      const products = await prisma.product.findMany({
-        where: { syncChannels: { has: 'AMAZON' } },
-        orderBy: { createdAt: 'desc' },
-      })
+      const q = request.query as { limit?: string; offset?: string; topLevelOnly?: string }
+      const limit = q.limit ? Math.min(parseInt(q.limit, 10) || 50, 500) : undefined
+      const offset = q.offset ? parseInt(q.offset, 10) || 0 : undefined
+      const topLevelOnly = q.topLevelOnly === '1' || q.topLevelOnly === 'true'
+
+      const where: any = { syncChannels: { has: 'AMAZON' } }
+      if (topLevelOnly) where.parentId = null
+
+      const [products, total] = await Promise.all([
+        prisma.product.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          ...(limit !== undefined ? { take: limit } : {}),
+          ...(offset !== undefined ? { skip: offset } : {}),
+        }),
+        prisma.product.count({ where: { syncChannels: { has: 'AMAZON' } } }),
+      ])
+
+      let enriched: any[] = products
+      if (topLevelOnly) {
+        // Compute childCount for each returned parent in one query
+        const parentIds = products.map((p) => p.id)
+        const childRows = await prisma.product.groupBy({
+          by: ['parentId'],
+          where: { parentId: { in: parentIds } },
+          _count: { id: true },
+        })
+        const childCountMap = new Map<string, number>()
+        for (const row of childRows) {
+          if (row.parentId) childCountMap.set(row.parentId, row._count.id)
+        }
+        enriched = products.map((p) => ({ ...p, childCount: childCountMap.get(p.id) ?? 0 }))
+      }
 
       return {
         success: true,
-        count: products.length,
-        products,
+        count: enriched.length,
+        total,
+        products: enriched,
       }
     } catch (error) {
       fastify.log.error({ err: error }, 'Failed to list Amazon products')
@@ -228,6 +262,143 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
       })
+    }
+  })
+
+  // POST /api/amazon/products/clear-hierarchy
+  // Emergency reset: unlinks all parent/child relationships and deletes phantom
+  // PARENT-* placeholder records created by the old /products route.
+  fastify.post('/products/clear-hierarchy', async (request, reply) => {
+    try {
+      // 1. Unlink all children
+      const unlinkResult = await prisma.product.updateMany({
+        where: { parentId: { not: null } },
+        data: { parentId: null, parentAsin: null },
+      })
+      // 2. Reset all isParent flags and variationTheme
+      const resetParents = await prisma.product.updateMany({
+        where: { isParent: true },
+        data: { isParent: false, variationTheme: null },
+      })
+      // 3. Delete phantom PARENT-* placeholder records (created by old /products sync)
+      const deletePhantoms = await prisma.product.deleteMany({
+        where: { sku: { startsWith: 'PARENT-' } },
+      })
+      // 4. Strip variations from categoryAttributes on all Amazon products
+      const allAmazon = await prisma.product.findMany({
+        where: { syncChannels: { has: 'AMAZON' } },
+        select: { id: true, categoryAttributes: true },
+      })
+      let strippedVariations = 0
+      for (const p of allAmazon) {
+        const ca = p.categoryAttributes
+        if (ca && typeof ca === 'object' && !Array.isArray(ca) && (ca as any).variations) {
+          const { variations: _drop, ...rest } = ca as any
+          await prisma.product.update({
+            where: { id: p.id },
+            data: { categoryAttributes: rest },
+          })
+          strippedVariations++
+        }
+      }
+      return {
+        success: true,
+        childrenUnlinked: unlinkResult.count,
+        parentsReset: resetParents.count,
+        phantomsDeleted: deletePhantoms.count,
+        variationsStripped: strippedVariations,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[clear-hierarchy] failed')
+      return reply.code(500).send({ success: false, error: error?.message ?? String(error) })
+    }
+  })
+
+  // GET /api/amazon/products/verify-amazon-parents?sku_prefix=xevo
+  // Calls getListingsItem for every local product matching sku_prefix and shows
+  // exactly what Amazon's Listings API returns for parentage_level and parent_sku.
+  // Default prefix is empty (all Amazon products). Pass ?sku_prefix=xevo to narrow.
+  fastify.get('/products/verify-amazon-parents', async (request, reply) => {
+    try {
+      if (!amazonService.isConfigured()) {
+        return reply.code(503).send({ success: false, error: 'Amazon SP-API not configured' })
+      }
+      const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+      const marketplaceId = process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
+      if (!sellerId) {
+        return reply.code(503).send({ success: false, error: 'AMAZON_SELLER_ID not set' })
+      }
+
+      const skuPrefix = ((request.query as any).sku_prefix ?? '') as string
+
+      const where: any = { syncChannels: { has: 'AMAZON' } }
+      if (skuPrefix) where.sku = { contains: skuPrefix, mode: 'insensitive' }
+
+      const products = await prisma.product.findMany({
+        where,
+        select: { id: true, sku: true, amazonAsin: true, name: true, isParent: true, parentId: true },
+        orderBy: { sku: 'asc' },
+      })
+
+      const sp = await (amazonService as any).getClient()
+      const results: any[] = []
+
+      for (const product of products) {
+        try {
+          const res: any = await sp.callAPI({
+            operation: 'getListingsItem',
+            endpoint: 'listingsItems',
+            path: { sellerId, sku: product.sku },
+            query: {
+              marketplaceIds: [marketplaceId],
+              includedData: ['summaries', 'attributes', 'relationships'],
+            },
+          })
+
+          const attrs = res.attributes ?? {}
+          const parentageLevel: string | null =
+            attrs.parentage_level?.[0]?.value ?? attrs.parentage_level?.[0]?.name ?? null
+          const variationTheme: string | null = attrs.variation_theme?.[0]?.name ?? null
+          const parentSkuFromAmazon: string | null =
+            attrs.child_parent_sku_relationship?.[0]?.parent_sku ?? null
+
+          const assessment =
+            parentageLevel === 'parent' ? 'AMAZON_PARENT'
+            : parentageLevel === 'child' ? `AMAZON_CHILD → parent_sku: ${parentSkuFromAmazon}`
+            : parentageLevel ? `UNKNOWN_LEVEL: ${parentageLevel}`
+            : 'NO_PARENTAGE (standalone or Amazon returned no parentage_level)'
+
+          results.push({
+            sku: product.sku,
+            asin: product.amazonAsin,
+            localIsParent: product.isParent,
+            localHasParent: !!product.parentId,
+            amazon: { parentageLevel, variationTheme, parentSku: parentSkuFromAmazon },
+            assessment,
+          })
+        } catch (err: any) {
+          const msg = err?.body?.errors?.[0]?.message ?? err?.message ?? String(err)
+          const isNotFound = msg.toLowerCase().includes('not found') || msg.includes('NO_SUCH_LISTING')
+          results.push({
+            sku: product.sku,
+            asin: product.amazonAsin,
+            localIsParent: product.isParent,
+            localHasParent: !!product.parentId,
+            amazon: null,
+            assessment: isNotFound ? 'STALE — SKU not on Amazon' : `ERROR: ${msg}`,
+          })
+        }
+      }
+
+      return {
+        success: true,
+        skuPrefix: skuPrefix || '(all)',
+        count: results.length,
+        results,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[verify-amazon-parents] failed')
+      return reply.code(500).send({ success: false, error: error?.message ?? String(error) })
     }
   })
 
