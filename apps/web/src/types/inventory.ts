@@ -63,6 +63,13 @@ export interface InventoryItem {
    /** Variation attribute value (e.g. "Red") — children only */
    variationValue: string | null;
 
+   /**
+    * Per-child structured variation attributes — children only.
+    * Multi-dimensional themes are stored as { "Body Type": "Uomo",
+    * "Color": "Nero", "Size": "M" }. Frontend renders one badge per key.
+    */
+   variations?: Record<string, string> | null;
+
    /** Brand (parent only) */
    brand: string | null;
 

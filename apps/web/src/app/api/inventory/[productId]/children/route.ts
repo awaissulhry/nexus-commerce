@@ -45,6 +45,9 @@ export async function GET(
       parentId: c.parentId || null,
       variationName: c.variationTheme || null,
       variationValue: null,
+      // Backend sets c.variations from categoryAttributes.variations
+      // (see /api/amazon/products/:id/children handler).
+      variations: (c.variations as Record<string, string> | null | undefined) ?? null,
       brand: null,
       fulfillment: c.fulfillmentMethod || c.fulfillmentChannel || null,
       fulfillmentChannel: (c.fulfillmentChannel as 'FBA' | 'FBM' | null) || null,

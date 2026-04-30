@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
+import { detectGroups, type ProductLite } from '../services/variation-parser.service.js'
 import prisma from '../db.js'
 
 const amazonService = new AmazonService()
@@ -301,6 +302,8 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // GET /api/amazon/products/:id/children - Fetch children of a parent product
+  // Lifts categoryAttributes.variations to a top-level `variations` field for
+  // easy frontend consumption (per-attribute badge rendering).
   fastify.get<{ Params: { id: string } }>('/products/:id/children', async (request, reply) => {
     try {
       const { id } = request.params
@@ -308,7 +311,15 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
         where: { parentId: id },
         orderBy: { sku: 'asc' },
       })
-      return { success: true, children }
+      const enriched = children.map((c) => {
+        const ca = c.categoryAttributes
+        const variations =
+          ca && typeof ca === 'object' && !Array.isArray(ca) && (ca as any).variations
+            ? ((ca as any).variations as Record<string, string>)
+            : null
+        return { ...c, variations }
+      })
+      return { success: true, children: enriched }
     } catch (error) {
       return reply.code(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' })
     }
@@ -1034,19 +1045,90 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   )
 
   // ────────────────────────────────────────────────────────────────────────
+  // POST /api/amazon/products/detect-variations
+  //
+  // Dry-run preview ONLY. Runs the variation parser against the live DB
+  // and returns the inferred grouping plan WITHOUT touching anything.
+  // Use this to validate detection before calling /auto-group.
+  //
+  // Output includes per-child structured variations like:
+  //   { "Body Type": "Uomo", "Color": "Nero", "Size": "M" }
+  // ────────────────────────────────────────────────────────────────────────
+  fastify.post('/products/detect-variations', async (_request, reply) => {
+    try {
+      const products = await prisma.product.findMany({
+        where: { syncChannels: { has: 'AMAZON' } },
+        select: { id: true, sku: true, name: true, amazonAsin: true, totalStock: true },
+      })
+
+      const groups = detectGroups(products as ProductLite[])
+
+      const totalChildren = groups.reduce((s, g) => s + g.children.length, 0)
+      const matchedGroups = groups.filter((g) => g.parentProduct !== null)
+      const orphanGroups = groups.filter((g) => g.parentProduct === null)
+
+      // Theme histogram (which themes show up and how often)
+      const themeHistogram: Record<string, number> = {}
+      for (const g of groups) {
+        const theme = g.attributeNames.join(' / ')
+        themeHistogram[theme] = (themeHistogram[theme] ?? 0) + 1
+      }
+
+      return {
+        dryRun: true,
+        summary: {
+          totalAmazonProducts: products.length,
+          groupsDetected: groups.length,
+          groupsWithExistingParent: matchedGroups.length,
+          orphanGroups: orphanGroups.length,
+          totalChildren,
+          themeHistogram,
+        },
+        // Top 20 by size, with sample child variations
+        plan: groups.slice(0, 20).map((g) => ({
+          baseName: g.baseName,
+          parentSku: g.parentProduct?.sku ?? null,
+          parentExists: g.parentProduct !== null,
+          attributeNames: g.attributeNames,
+          variationTheme: g.attributeNames.join(' / '),
+          childCount: g.children.length,
+          sampleChildren: g.children.slice(0, 5).map((c) => ({
+            sku: c.product.sku,
+            variations: c.variations,
+          })),
+        })),
+        orphanGroupSamples: orphanGroups.slice(0, 5).map((g) => ({
+          baseName: g.baseName.slice(0, 120),
+          attributeNames: g.attributeNames,
+          childCount: g.children.length,
+          sampleSkus: g.children.slice(0, 3).map((c) => c.product.sku),
+        })),
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[detect-variations] failed')
+      return reply.code(500).send({
+        success: false,
+        error: error?.message ?? String(error),
+      })
+    }
+  })
+
+  // ────────────────────────────────────────────────────────────────────────
   // POST /api/amazon/products/auto-group
   //
-  // Builds parent/child hierarchy by parsing product names — NOT SKU
-  // patterns. Amazon listings for variation children are titled identically
-  // to the parent + " (Size, Color)" appended at the end. e.g.:
-  //   parent: "XAVIA GALE Giacca... | Per Tutte Le Stagioni"
-  //   child:  "XAVIA GALE Giacca... | Per Tutte Le Stagioni (3XL, Nero)"
+  // Builds parent/child hierarchy by parsing product names. Variation
+  // children are titled identically to the parent + " (attr1, attr2, …)"
+  // appended at the end. The variation-parser service classifies each
+  // attribute position by majority-vote on values across siblings:
+  //   {S,M,L,XL} → "Size"
+  //   {Uomo,Donna} → "Body Type"
+  //   {Nero,Bianco} → "Color"
+  //   {Pelle,Rete} → "Material"
+  // Themes can be 1, 2, or 3+ dimensions, e.g. "Body Type / Color / Size".
   //
-  // Algorithm:
-  //   1. For every product, strip a trailing parenthetical "(...)" → baseTitle
-  //   2. Children = products that had a stripped paren (variation attrs)
-  //   3. Parents = products whose name == some child's baseTitle exactly
-  //   4. Variation theme inferred from attr count (1=Size, 2+=Size/Color)
+  // Each child gets its structured variations written to
+  // categoryAttributes.variations as { "Body Type": "Uomo", "Color": "Nero",
+  // "Size": "M" } so the UI can render per-attribute badges.
   //
   // Query params:
   //   ?dryRun=1   → preview the plan without writing
@@ -1058,7 +1140,6 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
       const dryRun = q.dryRun === '1' || q.dryRun === 'true'
       const reset = q.reset === '1' || q.reset === 'true'
 
-      // Optionally clear current hierarchy (children & parents) before re-grouping
       if (reset && !dryRun) {
         await prisma.product.updateMany({
           where: { parentId: { not: null } },
@@ -1072,126 +1153,107 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
 
       const products = await prisma.product.findMany({
         where: { syncChannels: { has: 'AMAZON' } },
-        select: { id: true, sku: true, name: true, amazonAsin: true },
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          amazonAsin: true,
+          totalStock: true,
+          categoryAttributes: true,
+        },
       })
 
-      // Parse name → { baseTitle, attrs }
-      // Match the LAST parenthetical at the end of the name. Allow trailing whitespace.
-      const TRAILING_PAREN = /^(.+?)\s*\(([^()]+)\)\s*$/
-      type Parsed = {
-        id: string
-        sku: string
-        name: string
-        amazonAsin: string | null
-        baseTitle: string
-        attrs: string[] | null
-      }
-      const parsed: Parsed[] = products.map((p) => {
-        const name = (p.name ?? '').trim()
-        const m = name.match(TRAILING_PAREN)
-        if (!m) return { ...p, name, baseTitle: name, attrs: null }
-        const inside = m[2].trim()
-        // Reject very long parentheticals — those are descriptive, not variation attrs
-        // (real variation attrs are short: "3XL", "Nero", "3XL, Nero", "S, Black, Men")
-        if (inside.length > 60) return { ...p, name, baseTitle: name, attrs: null }
-        const attrs = inside
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean)
-        return { ...p, name, baseTitle: m[1].trim(), attrs }
-      })
+      const groups = detectGroups(
+        products.map((p) => ({
+          id: p.id,
+          sku: p.sku,
+          name: p.name,
+          amazonAsin: p.amazonAsin,
+          totalStock: p.totalStock,
+        }))
+      )
 
-      // Index potential parents by baseTitle (products with no trailing parenthetical)
-      const parentByBase = new Map<string, Parsed>()
-      for (const p of parsed) {
-        if (p.attrs === null && !parentByBase.has(p.baseTitle)) {
-          parentByBase.set(p.baseTitle, p)
-        }
-      }
+      // Only groups with an existing parent product are auto-applied.
+      // Orphan groups (no parent record in DB) are surfaced for manual handling.
+      const applicable = groups.filter((g) => g.parentProduct !== null)
 
-      // For each child (has attrs), find its parent by baseTitle
-      const groupsByParent = new Map<string, { parent: Parsed; children: Parsed[] }>()
-      const orphanChildren: Array<{ sku: string; name: string; baseTitle: string }> = []
-      for (const p of parsed) {
-        if (p.attrs === null) continue
-        const parent = parentByBase.get(p.baseTitle)
-        if (!parent) {
-          orphanChildren.push({ sku: p.sku, name: p.name, baseTitle: p.baseTitle })
-          continue
-        }
-        const g = groupsByParent.get(parent.id) ?? { parent, children: [] }
-        g.children.push(p)
-        groupsByParent.set(parent.id, g)
-      }
+      const planView = applicable.map((g) => ({
+        baseName: g.baseName,
+        parentSku: g.parentProduct!.sku,
+        parentId: g.parentProduct!.id,
+        parentAsin: g.parentProduct!.amazonAsin,
+        attributeNames: g.attributeNames,
+        variationTheme: g.attributeNames.join(' / '),
+        childCount: g.children.length,
+        sampleChildren: g.children.slice(0, 5).map((c) => ({
+          sku: c.product.sku,
+          variations: c.variations,
+        })),
+      }))
 
-      // Build the plan: only groups with 2+ children make sense
-      const plan = [...groupsByParent.values()]
-        .filter((g) => g.children.length >= 2)
-        .map(({ parent, children }) => {
-          const attrCounts = children.map((c) => c.attrs!.length)
-          const minAttrs = Math.min(...attrCounts)
-          const theme = minAttrs === 1 ? 'Size' : minAttrs >= 2 ? 'Size/Color' : 'Variation'
-          return {
-            parentId: parent.id,
-            parentSku: parent.sku,
-            parentName: parent.name,
-            parentAsin: parent.amazonAsin,
-            variationTheme: theme,
-            childCount: children.length,
-            childIds: children.map((c) => c.id),
-            sampleChildren: children.slice(0, 5).map((c) => ({ sku: c.sku, attrs: c.attrs })),
-          }
-        })
-        .sort((a, b) => b.childCount - a.childCount)
-
-      const totalChildren = plan.reduce((s, g) => s + g.childCount, 0)
+      const totalChildren = applicable.reduce((s, g) => s + g.children.length, 0)
+      const orphanCount = groups.length - applicable.length
 
       if (dryRun) {
         return {
           dryRun: true,
           summary: {
             totalProducts: products.length,
-            childrenWithVariations: parsed.filter((p) => p.attrs !== null).length,
-            potentialParents: parentByBase.size,
-            groupsToCreate: plan.length,
+            groupsDetected: groups.length,
+            groupsApplicable: applicable.length,
+            orphanGroups: orphanCount,
             childrenToLink: totalChildren,
-            orphanChildren: orphanChildren.length,
           },
-          plan: plan.map((g) => ({ ...g, childIds: undefined })),
-          orphanSamples: orphanChildren.slice(0, 10),
+          plan: planView,
         }
       }
 
       // Apply
       let parentsUpdated = 0
       let childrenLinked = 0
-      for (const g of plan) {
+      for (const g of applicable) {
+        const parentId = g.parentProduct!.id
+        const parentAsin = g.parentProduct!.amazonAsin
+        const theme = g.attributeNames.join(' / ')
+
         await prisma.product.update({
-          where: { id: g.parentId },
-          data: { isParent: true, variationTheme: g.variationTheme },
+          where: { id: parentId },
+          data: { isParent: true, variationTheme: theme },
         })
         parentsUpdated++
 
-        const res = await prisma.product.updateMany({
-          where: { id: { in: g.childIds } },
-          data: {
-            parentId: g.parentId,
-            parentAsin: g.parentAsin,
-            isParent: false,
-          },
-        })
-        childrenLinked += res.count
+        // Per-child update — categoryAttributes.variations needs a per-child
+        // value, so we can't use updateMany.
+        for (const child of g.children) {
+          // Preserve any existing categoryAttributes keys other than 'variations'
+          const existing = (child.product as any).categoryAttributes
+          const existingObj =
+            existing && typeof existing === 'object' && !Array.isArray(existing) ? existing : {}
+          const newAttrs = { ...existingObj, variations: child.variations }
+
+          await prisma.product.update({
+            where: { id: child.product.id },
+            data: {
+              parentId,
+              parentAsin,
+              isParent: false,
+              variationTheme: theme,
+              categoryAttributes: newAttrs,
+            },
+          })
+          childrenLinked++
+        }
       }
 
       // Roll up child stock to parents
-      for (const g of plan) {
+      for (const g of applicable) {
         const children = await prisma.product.findMany({
-          where: { parentId: g.parentId },
+          where: { parentId: g.parentProduct!.id },
           select: { totalStock: true },
         })
         const totalStock = children.reduce((s, c) => s + (c.totalStock ?? 0), 0)
         await prisma.product.update({
-          where: { id: g.parentId },
+          where: { id: g.parentProduct!.id },
           data: { totalStock },
         })
       }
@@ -1201,11 +1263,10 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
         summary: {
           parentsUpdated,
           childrenLinked,
-          groupsApplied: plan.length,
-          orphanChildren: orphanChildren.length,
+          groupsApplied: applicable.length,
+          orphanGroups: orphanCount,
         },
-        plan: plan.map((g) => ({ ...g, childIds: undefined })),
-        orphanSamples: orphanChildren.slice(0, 10),
+        plan: planView,
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[auto-group] failed')

@@ -142,10 +142,27 @@ export const inventoryColumns = [
             </div>
           )}
 
-          {/* Child: show variant attribute */}
-          {isChild && item.variationName && (
-            <p className="text-[11px] text-slate-400 mt-0.5">{item.variationName}</p>
+          {/* Child: show variation attributes as badges (Body Type, Color, Size, …) */}
+          {isChild && item.variations && Object.keys(item.variations).length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {Object.entries(item.variations).map(([attrName, attrValue]) => (
+                <span
+                  key={attrName}
+                  className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded font-medium"
+                >
+                  <span className="text-slate-500">{attrName}:</span>{" "}
+                  <span>{attrValue}</span>
+                </span>
+              ))}
+            </div>
           )}
+
+          {/* Child fallback: show legacy single variationName when structured variations are absent */}
+          {isChild &&
+            (!item.variations || Object.keys(item.variations).length === 0) &&
+            item.variationName && (
+              <p className="text-[11px] text-slate-400 mt-0.5">{item.variationName}</p>
+            )}
 
           {/* Standalone (non-parent, non-child): variation details link */}
           {!hasChildren && !isChild && item.variationName && (
