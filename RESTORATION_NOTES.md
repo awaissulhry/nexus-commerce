@@ -204,3 +204,99 @@ parent ASINs and supersede this title heuristic — the existing
 parent/child records can be cleared with `?reset=1` on auto-group, then
 the reindex re-builds from authoritative data.
 
+---
+
+## Phase 2 V2: Real Amazon Listings-API hierarchy sync (2026-04-30)
+
+### What changed and why
+Heuristic title-based grouping was abandoned. The user's directive was
+"import the products exactly as they are on Amazon" — which means using
+Amazon's authoritative catalog data, not pattern-matching guesses.
+
+The Listings Items API (`getListingsItem`) is in a different SP-API role
+group than Catalog Items and **is accessible** to this account. It
+returns Amazon's actual product attributes including the hierarchy
+fields:
+
+| Amazon field | Persisted as |
+|---|---|
+| `attributes.parentage_level[0].value` (`parent`/`child`) | `Product.isParent` |
+| `attributes.child_parent_sku_relationship[0].parent_sku` | `Product.parentId` (resolved by SKU lookup) |
+| `attributes.variation_theme[0].name` (e.g. `SIZE/COLOR`) | `Product.variationTheme` (prettified) |
+| `relationships[].variationTheme.attributes` (e.g. `["color","size"]`) | per-attr names |
+| `attributes[<name>][0].value` for each name above | `Product.categoryAttributes.variations` |
+
+For products that store size in nested `apparel_size[0].size` rather
+than top-level `size[0].value`, a fallback extracts and normalises
+(`3x_l` → `3XL`).
+
+### New endpoint
+`POST /api/amazon/products/sync-hierarchy?offset=0&limit=25&reset=1`
+- Iterates Amazon SKUs in batches (default 25)
+- For each SKU, calls `getListingsItem` with
+  `includedData=[summaries, attributes, relationships]`
+- Persists Amazon's hierarchy + variation values
+- `reset=1` (offset=0 only): clears prior groupings before re-syncing
+- Final batch rolls up child stock to parents
+
+### Results — real Amazon catalog (verified)
+| Metric | Value |
+|---|---|
+| Total Amazon products | 278 |
+| Parents (Amazon's actual count) | **14** |
+| Children (linked via `parent_sku`) | 230 |
+| Standalone | 34 |
+| Lookup errors (Amazon says SKU doesn't exist) | 14 stale local-only SKUs |
+
+Top groupings (Amazon's authoritative themes — note multi-axis):
+
+| Parent SKU | Children | Real Amazon theme |
+|---|---|---|
+| `xracing` | 49 | `Fit Type / Size Name / Color Name` |
+| `VENTRA-JACKET` | 24 | `Size / Color` (men's + women's now correctly merged via parent_sku) |
+| `REGAL-JACKET` | 24 | `Size / Color` (men's + women's merged) |
+| `AIREON` | 24 | `Team Name / Athlete / Color / Size` (4 axes) |
+| `IT-MOSS-JACKET` | 21 | `Color Name / Size Name / Style Name / Pattern Name` (4 axes) |
+| `GALE-JACKET` | 18 | `Size / Color` |
+| `3K-HP05-BH9I` | 15 | `Size / Color` |
+| `AIRMESH-JACKET` | 12 | `Size / Color` |
+| `UD-LVLM-1H8T` | 10 | `Color / Size` |
+| `1J-EYE5-Y0TW` | 5 | `Color / Size` |
+
+Sample child variation values (per `categoryAttributes.variations`):
+```
+AIREON-JACKET-CREMA-E-VINO-MEN-3XL →
+  { "Color": "Crema e Vino", "Athlete": "Uomo",
+    "Team Name": "Giacca", "Size": "3XL" }
+
+xracingbxgxn54 →
+  { "Size": "54", "Color": "Bianco x Giallo x Nero",
+    "Fit Type": "Regular" }
+```
+
+The "Athlete = Uomo" / "Team Name = Giacca" oddity is Amazon's actual
+catalog data — the Italian seller listed gender under `athlete` and
+product-type under `team_name`. The sync surfaces what's there; it
+does not invent.
+
+### Heuristic code removed
+The following were deleted now that real-data sync works:
+- `apps/api/src/services/variation-parser.service.ts` (heuristic title parser)
+- `POST /api/amazon/products/auto-group` (heuristic apply)
+- `POST /api/amazon/products/detect-variations` (heuristic dry-run)
+- `POST /api/amazon/products/group-by-sku` (the original wrong SKU-prefix grouper)
+- `POST /api/amazon/products/reset-sku-grouping`
+- `POST /api/amazon/products/reindex-hierarchy` (broken Catalog Items implementation)
+- `POST /api/amazon/test-report/:reportType` (Reports API exploration; no parent column found)
+- `GET /api/amazon/test-report-status/:reportId`
+- `GET /api/amazon/analyze-report/:reportId`
+
+Kept:
+- `POST /api/amazon/products/sync-hierarchy` — the real one
+- `GET /api/amazon/products/probe-listing?sku=…` — diagnostic for a single SKU
+- `POST /api/amazon/products/merge` / `unmerge` — manual hierarchy edit (general-purpose)
+- `GET /api/amazon/products/test-catalog-api`, `GET /api/amazon/test-catalog-api`
+  (kept for the open Amazon support case)
+- `GET /api/amazon/products/debug-hierarchy`, `/products/list`, `/products/count`,
+  `GET /api/amazon/products/:id/children`, `GET /api/amazon/products` (catalog import)
+
