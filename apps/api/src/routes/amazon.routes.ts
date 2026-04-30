@@ -1045,6 +1045,116 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   )
 
   // ────────────────────────────────────────────────────────────────────────
+  // GET /api/amazon/products/probe-listing?sku=XXX
+  //
+  // Calls getListingsItem on a single SKU with includedData=[
+  //   summaries, attributes, relationships, identifiers, productTypes
+  // ] and returns a digest highlighting Amazon's real hierarchy fields:
+  //   - parentage_level     (parent | child)
+  //   - variation_theme     (e.g. "SIZE_NAME/COLOR_NAME")
+  //   - child_parent_sku_relationship.parent_sku
+  //   - any size_name / color_name / body_type-style attributes
+  //
+  // This is the source of truth — no heuristics. Use to verify what the
+  // sync will see before kicking off a full pass over 247 SKUs.
+  // ────────────────────────────────────────────────────────────────────────
+  fastify.get('/products/probe-listing', async (request, reply) => {
+    try {
+      const sku = (request.query as any).sku as string | undefined
+      if (!sku) {
+        return reply.code(400).send({ success: false, error: 'sku query param required' })
+      }
+      if (!amazonService.isConfigured()) {
+        return reply.code(503).send({ success: false, error: 'Amazon SP-API not configured' })
+      }
+
+      const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+      const marketplaceId = process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
+      if (!sellerId) {
+        return reply.code(503).send({ success: false, error: 'AMAZON_SELLER_ID not set' })
+      }
+
+      const sp = await (amazonService as any).getClient()
+
+      const res: any = await sp.callAPI({
+        operation: 'getListingsItem',
+        endpoint: 'listingsItems',
+        path: { sellerId, sku },
+        query: {
+          marketplaceIds: [marketplaceId],
+          includedData: ['summaries', 'attributes', 'relationships', 'identifiers', 'productTypes'],
+        },
+      })
+
+      // Surface the fields that matter for hierarchy, plus the raw attributes
+      // truncated to the keys most likely to carry variation data.
+      const attrs = res.attributes ?? {}
+      const variationTheme =
+        attrs.variation_theme?.[0]?.name ??
+        attrs.variation_theme?.[0]?.value ??
+        null
+      const parentageLevel =
+        attrs.parentage_level?.[0]?.value ??
+        attrs.parentage_level?.[0]?.name ??
+        null
+
+      // child_parent_sku_relationship is the canonical link: when present on
+      // a child, its .child_parent_sku_relationship.parent_sku names the parent.
+      const cpsr = attrs.child_parent_sku_relationship?.[0] ?? null
+
+      // Hunt for any *_name attribute values — these are typically the
+      // variation-axis values (size_name, color_name, body_type, etc.)
+      const variationKeys: string[] = []
+      const variationValues: Record<string, any> = {}
+      for (const k of Object.keys(attrs)) {
+        if (
+          k.endsWith('_name') ||
+          k === 'size_map' ||
+          k === 'color_map' ||
+          k === 'body_type' ||
+          k === 'material'
+        ) {
+          variationKeys.push(k)
+          // Each attr is an array of { value, marketplace_id, language_tag }
+          variationValues[k] = attrs[k]?.[0]?.value ?? attrs[k]?.[0]
+        }
+      }
+
+      return {
+        sku,
+        sellerId,
+        marketplaceId,
+        summaries: (res.summaries ?? []).map((s: any) => ({
+          asin: s.asin,
+          itemName: s.itemName,
+          status: s.status,
+          productType: s.productType,
+          mainImage: s.mainImage?.link,
+        })),
+        productTypes: res.productTypes,
+        relationships: res.relationships,
+        hierarchy: {
+          parentageLevel,
+          variationTheme,
+          childParentSkuRelationship: cpsr,
+        },
+        variationAttrs: variationValues,
+        attributeKeys: Object.keys(attrs).sort(),
+        // Full attributes object for first-time inspection — this can be large
+        attributesRaw: attrs,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error, sku: (request.query as any).sku }, '[probe-listing] failed')
+      return reply.code(500).send({
+        success: false,
+        error: error?.message ?? String(error),
+        code: error?.body?.errors?.[0]?.code ?? error?.code,
+        details: error?.body ?? null,
+      })
+    }
+  })
+
+  // ────────────────────────────────────────────────────────────────────────
   // POST /api/amazon/products/detect-variations
   //
   // Dry-run preview ONLY. Runs the variation parser against the live DB
