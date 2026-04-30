@@ -22,6 +22,7 @@ export interface PricingRow {
 }
 
 async function getPricingData(): Promise<PricingRow[]> {
+  try {
   const products = await prisma.product.findMany({
     include: {
       images: { take: 1, orderBy: { type: "asc" } },
@@ -52,6 +53,14 @@ async function getPricingData(): Promise<PricingRow[]> {
       margin,
     };
   });
+  } catch (err: any) {
+    console.error('[PRICING] Prisma error', {
+      message: err.message,
+      code: err.code,
+      meta: err.meta,
+    });
+    return [];
+  }
 }
 
 export default async function PricingPage() {
