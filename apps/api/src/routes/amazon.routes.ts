@@ -521,11 +521,16 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
       }
     } catch (error: any) {
       console.error('❌ Catalog Items API Error:', error.message)
+      console.error('Response headers:', error.response?.headers)
+      console.error('Response data:', error.response?.data)
+      console.error('Request ID:', error.response?.headers?.['x-amzn-requestid'] || error.response?.headers?.['x-amzn-request-id'])
 
       return reply.code(500).send({
         success: false,
         error: error.message,
-        details: error.response?.data || error,
+        requestId: error.response?.headers?.['x-amzn-requestid'] || error.response?.headers?.['x-amzn-request-id'] || 'NOT_CAPTURED',
+        timestamp: new Date().toISOString(),
+        details: error.response?.data,
       })
     }
   })
