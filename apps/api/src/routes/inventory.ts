@@ -496,6 +496,8 @@ export async function inventoryRoutes(app: FastifyInstance) {
               parentId: product.parentId,
               amazonAsin: product.amazonAsin,
               parentAsin: product.parentAsin,
+              variationTheme: product.variationTheme,
+              childCount: children.length,
               fulfillmentChannel: product.fulfillmentChannel,
               shippingTemplate: product.shippingTemplate,
               status: product.status,
