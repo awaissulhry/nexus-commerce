@@ -381,38 +381,47 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
 
       const sp = await (amazonService as any).getClient()
 
-      try {
-        const res = await sp.callAPI({
-          operation: 'getCatalogItem',
-          endpoint: 'catalogItems',
-          version: '2022-04-01',          // ← explicitly use the version that supports relationships
-          path: { asin: testAsin },
-          query: { marketplaceIds: [marketplaceId], includedData: ['relationships', 'summaries'] },
-        })
-        return {
-          success: true,
-          asin: testAsin,
-          sku: testSku,
-          marketplaceId,
-          apiVersion: '2022-04-01',
-          relationships: (res as any)?.relationships ?? [],
-          summaries: (res as any)?.summaries ?? [],
-          rawResponse: res,
+      const callOne = async (includedData: string[]) => {
+        try {
+          const res = await sp.callAPI({
+            operation: 'getCatalogItem',
+            endpoint: 'catalogItems',
+            version: '2022-04-01',
+            path: { asin: testAsin },
+            query: { marketplaceIds: [marketplaceId], includedData },
+          })
+          return { ok: true, data: res, includedData }
+        } catch (err: any) {
+          return {
+            ok: false,
+            includedData,
+            error: err?.message ?? String(err),
+            errorCode: err?.code ?? null,
+            errorType: err?.type ?? null,
+            // Serialize all enumerable own properties for full visibility
+            fullError: JSON.parse(JSON.stringify(err, Object.getOwnPropertyNames(err))),
+          }
         }
-      } catch (apiErr: any) {
-        const errBody = apiErr?.body ?? null
-        fastify.log.error({ asin: testAsin, err: apiErr, errBody }, '[test-catalog-api] getCatalogItem failed')
-        return {
-          success: false,
-          asin: testAsin,
-          sku: testSku,
-          marketplaceId,
-          apiVersion: '2022-04-01',
-          error: apiErr?.message ?? String(apiErr),
-          errorBody: errBody,
-          errorCode: apiErr?.code ?? null,
-          errors: apiErr?.errors ?? null,
-        }
+      }
+
+      // Test 1: summaries only (basic Catalog Items access)
+      const summariesResult = await callOne(['summaries'])
+      // Test 2: relationships only (requires variation hierarchy access)
+      const relationshipsResult = await callOne(['relationships'])
+
+      return {
+        asin: testAsin,
+        sku: testSku,
+        marketplaceId,
+        apiVersion: '2022-04-01',
+        summariesOnly: summariesResult,
+        relationshipsOnly: relationshipsResult,
+        // Diagnosis
+        diagnosis: !summariesResult.ok
+          ? 'CATALOG_ITEMS_API_BLOCKED: even summaries failed — role not granted or refresh token predates role grant'
+          : !relationshipsResult.ok
+          ? 'RELATIONSHIPS_BLOCKED: summaries OK but relationships denied — may need re-auth or Catalog Items v2 role'
+          : 'ALL_OK: both summaries and relationships work',
       }
     } catch (error) {
       return reply.code(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' })
