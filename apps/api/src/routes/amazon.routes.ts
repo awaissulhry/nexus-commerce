@@ -711,6 +711,270 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
       })
     }
   })
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Reports-API-based hierarchy discovery (alternative to Catalog Items API
+  // when the SP-API app does not have the Catalog Items role).
+  //
+  // Each /test-report/:reportType endpoint kicks off a report. Poll status
+  // and download the document with /test-report-status/:reportId.
+  // ────────────────────────────────────────────────────────────────────────
+
+  const ALLOWED_REPORT_TYPES = new Set([
+    'GET_MERCHANT_LISTINGS_DATA',
+    'GET_MERCHANT_LISTINGS_ALL_DATA',
+    'GET_MERCHANT_LISTINGS_INACTIVE_DATA',
+    'GET_FLAT_FILE_OPEN_LISTINGS_DATA',
+    'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_LAST_UPDATE_GENERAL',
+    'GET_FBA_INVENTORY_PLANNING_DATA',
+    'GET_XML_BROWSE_TREE_DATA',
+    'GET_AFN_INVENTORY_DATA',
+    'GET_RESTOCK_INVENTORY_RECOMMENDATIONS_REPORT',
+  ])
+
+  fastify.post<{ Params: { reportType: string } }>(
+    '/test-report/:reportType',
+    async (request, reply) => {
+      try {
+        const { reportType } = request.params
+        if (!ALLOWED_REPORT_TYPES.has(reportType)) {
+          return reply.code(400).send({
+            success: false,
+            error: `Unknown reportType. Allowed: ${[...ALLOWED_REPORT_TYPES].join(', ')}`,
+          })
+        }
+        if (!amazonService.isConfigured()) {
+          return reply.code(503).send({ success: false, error: 'Amazon SP-API not configured' })
+        }
+        const marketplaceId = process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
+        const sp = await (amazonService as any).getClient()
+
+        fastify.log.info({ reportType, marketplaceId }, '[test-report] requesting report')
+
+        const res: any = await sp.callAPI({
+          operation: 'createReport',
+          endpoint: 'reports',
+          version: '2021-06-30',
+          body: {
+            reportType,
+            marketplaceIds: [marketplaceId],
+          },
+        })
+
+        return {
+          success: true,
+          reportType,
+          reportId: res.reportId,
+          message: `Report requested. Poll status with GET /api/amazon/test-report-status/${res.reportId}`,
+        }
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[test-report] failed')
+        return reply.code(500).send({
+          success: false,
+          error: error?.message ?? String(error),
+          code: error?.body?.errors?.[0]?.code ?? error?.code,
+          details: error?.body ?? null,
+        })
+      }
+    }
+  )
+
+  fastify.get<{ Params: { reportId: string } }>(
+    '/test-report-status/:reportId',
+    async (request, reply) => {
+      try {
+        const { reportId } = request.params
+        if (!amazonService.isConfigured()) {
+          return reply.code(503).send({ success: false, error: 'Amazon SP-API not configured' })
+        }
+
+        const sp = await (amazonService as any).getClient()
+
+        const status: any = await sp.callAPI({
+          operation: 'getReport',
+          endpoint: 'reports',
+          version: '2021-06-30',
+          path: { reportId },
+        })
+
+        if (status.processingStatus !== 'DONE') {
+          return {
+            reportId,
+            processingStatus: status.processingStatus,
+            createdTime: status.createdTime,
+            processingStartTime: status.processingStartTime,
+          }
+        }
+
+        const docMeta: any = await sp.callAPI({
+          operation: 'getReportDocument',
+          endpoint: 'reports',
+          version: '2021-06-30',
+          path: { reportDocumentId: status.reportDocumentId },
+        })
+
+        // Download the document — Amazon merchant listings reports are TSV,
+        // sometimes gzip-compressed. We need to handle the compressionAlgorithm field.
+        const docResp = await fetch(docMeta.url)
+        if (!docResp.ok) {
+          return reply.code(502).send({
+            success: false,
+            error: `Failed to download report document: HTTP ${docResp.status}`,
+          })
+        }
+
+        let text: string
+        if (docMeta.compressionAlgorithm === 'GZIP') {
+          const buf = Buffer.from(await docResp.arrayBuffer())
+          const { gunzipSync } = await import('node:zlib')
+          text = gunzipSync(buf).toString('utf8')
+        } else {
+          text = await docResp.text()
+        }
+
+        const lines = text.split(/\r?\n/)
+        const header = lines[0] ?? ''
+        const sampleRows = lines.slice(0, 6)
+
+        // Highlight any column that looks like it could carry parent/child info
+        const hierarchyHints: string[] = []
+        const headerCols = header.split('\t')
+        for (const col of headerCols) {
+          const lc = col.toLowerCase()
+          if (
+            lc.includes('parent') ||
+            lc.includes('relationship') ||
+            lc.includes('variation') ||
+            lc.includes('asin') ||
+            lc.includes('sku')
+          ) {
+            hierarchyHints.push(col)
+          }
+        }
+
+        return {
+          status: 'DONE',
+          reportId,
+          reportDocumentId: status.reportDocumentId,
+          documentUrlExpiry: docMeta.url ? '(short-lived)' : null,
+          compressionAlgorithm: docMeta.compressionAlgorithm ?? null,
+          totalRows: lines.length - 1,
+          headerRaw: header,
+          headerColumns: headerCols,
+          hierarchyHints,
+          sampleRows,
+        }
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[test-report-status] failed')
+        return reply.code(500).send({
+          success: false,
+          error: error?.message ?? String(error),
+          code: error?.body?.errors?.[0]?.code ?? error?.code,
+          details: error?.body ?? null,
+        })
+      }
+    }
+  )
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Manual hierarchy merge — last-resort fallback when Catalog Items API and
+  // Reports API both don't expose parent/child info. Lets the operator group
+  // products manually via the UI.
+  // ────────────────────────────────────────────────────────────────────────
+  fastify.post<{
+    Body: { parentSku: string; childSkus: string[]; variationTheme?: string }
+  }>('/products/merge', async (request, reply) => {
+    try {
+      const { parentSku, childSkus, variationTheme } = request.body
+
+      if (!parentSku || !Array.isArray(childSkus) || childSkus.length === 0) {
+        return reply
+          .code(400)
+          .send({ success: false, error: 'parentSku and non-empty childSkus[] are required' })
+      }
+
+      const parent = await prisma.product.findUnique({ where: { sku: parentSku } })
+      if (!parent) {
+        return reply.code(404).send({ success: false, error: `Parent SKU not found: ${parentSku}` })
+      }
+
+      // Don't allow a parent to also be a child somewhere
+      if (childSkus.includes(parentSku)) {
+        return reply
+          .code(400)
+          .send({ success: false, error: 'parentSku cannot also appear in childSkus' })
+      }
+
+      await prisma.product.update({
+        where: { id: parent.id },
+        data: {
+          isParent: true,
+          variationTheme: variationTheme ?? 'Size',
+        },
+      })
+
+      const result = await prisma.product.updateMany({
+        where: { sku: { in: childSkus } },
+        data: {
+          parentId: parent.id,
+          parentAsin: parent.amazonAsin,
+          isParent: false,
+        },
+      })
+
+      // Roll up child stock to parent (informational total)
+      const children = await prisma.product.findMany({
+        where: { parentId: parent.id },
+        select: { totalStock: true },
+      })
+      const totalStock = children.reduce((s, c) => s + (c.totalStock ?? 0), 0)
+      await prisma.product.update({ where: { id: parent.id }, data: { totalStock } })
+
+      return {
+        success: true,
+        parentId: parent.id,
+        parentSku,
+        childrenLinked: result.count,
+        rolledUpStock: totalStock,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, 'products/merge failed')
+      return reply.code(500).send({ success: false, error: error?.message ?? String(error) })
+    }
+  })
+
+  // POST /products/unmerge — undo a merge by parent SKU
+  fastify.post<{ Body: { parentSku: string } }>('/products/unmerge', async (request, reply) => {
+    try {
+      const { parentSku } = request.body
+      if (!parentSku) {
+        return reply.code(400).send({ success: false, error: 'parentSku is required' })
+      }
+      const parent = await prisma.product.findUnique({ where: { sku: parentSku } })
+      if (!parent) {
+        return reply.code(404).send({ success: false, error: `Parent SKU not found: ${parentSku}` })
+      }
+
+      const result = await prisma.product.updateMany({
+        where: { parentId: parent.id },
+        data: { parentId: null, parentAsin: null, isParent: false },
+      })
+
+      await prisma.product.update({
+        where: { id: parent.id },
+        data: { isParent: false, variationTheme: null },
+      })
+
+      return {
+        success: true,
+        parentSku,
+        childrenUnlinked: result.count,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, 'products/unmerge failed')
+      return reply.code(500).send({ success: false, error: error?.message ?? String(error) })
+    }
+  })
 }
 
 export default amazonRoutes
