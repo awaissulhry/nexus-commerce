@@ -18,7 +18,7 @@ export default async function ProductEditPage({ params }: PageProps) {
     fetch(`${backend}/api/inventory/${id}`, { cache: 'no-store' }),
     fetch(`${backend}/api/products/${id}/all-listings`, { cache: 'no-store' }),
     fetch(`${backend}/api/marketplaces/grouped`, { cache: 'no-store' }),
-    fetch(`${backend}/api/inventory/${id}/children`, { cache: 'no-store' }),
+    fetch(`${backend}/api/amazon/products/${id}/children`, { cache: 'no-store' }),
   ])
 
   if (productRes.status === 404) notFound()
