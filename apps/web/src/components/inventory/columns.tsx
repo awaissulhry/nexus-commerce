@@ -35,6 +35,12 @@ function ActionsButton({ item }: { item: InventoryItem }) {
           >
             Edit Listing
           </Link>
+          <Link
+            href={`/products/${item.id}/edit`}
+            className="block px-4 py-2 text-[13px] text-slate-700 hover:bg-slate-50 border-b border-slate-100"
+          >
+            Edit (Multi-channel)
+          </Link>
           <button className="w-full text-left px-4 py-2 text-[13px] text-slate-700 hover:bg-slate-50 border-b border-slate-100">
             View on Amazon
           </button>

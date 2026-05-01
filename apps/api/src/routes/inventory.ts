@@ -543,6 +543,41 @@ export async function inventoryRoutes(app: FastifyInstance) {
     }
   );
 
+  // ── GET /inventory/:id ──────────────────────────────────────────────
+  // Single-product fetch (master fields). Used by /products/[id]/edit.
+  // Children are fetched separately via /inventory/:id/children to keep
+  // the payload small for products with many variations.
+  app.get<{ Params: { id: string } }>(
+    "/inventory/:id",
+    async (request, reply) => {
+      try {
+        const { id } = request.params;
+        const product = await prisma.product.findUnique({ where: { id } });
+        if (!product) {
+          return reply.status(404).send({ error: "Product not found" });
+        }
+        return reply.send({
+          ...product,
+          basePrice: Number(product.basePrice),
+          costPrice: product.costPrice == null ? null : Number(product.costPrice),
+          minMargin: product.minMargin == null ? null : Number(product.minMargin),
+          minPrice: product.minPrice == null ? null : Number(product.minPrice),
+          maxPrice: product.maxPrice == null ? null : Number(product.maxPrice),
+          weightValue: product.weightValue == null ? null : Number(product.weightValue),
+          dimLength: product.dimLength == null ? null : Number(product.dimLength),
+          dimWidth: product.dimWidth == null ? null : Number(product.dimWidth),
+          dimHeight: product.dimHeight == null ? null : Number(product.dimHeight),
+        });
+      } catch (error: any) {
+        request.log.error(error, "get-inventory-by-id failed");
+        return reply.status(500).send({
+          error: "Failed to fetch product",
+          message: error?.message ?? "Unknown error",
+        });
+      }
+    }
+  );
+
   // ── GET /inventory/variants/:productId ──────────────────────────────
   // Get all variants for a product with their channel listings
   app.get<{ Params: { productId: string } }>(
