@@ -1329,15 +1329,26 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
 
           if (!confirmedAbsent) continue
 
-          // 3. Unlink any children that pointed to this product, then delete
+          // 3. Unlink any children that pointed to this product, then delete.
+          // ChannelListing cleanup is best-effort: if the table doesn't
+          // exist on this database (schema drift), the cascade would have
+          // run on Product.delete anyway, and the row likely has no
+          // listings to begin with for these stale local-only SKUs.
           try {
             await prisma.product.updateMany({
               where: { parentId: local.id },
               data: { parentId: null, parentAsin: null },
             })
-            await prisma.channelListing.deleteMany({
-              where: { productId: local.id },
-            })
+            try {
+              await prisma.channelListing.deleteMany({
+                where: { productId: local.id },
+              })
+            } catch (chErr: any) {
+              fastify.log.warn(
+                { sku, err: chErr?.message },
+                '[stale] channelListing cleanup skipped'
+              )
+            }
             await prisma.product.delete({ where: { id: local.id } })
             deleted.push(sku)
           } catch (err: any) {
