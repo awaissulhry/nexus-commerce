@@ -1251,6 +1251,117 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // DELETE /api/amazon/pim/products/stale
+  // Body: { skus: string[] }
+  // For each SKU: call getListingsItem; if Amazon returns "not found" (or
+  // equivalent NO_SUCH_LISTING), delete the local Product row. Skip on any
+  // other outcome (still on Amazon, transient API error, etc.) — those
+  // SKUs stay in the DB and are reported back in skippedReasons.
+  fastify.delete<{ Body: { skus: string[] } }>(
+    '/pim/products/stale',
+    async (request, reply) => {
+      try {
+        const { skus } = request.body
+        if (!Array.isArray(skus) || skus.length === 0) {
+          return reply.code(400).send({ error: 'skus array required' })
+        }
+        if (!amazonService.isConfigured()) {
+          return reply.code(503).send({ error: 'Amazon SP-API not configured' })
+        }
+        const sellerId =
+          process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+        const marketplaceId = process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
+        if (!sellerId) {
+          return reply.code(503).send({ error: 'AMAZON_SELLER_ID not set' })
+        }
+
+        const sp = await (amazonService as any).getClient()
+        const deleted: string[] = []
+        const skippedReasons: Array<{ sku: string; reason: string }> = []
+
+        for (const sku of skus) {
+          // 1. Make sure the row even exists locally
+          const local = await prisma.product.findUnique({ where: { sku } })
+          if (!local) {
+            skippedReasons.push({ sku, reason: 'not in local DB' })
+            continue
+          }
+
+          // 2. Ask Amazon
+          let confirmedAbsent = false
+          try {
+            await sp.callAPI({
+              operation: 'getListingsItem',
+              endpoint: 'listingsItems',
+              path: { sellerId, sku },
+              query: {
+                marketplaceIds: [marketplaceId],
+                includedData: ['summaries'],
+              },
+            })
+            // Successful call = SKU is on Amazon, do NOT delete
+            skippedReasons.push({
+              sku,
+              reason: 'Amazon listing exists — refusing to delete',
+            })
+            continue
+          } catch (err: any) {
+            const msg =
+              err?.body?.errors?.[0]?.message ??
+              err?.body?.errors?.[0]?.code ??
+              err?.message ??
+              String(err)
+            const lower = msg.toLowerCase()
+            if (
+              lower.includes('not found') ||
+              lower.includes('no_such_listing') ||
+              lower.includes('does not exist')
+            ) {
+              confirmedAbsent = true
+            } else {
+              skippedReasons.push({
+                sku,
+                reason: `Amazon API error (refusing to delete): ${msg}`,
+              })
+              continue
+            }
+          }
+
+          if (!confirmedAbsent) continue
+
+          // 3. Unlink any children that pointed to this product, then delete
+          try {
+            await prisma.product.updateMany({
+              where: { parentId: local.id },
+              data: { parentId: null, parentAsin: null },
+            })
+            await prisma.channelListing.deleteMany({
+              where: { productId: local.id },
+            })
+            await prisma.product.delete({ where: { id: local.id } })
+            deleted.push(sku)
+          } catch (err: any) {
+            skippedReasons.push({
+              sku,
+              reason: `DB delete failed: ${err?.message ?? String(err)}`,
+            })
+          }
+        }
+
+        return {
+          success: true,
+          requested: skus.length,
+          deleted: deleted.length,
+          deletedSkus: deleted,
+          skippedReasons,
+        }
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[pim/products/stale] failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    }
+  )
+
   // POST /api/amazon/pim/bulk-link-amazon — link every product with an ASIN
   fastify.post('/pim/bulk-link-amazon', async (_request, reply) => {
     try {
