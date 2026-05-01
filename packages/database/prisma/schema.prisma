@@ -390,9 +390,13 @@ model ChannelListing {
   
   // ── Channel & Market Identification ─────────────────────────────
   // Examples: "AMAZON_US", "AMAZON_DE", "EBAY_US", "EBAY_DE", "SHOPIFY", etc.
-  channelMarket     String  // Composite key: CHANNEL_REGION
+  channelMarket     String  // Composite key: CHANNEL_REGION (legacy)
   channel           String  // "AMAZON", "EBAY", "SHOPIFY", "WOOCOMMERCE", "ETSY"
   region            String  // "US", "DE", "UK", "FR", "JP", etc.
+  // Phase 31b: clean per-marketplace key alongside legacy channelMarket.
+  // Values: country code ("IT", "DE", "FR", ...) for region-scoped channels,
+  // or "GLOBAL" for single-store channels (Shopify, WooCommerce, Etsy).
+  marketplace       String  @default("DEFAULT")
   
   // ── Platform-Specific Identifiers ───────────────────────────────
   // Amazon: Parent ASIN (non-buyable) or child ASIN (buyable)
@@ -507,13 +511,37 @@ model ChannelListing {
   updatedAt               DateTime @updatedAt
   
   @@unique([productId, channelMarket])
+  @@unique([productId, channel, marketplace], name: "productId_channel_marketplace")
   @@index([productId])
   @@index([channel])
   @@index([region])
+  @@index([marketplace])
   @@index([externalListingId])
   @@index([listingStatus])
   @@index([syncStatus])
   @@index([validationStatus])
+}
+
+// ── Phase 31b: Marketplace lookup ──────────────────────────────────────────
+// Static reference data: which (channel, code) pairs are valid for listings,
+// plus their localization metadata. Seeded via seed-marketplaces.ts.
+model Marketplace {
+  id              String   @id @default(cuid())
+  channel         String   // "AMAZON" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY"
+  code            String   // "IT" | "DE" | "FR" | "GLOBAL" | ...
+  name            String   // "Amazon Italy"
+  marketplaceId   String?  // SP-API marketplace ID e.g. "APJ6JRA9NG5V4"
+  region          String   // "EU" | "NA" | "FE" | "GLOBAL"
+  currency        String   // "EUR" | "GBP" | "USD"
+  language        String   // "it" | "de" | "fr" | "en"
+  domainUrl       String?  // "amazon.it" | "ebay.de"
+  isActive        Boolean  @default(true)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([channel, code])
+  @@index([channel])
 }
 
 // ── PHASE 20: Channel Listing Override (Audit Trail) ──────────────────────
