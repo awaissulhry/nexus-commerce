@@ -24,6 +24,16 @@ const NAV_SECTIONS: NavSectionConfig[] = [
     ],
   },
   {
+    id: "pim",
+    label: "Master Catalog",
+    icon: "🗂️",
+    items: [
+      { label: "Review Detected Groups", href: "/pim/review", icon: "🔍" },
+      { label: "Master Products", href: "/pim/master-catalog", icon: "📚", disabled: true },
+      { label: "Import Wizard", href: "/pim/import", icon: "⬇️", disabled: true },
+    ],
+  },
+  {
     id: "inventory",
     label: "Inventory",
     icon: "📋",

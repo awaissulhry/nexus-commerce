@@ -159,6 +159,24 @@ model Product {
   masterProduct   Product?  @relation("MasterVariations", fields: [masterProductId], references: [id], onDelete: Cascade)
   masterVariations Product[] @relation("MasterVariations")
 
+  // ── PHASE 31: PIM Master Catalog Fields ──────────────────────────
+  // True master entity flag (vs. isMasterProduct which is legacy)
+  isMaster              Boolean   @default(false)
+  // Internal master SKU (separate from channel SKUs)
+  masterSku             String?
+  // Variation axes for master products: ["Color", "Size", "BodyType"]
+  variationAxes         String[]  @default([])
+  // Channels this master is currently linked to (resolved listings)
+  linkedToChannels      String[]  @default([])
+  // Where this product came from
+  importSource          String?   // "AMAZON_AUTO_IMPORT" | "MANUAL" | "CSV_UPLOAD"
+  importedAt            DateTime?
+  // Review workflow state
+  reviewStatus          String?   // "PENDING_REVIEW" | "APPROVED" | "MERGED"
+  // For child products: per-variant attribute values
+  // Example: {"Color": "Black", "Size": "M", "BodyType": "Men"}
+  variantAttributes     Json?
+
   // ── PHASE 20: SSOT Indicators ────────────────────────────────────
   // Track which channels this product is synced to
   syncChannels    String[]  @default([])  // ["AMAZON", "EBAY", "SHOPIFY"]

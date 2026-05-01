@@ -1,6 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import prisma from '../db.js'
+import {
+  detectVariationGroups,
+  applyGroupings,
+  type ApprovedGroup,
+} from '../services/pim/auto-detect.service.js'
 
 const amazonService = new AmazonService()
 
@@ -262,6 +267,49 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
       })
+    }
+  })
+
+  // POST /api/amazon/products/cleanup-bad-parents
+  // Find phantom parents (placeholder PARENT-* SKU, null amazonAsin, or
+  // 0 stock + 0 price), unlink their children, and delete them.
+  fastify.post('/products/cleanup-bad-parents', async (_request, reply) => {
+    try {
+      const phantomParents = await prisma.product.findMany({
+        where: {
+          isParent: true,
+          OR: [
+            { sku: { contains: 'PARENT-' } },
+            { sku: { contains: '-PARENT' } },
+            { amazonAsin: null },
+            { AND: [{ totalStock: 0 }, { basePrice: 0 }] },
+          ],
+        },
+        include: { children: { select: { id: true, sku: true } } },
+      })
+
+      let childrenUnlinked = 0
+      for (const parent of phantomParents) {
+        const r = await prisma.product.updateMany({
+          where: { parentId: parent.id },
+          data: { parentId: null, parentAsin: null, isParent: false },
+        })
+        childrenUnlinked += r.count
+      }
+
+      const deleted = await prisma.product.deleteMany({
+        where: { id: { in: phantomParents.map((p) => p.id) } },
+      })
+
+      return {
+        success: true,
+        deletedPhantomParents: deleted.count,
+        skus: phantomParents.map((p) => p.sku),
+        childrenUnlinked,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[cleanup-bad-parents] failed')
+      return reply.code(500).send({ success: false, error: error?.message ?? String(error) })
     }
   })
 
@@ -1016,6 +1064,250 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (error: any) {
       fastify.log.error({ err: error }, 'products/unmerge failed')
       return reply.code(500).send({ success: false, error: error?.message ?? String(error) })
+    }
+  })
+
+  // ──────────────────────────────────────────────────────────────────────
+  // PIM (Product Information Management) endpoints
+  // ──────────────────────────────────────────────────────────────────────
+
+  // GET /api/amazon/pim/detect-groups — preview, no DB writes
+  fastify.get('/pim/detect-groups', async (_request, reply) => {
+    try {
+      const result = await detectVariationGroups()
+      return result
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[pim/detect-groups] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // POST /api/amazon/pim/apply-groups — apply approved groups
+  fastify.post<{ Body: { groups: ApprovedGroup[] } }>(
+    '/pim/apply-groups',
+    async (request, reply) => {
+      try {
+        const { groups } = request.body
+        if (!Array.isArray(groups)) {
+          return reply.code(400).send({ error: 'groups array required' })
+        }
+        const result = await applyGroupings(groups)
+        return result
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[pim/apply-groups] failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    }
+  )
+
+  // POST /api/amazon/pim/create-group — manually create one master+children
+  fastify.post<{
+    Body: {
+      masterSku: string
+      masterName: string
+      variationAxes: string[]
+      childIds: string[]
+      childAttributes?: Record<string, string>[]
+    }
+  }>('/pim/create-group', async (request, reply) => {
+    try {
+      const { masterSku, masterName, variationAxes, childIds, childAttributes } = request.body
+      if (!masterSku || !masterName || !Array.isArray(childIds) || childIds.length === 0) {
+        return reply
+          .code(400)
+          .send({ error: 'masterSku, masterName, and non-empty childIds required' })
+      }
+      const result = await applyGroupings([
+        {
+          masterSku,
+          masterName,
+          variationAxes: variationAxes ?? [],
+          children: childIds.map((id, i) => ({
+            productId: id,
+            attributes: childAttributes?.[i] ?? {},
+          })),
+        },
+      ])
+      return result
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[pim/create-group] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // POST /api/amazon/pim/unlink-child — detach a single child from its master
+  fastify.post<{ Body: { productId: string } }>(
+    '/pim/unlink-child',
+    async (request, reply) => {
+      try {
+        const { productId } = request.body
+        if (!productId) return reply.code(400).send({ error: 'productId required' })
+        await prisma.product.update({
+          where: { id: productId },
+          data: { parentId: null, variantAttributes: undefined },
+        })
+        return { success: true }
+      } catch (error: any) {
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    }
+  )
+
+  // DELETE /api/amazon/pim/master/:masterId — unlink children, delete master
+  fastify.delete<{ Params: { masterId: string } }>(
+    '/pim/master/:masterId',
+    async (request, reply) => {
+      try {
+        const { masterId } = request.params
+        await prisma.product.updateMany({
+          where: { parentId: masterId },
+          data: { parentId: null },
+        })
+        await prisma.product.delete({ where: { id: masterId } })
+        return { success: true }
+      } catch (error: any) {
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    }
+  )
+
+  // POST /api/amazon/pim/link-amazon — verify ASIN on Amazon, link to product
+  fastify.post<{
+    Body: { productId: string; asin: string; marketplace?: string }
+  }>('/pim/link-amazon', async (request, reply) => {
+    try {
+      const { productId, asin, marketplace } = request.body
+      if (!productId || !asin) {
+        return reply.code(400).send({ error: 'productId and asin required' })
+      }
+      if (!amazonService.isConfigured()) {
+        return reply.code(503).send({ error: 'Amazon SP-API not configured' })
+      }
+
+      const marketplaceId = marketplace || process.env.AMAZON_MARKETPLACE_ID || 'APJ6JRA9NG5V4'
+      const region = (process.env.AMAZON_REGION || 'IT').toUpperCase()
+      const sp = await (amazonService as any).getClient()
+
+      const item: any = await sp.callAPI({
+        operation: 'getCatalogItem',
+        endpoint: 'catalogItems',
+        version: '2022-04-01',
+        path: { asin },
+        query: {
+          marketplaceIds: [marketplaceId],
+          includedData: ['summaries', 'images'],
+        },
+      })
+      if (!item.asin) {
+        return reply.code(404).send({ error: 'ASIN not found on Amazon' })
+      }
+
+      const title = item.summaries?.[0]?.itemName ?? null
+      const channelMarket = `AMAZON_${region}`
+
+      await prisma.product.update({
+        where: { id: productId },
+        data: {
+          amazonAsin: asin,
+          linkedToChannels: { push: 'AMAZON' },
+          lastAmazonSync: new Date(),
+          amazonSyncStatus: 'LINKED',
+        },
+      })
+
+      await prisma.channelListing.upsert({
+        where: { productId_channelMarket: { productId, channelMarket } },
+        create: {
+          productId,
+          channel: 'AMAZON',
+          channelMarket,
+          region,
+          externalListingId: asin,
+          platformProductId: asin,
+          isPublished: true,
+          title,
+          listingStatus: 'ACTIVE',
+        },
+        update: {
+          externalListingId: asin,
+          platformProductId: asin,
+          isPublished: true,
+          lastSyncedAt: new Date(),
+        },
+      })
+
+      return {
+        success: true,
+        asin,
+        title,
+        images: item.images?.[0]?.images ?? [],
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[pim/link-amazon] failed')
+      return reply.code(500).send({
+        error: error?.message ?? String(error),
+        details: error?.response?.data,
+      })
+    }
+  })
+
+  // POST /api/amazon/pim/bulk-link-amazon — link every product with an ASIN
+  fastify.post('/pim/bulk-link-amazon', async (_request, reply) => {
+    try {
+      const region = (process.env.AMAZON_REGION || 'IT').toUpperCase()
+      const channelMarket = `AMAZON_${region}`
+
+      const unlinked = await prisma.product.findMany({
+        where: {
+          amazonAsin: { not: null },
+          OR: [{ amazonSyncStatus: null }, { amazonSyncStatus: { not: 'LINKED' } }],
+        },
+      })
+
+      let linked = 0
+      const errors: string[] = []
+
+      for (const product of unlinked) {
+        try {
+          await prisma.product.update({
+            where: { id: product.id },
+            data: {
+              linkedToChannels: { push: 'AMAZON' },
+              amazonSyncStatus: 'LINKED',
+              lastAmazonSync: new Date(),
+            },
+          })
+          await prisma.channelListing.upsert({
+            where: {
+              productId_channelMarket: { productId: product.id, channelMarket },
+            },
+            create: {
+              productId: product.id,
+              channel: 'AMAZON',
+              channelMarket,
+              region,
+              externalListingId: product.amazonAsin!,
+              platformProductId: product.amazonAsin!,
+              isPublished: true,
+              title: product.name,
+              listingStatus: 'ACTIVE',
+            },
+            update: {
+              externalListingId: product.amazonAsin!,
+              platformProductId: product.amazonAsin!,
+              lastSyncedAt: new Date(),
+            },
+          })
+          linked++
+        } catch (err: any) {
+          errors.push(`${product.sku}: ${err?.message ?? String(err)}`)
+        }
+      }
+
+      return { linked, total: unlinked.length, errors }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[pim/bulk-link-amazon] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })
 }
