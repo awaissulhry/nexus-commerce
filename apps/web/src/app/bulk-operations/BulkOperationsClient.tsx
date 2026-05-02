@@ -20,6 +20,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
 import { EditableCell, type EditableMeta } from './EditableCell'
+import PreviewChangesModal from './PreviewChangesModal'
 
 export interface BulkProduct {
   id: string
@@ -96,7 +97,6 @@ const META_STOCK: EditableMeta = {
 
 // ── Helpers passed to all editable cells via closure ──────────────────
 interface EditCtx {
-  serverVersion: number
   onCommit: (rowId: string, columnId: string, value: unknown) => void
 }
 
@@ -110,7 +110,6 @@ function fmtMargin(cost: number | null, price: number): string {
 // callbacks. The ref is set once per render before useReactTable runs.
 const editCtxRef: { current: EditCtx } = {
   current: {
-    serverVersion: 0,
     onCommit: () => {
       /* no-op until parent wires it */
     },
@@ -126,7 +125,6 @@ function makeEditableRenderer(meta: EditableMeta) {
         rowId={ctx.row.original.id}
         columnId={ctx.column.id}
         initialValue={value}
-        serverVersion={editCtxRef.current.serverVersion}
         meta={meta}
         onCommit={editCtxRef.current.onCommit}
       />
@@ -286,8 +284,7 @@ export default function BulkOperationsClient() {
 
   // Phase B state
   const [changes, setChanges] = useState<Map<string, CellChange>>(new Map())
-  // Phase C will bump this after successful save to clear yellow highlights.
-  const [serverVersion] = useState(0)
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   // Stable onCommit — use a ref to avoid recreating on every render
   // while still picking up the latest products array for old-value lookup.
@@ -323,11 +320,11 @@ export default function BulkOperationsClient() {
     []
   )
 
-  // Push the latest commit handler + serverVersion into the module-level
-  // ref so cell renderers see them. This intentionally does NOT cause
-  // memoized cells to re-render — the renderer reads from the ref each
-  // time it's invoked, but the renderer itself is stable.
-  editCtxRef.current = { serverVersion, onCommit: handleCommit }
+  // Push the latest commit handler into the module-level ref so cell
+  // renderers see it. This intentionally does NOT cause memoized cells
+  // to re-render — the renderer reads from the ref each time it's
+  // invoked, but the renderer itself is stable.
+  editCtxRef.current = { onCommit: handleCommit }
 
   useEffect(() => {
     let cancelled = false
@@ -391,20 +388,11 @@ export default function BulkOperationsClient() {
             variant="primary"
             size="sm"
             disabled={pendingCount === 0}
-            onClick={() => {
-              // Phase C: real save flow. For now just simulate clearing
-              // by bumping serverVersion, which would happen after a
-              // successful PATCH response.
-              alert(
-                `Phase C will POST ${pendingCount} change${
-                  pendingCount === 1 ? '' : 's'
-                } to /api/products/bulk and clear yellow highlights on success.`
-              )
-            }}
+            onClick={() => setPreviewOpen(true)}
           >
             {pendingCount === 0
               ? 'No changes'
-              : `Save ${pendingCount} change${pendingCount === 1 ? '' : 's'}`}
+              : `Preview ${pendingCount} change${pendingCount === 1 ? '' : 's'}`}
           </Button>
         </div>
       </div>
@@ -456,6 +444,13 @@ export default function BulkOperationsClient() {
         </span>
         <span>Phase B (editing) · save (C), filters (D), polish (E) coming next</span>
       </div>
+
+      <PreviewChangesModal
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        changes={changes}
+        products={products}
+      />
     </div>
   )
 }

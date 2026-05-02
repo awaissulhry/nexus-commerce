@@ -3,7 +3,6 @@
 import {
   memo,
   useCallback,
-  useEffect,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -25,9 +24,10 @@ export interface EditableMeta {
 interface Props {
   rowId: string
   columnId: string
+  /** Canonical server value. When the parent updates products[] (after
+   * a successful save), this prop changes and the memo comparator
+   * triggers a re-render — only for cells whose value actually changed. */
   initialValue: unknown
-  /** Bumped after a successful Phase C save so cells reset isDirty */
-  serverVersion: number
   meta: EditableMeta
   onCommit: (rowId: string, columnId: string, value: unknown) => void
 }
@@ -50,38 +50,36 @@ const defaultParse = (raw: string, fieldType: FieldType): unknown => {
  * Single editable cell.
  *
  * Performance contract:
- *   - Re-renders ONLY when (rowId, columnId, initialValue, serverVersion)
- *     changes. The custom memo comparator guarantees this even when the
- *     parent re-runs.
- *   - Local state owns isEditing / draftValue / isDirty so typing in
- *     this cell does not propagate state up the tree until blur/commit.
- *   - Commit updates the parent's changesMap via onCommit. The cell
- *     keeps its local isDirty=true until serverVersion bumps (after
- *     save), at which point useEffect resets isDirty + draftValue from
- *     the new initialValue.
+ *   - Re-renders ONLY when (rowId, columnId, initialValue) actually
+ *     changes. Custom memo comparator enforces this.
+ *   - Local state owns only isEditing + draftValue. isDirty is DERIVED
+ *     from `draftValue !== initialValue` — no separate state. When a
+ *     successful save updates products[] in the parent, ONLY the cells
+ *     whose value changed get a new initialValue prop (object identity
+ *     stays for unchanged rows), so only those cells re-render. Yellow
+ *     highlight clears automatically because draftValue and the new
+ *     initialValue now match.
+ *   - Commit reports the cell's current draftValue to the parent via
+ *     onCommit; parent decides whether to add or remove the entry from
+ *     its changesMap based on equality with the original.
  */
 export const EditableCell = memo(
   function EditableCell({
     rowId,
     columnId,
     initialValue,
-    serverVersion,
     meta,
     onCommit,
   }: Props) {
     const [isEditing, setIsEditing] = useState(false)
     const [draftValue, setDraftValue] = useState<unknown>(initialValue)
-    const [isDirty, setIsDirty] = useState(false)
     const inputRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null)
 
-    // After a save (serverVersion bumps) or a hard initialValue change,
-    // reset local state so this cell mirrors the canonical server value.
-    useEffect(() => {
-      setDraftValue(initialValue)
-      setIsDirty(false)
-      setIsEditing(false)
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [serverVersion])
+    // Derived, NOT tracked as state. When the parent updates products[]
+    // after a save, the new initialValue flows in via props, the memo
+    // comparator triggers a re-render, and isDirty naturally evaluates
+    // to false (because draftValue now equals the new server value).
+    const isDirty = !shallowEquals(draftValue, initialValue)
 
     const enterEdit = useCallback(() => {
       setIsEditing(true)
@@ -97,25 +95,13 @@ export const EditableCell = memo(
       })
     }, [])
 
-    const commitIfChanged = useCallback(
-      (value: unknown) => {
-        const changed = !shallowEquals(value, initialValue)
-        if (changed) {
-          setIsDirty(true)
-          onCommit(rowId, columnId, value)
-        } else {
-          setIsDirty(false)
-          // Pass through the original so parent can remove from changesMap
-          onCommit(rowId, columnId, initialValue)
-        }
-      },
-      [initialValue, rowId, columnId, onCommit]
-    )
-
     const handleBlur = useCallback(() => {
       setIsEditing(false)
-      commitIfChanged(draftValue)
-    }, [draftValue, commitIfChanged])
+      // Always notify the parent — it'll add or remove from changesMap
+      // based on whether draftValue equals the original. Parent has the
+      // canonical comparison logic; cell just reports its current value.
+      onCommit(rowId, columnId, draftValue)
+    }, [draftValue, rowId, columnId, onCommit])
 
     const handleKeyDown = useCallback(
       (e: ReactKeyboardEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -212,7 +198,6 @@ export const EditableCell = memo(
   (prev, next) =>
     prev.rowId === next.rowId &&
     prev.columnId === next.columnId &&
-    prev.serverVersion === next.serverVersion &&
     shallowEquals(prev.initialValue, next.initialValue) &&
     prev.meta === next.meta &&
     prev.onCommit === next.onCommit
