@@ -27,6 +27,8 @@ import { catalogSafeRoutes } from "./routes/catalog-safe.routes.js";
 import healthRoutes from "./routes/health.js";
 import amazonRoutes from "./routes/amazon.routes.js";
 import marketplacesRoutes from "./routes/marketplaces.routes.js";
+import fulfillmentRoutes from "./routes/fulfillment.routes.js";
+import marketingRoutes from "./routes/marketing.routes.js";
 // Queue/worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS — Phase 2 will flip it on.
 // import { startJobs } from "./jobs/sync.job.js";
 // import { initializeBullMQWorker } from "./workers/bullmq-sync.worker.js";
@@ -76,6 +78,8 @@ app.register(catalogSafeRoutes, { prefix: '/api/catalog' });
 app.register(healthRoutes, { prefix: '/api' });
 app.register(amazonRoutes, { prefix: '/api/amazon' });
 app.register(marketplacesRoutes, { prefix: '/api' });
+app.register(fulfillmentRoutes, { prefix: '/api' });
+app.register(marketingRoutes, { prefix: '/api' });
 
 const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 8080;
 

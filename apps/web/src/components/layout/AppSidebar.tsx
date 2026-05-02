@@ -7,7 +7,7 @@ import {
   Home,
   Package,
   Layers,
-  Upload,
+  FileSpreadsheet,
   Boxes,
   ChevronRight,
   ChevronDown,
@@ -21,6 +21,16 @@ import {
   Settings,
   Search,
   Plus,
+  Warehouse,
+  PackageCheck,
+  PackageOpen,
+  RefreshCw,
+  Truck,
+  Undo2,
+  Megaphone,
+  Target,
+  Image as ImageIcon,
+  Star,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -152,13 +162,13 @@ export default function AppSidebar() {
           />
           <NavItem
             href="/inventory/upload"
-            icon={Upload}
-            label="Bulk Upload"
+            icon={FileSpreadsheet}
+            label="Bulk Operations"
             active={pathname === '/inventory/upload'}
           />
         </NavGroup>
 
-        <NavGroup label="Listings">
+        <NavGroup label="Syndication">
           <NavItem
             href="/listings"
             icon={Boxes}
@@ -197,6 +207,72 @@ export default function AppSidebar() {
             label="WooCommerce"
             indicator="disconnected"
             active={pathname.startsWith('/listings/woocommerce')}
+          />
+        </NavGroup>
+
+        <NavGroup label="Fulfillment">
+          <NavItem
+            href="/fulfillment/stock"
+            icon={Warehouse}
+            label="Stock Overview"
+            active={pathname === '/fulfillment/stock'}
+          />
+          <NavItem
+            href="/fulfillment/inbound"
+            icon={PackageCheck}
+            label="Inbound Shipments"
+            active={pathname === '/fulfillment/inbound'}
+          />
+          <NavItem
+            href="/fulfillment/outbound"
+            icon={PackageOpen}
+            label="Outbound Shipments"
+            active={pathname === '/fulfillment/outbound'}
+          />
+          <NavItem
+            href="/fulfillment/replenishment"
+            icon={RefreshCw}
+            label="Smart Replenishment"
+            active={pathname === '/fulfillment/replenishment'}
+          />
+          <NavItem
+            href="/fulfillment/carriers"
+            icon={Truck}
+            label="Carriers"
+            active={pathname === '/fulfillment/carriers'}
+          />
+          <NavItem
+            href="/fulfillment/returns"
+            icon={Undo2}
+            label="Returns"
+            active={pathname === '/fulfillment/returns'}
+          />
+        </NavGroup>
+
+        <NavGroup label="Marketing">
+          <NavItem
+            href="/marketing/promotions"
+            icon={Megaphone}
+            label="Promotions"
+            active={pathname === '/marketing/promotions'}
+          />
+          <NavItem
+            href="/marketing/advertising"
+            icon={Target}
+            label="Advertising"
+            active={pathname === '/marketing/advertising'}
+          />
+          <NavItem
+            href="/marketing/content"
+            icon={ImageIcon}
+            label="Content Hub"
+            active={pathname === '/marketing/content'}
+          />
+          <NavItem
+            href="/marketing/reviews"
+            icon={Star}
+            label="Reviews"
+            active={pathname === '/marketing/reviews'}
           />
         </NavGroup>
 
