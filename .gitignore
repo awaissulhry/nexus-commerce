@@ -26,6 +26,9 @@ lerna-debug.log*
 .env.local
 .env.*.local
 
+# Claude Code session state
+.claude/scheduled_tasks.lock
+
 # IDE
 .vscode/
 .idea/
