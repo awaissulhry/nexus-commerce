@@ -159,6 +159,15 @@ model Product {
   masterProduct   Product?  @relation("MasterVariations", fields: [masterProductId], references: [id], onDelete: Cascade)
   masterVariations Product[] @relation("MasterVariations")
 
+  // ── PHASE D.3: Bulk-ops cascade + master-level GTIN ──────────────
+  // Tracks which fields on this row were inherited from a parent
+  // cascade. Updated by PATCH /api/products/bulk when cascade=true.
+  cascadedFields        String[]  @default([])
+  // Master-level GTIN for products without variations (Amazon accepts
+  // GTIN at master OR variant level). Per-variant GTIN lives on
+  // ProductVariation.gtin.
+  gtin                  String?
+
   // ── PHASE 31: PIM Master Catalog Fields ──────────────────────────
   // True master entity flag (vs. isMasterProduct which is legacy)
   isMaster              Boolean   @default(false)
@@ -210,6 +219,8 @@ model Product {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([gtin])
 }
 
 model ProductVariation {
@@ -1385,14 +1396,23 @@ model OutboundSyncQueue {
 // Records every PATCH /api/products/bulk request for traceability.
 // userId left nullable until auth is wired; populated as null for now.
 model BulkOperation {
-  id           String   @id @default(cuid())
-  userId       String?
-  productCount Int
-  changeCount  Int
-  changes      Json     // [{ id, field, oldValue, newValue }]
-  status       String   // SUCCESS | PARTIAL | FAILED
-  errors       Json?    // [{ id, field, error }]
-  createdAt    DateTime @default(now())
+  id                String   @id @default(cuid())
+  userId            String?
+  productCount      Int
+  changeCount       Int
+  changes           Json     // [{ id, field, oldValue, newValue }]
+  status            String   // SUCCESS | PARTIAL | FAILED
+  errors            Json?    // [{ id, field, error }]
+
+  // ── Phase D.3: Cascade audit ─────────────────────────────────────
+  // How many cascade fan-outs this operation triggered (0 if no
+  // cascade flags were set in the request).
+  cascadeCount      Int      @default(0)
+  // Product IDs of every child that was updated as a cascade target.
+  // Useful for "undo" — replay these in reverse.
+  affectedChildren  String[] @default([])
+
+  createdAt         DateTime @default(now())
 
   @@index([createdAt])
   @@index([userId])
