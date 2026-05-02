@@ -60,6 +60,9 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           syncChannels: true,
           variantAttributes: true,
           updatedAt: true,
+          // ── D.3a additions — verify migration applied ────────────
+          gtin: true,
+          cascadedFields: true,
         },
         // Parents first via parentId asc (NULLs first in Postgres asc),
         // then SKU.
