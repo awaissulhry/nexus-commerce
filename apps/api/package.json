@@ -15,6 +15,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1037.0",
     "@fastify/compress": "^8.3.1",
     "@fastify/cors": "^11.2.0",
+    "@fastify/multipart": "^10.0.0",
     "@google/generative-ai": "^0.24.1",
     "@nexus/database": "*",
     "@nexus/shared": "*",
@@ -30,11 +31,14 @@
     "ioredis": "^5.10.1",
     "multer": "^2.1.1",
     "node-cron": "^4.2.1",
-    "pg": "^8.20.0"
+    "papaparse": "^5.5.3",
+    "pg": "^8.20.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/node-cron": "^3.0.11",
+    "@types/papaparse": "^5.5.2",
     "prisma": "^6.19.3",
     "tsx": "^4.21.0"
   }

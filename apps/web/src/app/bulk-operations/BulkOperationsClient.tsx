@@ -26,6 +26,7 @@ import {
   ChevronRight,
   Lock,
   RotateCcw,
+  Upload,
   WifiOff,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
@@ -38,6 +39,7 @@ import {
   type EditableMeta,
 } from './EditableCell'
 import PreviewChangesModal from './PreviewChangesModal'
+import UploadModal from './UploadModal'
 import PastePreviewModal, {
   type PasteCell,
   type PasteError,
@@ -957,6 +959,7 @@ export default function BulkOperationsClient() {
   const [resetKeys, setResetKeys] = useState<Map<string, number>>(new Map())
   const [cascadeModal, setCascadeModal] = useState<CascadeModalState | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [uploadOpen, setUploadOpen] = useState(false)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>({ kind: 'idle' })
   const [online, setOnline] = useState(true)
 
@@ -1630,29 +1633,26 @@ export default function BulkOperationsClient() {
   // Refetch products when marketplace context changes — bulk-fetch
   // includes _channelListing per row when channel + marketplace params
   // are set, so amazon_*/ebay_* cells render real values.
-  useEffect(() => {
-    let cancelled = false
+  const reloadProducts = useCallback(() => {
     const params = new URLSearchParams()
     if (marketplaceContext) {
       params.set('channel', marketplaceContext.channel)
       params.set('marketplace', marketplaceContext.marketplace)
     }
     const qs = params.toString()
-    fetch(
+    return fetch(
       `${getBackendUrl()}/api/products/bulk-fetch${qs ? `?${qs}` : ''}`,
-      { cache: 'no-store' }
+      { cache: 'no-store' },
     )
       .then(async (res) => (res.ok ? res.json() : { products: [] }))
       .then((data) => {
-        if (cancelled) return
         setProducts(Array.isArray(data.products) ? data.products : [])
       })
       .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marketplaceContext?.channel, marketplaceContext?.marketplace])
+  useEffect(() => {
+    reloadProducts()
+  }, [reloadProducts])
 
   // Refetch fields when channels/productTypes/marketplace change.
   // D.3g: passing `marketplace` lets the backend pull live category
@@ -2442,6 +2442,14 @@ export default function BulkOperationsClient() {
               Reset widths
             </button>
           )}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setUploadOpen(true)}
+          >
+            <Upload className="w-3.5 h-3.5 mr-1.5" />
+            Upload
+          </Button>
           <ColumnSelector
             allFields={allFields}
             visibleColumnIds={visibleColumnIds}
@@ -2601,6 +2609,16 @@ export default function BulkOperationsClient() {
         preview={pastePreview}
         onCancel={cancelPaste}
         onApply={applyPaste}
+      />
+
+      <UploadModal
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        onApplied={() => {
+          // Refetch products so the grid reflects the saved changes.
+          // Selection + pending edits are local state and unaffected.
+          reloadProducts()
+        }}
       />
 
       <CascadeChoiceModal

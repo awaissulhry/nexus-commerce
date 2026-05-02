@@ -5,6 +5,12 @@ import {
   getAvailableFields,
   getFieldDefinition,
 } from '../services/pim/field-registry.service.js'
+import {
+  buildUploadPlan,
+  parseUploadBuffer,
+  summarisePlan,
+  type PlanRow,
+} from '../services/products/bulk-upload.service.js'
 
 /**
  * Routes for bulk-operations: optimized fetch + atomic patch.
@@ -930,6 +936,281 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })
+
+  // ── D.4: CSV / XLSX bulk upload ────────────────────────────────
+  //
+  // POST /api/products/bulk-upload
+  //   multipart/form-data with one file. Parses + validates against
+  //   the field registry, writes a BulkOperation row with status
+  //   PENDING_APPLY holding the validated plan, returns
+  //   { uploadId, preview }.
+  fastify.post('/products/bulk-upload', async (request, reply) => {
+    try {
+      const part = await (request as any).file?.()
+      if (!part) {
+        return reply.code(400).send({ error: 'No file in request' })
+      }
+      const filename: string = part.filename ?? 'upload'
+      const buf: Buffer = await part.toBuffer()
+      let parsed
+      try {
+        parsed = parseUploadBuffer(filename, buf)
+      } catch (e: any) {
+        return reply.code(400).send({ error: e?.message ?? 'Parse failed' })
+      }
+      let plan
+      try {
+        plan = await buildUploadPlan(prisma, filename, parsed.rows)
+      } catch (e: any) {
+        return reply.code(400).send({ error: e?.message ?? 'Validation failed' })
+      }
+
+      // Persist the plan so apply can replay without re-parsing. Only
+      // include rows that have at least one change OR at least one
+      // error — fully empty rows would just bloat the JSON.
+      const planForDb: PlanRow[] = plan.rows.filter(
+        (r) => r.changes.length > 0 || r.errors.length > 0,
+      )
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000) // 30 min
+      const summary = summarisePlan(plan)
+
+      const op = await prisma.bulkOperation.create({
+        data: {
+          status: 'PENDING_APPLY',
+          productCount: summary.toUpdate,
+          changeCount: 0, // will be set on apply
+          changes: planForDb as any,
+          errors:
+            summary.errors.length > 0 ? (summary.errors as any) : undefined,
+          uploadFilename: filename,
+          expiresAt,
+        },
+      })
+
+      return {
+        uploadId: op.id,
+        preview: {
+          ...summary,
+          warnings: parsed.warnings,
+          expiresAt: expiresAt.toISOString(),
+        },
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[products/bulk-upload] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // POST /api/products/bulk-apply
+  //   body: { uploadId }
+  //   Reads the PENDING_APPLY row, applies in chunks of 500, flips
+  //   status to SUCCESS / PARTIAL / FAILED with completedAt.
+  fastify.post<{ Body: { uploadId?: string } }>(
+    '/products/bulk-apply',
+    async (request, reply) => {
+      const uploadId = request.body?.uploadId
+      if (!uploadId) {
+        return reply.code(400).send({ error: 'uploadId required' })
+      }
+      const op = await prisma.bulkOperation.findUnique({
+        where: { id: uploadId },
+      })
+      if (!op) {
+        return reply.code(404).send({ error: 'Upload not found' })
+      }
+      if (op.status !== 'PENDING_APPLY') {
+        return reply
+          .code(409)
+          .send({ error: `Upload already ${op.status.toLowerCase()}` })
+      }
+      if (op.expiresAt && op.expiresAt.getTime() < Date.now()) {
+        return reply.code(410).send({ error: 'Upload preview has expired' })
+      }
+
+      const planRows = (op.changes as unknown as PlanRow[]) ?? []
+      const flatChanges: Array<{
+        productId: string
+        field: string
+        value: unknown
+      }> = []
+      for (const r of planRows) {
+        if (!r.productId) continue
+        for (const c of r.changes) {
+          flatChanges.push({
+            productId: r.productId,
+            field: c.field,
+            value: c.newValue,
+          })
+        }
+      }
+
+      if (flatChanges.length === 0) {
+        await prisma.bulkOperation.update({
+          where: { id: op.id },
+          data: {
+            status: 'FAILED',
+            completedAt: new Date(),
+            errors: [{ message: 'No applicable changes' }] as any,
+          },
+        })
+        return reply.code(400).send({ error: 'No applicable changes' })
+      }
+
+      const startTs = Date.now()
+      const CHUNK = 500
+      let applied = 0
+      const chunkErrors: Array<{ chunkStart: number; error: string }> = []
+
+      for (let i = 0; i < flatChanges.length; i += CHUNK) {
+        const slice = flatChanges.slice(i, i + CHUNK)
+        try {
+          await prisma.$transaction(
+            slice.map((c) =>
+              prisma.product.update({
+                where: { id: c.productId },
+                data: { [c.field]: c.value as any } as any,
+              }),
+            ),
+            { isolationLevel: 'ReadCommitted' },
+          )
+          applied += slice.length
+        } catch (err: any) {
+          chunkErrors.push({
+            chunkStart: i,
+            error: err?.message ?? String(err),
+          })
+        }
+      }
+
+      const elapsedMs = Date.now() - startTs
+      const finalStatus =
+        applied === flatChanges.length
+          ? 'SUCCESS'
+          : applied === 0
+          ? 'FAILED'
+          : 'PARTIAL'
+
+      await prisma.bulkOperation.update({
+        where: { id: op.id },
+        data: {
+          status: finalStatus,
+          changeCount: applied,
+          completedAt: new Date(),
+          errors:
+            chunkErrors.length > 0 ? (chunkErrors as any) : op.errors ?? undefined,
+        },
+      })
+
+      return {
+        applied,
+        total: flatChanges.length,
+        errors: chunkErrors,
+        status: finalStatus,
+        elapsedMs,
+      }
+    },
+  )
+
+  // GET /api/products/bulk-template?view=catalog
+  //   CSV with editable field headers + a single sample row that
+  //   demonstrates the format (including weight/dim unit suffixes).
+  fastify.get<{ Querystring: { view?: string } }>(
+    '/products/bulk-template',
+    async (request, reply) => {
+      const view = (request.query?.view ?? 'full').toLowerCase()
+      const fields = await getAvailableFields({})
+      // Always include sku as the join key + every editable field.
+      // The view filter just biases the column order so the user
+      // sees the most relevant ones first when they open the file.
+      const editable = fields.filter((f) => f.editable)
+      const headerOrder: string[] = ['sku']
+      const sortKey = (id: string): number => {
+        if (view === 'pricing') {
+          return [
+            'name',
+            'basePrice',
+            'costPrice',
+            'minMargin',
+            'minPrice',
+            'maxPrice',
+          ].indexOf(id)
+        }
+        if (view === 'inventory') {
+          return [
+            'name',
+            'totalStock',
+            'lowStockThreshold',
+            'fulfillmentChannel',
+          ].indexOf(id)
+        }
+        if (view === 'physical') {
+          return [
+            'weightValue',
+            'weightUnit',
+            'dimLength',
+            'dimWidth',
+            'dimHeight',
+            'dimUnit',
+          ].indexOf(id)
+        }
+        return -1
+      }
+      const sorted = [...editable].sort((a, b) => {
+        const ai = sortKey(a.id)
+        const bi = sortKey(b.id)
+        if (ai === -1 && bi === -1) return a.id.localeCompare(b.id)
+        if (ai === -1) return 1
+        if (bi === -1) return -1
+        return ai - bi
+      })
+      for (const f of sorted) {
+        if (f.id !== 'sku') headerOrder.push(f.id)
+      }
+
+      // Sample row — one example value per field showing format.
+      const sampleByField: Record<string, string> = {
+        sku: 'EXAMPLE-SKU-001',
+        name: 'Example product name',
+        brand: 'Brand X',
+        manufacturer: 'Brand X Mfg',
+        status: 'ACTIVE',
+        fulfillmentChannel: 'FBA',
+        basePrice: '49.95',
+        costPrice: '18.50',
+        minMargin: '0.20',
+        minPrice: '40.00',
+        maxPrice: '79.95',
+        totalStock: '100',
+        lowStockThreshold: '10',
+        upc: '123456789012',
+        ean: '1234567890123',
+        gtin: '12345678901234',
+        weightValue: '5kg',
+        weightUnit: 'kg',
+        dimLength: '60cm',
+        dimWidth: '40cm',
+        dimHeight: '20cm',
+        dimUnit: 'cm',
+      }
+
+      const csvEscape = (v: string) =>
+        /[\t\n",]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
+
+      const headerRow = headerOrder.map(csvEscape).join(',')
+      const sampleRow = headerOrder
+        .map((id) => csvEscape(sampleByField[id] ?? ''))
+        .join(',')
+      const csv = `${headerRow}\n${sampleRow}\n`
+
+      reply
+        .header('Content-Type', 'text/csv; charset=utf-8')
+        .header(
+          'Content-Disposition',
+          `attachment; filename="nexus-template-${view}.csv"`,
+        )
+      return csv
+    },
+  )
 }
 
 export default productsRoutes

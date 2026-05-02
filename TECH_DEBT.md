@@ -52,3 +52,16 @@ Found during the sidebar audit but not linked from `AppSidebar.tsx`. They show u
 **Workaround:** None for now. The user sees yellow on visible cells immediately and the save still applies all changes (visible + scrolled-out). The mismatch is purely cosmetic and disappears after a save.
 
 **Proper fix:** Pass a `pendingValue` prop down to EditableCell when there's an entry in the changes Map for it. EditableCell's `useState(() => …)` initialiser seeds `draftValue` from `pendingValue ?? initialValue` so the yellow tint shows on first mount. Memo comparator already includes the relevant fields; one extra prop keyed on cellKey is enough.
+
+## 6. SheetJS (`xlsx`) CVE-2023-30533 + maintenance posture
+
+**Symptom / risk:** `xlsx` is used in D.4 (bulk CSV/XLSX upload) to parse user-provided spreadsheets. CVE-2023-30533 is a prototype-pollution issue in older versions; the package's maintenance moved to a CDN/commercial track and the npm tarball is no longer the maintainer's preferred distribution.
+
+**Surfaced at:** D.4 dependency install (`npm audit` flagged it).
+
+**Workaround / current mitigations:**
+- Parse-only path on authenticated user input (no `eval`, no dynamic property assignment).
+- 50 MB / 50,000 row caps enforced by `@fastify/multipart` config + the upload service.
+- The parse result is normalised through the same field-registry validation as the rest of the bulk API, so a malicious cell can't slip through to Prisma as an attacker-controlled key.
+
+**Proper fix:** Replace with `exceljs` (MIT, actively maintained) when we have time to swap. `exceljs` has a slightly different API but supports CSV + XLSX with the same row-shape we need.

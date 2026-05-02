@@ -1401,7 +1401,7 @@ model BulkOperation {
   productCount      Int
   changeCount       Int
   changes           Json     // [{ id, field, oldValue, newValue }]
-  status            String   // SUCCESS | PARTIAL | FAILED
+  status            String   // SUCCESS | PARTIAL | FAILED | PENDING_APPLY
   errors            Json?    // [{ id, field, error }]
 
   // ── Phase D.3: Cascade audit ─────────────────────────────────────
@@ -1412,11 +1412,19 @@ model BulkOperation {
   // Useful for "undo" — replay these in reverse.
   affectedChildren  String[] @default([])
 
+  // ── Phase D.4: CSV/XLSX upload preview state ────────────────────
+  // status='PENDING_APPLY' rows hold a parsed-and-validated upload
+  // waiting on user confirmation; expiresAt clears stale rows.
+  expiresAt         DateTime?
+  completedAt       DateTime?
+  uploadFilename    String?
+
   createdAt         DateTime @default(now())
 
   @@index([createdAt])
   @@index([userId])
   @@index([status])
+  @@index([status, expiresAt])
 }
 
 // ── Phase D.3f: Live category schema sync ────────────────────────────

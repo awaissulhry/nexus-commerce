@@ -2,6 +2,7 @@ import "./db.js"; // ensure dotenv loads before anything else
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import compress from "@fastify/compress";
+import multipart from "@fastify/multipart";
 import { listingsRoutes } from "./routes/listings.js";
 import { inventoryRoutes } from "./routes/inventory.js";
 import { aiRoutes } from "./routes/ai.js";
@@ -49,6 +50,15 @@ app.register(compress, {
   global: true,
   threshold: 1024,
   encodings: ['gzip', 'deflate'],
+});
+
+// D.4: bulk CSV/XLSX upload. 50 MB cap matches the documented spec
+// and prevents an obvious DoS vector. Single-file uploads only.
+app.register(multipart, {
+  limits: {
+    fileSize: 50 * 1024 * 1024,
+    files: 1,
+  },
 });
 
 // Register CORS to allow cross-origin requests from frontend (Port 3000)

@@ -334,3 +334,51 @@ keyboard model — copy/paste, Tab navigation, type-to-replace, etc.
 the old behaviour will need a moment to adjust. The status-bar pill
 now nudges them: `1 cell · Enter or type to edit`.
 
+
+---
+
+## D.4: Bulk CSV / XLSX upload (v1)
+
+Date: 2026-05-02
+
+File-based alternative to the Step 1–6 spreadsheet copy/paste flow.
+The two coexist: copy/paste suits 10–100 cell quick edits with data
+already in Excel; CSV upload suits 100+ row catalog updates with a
+downloadable template.
+
+**v1 scope**
+- Upload CSV / XLSX / XLS up to 50 MB / 50,000 rows.
+- Two-stage flow: parse + validate → preview modal → apply on confirm.
+- **Updates only.** Unknown SKUs are reported as errors with an
+  actionable message (e.g. *SKU "ABC-001" not found — add the product
+  via the catalog before updating*). Create-new is deferred to D.4.5
+  pending its own design (productType, parent linking, image URLs,
+  channel context all need answers).
+- **Empty cells = no change.** The empty-cell-clears-data semantic was
+  rejected: CSV exporters often emit columns the user doesn't intend
+  to touch.
+- **Smart parsing** carries through from D.3j: `5kg` / `5,5 kg`
+  /`60cm` parse and emit a paired `*Unit` change.
+- **Apply** is chunked at 500 changes per Prisma `$transaction`.
+  Per-chunk atomicity: if chunk 5 of 10 fails, chunks 1–4 stay
+  applied, 6–10 still try.
+- **Preview state** lives on `BulkOperation` rows with status
+  `PENDING_APPLY` and `expiresAt = now + 30 min`. No Redis
+  dependency. Cleanup is a future cron.
+- **Templates** at `GET /api/products/bulk-template?view={catalog,
+  pricing,inventory,physical,full}` — CSV with editable headers + one
+  sample row showing format conventions.
+
+**Endpoints**
+- `POST /api/products/bulk-upload` (multipart) → `{ uploadId, preview }`
+- `POST /api/products/bulk-apply` `{ uploadId }` → `{ applied, total, status, errors, elapsedMs }`
+- `GET /api/products/bulk-template?view=…` → `text/csv`
+
+**Limitations / known follow-ups**
+- No upload history UI yet — `BulkOperation` table is the system of
+  record; future page can query it.
+- Cascade is NOT triggered by upload (parent edits via CSV apply
+  directly to the parent only; users wanting fan-out should use the
+  per-cell editor).
+- SheetJS / `xlsx` parse-only path; see TECH_DEBT entry on the CVE.
+
