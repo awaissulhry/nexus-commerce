@@ -1,223 +1,164 @@
-"use client";
+'use client'
 
-import { useState, useMemo } from "react";
-import Link from "next/link";
-import FilterBar from "@/components/shared/FilterBar";
-import ExportButton from "@/components/shared/ExportButton";
+import { useMemo, useState } from 'react'
+import { ShoppingBag } from 'lucide-react'
+import { Card } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { Tabs } from '@/components/ui/Tabs'
 
-export interface OrderRow {
-  id: string;
-  amazonOrderId: string;
-  channelName: string;
-  status: string;
-  totalAmount: number;
-  itemCount: number;
-  buyerName: string | null;
-  trackingNumber: string | null;
-  createdAt: string;
+export interface Order {
+  id: string
+  channel: 'AMAZON' | 'EBAY' | 'SHOPIFY'
+  channelOrderId: string
+  status: 'PENDING' | 'SHIPPED' | 'CANCELLED' | 'DELIVERED'
+  totalPrice: number | string
+  customerName: string
+  customerEmail: string
+  itemCount: number
+  createdAt: string
 }
 
-interface OrdersClientProps {
-  orders: OrderRow[];
+const STATUS_VARIANT: Record<
+  Order['status'],
+  'success' | 'warning' | 'danger' | 'info' | 'default'
+> = {
+  PENDING: 'warning',
+  SHIPPED: 'info',
+  CANCELLED: 'danger',
+  DELIVERED: 'success',
 }
 
-export default function OrdersClient({ orders }: OrdersClientProps) {
-  const [activeTab, setActiveTab] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
+interface Props {
+  orders: Order[]
+  stats: {
+    total: number
+    pending: number
+    shipped: number
+    cancelled: number
+    delivered: number
+  }
+}
+
+export function OrdersClient({ orders, stats }: Props) {
+  const [tab, setTab] = useState<'ALL' | Order['status']>('ALL')
 
   const filtered = useMemo(() => {
-    let items = orders;
+    if (tab === 'ALL') return orders
+    return orders.filter((o) => o.status === tab)
+  }, [orders, tab])
 
-    // Tab filter
-    if (activeTab !== "all") {
-      items = items.filter((o) => o.status === activeTab);
-    }
+  const tabs = [
+    { id: 'ALL', label: 'All', count: stats.total },
+    { id: 'PENDING', label: 'Pending', count: stats.pending },
+    { id: 'SHIPPED', label: 'Shipped', count: stats.shipped },
+    { id: 'DELIVERED', label: 'Delivered', count: stats.delivered },
+    { id: 'CANCELLED', label: 'Cancelled', count: stats.cancelled },
+  ]
 
-    // Search filter
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      items = items.filter(
-        (o) =>
-          o.amazonOrderId.toLowerCase().includes(q) ||
-          o.id.toLowerCase().includes(q) ||
-          (o.buyerName && o.buyerName.toLowerCase().includes(q)) ||
-          (o.trackingNumber && o.trackingNumber.toLowerCase().includes(q))
-      );
-    }
-
-    return items;
-  }, [orders, activeTab, searchQuery]);
-
-  const tabs = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const o of orders) {
-      counts[o.status] = (counts[o.status] || 0) + 1;
-    }
-    return [
-      { label: "All", value: "all", count: orders.length },
-      { label: "Pending", value: "pending", count: counts["pending"] || 0 },
-      { label: "Completed", value: "completed", count: counts["completed"] || 0 },
-      { label: "Shipped", value: "shipped", count: counts["shipped"] || 0 },
-      { label: "Cancelled", value: "cancelled", count: counts["cancelled"] || 0 },
-    ];
-  }, [orders]);
-
-  const formatDate = (iso: string) =>
-    new Date(iso).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(amount);
-
-  const statusStyles: Record<string, string> = {
-    completed: "bg-green-100 text-green-800",
-    pending: "bg-yellow-100 text-yellow-800",
-    shipped: "bg-blue-100 text-blue-800",
-    cancelled: "bg-red-100 text-red-800",
-  };
-
-  const exportData = filtered.map((o) => ({
-    orderId: o.id,
-    amazonOrderId: o.amazonOrderId,
-    channel: o.channelName,
-    status: o.status,
-    totalAmount: o.totalAmount,
-    items: o.itemCount,
-    buyer: o.buyerName || "",
-    tracking: o.trackingNumber || "",
-    date: o.createdAt,
-  }));
+  if (orders.length === 0) {
+    return (
+      <EmptyState
+        icon={ShoppingBag}
+        title="No orders yet"
+        description="Orders synced from Amazon, eBay, and Shopify will appear here. Connect a channel or trigger a manual ingest to get started."
+        action={{ label: 'Manage Connections', href: '/settings/channels' }}
+      />
+    )
+  }
 
   return (
     <div className="space-y-4">
-      <FilterBar
-        tabs={tabs}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        onSearch={setSearchQuery}
-        searchPlaceholder="Search by order ID, buyer name, or tracking number..."
-        actions={
-          <div className="flex items-center gap-2">
-            <ExportButton
-              data={exportData}
-              filename="orders-export"
-              columns={{
-                orderId: "Order ID",
-                amazonOrderId: "Amazon Order ID",
-                channel: "Channel",
-                status: "Status",
-                totalAmount: "Total",
-                items: "Items",
-                buyer: "Buyer",
-                tracking: "Tracking",
-                date: "Date",
-              }}
-            />
-            <Link
-              href="/orders/returns"
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              ↩️ Returns
-            </Link>
+      <Card noPadding>
+        <Tabs tabs={tabs} activeTab={tab} onChange={(id) => setTab(id as typeof tab)} />
+      </Card>
+
+      <Card noPadding>
+        {filtered.length === 0 ? (
+          <div className="px-4 py-8 text-center text-[12px] text-slate-500">
+            No {tab.toLowerCase()} orders.
           </div>
-        }
-      />
-
-      <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
-                Order ID
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
-                Amazon Order ID
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
-                Channel
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
-                Total
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
-                Items
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
-                Buyer
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
-                Date
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {filtered.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="px-6 py-12 text-center">
-                  <div className="text-4xl mb-2">🛒</div>
-                  <p className="text-gray-600 font-medium">No orders match your filters</p>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Try adjusting your search or filter criteria.
-                  </p>
-                </td>
-              </tr>
-            ) : (
-              filtered.map((order) => (
-                <tr
-                  key={order.id}
-                  className="hover:bg-gray-50 transition-colors"
-                >
-                  <td className="px-6 py-4 text-sm text-gray-900 font-mono">
-                    {order.id.slice(0, 8)}...
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-900">
-                    {order.amazonOrderId}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-900">
-                    {order.channelName}
-                  </td>
-                  <td className="px-6 py-4 text-sm">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        statusStyles[order.status] || "bg-gray-100 text-gray-800"
-                      }`}
-                    >
-                      {order.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm font-semibold text-gray-900">
-                    {formatCurrency(order.totalAmount)}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-900">
-                    {order.itemCount} item{order.itemCount !== 1 ? "s" : ""}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">
-                    {order.buyerName || (
-                      <span className="text-gray-400">—</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">
-                    {formatDate(order.createdAt)}
-                  </td>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <Th>Order</Th>
+                  <Th>Channel</Th>
+                  <Th>Customer</Th>
+                  <Th align="right">Items</Th>
+                  <Th align="right">Total</Th>
+                  <Th>Status</Th>
+                  <Th>Date</Th>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="text-sm text-gray-500">
-        Showing {filtered.length} of {orders.length} orders
-      </div>
+              </thead>
+              <tbody>
+                {filtered.map((o) => (
+                  <tr
+                    key={o.id}
+                    className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
+                  >
+                    <td className="px-4 py-2.5">
+                      <div className="font-mono text-[12px] text-slate-900">
+                        {o.channelOrderId.length > 20
+                          ? `${o.channelOrderId.slice(0, 20)}…`
+                          : o.channelOrderId}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <Badge variant="default" size="sm" mono>
+                        {o.channel}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="text-[13px] text-slate-900">{o.customerName}</div>
+                      <div className="text-[11px] text-slate-500 truncate max-w-[220px]">
+                        {o.customerEmail}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-[13px] tabular-nums text-slate-700">
+                      {o.itemCount}
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-[13px] tabular-nums font-medium text-slate-900">
+                      €{Number(o.totalPrice).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <Badge variant={STATUS_VARIANT[o.status]} size="sm">
+                        {o.status}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-2.5 text-[12px] text-slate-500">
+                      {new Date(o.createdAt).toLocaleDateString('en-GB', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
     </div>
-  );
+  )
+}
+
+function Th({
+  children,
+  align = 'left',
+}: {
+  children: React.ReactNode
+  align?: 'left' | 'right'
+}) {
+  return (
+    <th
+      className={`px-4 py-2 text-[11px] font-semibold text-slate-700 uppercase tracking-wider ${
+        align === 'right' ? 'text-right' : 'text-left'
+      }`}
+    >
+      {children}
+    </th>
+  )
 }

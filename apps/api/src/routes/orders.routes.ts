@@ -10,6 +10,7 @@ import {
   getOrders,
   shipOrder,
 } from '../services/order-ingestion.service.js'
+import prisma from '../db.js'
 
 export async function ordersRoutes(app: FastifyInstance) {
   /**
@@ -42,6 +43,41 @@ export async function ordersRoutes(app: FastifyInstance) {
    * GET /api/orders
    * Fetch all orders with pagination
    */
+  /**
+   * GET /api/orders/stats
+   * Counts grouped by status — used by the orders StatsBar.
+   * 30s cache.
+   */
+  app.get('/api/orders/stats', async (_request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      reply.header('Cache-Control', 'private, max-age=30')
+      const [total, pending, shipped, cancelled, delivered] = await Promise.all([
+        prisma.order.count(),
+        prisma.order.count({ where: { status: 'PENDING' } }),
+        prisma.order.count({ where: { status: 'SHIPPED' } }),
+        prisma.order.count({ where: { status: 'CANCELLED' } }),
+        prisma.order.count({ where: { status: 'DELIVERED' } }),
+      ])
+      const last = await prisma.order.findFirst({
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      })
+      reply.send({
+        total,
+        pending,
+        shipped,
+        cancelled,
+        delivered,
+        lastOrderAt: last?.createdAt ?? null,
+      })
+    } catch (error: any) {
+      logger.error('[ORDERS API] stats failed', { message: error.message })
+      reply
+        .status(500)
+        .send({ success: false, error: error?.message ?? 'Unknown error' })
+    }
+  })
+
   app.get('/api/orders', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const page = parseInt((request.query as any).page as string) || 1
