@@ -32,21 +32,25 @@ export interface SchemaQuery {
 
 interface AmazonProductTypeMeta {
   productType: string
-  meta: {
-    /** Schema version identifier — flips when Amazon updates the type. */
+  /** Version identifier — flips when Amazon revises the type. Path is
+   * `productTypeVersion.version` (e.g. "RELEASE_18.1"). */
+  productTypeVersion?: {
     version: string
-    /** Time the schema was last modified by Amazon. */
-    lastUpdated?: string
-    /** Locale of returned labels/descriptions. */
-    locale?: string
+    latest?: boolean
+    releaseCandidate?: boolean
   }
   /** Pointer to the full JSON Schema (S3 presigned URL + checksum). */
   schema: {
     link: { resource: string; verb: 'GET' }
     checksum: string
   }
-  /** Optional pointer to a prerequisites schema (we ignore for now). */
+  /** Pointer to the meta-schema (we ignore — describes how to read schema). */
+  metaSchema?: unknown
+  /** Locale of returned labels/descriptions. */
+  locale?: string
+  /** Optional requirements descriptor. */
   requirements?: string
+  requirementsEnforced?: string
 }
 
 export class CategorySchemaService {
@@ -118,7 +122,7 @@ export class CategorySchemaService {
     const sp = await (this.amazon as any).getClient()
     const marketplaceId = amazonMarketplaceId(query.marketplace)
 
-    const meta = (await sp.callAPI({
+    const envelope = (await sp.callAPI({
       operation: 'getDefinitionsProductType',
       endpoint: 'productTypeDefinitions',
       version: '2020-09-01',
@@ -130,21 +134,21 @@ export class CategorySchemaService {
       },
     })) as AmazonProductTypeMeta
 
-    if (!meta?.schema?.link?.resource) {
+    if (!envelope?.schema?.link?.resource) {
       throw new Error(
         `Amazon getDefinitionsProductType returned no schema link for ${query.productType}`,
       )
     }
 
     // Step 2 — fetch the actual JSON Schema from the S3 link.
-    const schemaRes = await fetch(meta.schema.link.resource)
+    const schemaRes = await fetch(envelope.schema.link.resource)
     if (!schemaRes.ok) {
       throw new Error(
         `Failed to fetch schema body for ${query.productType}: HTTP ${schemaRes.status}`,
       )
     }
     const schemaDefinition = (await schemaRes.json()) as Record<string, unknown>
-    const schemaVersion = meta.meta?.version ?? 'unknown'
+    const schemaVersion = envelope.productTypeVersion?.version ?? 'unknown'
     const variationThemes = extractVariationThemes(schemaDefinition)
 
     // If we already have this exact version cached, just bump the
