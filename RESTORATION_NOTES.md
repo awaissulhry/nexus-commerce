@@ -382,3 +382,61 @@ downloadable template.
   per-cell editor).
 - SheetJS / `xlsx` parse-only path; see TECH_DEBT entry on the CVE.
 
+
+---
+
+## D.5: Multi-file ZIP upload (v1)
+
+Date: 2026-05-02
+
+ZIP-archive flow alongside the D.4 single-file (CSV / XLSX) path. Same
+preview/apply UX (`POST /api/products/bulk-upload-zip` then re-uses
+`POST /api/products/bulk-apply`); the difference is the parser.
+
+**Layout**
+```
+products.zip/
+├── SKU-AAA/
+│   ├── data.json        // optional — field updates as JSON
+│   └── description.html // optional — HTML body for Product.description
+├── SKU-BBB/
+│   ├── data.json
+│   └── images/
+│       └── main.jpg     // ignored in v1, surfaced in preview warnings
+└── …
+```
+
+**v1 scope**
+- Per top-level folder (= SKU): read `data.json` + `description.html`.
+- `data.json` accepts the same field IDs as the field registry,
+  including a nested `categoryAttributes` object that maps to
+  `attr_<key>` registry fields (jsonb merge on apply, no overwrite).
+- `description.html` writes to a new `Product.description String?`
+  column added by the same migration.
+- Empty fields = no change (matches D.4).
+- Per-folder error isolation: one bad folder doesn't kill the upload.
+- Defensive limits: 10 000 entries, 6-level path depth, 5 000 folders,
+  50 KB per `data.json`, 100 KB per `description.html`.
+- `images/` and other unrecognised files are silently skipped and
+  surfaced as preview warnings.
+- Apply path: same `BulkOperation` row as D.4 (`status: PENDING_APPLY`
+  → chunked 500-change apply → `SUCCESS` / `PARTIAL` / `FAILED`). The
+  apply endpoint now routes `attr_*` changes to a Postgres `jsonb ||`
+  merge so categoryAttributes from a ZIP don't blow away keys that
+  weren't in the upload.
+
+**Schema add**
+```prisma
+model Product {
+  // …
+  description String?  // D.5: HTML body shown on listings
+}
+```
++ `description` registered in the field registry as editable text so
+the spreadsheet/CSV grid can also update it.
+
+**Out of scope (D.5.5 follow-up — see TECH_DEBT entry)**
+- Image upload from `images/` folders
+- `channels/<channel>.json` per-marketplace overrides
+- `variants.csv` per-product variation data
+

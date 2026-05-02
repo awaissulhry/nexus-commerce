@@ -11,6 +11,7 @@ import {
   summarisePlan,
   type PlanRow,
 } from '../services/products/bulk-upload.service.js'
+import { parseZipUpload } from '../services/products/bulk-zip-upload.service.js'
 
 /**
  * Routes for bulk-operations: optimized fetch + atomic patch.
@@ -210,6 +211,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
 
     const ALLOWED_FIELDS = new Set([
       'name',
+      'description', // D.5: ZIP upload + grid editing
       'basePrice',
       'costPrice',
       'minMargin',
@@ -1001,6 +1003,64 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // POST /api/products/bulk-upload-zip
+  //   D.5: ZIP archive with one folder per SKU. Each folder may
+  //   carry a data.json (field updates) and/or description.html.
+  //   Images/ subfolders + other files are surfaced as warnings; the
+  //   apply path is the same as CSV uploads.
+  fastify.post('/products/bulk-upload-zip', async (request, reply) => {
+    try {
+      const part = await (request as any).file?.()
+      if (!part) {
+        return reply.code(400).send({ error: 'No file in request' })
+      }
+      const filename: string = part.filename ?? 'upload.zip'
+      if (!/\.zip$/i.test(filename)) {
+        return reply
+          .code(400)
+          .send({ error: 'Expected a .zip file' })
+      }
+      const buf: Buffer = await part.toBuffer()
+      let result
+      try {
+        result = await parseZipUpload(prisma, filename, buf)
+      } catch (e: any) {
+        return reply.code(400).send({ error: e?.message ?? 'Parse failed' })
+      }
+
+      const planForDb: PlanRow[] = result.rows.filter(
+        (r) => r.changes.length > 0 || r.errors.length > 0,
+      )
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000)
+      const summary = summarisePlan(result)
+
+      const op = await prisma.bulkOperation.create({
+        data: {
+          status: 'PENDING_APPLY',
+          productCount: summary.toUpdate,
+          changeCount: 0,
+          changes: planForDb as any,
+          errors:
+            summary.errors.length > 0 ? (summary.errors as any) : undefined,
+          uploadFilename: filename,
+          expiresAt,
+        },
+      })
+
+      return {
+        uploadId: op.id,
+        preview: {
+          ...summary,
+          warnings: result.warnings,
+          expiresAt: expiresAt.toISOString(),
+        },
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[products/bulk-upload-zip] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // POST /api/products/bulk-apply
   //   body: { uploadId }
   //   Reads the PENDING_APPLY row, applies in chunks of 500, flips
@@ -1028,23 +1088,39 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const planRows = (op.changes as unknown as PlanRow[]) ?? []
-      const flatChanges: Array<{
+      // D.5: split scalar field changes from category-attribute
+      // changes. Scalars become prisma.product.update; attr_* are
+      // grouped per-product into a single jsonb merge UPDATE so we
+      // don't blow away keys that aren't in this upload.
+      const scalarChanges: Array<{
         productId: string
         field: string
         value: unknown
       }> = []
+      const attrByProduct = new Map<string, Record<string, unknown>>()
       for (const r of planRows) {
         if (!r.productId) continue
         for (const c of r.changes) {
-          flatChanges.push({
-            productId: r.productId,
-            field: c.field,
-            value: c.newValue,
-          })
+          if (c.field.startsWith('attr_')) {
+            const stripped = c.field.replace(/^attr_/, '')
+            let bag = attrByProduct.get(r.productId)
+            if (!bag) {
+              bag = {}
+              attrByProduct.set(r.productId, bag)
+            }
+            bag[stripped] = c.newValue
+          } else {
+            scalarChanges.push({
+              productId: r.productId,
+              field: c.field,
+              value: c.newValue,
+            })
+          }
         }
       }
 
-      if (flatChanges.length === 0) {
+      const totalUnits = scalarChanges.length + attrByProduct.size
+      if (totalUnits === 0) {
         await prisma.bulkOperation.update({
           where: { id: op.id },
           data: {
@@ -1056,23 +1132,41 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(400).send({ error: 'No applicable changes' })
       }
 
+      const writeAttrMerge = (productId: string, patch: Record<string, unknown>) =>
+        prisma.$executeRaw`
+          UPDATE "Product"
+          SET "categoryAttributes" = COALESCE("categoryAttributes", '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb
+          WHERE id = ${productId}
+        `
+
       const startTs = Date.now()
       const CHUNK = 500
       let applied = 0
       const chunkErrors: Array<{ chunkStart: number; error: string }> = []
 
-      for (let i = 0; i < flatChanges.length; i += CHUNK) {
-        const slice = flatChanges.slice(i, i + CHUNK)
+      // Build a single ordered list of Prisma promises so chunking is
+      // simple. Scalar edges come first, then per-product attr merges
+      // — each contributes one slot regardless of how many keys it
+      // touches inside the jsonb blob.
+      const pendingOps: Array<() => Prisma.PrismaPromise<unknown>> = []
+      for (const c of scalarChanges) {
+        pendingOps.push(() =>
+          prisma.product.update({
+            where: { id: c.productId },
+            data: { [c.field]: c.value as any } as any,
+          }),
+        )
+      }
+      for (const [productId, patch] of attrByProduct) {
+        pendingOps.push(() => writeAttrMerge(productId, patch))
+      }
+
+      for (let i = 0; i < pendingOps.length; i += CHUNK) {
+        const slice = pendingOps.slice(i, i + CHUNK).map((fn) => fn())
         try {
-          await prisma.$transaction(
-            slice.map((c) =>
-              prisma.product.update({
-                where: { id: c.productId },
-                data: { [c.field]: c.value as any } as any,
-              }),
-            ),
-            { isolationLevel: 'ReadCommitted' },
-          )
+          await prisma.$transaction(slice as any, {
+            isolationLevel: 'ReadCommitted',
+          })
           applied += slice.length
         } catch (err: any) {
           chunkErrors.push({
@@ -1084,7 +1178,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
 
       const elapsedMs = Date.now() - startTs
       const finalStatus =
-        applied === flatChanges.length
+        applied === pendingOps.length
           ? 'SUCCESS'
           : applied === 0
           ? 'FAILED'
@@ -1103,7 +1197,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
 
       return {
         applied,
-        total: flatChanges.length,
+        total: pendingOps.length,
         errors: chunkErrors,
         status: finalStatus,
         elapsedMs,

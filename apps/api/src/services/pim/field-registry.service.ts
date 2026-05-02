@@ -63,6 +63,11 @@ const UNIVERSAL_FIELDS: FieldDefinition[] = [
   { id: 'manufacturer', label: 'Manufacturer', type: 'text', category: 'universal', editable: true, width: 160 },
   { id: 'status', label: 'Status', type: 'select', options: ['ACTIVE', 'DRAFT', 'INACTIVE'], category: 'universal', editable: true, width: 110 },
   { id: 'productType', label: 'Product Type', type: 'text', category: 'universal', editable: false, width: 130, helpText: 'Set via Amazon import; drives category-specific fields' },
+  // D.5: description is HTML-string content shown on listings. Made
+  // editable in the registry primarily for the ZIP-upload path
+  // (description.html files); the spreadsheet grid can edit it too,
+  // though it's rarely opened by default since the column is wide.
+  { id: 'description', label: 'Description', type: 'text', category: 'universal', editable: true, width: 320, helpText: 'HTML body shown on listings — best edited via ZIP upload (description.html per product folder)' },
 ]
 
 // ── Pricing ────────────────────────────────────────────────────────────

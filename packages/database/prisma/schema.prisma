@@ -91,6 +91,7 @@ model Product {
   dimUnit     String? // e.g., 'in', 'cm'
 
   // Content (shared/inherited by all variants)
+  description  String? // D.5: HTML body shown on listings (master-level)
   bulletPoints String[] // Amazon-style bullet points
   aPlusContent Json? // Rich text / A+ Content as JSON
   keywords     String[] // Search keywords

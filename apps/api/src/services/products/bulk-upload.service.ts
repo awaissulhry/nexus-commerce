@@ -364,13 +364,13 @@ export function summarisePlan(plan: UploadPlan): UploadPreviewSummary {
   }
 }
 
-interface CoerceResult {
+export interface CoerceResult {
   value?: unknown
   error?: string
   pairedUnit?: { field: string; value: string }
 }
 
-function coerceForField(field: FieldDefinition, raw: string): CoerceResult {
+export function coerceForField(field: FieldDefinition, raw: string): CoerceResult {
   const v = raw.trim()
   if (v === '') return { value: null }
   // Weight + dimension columns accept "5kg"/"60cm" with optional
@@ -475,7 +475,7 @@ function coerceForField(field: FieldDefinition, raw: string): CoerceResult {
   return { value: v }
 }
 
-function decimalToNumber(v: unknown): unknown {
+export function decimalToNumber(v: unknown): unknown {
   if (v == null) return v
   // Prisma Decimal exposes a toNumber/toString. We get plain numbers
   // for Float columns and Decimal-instance for Decimal columns. For
@@ -490,7 +490,7 @@ function decimalToNumber(v: unknown): unknown {
   return v
 }
 
-function looselyEqual(a: unknown, b: unknown): boolean {
+export function looselyEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true
   if (a == null && b == null) return true
   if (a == null || b == null) return false

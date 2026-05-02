@@ -99,14 +99,22 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
 
   async function handleFile(file: File) {
     setError(null)
+    const ext = file.name.toLowerCase().split('.').pop() ?? ''
+    if (!['csv', 'xlsx', 'xls', 'tsv', 'zip'].includes(ext)) {
+      setError(
+        'Unsupported file type. Drop a .csv, .xlsx, .xls, or .zip file.',
+      )
+      return
+    }
     setStage('uploading')
+    const endpoint =
+      ext === 'zip'
+        ? `${getBackendUrl()}/api/products/bulk-upload-zip`
+        : `${getBackendUrl()}/api/products/bulk-upload`
     const fd = new FormData()
     fd.append('file', file)
     try {
-      const res = await fetch(`${getBackendUrl()}/api/products/bulk-upload`, {
-        method: 'POST',
-        body: fd,
-      })
+      const res = await fetch(endpoint, { method: 'POST', body: fd })
       const json = (await res.json()) as
         | UploadResponse
         | { error: string }
@@ -218,7 +226,7 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".csv,.xlsx,.xls,.tsv"
+                  accept=".csv,.xlsx,.xls,.tsv,.zip"
                   className="hidden"
                   onChange={(e) => {
                     const f = e.target.files?.[0]
@@ -227,13 +235,18 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
                 />
                 <Upload className="w-7 h-7 mx-auto text-slate-400 mb-3" />
                 <div className="text-[13px] font-medium text-slate-700">
-                  Drop CSV or Excel file here
+                  Drop CSV, Excel, or ZIP file here
                 </div>
                 <div className="text-[12px] text-slate-500 mt-0.5">
                   or click to browse
                 </div>
                 <div className="text-[11px] text-slate-400 mt-3">
-                  Supported: .csv, .xlsx, .xls · Max 50 MB · 50,000 rows
+                  Supported: .csv, .xlsx, .xls, .zip · Max 50 MB · 50,000 rows
+                </div>
+                <div className="text-[11px] text-slate-400 mt-1">
+                  ZIP layout: <code className="font-mono">SKU/data.json</code> +{' '}
+                  <code className="font-mono">SKU/description.html</code> per
+                  product folder
                 </div>
               </div>
 

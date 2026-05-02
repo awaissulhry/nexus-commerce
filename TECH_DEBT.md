@@ -65,3 +65,23 @@ Found during the sidebar audit but not linked from `AppSidebar.tsx`. They show u
 - The parse result is normalised through the same field-registry validation as the rest of the bulk API, so a malicious cell can't slip through to Prisma as an attacker-controlled key.
 
 **Proper fix:** Replace with `exceljs` (MIT, actively maintained) when we have time to swap. `exceljs` has a slightly different API but supports CSV + XLSX with the same row-shape we need.
+
+## 7. D.5.5: ZIP upload — image handling, channel overrides, variants
+
+Deferred from D.5 v1. Three feature areas, each with open design questions that need a sit-down with the user before implementation.
+
+**Images** (`<SKU>/images/*.{jpg,png,webp,…}`)
+Open questions:
+- Storage backend: Cloudinary is the only viable option (Railway / Vercel local FS is ephemeral). Need to verify the Cloudinary product-image path is wired and produces working `Image` / `ProductImage` rows.
+- Replace vs append: does an upload of `images/main.jpg` *replace* the product's existing main image, or append to a gallery? Probably replace based on filename slot (main, alt-1, …) but spec needs confirming.
+- Per-product limit (Amazon allows 9, eBay allows 12).
+- MIME validation + EXIF stripping (privacy).
+- Failed upload recovery: one bad image fails the product, or skip with a warning?
+
+**Channel overrides** (`<SKU>/channels/<channel>-<marketplace>.json`)
+Marketplace-specific titles / descriptions — would map to `ChannelListing` rows. Clean to design, but interlocks with the multi-marketplace work in D.3d, so worth doing once the patterns there are stable.
+
+**Variants** (`<SKU>/variants.csv` or `<SKU>/variants/`)
+Each row a child variation. Has the same "create new product" can-of-worms as D.4.5 — productType, parent linking, image inheritance — so likely waits until D.4.5 is shipped and we know the pattern.
+
+For all three: the v1 ZIP parser already surfaces them as preview warnings ("12 image files in 3 folders ignored — coming in D.5.5"), so users get a graceful fail-soft rather than silent drop or hard error.
