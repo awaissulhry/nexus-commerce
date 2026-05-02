@@ -18,8 +18,11 @@
  *     normalised to digits-only and validated for 8–14 length.
  */
 
-import * as Papa from 'papaparse'
+import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
+// Note: papaparse exports default; xlsx is CJS-shaped and works
+// fine via the namespace import here since we only call XLSX.read
+// and XLSX.utils, both of which sit on the namespace object.
 import type { PrismaClient } from '@prisma/client'
 import {
   getAvailableFields,
