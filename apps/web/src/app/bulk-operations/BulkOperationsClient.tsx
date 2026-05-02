@@ -220,6 +220,29 @@ interface SelectionState {
   active: CellCoord | null
 }
 
+interface SelectionMetrics {
+  /** Total cells in the rectangle (numeric + non-numeric). */
+  count: number
+  /** True when count > 1000 — the heavy iteration is skipped to keep
+   *  drag-selection responsive, only `count` is populated. */
+  isLarge?: boolean
+  numericCount?: number
+  sum?: number
+  avg?: number
+  min?: number
+  max?: number
+}
+
+/**
+ * Whole numbers render without a decimal; everything else renders to
+ * 2 decimals max. Currency-style summaries stay tidy without forcing
+ * "5" into "5.00".
+ */
+function formatMetric(n: number): string {
+  if (Number.isInteger(n)) return n.toString()
+  return n.toFixed(2)
+}
+
 function makeEditableRenderer(meta: EditableMeta) {
   return function EditableCellRenderer(ctx: CellContext<BulkProduct, unknown>) {
     const value = ctx.getValue()
@@ -1926,6 +1949,58 @@ export default function BulkOperationsClient() {
     }
   })()
 
+  // ── Step 6: status-bar metrics ─────────────────────────────────
+  // For numeric ranges, compute Sum/Avg/Min/Max alongside the cell
+  // count. Skip the heavy iteration above 1000 cells — the count
+  // alone is enough for huge selections, and recomputing on every
+  // mousemove during a drag would become noticeable.
+  const selectionMetrics = useMemo<SelectionMetrics | null>(() => {
+    if (!rangeBounds) return null
+    const count =
+      (rangeBounds.maxRow - rangeBounds.minRow + 1) *
+      (rangeBounds.maxCol - rangeBounds.minCol + 1)
+    if (count > 1000) {
+      return { count, isLarge: true }
+    }
+    const tableRows = table.getRowModel().rows
+    const cols = visibleLeafCols
+    let sum = 0
+    let min = Infinity
+    let max = -Infinity
+    let numericCount = 0
+    for (let r = rangeBounds.minRow; r <= rangeBounds.maxRow; r++) {
+      const row = tableRows[r]
+      if (!row) continue
+      for (let c = rangeBounds.minCol; c <= rangeBounds.maxCol; c++) {
+        const col = cols[c]
+        if (!col) continue
+        let v: unknown
+        try {
+          v = row.getValue(col.id)
+        } catch {
+          continue
+        }
+        if (typeof v === 'number' && Number.isFinite(v)) {
+          sum += v
+          if (v < min) min = v
+          if (v > max) max = v
+          numericCount++
+        }
+      }
+    }
+    if (numericCount === 0) {
+      return { count, numericCount: 0 }
+    }
+    return {
+      count,
+      numericCount,
+      sum,
+      avg: sum / numericCount,
+      min,
+      max,
+    }
+  }, [rangeBounds, table, visibleLeafCols])
+
   // D.3d: track which visible columns are channel-prefixed AND
   // whether any pending change targets one. Used to drive the banner
   // and the marketplace-selector pulse animation.
@@ -2187,6 +2262,7 @@ export default function BulkOperationsClient() {
         fetchMs={fetchMs}
         loading={loading}
         selectedCellCount={selectedCellCount}
+        selectionMetrics={selectionMetrics}
         copyFlashCount={copyFlash?.count ?? null}
       />
 
@@ -2223,6 +2299,7 @@ function StatusBar({
   fetchMs,
   loading,
   selectedCellCount,
+  selectionMetrics,
   copyFlashCount,
 }: {
   status: SaveStatus
@@ -2232,6 +2309,9 @@ function StatusBar({
   /** 0 when nothing is selected; otherwise how many cells the
    *  current range covers. */
   selectedCellCount: number
+  /** Step 6: Sum/Avg/Min/Max etc. Null when no selection or only
+   *  the large-selection count is available. */
+  selectionMetrics: SelectionMetrics | null
   /** Non-null for ~2s after a successful copy — drives the green
    *  "Copied N cells" pill. */
   copyFlashCount: number | null
@@ -2289,26 +2369,64 @@ function StatusBar({
       )}
     >
       <span className="flex items-center gap-1.5">{left}</span>
-      <span className="flex items-center gap-3 text-slate-500">
+      <span className="flex items-center gap-2 text-slate-500 text-[12px]">
         {copyFlashCount != null ? (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-green-50 border border-green-200 rounded text-[12px]">
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-green-50 border border-green-200 rounded">
             <CheckCircle2 className="w-3 h-3 text-green-600" />
             <span className="text-green-900 tabular-nums">
               Copied {copyFlashCount} cell{copyFlashCount === 1 ? '' : 's'}
             </span>
           </span>
-        ) : (
-          selectedCellCount > 0 && (
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded text-[12px]">
+        ) : selectedCellCount > 0 ? (
+          <>
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
               <span className="text-blue-900 tabular-nums">
                 {selectedCellCount === 1
                   ? '1 cell · Enter or type to edit'
-                  : `${selectedCellCount} cells · Enter to edit active`}
+                  : `${selectedCellCount} cells`}
               </span>
             </span>
-          )
-        )}
+            {selectionMetrics?.isLarge && (
+              <span className="text-slate-400 italic">
+                large selection — metrics off
+              </span>
+            )}
+            {selectionMetrics &&
+              !selectionMetrics.isLarge &&
+              selectionMetrics.numericCount !== undefined &&
+              selectionMetrics.numericCount > 0 && (
+                <>
+                  <span className="text-slate-300">·</span>
+                  <span className="text-slate-500">Sum:</span>
+                  <span className="font-semibold text-slate-700 tabular-nums">
+                    {formatMetric(selectionMetrics.sum!)}
+                  </span>
+                  <span className="text-slate-300">·</span>
+                  <span className="text-slate-500">Avg:</span>
+                  <span className="font-semibold text-slate-700 tabular-nums">
+                    {formatMetric(selectionMetrics.avg!)}
+                  </span>
+                  <span className="text-slate-300">·</span>
+                  <span className="text-slate-500">Min:</span>
+                  <span className="font-semibold text-slate-700 tabular-nums">
+                    {formatMetric(selectionMetrics.min!)}
+                  </span>
+                  <span className="text-slate-300">·</span>
+                  <span className="text-slate-500">Max:</span>
+                  <span className="font-semibold text-slate-700 tabular-nums">
+                    {formatMetric(selectionMetrics.max!)}
+                  </span>
+                  {selectionMetrics.numericCount <
+                    selectionMetrics.count && (
+                    <span className="text-slate-400 italic">
+                      ({selectionMetrics.numericCount} numeric)
+                    </span>
+                  )}
+                </>
+              )}
+          </>
+        ) : null}
         {fetchMs != null && <span>Initial fetch: {fetchMs}ms</span>}
       </span>
     </div>
