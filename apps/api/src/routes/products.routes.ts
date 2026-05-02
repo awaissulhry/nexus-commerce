@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
+import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 
 /**
@@ -241,24 +242,69 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ errors })
     }
 
-    // Apply survivors atomically. If any individual update fails (e.g.
-    // a referenced product no longer exists), the entire transaction
-    // rolls back; we return all surviving validation errors plus the
-    // single transaction error.
+    // Apply survivors via grouped bulk-SQL. Per-row UPDATE in a
+    // transaction is N round-trips; with the serverless pool config
+    // (max:1 connection, sequential queries) that's ~13ms per row →
+    // 13s for 1000 rows. Group by field and run one
+    // `UPDATE … FROM (VALUES …)` per field — drops 1000 round trips
+    // to one-per-field (typically 1-7 depending on what was edited).
+    //
+    // Field names come from ALLOWED_FIELDS (whitelisted above) so
+    // Prisma.raw on the column name is safe from injection.
     try {
       const startTs = Date.now()
       const productIds = new Set(validated.map((v) => v.id))
-      // Array form runs all updates in a single transaction. Doesn't
-      // accept `timeout` (that's the callback form), but the default
-      // is 5s — plenty for 1000 simple updates.
+
+      const byField = new Map<string, Array<{ id: string; value: any }>>()
+      for (const v of validated) {
+        let arr = byField.get(v.field)
+        if (!arr) {
+          arr = []
+          byField.set(v.field, arr)
+        }
+        arr.push({ id: v.id, value: v.value })
+      }
+
+      // Cast hint per field: postgres needs an explicit type cast on
+      // VALUES columns when the destination isn't text.
+      const FIELD_CAST: Record<string, string> = {
+        totalStock: 'int',
+        lowStockThreshold: 'int',
+        basePrice: 'decimal',
+        costPrice: 'decimal',
+        minMargin: 'decimal',
+        minPrice: 'decimal',
+        maxPrice: 'decimal',
+        weightValue: 'decimal',
+      }
+
       await prisma.$transaction(
-        validated.map((v) =>
-          prisma.product.update({
-            where: { id: v.id },
-            data: { [v.field]: v.value } as any,
-          })
-        ),
-        { isolationLevel: 'ReadCommitted' }
+        async (tx) => {
+          for (const [field, items] of byField) {
+            const cast = FIELD_CAST[field]
+            // Build the VALUES rows as parameterized SQL fragments.
+            const rows = items.map((it) =>
+              Prisma.sql`(${it.id}, ${
+                it.value === null ? null : it.value
+              })`
+            )
+            const sql = cast
+              ? Prisma.sql`
+                  UPDATE "Product" AS p
+                  SET ${Prisma.raw(`"${field}"`)} = v.value::${Prisma.raw(cast)}
+                  FROM (VALUES ${Prisma.join(rows)}) AS v(id, value)
+                  WHERE p.id = v.id
+                `
+              : Prisma.sql`
+                  UPDATE "Product" AS p
+                  SET ${Prisma.raw(`"${field}"`)} = v.value
+                  FROM (VALUES ${Prisma.join(rows)}) AS v(id, value)
+                  WHERE p.id = v.id
+                `
+            await tx.$executeRaw(sql)
+          }
+        },
+        { timeout: 30_000, isolationLevel: 'ReadCommitted' }
       )
       const elapsedMs = Date.now() - startTs
 
