@@ -104,6 +104,58 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // GET /api/listings/all — flat list of every channel listing, enriched
+  // with the parent product's sku/name/asin and the marketplace's
+  // currency (no FK between ChannelListing and Marketplace, so we join
+  // in JS). Capped at 200 rows for the cross-channel table view.
+  fastify.get('/listings/all', async (_request, reply) => {
+    try {
+      const [listings, marketplaces] = await Promise.all([
+        prisma.channelListing.findMany({
+          include: {
+            product: {
+              select: { id: true, sku: true, name: true, amazonAsin: true },
+            },
+          },
+          orderBy: [
+            { channel: 'asc' },
+            { marketplace: 'asc' },
+            { updatedAt: 'desc' },
+          ],
+          take: 200,
+        }),
+        prisma.marketplace.findMany({
+          select: { channel: true, code: true, currency: true, language: true },
+        }),
+      ])
+
+      const mpKey = (channel: string, code: string) => `${channel}_${code}`
+      const meta = new Map(
+        marketplaces.map((m) => [
+          mpKey(m.channel, m.code),
+          { currency: m.currency, language: m.language },
+        ])
+      )
+
+      const enriched = listings.map((l) => {
+        const m = meta.get(mpKey(l.channel, l.marketplace))
+        return {
+          ...l,
+          // Coerce Decimal fields to numbers for JSON safety
+          price: l.price == null ? null : Number(l.price),
+          salePrice: l.salePrice == null ? null : Number(l.salePrice),
+          currency: m?.currency ?? null,
+          language: m?.language ?? null,
+        }
+      })
+
+      return { listings: enriched }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[listings/all] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // GET /api/marketplaces?channel=AMAZON — flat list, optional channel filter
   fastify.get('/marketplaces', async (request, reply) => {
     try {

@@ -544,28 +544,51 @@ export async function inventoryRoutes(app: FastifyInstance) {
   );
 
   // ── GET /inventory/stats ────────────────────────────────────────────
-  // Aggregate counters for the inventory page header. One call, four
-  // counts — beats four separate parallel fetches from the client.
+  // PIM-aware counters for the inventory page header. Distinguishes
+  // master products (what the user thinks of as "a product", e.g.
+  // AIRMESH-JACKET) from individual SKU rows (a master + all its
+  // variations). 30s cache.
   app.get("/inventory/stats", async (request, reply) => {
     try {
-      const where = { syncChannels: { has: "AMAZON" } };
-      const [total, synced, lowStock, lastSyncedRecord] = await Promise.all([
-        prisma.product.count({ where }),
+      reply.header("Cache-Control", "private, max-age=30");
+
+      const [
+        masterProducts,
+        totalSKUs,
+        standalone,
+        variations,
+        syncedToAmazon,
+        lowStock,
+        lastSyncedRecord,
+      ] = await Promise.all([
+        // Master = top-level row (no parent). Includes both isParent=true
+        // entities and standalone single-SKU products.
+        prisma.product.count({ where: { parentId: null } }),
+        // Every Product row.
+        prisma.product.count(),
+        // Top-level rows that aren't parents — single-SKU products.
         prisma.product.count({
-          where: { ...where, amazonAsin: { not: null } },
+          where: { parentId: null, isParent: false },
         }),
-        prisma.product.count({
-          where: { ...where, totalStock: { lt: 5 } },
-        }),
+        // Children = rows that have a parent.
+        prisma.product.count({ where: { parentId: { not: null } } }),
+        // SKUs (any level) synced to Amazon.
+        prisma.product.count({ where: { syncChannels: { has: "AMAZON" } } }),
+        // Low stock = ≤ 5 units. Counts all rows including children.
+        prisma.product.count({ where: { totalStock: { lte: 5 } } }),
         prisma.product.findFirst({
-          where: { ...where, lastAmazonSync: { not: null } },
+          where: { lastAmazonSync: { not: null } },
           orderBy: { lastAmazonSync: "desc" },
           select: { lastAmazonSync: true },
         }),
       ]);
+
       return reply.send({
-        total,
-        synced,
+        masterProducts,
+        totalSKUs,
+        standalone,
+        variations,
+        syncedToAmazon,
         lowStock,
         lastSync: lastSyncedRecord?.lastAmazonSync ?? null,
       });

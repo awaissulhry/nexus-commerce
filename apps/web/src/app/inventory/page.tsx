@@ -5,7 +5,7 @@ import ManageInventoryClient from './manage/ManageInventoryClient'
 import PageHeader from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { StatsBar } from '@/components/inventory/StatsBar'
+import { StatsBar, type InventoryStats } from '@/components/inventory/StatsBar'
 import { getBackendUrl } from '@/lib/backend-url'
 
 export const dynamic = 'force-dynamic'
@@ -29,14 +29,15 @@ interface ApiProduct {
   childCount?: number
 }
 
-interface InventoryStats {
-  total: number
-  synced: number
-  lowStock: number
-  lastSync: string | null
+const FALLBACK_STATS: InventoryStats = {
+  masterProducts: 0,
+  totalSKUs: 0,
+  standalone: 0,
+  variations: 0,
+  syncedToAmazon: 0,
+  lowStock: 0,
+  lastSync: null,
 }
-
-const FALLBACK_STATS: InventoryStats = { total: 0, synced: 0, lowStock: 0, lastSync: null }
 
 async function loadInventory(): Promise<{
   items: InventoryItem[]
