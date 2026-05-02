@@ -160,28 +160,23 @@ export async function ebayOrdersRoutes(app: FastifyInstance) {
           })
         }
 
-        // Get order statistics
-        const totalOrders = await (prisma as any).order.count({
-          where: {
-            salesChannel: 'EBAY',
-          },
+        // Phase 26 unified Order schema uses `channel` (OrderChannel
+        // enum) and `totalPrice` Decimal. The original code referenced
+        // pre-Phase-26 names (salesChannel / totalAmount) which threw
+        // at runtime. See TECH_DEBT #33 for the broader orders-service
+        // rewrite — this endpoint is the lightweight read path so the
+        // field rename gets it back to green on its own.
+        const totalOrders = await prisma.order.count({
+          where: { channel: 'EBAY' },
         })
 
-        const totalItems = await (prisma as any).orderItem.count({
-          where: {
-            order: {
-              salesChannel: 'EBAY',
-            },
-          },
+        const totalItems = await prisma.orderItem.count({
+          where: { order: { channel: 'EBAY' } },
         })
 
-        const totalRevenue = await (prisma as any).order.aggregate({
-          where: {
-            salesChannel: 'EBAY',
-          },
-          _sum: {
-            totalAmount: true,
-          },
+        const totalRevenue = await prisma.order.aggregate({
+          where: { channel: 'EBAY' },
+          _sum: { totalPrice: true },
         })
 
         return reply.send({
@@ -189,7 +184,7 @@ export async function ebayOrdersRoutes(app: FastifyInstance) {
           stats: {
             totalOrders,
             totalItems,
-            totalRevenue: totalRevenue._sum.totalAmount || 0,
+            totalRevenue: totalRevenue._sum.totalPrice ?? 0,
             lastSyncAt: connection.lastSyncAt,
             lastSyncStatus: connection.lastSyncStatus,
           },

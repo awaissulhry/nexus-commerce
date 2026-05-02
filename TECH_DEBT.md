@@ -296,20 +296,13 @@ Same shape as the channels facet; mostly a typing exercise.
 
 When the schema-drift CI gate landed, it caught **two more orphans** beyond `Image` — both are tracked here as concrete tickets. The drift check allow-lists them by name with a pointer back to these entries, so the gate can pass while we work them off.
 
-## 31. 🔴 ChannelConnection — model in schema, no Postgres table, eBay flow broken at runtime
+## 31. ✅ ChannelConnection — resolved 2026-05-03
 
-**Symptom:** `prisma.channelConnection` is referenced in ~12 sites across `apps/api/src/routes/ebay-auth.ts`, `apps/api/src/routes/ebay.routes.ts`, and `apps/api/src/services/ebay-auth.service.ts`. The entire eBay OAuth + listing path goes through it. **No migration creates the table.** Same root cause as the `Image` bug — TypeScript compiles, runtime crashes the moment a user starts the eBay auth flow.
+Migration `20260503_p0_31_channel_connection` adds the `ChannelConnection` table + indexes. Same migration also fixes substantial column-level drift on `VariantChannelListing` that the audit surfaced — `channelConnectionId`, `externalListingId`, `externalSku`, `listingUrl`, `currentPrice`, `quantity`, `quantitySold` were all in `schema.prisma` but never migrated, so the listing-sync endpoints would crash even with the new ChannelConnection table. `channelId` was also relaxed from `NOT NULL` to nullable to allow eBay rows that key off `channelConnectionId` instead of the legacy `Channel.id`. FK from `VariantChannelListing.channelConnectionId` → `ChannelConnection.id` now in place.
 
-**Surfaced at:** `packages/database/scripts/check-schema-drift.mjs` flagged it the first time it ran. Almost certainly broken in production today; we just haven't tested the eBay-auth path since the model was added to the schema.
+Drift gate allow-list removed `ChannelConnection`; remaining allow-list entries are just `DraftListing` (TECH_DEBT #32).
 
-**Workaround:** None — eBay auth flow does not work in production until this is fixed.
-
-**Proper fix (one of):**
-
-1. **Write the migration** — read `model ChannelConnection { … }` in `schema.prisma`, generate a `CREATE TABLE` migration that matches it (`npx prisma migrate dev --name add_channel_connection_table` will do it for you against a local Postgres). Ship. Verify the eBay auth flow.
-2. **Switch to an existing table** — if `ChannelConnection` is functionally what `Marketplace` or `ChannelListing` already does, refactor the eBay code to use those instead. Probably not — the field shapes differ.
-
-Verify with the live API before declaring done — hit the eBay auth endpoint and confirm a connection row gets written without a 500.
+Verified at Phase 1 push: `/api/ebay/auth/create-connection` returns 201 (was 500), drift gate passes with 45 models / 1 allow-list entry. The OAuth callback flow itself is end-to-end-tested at Gate 1 by the user connecting a real eBay account.
 
 ## 32. 🟢 DraftListing — orphan model, zero callers
 
@@ -322,15 +315,47 @@ Verify with the live API before declaring done — hit the eBay auth endpoint an
 1. **Delete the model.** Lowest-risk default — if no code uses it, the schema doesn't need to describe it. Ship a one-line schema.prisma diff and remove the allow-list line.
 2. **Land the migration.** Only if there's a concrete plan to use it in the next sprint. Otherwise option 1 is correct (YAGNI).
 
+## 33. 🟡 ebay-orders.service.ts targets pre-Phase-26 Order schema
+
+**Symptom:** Surfaced by the P0 #31 audit. `apps/api/src/services/ebay-orders.service.ts` writes orders using field names from a previous Order schema iteration (Phase < 26):
+
+| In code | Actual schema |
+|---|---|
+| `salesChannel` | `channel` (`OrderChannel` enum) |
+| `ebayOrderId` | `channelOrderId` |
+| `purchaseDate` | `createdAt` |
+| `lastUpdateDate` | `updatedAt` |
+| `fulfillmentChannel` | (does not exist — moved to per-item or to `ebayMetadata`) |
+| `buyerName` | `customerName` |
+| `buyerEmail` | `customerEmail` |
+| `buyerPhone` | (does not exist) |
+| `totalAmount` | `totalPrice` (Decimal) |
+| `currencyCode` | (does not exist on Order — needs to live in `ebayMetadata` or a new column) |
+
+The field divergence happened during the Phase 26 unified-Order-Command refactor (schema.prisma comment at line 1182 confirms). The eBay orders service was not updated to match.
+
+**Affected endpoint:** `POST /api/sync/ebay/orders` (registered at `app.register(ebayOrdersRoutes)`). Hitting this triggers an `Order.create` with all the wrong field names → Prisma will reject. The user-flow that triggers it is the `/settings/channels` "Sync orders" button, which they haven't pressed yet (Amazon-IT-only so far).
+
+**Already fixed by P0 #31:** The lightweight stats endpoint `GET /api/sync/ebay/orders/stats/:connectionId` had the same `salesChannel`/`totalAmount` mismatch and got renamed inline (low scope, no schema dependency). Just rewriting `processOrder()` is the substantial part.
+
+**Proper fix:** Rewrite `processOrder()` and the surrounding shape adapters in `ebay-orders.service.ts` to match Phase 26's `Order` model:
+- Map eBay's `orderId` → `channelOrderId`, `channel: 'EBAY'`
+- Map `pricingSummary.total` → `totalPrice` (Decimal — coerce from float)
+- Move `currencyCode`, `purchaseDate`, `lastUpdateDate`, `fulfillmentStatus` into `ebayMetadata` JSON
+- Map `buyer.username` → `customerName`, `buyer.email` → `customerEmail`
+- Update OrderItem mapping similarly
+
+Estimated 1–2h. Out of P0 #31 scope; do as soon as Xavia actually wants eBay orders synced (they don't yet).
+
 ---
 
 ## Triage summary
 
 **🔴 P0 — tackle next:**
-- **0** ✅ Schema-migration drift gate landed 2026-05-02 (script + npm script + .githooks/pre-push). Allow-list captures pre-existing drift that's worked off via 31/32.
+- **0** ✅ Schema-migration drift gate landed 2026-05-02 (script + npm script + .githooks/pre-push). Allow-list down to 1 (DraftListing only).
 - **8** ✅ Resolved 2026-05-02 — verified GTIN wizard validator was already on the correct ProductImage relation; deleted the orphan `Image` model + dead Express service & route (~1,213 lines). Demoted to P2 for the remaining UX polish.
 - **27** ✅ Resolved 2026-05-02 — TerminologyPreference table + CRUD API + AI prompt injection + admin UI at `/settings/terminology`. Seeded with 7 Xavia/IT entries (Giacca, Pantaloni, Casco, Stivali, Protezioni, Pelle, Rete). Verify post-deploy that "Giacca" wins consistently in regenerations; add new preferences inline as drift surfaces.
-- **31** ChannelConnection has no migration — eBay OAuth + listing path is broken at runtime, just not exercised yet
+- **31** ✅ Resolved 2026-05-03 — migration `20260503_p0_31_channel_connection` adds the table + fixes substantial column-level drift on `VariantChannelListing` surfaced by the audit. eBay auth + listing flows are now operational; orders flow has separate refactor work tracked at #33.
 
 **🟡 P1 — backlog (informed by real usage):**
 - **1** `@fastify/compress` empty body on `/api/orders` (workaround in place)
@@ -344,6 +369,7 @@ Verify with the live API before declaring done — hit the eBay auth endpoint an
 - **28** Listing wizard multi-marketplace apply — was P2 #13, **promoted** based on usage signal
 - **29** `/products` "needs photos" filter (and sibling hygiene filters)
 - **30** `/products` show + filter by category / productType
+- **33** Rewrite `ebay-orders.service.ts` against Phase 26 unified Order schema (orders sync flow currently broken)
 
 **🟢 P2 — when in the area:**
 - **4** CategorySchema "unknown" rows

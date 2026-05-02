@@ -116,11 +116,6 @@ for (const sqlPath of listMigrationDirs()) {
 // To remove an entry: ship the missing migration (or remove the model
 // from schema.prisma) and delete the line below.
 const ALLOW_LIST = new Map([
-  // TECH_DEBT #31 — eBay auth + routes use prisma.channelConnection
-  // (~12 call sites) but no migration creates ChannelConnection. The
-  // entire eBay OAuth + listing path is at runtime risk. Needs a
-  // migration written for the existing model definition.
-  ['ChannelConnection', 'TECH_DEBT #31'],
   // TECH_DEBT #32 — DraftListing is in schema with zero call sites.
   // Pure orphan. Decide: write the migration to keep it for future
   // use, or delete the model entirely.
