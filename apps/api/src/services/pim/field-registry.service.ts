@@ -186,13 +186,25 @@ interface AvailableFieldsParams {
   productTypes?: string[]
   channels?: string[]
   marketplaces?: string[]
+  /** Single marketplace code (IT, DE, US…) used to look up cached
+   *  CategorySchema rows. When omitted, dynamic schema fields are not
+   *  included — only the hardcoded fallback. */
+  marketplace?: string | null
 }
 
 /**
  * Compose the field set for a given context. The order matters — column
  * selectors and templates render in this order by default.
+ *
+ * D.3g: when `marketplace` is set and `productTypes` is non-empty, we
+ * also pull dynamic category fields from CategorySchema (cached
+ * Amazon schemas). Hardcoded fields remain as a fallback for
+ * categories that haven't been fetched yet, and are merged with
+ * dynamic ones (dynamic wins on duplicate id).
  */
-export function getAvailableFields(params: AvailableFieldsParams = {}): FieldDefinition[] {
+export async function getAvailableFields(
+  params: AvailableFieldsParams = {},
+): Promise<FieldDefinition[]> {
   const fields: FieldDefinition[] = [
     ...UNIVERSAL_FIELDS,
     ...PRICING_FIELDS,
@@ -201,34 +213,69 @@ export function getAvailableFields(params: AvailableFieldsParams = {}): FieldDef
     ...PHYSICAL_FIELDS,
   ]
 
-  // Category-specific fields based on product types
   const types = (params.productTypes ?? []).filter(Boolean)
+  const channels = (params.channels ?? []).map((c) => c.toUpperCase())
+
+  // ── Dynamic category fields (Amazon, when marketplace + productTypes set)
+  // We intentionally only consult cached schemas — no live SP-API calls
+  // on the column-list path, which is hit on every page load. The
+  // schema-sync service is responsible for keeping the cache fresh.
+  const dynamicFields: FieldDefinition[] = []
+  if (
+    types.length > 0 &&
+    params.marketplace &&
+    channels.includes('AMAZON')
+  ) {
+    try {
+      const cached = await loadCachedSchemas(params.marketplace, types)
+      for (const row of cached) {
+        const fromSchema = (
+          await import('./schema-to-fields.js')
+        ).schemaToFieldDefinitions({
+          productType: row.productType,
+          schemaDefinition: row.schemaDefinition,
+        })
+        dynamicFields.push(...fromSchema)
+      }
+    } catch {
+      // Swallow — fallthrough to hardcoded fields below.
+    }
+  }
+
+  // ── Hardcoded category fallback (used as a backstop and for types
+  //    that don't have a cached schema yet).
   for (const pt of types) {
     fields.push(...getCategorySpecificFields(pt))
   }
 
-  // Channel-specific fields
-  const channels = (params.channels ?? []).map((c) => c.toUpperCase())
   if (channels.includes('AMAZON')) fields.push(...AMAZON_FIELDS)
   if (channels.includes('EBAY')) fields.push(...EBAY_FIELDS)
 
-  // De-dupe by id (a field could legitimately appear twice if the
-  // caller passes overlapping productTypes; first one wins)
+  // De-dupe by id. Dynamic schema fields take precedence over the
+  // hardcoded ones — when both exist, the live schema wins.
+  const result: FieldDefinition[] = []
   const seen = new Set<string>()
-  return fields.filter((f) => {
-    if (seen.has(f.id)) return false
+  for (const f of [...dynamicFields, ...fields]) {
+    if (seen.has(f.id)) continue
     seen.add(f.id)
-    return true
-  })
+    result.push(f)
+  }
+  return result
 }
 
 /**
- * Lookup a single field by id. Used by the bulk-patch endpoint in D.3
- * to validate incoming change IDs against the registry.
+ * Lookup a single field by id. Used by the bulk-patch endpoint to
+ * validate incoming change IDs against the registry.
+ *
+ * D.3g: dynamic resolution — when an attr_* id isn't in the static
+ * registry, we scan cached CategorySchema rows for a matching field.
+ * The optional `context` narrows the search and is recommended when
+ * multiple categories define the same attr name.
  */
-export function getFieldDefinition(id: string): FieldDefinition | undefined {
-  // The full set of static fields, regardless of context, so the
-  // bulk-patch endpoint can recognise any field id.
+export async function getFieldDefinition(
+  id: string,
+  context: { marketplace?: string | null; productTypes?: string[] } = {},
+): Promise<FieldDefinition | undefined> {
   const all: FieldDefinition[] = [
     ...UNIVERSAL_FIELDS,
     ...PRICING_FIELDS,
@@ -239,5 +286,55 @@ export function getFieldDefinition(id: string): FieldDefinition | undefined {
     ...EBAY_FIELDS,
     ...Object.values(CATEGORY_FIELDS_BY_TYPE).flat(),
   ]
-  return all.find((f) => f.id === id)
+  const staticHit = all.find((f) => f.id === id)
+  if (staticHit) return staticHit
+
+  // Dynamic resolution for attr_* ids — scan cached schemas.
+  if (!id.startsWith('attr_')) return undefined
+  if (!context.marketplace) return undefined
+
+  try {
+    const types = (context.productTypes ?? []).filter(Boolean)
+    const cached = await loadCachedSchemas(context.marketplace, types)
+    for (const row of cached) {
+      const fromSchema = (
+        await import('./schema-to-fields.js')
+      ).schemaToFieldDefinitions({
+        productType: row.productType,
+        schemaDefinition: row.schemaDefinition,
+      })
+      const hit = fromSchema.find((f) => f.id === id)
+      if (hit) return hit
+    }
+  } catch {
+    /* fall through */
+  }
+  return undefined
+}
+
+/**
+ * Find the most recently fetched CategorySchema row for each requested
+ * productType in the given marketplace. We prefer fresh (non-expired)
+ * rows; if none exist, the most recent stale row is still useful for
+ * UI rendering. Live refresh of expired rows happens via the
+ * GET /api/categories/schema endpoint.
+ */
+async function loadCachedSchemas(
+  marketplace: string,
+  productTypes: string[],
+) {
+  if (productTypes.length === 0) return []
+  // Lazy import to avoid pulling Prisma into modules that don't need
+  // it — tests and the static path stay fast.
+  const { default: prisma } = await import('../../db.js')
+  return prisma.categorySchema.findMany({
+    where: {
+      channel: 'AMAZON',
+      marketplace,
+      productType: { in: productTypes },
+      isActive: true,
+    },
+    orderBy: { fetchedAt: 'desc' },
+    distinct: ['productType'],
+  })
 }

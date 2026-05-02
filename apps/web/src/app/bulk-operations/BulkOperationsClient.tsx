@@ -1033,12 +1033,18 @@ export default function BulkOperationsClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marketplaceContext?.channel, marketplaceContext?.marketplace])
 
-  // Refetch fields when channels/productTypes change
+  // Refetch fields when channels/productTypes/marketplace change.
+  // D.3g: passing `marketplace` lets the backend pull live category
+  // attributes from cached Amazon schemas (CategorySchema). Without
+  // it we get the static fallback set only.
   useEffect(() => {
     const params = new URLSearchParams()
     if (enabledChannels.length) params.set('channels', enabledChannels.join(','))
     if (enabledProductTypes.length)
       params.set('productTypes', enabledProductTypes.join(','))
+    if (marketplaceContext?.marketplace) {
+      params.set('marketplace', marketplaceContext.marketplace)
+    }
     const qs = params.toString()
     const url = `${getBackendUrl()}/api/pim/fields${qs ? `?${qs}` : ''}`
 
@@ -1053,7 +1059,7 @@ export default function BulkOperationsClient() {
     return () => {
       cancelled = true
     }
-  }, [enabledChannels, enabledProductTypes])
+  }, [enabledChannels, enabledProductTypes, marketplaceContext?.marketplace])
 
   // ── Build columns dynamically from registry + visibility ──────────
   const fieldsById = useMemo(() => {

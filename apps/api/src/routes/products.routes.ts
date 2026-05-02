@@ -14,18 +14,26 @@ import {
 const productsRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/pim/fields — return field definitions for the column
   // selector. Optional filters:
-  //   ?channels=AMAZON,EBAY     — include those channels' fields
-  //   ?productTypes=OUTERWEAR   — include category-specific fields
-  // Cached 5 min since registry is static at runtime.
+  //   ?channels=AMAZON,EBAY      — include those channels' fields
+  //   ?productTypes=OUTERWEAR    — include category-specific fields
+  //   ?marketplace=IT            — pull dynamic Amazon schema fields
+  //                                from cached CategorySchema rows
+  // Cached 5 min — registry is mostly static; dynamic fields are
+  // already DB-backed so the cost of refetching is small.
   fastify.get('/pim/fields', async (request, reply) => {
     reply.header('Cache-Control', 'private, max-age=300')
-    const q = request.query as { channels?: string; productTypes?: string }
-    const fields = getAvailableFields({
+    const q = request.query as {
+      channels?: string
+      productTypes?: string
+      marketplace?: string
+    }
+    const fields = await getAvailableFields({
       channels: q.channels?.split(',').map((s) => s.trim()).filter(Boolean),
       productTypes: q.productTypes
         ?.split(',')
         .map((s) => s.trim())
         .filter(Boolean),
+      marketplace: q.marketplace ?? null,
     })
     return { fields, count: fields.length }
   })
@@ -258,11 +266,15 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         errors.push({ id: c.id, field: c.field ?? '', error: 'Field not editable' })
         continue
       }
-      // For attr_* fields, the registry must have it AND be editable
-      // (e.g., attr_armorType is editable, but a hypothetical typo
-      // like attr_unknown wouldn't be).
+      // For attr_* fields, the registry must have it AND be editable.
+      // D.3g: getFieldDefinition is now async and falls back to the
+      // cached Amazon schemas when the id isn't in the static
+      // hardcoded list — so any field exposed by /api/pim/fields with
+      // a marketplace context is also acceptable here.
       if (isAttr) {
-        const def = getFieldDefinition(c.field)
+        const def = await getFieldDefinition(c.field, {
+          marketplace: marketplaceContext?.marketplace ?? null,
+        })
         if (!def || !def.editable) {
           errors.push({
             id: c.id,
