@@ -42,3 +42,11 @@ Found during the sidebar audit but not linked from `AppSidebar.tsx`. They show u
 **Workaround:** None — just orphans. They expire 24h after creation and don't break anything.
 
 **Proper fix:** Either let them age out and run a one-shot `DELETE FROM "CategorySchema" WHERE "schemaVersion" = 'unknown'` at any point, or accept and ignore. Worth a single cleanup migration if we touch this area again.
+
+## 5. Bulk-ops spreadsheet: type-to-replace not yet wired
+
+**Symptom:** In Excel, typing a printable key with a cell selected (no edit mode) starts a fresh edit — the typed character replaces the cell's value. Step 5 of the spreadsheet selection rollout shipped F2 / Enter / double-click to enter edit mode but skipped type-to-replace.
+
+**Why deferred:** Implementing it cleanly requires a global `keydown` listener with input-element exclusions (search bar, marketplace selector, header filters, modals) and careful interaction with browser shortcuts. Independently testable in a follow-up — flagged here so we don't forget it.
+
+**Proper fix:** Add a window keydown listener gated on `document.activeElement?.tagName !== 'INPUT' && tagName !== 'TEXTAREA' && !isContentEditable`, ignore modifier-key chords, and on a printable key press call `enterEdit(active.row, active.col, prefillValue=key)`. Verify modals (CascadeChoiceModal, PreviewChangesModal, MarketplaceSelector) still capture their own keys.

@@ -168,6 +168,30 @@ const hierarchyCtxRef: { current: HierarchyCtx } = {
   },
 }
 
+// ── Selection ctx (Step 1) ───────────────────────────────────────────
+// Selection lives in React state but we expose the imperative `select`
+// callback through a module-level ref so the cell-wrapper handler can
+// stay stable across renders (no extra prop on TableRow's memo).
+interface SelectCtx {
+  select: (rowIdx: number, colIdx: number, shift: boolean) => void
+}
+
+const selectCtxRef: { current: SelectCtx } = {
+  current: { select: () => {} },
+}
+
+interface CellCoord {
+  rowIdx: number
+  colIdx: number
+}
+
+interface SelectionState {
+  /** Where the range starts (first click). */
+  anchor: CellCoord | null
+  /** Active cell — where typing/edits land; the moving end of the range. */
+  active: CellCoord | null
+}
+
 function makeEditableRenderer(meta: EditableMeta) {
   return function EditableCellRenderer(ctx: CellContext<BulkProduct, unknown>) {
     const value = ctx.getValue()
@@ -541,17 +565,40 @@ function SkuCell({
 }
 
 // ── Memoized row ──────────────────────────────────────────────────────
+//
+// Step 1 selection: the row receives three primitive selection props
+// computed in the parent's virtualizer loop. The memo comparator
+// includes them so a row only re-renders when this row gains/loses
+// range-membership or active-cell focus — not when *any* selection
+// changes anywhere in the grid.
 const TableRow = memo(
   function TableRow({
     row,
+    rowIdx,
     top,
+    selRangeColMin,
+    selRangeColMax,
+    selActiveColIdx,
   }: {
     row: Row<BulkProduct>
+    rowIdx: number
     top: number
     /** Bumped when the visible-column set changes; forces a row
      * re-render so cells map onto the new columns. */
     columnsKey: string
+    /** Minimum/maximum column index of the selection range that
+     *  intersects this row, or -1 if no intersection. */
+    selRangeColMin: number
+    selRangeColMax: number
+    /** Column index of the active cell within this row, -1 if active
+     *  cell isn't on this row. */
+    selActiveColIdx: number
   }) {
+    const hier = (row.original as Partial<HierarchyRow>)._hier
+    const isAggregateRow =
+      hierarchyCtxRef.current.mode === 'hierarchy' &&
+      hier?.level === 0 &&
+      hier?.hasChildren
     return (
       <div
         className="absolute left-0 right-0 flex border-b border-slate-100 hover:bg-slate-50/70"
@@ -561,22 +608,63 @@ const TableRow = memo(
           willChange: 'transform',
         }}
       >
-        {row.getVisibleCells().map((cell) => (
-          <div
-            key={cell.id}
-            className="overflow-hidden border-r border-slate-100/60 last:border-r-0"
-            style={{ width: cell.column.getSize(), flexShrink: 0 }}
-          >
-            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-          </div>
-        ))}
+        {row.getVisibleCells().map((cell, colIdx) => {
+          const inRange =
+            selRangeColMin !== -1 &&
+            colIdx >= selRangeColMin &&
+            colIdx <= selRangeColMax
+          const isActive = selActiveColIdx === colIdx
+          // Parent aggregate cells (Sum stock, basePrice on a parent
+          // in hierarchy mode) render a non-interactive aggregate
+          // value — exclude them from selection per the spec.
+          const fieldId = (cell.column.columnDef.meta as any)?.fieldDef
+            ?.id as string | undefined
+          const isParentAggregateCell =
+            isAggregateRow &&
+            fieldId !== undefined &&
+            isAggregatableField(fieldId)
+          const selectable = !isParentAggregateCell
+          return (
+            <div
+              key={cell.id}
+              onMouseDown={
+                selectable
+                  ? (e) => {
+                      if (e.button !== 0) return
+                      // Shift+click extends and must not enter edit
+                      // mode; let plain click bubble so EditableCell
+                      // still goes into edit on the same gesture.
+                      if (e.shiftKey) {
+                        e.preventDefault()
+                        e.stopPropagation()
+                      }
+                      selectCtxRef.current.select(rowIdx, colIdx, e.shiftKey)
+                    }
+                  : undefined
+              }
+              className={cn(
+                'overflow-hidden border-r border-slate-100/60 last:border-r-0 relative',
+                inRange && !isActive && 'bg-blue-50/60',
+                isActive &&
+                  'ring-2 ring-blue-500 ring-inset z-10'
+              )}
+              style={{ width: cell.column.getSize(), flexShrink: 0 }}
+            >
+              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+            </div>
+          )
+        })}
       </div>
     )
   },
   (prev, next) =>
     prev.row.original === next.row.original &&
+    prev.rowIdx === next.rowIdx &&
     prev.top === next.top &&
-    (prev as any).columnsKey === (next as any).columnsKey
+    (prev as any).columnsKey === (next as any).columnsKey &&
+    prev.selRangeColMin === next.selRangeColMin &&
+    prev.selRangeColMax === next.selRangeColMax &&
+    prev.selActiveColIdx === next.selActiveColIdx
 )
 
 function SkeletonRow({ top, colCount }: { top: number; colCount: number }) {
@@ -628,6 +716,42 @@ export default function BulkOperationsClient() {
   const [marketplaceContext, setMarketplaceContext] =
     useState<MarketplaceContext | null>(null)
   const [marketplaceOptions, setMarketplaceOptions] = useState<MarketplaceOption[]>([])
+
+  // ── Step 1 selection state ──────────────────────────────────────
+  const [selection, setSelection] = useState<SelectionState>({
+    anchor: null,
+    active: null,
+  })
+  const select = useCallback(
+    (rowIdx: number, colIdx: number, shift: boolean) => {
+      setSelection((prev) =>
+        shift && prev.anchor
+          ? { anchor: prev.anchor, active: { rowIdx, colIdx } }
+          : {
+              anchor: { rowIdx, colIdx },
+              active: { rowIdx, colIdx },
+            },
+      )
+    },
+    [],
+  )
+  selectCtxRef.current.select = select
+  const rangeBounds = useMemo(() => {
+    if (!selection.anchor || !selection.active) return null
+    return {
+      minRow: Math.min(selection.anchor.rowIdx, selection.active.rowIdx),
+      maxRow: Math.max(selection.anchor.rowIdx, selection.active.rowIdx),
+      minCol: Math.min(selection.anchor.colIdx, selection.active.colIdx),
+      maxCol: Math.max(selection.anchor.colIdx, selection.active.colIdx),
+    }
+  }, [selection])
+  const selectedCellCount = useMemo(() => {
+    if (!rangeBounds) return 0
+    return (
+      (rangeBounds.maxRow - rangeBounds.minRow + 1) *
+      (rangeBounds.maxCol - rangeBounds.minCol + 1)
+    )
+  }, [rangeBounds])
 
   // Hydrate localStorage state on mount
   useEffect(() => {
@@ -1347,12 +1471,27 @@ export default function BulkOperationsClient() {
                 />
               )
             const row = rows[vRow.index]
+            const rowIdx = vRow.index
+            const inRange =
+              rangeBounds &&
+              rowIdx >= rangeBounds.minRow &&
+              rowIdx <= rangeBounds.maxRow
+            const selRangeColMin = inRange ? rangeBounds!.minCol : -1
+            const selRangeColMax = inRange ? rangeBounds!.maxCol : -1
+            const selActiveColIdx =
+              selection.active && selection.active.rowIdx === rowIdx
+                ? selection.active.colIdx
+                : -1
             return (
               <TableRow
                 key={row.id}
                 row={row}
+                rowIdx={rowIdx}
                 top={vRow.start}
                 columnsKey={columnsKey}
+                selRangeColMin={selRangeColMin}
+                selRangeColMax={selRangeColMax}
+                selActiveColIdx={selActiveColIdx}
               />
             )
           })}
@@ -1372,6 +1511,7 @@ export default function BulkOperationsClient() {
         pendingCount={pendingCount}
         fetchMs={fetchMs}
         loading={loading}
+        selectedCellCount={selectedCellCount}
       />
 
       <PreviewChangesModal
@@ -1400,11 +1540,15 @@ function StatusBar({
   pendingCount,
   fetchMs,
   loading,
+  selectedCellCount,
 }: {
   status: SaveStatus
   pendingCount: number
   fetchMs: number | null
   loading: boolean
+  /** 0 when nothing is selected; otherwise how many cells the
+   *  current range covers. */
+  selectedCellCount: number
 }) {
   const left = (() => {
     if (loading) return <span>Fetching…</span>
@@ -1459,8 +1603,13 @@ function StatusBar({
       )}
     >
       <span className="flex items-center gap-1.5">{left}</span>
-      <span className="text-slate-500">
-        {fetchMs != null ? `Initial fetch: ${fetchMs}ms` : ''}
+      <span className="flex items-center gap-3 text-slate-500">
+        {selectedCellCount > 1 && (
+          <span className="tabular-nums">
+            {selectedCellCount} cells selected
+          </span>
+        )}
+        {fetchMs != null && <span>Initial fetch: {fetchMs}ms</span>}
       </span>
     </div>
   )
