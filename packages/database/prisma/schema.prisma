@@ -204,7 +204,6 @@ model Product {
   // Relations
   variations          ProductVariation[]
   images              ProductImage[]
-  cloudImages         Image[]  @relation("ProductImages")  // Phase 31: Cloud image management
   channelListings     ChannelListing[]
   channelListingImages ChannelListingImage[]
   listings            Listing[]
@@ -679,60 +678,11 @@ model ProductImage {
   updatedAt DateTime @updatedAt
 }
 
-// ── PHASE 31: Image Management System with Color-Based Variant Assignment ────
-
-model Image {
-  id                String   @id @default(cuid())
-  
-  // ── Product Reference ──────────────────────────────────────────────
-  product           Product  @relation("ProductImages", fields: [productId], references: [id], onDelete: Cascade)
-  productId         String
-  
-  // ── Image Data ─────────────────────────────────────────────────────
-  url               String   // Cloud storage URL (mock or real)
-  alt               String?  // Alt text for accessibility
-  type              String   @default("ALT") // MAIN, ALT, LIFESTYLE, SWATCH
-  sortOrder         Int      @default(0)
-  
-  // ── Color-Based Variant Assignment ─────────────────────────────────
-  // Detected dominant color (hex format: #RRGGBB)
-  dominantColor     String?  // e.g., "#FF5733"
-  
-  // Color confidence (0-100): how confident the system is about the color
-  colorConfidence   Int      @default(0)
-  
-  // Assigned variants (JSON array of variant IDs that match this color)
-  // Structure: ["variant-id-1", "variant-id-2"]
-  assignedVariants  String[] @default([])
-  
-  // Manual color override (if user wants to override auto-detection)
-  colorOverride     String?  // e.g., "Red", "Blue", "Black"
-  
-  // ── Hero/Primary Image Toggle ──────────────────────────────────────
-  // When true, this is the primary image for the product
-  isHero            Boolean  @default(false)
-  
-  // ── Cloud Storage Metadata ─────────────────────────────────────────
-  // Stores cloud provider info: { "provider": "mock", "bucket": "nexus-images", "key": "..." }
-  storageMetadata   Json?
-  
-  // ── Upload Status ──────────────────────────────────────────────────
-  uploadStatus      String   @default("PENDING") // PENDING, UPLOADING, SUCCESS, FAILED
-  uploadError       String?  // Error message if upload failed
-  
-  // ── Marketplace-Specific Metadata ──────────────────────────────────
-  // Amazon: { asin, imageType }
-  // eBay: { pictureURL, galleryType }
-  // Shopify: { shopifyImageId }
-  platformMetadata  Json?
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
-  @@index([productId])
-  @@index([dominantColor])
-  @@index([uploadStatus])
-}
+// (Phase 31 Image model removed 2026-05-02 — see RESTORATION_NOTES.
+// The model was orphaned: no migration created the table, and the
+// only callers — apps/api/src/services/image.service.ts and
+// apps/api/src/routes/images.ts — were Express dead code never
+// registered with the Fastify app. Use ProductImage instead.)
 
 model MarketplaceSync {
   id             String   @id @default(cuid())

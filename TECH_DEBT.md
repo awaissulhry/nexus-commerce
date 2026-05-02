@@ -124,13 +124,13 @@ Each row a child variation. Has the same "create new product" can-of-worms as D.
 
 For all three: the v1 ZIP parser already surfaces them as preview warnings ("12 image files in 3 folders ignored — coming in D.5.5"), so users get a graceful fail-soft rather than silent drop or hard error.
 
-## 8. 🔴 Phase 5.4 — image upload from inside the wizard (also: Image-model crash risk, see entry 0)
+## 8. 🟢 Phase 5.4 — image upload from inside the wizard
 
-The v1 GTIN-exemption wizard reads the master product's existing images via the `Image` model and validates whatever is there. If a product has fewer than 9 images we surface a message asking the user to add more on the product edit page, then re-run validation. That round trip is awkward.
+**Crash-risk hypothesis was wrong.** Verified 2026-05-02: the GTIN-exemption wizard's image validator path was already on the correct relation (`prisma.product.findMany({ select: { images: { select: { url: true } } } })` in `gtin-exemption.routes.ts`) — `images` is `ProductImage`, not the orphan `Image` model. Live test against the existing Xavia DRAFT (`POST /api/gtin-exemption/cmooff80g0000mx01pn0ijngl/validate-images`) returned 200 with the expected empty validation set. No change needed.
 
-**🔴 Crash risk** — same root cause as entry 0. The `Image` model has no Postgres table, so the Step-2 image validator is almost certainly broken at runtime. **Verify on next session before trusting the GTIN-exemption flow.** Either swap the wizard to `ProductImage` or land the missing migration before any user opens this path.
+The orphan `Image` model + its dead-code service (`image.service.ts`) + Express dead-code route (`routes/images.ts`, never wired into Fastify) were deleted in the same P0 #8 commit (~1,213 lines removed). The `cloudImages` relation came off `Product`. Schema is now consistent — drift gate shows 44 models, all with migrations.
 
-**Proper fix (UX):** an upload-from-wizard control inside Step 2 that adds images directly to the product (via the existing image upload pipeline once Cloudinary is verified — see TECH_DEBT entry on D.5.5). Re-runs validation automatically after each upload.
+**Remaining UX work** (now P2): an upload-from-wizard control inside Step 2 that adds images directly to the product (via a real image upload pipeline once Cloudinary is verified — see TECH_DEBT entry on D.5.5). Re-runs validation automatically after each upload. Currently the user has to add images on the product edit page and re-run validation by hand — awkward, not blocking.
 
 ## 9. 🟢 Phase 5.4 → Phase 6 — vision-based image checks
 
@@ -327,8 +327,8 @@ Verify with the live API before declaring done — hit the eBay auth endpoint an
 ## Triage summary
 
 **🔴 P0 — tackle next:**
-- **0** Schema-migration drift gate ✅ landed 2026-05-02 (script + npm script + .githooks/pre-push). Allow-list captures pre-existing drift that's worked off via 8/31/32.
-- **8** Phase 5.4 GTIN wizard image validator likely crashes on the same `Image`-table-missing root cause — verify before next user touches the flow
+- **0** Schema-migration drift gate ✅ landed 2026-05-02 (script + npm script + .githooks/pre-push). Allow-list captures pre-existing drift that's worked off via 31/32.
+- **8** ✅ Resolved 2026-05-02 — verified GTIN wizard validator was already on the correct ProductImage relation; deleted the orphan `Image` model + dead Express service & route (~1,213 lines). Demoted to P2 for the remaining UX polish.
 - **27** Brand-terminology glossary for AI title generation (Giubbotto / Giacca regression actively undermining the 5.5 feature)
 - **31** ChannelConnection has no migration — eBay OAuth + listing path is broken at runtime, just not exercised yet
 
@@ -349,6 +349,7 @@ Verify with the live API before declaring done — hit the eBay auth endpoint an
 - **4** CategorySchema "unknown" rows
 - **5** Bulk-ops paste yellow-tint cosmetic
 - **7** D.5.5 ZIP image / channel / variant features
+- **8** Upload-from-wizard image control for GTIN Step 2 (UX polish; validator itself works)
 - **9–16** Phase 5.4 & 5.5 follow-ups (vision checks, implicit approval, rejection-fix loop, email inbox, telemetry, scoring, A+ content)
 - **19** `/products` single-product create form
 - **20** Faceted search counts

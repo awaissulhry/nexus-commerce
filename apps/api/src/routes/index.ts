@@ -23,7 +23,7 @@ import syncHealthRouter from './sync-health.routes.js';
 import { matrixRoutes } from './matrix.routes.js';
 import { ordersRoutes } from './orders.routes.js';
 import attributeInheritanceRouter from './attribute-inheritance.routes.js';
-import imagesRouter from './images.js';
+// images router (Phase 31) removed 2026-05-02 — see RESTORATION_NOTES
 
 /**
  * Setup all routes and middleware
@@ -103,21 +103,12 @@ export async function setupRoutes(app: Express): Promise<void> {
   app.use('/api/attributes', attributeInheritanceRouter);
   logger.info('Registered attribute-inheritance routes');
 
-  /**
-   * Images Routes (Phase 31)
-   * POST   /api/images/upload                    - Upload image
-   * GET    /api/images/:productId                - Get product images
-   * PUT    /api/images/:imageId/hero             - Set hero image
-   * PUT    /api/images/:imageId/color            - Update color override
-   * DELETE /api/images/:imageId                  - Delete image
-   * POST   /api/images/:productId/auto-assign    - Auto-assign to variants
-   * POST   /api/images/:imageId/assign-variants  - Manually assign variants
-   * GET    /api/images/:imageId/assigned-variants - Get assigned variants
-   * GET    /api/images/:productId/by-color/:color - Get images by color
-   * POST   /api/images/analyze-color            - Analyze image color
-   */
-  app.use('/api/images', imagesRouter);
-  logger.info('Registered images routes');
+  // (Phase 31 image-management routes removed 2026-05-02. The Image
+  // model was orphaned in schema.prisma without a migration; the
+  // Express-based routes/images.ts and services/image.service.ts are
+  // gone. ProductImage is the live image relation. This whole
+  // routes/index.ts file is also unused — `setupRoutes` is never
+  // imported. See TECH_DEBT and RESTORATION_NOTES for context.)
 
   // ============================================================================
   // Error Handling Middleware (Must be last)
