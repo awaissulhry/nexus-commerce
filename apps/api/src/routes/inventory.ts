@@ -543,6 +543,41 @@ export async function inventoryRoutes(app: FastifyInstance) {
     }
   );
 
+  // ── GET /inventory/stats ────────────────────────────────────────────
+  // Aggregate counters for the inventory page header. One call, four
+  // counts — beats four separate parallel fetches from the client.
+  app.get("/inventory/stats", async (request, reply) => {
+    try {
+      const where = { syncChannels: { has: "AMAZON" } };
+      const [total, synced, lowStock, lastSyncedRecord] = await Promise.all([
+        prisma.product.count({ where }),
+        prisma.product.count({
+          where: { ...where, amazonAsin: { not: null } },
+        }),
+        prisma.product.count({
+          where: { ...where, totalStock: { lt: 5 } },
+        }),
+        prisma.product.findFirst({
+          where: { ...where, lastAmazonSync: { not: null } },
+          orderBy: { lastAmazonSync: "desc" },
+          select: { lastAmazonSync: true },
+        }),
+      ]);
+      return reply.send({
+        total,
+        synced,
+        lowStock,
+        lastSync: lastSyncedRecord?.lastAmazonSync ?? null,
+      });
+    } catch (error: any) {
+      request.log.error(error, "get-inventory-stats failed");
+      return reply.status(500).send({
+        error: "Failed to fetch stats",
+        message: error?.message ?? "Unknown error",
+      });
+    }
+  });
+
   // ── GET /inventory/:id ──────────────────────────────────────────────
   // Single-product fetch (master fields). Used by /products/[id]/edit.
   // Children are fetched separately via /inventory/:id/children to keep
