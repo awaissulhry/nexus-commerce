@@ -325,17 +325,21 @@ async function loadCachedSchemas(
   marketplace: string,
   productTypes: string[],
 ) {
-  if (productTypes.length === 0) return []
   // Lazy import to avoid pulling Prisma into modules that don't need
   // it — tests and the static path stay fast.
   const { default: prisma } = await import('../../db.js')
+  const where: any = {
+    channel: 'AMAZON',
+    marketplace,
+    isActive: true,
+  }
+  // Empty productTypes means "all" — used by the PATCH validator,
+  // which doesn't know which type a given attr_* field belongs to.
+  if (productTypes.length > 0) {
+    where.productType = { in: productTypes }
+  }
   return prisma.categorySchema.findMany({
-    where: {
-      channel: 'AMAZON',
-      marketplace,
-      productType: { in: productTypes },
-      isActive: true,
-    },
+    where,
     orderBy: { fetchedAt: 'desc' },
     distinct: ['productType'],
   })
