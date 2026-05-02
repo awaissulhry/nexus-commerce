@@ -18,11 +18,22 @@ import {
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { produce } from 'immer'
-import { AlertCircle, CheckCircle2, WifiOff } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Lock, WifiOff } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
 import { EditableCell, type EditableMeta } from './EditableCell'
 import PreviewChangesModal from './PreviewChangesModal'
+import ColumnSelector, { type FieldDef } from './components/ColumnSelector'
+import {
+  loadAllViews,
+  saveUserView,
+  deleteUserView,
+  isDefaultView,
+  setActiveViewId,
+  getActiveViewId,
+  DEFAULT_VIEWS,
+  type SavedView,
+} from './lib/saved-views'
 import { cn } from '@/lib/utils'
 
 export interface BulkProduct {
@@ -51,6 +62,16 @@ export interface BulkProduct {
   syncChannels: string[]
   variantAttributes: unknown
   updatedAt: string
+  productType?: string | null
+  buyBoxPrice?: number | null
+  competitorPrice?: number | null
+  parentAsin?: string | null
+  shippingTemplate?: string | null
+  dimLength?: number | null
+  dimWidth?: number | null
+  dimHeight?: number | null
+  dimUnit?: string | null
+  [k: string]: unknown
 }
 
 interface CellChange {
@@ -78,56 +99,15 @@ type SaveStatus =
 const ROW_HEIGHT = 36
 const HEADER_HEIGHT = 36
 
-// ── Editable column metas ─────────────────────────────────────────────
-const META_NAME: EditableMeta = { editable: true, fieldType: 'text' }
-const META_BRAND: EditableMeta = { editable: true, fieldType: 'text' }
-const META_STATUS: EditableMeta = {
-  editable: true,
-  fieldType: 'select',
-  options: ['ACTIVE', 'DRAFT', 'INACTIVE'],
-}
-const META_CHANNEL: EditableMeta = {
-  editable: true,
-  fieldType: 'select',
-  options: ['FBA', 'FBM'],
-}
-const META_PRICE: EditableMeta = {
-  editable: true,
-  fieldType: 'number',
-  numeric: true,
-  prefix: '€',
-  format: (v) =>
-    v === null || v === undefined ? '' : Number(v).toFixed(2),
-}
-const META_STOCK: EditableMeta = {
-  editable: true,
-  fieldType: 'number',
-  numeric: true,
-  format: (v) =>
-    v === null || v === undefined ? '' : String(Math.floor(Number(v))),
-  parse: (raw) => {
-    if (raw === '' || raw === null) return null
-    const n = parseInt(raw, 10)
-    return Number.isNaN(n) ? raw : n
-  },
-}
-
-// ── Helpers passed to all editable cells via closure ──────────────────
+// ── Editable cell ctx ─────────────────────────────────────────────────
 interface EditCtx {
   onCommit: (rowId: string, columnId: string, value: unknown) => void
   cellErrors: Map<string, string>
 }
 
-function fmtMargin(cost: number | null, price: number): string {
-  if (cost == null || price <= 0) return ''
-  return `${((1 - cost / price) * 100).toFixed(0)}%`
-}
-
 const editCtxRef: { current: EditCtx } = {
   current: {
-    onCommit: () => {
-      /* no-op until parent wires it */
-    },
+    onCommit: () => {},
     cellErrors: new Map(),
   },
 }
@@ -149,101 +129,137 @@ function makeEditableRenderer(meta: EditableMeta) {
   }
 }
 
-const columns: ColumnDef<BulkProduct>[] = [
-  {
-    id: 'sku',
-    accessorKey: 'sku',
-    header: 'SKU',
-    size: 220,
-    cell: ({ getValue }) => (
-      <span className="font-mono text-[12px] text-slate-900 px-2">
-        {getValue<string>()}
+// ── FieldDef → ColumnDef conversion ───────────────────────────────────
+const PRICE_FIELDS = new Set([
+  'basePrice',
+  'costPrice',
+  'minPrice',
+  'maxPrice',
+  'buyBoxPrice',
+  'competitorPrice',
+])
+const MONO_FIELDS = new Set([
+  'sku',
+  'amazonAsin',
+  'parentAsin',
+  'ebayItemId',
+  'upc',
+  'ean',
+])
+
+function fieldToMeta(field: FieldDef): EditableMeta {
+  if (field.type === 'select') {
+    return {
+      editable: true,
+      fieldType: 'select',
+      options: field.options ?? [],
+    }
+  }
+  if (field.type === 'number') {
+    const isPrice = PRICE_FIELDS.has(field.id)
+    const isInt = field.id === 'totalStock' || field.id === 'lowStockThreshold'
+    return {
+      editable: true,
+      fieldType: 'number',
+      numeric: true,
+      prefix: isPrice ? '€' : undefined,
+      format: isPrice
+        ? (v) => (v === null || v === undefined ? '' : Number(v).toFixed(2))
+        : isInt
+        ? (v) =>
+            v === null || v === undefined
+              ? ''
+              : String(Math.floor(Number(v)))
+        : (v) => (v === null || v === undefined ? '' : String(v)),
+      parse: isInt
+        ? (raw) => {
+            if (raw === '' || raw === null) return null
+            const n = parseInt(raw, 10)
+            return Number.isNaN(n) ? raw : n
+          }
+        : undefined,
+    }
+  }
+  return { editable: true, fieldType: 'text' }
+}
+
+function ReadOnlyCell({
+  value,
+  field,
+}: {
+  value: unknown
+  field: FieldDef
+}) {
+  if (value === null || value === undefined || value === '') {
+    return <span className="text-slate-300 px-2">—</span>
+  }
+  if (MONO_FIELDS.has(field.id)) {
+    return (
+      <span className="font-mono text-[11px] text-slate-700 px-2 truncate">
+        {String(value)}
+      </span>
+    )
+  }
+  if (field.type === 'number') {
+    const n = Number(value)
+    if (Number.isNaN(n)) {
+      return <span className="text-slate-300 px-2">—</span>
+    }
+    const formatted = PRICE_FIELDS.has(field.id) ? `€${n.toFixed(2)}` : String(n)
+    return (
+      <span className="text-[12px] tabular-nums text-slate-700 px-2">
+        {formatted}
+      </span>
+    )
+  }
+  return (
+    <span className="text-[12px] text-slate-700 px-2 truncate">
+      {String(value)}
+    </span>
+  )
+}
+
+function buildColumnFromField(field: FieldDef): ColumnDef<BulkProduct> {
+  const size = field.width ?? 120
+  if (field.editable) {
+    const meta = fieldToMeta(field)
+    return {
+      id: field.id,
+      accessorKey: field.id as string,
+      header: field.label,
+      size,
+      cell: makeEditableRenderer(meta),
+    }
+  }
+  return {
+    id: field.id,
+    accessorKey: field.id as string,
+    header: () => (
+      <span className="flex items-center gap-1">
+        <span>{field.label}</span>
+        <Lock
+          className="w-2.5 h-2.5 text-slate-400"
+          aria-label="Read-only"
+        />
       </span>
     ),
-  },
-  {
-    id: 'name',
-    accessorKey: 'name',
-    header: 'Name',
-    size: 380,
-    cell: makeEditableRenderer(META_NAME),
-  },
-  {
-    id: 'brand',
-    accessorKey: 'brand',
-    header: 'Brand',
-    size: 160,
-    cell: makeEditableRenderer(META_BRAND),
-  },
-  {
-    id: 'status',
-    accessorKey: 'status',
-    header: 'Status',
-    size: 110,
-    cell: makeEditableRenderer(META_STATUS),
-  },
-  {
-    id: 'fulfillmentChannel',
-    accessorKey: 'fulfillmentChannel',
-    header: 'Channel',
-    size: 100,
-    cell: makeEditableRenderer(META_CHANNEL),
-  },
-  {
-    id: 'basePrice',
-    accessorKey: 'basePrice',
-    header: 'Price',
-    size: 100,
-    cell: makeEditableRenderer(META_PRICE),
-  },
-  {
-    id: 'costPrice',
-    accessorKey: 'costPrice',
-    header: 'Cost',
-    size: 100,
-    cell: makeEditableRenderer(META_PRICE),
-  },
-  {
-    id: 'margin',
-    header: 'Margin',
-    size: 80,
-    accessorFn: (row) => fmtMargin(row.costPrice, row.basePrice),
-    cell: ({ getValue }) => {
-      const v = getValue<string>()
-      return v ? (
-        <span className="text-[13px] tabular-nums text-slate-700 px-2">{v}</span>
-      ) : (
-        <span className="text-slate-300 px-2">—</span>
-      )
-    },
-  },
-  {
-    id: 'totalStock',
-    accessorKey: 'totalStock',
-    header: 'Stock',
-    size: 90,
-    cell: makeEditableRenderer(META_STOCK),
-  },
-  {
-    id: 'amazonAsin',
-    accessorKey: 'amazonAsin',
-    header: 'ASIN',
-    size: 110,
-    cell: ({ getValue }) => {
-      const v = getValue<string | null>()
-      return v ? (
-        <span className="font-mono text-[11px] text-slate-700 px-2">{v}</span>
-      ) : (
-        <span className="text-slate-300 px-2">—</span>
-      )
-    },
-  },
-]
+    size,
+    cell: ({ getValue }) => <ReadOnlyCell value={getValue()} field={field} />,
+  }
+}
 
-const TABLE_MIN_WIDTH = columns.reduce((sum, c) => sum + (c.size ?? 100), 0)
-
+// ── Memoized row ──────────────────────────────────────────────────────
 const TableRow = memo(
-  function TableRow({ row, top }: { row: Row<BulkProduct>; top: number }) {
+  function TableRow({
+    row,
+    top,
+  }: {
+    row: Row<BulkProduct>
+    top: number
+    /** Bumped when the visible-column set changes; forces a row
+     * re-render so cells map onto the new columns. */
+    columnsKey: string
+  }) {
     return (
       <div
         className="absolute left-0 right-0 flex border-b border-slate-100 hover:bg-slate-50/70"
@@ -265,21 +281,20 @@ const TableRow = memo(
       </div>
     )
   },
-  (prev, next) => prev.row.original === next.row.original && prev.top === next.top
+  (prev, next) =>
+    prev.row.original === next.row.original &&
+    prev.top === next.top &&
+    (prev as any).columnsKey === (next as any).columnsKey
 )
 
-function SkeletonRow({ top }: { top: number }) {
+function SkeletonRow({ top, colCount }: { top: number; colCount: number }) {
   return (
     <div
       className="absolute left-0 right-0 flex border-b border-slate-100 animate-pulse"
       style={{ height: ROW_HEIGHT, transform: `translateY(${top}px)` }}
     >
-      {columns.map((c) => (
-        <div
-          key={c.id}
-          className="flex items-center px-3"
-          style={{ width: c.size ?? 100, flexShrink: 0 }}
-        >
+      {Array.from({ length: colCount }).map((_, i) => (
+        <div key={i} className="flex items-center px-3" style={{ width: 120, flexShrink: 0 }}>
           <div className="h-3 bg-slate-200 rounded w-3/4" />
         </div>
       ))}
@@ -298,6 +313,33 @@ export default function BulkOperationsClient() {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>({ kind: 'idle' })
   const [online, setOnline] = useState(true)
+
+  // ── Dynamic columns state ───────────────────────────────────────────
+  const [allFields, setAllFields] = useState<FieldDef[]>([])
+  const [enabledChannels, setEnabledChannels] = useState<string[]>([])
+  const [enabledProductTypes, setEnabledProductTypes] = useState<string[]>([])
+  const [savedViews, setSavedViews] = useState<SavedView[]>(() => [...DEFAULT_VIEWS])
+  const [activeViewIdState, setActiveViewIdState] = useState<string>(
+    DEFAULT_VIEWS[0].id
+  )
+  const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(
+    DEFAULT_VIEWS[0].columnIds
+  )
+
+  // Hydrate localStorage state on mount
+  useEffect(() => {
+    setSavedViews(loadAllViews())
+    const id = getActiveViewId()
+    setActiveViewIdState(id)
+    const view =
+      loadAllViews().find((v) => v.id === id) ?? DEFAULT_VIEWS[0]
+    setVisibleColumnIds(view.columnIds)
+    if (view.channels) setEnabledChannels(view.channels)
+    if (view.productTypes) setEnabledProductTypes(view.productTypes)
+    const onChange = () => setSavedViews(loadAllViews())
+    window.addEventListener('nexus:views-changed', onChange)
+    return () => window.removeEventListener('nexus:views-changed', onChange)
+  }, [])
 
   // Refs for stable callbacks
   const productsRef = useRef(products)
@@ -345,7 +387,6 @@ export default function BulkOperationsClient() {
         return next
       })
 
-      // Clear any previous error for this cell when user re-edits it
       setCellErrors((prev) => {
         if (!prev.has(key)) return prev
         const next = new Map(prev)
@@ -353,18 +394,13 @@ export default function BulkOperationsClient() {
         return next
       })
 
-      // Reset saved-pulse if user starts editing again
-      if (saveStatus.kind === 'saved' || saveStatus.kind === 'partial') {
-        setSaveStatus({ kind: 'dirty' })
-      } else if (saveStatus.kind === 'idle') {
-        setSaveStatus({ kind: 'dirty' })
-      }
+      setSaveStatus((prev) =>
+        prev.kind === 'saving' ? prev : { kind: 'dirty' }
+      )
     },
-    [saveStatus.kind]
+    []
   )
 
-  // Push latest commit handler + cellErrors snapshot into the
-  // module-level ref so cell renderers see them.
   editCtxRef.current = { onCommit: handleCommit, cellErrors }
 
   // ── Save flow ──────────────────────────────────────────────────────
@@ -374,7 +410,7 @@ export default function BulkOperationsClient() {
     if (saveStatus.kind === 'saving') return
 
     setSaveStatus({ kind: 'saving' })
-    setCellErrors(new Map()) // clear previous errors before retrying
+    setCellErrors(new Map())
 
     const changesArray = Array.from(currentChanges.values()).map((c) => ({
       id: c.rowId,
@@ -398,13 +434,11 @@ export default function BulkOperationsClient() {
       }
 
       if (!res.ok) {
-        // Total failure — keep all changes in UI for retry
         setSaveStatus({
           kind: 'error',
           message: result.error ?? result.message ?? `HTTP ${res.status}`,
         })
         if (Array.isArray(result.errors)) {
-          // Validation-only failure: mark each rejected cell
           const map = new Map<string, string>()
           for (const e of result.errors) {
             map.set(`${e.id}:${e.field}`, e.error)
@@ -420,9 +454,6 @@ export default function BulkOperationsClient() {
         (c) => !failedKeys.has(`${c.id}:${c.field}`)
       )
 
-      // Apply successful changes to products[] via immer — gives us
-      // O(saved rows) object-identity changes. Cells in unchanged rows
-      // skip re-render.
       if (succeededChanges.length > 0) {
         setProducts((prev) =>
           produce(prev, (draft) => {
@@ -436,8 +467,6 @@ export default function BulkOperationsClient() {
         )
       }
 
-      // Drop only the saved entries from the changesMap. Failed ones
-      // stay so the user can fix or retry.
       setChanges((prev) => {
         if (succeededChanges.length === 0) return prev
         const next = new Map(prev)
@@ -447,7 +476,6 @@ export default function BulkOperationsClient() {
         return next
       })
 
-      // Mark failed cells with red borders + tooltips
       if (errs.length > 0) {
         const map = new Map<string, string>()
         for (const e of errs) {
@@ -465,7 +493,6 @@ export default function BulkOperationsClient() {
           count: succeededChanges.length,
           at: Date.now(),
         })
-        // Auto-fade saved status after 3s
         setTimeout(() => {
           setSaveStatus((s) => (s.kind === 'saved' ? { kind: 'idle' } : s))
         }, 3000)
@@ -475,7 +502,7 @@ export default function BulkOperationsClient() {
     }
   }, [saveStatus.kind])
 
-  // Cmd/Ctrl+S to save
+  // Cmd/Ctrl+S
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
@@ -487,16 +514,31 @@ export default function BulkOperationsClient() {
     return () => window.removeEventListener('keydown', onKey)
   }, [handleSave])
 
-  // Initial fetch
+  // ── Initial fetch (products + fields in parallel) ─────────────────
   useEffect(() => {
     let cancelled = false
     const start = performance.now()
-    fetch(`${getBackendUrl()}/api/products/bulk-fetch`, { cache: 'no-store' })
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
+    const backend = getBackendUrl()
+    Promise.all([
+      fetch(`${backend}/api/products/bulk-fetch`, { cache: 'no-store' }).then(
+        async (res) => {
+          if (!res.ok) throw new Error(`products: HTTP ${res.status}`)
+          return res.json()
+        }
+      ),
+      fetch(`${backend}/api/pim/fields`, { cache: 'no-store' }).then(
+        async (res) => {
+          if (!res.ok) throw new Error(`fields: HTTP ${res.status}`)
+          return res.json()
+        }
+      ),
+    ])
+      .then(([productsData, fieldsData]) => {
         if (cancelled) return
-        setProducts(Array.isArray(data.products) ? data.products : [])
+        setProducts(
+          Array.isArray(productsData.products) ? productsData.products : []
+        )
+        setAllFields(Array.isArray(fieldsData.fields) ? fieldsData.fields : [])
         setFetchMs(Math.round(performance.now() - start))
       })
       .catch((err) => {
@@ -511,9 +553,59 @@ export default function BulkOperationsClient() {
     }
   }, [])
 
+  // Refetch fields when channels/productTypes change
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (enabledChannels.length) params.set('channels', enabledChannels.join(','))
+    if (enabledProductTypes.length)
+      params.set('productTypes', enabledProductTypes.join(','))
+    const qs = params.toString()
+    const url = `${getBackendUrl()}/api/pim/fields${qs ? `?${qs}` : ''}`
+
+    let cancelled = false
+    fetch(url, { cache: 'no-store' })
+      .then(async (res) => (res.ok ? res.json() : { fields: [] }))
+      .then((data) => {
+        if (cancelled) return
+        setAllFields(Array.isArray(data.fields) ? data.fields : [])
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [enabledChannels, enabledProductTypes])
+
+  // ── Build columns dynamically from registry + visibility ──────────
+  const fieldsById = useMemo(() => {
+    const m = new Map<string, FieldDef>()
+    for (const f of allFields) m.set(f.id, f)
+    return m
+  }, [allFields])
+
+  const dynamicColumns = useMemo<ColumnDef<BulkProduct>[]>(() => {
+    const out: ColumnDef<BulkProduct>[] = []
+    for (const id of visibleColumnIds) {
+      const field = fieldsById.get(id)
+      if (!field) continue
+      out.push(buildColumnFromField(field))
+    }
+    return out
+  }, [visibleColumnIds, fieldsById])
+
+  // Bumped whenever the column set actually changes; passed to TableRow
+  // so memoized rows know to re-render on column changes. We use a
+  // stable string key — when it changes, the memo comparator sees a
+  // different value and re-runs.
+  const columnsKey = useMemo(() => visibleColumnIds.join('|'), [visibleColumnIds])
+
+  const tableMinWidth = useMemo(
+    () => dynamicColumns.reduce((sum, c) => sum + (c.size ?? 120), 0),
+    [dynamicColumns]
+  )
+
   const table = useReactTable({
     data: products,
-    columns,
+    columns: dynamicColumns,
     getCoreRowModel: getCoreRowModel(),
   })
 
@@ -527,7 +619,10 @@ export default function BulkOperationsClient() {
     overscan: 10,
   })
 
-  const headerCells = useMemo(() => table.getHeaderGroups()[0]?.headers ?? [], [table])
+  const headerCells = useMemo(
+    () => table.getHeaderGroups()[0]?.headers ?? [],
+    [table]
+  )
   const totalSize = rowVirtualizer.getTotalSize()
   const pendingCount = changes.size
 
@@ -538,9 +633,51 @@ export default function BulkOperationsClient() {
       ? 'No changes'
       : `Save ${pendingCount} change${pendingCount === 1 ? '' : 's'}`
 
+  // ── View handlers ────────────────────────────────────────────────
+  const handleSelectView = useCallback(
+    (id: string) => {
+      const view = savedViews.find((v) => v.id === id)
+      if (!view) return
+      setActiveViewIdState(id)
+      setActiveViewId(id)
+      setVisibleColumnIds(view.columnIds)
+      setEnabledChannels(view.channels ?? [])
+      setEnabledProductTypes(view.productTypes ?? [])
+    },
+    [savedViews]
+  )
+
+  const handleSaveAsView = useCallback(
+    (name: string) => {
+      const id = `user_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+      const view = saveUserView({
+        id,
+        name,
+        columnIds: visibleColumnIds,
+        channels: enabledChannels,
+        productTypes: enabledProductTypes,
+      })
+      setSavedViews(loadAllViews())
+      setActiveViewIdState(view.id)
+      setActiveViewId(view.id)
+    },
+    [visibleColumnIds, enabledChannels, enabledProductTypes]
+  )
+
+  const handleDeleteView = useCallback(
+    (id: string) => {
+      if (isDefaultView(id)) return
+      deleteUserView(id)
+      setSavedViews(loadAllViews())
+      if (activeViewIdState === id) {
+        handleSelectView(DEFAULT_VIEWS[0].id)
+      }
+    },
+    [activeViewIdState, handleSelectView]
+  )
+
   return (
     <div className="flex-1 min-h-0 px-6 pb-6 flex flex-col">
-      {/* Offline banner */}
       {!online && (
         <div className="flex-shrink-0 mb-3 flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-[12px] text-amber-800">
           <WifiOff className="w-3.5 h-3.5 flex-shrink-0" />
@@ -548,14 +685,27 @@ export default function BulkOperationsClient() {
         </div>
       )}
 
-      {/* Action bar — pending count, preview, save */}
       <div className="flex-shrink-0 mb-3 flex items-center justify-between gap-3 flex-wrap">
         <div className="text-[12px] text-slate-500">
           {loading
             ? 'Loading…'
-            : `${products.length.toLocaleString()} rows · click any cell to edit · Tab/Enter/Esc · Cmd+S to save`}
+            : `${products.length.toLocaleString()} rows · Showing ${visibleColumnIds.length} of ${allFields.length} columns · click any cell to edit · Cmd+S to save`}
         </div>
         <div className="flex items-center gap-2">
+          <ColumnSelector
+            allFields={allFields}
+            visibleColumnIds={visibleColumnIds}
+            onVisibleChange={setVisibleColumnIds}
+            enabledChannels={enabledChannels}
+            onEnabledChannelsChange={setEnabledChannels}
+            enabledProductTypes={enabledProductTypes}
+            onEnabledProductTypesChange={setEnabledProductTypes}
+            views={savedViews}
+            activeViewId={activeViewIdState}
+            onSelectView={handleSelectView}
+            onSaveAsView={handleSaveAsView}
+            onDeleteView={handleDeleteView}
+          />
           <Button
             variant="secondary"
             size="sm"
@@ -576,7 +726,6 @@ export default function BulkOperationsClient() {
         </div>
       </div>
 
-      {/* Table container */}
       <div
         ref={containerRef}
         className="flex-1 min-h-0 overflow-auto bg-white border border-slate-200 rounded-lg"
@@ -584,7 +733,7 @@ export default function BulkOperationsClient() {
       >
         <div
           className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 flex"
-          style={{ height: HEADER_HEIGHT, minWidth: TABLE_MIN_WIDTH }}
+          style={{ height: HEADER_HEIGHT, minWidth: tableMinWidth }}
         >
           {headerCells.map((header) => (
             <div
@@ -597,11 +746,25 @@ export default function BulkOperationsClient() {
           ))}
         </div>
 
-        <div className="relative" style={{ height: totalSize, minWidth: TABLE_MIN_WIDTH }}>
+        <div className="relative" style={{ height: totalSize, minWidth: tableMinWidth }}>
           {rowVirtualizer.getVirtualItems().map((vRow) => {
-            if (loading) return <SkeletonRow key={vRow.key} top={vRow.start} />
+            if (loading)
+              return (
+                <SkeletonRow
+                  key={vRow.key}
+                  top={vRow.start}
+                  colCount={dynamicColumns.length || 7}
+                />
+              )
             const row = rows[vRow.index]
-            return <TableRow key={row.id} row={row} top={vRow.start} />
+            return (
+              <TableRow
+                key={row.id}
+                row={row}
+                top={vRow.start}
+                columnsKey={columnsKey}
+              />
+            )
           })}
         </div>
 
@@ -614,7 +777,6 @@ export default function BulkOperationsClient() {
         )}
       </div>
 
-      {/* Status bar */}
       <StatusBar
         status={saveStatus}
         pendingCount={pendingCount}
@@ -645,7 +807,12 @@ function StatusBar({
 }) {
   const left = (() => {
     if (loading) return <span>Fetching…</span>
-    if (status.kind === 'saving') return <span>Saving {pendingCount} change{pendingCount === 1 ? '' : 's'}…</span>
+    if (status.kind === 'saving')
+      return (
+        <span>
+          Saving {pendingCount} change{pendingCount === 1 ? '' : 's'}…
+        </span>
+      )
     if (status.kind === 'saved')
       return (
         <span className="flex items-center gap-1.5 text-green-700">
