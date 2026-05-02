@@ -1405,10 +1405,20 @@ export default function BulkOperationsClient() {
   useEffect(() => {
     const onCopy = (e: ClipboardEvent) => {
       const bounds = copyCtxRef.current.bounds
-      if (!bounds) return
+      const ae = document.activeElement as HTMLElement | null
+      // eslint-disable-next-line no-console
+      console.log('[COPY] fired', {
+        bounds,
+        activeTag: ae?.tagName,
+        isCE: ae?.isContentEditable,
+      })
+      if (!bounds) {
+        // eslint-disable-next-line no-console
+        console.log('[COPY] BAIL: no bounds')
+        return
+      }
       // Don't intercept native copy when the user is editing or
       // selected text inside a regular input/textarea.
-      const ae = document.activeElement as HTMLElement | null
       if (ae) {
         const tag = ae.tagName
         if (
@@ -1416,27 +1426,39 @@ export default function BulkOperationsClient() {
           tag === 'TEXTAREA' ||
           ae.isContentEditable
         ) {
+          // eslint-disable-next-line no-console
+          console.log('[COPY] BAIL: input/textarea/CE focused')
           return
         }
       }
       const tbl = copyCtxRef.current.table
       const tableRows = tbl.getRowModel().rows
       const cols = tbl.getVisibleLeafColumns()
+      // eslint-disable-next-line no-console
+      console.log('[COPY] tableRows.length', tableRows.length, 'cols', cols.map((c) => c.id))
       const tsvRows: string[] = []
       for (let r = bounds.minRow; r <= bounds.maxRow; r++) {
         const row = tableRows[r]
-        if (!row) continue
+        if (!row) {
+          // eslint-disable-next-line no-console
+          console.log('[COPY] missing row at index', r)
+          continue
+        }
         const cells: string[] = []
         for (let c = bounds.minCol; c <= bounds.maxCol; c++) {
           const col = cols[c]
           if (!col) {
+            // eslint-disable-next-line no-console
+            console.log('[COPY] missing col at index', c)
             cells.push('')
             continue
           }
           let v: unknown
           try {
             v = row.getValue(col.id)
-          } catch {
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.log('[COPY] getValue threw', col.id, err)
             v = undefined
           }
           cells.push(toTsvCell(v))
@@ -1444,7 +1466,16 @@ export default function BulkOperationsClient() {
         tsvRows.push(cells.join('\t'))
       }
       const tsv = tsvRows.join('\n')
+      // eslint-disable-next-line no-console
+      console.log('[COPY] tsvRows', tsvRows)
+      // eslint-disable-next-line no-console
+      console.log('[COPY] tsv', JSON.stringify(tsv))
       e.clipboardData?.setData('text/plain', tsv)
+      // eslint-disable-next-line no-console
+      console.log(
+        '[COPY] readback',
+        JSON.stringify(e.clipboardData?.getData('text/plain')),
+      )
       e.preventDefault()
       const count =
         (bounds.maxRow - bounds.minRow + 1) *
