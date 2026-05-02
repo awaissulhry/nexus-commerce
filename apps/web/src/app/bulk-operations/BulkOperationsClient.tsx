@@ -541,7 +541,7 @@ function SkuCell({
         </Badge>
       )}
       {visibleVariations.length > 0 && (
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="ml-auto flex items-center gap-1 flex-shrink-0">
           {visibleVariations.map(([k, v]) => (
             <span
               key={k}
