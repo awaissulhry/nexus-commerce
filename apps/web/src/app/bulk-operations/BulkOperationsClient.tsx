@@ -71,6 +71,12 @@ import {
   type DisplayMode,
   type HierarchyRow,
 } from './lib/hierarchy'
+import {
+  isDimFieldId,
+  isWeightFieldId,
+  parseDimension,
+  parseWeight,
+} from './lib/unit-parsing'
 import { cn } from '@/lib/utils'
 
 export interface BulkProduct {
@@ -109,6 +115,7 @@ export interface BulkProduct {
   dimWidth?: number | null
   dimHeight?: number | null
   dimUnit?: string | null
+  gtin?: string | null
   [k: string]: unknown
 }
 
@@ -257,6 +264,20 @@ function fieldToMeta(field: FieldDef): EditableMeta {
       editable: true,
       fieldType: 'select',
       options: field.options ?? [],
+    }
+  }
+  // D.3j: weight + dimension fields are typed as 'number' in the
+  // registry but rendered as text inputs so the user can type "5kg"
+  // or "60cm". The smart-parsing in handleCommit splits the unit
+  // suffix into the corresponding *Unit column. defaultParse keeps
+  // the raw string in draftValue; the cell renders the plain number
+  // returned by the server in read mode.
+  if (isWeightFieldId(field.id) || isDimFieldId(field.id)) {
+    return {
+      editable: true,
+      fieldType: 'text',
+      numeric: true,
+      format: (v) => (v === null || v === undefined ? '' : String(v)),
     }
   }
   if (field.type === 'number') {
@@ -1022,6 +1043,47 @@ export default function BulkOperationsClient() {
     (rowId: string, columnId: string, newValue: unknown) => {
       const product = productsRef.current.find((p) => p.id === rowId)
       if (!product) return
+
+      // D.3j: weight + dim cells render as text inputs ("5kg", "60cm",
+      // "5,5"). Smart-parse here and route to the value column + the
+      // unit column when the user typed a unit suffix. We bypass the
+      // cascade modal for these — the unit change is a side effect
+      // tied to the value, not a separate user-initiated edit.
+      if (
+        typeof newValue === 'string' &&
+        (isWeightFieldId(columnId) || isDimFieldId(columnId))
+      ) {
+        const parsed = isWeightFieldId(columnId)
+          ? parseWeight(newValue)
+          : parseDimension(newValue)
+        if (!parsed) {
+          // Surface as a cell error — the typed text is invalid.
+          const k = `${rowId}:${columnId}`
+          setCellErrors((prev) => {
+            const next = new Map(prev)
+            next.set(
+              k,
+              isWeightFieldId(columnId)
+                ? 'Invalid weight — try "5", "5kg" or "5.5 lb"'
+                : 'Invalid dimension — try "60", "60cm" or "23.6in"',
+            )
+            return next
+          })
+          return
+        }
+        writeChange(rowId, columnId, parsed.value, false)
+        if (parsed.unit) {
+          const unitField = isWeightFieldId(columnId) ? 'weightUnit' : 'dimUnit'
+          const currentUnit = (product as unknown as Record<string, unknown>)[
+            unitField
+          ]
+          if (currentUnit !== parsed.unit) {
+            writeChange(rowId, unitField, parsed.unit, false)
+          }
+        }
+        return
+      }
+
       const oldValue = (product as unknown as Record<string, unknown>)[columnId]
 
       // Quick path: revert. No modal even on parent rows.
@@ -1218,6 +1280,32 @@ export default function BulkOperationsClient() {
         }
         return next
       })
+
+      // D.3j: weight + dim cells edit-mode held the user's raw text
+      // ("5kg") but the canonical post-save value is the plain number
+      // (5). Bump resetKey for those cells so EditableCell resets its
+      // local draft to the new initialValue and isDirty clears.
+      if (succeededChanges.length > 0) {
+        const reseedFields = new Set([
+          'weightValue',
+          'dimLength',
+          'dimWidth',
+          'dimHeight',
+        ])
+        const reseed = succeededChanges.filter((c) =>
+          reseedFields.has(c.field),
+        )
+        if (reseed.length > 0) {
+          setResetKeys((prev) => {
+            const next = new Map(prev)
+            for (const c of reseed) {
+              const k = `${c.id}:${c.field}`
+              next.set(k, (next.get(k) ?? 0) + 1)
+            }
+            return next
+          })
+        }
+      }
 
       if (errs.length > 0) {
         const map = new Map<string, string>()

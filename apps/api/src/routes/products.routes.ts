@@ -74,6 +74,11 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           ean: true,
           weightValue: true,
           weightUnit: true,
+          // D.3j: dimensions
+          dimLength: true,
+          dimWidth: true,
+          dimHeight: true,
+          dimUnit: true,
           status: true,
           fulfillmentChannel: true,
           isParent: true,
@@ -104,6 +109,9 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         minPrice: p.minPrice == null ? null : Number(p.minPrice),
         maxPrice: p.maxPrice == null ? null : Number(p.maxPrice),
         weightValue: p.weightValue == null ? null : Number(p.weightValue),
+        dimLength: p.dimLength == null ? null : Number(p.dimLength),
+        dimWidth: p.dimWidth == null ? null : Number(p.dimWidth),
+        dimHeight: p.dimHeight == null ? null : Number(p.dimHeight),
       }))
 
       // Attach _channelListing for the requested context so the table
@@ -208,6 +216,14 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       'upc',
       'ean',
       'weightValue',
+      // D.3j: weight/dim units + dim values
+      'weightUnit',
+      'dimLength',
+      'dimWidth',
+      'dimHeight',
+      'dimUnit',
+      // D.3k: master-level GTIN
+      'gtin',
       'status',
       'fulfillmentChannel',
     ])
@@ -232,10 +248,30 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       'minPrice',
       'maxPrice',
       'weightValue',
+      // D.3j
+      'dimLength',
+      'dimWidth',
+      'dimHeight',
     ])
     const INTEGER_FIELDS = new Set(['totalStock', 'lowStockThreshold'])
     const STATUS_VALUES = new Set(['ACTIVE', 'DRAFT', 'INACTIVE'])
     const CHANNEL_VALUES = new Set(['FBA', 'FBM'])
+    // D.3j: unit enums for the editable weightUnit / dimUnit fields.
+    const WEIGHT_UNIT_VALUES = new Set(['kg', 'g', 'lb', 'oz'])
+    const DIM_UNIT_VALUES = new Set(['cm', 'mm', 'in'])
+    // Locale-tolerant numeric coercion: accept Italian / European
+    // decimal commas ("5,5") alongside the canonical period.
+    const numericFromLocale = (raw: unknown): number => {
+      if (typeof raw === 'number') return raw
+      if (raw == null) return NaN
+      const s = String(raw).trim()
+      if (s === '') return NaN
+      // Only swap commas to periods when there's no period already
+      // (avoids "1,000.00" → "1.000.00"). For our domain, raw user
+      // inputs like "5,5" or "5.5" are the common cases.
+      if (s.includes('.') || !s.includes(',')) return Number(s)
+      return Number(s.replace(',', '.'))
+    }
 
     interface Validated {
       id: string
@@ -381,7 +417,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         if (value === '' || value === null || value === undefined) {
           value = null
         } else {
-          const n = Number(value)
+          const n = numericFromLocale(value)
           if (Number.isNaN(n)) {
             errors.push({ id: c.id, field: c.field, error: 'Invalid number' })
             continue
@@ -391,6 +427,44 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             continue
           }
           value = n
+        }
+      } else if (c.field === 'weightUnit') {
+        const v = String(value ?? '').toLowerCase()
+        if (!WEIGHT_UNIT_VALUES.has(v)) {
+          errors.push({
+            id: c.id,
+            field: c.field,
+            error: `Weight unit must be one of ${Array.from(WEIGHT_UNIT_VALUES).join(', ')}`,
+          })
+          continue
+        }
+        value = v
+      } else if (c.field === 'dimUnit') {
+        const v = String(value ?? '').toLowerCase()
+        if (!DIM_UNIT_VALUES.has(v)) {
+          errors.push({
+            id: c.id,
+            field: c.field,
+            error: `Dimension unit must be one of ${Array.from(DIM_UNIT_VALUES).join(', ')}`,
+          })
+          continue
+        }
+        value = v
+      } else if (c.field === 'gtin') {
+        // Empty / null clears it.
+        if (value === '' || value === null || value === undefined) {
+          value = null
+        } else {
+          const digits = String(value).replace(/\D/g, '')
+          if (digits.length < 8 || digits.length > 14) {
+            errors.push({
+              id: c.id,
+              field: c.field,
+              error: 'GTIN must be 8–14 digits',
+            })
+            continue
+          }
+          value = digits
         }
       } else if (INTEGER_FIELDS.has(c.field)) {
         if (value === '' || value === null || value === undefined) {

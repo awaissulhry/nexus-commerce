@@ -88,19 +88,25 @@ const INVENTORY_FIELDS: FieldDefinition[] = [
 const IDENTIFIER_FIELDS: FieldDefinition[] = [
   { id: 'upc', label: 'UPC', type: 'text', category: 'identifiers', editable: true, width: 130 },
   { id: 'ean', label: 'EAN', type: 'text', category: 'identifiers', editable: true, width: 130 },
+  // D.3k: master-level GTIN (8–14 digits, normalised on save).
+  { id: 'gtin', label: 'GTIN', type: 'text', category: 'identifiers', editable: true, width: 140, helpText: 'Universal product identifier — 8 to 14 digits' },
   { id: 'amazonAsin', label: 'ASIN', type: 'text', category: 'identifiers', editable: false, width: 110 },
   { id: 'parentAsin', label: 'Parent ASIN', type: 'text', category: 'identifiers', editable: false, width: 110 },
   { id: 'ebayItemId', label: 'eBay Item ID', type: 'text', category: 'identifiers', editable: false, width: 130 },
 ]
 
 // ── Physical attributes ───────────────────────────────────────────────
+// D.3j: weight + dimension fields are now editable. Smart parsing on
+// the client lets users type "5kg" or "60cm" and the unit suffix is
+// extracted and routed to the corresponding *Unit column. The unit
+// fields themselves stay editable (select) for explicit changes.
 const PHYSICAL_FIELDS: FieldDefinition[] = [
-  { id: 'weightValue', label: 'Weight', type: 'number', category: 'physical', editable: true, width: 90 },
-  { id: 'weightUnit', label: 'Wt Unit', type: 'select', options: ['kg', 'g', 'lb', 'oz'], category: 'physical', editable: false, width: 80, helpText: 'Bulk-patch enforces gram base; per-row edit via product page for now' },
-  { id: 'dimLength', label: 'Length', type: 'number', category: 'physical', editable: false, width: 90 },
-  { id: 'dimWidth', label: 'Width', type: 'number', category: 'physical', editable: false, width: 90 },
-  { id: 'dimHeight', label: 'Height', type: 'number', category: 'physical', editable: false, width: 90 },
-  { id: 'dimUnit', label: 'Dim Unit', type: 'select', options: ['cm', 'mm', 'in'], category: 'physical', editable: false, width: 80 },
+  { id: 'weightValue', label: 'Weight', type: 'number', category: 'physical', editable: true, width: 100, helpText: 'Type "5kg" or "5.5 lb" — the unit is auto-detected' },
+  { id: 'weightUnit', label: 'Wt Unit', type: 'select', options: ['kg', 'g', 'lb', 'oz'], category: 'physical', editable: true, width: 80 },
+  { id: 'dimLength', label: 'Length', type: 'number', category: 'physical', editable: true, width: 100, helpText: 'Type "60cm" or "23.6in" — the unit is auto-detected' },
+  { id: 'dimWidth', label: 'Width', type: 'number', category: 'physical', editable: true, width: 100, helpText: 'Type "60cm" or "23.6in" — the unit is auto-detected' },
+  { id: 'dimHeight', label: 'Height', type: 'number', category: 'physical', editable: true, width: 100, helpText: 'Type "60cm" or "23.6in" — the unit is auto-detected' },
+  { id: 'dimUnit', label: 'Dim Unit', type: 'select', options: ['cm', 'mm', 'in'], category: 'physical', editable: true, width: 80 },
 ]
 
 // ── Channel-scoped fields ─────────────────────────────────────────────
