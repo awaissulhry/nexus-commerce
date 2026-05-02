@@ -292,12 +292,45 @@ Same shape as the channels facet; mostly a typing exercise.
 
 ---
 
+# Schema drift findings (surfaced by the P0 #0 gate, 2026-05-02)
+
+When the schema-drift CI gate landed, it caught **two more orphans** beyond `Image` — both are tracked here as concrete tickets. The drift check allow-lists them by name with a pointer back to these entries, so the gate can pass while we work them off.
+
+## 31. 🔴 ChannelConnection — model in schema, no Postgres table, eBay flow broken at runtime
+
+**Symptom:** `prisma.channelConnection` is referenced in ~12 sites across `apps/api/src/routes/ebay-auth.ts`, `apps/api/src/routes/ebay.routes.ts`, and `apps/api/src/services/ebay-auth.service.ts`. The entire eBay OAuth + listing path goes through it. **No migration creates the table.** Same root cause as the `Image` bug — TypeScript compiles, runtime crashes the moment a user starts the eBay auth flow.
+
+**Surfaced at:** `packages/database/scripts/check-schema-drift.mjs` flagged it the first time it ran. Almost certainly broken in production today; we just haven't tested the eBay-auth path since the model was added to the schema.
+
+**Workaround:** None — eBay auth flow does not work in production until this is fixed.
+
+**Proper fix (one of):**
+
+1. **Write the migration** — read `model ChannelConnection { … }` in `schema.prisma`, generate a `CREATE TABLE` migration that matches it (`npx prisma migrate dev --name add_channel_connection_table` will do it for you against a local Postgres). Ship. Verify the eBay auth flow.
+2. **Switch to an existing table** — if `ChannelConnection` is functionally what `Marketplace` or `ChannelListing` already does, refactor the eBay code to use those instead. Probably not — the field shapes differ.
+
+Verify with the live API before declaring done — hit the eBay auth endpoint and confirm a connection row gets written without a 500.
+
+## 32. 🟢 DraftListing — orphan model, zero callers
+
+**Symptom:** `model DraftListing` exists in `schema.prisma`, no migration creates the table, and `grep -rn "prisma.draftListing"` returns zero hits across `apps/`. Pure orphan from a Phase 5 design that never landed.
+
+**Workaround:** Allow-listed in the drift check.
+
+**Proper fix:** Decide between:
+
+1. **Delete the model.** Lowest-risk default — if no code uses it, the schema doesn't need to describe it. Ship a one-line schema.prisma diff and remove the allow-list line.
+2. **Land the migration.** Only if there's a concrete plan to use it in the next sprint. Otherwise option 1 is correct (YAGNI).
+
+---
+
 ## Triage summary
 
 **🔴 P0 — tackle next:**
-- **0** Schema-migration drift (process gap + prevention CI)
+- **0** Schema-migration drift gate ✅ landed 2026-05-02 (script + npm script + .githooks/pre-push). Allow-list captures pre-existing drift that's worked off via 8/31/32.
 - **8** Phase 5.4 GTIN wizard image validator likely crashes on the same `Image`-table-missing root cause — verify before next user touches the flow
 - **27** Brand-terminology glossary for AI title generation (Giubbotto / Giacca regression actively undermining the 5.5 feature)
+- **31** ChannelConnection has no migration — eBay OAuth + listing path is broken at runtime, just not exercised yet
 
 **🟡 P1 — backlog (informed by real usage):**
 - **1** `@fastify/compress` empty body on `/api/orders` (workaround in place)
@@ -322,3 +355,4 @@ Same shape as the channels facet; mostly a typing exercise.
 - **21** `/api/products/:id` for the edit page
 - **22** Derived-column sort
 - **23–24** `/inventory` sub-routes URL migration + legacy component cleanup
+- **32** Delete the orphan `DraftListing` model from schema.prisma

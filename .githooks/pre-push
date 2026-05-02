@@ -1,0 +1,40 @@
+#!/bin/bash
+#
+# Canonical pre-push hook. Version-controlled — install with:
+#
+#   git config core.hooksPath .githooks
+#
+# (Does this for the current clone only; teammates / fresh clones must
+# also run the command. CI is the long-term answer.)
+#
+# Stages:
+#   1. Schema-migration drift gate — see packages/database/scripts/
+#      check-schema-drift.mjs. Fast; fails fast.
+#   2. apps/web build (next build).
+#   3. apps/api build (tsc).
+set -e
+cd "$(git rev-parse --show-toplevel)"
+
+echo "→ Checking schema/migration drift..."
+node packages/database/scripts/check-schema-drift.mjs || {
+  echo "❌ Schema drift check FAILED — see message above"
+  exit 1
+}
+
+echo "→ Building apps/web..."
+(cd apps/web && rm -rf .next && npx next build > /tmp/web-build.log 2>&1) || {
+  echo "❌ apps/web build FAILED"
+  tail -30 /tmp/web-build.log
+  exit 1
+}
+echo "✓ apps/web build passed"
+
+echo "→ Building apps/api..."
+npm run build --workspace=@nexus/api > /tmp/api-build.log 2>&1 || {
+  echo "❌ apps/api build FAILED"
+  tail -30 /tmp/api-build.log
+  exit 1
+}
+echo "✓ apps/api build passed"
+
+echo "✅ All workspaces build cleanly — pushing"

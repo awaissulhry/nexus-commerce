@@ -16,7 +16,8 @@
     "dev": "echo \"Add your database dev command here\"",
     "build": "prisma generate",
     "postinstall": "prisma generate",
-    "seed": "tsx seed.ts"
+    "seed": "tsx seed.ts",
+    "check:drift": "node scripts/check-schema-drift.mjs"
   },
   "dependencies": {
     "@nexus/shared": "*",
