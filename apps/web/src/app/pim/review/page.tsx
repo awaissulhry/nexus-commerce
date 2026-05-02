@@ -1,8 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronRight, Check, X } from 'lucide-react'
+import { ChevronRight, Check, X, Layers } from 'lucide-react'
+import PageHeader from '@/components/layout/PageHeader'
+import { Button } from '@/components/ui/Button'
+import { Card } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { getBackendUrl } from '@/lib/backend-url'
+import { cn } from '@/lib/utils'
 
 interface DetectedGroup {
   id: string
@@ -25,6 +31,22 @@ interface StandaloneProduct {
   name: string
 }
 
+function GroupSkeleton() {
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg p-4 animate-pulse">
+      <div className="flex items-center gap-4">
+        <div className="w-5 h-5 bg-slate-200 rounded" />
+        <div className="flex-1 space-y-2">
+          <div className="h-3 bg-slate-200 rounded w-3/4" />
+          <div className="h-2 bg-slate-200 rounded w-1/2" />
+        </div>
+        <div className="w-24 h-6 bg-slate-200 rounded" />
+        <div className="w-16 h-7 bg-slate-200 rounded" />
+      </div>
+    </div>
+  )
+}
+
 export default function PIMReviewPage() {
   const [loading, setLoading] = useState(true)
   const [groups, setGroups] = useState<DetectedGroup[]>([])
@@ -33,6 +55,9 @@ export default function PIMReviewPage() {
   const [approvedGroups, setApprovedGroups] = useState<Set<string>>(new Set())
   const [rejectedGroups, setRejectedGroups] = useState<Set<string>>(new Set())
   const [applying, setApplying] = useState(false)
+  const [statusMsg, setStatusMsg] = useState<{ kind: 'success' | 'error'; text: string } | null>(
+    null
+  )
 
   useEffect(() => {
     fetchDetection()
@@ -56,6 +81,7 @@ export default function PIMReviewPage() {
 
   async function handleApplyApproved() {
     setApplying(true)
+    setStatusMsg(null)
     try {
       const toApply = groups
         .filter((g) => approvedGroups.has(g.id))
@@ -73,233 +99,303 @@ export default function PIMReviewPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ groups: toApply }),
       })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error ?? `HTTP ${res.status}`)
+      }
       const result = await res.json()
-      alert(
-        `Applied! Created ${result.mastersCreated} masters, linked ${result.childrenLinked} children` +
-          (result.errors?.length ? `\n\nErrors:\n${result.errors.join('\n')}` : '')
-      )
+      setStatusMsg({
+        kind: 'success',
+        text: `Created ${result.mastersCreated} master${
+          result.mastersCreated === 1 ? '' : 's'
+        }, linked ${result.childrenLinked} children${
+          result.errors?.length ? ` (${result.errors.length} errors — see console)` : ''
+        }`,
+      })
+      if (result.errors?.length) console.warn('[PIM] apply errors', result.errors)
       setApprovedGroups(new Set())
       setRejectedGroups(new Set())
       fetchDetection()
     } catch (e) {
-      console.error('[PIM] apply failed', e)
-      alert('Apply failed; see console.')
+      setStatusMsg({ kind: 'error', text: `Apply failed: ${(e as Error).message}` })
     } finally {
       setApplying(false)
     }
   }
 
-  function getConfidenceColor(conf: number) {
-    if (conf >= 80) return 'bg-green-100 text-green-700 border-green-300'
-    if (conf >= 60) return 'bg-yellow-100 text-yellow-700 border-yellow-300'
-    return 'bg-red-100 text-red-700 border-red-300'
+  function toggleApproved(id: string) {
+    setApprovedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+    setRejectedGroups((prev) => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
   }
 
-  if (loading) {
-    return <div className="p-8 text-center text-slate-500">Detecting variation groups…</div>
+  function toggleRejected(id: string) {
+    setRejectedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+    setApprovedGroups((prev) => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
   }
 
+  function confidenceVariant(conf: number): 'success' | 'warning' | 'danger' {
+    if (conf >= 80) return 'success'
+    if (conf >= 60) return 'warning'
+    return 'danger'
+  }
+
+  const totalMembers = groups.reduce((sum, g) => sum + g.members.length, 0)
   const pendingCount = groups.length - approvedGroups.size - rejectedGroups.size
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-2">Master Catalog — Review Detected Groups</h1>
-        <p className="text-slate-600">
-          Detected {groups.length} potential variation groups across{' '}
-          {groups.reduce((sum, g) => sum + g.members.length, 0)} products. Review and approve to
-          create master products in your catalog.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        title="PIM Review"
+        description={
+          loading
+            ? 'Detecting variation groups…'
+            : `Detected ${groups.length} group${
+                groups.length === 1 ? '' : 's'
+              } across ${totalMembers} product${totalMembers === 1 ? '' : 's'}`
+        }
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={loading || groups.length === 0}
+              onClick={() =>
+                setApprovedGroups(
+                  new Set(groups.filter((g) => g.confidence >= 80).map((g) => g.id))
+                )
+              }
+            >
+              Auto-approve 80%+
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              loading={applying}
+              disabled={approvedGroups.size === 0}
+              onClick={handleApplyApproved}
+            >
+              {`Apply ${approvedGroups.size || ''} Approved`.trim()}
+            </Button>
+          </>
+        }
+      />
 
-      <div className="bg-white border border-slate-200 rounded-lg p-4 mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-4 text-sm">
-          <span className="text-slate-600">
-            <span className="font-bold text-green-600">{approvedGroups.size}</span> approved
-          </span>
-          <span className="text-slate-600">
-            <span className="font-bold text-red-600">{rejectedGroups.size}</span> rejected
-          </span>
-          <span className="text-slate-600">
-            <span className="font-bold text-slate-900">{pendingCount}</span> pending
-          </span>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() =>
-              setApprovedGroups(new Set(groups.filter((g) => g.confidence >= 80).map((g) => g.id)))
-            }
-            className="px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 border border-blue-200"
-          >
-            Auto-approve high confidence (80%+)
-          </button>
-          <button
-            onClick={handleApplyApproved}
-            disabled={approvedGroups.size === 0 || applying}
-            className="px-4 py-1.5 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
-          >
-            {applying ? 'Applying…' : `Apply ${approvedGroups.size} Approved Groups`}
-          </button>
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        {groups.map((group) => (
-          <div
-            key={group.id}
-            className={`bg-white border-2 rounded-lg overflow-hidden ${
-              approvedGroups.has(group.id)
-                ? 'border-green-400'
-                : rejectedGroups.has(group.id)
-                ? 'border-red-400 opacity-50'
-                : 'border-slate-200'
-            }`}
-          >
-            <div className="p-4 flex items-center gap-4">
-              <button
-                onClick={() => setExpandedGroup(expandedGroup === group.id ? null : group.id)}
-                className="p-1 hover:bg-slate-100 rounded"
-              >
-                <ChevronRight
-                  className={`w-5 h-5 transition-transform ${
-                    expandedGroup === group.id ? 'rotate-90' : ''
-                  }`}
-                />
-              </button>
-
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-slate-900 truncate">{group.baseName}</div>
-                <div className="text-sm text-slate-500 mt-1 flex items-center gap-3 flex-wrap">
-                  <span className="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded">
-                    {group.suggestedMasterSku}
-                  </span>
-                  <span>{group.members.length} variants</span>
-                  <span>•</span>
-                  <span>Axes: {group.variationAxes.join(' / ') || '—'}</span>
-                </div>
-              </div>
-
-              <div
-                className={`text-xs px-2 py-1 rounded-md border whitespace-nowrap ${getConfidenceColor(
-                  group.confidence
-                )}`}
-              >
-                {group.confidence}% confidence
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    setApprovedGroups((prev) => {
-                      const next = new Set(prev)
-                      if (next.has(group.id)) next.delete(group.id)
-                      else next.add(group.id)
-                      return next
-                    })
-                    setRejectedGroups((prev) => {
-                      const next = new Set(prev)
-                      next.delete(group.id)
-                      return next
-                    })
-                  }}
-                  className={`p-2 rounded-md ${
-                    approvedGroups.has(group.id)
-                      ? 'bg-green-500 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-green-100'
-                  }`}
-                  title="Approve"
-                >
-                  <Check className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => {
-                    setRejectedGroups((prev) => {
-                      const next = new Set(prev)
-                      if (next.has(group.id)) next.delete(group.id)
-                      else next.add(group.id)
-                      return next
-                    })
-                    setApprovedGroups((prev) => {
-                      const next = new Set(prev)
-                      next.delete(group.id)
-                      return next
-                    })
-                  }}
-                  className={`p-2 rounded-md ${
-                    rejectedGroups.has(group.id)
-                      ? 'bg-red-500 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-red-100'
-                  }`}
-                  title="Reject"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+      {/* Approval counters */}
+      {!loading && groups.length > 0 && (
+        <Card>
+          <div className="flex items-center gap-6 text-[13px] -my-1">
+            <div className="flex items-center gap-2">
+              <Badge variant="success" size="md">
+                {approvedGroups.size}
+              </Badge>
+              <span className="text-slate-600">approved</span>
             </div>
-
-            {expandedGroup === group.id && (
-              <div className="border-t border-slate-200 bg-slate-50 p-4">
-                <div className="text-xs font-medium text-slate-700 mb-2">
-                  {group.members.length} variations:
-                </div>
-                <div className="grid gap-2">
-                  {group.members.map((m) => (
-                    <div
-                      key={m.productId}
-                      className="bg-white border border-slate-200 rounded p-3 flex items-center justify-between gap-3"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate">{m.sku}</div>
-                        <div className="text-xs text-slate-500 truncate">{m.name}</div>
-                        {m.asin && (
-                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                            ASIN: {m.asin}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex gap-1.5 flex-wrap justify-end">
-                        {Object.entries(m.detectedAttributes).map(([k, v]) => (
-                          <span
-                            key={k}
-                            className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded whitespace-nowrap"
-                          >
-                            <strong>{k}:</strong> {v}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="danger" size="md">
+                {rejectedGroups.size}
+              </Badge>
+              <span className="text-slate-600">rejected</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="default" size="md">
+                {pendingCount}
+              </Badge>
+              <span className="text-slate-600">pending</span>
+            </div>
+            {statusMsg && (
+              <div
+                className={cn(
+                  'ml-auto text-[12px] px-3 py-1 rounded border',
+                  statusMsg.kind === 'success'
+                    ? 'bg-green-50 border-green-200 text-green-700'
+                    : 'bg-red-50 border-red-200 text-red-700'
+                )}
+              >
+                {statusMsg.text}
               </div>
             )}
           </div>
-        ))}
-      </div>
+        </Card>
+      )}
 
-      {standalone.length > 0 && (
-        <div className="mt-8">
-          <h2 className="text-lg font-semibold mb-3">
-            Standalone Products ({standalone.length})
-          </h2>
-          <p className="text-sm text-slate-600 mb-4">
-            These products don't appear to be variations. They'll remain as standalone master
-            products.
-          </p>
-          <div className="bg-white border border-slate-200 rounded-lg p-4">
-            <div className="text-xs text-slate-500 space-y-1">
-              {standalone.slice(0, 10).map((p) => (
-                <div key={p.id}>
-                  <span className="font-mono">{p.sku}</span> — {p.name}
-                </div>
-              ))}
-              {standalone.length > 10 && (
-                <div className="text-slate-400 mt-2">
-                  … and {standalone.length - 10} more
-                </div>
-              )}
-            </div>
-          </div>
+      {/* Groups */}
+      {loading ? (
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <GroupSkeleton key={i} />
+          ))}
         </div>
+      ) : groups.length === 0 ? (
+        <EmptyState
+          icon={Layers}
+          title="No variation groups detected"
+          description="Either every product is already grouped, or there aren't enough similar items to detect a pattern. Re-run detection after importing more products."
+          action={{ label: 'View Catalog', href: '/inventory' }}
+        />
+      ) : (
+        <div className="space-y-3">
+          {groups.map((group) => {
+            const isApproved = approvedGroups.has(group.id)
+            const isRejected = rejectedGroups.has(group.id)
+            const isExpanded = expandedGroup === group.id
+            return (
+              <div
+                key={group.id}
+                className={cn(
+                  'bg-white border-2 rounded-lg overflow-hidden transition-colors',
+                  isApproved && 'border-green-400',
+                  isRejected && 'border-red-300 opacity-50',
+                  !isApproved && !isRejected && 'border-slate-200'
+                )}
+              >
+                <div className="p-4 flex items-center gap-3 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedGroup(isExpanded ? null : group.id)}
+                    className="p-1 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors"
+                    aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                  >
+                    <ChevronRight
+                      className={cn(
+                        'w-4 h-4 transition-transform',
+                        isExpanded && 'rotate-90'
+                      )}
+                    />
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-semibold text-slate-900 truncate">
+                      {group.baseName}
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
+                      <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">
+                        {group.suggestedMasterSku}
+                      </span>
+                      <span>·</span>
+                      <span>
+                        {group.members.length} variant
+                        {group.members.length === 1 ? '' : 's'}
+                      </span>
+                      <span>·</span>
+                      <span>{group.variationAxes.join(' / ') || '—'}</span>
+                    </div>
+                  </div>
+                  <Badge variant={confidenceVariant(group.confidence)} size="md">
+                    {group.confidence}% confidence
+                  </Badge>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => toggleApproved(group.id)}
+                      className={cn(
+                        'p-1.5 rounded-md transition-colors',
+                        isApproved
+                          ? 'bg-green-500 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-green-100'
+                      )}
+                      title="Approve"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleRejected(group.id)}
+                      className={cn(
+                        'p-1.5 rounded-md transition-colors',
+                        isRejected
+                          ? 'bg-red-500 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-red-100'
+                      )}
+                      title="Reject"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {isExpanded && (
+                  <div className="border-t border-slate-200 bg-slate-50 p-4">
+                    <div className="text-[11px] font-semibold text-slate-700 uppercase tracking-wide mb-2">
+                      {group.members.length} variation
+                      {group.members.length === 1 ? '' : 's'}
+                    </div>
+                    <ul className="space-y-1.5">
+                      {group.members.map((m) => (
+                        <li
+                          key={m.productId}
+                          className="bg-white border border-slate-200 rounded-md p-2.5 flex items-center justify-between gap-3"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[13px] font-medium text-slate-900 truncate font-mono">
+                              {m.sku}
+                            </div>
+                            <div className="text-[11px] text-slate-500 truncate">{m.name}</div>
+                            {m.asin && (
+                              <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                                ASIN: {m.asin}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex gap-1 flex-wrap justify-end max-w-[60%]">
+                            {Object.entries(m.detectedAttributes).map(([k, v]) => (
+                              <Badge key={k} variant="info" size="sm">
+                                <span className="text-blue-600">{k}:</span>
+                                <span className="ml-1">{v}</span>
+                              </Badge>
+                            ))}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Standalone */}
+      {!loading && standalone.length > 0 && (
+        <Card
+          title={`Standalone Products (${standalone.length})`}
+          description="These products don't appear to be variations. They'll remain as standalone master products."
+        >
+          <ul className="space-y-1 -my-0.5">
+            {standalone.slice(0, 10).map((p) => (
+              <li
+                key={p.id}
+                className="text-[12px] text-slate-600 flex items-baseline gap-2"
+              >
+                <span className="font-mono text-slate-700 flex-shrink-0">{p.sku}</span>
+                <span className="text-slate-400">·</span>
+                <span className="truncate">{p.name}</span>
+              </li>
+            ))}
+            {standalone.length > 10 && (
+              <li className="text-[11px] text-slate-400 mt-2">
+                …and {standalone.length - 10} more
+              </li>
+            )}
+          </ul>
+        </Card>
       )}
     </div>
   )

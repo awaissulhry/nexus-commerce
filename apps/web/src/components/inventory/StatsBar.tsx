@@ -54,11 +54,6 @@ function Stat({ label, value, hint, icon: Icon, warning }: StatProps) {
 }
 
 export function StatsBar({ stats }: { stats: InventoryStats }) {
-  const syncPct =
-    stats.totalSKUs > 0
-      ? `${Math.round((stats.syncedToAmazon / stats.totalSKUs) * 100)}% of catalog`
-      : 'no SKUs yet'
-
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
       <Stat
@@ -74,9 +69,9 @@ export function StatsBar({ stats }: { stats: InventoryStats }) {
         icon={Boxes}
       />
       <Stat
-        label="Synced to Amazon"
+        label="Imported from Amazon"
         value={`${stats.syncedToAmazon.toLocaleString()} / ${stats.totalSKUs.toLocaleString()}`}
-        hint={syncPct}
+        hint="Source data, not active listings"
         icon={Link2}
       />
       <Stat
