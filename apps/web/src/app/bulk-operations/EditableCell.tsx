@@ -3,6 +3,7 @@
 import {
   memo,
   useCallback,
+  useEffect,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -34,6 +35,14 @@ interface Props {
    * the vast majority of cells; only failed cells re-render when this
    * map updates. */
   cellError?: string
+  /** When this number changes, the cell resets its draftValue back to
+   * initialValue. Used to revert pending edits that were rejected by a
+   * higher-level flow (e.g., user cancelled the cascade choice modal).
+   * Undefined means "no reset request"; treat as 0. */
+  resetKey?: number
+  /** True when this cell's pending change is a cascade. Drives the
+   * orange-tinted background instead of yellow. */
+  cellCascading?: boolean
 }
 
 const defaultFormat = (v: unknown): string => {
@@ -75,6 +84,8 @@ export const EditableCell = memo(
     meta,
     onCommit,
     cellError,
+    resetKey,
+    cellCascading,
   }: Props) {
     const [isEditing, setIsEditing] = useState(false)
     const [draftValue, setDraftValue] = useState<unknown>(initialValue)
@@ -85,6 +96,16 @@ export const EditableCell = memo(
     // comparator triggers a re-render, and isDirty naturally evaluates
     // to false (because draftValue now equals the new server value).
     const isDirty = !shallowEquals(draftValue, initialValue)
+
+    // resetKey reset: parent bumped the counter to ask us to throw away
+    // local state (e.g., cascade modal cancelled). Only fires when the
+    // value actually changes — initial undefined → undefined is a no-op.
+    useEffect(() => {
+      if (resetKey === undefined) return
+      setDraftValue(initialValue)
+      setIsEditing(false)
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [resetKey])
 
     const enterEdit = useCallback(() => {
       setIsEditing(true)
@@ -188,11 +209,12 @@ export const EditableCell = memo(
             enterEdit()
           }
         }}
-        title={cellError}
+        title={cellError ?? (cellCascading && isDirty ? 'Will cascade to children' : undefined)}
         className={cn(
           'w-full h-full px-2 flex items-center text-[13px] cursor-cell',
           'focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-inset',
-          isDirty && !cellError && 'bg-yellow-50',
+          isDirty && !cellError && !cellCascading && 'bg-yellow-50',
+          isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
           cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
           meta.numeric && 'tabular-nums justify-end'
         )}
@@ -208,7 +230,9 @@ export const EditableCell = memo(
     shallowEquals(prev.initialValue, next.initialValue) &&
     prev.meta === next.meta &&
     prev.onCommit === next.onCommit &&
-    prev.cellError === next.cellError
+    prev.cellError === next.cellError &&
+    prev.resetKey === next.resetKey &&
+    prev.cellCascading === next.cellCascading
 )
 
 function shallowEquals(a: unknown, b: unknown): boolean {

@@ -31,6 +31,7 @@ import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
 import { EditableCell, type EditableMeta } from './EditableCell'
 import PreviewChangesModal from './PreviewChangesModal'
+import CascadeChoiceModal from './components/CascadeChoiceModal'
 import ColumnSelector, { type FieldDef } from './components/ColumnSelector'
 import {
   loadAllViews,
@@ -98,7 +99,18 @@ interface CellChange {
   columnId: string
   oldValue: unknown
   newValue: unknown
+  cascade: boolean
   timestamp: number
+}
+
+interface CascadeModalState {
+  rowId: string
+  columnId: string
+  oldValue: unknown
+  newValue: unknown
+  parentSku: string
+  fieldLabel: string
+  children: Array<{ id: string; sku: string }>
 }
 
 interface ApiError {
@@ -122,12 +134,18 @@ const HEADER_HEIGHT = 36
 interface EditCtx {
   onCommit: (rowId: string, columnId: string, value: unknown) => void
   cellErrors: Map<string, string>
+  /** cellKey → bumped each time parent wants to force-revert that cell */
+  resetKeys: Map<string, number>
+  /** cellKey → true if its pending change is a cascade (orange tint) */
+  cascadeKeys: Set<string>
 }
 
 const editCtxRef: { current: EditCtx } = {
   current: {
     onCommit: () => {},
     cellErrors: new Map(),
+    resetKeys: new Map(),
+    cascadeKeys: new Set(),
   },
 }
 
@@ -156,6 +174,8 @@ function makeEditableRenderer(meta: EditableMeta) {
         meta={meta}
         onCommit={editCtxRef.current.onCommit}
         cellError={editCtxRef.current.cellErrors.get(cellKey)}
+        resetKey={editCtxRef.current.resetKeys.get(cellKey)}
+        cellCascading={editCtxRef.current.cascadeKeys.has(cellKey)}
       />
     )
   }
@@ -460,6 +480,8 @@ export default function BulkOperationsClient() {
 
   const [changes, setChanges] = useState<Map<string, CellChange>>(new Map())
   const [cellErrors, setCellErrors] = useState<Map<string, string>>(new Map())
+  const [resetKeys, setResetKeys] = useState<Map<string, number>>(new Map())
+  const [cascadeModal, setCascadeModal] = useState<CascadeModalState | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>({ kind: 'idle' })
   const [online, setOnline] = useState(true)
@@ -521,6 +543,7 @@ export default function BulkOperationsClient() {
   // Refs for stable callbacks
   const productsRef = useRef(products)
   const changesRef = useRef(changes)
+  const allFieldsRef = useRef<FieldDef[]>([])
   useEffect(() => {
     productsRef.current = products
   }, [products])
@@ -541,8 +564,12 @@ export default function BulkOperationsClient() {
     }
   }, [])
 
-  const handleCommit = useCallback(
-    (rowId: string, columnId: string, newValue: unknown) => {
+  /** Add or update an entry in the changesMap. Drops the entry when the
+   * new value matches the original (revert). Updates cascade tracking
+   * + clears stale cell errors. Common code path used by both direct
+   * commits and the cascade modal's "Apply" handler. */
+  const writeChange = useCallback(
+    (rowId: string, columnId: string, newValue: unknown, cascade: boolean) => {
       const key = `${rowId}:${columnId}`
       const product = productsRef.current.find((p) => p.id === rowId)
       if (!product) return
@@ -558,6 +585,7 @@ export default function BulkOperationsClient() {
             columnId,
             oldValue,
             newValue,
+            cascade,
             timestamp: Date.now(),
           })
         }
@@ -578,7 +606,96 @@ export default function BulkOperationsClient() {
     []
   )
 
-  editCtxRef.current = { onCommit: handleCommit, cellErrors }
+  // Cascade-aware commit. Decides whether to write directly or open
+  // the choice modal. Modal appears only when:
+  //   - hierarchy or grouped display mode
+  //   - target row has children (is a master with kids)
+  //   - the cell isn't an aggregate (those aren't editable on parents)
+  const handleCommit = useCallback(
+    (rowId: string, columnId: string, newValue: unknown) => {
+      const product = productsRef.current.find((p) => p.id === rowId)
+      if (!product) return
+      const oldValue = (product as unknown as Record<string, unknown>)[columnId]
+
+      // Quick path: revert. No modal even on parent rows.
+      if (looselyEqual(newValue, oldValue)) {
+        writeChange(rowId, columnId, newValue, false)
+        return
+      }
+
+      const inHierarchyMode =
+        displayMode === 'hierarchy' || displayMode === 'grouped'
+      if (!inHierarchyMode) {
+        writeChange(rowId, columnId, newValue, false)
+        return
+      }
+
+      // Find children of this product
+      const children = productsRef.current.filter(
+        (p) => p.parentId === rowId
+      )
+      if (children.length === 0) {
+        // Standalone or child row — no cascade choice needed
+        writeChange(rowId, columnId, newValue, false)
+        return
+      }
+
+      // Open modal — don't commit yet
+      const fieldDef = allFieldsRef.current.find((f) => f.id === columnId)
+      setCascadeModal({
+        rowId,
+        columnId,
+        oldValue,
+        newValue,
+        parentSku: product.sku,
+        fieldLabel: fieldDef?.label ?? columnId,
+        children: children.map((c) => ({ id: c.id, sku: c.sku })),
+      })
+    },
+    [displayMode, writeChange]
+  )
+
+  // Cascade modal handlers
+  const handleCascadeApply = useCallback(
+    (cascade: boolean) => {
+      const m = cascadeModal
+      if (!m) return
+      writeChange(m.rowId, m.columnId, m.newValue, cascade)
+      setCascadeModal(null)
+    },
+    [cascadeModal, writeChange]
+  )
+
+  const handleCascadeCancel = useCallback(() => {
+    const m = cascadeModal
+    if (!m) return
+    // Force the cell to revert its draftValue to initialValue by bumping
+    // its resetKey. The EditableCell's useEffect picks up the change.
+    const key = `${m.rowId}:${m.columnId}`
+    setResetKeys((prev) => {
+      const next = new Map(prev)
+      next.set(key, (next.get(key) ?? 0) + 1)
+      return next
+    })
+    setCascadeModal(null)
+  }, [cascadeModal])
+
+  // Push the latest commit handler + per-cell maps into the module ref
+  // so cell renderers see them. cascadeKeys derives from changesMap.
+  const cascadeKeys = useMemo(() => {
+    const s = new Set<string>()
+    for (const [k, v] of changes) {
+      if (v.cascade) s.add(k)
+    }
+    return s
+  }, [changes])
+  editCtxRef.current = {
+    onCommit: handleCommit,
+    cellErrors,
+    resetKeys,
+    cascadeKeys,
+  }
+  allFieldsRef.current = allFields
 
   // ── Save flow ──────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
@@ -593,6 +710,7 @@ export default function BulkOperationsClient() {
       id: c.rowId,
       field: c.columnId,
       value: c.newValue,
+      cascade: c.cascade,
     }))
 
     try {
@@ -1002,6 +1120,17 @@ export default function BulkOperationsClient() {
         onClose={() => setPreviewOpen(false)}
         changes={changes}
         products={products}
+      />
+
+      <CascadeChoiceModal
+        open={cascadeModal !== null}
+        fieldLabel={cascadeModal?.fieldLabel ?? ''}
+        oldValue={cascadeModal?.oldValue}
+        newValue={cascadeModal?.newValue}
+        parentSku={cascadeModal?.parentSku ?? ''}
+        children={cascadeModal?.children ?? []}
+        onApply={handleCascadeApply}
+        onCancel={handleCascadeCancel}
       />
     </div>
   )

@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
+import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { getAvailableFields } from '../services/pim/field-registry.service.js'
 
@@ -89,25 +90,29 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
 
   // PATCH /api/products/bulk
   //
-  // Body: { changes: Array<{ id: string; field: string; value: unknown }> }
+  // Body: { changes: Array<{ id, field, value, cascade? }> }
   //
-  // Validates each change against ALLOWED_FIELDS, type-coerces numeric
-  // fields, and applies the survivors in a single Prisma $transaction
-  // (10s timeout). Returns:
-  //   { success, updated, errors?: [{ id, field, error }] }
+  // - Validates against ALLOWED_FIELDS, type-coerces, atomically
+  //   applies survivors in a single Prisma transaction.
+  // - cascade=true (D.3c): finds children of `id`, applies the same
+  //   change to each, and pushes `field` onto each child's
+  //   `cascadedFields` array (deduped on read).
+  // - cascade=false on a child product: also removes `field` from
+  //   that child's `cascadedFields` array — direct edit overrides
+  //   any prior parent-cascaded value.
   //
-  // status semantics:
-  //   - 200 success: every change applied (errors: undefined)
-  //   - 200 partial: some applied, some rejected at validation;
-  //     status: 'PARTIAL' in audit log; client uses errors[] to mark
-  //     red borders on the failed cells
-  //   - 400 if every change failed validation (nothing was applied)
-  //   - 500 if the transaction itself threw (nothing was applied)
-  //
-  // Every request — even validation-only failures — writes an audit
-  // row to BulkOperation.
+  // Audit row captures:
+  //   cascadeCount       — how many cascade fan-outs ran
+  //   affectedChildren   — every child id touched by a cascade
   fastify.patch<{
-    Body: { changes: Array<{ id: string; field: string; value: unknown }> }
+    Body: {
+      changes: Array<{
+        id: string
+        field: string
+        value: unknown
+        cascade?: boolean
+      }>
+    }
   }>('/products/bulk', async (request, reply) => {
     const { changes } = request.body ?? {}
     if (!Array.isArray(changes) || changes.length === 0) {
@@ -150,6 +155,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       id: string
       field: string
       value: any
+      cascade: boolean
     }
     interface ChangeError {
       id: string
@@ -246,7 +252,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      validated.push({ id: c.id, field: c.field, value })
+      validated.push({ id: c.id, field: c.field, value, cascade: !!c.cascade })
     }
 
     // Nothing survived validation — do not open a transaction
@@ -265,34 +271,115 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
 
     // Apply survivors atomically. Per-row updates in a single
     // transaction (array form). With serverless max:1 connection and
-    // sequential transactions, this is ~13ms per row, so:
-    //   100 rows → ~1.3s   (above the 500ms target)
-    //   1000 rows → ~13s   (above the 2s target)
+    // sequential transactions, this is ~13ms per row.
     //
-    // Tracked as a follow-up perf hotfix: switch to one
-    // `UPDATE … FROM (VALUES …)` per field group. Earlier attempt at
-    // that pattern caused a runtime crash (502) — likely Prisma 6
-    // tagged-template + raw-column-name interaction. Needs careful
-    // local repro before re-shipping.
+    // D.3c additions:
+    //   - cascade=true: pre-fetches children for each cascading parent,
+    //     adds extra updates for each child. cascadedFields gets the
+    //     field name appended (deduped on read; allowing dups is fine
+    //     and avoids an extra round-trip per child).
+    //   - cascade=false on a child: removes the field from the child's
+    //     cascadedFields array via raw SQL array_remove, so a direct
+    //     edit cleanly overrides any prior cascade.
     try {
       const startTs = Date.now()
       const productIds = new Set(validated.map((v) => v.id))
 
-      await prisma.$transaction(
-        validated.map((v) =>
-          prisma.product.update({
-            where: { id: v.id },
-            data: { [v.field]: v.value } as any,
-          })
-        ),
-        { isolationLevel: 'ReadCommitted' }
+      // Pre-fetch which validated targets are children (parentId set).
+      // Used to decide whether to call array_remove on cascadedFields
+      // when applying a non-cascade change.
+      const targetIds = Array.from(productIds)
+      const targetProducts = await prisma.product.findMany({
+        where: { id: { in: targetIds } },
+        select: { id: true, parentId: true, isParent: true },
+      })
+      const childIdSet = new Set(
+        targetProducts.filter((p) => p.parentId).map((p) => p.id)
       )
+
+      // Pre-fetch children for cascading parents.
+      const cascadingParents = validated.filter((v) => v.cascade)
+      const childrenByParent = new Map<string, string[]>()
+      let totalAffectedChildren = 0
+      const allAffectedChildIds = new Set<string>()
+      if (cascadingParents.length > 0) {
+        const parentIds = Array.from(
+          new Set(cascadingParents.map((v) => v.id))
+        )
+        const kids = await prisma.product.findMany({
+          where: { parentId: { in: parentIds } },
+          select: { id: true, parentId: true },
+        })
+        for (const k of kids) {
+          if (!k.parentId) continue
+          let arr = childrenByParent.get(k.parentId)
+          if (!arr) {
+            arr = []
+            childrenByParent.set(k.parentId, arr)
+          }
+          arr.push(k.id)
+          allAffectedChildIds.add(k.id)
+        }
+        totalAffectedChildren = allAffectedChildIds.size
+      }
+
+      // Build the transaction's update list. One Prisma promise per
+      // statement; runs serially in array-form $transaction.
+      const updates: any[] = []
+
+      for (const v of validated) {
+        if (v.cascade) {
+          // Update parent itself
+          updates.push(
+            prisma.product.update({
+              where: { id: v.id },
+              data: { [v.field]: v.value } as any,
+            })
+          )
+          // Update each child + push field onto cascadedFields
+          const kids = childrenByParent.get(v.id) ?? []
+          for (const childId of kids) {
+            updates.push(
+              prisma.product.update({
+                where: { id: childId },
+                data: {
+                  [v.field]: v.value,
+                  cascadedFields: { push: v.field },
+                } as any,
+              })
+            )
+          }
+        } else if (childIdSet.has(v.id)) {
+          // Direct edit on a child — also remove the field from
+          // cascadedFields if it's there (override semantics).
+          // Using $executeRaw because Prisma doesn't have an
+          // array_remove operation in the standard data API.
+          updates.push(
+            prisma.$executeRaw`
+              UPDATE "Product"
+              SET ${Prisma.raw(`"${v.field}"`)} = ${v.value as any},
+                  "cascadedFields" = array_remove("cascadedFields", ${v.field})
+              WHERE id = ${v.id}
+            `
+          )
+        } else {
+          // Direct edit on a parent or standalone — plain update
+          updates.push(
+            prisma.product.update({
+              where: { id: v.id },
+              data: { [v.field]: v.value } as any,
+            })
+          )
+        }
+      }
+
+      await prisma.$transaction(updates, {
+        isolationLevel: 'ReadCommitted',
+      })
       const elapsedMs = Date.now() - startTs
 
       const overallStatus =
-        errors.length === 0
-          ? 'SUCCESS'
-          : 'PARTIAL'
+        errors.length === 0 ? 'SUCCESS' : 'PARTIAL'
 
       await prisma.bulkOperation.create({
         data: {
@@ -301,12 +388,16 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           changes: validated as any,
           status: overallStatus,
           errors: errors.length ? (errors as any) : undefined,
+          cascadeCount: cascadingParents.length,
+          affectedChildren: Array.from(allAffectedChildIds),
         },
       })
 
       return {
         success: true,
         updated: validated.length,
+        cascadeCount: cascadingParents.length,
+        affectedChildren: totalAffectedChildren,
         errors: errors.length ? errors : undefined,
         elapsedMs,
       }
