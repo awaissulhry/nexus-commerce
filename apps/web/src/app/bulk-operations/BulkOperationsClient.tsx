@@ -201,10 +201,13 @@ interface SelectCtx {
    *  for click+drag rectangle selection. Called on plain mousedown
    *  (not shift-click). */
   beginDrag: (rowIdx: number, colIdx: number) => void
+  /** Step 5: drag-fill (Excel autofill). Called from the small handle
+   *  on the bottom-right of the selection rectangle. */
+  beginFill: () => void
 }
 
 const selectCtxRef: { current: SelectCtx } = {
-  current: { select: () => {}, beginDrag: () => {} },
+  current: { select: () => {}, beginDrag: () => {}, beginFill: () => {} },
 }
 
 
@@ -218,6 +221,22 @@ interface SelectionState {
   anchor: CellCoord | null
   /** Active cell — where typing/edits land; the moving end of the range. */
   active: CellCoord | null
+}
+
+interface FillState {
+  /** The original selection rectangle captured at handle-mousedown. */
+  source: { minRow: number; maxRow: number; minCol: number; maxCol: number }
+  /** Cell currently under the cursor — drives the dashed-extension
+   *  preview. */
+  target: CellCoord
+}
+
+interface FillExtension {
+  minRow: number
+  maxRow: number
+  minCol: number
+  maxCol: number
+  axis: 'row' | 'col'
 }
 
 interface SelectionMetrics {
@@ -718,14 +737,20 @@ const TableRow = memo(
     (prev as any).columnsKey === (next as any).columnsKey,
 )
 
-// Two absolutely-positioned overlays that draw the selection on top
-// of the table body. Single-element renders, no per-cell re-paints.
+// Three absolutely-positioned overlays that draw the selection on
+// top of the table body — single-element renders, no per-cell
+// re-paints. The fill handle (when no fill drag is in progress) is a
+// small interactive square at the bottom-right corner of the range.
 function SelectionOverlays({
   rangeRect,
   activeRect,
+  fillRect,
+  isFilling,
 }: {
-  rangeRect: { top: number; left: number; width: number; height: number } | null
-  activeRect: { top: number; left: number; width: number; height: number } | null
+  rangeRect: Rect | null
+  activeRect: Rect | null
+  fillRect: Rect | null
+  isFilling: boolean
 }) {
   return (
     <>
@@ -741,8 +766,169 @@ function SelectionOverlays({
           style={activeRect}
         />
       )}
+      {fillRect && (
+        <div
+          className="absolute pointer-events-none border-2 border-dashed border-blue-500 bg-blue-100/30 z-20"
+          style={fillRect}
+        />
+      )}
+      {/* Fill handle — a 8×8 blue square at the bottom-right of the
+       *  selection range. Hidden while a fill drag is in progress so
+       *  it doesn't visually fight the dashed extension preview. */}
+      {rangeRect && !isFilling && (
+        <div
+          data-fill-handle
+          className="absolute w-2 h-2 bg-blue-600 border border-white cursor-crosshair z-30"
+          style={{
+            left: rangeRect.left + rangeRect.width - 4,
+            top: rangeRect.top + rangeRect.height - 4,
+          }}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            selectCtxRef.current.beginFill()
+          }}
+        />
+      )}
     </>
   )
+}
+
+interface Rect {
+  top: number
+  left: number
+  width: number
+  height: number
+}
+
+/**
+ * Pick the largest axis distance from any edge of `source` to
+ * `target`. Returns the rectangular extension on that axis, or null
+ * when target is inside source (no fill).
+ */
+function computeFillExtension(
+  source: { minRow: number; maxRow: number; minCol: number; maxCol: number },
+  target: CellCoord,
+): FillExtension | null {
+  const dDown = target.rowIdx - source.maxRow
+  const dUp = source.minRow - target.rowIdx
+  const dRight = target.colIdx - source.maxCol
+  const dLeft = source.minCol - target.colIdx
+  const maxD = Math.max(dDown, dUp, dRight, dLeft)
+  if (maxD <= 0) return null
+  if (maxD === dDown) {
+    return {
+      minRow: source.maxRow + 1,
+      maxRow: target.rowIdx,
+      minCol: source.minCol,
+      maxCol: source.maxCol,
+      axis: 'row',
+    }
+  }
+  if (maxD === dUp) {
+    return {
+      minRow: target.rowIdx,
+      maxRow: source.minRow - 1,
+      minCol: source.minCol,
+      maxCol: source.maxCol,
+      axis: 'row',
+    }
+  }
+  if (maxD === dRight) {
+    return {
+      minRow: source.minRow,
+      maxRow: source.maxRow,
+      minCol: source.maxCol + 1,
+      maxCol: target.colIdx,
+      axis: 'col',
+    }
+  }
+  return {
+    minRow: source.minRow,
+    maxRow: source.maxRow,
+    minCol: target.colIdx,
+    maxCol: source.minCol - 1,
+    axis: 'col',
+  }
+}
+
+/** Detect a constant-step linear pattern across a numeric source.
+ *  Returns null for non-numeric, length<2, or non-constant diffs. */
+function detectLinearStep(values: unknown[]): number | null {
+  if (values.length < 2) return null
+  if (!values.every((v) => typeof v === 'number' && Number.isFinite(v))) {
+    return null
+  }
+  const step = (values[1] as number) - (values[0] as number)
+  if (step === 0) return null
+  for (let i = 2; i < values.length; i++) {
+    if ((values[i] as number) - (values[i - 1] as number) !== step) return null
+  }
+  return step
+}
+
+function computeFillValueAlongAxis(values: unknown[], d: number): unknown {
+  const len = values.length
+  if (len === 0) return null
+  if (len === 1) return values[0]
+  const step = detectLinearStep(values)
+  if (step !== null) {
+    return (values[0] as number) + step * d
+  }
+  // Cyclic fallback — works for both forward and backward drags.
+  const idx = ((d % len) + len) % len
+  return values[idx]
+}
+
+/** Compute the value to write into one extension cell, based on the
+ *  source values along the relevant axis and the cell's distance from
+ *  the source's leading edge. */
+function computeFillValue(
+  source: { minRow: number; maxRow: number; minCol: number; maxCol: number },
+  ext: FillExtension,
+  target: CellCoord,
+  tableRows: ReturnType<
+    ReturnType<typeof useReactTable<BulkProduct>>['getRowModel']
+  >['rows'],
+  cols: ReturnType<
+    ReturnType<typeof useReactTable<BulkProduct>>['getVisibleLeafColumns']
+  >,
+): unknown {
+  const sourceValues: unknown[] = []
+  if (ext.axis === 'row') {
+    const col = cols[target.colIdx]
+    if (!col) return undefined
+    for (let r = source.minRow; r <= source.maxRow; r++) {
+      const row = tableRows[r]
+      if (!row) {
+        sourceValues.push(null)
+        continue
+      }
+      try {
+        sourceValues.push(row.getValue(col.id))
+      } catch {
+        sourceValues.push(null)
+      }
+    }
+    const d = target.rowIdx - source.minRow
+    return computeFillValueAlongAxis(sourceValues, d)
+  }
+  const row = tableRows[target.rowIdx]
+  if (!row) return undefined
+  for (let c = source.minCol; c <= source.maxCol; c++) {
+    const col = cols[c]
+    if (!col) {
+      sourceValues.push(null)
+      continue
+    }
+    try {
+      sourceValues.push(row.getValue(col.id))
+    } catch {
+      sourceValues.push(null)
+    }
+  }
+  const d = target.colIdx - source.minCol
+  return computeFillValueAlongAxis(sourceValues, d)
 }
 
 function SkeletonRow({ top, colCount }: { top: number; colCount: number }) {
@@ -940,6 +1126,12 @@ export default function BulkOperationsClient() {
       maxCol: Math.max(selection.anchor.colIdx, selection.active.colIdx),
     }
   }, [selection])
+  const rangeBoundsRef = useRef(rangeBounds)
+  rangeBoundsRef.current = rangeBounds
+
+  // ── Step 5: drag-fill state ────────────────────────────────────
+  const [fillState, setFillState] = useState<FillState | null>(null)
+
   const selectedCellCount = useMemo(() => {
     if (!rangeBounds) return 0
     return (
@@ -1597,6 +1789,117 @@ export default function BulkOperationsClient() {
   // calls this on Enter / Tab inside the input — Excel semantics:
   // commit + move selection.
   commitNavigateRef.current = (dRow, dCol) => moveSelection(dRow, dCol, false)
+
+  // ── Step 5: drag-fill (Excel autofill) ──────────────────────────
+  // The handle on the bottom-right of the selection rectangle starts
+  // a fill drag. As the cursor moves we update fillState.target; on
+  // mouseup we compute the extension, generate fill values per the
+  // detected pattern (linear numeric or cyclic), apply via writeChange
+  // + applyValue, and expand the selection over the source + filled
+  // region. Escape cancels mid-drag with no changes.
+  const commitFill = useCallback(
+    (state: FillState) => {
+      const ext = computeFillExtension(state.source, state.target)
+      if (!ext) return
+      const tbl = tableRef.current
+      const tableRows = tbl.getRowModel().rows
+      const cols = tbl.getVisibleLeafColumns()
+      const allFields = allFieldsRef.current
+      let appliedAny = false
+      for (let r = ext.minRow; r <= ext.maxRow; r++) {
+        const row = tableRows[r]
+        if (!row) continue
+        for (let c = ext.minCol; c <= ext.maxCol; c++) {
+          const col = cols[c]
+          if (!col) continue
+          const fieldDef = allFields.find((f) => f.id === col.id)
+          if (!fieldDef?.editable) continue
+          const v = computeFillValue(state.source, ext, {
+            rowIdx: r,
+            colIdx: c,
+          }, tableRows, cols)
+          if (v === undefined) continue
+          editHandlers
+            .get(editKey(row.original.id, col.id))
+            ?.applyValue(v)
+          writeChange(row.original.id, col.id, v, false)
+          appliedAny = true
+        }
+      }
+      if (appliedAny) {
+        setSelection({
+          anchor: {
+            rowIdx: Math.min(state.source.minRow, ext.minRow),
+            colIdx: Math.min(state.source.minCol, ext.minCol),
+          },
+          active: {
+            rowIdx: Math.max(state.source.maxRow, ext.maxRow),
+            colIdx: Math.max(state.source.maxCol, ext.maxCol),
+          },
+        })
+      }
+    },
+    [writeChange],
+  )
+
+  const beginFill = useCallback(() => {
+    const rb = rangeBoundsRef.current
+    if (!rb) return
+    setFillState({
+      source: { ...rb },
+      target: { rowIdx: rb.maxRow, colIdx: rb.maxCol },
+    })
+    const local = { rafId: null as number | null, x: 0, y: 0 }
+    const flush = () => {
+      local.rafId = null
+      const el = document.elementFromPoint(local.x, local.y) as
+        | HTMLElement
+        | null
+      if (!el) return
+      const cellEl = el.closest('[data-row-idx]') as HTMLElement | null
+      if (!cellEl) return
+      const r = parseInt(cellEl.getAttribute('data-row-idx') ?? '', 10)
+      const c = parseInt(cellEl.getAttribute('data-col-idx') ?? '', 10)
+      if (Number.isNaN(r) || Number.isNaN(c)) return
+      setFillState((curr) =>
+        curr ? { ...curr, target: { rowIdx: r, colIdx: c } } : curr,
+      )
+    }
+    const teardown = () => {
+      if (local.rafId !== null) cancelAnimationFrame(local.rafId)
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.removeEventListener('keydown', onKey)
+    }
+    const onMove = (e: MouseEvent) => {
+      local.x = e.clientX
+      local.y = e.clientY
+      if (local.rafId === null) {
+        local.rafId = requestAnimationFrame(flush)
+      }
+    }
+    const onUp = () => {
+      teardown()
+      // Read the latest fillState off the setter so we always commit
+      // the final target, not whatever stale value the handler closure
+      // captured.
+      setFillState((curr) => {
+        if (curr) commitFill(curr)
+        return null
+      })
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        teardown()
+        setFillState(null)
+      }
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    document.addEventListener('keydown', onKey)
+  }, [commitFill])
+  selectCtxRef.current.beginFill = beginFill
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const sel = selectionRef.current
@@ -1948,6 +2251,22 @@ export default function BulkOperationsClient() {
       height: ROW_HEIGHT,
     }
   })()
+  const fillRect = (() => {
+    if (!fillState) return null
+    const ext = computeFillExtension(fillState.source, fillState.target)
+    if (!ext) return null
+    const left = colLefts[ext.minCol] ?? 0
+    let width = 0
+    for (let i = ext.minCol; i <= ext.maxCol; i++) {
+      width += visibleLeafCols[i]?.getSize() ?? 0
+    }
+    return {
+      top: ext.minRow * ROW_HEIGHT,
+      left,
+      width,
+      height: (ext.maxRow - ext.minRow + 1) * ROW_HEIGHT,
+    }
+  })()
 
   // ── Step 6: status-bar metrics ─────────────────────────────────
   // For numeric ranges, compute Sum/Avg/Min/Max alongside the cell
@@ -2244,7 +2563,12 @@ export default function BulkOperationsClient() {
               />
             )
           })}
-          <SelectionOverlays rangeRect={rangeRect} activeRect={activeRect} />
+          <SelectionOverlays
+            rangeRect={rangeRect}
+            activeRect={activeRect}
+            fillRect={fillRect}
+            isFilling={fillState !== null}
+          />
         </div>
 
         {error && (
