@@ -170,16 +170,20 @@ const hierarchyCtxRef: { current: HierarchyCtx } = {
   },
 }
 
-// ── Selection ctx (Step 1) ───────────────────────────────────────────
-// Selection lives in React state but we expose the imperative `select`
-// callback through a module-level ref so the cell-wrapper handler can
-// stay stable across renders (no extra prop on TableRow's memo).
+// ── Selection ctx (Step 1 + Step 2) ──────────────────────────────────
+// Selection lives in React state but we expose the imperative
+// callbacks through a module-level ref so the cell-wrapper handler
+// can stay stable across renders (no extra prop on TableRow's memo).
 interface SelectCtx {
   select: (rowIdx: number, colIdx: number, shift: boolean) => void
+  /** Step 2: arm the document-level mousemove/mouseup listeners
+   *  for click+drag rectangle selection. Called on plain mousedown
+   *  (not shift-click). */
+  beginDrag: (rowIdx: number, colIdx: number) => void
 }
 
 const selectCtxRef: { current: SelectCtx } = {
-  current: { select: () => {} },
+  current: { select: () => {}, beginDrag: () => {} },
 }
 
 interface CellCoord {
@@ -612,6 +616,8 @@ const TableRow = memo(
           return (
             <div
               key={cell.id}
+              data-row-idx={rowIdx}
+              data-col-idx={colIdx}
               onMouseDown={
                 selectable
                   ? (e) => {
@@ -624,6 +630,11 @@ const TableRow = memo(
                         e.stopPropagation()
                       }
                       selectCtxRef.current.select(rowIdx, colIdx, e.shiftKey)
+                      // Step 2: arm the document-level drag handlers
+                      // for rectangle selection.
+                      if (!e.shiftKey) {
+                        selectCtxRef.current.beginDrag(rowIdx, colIdx)
+                      }
                     }
                   : undefined
               }
@@ -767,6 +778,88 @@ export default function BulkOperationsClient() {
     [],
   )
   selectCtxRef.current.select = select
+
+  // ── Step 2: click + drag rectangle ─────────────────────────────
+  // The drag implementation lives in refs so we don't pay re-render
+  // cost on every mousemove. Active updates flow through setSelection
+  // (and only the overlays re-render — see SelectionOverlays).
+  const dragStateRef = useRef<{
+    rafId: number | null
+    pendingX: number
+    pendingY: number
+    didMove: boolean
+    startRow: number
+    startCol: number
+  } | null>(null)
+  const beginDrag = useCallback((startRow: number, startCol: number) => {
+    dragStateRef.current = {
+      rafId: null,
+      pendingX: 0,
+      pendingY: 0,
+      didMove: false,
+      startRow,
+      startCol,
+    }
+
+    const flush = () => {
+      const s = dragStateRef.current
+      if (!s) return
+      s.rafId = null
+      const el = document.elementFromPoint(s.pendingX, s.pendingY) as
+        | HTMLElement
+        | null
+      if (!el) return
+      const cellEl = el.closest('[data-row-idx]') as HTMLElement | null
+      if (!cellEl) return
+      const r = parseInt(cellEl.getAttribute('data-row-idx') ?? '', 10)
+      const c = parseInt(cellEl.getAttribute('data-col-idx') ?? '', 10)
+      if (Number.isNaN(r) || Number.isNaN(c)) return
+      if (r !== s.startRow || c !== s.startCol) s.didMove = true
+      setSelection((prev) =>
+        prev.anchor
+          ? { anchor: prev.anchor, active: { rowIdx: r, colIdx: c } }
+          : prev,
+      )
+    }
+
+    const onMove = (e: MouseEvent) => {
+      const s = dragStateRef.current
+      if (!s) return
+      s.pendingX = e.clientX
+      s.pendingY = e.clientY
+      // Coalesce on rAF — caps work at ~60fps regardless of how fast
+      // the mouse moves.
+      if (s.rafId === null) {
+        s.rafId = requestAnimationFrame(flush)
+      }
+    }
+
+    const onUp = () => {
+      const s = dragStateRef.current
+      if (s?.rafId !== null && s?.rafId !== undefined) {
+        cancelAnimationFrame(s.rafId)
+      }
+      const didMove = !!s?.didMove
+      dragStateRef.current = null
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      // If the drag actually moved across cells, suppress the click
+      // that follows so EditableCell at the drop target doesn't enter
+      // edit mode for what was clearly a select-rectangle gesture.
+      if (didMove) {
+        const onClickOnce = (ce: MouseEvent) => {
+          ce.stopPropagation()
+          ce.preventDefault()
+          document.removeEventListener('click', onClickOnce, true)
+        }
+        document.addEventListener('click', onClickOnce, true)
+      }
+    }
+
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }, [])
+  selectCtxRef.current.beginDrag = beginDrag
   const rangeBounds = useMemo(() => {
     if (!selection.anchor || !selection.active) return null
     return {
