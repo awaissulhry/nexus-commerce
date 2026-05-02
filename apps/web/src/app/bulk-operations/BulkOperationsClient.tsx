@@ -33,6 +33,11 @@ import { EditableCell, type EditableMeta } from './EditableCell'
 import PreviewChangesModal from './PreviewChangesModal'
 import CascadeChoiceModal from './components/CascadeChoiceModal'
 import ColumnSelector, { type FieldDef } from './components/ColumnSelector'
+import MarketplaceSelector, {
+  MarketplaceContextBanner,
+  type MarketplaceContext,
+  type MarketplaceOption,
+} from './components/MarketplaceSelector'
 import {
   loadAllViews,
   saveUserView,
@@ -271,11 +276,28 @@ function ReadOnlyCell({
   )
 }
 
+/** For channel-scoped fields (amazon_title, ebay_description, etc.),
+ *  the value lives on row._channelListing.<stripped> rather than on
+ *  the row itself. Used as the accessorFn so TanStack getValue() and
+ *  cell renderers transparently read the right place. */
+function channelAccessorFn(field: FieldDef) {
+  const channel = field.channel
+  if (!channel) return undefined
+  const stripped = field.id.replace(/^(amazon|ebay)_/, '')
+  return (row: BulkProduct) => {
+    const cl = (row as any)._channelListing
+    if (!cl) return null
+    return cl[stripped] ?? null
+  }
+}
+
 function buildColumnFromField(field: FieldDef): ColumnDef<BulkProduct> {
   const size = field.width ?? 120
   // Stash the FieldDef on meta so the header row can reach helpText
   // and the editable flag without recomputing per-render.
   const meta = { fieldDef: field }
+
+  const isChannelField = !!field.channel
 
   // ── SKU column gets hierarchy-aware rendering in hierarchy mode ──
   if (field.id === 'sku') {
@@ -289,16 +311,43 @@ function buildColumnFromField(field: FieldDef): ColumnDef<BulkProduct> {
     }
   }
 
+  // For channel-scoped fields, use accessorFn → row._channelListing.<stripped>.
+  // For regular Product fields, use accessorKey → row[field.id].
+  const accessor = isChannelField
+    ? { accessorFn: channelAccessorFn(field) }
+    : { accessorKey: field.id as string }
+
   if (field.editable) {
     const editMeta = fieldToMeta(field)
     const editRenderer = makeEditableRenderer(editMeta)
+    // For channel fields without marketplace context, show
+    // "Select marketplace" placeholder instead of the editable cell.
+    if (isChannelField) {
+      return {
+        id: field.id,
+        ...accessor,
+        header: field.label,
+        size,
+        meta,
+        cell: (ctx) => {
+          if (!hasMarketplaceContextRef.current) {
+            return (
+              <span className="px-2 text-[11px] italic text-amber-600 truncate">
+                Select marketplace
+              </span>
+            )
+          }
+          return editRenderer(ctx)
+        },
+      } as ColumnDef<BulkProduct>
+    }
     // For aggregatable fields (totalStock, basePrice), parents in
     // hierarchy mode show a computed display instead of the editable
     // cell — children render normally.
     if (isAggregatableField(field.id)) {
       return {
         id: field.id,
-        accessorKey: field.id as string,
+        ...accessor,
         header: field.label,
         size,
         meta,
@@ -319,27 +368,31 @@ function buildColumnFromField(field: FieldDef): ColumnDef<BulkProduct> {
           }
           return editRenderer(ctx)
         },
-      }
+      } as ColumnDef<BulkProduct>
     }
     return {
       id: field.id,
-      accessorKey: field.id as string,
+      ...accessor,
       header: field.label,
       size,
       meta,
       cell: editRenderer,
-    }
+    } as ColumnDef<BulkProduct>
   }
 
   return {
     id: field.id,
-    accessorKey: field.id as string,
+    ...accessor,
     header: field.label,
     size,
     meta,
     cell: ({ getValue }) => <ReadOnlyCell value={getValue()} field={field} />,
-  }
+  } as ColumnDef<BulkProduct>
 }
+
+// Module-level ref so cell renderers can check marketplace context
+// presence without taking it as a prop. Bumped from the component below.
+const hasMarketplaceContextRef: { current: boolean } = { current: false }
 
 // ── SKU cell with hierarchy-aware chrome ──────────────────────────────
 function SkuCell({
@@ -502,6 +555,11 @@ export default function BulkOperationsClient() {
   const [displayMode, setDisplayMode] = useState<DisplayMode>('flat')
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set())
 
+  // ── D.3d: marketplace context state ─────────────────────────────
+  const [marketplaceContext, setMarketplaceContext] =
+    useState<MarketplaceContext | null>(null)
+  const [marketplaceOptions, setMarketplaceOptions] = useState<MarketplaceOption[]>([])
+
   // Hydrate localStorage state on mount
   useEffect(() => {
     setSavedViews(loadAllViews())
@@ -539,6 +597,11 @@ export default function BulkOperationsClient() {
 
   // Push hierarchy ctx into the module ref so cell renderers see it
   hierarchyCtxRef.current = { mode: displayMode, onToggle: toggleExpanded }
+
+  // Push marketplace presence into the module ref so channel-field
+  // cell renderers can show "Select marketplace" placeholder when
+  // context is missing.
+  hasMarketplaceContextRef.current = marketplaceContext !== null
 
   // Refs for stable callbacks
   const productsRef = useRef(products)
@@ -713,11 +776,17 @@ export default function BulkOperationsClient() {
       cascade: c.cascade,
     }))
 
+    // Body includes marketplaceContext when we have one — needed by
+    // backend to upsert ChannelListing rows for channel-prefixed
+    // fields.
+    const body: any = { changes: changesArray }
+    if (marketplaceContext) body.marketplaceContext = marketplaceContext
+
     try {
       const res = await fetch(`${getBackendUrl()}/api/products/bulk`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ changes: changesArray }),
+        body: JSON.stringify(body),
       })
 
       const result = (await res.json().catch(() => ({}))) as {
@@ -754,7 +823,21 @@ export default function BulkOperationsClient() {
           produce(prev, (draft) => {
             for (const c of succeededChanges) {
               const product = draft.find((p) => p.id === c.id)
-              if (product) {
+              if (!product) continue
+              if (c.field.startsWith('amazon_') || c.field.startsWith('ebay_')) {
+                // Channel field — value lives under _channelListing.<stripped>
+                const stripped = c.field.replace(/^(amazon|ebay)_/, '')
+                if (!(product as any)._channelListing) {
+                  ;(product as any)._channelListing = {
+                    title: null,
+                    description: null,
+                    price: null,
+                    quantity: null,
+                    listingStatus: 'DRAFT',
+                  }
+                }
+                ;((product as any)._channelListing as Record<string, unknown>)[stripped] = c.value
+              } else {
                 ;(product as unknown as Record<string, unknown>)[c.field] = c.value
               }
             }
@@ -795,7 +878,7 @@ export default function BulkOperationsClient() {
     } catch (err: any) {
       setSaveStatus({ kind: 'error', message: err?.message ?? String(err) })
     }
-  }, [saveStatus.kind])
+  }, [saveStatus.kind, marketplaceContext])
 
   // Cmd/Ctrl+S
   useEffect(() => {
@@ -809,7 +892,7 @@ export default function BulkOperationsClient() {
     return () => window.removeEventListener('keydown', onKey)
   }, [handleSave])
 
-  // ── Initial fetch (products + fields in parallel) ─────────────────
+  // ── Initial fetch (products + fields + marketplaces in parallel) ──
   useEffect(() => {
     let cancelled = false
     const start = performance.now()
@@ -827,13 +910,32 @@ export default function BulkOperationsClient() {
           return res.json()
         }
       ),
+      fetch(`${backend}/api/marketplaces/grouped`, { cache: 'no-store' }).then(
+        async (res) => (res.ok ? res.json() : {})
+      ),
     ])
-      .then(([productsData, fieldsData]) => {
+      .then(([productsData, fieldsData, marketplacesData]) => {
         if (cancelled) return
         setProducts(
           Array.isArray(productsData.products) ? productsData.products : []
         )
         setAllFields(Array.isArray(fieldsData.fields) ? fieldsData.fields : [])
+        // Flatten marketplaces grouped object → flat options for the
+        // selector, scoped to channels we care about.
+        const opts: MarketplaceOption[] = []
+        for (const ch of ['AMAZON', 'EBAY'] as const) {
+          const list = (marketplacesData?.[ch] ?? []) as Array<any>
+          for (const m of list) {
+            opts.push({
+              channel: ch,
+              code: m.code,
+              name: m.name,
+              currency: m.currency,
+              language: m.language,
+            })
+          }
+        }
+        setMarketplaceOptions(opts)
         setFetchMs(Math.round(performance.now() - start))
       })
       .catch((err) => {
@@ -847,6 +949,33 @@ export default function BulkOperationsClient() {
       cancelled = true
     }
   }, [])
+
+  // Refetch products when marketplace context changes — bulk-fetch
+  // includes _channelListing per row when channel + marketplace params
+  // are set, so amazon_*/ebay_* cells render real values.
+  useEffect(() => {
+    let cancelled = false
+    const params = new URLSearchParams()
+    if (marketplaceContext) {
+      params.set('channel', marketplaceContext.channel)
+      params.set('marketplace', marketplaceContext.marketplace)
+    }
+    const qs = params.toString()
+    fetch(
+      `${getBackendUrl()}/api/products/bulk-fetch${qs ? `?${qs}` : ''}`,
+      { cache: 'no-store' }
+    )
+      .then(async (res) => (res.ok ? res.json() : { products: [] }))
+      .then((data) => {
+        if (cancelled) return
+        setProducts(Array.isArray(data.products) ? data.products : [])
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marketplaceContext?.channel, marketplaceContext?.marketplace])
 
   // Refetch fields when channels/productTypes change
   useEffect(() => {
@@ -929,6 +1058,30 @@ export default function BulkOperationsClient() {
   const totalSize = rowVirtualizer.getTotalSize()
   const pendingCount = changes.size
 
+  // D.3d: track which visible columns are channel-prefixed AND
+  // whether any pending change targets one. Used to drive the banner
+  // and the marketplace-selector pulse animation.
+  const channelFieldsVisible = useMemo(() => {
+    return visibleColumnIds.some((id) => {
+      const f = fieldsById.get(id)
+      return !!f?.channel
+    })
+  }, [visibleColumnIds, fieldsById])
+
+  const pendingChannelChanges = useMemo(() => {
+    let n = 0
+    for (const [, c] of changes) {
+      if (c.columnId.startsWith('amazon_') || c.columnId.startsWith('ebay_')) n++
+    }
+    return n
+  }, [changes])
+
+  const showContextBanner =
+    channelFieldsVisible && marketplaceContext === null
+
+  const hasUnsavablePendingChanges =
+    marketplaceContext === null && pendingChannelChanges > 0
+
   const saveLabel =
     saveStatus.kind === 'saving'
       ? 'Saving…'
@@ -988,6 +1141,11 @@ export default function BulkOperationsClient() {
         </div>
       )}
 
+      <MarketplaceContextBanner
+        visible={showContextBanner}
+        pendingChannelChanges={pendingChannelChanges}
+      />
+
       <div className="flex-shrink-0 mb-3 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 flex-wrap">
           <DisplayModeToggle mode={displayMode} onChange={setDisplayMode} />
@@ -1005,6 +1163,12 @@ export default function BulkOperationsClient() {
           </span>
         </div>
         <div className="flex items-center gap-2">
+          <MarketplaceSelector
+            value={marketplaceContext}
+            onChange={setMarketplaceContext}
+            options={marketplaceOptions}
+            pulse={showContextBanner}
+          />
           <ColumnSelector
             allFields={allFields}
             visibleColumnIds={visibleColumnIds}
@@ -1030,9 +1194,21 @@ export default function BulkOperationsClient() {
           <Button
             variant="primary"
             size="sm"
-            disabled={pendingCount === 0 || saveStatus.kind === 'saving' || !online}
+            disabled={
+              pendingCount === 0 ||
+              saveStatus.kind === 'saving' ||
+              !online ||
+              hasUnsavablePendingChanges
+            }
             loading={saveStatus.kind === 'saving'}
             onClick={handleSave}
+            title={
+              hasUnsavablePendingChanges
+                ? `${pendingChannelChanges} channel change${
+                    pendingChannelChanges === 1 ? '' : 's'
+                  } need a marketplace context to save`
+                : undefined
+            }
           >
             {saveLabel}
           </Button>

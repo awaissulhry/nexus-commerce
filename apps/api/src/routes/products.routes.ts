@@ -30,9 +30,20 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/products/bulk-fetch — single optimized SELECT for the
   // bulk-operations table. Plain Decimal coercion to numbers so the
   // client can sort/edit without parseFloat-ing everywhere.
-  fastify.get('/products/bulk-fetch', async (_request, reply) => {
+  //
+  // D.3d: optional ?channel=AMAZON&marketplace=IT params. When both
+  // are set, each product gets a `_channelListing` field with the
+  // matching ChannelListing row (or null if none exists). Used by the
+  // bulk-ops table to render amazon_*/ebay_* cell values.
+  fastify.get<{
+    Querystring: { channel?: string; marketplace?: string }
+  }>('/products/bulk-fetch', async (request, reply) => {
     try {
       reply.header('Cache-Control', 'private, max-age=10')
+      const channelParam = request.query.channel?.toUpperCase()
+      const marketplaceParam = request.query.marketplace?.toUpperCase()
+      const includeChannelListing =
+        !!channelParam && !!marketplaceParam
 
       const rows = await prisma.product.findMany({
         select: {
@@ -71,7 +82,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       })
 
       // Coerce Decimal → number for JSON safety + cheap client compares
-      const products = rows.map((p) => ({
+      let products: any[] = rows.map((p) => ({
         ...p,
         basePrice: Number(p.basePrice),
         costPrice: p.costPrice == null ? null : Number(p.costPrice),
@@ -81,7 +92,50 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         weightValue: p.weightValue == null ? null : Number(p.weightValue),
       }))
 
-      return { products, count: products.length }
+      // Attach _channelListing for the requested context so the table
+      // can render amazon_*/ebay_* cells from real data.
+      if (includeChannelListing) {
+        const productIds = products.map((p) => p.id)
+        const listings = await prisma.channelListing.findMany({
+          where: {
+            productId: { in: productIds },
+            channel: channelParam!,
+            marketplace: marketplaceParam!,
+          },
+          select: {
+            productId: true,
+            title: true,
+            description: true,
+            price: true,
+            quantity: true,
+            listingStatus: true,
+          },
+        })
+        const byProductId = new Map(
+          listings.map((l) => [
+            l.productId,
+            {
+              title: l.title,
+              description: l.description,
+              price: l.price == null ? null : Number(l.price),
+              quantity: l.quantity,
+              listingStatus: l.listingStatus,
+            },
+          ])
+        )
+        products = products.map((p) => ({
+          ...p,
+          _channelListing: byProductId.get(p.id) ?? null,
+        }))
+      }
+
+      return {
+        products,
+        count: products.length,
+        channelContext: includeChannelListing
+          ? { channel: channelParam, marketplace: marketplaceParam }
+          : null,
+      }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[products/bulk-fetch] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -112,9 +166,13 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         value: unknown
         cascade?: boolean
       }>
+      marketplaceContext?: {
+        channel: 'AMAZON' | 'EBAY'
+        marketplace: string
+      }
     }
   }>('/products/bulk', async (request, reply) => {
-    const { changes } = request.body ?? {}
+    const { changes, marketplaceContext } = request.body ?? {}
     if (!Array.isArray(changes) || changes.length === 0) {
       return reply.code(400).send({ error: 'No changes provided' })
     }
@@ -139,6 +197,19 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       'status',
       'fulfillmentChannel',
     ])
+    // D.3d: prefixed channel fields write to ChannelListing instead of
+    // Product. Only the suffixes in this set are wired today; the rest
+    // of amazon_*/ebay_* are still read-only in the registry.
+    const CHANNEL_FIELD_MAP: Record<string, string> = {
+      amazon_title: 'title',
+      amazon_description: 'description',
+      ebay_title: 'title',
+      ebay_description: 'description',
+    }
+    const isChannelField = (f: string) =>
+      Object.prototype.hasOwnProperty.call(CHANNEL_FIELD_MAP, f)
+    const channelOf = (f: string): 'AMAZON' | 'EBAY' | null =>
+      f.startsWith('amazon_') ? 'AMAZON' : f.startsWith('ebay_') ? 'EBAY' : null
     const NUMERIC_FIELDS = new Set([
       'basePrice',
       'costPrice',
@@ -171,12 +242,73 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         errors.push({ id: c?.id ?? '', field: c?.field ?? '', error: 'Missing id' })
         continue
       }
-      if (!c.field || !ALLOWED_FIELDS.has(c.field)) {
+      const isCh = isChannelField(c.field ?? '')
+      if (!c.field || (!ALLOWED_FIELDS.has(c.field) && !isCh)) {
         errors.push({ id: c.id, field: c.field ?? '', error: 'Field not editable' })
         continue
       }
+      // Channel fields require marketplaceContext to know which
+      // ChannelListing to upsert.
+      if (isCh) {
+        if (!marketplaceContext?.channel || !marketplaceContext?.marketplace) {
+          errors.push({
+            id: c.id,
+            field: c.field,
+            error: 'marketplaceContext required for channel fields',
+          })
+          continue
+        }
+        const expectedChannel = channelOf(c.field)
+        if (expectedChannel && expectedChannel !== marketplaceContext.channel) {
+          errors.push({
+            id: c.id,
+            field: c.field,
+            error: `Field belongs to ${expectedChannel} but context is ${marketplaceContext.channel}`,
+          })
+          continue
+        }
+      }
 
       let value: any = c.value
+
+      // Channel fields are all text in D.3d (title, description). Trim,
+      // null on empty.
+      if (isCh) {
+        if (typeof value !== 'string' && value !== null && value !== undefined) {
+          value = String(value)
+        }
+        if (typeof value === 'string') {
+          const trimmed = value.trim()
+          value = trimmed === '' ? null : trimmed
+        }
+        // Length validation (lightweight — frontend already enforces)
+        if (
+          typeof value === 'string' &&
+          c.field === 'amazon_title' &&
+          value.length > 200
+        ) {
+          errors.push({
+            id: c.id,
+            field: c.field,
+            error: 'Amazon title max 200 characters',
+          })
+          continue
+        }
+        if (
+          typeof value === 'string' &&
+          c.field === 'ebay_title' &&
+          value.length > 80
+        ) {
+          errors.push({
+            id: c.id,
+            field: c.field,
+            error: 'eBay title max 80 characters',
+          })
+          continue
+        }
+        validated.push({ id: c.id, field: c.field, value, cascade: !!c.cascade })
+        continue
+      }
 
       if (NUMERIC_FIELDS.has(c.field)) {
         if (value === '' || value === null || value === undefined) {
@@ -327,33 +459,100 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       // statement; runs serially in array-form $transaction.
       const updates: any[] = []
 
+      // Helper for ChannelListing upsert by (productId, channel, marketplace)
+      const upsertChannelListing = (
+        productId: string,
+        field: string,
+        value: any
+      ) => {
+        if (!marketplaceContext) return null
+        const stripped = CHANNEL_FIELD_MAP[field]
+        if (!stripped) return null
+        const channelMarket = `${marketplaceContext.channel}_${marketplaceContext.marketplace}`
+        return prisma.channelListing.upsert({
+          where: {
+            productId_channel_marketplace: {
+              productId,
+              channel: marketplaceContext.channel,
+              marketplace: marketplaceContext.marketplace,
+            },
+          },
+          create: {
+            productId,
+            channel: marketplaceContext.channel,
+            channelMarket,
+            region: marketplaceContext.marketplace,
+            marketplace: marketplaceContext.marketplace,
+            listingStatus: 'DRAFT',
+            [stripped]: value,
+          } as any,
+          update: { [stripped]: value } as any,
+        })
+      }
+
       for (const v of validated) {
+        const isCh = isChannelField(v.field)
+
         if (v.cascade) {
-          // Update parent itself
-          updates.push(
-            prisma.product.update({
-              where: { id: v.id },
-              data: { [v.field]: v.value } as any,
-            })
-          )
-          // Update each child + push field onto cascadedFields
-          const kids = childrenByParent.get(v.id) ?? []
-          for (const childId of kids) {
+          // Cascade applies to the parent itself + all its children.
+          // For channel fields, each "update" is a ChannelListing
+          // upsert in the active marketplace context. cascadedFields
+          // tracking still goes on the Product row so children can be
+          // visually distinguished as inheriting.
+          if (isCh) {
+            const parentUpsert = upsertChannelListing(v.id, v.field, v.value)
+            if (parentUpsert) updates.push(parentUpsert)
+            const kids = childrenByParent.get(v.id) ?? []
+            for (const childId of kids) {
+              const kidUpsert = upsertChannelListing(childId, v.field, v.value)
+              if (kidUpsert) updates.push(kidUpsert)
+              // Track on Product.cascadedFields with the prefixed name
+              updates.push(
+                prisma.product.update({
+                  where: { id: childId },
+                  data: { cascadedFields: { push: v.field } } as any,
+                })
+              )
+            }
+          } else {
             updates.push(
               prisma.product.update({
-                where: { id: childId },
-                data: {
-                  [v.field]: v.value,
-                  cascadedFields: { push: v.field },
-                } as any,
+                where: { id: v.id },
+                data: { [v.field]: v.value } as any,
               })
+            )
+            const kids = childrenByParent.get(v.id) ?? []
+            for (const childId of kids) {
+              updates.push(
+                prisma.product.update({
+                  where: { id: childId },
+                  data: {
+                    [v.field]: v.value,
+                    cascadedFields: { push: v.field },
+                  } as any,
+                })
+              )
+            }
+          }
+        } else if (isCh) {
+          // Direct channel-field edit (works for parents, children, and
+          // standalone — they all map to a single ChannelListing row).
+          // For children, also remove the prefixed field from
+          // cascadedFields so future renders don't show "inherited."
+          const upsert = upsertChannelListing(v.id, v.field, v.value)
+          if (upsert) updates.push(upsert)
+          if (childIdSet.has(v.id)) {
+            updates.push(
+              prisma.$executeRaw`
+                UPDATE "Product"
+                SET "cascadedFields" = array_remove("cascadedFields", ${v.field})
+                WHERE id = ${v.id}
+              `
             )
           }
         } else if (childIdSet.has(v.id)) {
-          // Direct edit on a child — also remove the field from
-          // cascadedFields if it's there (override semantics).
-          // Using $executeRaw because Prisma doesn't have an
-          // array_remove operation in the standard data API.
+          // Direct edit on a child Product field — also remove the
+          // field from cascadedFields if it's there (override).
           updates.push(
             prisma.$executeRaw`
               UPDATE "Product"
@@ -363,7 +562,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             `
           )
         } else {
-          // Direct edit on a parent or standalone — plain update
+          // Direct edit on a parent or standalone Product field
           updates.push(
             prisma.product.update({
               where: { id: v.id },

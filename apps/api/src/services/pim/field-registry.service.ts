@@ -104,19 +104,60 @@ const PHYSICAL_FIELDS: FieldDefinition[] = [
 ]
 
 // ── Channel-scoped fields ─────────────────────────────────────────────
-// Mark editable: false until D.3 wires the bulk-patch endpoint to
-// resolve `amazon_*` / `ebay_*` IDs to ChannelListing rows.
+// D.3d: amazon_title / amazon_description / ebay_title / ebay_description
+// are now editable. They map directly to ChannelListing columns.
+// The other amazon_*/ebay_* fields stay editable: false until ChannelListing
+// schema gains the corresponding columns (bulletPointsOverride array
+// handling, search keywords, browse node, listing format / duration).
 const AMAZON_FIELDS: FieldDefinition[] = [
-  { id: 'amazon_title', label: 'Amazon Title', type: 'text', channel: 'AMAZON', category: 'amazon', editable: false, width: 250 },
-  { id: 'amazon_bullets', label: 'Amazon Bullets', type: 'text', channel: 'AMAZON', category: 'amazon', editable: false, width: 300 },
-  { id: 'amazon_searchKeywords', label: 'Search Keywords', type: 'text', channel: 'AMAZON', category: 'amazon', editable: false, width: 250 },
-  { id: 'amazon_browseNode', label: 'Browse Node', type: 'text', channel: 'AMAZON', category: 'amazon', editable: false, width: 130 },
+  {
+    id: 'amazon_title',
+    label: 'Amazon Title',
+    type: 'text',
+    channel: 'AMAZON',
+    category: 'amazon',
+    editable: true,
+    width: 250,
+    helpText: 'ChannelListing.title for the active marketplace. 200 char max per Amazon spec.',
+  },
+  {
+    id: 'amazon_description',
+    label: 'Amazon Description',
+    type: 'text',
+    channel: 'AMAZON',
+    category: 'amazon',
+    editable: true,
+    width: 320,
+    helpText: 'ChannelListing.description for the active marketplace.',
+  },
+  { id: 'amazon_bullets', label: 'Amazon Bullets', type: 'text', channel: 'AMAZON', category: 'amazon', editable: false, width: 300, helpText: 'Bullet array writes ship in a follow-up phase' },
+  { id: 'amazon_searchKeywords', label: 'Search Keywords', type: 'text', channel: 'AMAZON', category: 'amazon', editable: false, width: 250, helpText: 'No backing column yet' },
+  { id: 'amazon_browseNode', label: 'Browse Node', type: 'text', channel: 'AMAZON', category: 'amazon', editable: false, width: 130, helpText: 'No backing column yet' },
 ]
 
 const EBAY_FIELDS: FieldDefinition[] = [
-  { id: 'ebay_title', label: 'eBay Title', type: 'text', channel: 'EBAY', category: 'ebay', editable: false, width: 250 },
-  { id: 'ebay_format', label: 'Listing Format', type: 'select', options: ['FixedPrice', 'Auction', 'StoreInventory'], channel: 'EBAY', category: 'ebay', editable: false, width: 130 },
-  { id: 'ebay_duration', label: 'Duration', type: 'select', options: ['GTC', 'Days_7', 'Days_30'], channel: 'EBAY', category: 'ebay', editable: false, width: 100 },
+  {
+    id: 'ebay_title',
+    label: 'eBay Title',
+    type: 'text',
+    channel: 'EBAY',
+    category: 'ebay',
+    editable: true,
+    width: 250,
+    helpText: 'ChannelListing.title for the active marketplace. 80 char max per eBay spec.',
+  },
+  {
+    id: 'ebay_description',
+    label: 'eBay Description',
+    type: 'text',
+    channel: 'EBAY',
+    category: 'ebay',
+    editable: true,
+    width: 320,
+    helpText: 'ChannelListing.description for the active marketplace.',
+  },
+  { id: 'ebay_format', label: 'Listing Format', type: 'select', options: ['FixedPrice', 'Auction', 'StoreInventory'], channel: 'EBAY', category: 'ebay', editable: false, width: 130, helpText: 'No backing column yet' },
+  { id: 'ebay_duration', label: 'Duration', type: 'select', options: ['GTC', 'Days_7', 'Days_30'], channel: 'EBAY', category: 'ebay', editable: false, width: 100, helpText: 'No backing column yet' },
 ]
 
 // ── Category-specific (e.g. OUTERWEAR, HELMET) ────────────────────────
