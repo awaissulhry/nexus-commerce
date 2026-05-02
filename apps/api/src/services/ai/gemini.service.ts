@@ -123,7 +123,7 @@ export class GeminiService {
     categoryId?: string,
     aspects?: CategoryAspect[]
   ): Promise<EbayListingData> {
-    const model = this.getClient().getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = this.getClient().getGenerativeModel({ model: "gemini-2.0-flash" });
 
     /* ── Build structured context blocks for the prompt ────────── */
 

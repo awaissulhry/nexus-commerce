@@ -11,7 +11,10 @@
 import type { GenerativeModel } from '@google/generative-ai'
 import { GeminiService } from './gemini.service.js'
 
-const FLASH_MODEL = 'gemini-1.5-flash'
+// Google deprecated gemini-1.5-flash on the v1beta endpoint in
+// late 2025; calls 404. gemini-2.0-flash is the current stable
+// successor.
+const FLASH_MODEL = 'gemini-2.0-flash'
 
 const LANGUAGE_FOR_MARKETPLACE: Record<string, string> = {
   IT: 'Italian',
