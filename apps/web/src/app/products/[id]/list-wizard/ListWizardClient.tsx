@@ -7,6 +7,8 @@ import WizardStepper from './components/WizardStepper'
 import WizardHeader from './components/WizardHeader'
 import WizardNav from './components/WizardNav'
 import PlaceholderStep from './components/PlaceholderStep'
+import Step1Identifiers from './steps/Step1Identifiers'
+import Step2GtinExemption from './steps/Step2GtinExemption'
 import { STEPS, findStep } from './lib/steps'
 
 export interface WizardData {
@@ -24,6 +26,22 @@ export interface WizardProduct {
   sku: string
   name: string
   isParent: boolean
+  brand?: string | null
+  upc?: string | null
+  ean?: string | null
+  gtin?: string | null
+}
+
+export interface StepProps {
+  wizardId: string
+  wizardState: Record<string, unknown>
+  updateWizardState: (
+    patch: Record<string, unknown>,
+    options?: { advance?: boolean },
+  ) => Promise<void>
+  product: WizardProduct
+  channel: string
+  marketplace: string
 }
 
 interface Props {
@@ -167,11 +185,38 @@ export default function ListWizardClient({
     return () => window.removeEventListener('keydown', onKey)
   }, [handleContinue, handleBack])
 
-  // _wizardState is reserved for the per-step content components in
-  // 5.4 / 5.5 / Phase 6 (each will read + write its own slice). The
-  // shell doesn't render anything from it directly.
-  void wizardState
-  void setWizardState
+  // Step components mutate their slice of wizardState via this
+  // callback. The patch is shallow-merged at the top level (so Step
+  // 1 writes into wizardState.identifiers without touching other
+  // slices) and persisted on the next PATCH cycle. With advance=true
+  // we also bump currentStep, which is what Step 1 uses when the
+  // user picks a path that doesn't need Step 2.
+  const updateWizardState = useCallback(
+    async (
+      patch: Record<string, unknown>,
+      options?: { advance?: boolean },
+    ) => {
+      const merged = {
+        ...stateRef.current.wizardState,
+        ...patch,
+      }
+      setWizardState(merged)
+      if (options?.advance) {
+        const target = Math.min(currentStep + 1, STEPS.length)
+        setCompletedSteps((prev) => {
+          if (prev.has(currentStep)) return prev
+          const next = new Set(prev)
+          next.add(currentStep)
+          return next
+        })
+        setCurrentStep(target)
+        await persist({ currentStep: target, state: merged })
+      } else {
+        await persist({ state: merged })
+      }
+    },
+    [currentStep, persist],
+  )
 
   const step = findStep(currentStep) ?? STEPS[0]
 
@@ -191,7 +236,19 @@ export default function ListWizardClient({
         onStepClick={handleStepClick}
       />
       <div className="flex-1 overflow-y-auto">
-        <PlaceholderStep step={step} />
+        {(() => {
+          const stepProps = {
+            wizardId,
+            wizardState,
+            updateWizardState,
+            product,
+            channel: initialWizard.channel,
+            marketplace: initialWizard.marketplace,
+          }
+          if (currentStep === 1) return <Step1Identifiers {...stepProps} />
+          if (currentStep === 2) return <Step2GtinExemption {...stepProps} />
+          return <PlaceholderStep step={step} />
+        })()}
       </div>
       <WizardNav
         currentStep={currentStep}

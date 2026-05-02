@@ -85,3 +85,40 @@ Marketplace-specific titles / descriptions — would map to `ChannelListing` row
 Each row a child variation. Has the same "create new product" can-of-worms as D.4.5 — productType, parent linking, image inheritance — so likely waits until D.4.5 is shipped and we know the pattern.
 
 For all three: the v1 ZIP parser already surfaces them as preview warnings ("12 image files in 3 folders ignored — coming in D.5.5"), so users get a graceful fail-soft rather than silent drop or hard error.
+
+## 8. Phase 5.4 — image upload from inside the wizard
+
+The v1 GTIN-exemption wizard reads the master product's existing images via the `Image` model and validates whatever is there. If a product has fewer than 9 images we surface a message asking the user to add more on the product edit page, then re-run validation. That round trip is awkward.
+
+**Proper fix:** an upload-from-wizard control inside Step 2 that adds images directly to the product (via the existing image upload pipeline once Cloudinary is verified — see TECH_DEBT entry on D.5.5). Re-runs validation automatically after each upload.
+
+## 9. Phase 5.4 → Phase 6 — vision-based image checks
+
+The v1 image validator is rule-based: dimensions (≥ 1000×1000), format (JPG/PNG), file size (> 20KB). All three are real reasons Amazon rejects exemption applications, but not the only ones — Amazon also looks at logo/watermark presence, brand visibility, white-background quality, and "lifestyle vs product" framing. These need a vision model.
+
+**Deferred to Phase 6** when we have Gemini Vision or similar wired:
+- Logo / watermark detection — flag images Amazon will reject
+- Brand-name OCR + visibility scoring — confirm brand is on product or packaging in ≥ 3 images
+- Main-image background analysis — RGB sampling at corners + edge-detection for "is this really pure white"
+- Multi-angle coverage detection — make sure the 9 images aren't 9 of the same angle
+
+## 10. Phase 5.4 → implicit-approval detection
+
+Right now the user manually clicks "Mark as approved" after Amazon's email arrives. We could detect approval implicitly: when a future product listing on this marketplace succeeds with `external_product_id_type: 'EXEMPT'`, the brand is provably cleared. Auto-flip the matching `GtinExemptionApplication` row to APPROVED.
+
+**Deferred** until we wire the listing-publish path (Phase 6 step 10).
+
+## 11. Phase 5.4 → AI-driven rejection-fix loop
+
+When the user marks an application REJECTED and pastes Amazon's email, we could parse the rejection reason with an LLM and:
+- Suggest specific image replacements / brand-letter rewrites
+- Offer "Regenerate package with fixes applied"
+- Track which rejection patterns Amazon hits us with most often
+
+**Deferred** to the same Phase 6 work that adds the vision model + LLM-based content generation in step 6.
+
+## 12. Phase 5.4 → email-forwarding inbox
+
+Sellers could forward Amazon's approval / rejection email to a Nexus inbox; we extract the case ID + outcome and update the application automatically. Avoids the manual "Mark as approved" click.
+
+**Deferred** because it needs an inbound-email pipeline (SES / Postmark / Mailgun), which we don't have yet.

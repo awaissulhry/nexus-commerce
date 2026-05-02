@@ -1463,6 +1463,59 @@ model CategorySchema {
   @@index([expiresAt])
 }
 
+// ── Phase 5.4: GTIN exemption submission package ────────────────────
+// User-driven status flow with Amazon Seller Central handoff. Amazon
+// has no SP-API endpoint for exemption submission; we generate the
+// perfect submission package + track status the user reports back.
+//
+// Status transitions:
+//   DRAFT          — user is filling out the form
+//   PACKAGE_READY  — ZIP generated, instructions on screen
+//   SUBMITTED      — user clicked "Mark as submitted" + optional caseId
+//   APPROVED       — user reported Amazon's approval; cached for the
+//                    brand + marketplace combo so future products
+//                    auto-skip the wizard step
+//   REJECTED       — user reported Amazon's rejection + reason
+//   ABANDONED      — user cancelled before submitting
+model GtinExemptionApplication {
+  id                    String   @id @default(cuid())
+  brandName             String
+  productIds            String[] // products this exemption covers
+  marketplace           String   // IT | DE | FR | …
+
+  // Brand verification path
+  brandRegistrationType String   // TRADEMARK | BRAND_STAND_IN | WEBSITE_ONLY
+  trademarkNumber       String?
+  trademarkCountry      String?
+  trademarkDate         DateTime?
+  trademarkCertUrl      String?
+  brandWebsite          String?
+
+  // Generated artifacts (the brand letter is stored as plain text and
+  // re-rendered to PDF on each download — no external storage needed).
+  brandLetter           String   @db.Text
+  brandLetterCustomised Boolean  @default(false)
+  imagesProvided        String[]
+  // { passed: 7, failed: 2, items: [{ url, dimensions, issues, … }] }
+  imageValidation       Json?
+
+  // User-driven status
+  status                String   @default("DRAFT")
+  amazonCaseId          String?  // user-pasted after Seller Central submit
+  rejectionReason       String?  // user-pasted from Amazon's email
+
+  createdAt             DateTime @default(now())
+  packageGeneratedAt    DateTime?
+  submittedAt           DateTime?
+  approvedAt            DateTime?
+  rejectedAt            DateTime?
+  updatedAt             DateTime @updatedAt
+
+  @@index([status])
+  @@index([brandName])
+  @@index([brandName, marketplace])
+}
+
 // ── Phase 5.3: Listing wizard ────────────────────────────────────────
 // One row per (productId, channel, marketplace) wizard session.
 // state holds the per-step JSON (see lib/wizard-state in apps/web).

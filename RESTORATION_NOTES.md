@@ -440,3 +440,85 @@ the spreadsheet/CSV grid can also update it.
 - `channels/<channel>.json` per-marketplace overrides
 - `variants.csv` per-product variation data
 
+
+---
+
+## Phase 5.4: GTIN exemption — submission package + guided handoff
+
+Date: 2026-05-02
+
+The original spec assumed an Amazon SP-API endpoint for submitting GTIN
+exemption applications and polling status. **That endpoint doesn't
+exist** — Amazon's GTIN exemption is a Seller Central web flow with
+human review by email, no public API surface. The phase pivoted from
+"auto-submit + auto-poll" to "perfect submission package + user-driven
+status flow", which still kills 90% of the seller's time on this
+process (the prep work, not the review wait).
+
+### What ships
+
+- **`GtinExemptionApplication` model** — DRAFT → PACKAGE_READY →
+  SUBMITTED → APPROVED / REJECTED / ABANDONED. Indexed on
+  `(brandName, marketplace)` for the brand-cache lookup.
+
+- **API**:
+  - `GET /api/gtin-exemption/check?brand=&marketplace=` — surfaces
+    an existing approved (or pending) application so the wizard
+    auto-detects "this brand is already cleared".
+  - `POST /api/gtin-exemption` — find-or-create a DRAFT for
+    `(brand, marketplace)`. Pre-fills the brand letter from the
+    `AccountSettings` record.
+  - `GET /api/gtin-exemption/:id`, `PATCH /api/gtin-exemption/:id`
+    — read + edit fields and status.
+  - `POST /api/gtin-exemption/:id/validate-images` — runs the
+    rule-based validator (resolution ≥ 1000×1000, accepted format,
+    plausible file size) over the master product's images and
+    stores the result on the application.
+  - `GET /api/gtin-exemption/:id/brand-letter.pdf` — pdfkit-rendered
+    on the fly from the stored text, no storage round-trip.
+  - `GET /api/gtin-exemption/:id/package.zip` — the full submission
+    package (brand letter PDF + image files + per-marketplace
+    `instructions.md`), regenerated on every download from the
+    application's current state. First download flips status to
+    `PACKAGE_READY`.
+
+- **Wizard step 1 (Identifiers)** — three radio paths (existing
+  GTIN, brand already exempted, apply now). Auto-detects the
+  product's UPC/EAN/GTIN; runs the brand-cache check on mount and
+  pre-selects "have exemption" when an approved record is found.
+
+- **Wizard step 2 (Apply)** — when the user picks the "apply now"
+  path, this is the full guided flow: brand verification form
+  (trademark / brand stand-in / website-only), image-validation
+  panel with per-image diagnostics, brand-letter preview, package
+  download button, status tracking. When the user picks one of the
+  other paths, step 2 is informational only.
+
+- **User-driven status** — "Mark as submitted" (with optional case
+  ID), "Mark as approved" (caches the brand for this marketplace
+  forever), "Mark as rejected" (captures Amazon's reason for the
+  next package iteration).
+
+### What we don't do (and why)
+
+- **Programmatic submission to Amazon** — no SP-API endpoint.
+- **Automatic status polling** — Amazon responds via email, not
+  API. User reports the outcome in our UI.
+- **Vision-based image checks** (logo / watermark detection,
+  background analysis, brand visibility scoring) — deferred to
+  Phase 6 once a vision model is wired.
+- **AI-generated rejection fixes** — same dependency.
+- **Adding new images via the wizard** — v1 uses the master
+  product's existing images; if there are < 9 we surface a clear
+  message asking the user to add more via the product edit page,
+  then re-run validation.
+
+### Sales pitch (the honest version)
+
+90% of the seller's GTIN-exemption pain is **prep**, not Amazon's
+review wait. We generate a submission-ready package in 2 minutes
+versus 2–3 days of trial-and-error, and the **brand cache** means
+each brand only needs ONE successful application — every future
+listing for that brand on that marketplace skips this step
+entirely.
+

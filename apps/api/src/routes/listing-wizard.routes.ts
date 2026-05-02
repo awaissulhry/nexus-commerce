@@ -54,7 +54,16 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const product = await prisma.product.findUnique({
         where: { id: productId },
-        select: { id: true, sku: true, name: true, isParent: true },
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          isParent: true,
+          brand: true,
+          upc: true,
+          ean: true,
+          gtin: true,
+        },
       })
       if (!product) {
         return reply.code(404).send({ error: 'Product not found' })
@@ -98,7 +107,16 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const product = await prisma.product.findUnique({
         where: { id: wizard.productId },
-        select: { id: true, sku: true, name: true, isParent: true },
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          isParent: true,
+          brand: true,
+          upc: true,
+          ean: true,
+          gtin: true,
+        },
       })
       return { wizard, product }
     },
