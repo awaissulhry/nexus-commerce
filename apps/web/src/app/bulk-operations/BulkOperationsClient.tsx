@@ -25,9 +25,13 @@ import {
   ChevronDown,
   ChevronRight,
   Lock,
+  Redo2,
   RotateCcw,
+  Search,
+  Undo2,
   Upload,
   WifiOff,
+  X,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -40,6 +44,7 @@ import {
 } from './EditableCell'
 import PreviewChangesModal from './PreviewChangesModal'
 import UploadModal from './UploadModal'
+import FilterDropdown from './components/FilterDropdown'
 import PastePreviewModal, {
   type PasteCell,
   type PasteError,
@@ -223,6 +228,28 @@ interface SelectionState {
   anchor: CellCoord | null
   /** Active cell — where typing/edits land; the moving end of the range. */
   active: CellCoord | null
+}
+
+interface FilterState {
+  status: string[]
+  channels: string[]
+  stockLevel: 'all' | 'out' | 'low' | 'in'
+}
+
+interface HistoryDelta {
+  rowId: string
+  columnId: string
+  /** What was in the changes Map for this cell BEFORE this delta;
+   *  null = the cell was clean. */
+  before: CellChange | null
+  /** What is in the changes Map AFTER this delta; null = the cell
+   *  becomes clean (e.g., user typed back the original value). */
+  after: CellChange | null
+}
+
+interface HistoryEntry {
+  cells: HistoryDelta[]
+  timestamp: number
 }
 
 interface FillState {
@@ -977,6 +1004,29 @@ export default function BulkOperationsClient() {
 
   // ── Hierarchy display state ──────────────────────────────────────
   const [displayMode, setDisplayMode] = useState<DisplayMode>('flat')
+
+  // ── D.6: search + filter state ─────────────────────────────────
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(searchQuery), 150)
+    return () => window.clearTimeout(t)
+  }, [searchQuery])
+  const [filterState, setFilterState] = useState<FilterState>({
+    status: [],
+    channels: [],
+    stockLevel: 'all',
+  })
+  const activeFilterCount =
+    filterState.status.length +
+    filterState.channels.length +
+    (filterState.stockLevel !== 'all' ? 1 : 0)
+  const resetFilters = useCallback(
+    () =>
+      setFilterState({ status: [], channels: [], stockLevel: 'all' }),
+    [],
+  )
+  const [filterOpen, setFilterOpen] = useState(false)
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set())
 
   // ── D.3d: marketplace context state ─────────────────────────────
@@ -1210,30 +1260,79 @@ export default function BulkOperationsClient() {
     }
   }, [])
 
+  // ── D.6.3: undo / redo history ──────────────────────────────────
+  // Capped at 50 entries to bound memory; truncates forward history
+  // when the user edits after undoing (standard Excel/Sheets feel).
+  const HISTORY_LIMIT = 50
+  const [history, setHistory] = useState<HistoryEntry[]>([])
+  const [historyIndex, setHistoryIndex] = useState(-1)
+  // Suppresses re-recording while undo/redo is in flight.
+  const isUndoingRef = useRef(false)
+  const pushHistoryEntry = useCallback((entry: HistoryEntry) => {
+    setHistory((prev) => {
+      const next = prev.slice(0, historyIndexRef.current + 1)
+      next.push(entry)
+      const trimmed =
+        next.length > HISTORY_LIMIT
+          ? next.slice(next.length - HISTORY_LIMIT)
+          : next
+      historyIndexRef.current = trimmed.length - 1
+      setHistoryIndex(trimmed.length - 1)
+      return trimmed
+    })
+  }, [])
+  const historyIndexRef = useRef(historyIndex)
+  useEffect(() => {
+    historyIndexRef.current = historyIndex
+  }, [historyIndex])
+
   /** Add or update an entry in the changesMap. Drops the entry when the
    * new value matches the original (revert). Updates cascade tracking
    * + clears stale cell errors. Common code path used by both direct
    * commits and the cascade modal's "Apply" handler. */
   const writeChange = useCallback(
-    (rowId: string, columnId: string, newValue: unknown, cascade: boolean) => {
+    (
+      rowId: string,
+      columnId: string,
+      newValue: unknown,
+      cascade: boolean,
+      /** D.6.3: when supplied, the delta is appended here instead of
+       *  pushing a new history entry. The caller pushes one combined
+       *  entry after the batch finishes (paste, drag-fill, etc.). */
+      historyBatch?: HistoryDelta[],
+    ) => {
       const key = `${rowId}:${columnId}`
       const product = productsRef.current.find((p) => p.id === rowId)
       if (!product) return
       const oldValue = (product as unknown as Record<string, unknown>)[columnId]
 
-      setChanges((prev) => {
-        const next = new Map(prev)
-        if (looselyEqual(newValue, oldValue)) {
-          next.delete(key)
-        } else {
-          next.set(key, {
+      // Compute before/after snapshots for the history delta.
+      const before = changesRef.current.get(key) ?? null
+      const after: CellChange | null = looselyEqual(newValue, oldValue)
+        ? null
+        : {
             rowId,
             columnId,
             oldValue,
             newValue,
             cascade,
             timestamp: Date.now(),
-          })
+          }
+      // No-op edits (clean → clean with same value) shouldn't pollute
+      // the history stack.
+      const isNoOp =
+        (before === null && after === null) ||
+        (before !== null &&
+          after !== null &&
+          looselyEqual(before.newValue, after.newValue) &&
+          before.cascade === after.cascade)
+
+      setChanges((prev) => {
+        const next = new Map(prev)
+        if (after === null) {
+          next.delete(key)
+        } else {
+          next.set(key, after)
         }
         return next
       })
@@ -1248,9 +1347,103 @@ export default function BulkOperationsClient() {
       setSaveStatus((prev) =>
         prev.kind === 'saving' ? prev : { kind: 'dirty' }
       )
+
+      if (!isUndoingRef.current && !isNoOp) {
+        const delta: HistoryDelta = {
+          rowId,
+          columnId,
+          before,
+          after,
+        }
+        if (historyBatch) {
+          historyBatch.push(delta)
+        } else {
+          pushHistoryEntry({ cells: [delta], timestamp: Date.now() })
+        }
+      }
     },
-    []
+    [pushHistoryEntry]
   )
+
+  // Apply a history entry in either direction. For each cell delta,
+  // either set the changes-map entry directly (dirty target value) or
+  // delete it and bump resetKey so EditableCell snaps back to its
+  // server-side initialValue. isUndoingRef suppresses re-recording.
+  const applyEntryDirection = useCallback(
+    (entry: HistoryEntry, direction: 'undo' | 'redo') => {
+      isUndoingRef.current = true
+      try {
+        setChanges((prev) => {
+          const next = new Map(prev)
+          for (const d of entry.cells) {
+            const k = `${d.rowId}:${d.columnId}`
+            const target = direction === 'undo' ? d.before : d.after
+            if (target === null) next.delete(k)
+            else next.set(k, target)
+          }
+          return next
+        })
+        for (const d of entry.cells) {
+          const k = `${d.rowId}:${d.columnId}`
+          const target = direction === 'undo' ? d.before : d.after
+          const handle = editHandlers.get(k)
+          if (target === null) {
+            setResetKeys((prev) => {
+              const next = new Map(prev)
+              next.set(k, (next.get(k) ?? 0) + 1)
+              return next
+            })
+          } else if (handle) {
+            handle.applyValue(target.newValue)
+          }
+        }
+        setSaveStatus((prev) =>
+          prev.kind === 'saving' ? prev : { kind: 'dirty' },
+        )
+      } finally {
+        isUndoingRef.current = false
+      }
+    },
+    [],
+  )
+  const undo = useCallback(() => {
+    const idx = historyIndexRef.current
+    if (idx < 0) return
+    applyEntryDirection(history[idx], 'undo')
+    historyIndexRef.current = idx - 1
+    setHistoryIndex(idx - 1)
+  }, [history, applyEntryDirection])
+  const redo = useCallback(() => {
+    const idx = historyIndexRef.current
+    if (idx >= history.length - 1) return
+    applyEntryDirection(history[idx + 1], 'redo')
+    historyIndexRef.current = idx + 1
+    setHistoryIndex(idx + 1)
+  }, [history, applyEntryDirection])
+  // Cmd/Ctrl+Z and Cmd/Ctrl+Shift+Z keyboard shortcuts.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return
+      if (e.key.toLowerCase() !== 'z') return
+      const ae = document.activeElement as HTMLElement | null
+      if (
+        ae &&
+        (ae.tagName === 'INPUT' ||
+          ae.tagName === 'TEXTAREA' ||
+          ae.isContentEditable)
+      ) {
+        // Let the input element handle its own native undo.
+        return
+      }
+      e.preventDefault()
+      if (e.shiftKey) redo()
+      else undo()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [undo, redo])
+  const canUndo = historyIndex >= 0
+  const canRedo = historyIndex < history.length - 1
 
   // Cascade-aware commit. Decides whether to write directly or open
   // the choice modal. Modal appears only when:
@@ -1546,6 +1739,15 @@ export default function BulkOperationsClient() {
           setSaveStatus((s) => (s.kind === 'saved' ? { kind: 'idle' } : s))
         }, 3000)
       }
+      // D.6.3: changes successfully sent to the backend can no longer
+      // be undone via the local history stack — clear it so the
+      // toolbar buttons disable and Cmd+Z is a no-op until the user
+      // makes new edits.
+      if (succeededChanges.length > 0) {
+        setHistory([])
+        setHistoryIndex(-1)
+        historyIndexRef.current = -1
+      }
     } catch (err: any) {
       setSaveStatus({ kind: 'error', message: err?.message ?? String(err) })
     }
@@ -1716,11 +1918,49 @@ export default function BulkOperationsClient() {
     [dynamicColumns]
   )
 
+  // ── D.6: Search + filter ─────────────────────────────────────────
+  // Search runs against the raw products array first, then we feed
+  // the filtered set into the existing hierarchy builder. This means
+  // a parent whose children all get filtered out simply vanishes
+  // from hierarchy view — same as filtering in any spreadsheet.
+  const filteredProducts = useMemo(() => {
+    let pool = products
+    if (filterState.status.length > 0) {
+      const statuses = new Set(filterState.status)
+      pool = pool.filter((p) => statuses.has(p.status))
+    }
+    if (filterState.channels.length > 0) {
+      const channels = new Set(filterState.channels)
+      pool = pool.filter((p) =>
+        (p.syncChannels ?? []).some((c) => channels.has(c)),
+      )
+    }
+    if (filterState.stockLevel !== 'all') {
+      pool = pool.filter((p) => {
+        const stock = p.totalStock ?? 0
+        if (filterState.stockLevel === 'out') return stock === 0
+        if (filterState.stockLevel === 'low') return stock > 0 && stock <= 5
+        if (filterState.stockLevel === 'in') return stock > 0
+        return true
+      })
+    }
+    const q = debouncedSearch.trim().toLowerCase()
+    if (q) {
+      pool = pool.filter((p) => {
+        if (p.sku?.toLowerCase().includes(q)) return true
+        if (p.name?.toLowerCase().includes(q)) return true
+        if (p.brand?.toLowerCase().includes(q)) return true
+        return false
+      })
+    }
+    return pool
+  }, [products, debouncedSearch, filterState])
+
   // Build display rows based on mode
   const displayRows = useMemo(() => {
-    if (displayMode !== 'hierarchy') return products
-    return buildHierarchy(products, expandedParents)
-  }, [products, displayMode, expandedParents])
+    if (displayMode !== 'hierarchy') return filteredProducts
+    return buildHierarchy(filteredProducts, expandedParents)
+  }, [filteredProducts, displayMode, expandedParents])
 
   const table = useReactTable({
     data: displayRows as BulkProduct[],
@@ -1806,6 +2046,9 @@ export default function BulkOperationsClient() {
       const cols = tbl.getVisibleLeafColumns()
       const allFields = allFieldsRef.current
       let appliedAny = false
+      // D.6.3: drag-fill is one user action — collect deltas into a
+      // single history entry so Cmd+Z reverts the whole fill.
+      const batch: HistoryDelta[] = []
       for (let r = ext.minRow; r <= ext.maxRow; r++) {
         const row = tableRows[r]
         if (!row) continue
@@ -1822,9 +2065,12 @@ export default function BulkOperationsClient() {
           editHandlers
             .get(editKey(row.original.id, col.id))
             ?.applyValue(v)
-          writeChange(row.original.id, col.id, v, false)
+          writeChange(row.original.id, col.id, v, false, batch)
           appliedAny = true
         }
+      }
+      if (batch.length > 0) {
+        pushHistoryEntry({ cells: batch, timestamp: Date.now() })
       }
       if (appliedAny) {
         setSelection({
@@ -1839,7 +2085,7 @@ export default function BulkOperationsClient() {
         })
       }
     },
-    [writeChange],
+    [writeChange, pushHistoryEntry],
   )
 
   const beginFill = useCallback(() => {
@@ -2174,13 +2420,20 @@ export default function BulkOperationsClient() {
         maxR = -Infinity,
         minC = Infinity,
         maxC = -Infinity
+      // D.6.3: paste is one user action — collect every per-cell
+      // delta into a single history entry so Cmd+Z reverts the
+      // whole paste in one go.
+      const batch: HistoryDelta[] = []
       for (const c of curr.plan) {
         editHandlers.get(editKey(c.rowId, c.columnId))?.applyValue(c.newValue)
-        writeChange(c.rowId, c.columnId, c.newValue, false)
+        writeChange(c.rowId, c.columnId, c.newValue, false, batch)
         if (c.rowIdx < minR) minR = c.rowIdx
         if (c.rowIdx > maxR) maxR = c.rowIdx
         if (c.colIdx < minC) minC = c.colIdx
         if (c.colIdx > maxC) maxC = c.colIdx
+      }
+      if (batch.length > 0) {
+        pushHistoryEntry({ cells: batch, timestamp: Date.now() })
       }
       // Expand the selection over the pasted region so the user can
       // see what just changed. Falls back to current selection if no
@@ -2193,7 +2446,7 @@ export default function BulkOperationsClient() {
       }
       return null
     })
-  }, [writeChange])
+  }, [writeChange, pushHistoryEntry])
   const cancelPaste = useCallback(() => setPastePreview(null), [])
 
   const containerRef = useRef<HTMLDivElement>(null)
@@ -2421,10 +2674,63 @@ export default function BulkOperationsClient() {
           <span className="text-[12px] text-slate-500">
             {loading
               ? 'Loading…'
-              : `${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · Cmd+S to save`}
+              : filteredProducts.length === products.length
+              ? `${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · Cmd+S to save`
+              : `${filteredProducts.length.toLocaleString()} of ${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · Cmd+S to save`}
           </span>
         </div>
         <div className="flex items-center gap-2">
+          <div className="relative flex items-center">
+            <Search className="absolute left-2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search SKU, name, brand…"
+              className="h-7 pl-7 pr-7 text-[12px] border border-slate-200 rounded-md w-56 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-1.5 text-slate-400 hover:text-slate-700"
+                aria-label="Clear search"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+          <FilterDropdown
+            open={filterOpen}
+            onOpenChange={setFilterOpen}
+            value={filterState}
+            onChange={setFilterState}
+            onReset={resetFilters}
+            activeCount={activeFilterCount}
+          />
+          <div className="flex items-center gap-0.5 border border-slate-200 rounded-md">
+            <button
+              type="button"
+              onClick={undo}
+              disabled={!canUndo}
+              title="Undo (⌘Z)"
+              aria-label="Undo"
+              className="h-7 px-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-default rounded-l-md"
+            >
+              <Undo2 className="w-3.5 h-3.5" />
+            </button>
+            <div className="w-px h-4 bg-slate-200" />
+            <button
+              type="button"
+              onClick={redo}
+              disabled={!canRedo}
+              title="Redo (⌘⇧Z)"
+              aria-label="Redo"
+              className="h-7 px-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-default rounded-r-md"
+            >
+              <Redo2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
           <MarketplaceSelector
             value={marketplaceContext}
             onChange={setMarketplaceContext}
