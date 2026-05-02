@@ -221,29 +221,25 @@ function ReadOnlyCell({
 
 function buildColumnFromField(field: FieldDef): ColumnDef<BulkProduct> {
   const size = field.width ?? 120
+  // Stash the FieldDef on meta so the header row can reach helpText
+  // and the editable flag without recomputing per-render.
+  const meta = { fieldDef: field }
   if (field.editable) {
-    const meta = fieldToMeta(field)
     return {
       id: field.id,
       accessorKey: field.id as string,
       header: field.label,
       size,
-      cell: makeEditableRenderer(meta),
+      meta,
+      cell: makeEditableRenderer(fieldToMeta(field)),
     }
   }
   return {
     id: field.id,
     accessorKey: field.id as string,
-    header: () => (
-      <span className="flex items-center gap-1">
-        <span>{field.label}</span>
-        <Lock
-          className="w-2.5 h-2.5 text-slate-400"
-          aria-label="Read-only"
-        />
-      </span>
-    ),
+    header: field.label,
     size,
+    meta,
     cell: ({ getValue }) => <ReadOnlyCell value={getValue()} field={field} />,
   }
 }
@@ -619,10 +615,12 @@ export default function BulkOperationsClient() {
     overscan: 10,
   })
 
-  const headerCells = useMemo(
-    () => table.getHeaderGroups()[0]?.headers ?? [],
-    [table]
-  )
+  // NOT memoized: TanStack's table object is stable across renders by
+  // design (it mutates internally). A useMemo([table]) dep would
+  // capture an empty headers array on first render (before dynamicColumns
+  // is populated) and never recompute. Calling getHeaderGroups() each
+  // render is cheap — TanStack returns the cached internal structure.
+  const headerCells = table.getHeaderGroups()[0]?.headers ?? []
   const totalSize = rowVirtualizer.getTotalSize()
   const pendingCount = changes.size
 
@@ -732,18 +730,36 @@ export default function BulkOperationsClient() {
         style={{ contain: 'strict' }}
       >
         <div
-          className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 flex"
+          className="sticky top-0 z-20 bg-slate-50 border-b border-slate-200 flex"
           style={{ height: HEADER_HEIGHT, minWidth: tableMinWidth }}
         >
-          {headerCells.map((header) => (
-            <div
-              key={header.id}
-              className="flex items-center px-3 text-[11px] font-semibold text-slate-700 uppercase tracking-wider"
-              style={{ width: header.getSize(), flexShrink: 0 }}
-            >
-              {flexRender(header.column.columnDef.header, header.getContext())}
-            </div>
-          ))}
+          {headerCells.map((header) => {
+            const fieldDef = (header.column.columnDef.meta as
+              | { fieldDef?: FieldDef }
+              | undefined)?.fieldDef
+            const isReadOnly = fieldDef && !fieldDef.editable
+            return (
+              <div
+                key={header.id}
+                className="flex items-center gap-1 px-3 border-r border-slate-200/70 last:border-r-0 text-[11px] font-semibold text-slate-700 uppercase tracking-wider"
+                style={{ width: header.getSize(), flexShrink: 0 }}
+                title={fieldDef?.helpText}
+              >
+                <span className="truncate">
+                  {flexRender(
+                    header.column.columnDef.header,
+                    header.getContext()
+                  )}
+                </span>
+                {isReadOnly && (
+                  <Lock
+                    className="w-2.5 h-2.5 text-slate-400 flex-shrink-0"
+                    aria-label="Read-only"
+                  />
+                )}
+              </div>
+            )
+          })}
         </div>
 
         <div className="relative" style={{ height: totalSize, minWidth: tableMinWidth }}>
