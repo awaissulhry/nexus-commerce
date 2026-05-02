@@ -8,10 +8,10 @@ import { ChannelsClient } from "./ChannelsClient";
 
 export default function ChannelsPage() {
   return (
-    <div>
+    <div className="space-y-5">
       <PageHeader
-        title="Marketplace Channels"
-        subtitle="Connect and manage your marketplace accounts"
+        title="Channel Connections"
+        description="Connect and manage your marketplace accounts"
       />
       <ChannelsClient />
     </div>

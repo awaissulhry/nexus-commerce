@@ -1,305 +1,318 @@
-"use client";
+'use client'
 
-import { useState, useEffect } from "react";
+import { useState, useEffect } from 'react'
+import { ShoppingBag, Plug, AlertCircle } from 'lucide-react'
+import { Card } from '@/components/ui/Card'
+import { Button } from '@/components/ui/Button'
+import { Badge } from '@/components/ui/Badge'
+import { cn } from '@/lib/utils'
 
 interface ChannelConnection {
-  id: string;
-  channelType: string;
-  isActive: boolean;
-  sellerName?: string;
-  storeName?: string;
-  storeFrontUrl?: string;
-  tokenExpiresAt?: string;
-  lastSyncAt?: string;
-  lastSyncStatus?: string;
-  lastSyncError?: string;
+  id: string
+  channelType: string
+  isActive: boolean
+  sellerName?: string
+  storeName?: string
+  storeFrontUrl?: string
+  tokenExpiresAt?: string
+  lastSyncAt?: string
+  lastSyncStatus?: string
+  lastSyncError?: string
 }
 
-interface ChannelCard {
-  type: "EBAY" | "AMAZON" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY";
-  name: string;
-  icon: string;
-  description: string;
-  color: string;
+interface ChannelDef {
+  type: 'EBAY' | 'AMAZON' | 'SHOPIFY' | 'WOOCOMMERCE' | 'ETSY'
+  name: string
+  description: string
 }
 
-const CHANNELS: ChannelCard[] = [
-  {
-    type: "EBAY",
-    name: "eBay",
-    icon: "🏪",
-    description: "Connect your eBay seller account",
-    color: "from-red-50 to-red-100",
-  },
-  {
-    type: "AMAZON",
-    name: "Amazon",
-    icon: "📦",
-    description: "Connect your Amazon seller account",
-    color: "from-orange-50 to-orange-100",
-  },
-  {
-    type: "SHOPIFY",
-    name: "Shopify",
-    icon: "🛍️",
-    description: "Connect your Shopify store",
-    color: "from-green-50 to-green-100",
-  },
-  {
-    type: "WOOCOMMERCE",
-    name: "WooCommerce",
-    icon: "🏬",
-    description: "Connect your WooCommerce store",
-    color: "from-purple-50 to-purple-100",
-  },
-  {
-    type: "ETSY",
-    name: "Etsy",
-    icon: "🎨",
-    description: "Connect your Etsy shop",
-    color: "from-yellow-50 to-yellow-100",
-  },
-];
+const CHANNELS: ChannelDef[] = [
+  { type: 'AMAZON', name: 'Amazon', description: 'Connect your Amazon seller account' },
+  { type: 'EBAY', name: 'eBay', description: 'Connect your eBay seller account' },
+  { type: 'SHOPIFY', name: 'Shopify', description: 'Connect your Shopify store' },
+  { type: 'WOOCOMMERCE', name: 'WooCommerce', description: 'Connect your WooCommerce store' },
+  { type: 'ETSY', name: 'Etsy', description: 'Connect your Etsy shop' },
+]
 
 export function ChannelsClient() {
   const [connections, setConnections] = useState<Map<string, ChannelConnection>>(
     new Map()
-  );
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [connectingChannel, setConnectingChannel] = useState<string | null>(null);
+  )
+  const [loading, setLoading] = useState(true)
+  const [statusMsg, setStatusMsg] = useState<{ kind: 'error' | 'success' | 'info'; text: string } | null>(null)
+  const [connectingChannel, setConnectingChannel] = useState<string | null>(null)
+  const [testingId, setTestingId] = useState<string | null>(null)
 
-  // Load existing connections
   useEffect(() => {
-    loadConnections();
-  }, []);
+    loadConnections()
+  }, [])
 
-  const loadConnections = async () => {
+  async function loadConnections() {
     try {
-      setLoading(true);
-      setError(null);
-
-      // In a real app, fetch from API
-      // For now, initialize empty connections
-      const newConnections = new Map<string, ChannelConnection>();
-      setConnections(newConnections);
+      setLoading(true)
+      setStatusMsg(null)
+      // In a real app, fetch from API. Schema's ChannelConnection table
+      // exists but no list endpoint is wired yet — start empty.
+      const newConnections = new Map<string, ChannelConnection>()
+      setConnections(newConnections)
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to load connections";
-      setError(message);
+      const message = err instanceof Error ? err.message : 'Failed to load connections'
+      setStatusMsg({ kind: 'error', text: message })
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
-  const handleConnectEbay = async () => {
+  async function handleConnectEbay() {
     try {
-      setConnectingChannel("EBAY");
-      setError(null);
+      setConnectingChannel('EBAY')
+      setStatusMsg(null)
 
-      // Create a new ChannelConnection in the database
-      const response = await fetch("/api/ebay/auth/initiate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const response = await fetch('/api/ebay/auth/initiate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           redirectUri: `${window.location.origin}/settings/channels/ebay-callback`,
         }),
-      });
+      })
 
       if (!response.ok) {
-        throw new Error("Failed to initiate eBay connection");
+        throw new Error('Failed to initiate eBay connection')
       }
 
-      const data = await response.json();
+      const data = await response.json()
 
       if (!data.success || !data.authUrl) {
-        throw new Error(data.error || "Failed to generate authorization URL");
+        throw new Error(data.error || 'Failed to generate authorization URL')
       }
 
-      // Store state in sessionStorage for validation on callback
-      sessionStorage.setItem("ebayAuthState", data.state);
-
-      // Redirect to eBay authorization
-      window.location.href = data.authUrl;
+      sessionStorage.setItem('ebayAuthState', data.state)
+      window.location.href = data.authUrl
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Connection failed";
-      setError(message);
-      setConnectingChannel(null);
+      const message = err instanceof Error ? err.message : 'Connection failed'
+      setStatusMsg({ kind: 'error', text: message })
+      setConnectingChannel(null)
     }
-  };
+  }
 
-  const handleRevokeConnection = async (connectionId: string) => {
-    if (!confirm("Are you sure you want to disconnect this channel?")) {
-      return;
-    }
+  async function handleRevokeConnection(connectionId: string) {
+    if (!confirm('Are you sure you want to disconnect this channel?')) return
 
     try {
-      const response = await fetch("/api/ebay/auth/revoke", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const response = await fetch('/api/ebay/auth/revoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ connectionId }),
-      });
+      })
 
       if (!response.ok) {
-        throw new Error("Failed to revoke connection");
+        throw new Error('Failed to revoke connection')
       }
 
-      // Remove from local state
-      const newConnections = new Map(connections);
-      newConnections.delete(connectionId);
-      setConnections(newConnections);
+      const newConnections = new Map(connections)
+      newConnections.delete(connectionId)
+      setConnections(newConnections)
+      setStatusMsg({ kind: 'success', text: 'Connection revoked.' })
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Revocation failed";
-      setError(message);
+      const message = err instanceof Error ? err.message : 'Revocation failed'
+      setStatusMsg({ kind: 'error', text: message })
     }
-  };
+  }
 
-  const handleTestConnection = async (connectionId: string) => {
+  async function handleTestConnection(connectionId: string) {
     try {
-      const response = await fetch(`/api/ebay/auth/test?connectionId=${connectionId}`);
+      setTestingId(connectionId)
+      const response = await fetch(
+        `/api/ebay/auth/test?connectionId=${connectionId}`
+      )
 
       if (!response.ok) {
-        throw new Error("Connection test failed");
+        throw new Error('Connection test failed')
       }
 
-      const data = await response.json();
-      alert(`✓ Connection successful!\n\nSeller: ${data.seller.signInName}`);
+      const data = await response.json()
+      setStatusMsg({
+        kind: 'success',
+        text: `Connection OK. Seller: ${data.seller?.signInName ?? '(unknown)'}`,
+      })
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Test failed";
-      alert(`✗ Connection test failed: ${message}`);
+      const message = err instanceof Error ? err.message : 'Test failed'
+      setStatusMsg({ kind: 'error', text: `Connection test failed: ${message}` })
+    } finally {
+      setTestingId(null)
     }
-  };
+  }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-gray-500">Loading channels...</div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className="bg-white border border-slate-200 rounded-lg p-4 animate-pulse"
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-slate-200 rounded" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 bg-slate-200 rounded w-1/2" />
+                <div className="h-2 bg-slate-200 rounded w-3/4" />
+              </div>
+            </div>
+            <div className="h-8 bg-slate-200 rounded" />
+          </div>
+        ))}
       </div>
-    );
+    )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Error Alert */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-sm text-red-800">{error}</p>
+    <div className="space-y-4">
+      {statusMsg && (
+        <div
+          className={cn(
+            'border rounded-lg px-4 py-3 text-[12px] flex items-start gap-2',
+            statusMsg.kind === 'success' && 'bg-green-50 border-green-200 text-green-700',
+            statusMsg.kind === 'error' && 'bg-red-50 border-red-200 text-red-700',
+            statusMsg.kind === 'info' && 'bg-slate-50 border-slate-200 text-slate-700'
+          )}
+        >
+          {statusMsg.kind === 'error' && (
+            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+          )}
+          <span>{statusMsg.text}</span>
         </div>
       )}
 
-      {/* Channels Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {CHANNELS.map((channel) => {
-          const connection = connections.get(channel.type);
-          const isConnected = connection?.isActive;
+          const connection = connections.get(channel.type)
+          const isConnected = !!connection?.isActive
+          const isConnecting = connectingChannel === channel.type
 
           return (
-            <div
-              key={channel.type}
-              className={`bg-gradient-to-br ${channel.color} border border-gray-200 rounded-lg p-6 transition-all hover:shadow-md`}
-            >
-              {/* Header */}
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <span className="text-3xl">{channel.icon}</span>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{channel.name}</h3>
-                    <p className="text-xs text-gray-600">{channel.description}</p>
+            <Card key={channel.type}>
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 bg-slate-100 rounded-md flex items-center justify-center flex-shrink-0">
+                    <ShoppingBag className="w-4 h-4 text-slate-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-[14px] font-semibold text-slate-900">
+                      {channel.name}
+                    </h3>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      {channel.description}
+                    </p>
                   </div>
                 </div>
-                {isConnected && (
-                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">
-                    <span className="w-2 h-2 bg-green-600 rounded-full"></span>
+                {isConnected ? (
+                  <Badge variant="success" size="md">
                     Connected
-                  </span>
+                  </Badge>
+                ) : (
+                  <Badge variant="default" size="md">
+                    Not connected
+                  </Badge>
                 )}
               </div>
 
-              {/* Connection Details */}
-              {isConnected && connection ? (
-                <div className="space-y-3 mb-4">
+              {isConnected && connection && (
+                <div className="space-y-1.5 mb-3 text-[12px] border-t border-slate-100 pt-3">
                   {connection.sellerName && (
-                    <div className="text-sm">
-                      <span className="text-gray-600">Seller:</span>
-                      <span className="ml-2 font-medium text-gray-900">
-                        {connection.sellerName}
-                      </span>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-slate-500">Seller</span>
+                      <span className="text-slate-900 truncate">{connection.sellerName}</span>
                     </div>
                   )}
                   {connection.storeName && (
-                    <div className="text-sm">
-                      <span className="text-gray-600">Store:</span>
-                      <span className="ml-2 font-medium text-gray-900">
-                        {connection.storeName}
-                      </span>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-slate-500">Store</span>
+                      <span className="text-slate-900 truncate">{connection.storeName}</span>
                     </div>
                   )}
                   {connection.tokenExpiresAt && (
-                    <div className="text-sm">
-                      <span className="text-gray-600">Token expires:</span>
-                      <span className="ml-2 font-medium text-gray-900">
-                        {new Date(connection.tokenExpiresAt).toLocaleDateString()}
+                    <div className="flex justify-between gap-2">
+                      <span className="text-slate-500">Token expires</span>
+                      <span className="text-slate-900 tabular-nums">
+                        {new Date(connection.tokenExpiresAt).toLocaleDateString('en-GB', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
                       </span>
                     </div>
                   )}
                   {connection.lastSyncAt && (
-                    <div className="text-sm">
-                      <span className="text-gray-600">Last sync:</span>
-                      <span className="ml-2 font-medium text-gray-900">
-                        {new Date(connection.lastSyncAt).toLocaleDateString()}
+                    <div className="flex justify-between gap-2">
+                      <span className="text-slate-500">Last sync</span>
+                      <span className="text-slate-900 tabular-nums">
+                        {new Date(connection.lastSyncAt).toLocaleDateString('en-GB', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
                       </span>
                     </div>
                   )}
                 </div>
-              ) : null}
+              )}
 
-              {/* Actions */}
               <div className="flex gap-2">
-                {isConnected ? (
+                {isConnected && connection ? (
                   <>
-                    <button
-                      onClick={() => handleTestConnection(connection!.id)}
-                      className="flex-1 px-3 py-2 bg-blue-100 text-blue-700 text-sm font-medium rounded hover:bg-blue-200 transition-colors"
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      loading={testingId === connection.id}
+                      onClick={() => handleTestConnection(connection.id)}
+                      className="flex-1"
                     >
                       Test
-                    </button>
-                    <button
-                      onClick={() => handleRevokeConnection(connection!.id)}
-                      className="flex-1 px-3 py-2 bg-red-100 text-red-700 text-sm font-medium rounded hover:bg-red-200 transition-colors"
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => handleRevokeConnection(connection.id)}
+                      className="flex-1"
                     >
                       Disconnect
-                    </button>
+                    </Button>
                   </>
                 ) : (
-                  <button
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    loading={isConnecting}
+                    icon={<Plug className="w-3.5 h-3.5" />}
                     onClick={() => {
-                      if (channel.type === "EBAY") {
-                        handleConnectEbay();
+                      if (channel.type === 'EBAY') {
+                        handleConnectEbay()
                       } else {
-                        setError(`${channel.name} integration coming soon`);
+                        setStatusMsg({
+                          kind: 'info',
+                          text: `${channel.name} OAuth flow ships in Phase 5.`,
+                        })
                       }
                     }}
-                    disabled={connectingChannel === channel.type}
-                    className="w-full px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1"
                   >
-                    {connectingChannel === channel.type ? "Connecting..." : "Connect"}
-                  </button>
+                    Connect
+                  </Button>
                 )}
               </div>
-            </div>
-          );
+            </Card>
+          )
         })}
       </div>
 
-      {/* Info Box */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h4 className="font-semibold text-blue-900 mb-2">About Marketplace Connections</h4>
-        <ul className="text-sm text-blue-800 space-y-1">
-          <li>• Connect your marketplace accounts to sync products and orders</li>
-          <li>• Each connection requires authorization from the marketplace</li>
-          <li>• Tokens are securely stored and automatically refreshed</li>
-          <li>• You can disconnect at any time</li>
+      <Card title="About marketplace connections">
+        <ul className="text-[12px] text-slate-600 space-y-1.5">
+          <li>· Each connection authorizes Nexus to read products, listings, and orders from that channel.</li>
+          <li>· OAuth tokens are stored encrypted and refreshed automatically before expiry.</li>
+          <li>· Disconnecting revokes the token and stops all syncs for that channel.</li>
+          <li>· Currently live: <strong>eBay OAuth</strong>. Other channels are stubbed pending Phase 5.</li>
         </ul>
-      </div>
+      </Card>
     </div>
-  );
+  )
 }
