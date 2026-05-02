@@ -14,6 +14,7 @@ import {
   useReactTable,
   type CellContext,
   type ColumnDef,
+  type ColumnSizingState,
   type Row,
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -24,6 +25,7 @@ import {
   ChevronDown,
   ChevronRight,
   Lock,
+  RotateCcw,
   WifiOff,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
@@ -601,7 +603,7 @@ const TableRow = memo(
       hier?.hasChildren
     return (
       <div
-        className="absolute left-0 right-0 flex border-b border-slate-100 hover:bg-slate-50/70"
+        className="absolute left-0 right-0 flex border-b border-slate-100"
         style={{
           height: ROW_HEIGHT,
           transform: `translateY(${top}px)`,
@@ -644,9 +646,10 @@ const TableRow = memo(
               }
               className={cn(
                 'overflow-hidden border-r border-slate-100/60 last:border-r-0 relative',
-                inRange && !isActive && 'bg-blue-50/60',
-                isActive &&
-                  'ring-2 ring-blue-500 ring-inset z-10'
+                'select-none transition-colors duration-100',
+                selectable && !inRange && !isActive && 'hover:bg-slate-50',
+                inRange && !isActive && 'bg-blue-50/80 hover:bg-blue-100/80',
+                isActive && 'ring-2 ring-blue-600 ring-inset z-10',
               )}
               style={{ width: cell.column.getSize(), flexShrink: 0 }}
             >
@@ -716,6 +719,30 @@ export default function BulkOperationsClient() {
   const [marketplaceContext, setMarketplaceContext] =
     useState<MarketplaceContext | null>(null)
   const [marketplaceOptions, setMarketplaceOptions] = useState<MarketplaceOption[]>([])
+
+  // ── Column resize state (Step 1.5) ─────────────────────────────
+  // TanStack v8 stores user-dragged widths as a {[colId]: width} map.
+  // We persist it to localStorage so widths survive reloads.
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(() => {
+    if (typeof window === 'undefined') return {}
+    try {
+      const raw = window.localStorage.getItem('nexus_bulkops_column_widths')
+      return raw ? (JSON.parse(raw) as ColumnSizingState) : {}
+    } catch {
+      return {}
+    }
+  })
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        'nexus_bulkops_column_widths',
+        JSON.stringify(columnSizing),
+      )
+    } catch {
+      /* localStorage may be disabled — non-critical */
+    }
+  }, [columnSizing])
+  const resetColumnWidths = useCallback(() => setColumnSizing({}), [])
 
   // ── Step 1 selection state ──────────────────────────────────────
   const [selection, setSelection] = useState<SelectionState>({
@@ -1244,6 +1271,11 @@ export default function BulkOperationsClient() {
     data: displayRows as BulkProduct[],
     columns: dynamicColumns,
     getCoreRowModel: getCoreRowModel(),
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
+    state: { columnSizing },
+    onColumnSizingChange: setColumnSizing,
+    defaultColumn: { minSize: 60, maxSize: 600 },
   })
 
   const rows = table.getRowModel().rows
@@ -1376,6 +1408,17 @@ export default function BulkOperationsClient() {
             options={marketplaceOptions}
             pulse={showContextBanner}
           />
+          {Object.keys(columnSizing).length > 0 && (
+            <button
+              type="button"
+              onClick={resetColumnWidths}
+              title="Reset column widths to defaults"
+              className="inline-flex items-center gap-1 h-7 px-2 text-[11px] text-slate-600 border border-slate-200 rounded-md hover:bg-slate-50 hover:text-slate-900"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Reset widths
+            </button>
+          )}
           <ColumnSelector
             allFields={allFields}
             visibleColumnIds={visibleColumnIds}
@@ -1424,7 +1467,7 @@ export default function BulkOperationsClient() {
 
       <div
         ref={containerRef}
-        className="flex-1 min-h-0 overflow-auto bg-white border border-slate-200 rounded-lg"
+        className="flex-1 min-h-0 overflow-auto bg-white border border-slate-200 rounded-lg select-none"
         style={{ contain: 'strict' }}
       >
         <div
@@ -1436,10 +1479,11 @@ export default function BulkOperationsClient() {
               | { fieldDef?: FieldDef }
               | undefined)?.fieldDef
             const isReadOnly = fieldDef && !fieldDef.editable
+            const isResizing = header.column.getIsResizing()
             return (
               <div
                 key={header.id}
-                className="flex items-center gap-1 px-3 border-r border-slate-200/70 last:border-r-0 text-[11px] font-semibold text-slate-700 uppercase tracking-wider"
+                className="relative flex items-center gap-1 px-3 border-r border-slate-200/70 last:border-r-0 text-[11px] font-semibold text-slate-700 uppercase tracking-wider"
                 style={{ width: header.getSize(), flexShrink: 0 }}
                 title={fieldDef?.helpText}
               >
@@ -1455,6 +1499,21 @@ export default function BulkOperationsClient() {
                     aria-label="Read-only"
                   />
                 )}
+                {/* Resize handle — sits on the right border. Calls
+                 *  TanStack's getResizeHandler to track mousedown and
+                 *  drive column.size via the columnSizing state. */}
+                <div
+                  onMouseDown={header.getResizeHandler()}
+                  onTouchStart={header.getResizeHandler()}
+                  onClick={(e) => e.stopPropagation()}
+                  className={cn(
+                    'absolute top-0 bottom-0 w-1.5 cursor-col-resize select-none touch-none',
+                    'right-0 -mr-[3px] z-10',
+                    isResizing
+                      ? 'bg-blue-500'
+                      : 'bg-transparent hover:bg-blue-500/60',
+                  )}
+                />
               </div>
             )
           })}
@@ -1605,8 +1664,11 @@ function StatusBar({
       <span className="flex items-center gap-1.5">{left}</span>
       <span className="flex items-center gap-3 text-slate-500">
         {selectedCellCount > 1 && (
-          <span className="tabular-nums">
-            {selectedCellCount} cells selected
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded text-[12px]">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
+            <span className="text-blue-900 tabular-nums">
+              {selectedCellCount} cells selected
+            </span>
           </span>
         )}
         {fetchMs != null && <span>Initial fetch: {fetchMs}ms</span>}

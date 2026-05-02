@@ -148,7 +148,7 @@ export const EditableCell = memo(
 
     if (isEditing) {
       const baseInputClass =
-        'w-full h-full px-2 outline-none ring-2 ring-blue-500 bg-white text-[13px]'
+        'w-full h-full px-2 outline-none ring-2 ring-blue-500 bg-white text-[13px] select-text'
       if (meta.fieldType === 'select') {
         return (
           <select
