@@ -522,3 +522,65 @@ each brand only needs ONE successful application — every future
 listing for that brand on that marketplace skips this step
 entirely.
 
+
+---
+
+## Phase 5.5: AI content generation (v1)
+
+Date: 2026-05-02
+
+Step 6 of the listing wizard is now wired to a real Gemini Flash
+backend. One generation pass produces an Amazon-optimised title,
+five themed bullets, an HTML description, and 250-char backend
+keywords — all in the marketplace's language.
+
+### What ships
+
+- **`POST /api/listing-content/generate`** — single endpoint with
+  field-array selection (`['title','bullets','description','keywords']`).
+  Runs the requested prompts in parallel server-side via
+  `Promise.all`. Returns whichever fields were asked for, plus a
+  metadata block with model, language, elapsed time.
+- **`ListingContentService`** — Gemini Flash via the existing
+  `GeminiService`. Per-field prompt templates with structured-JSON
+  output contracts. Temperature bumped per `variant` so repeated
+  regenerations produce visibly different copy.
+- **Step 6 UI** — per-field generate / regenerate, inline editing,
+  live char counts, AI-supplied "insights" badges (✓ Brand at start
+  / ✓ Italian localisation / etc.) so the user sees why the
+  suggestion is good. Auto-saves the entire content slice into
+  `wizardState.content` after every generation or edit, so the
+  user can resume where they left off.
+- **Localisation** — the prompt switches language by marketplace
+  (IT → Italian, DE → German, FR → French, ES → Spanish, UK →
+  British English with proper spellings, US → American English,
+  plus NL / SE / PL / CA / MX). Falls back to English for any
+  marketplace not in the table.
+- **Cost / latency** — Flash, not Pro: ~$0.0005 per field
+  generation, < 1s typical. 4-field "Generate all" lands in
+  < 5s on warm cache.
+- **JSON parsing** — strips markdown fences if Gemini accidentally
+  wraps the response, throws a clear error if the body still isn't
+  valid JSON for the requested field.
+- **Service-level guard** — when `GEMINI_API_KEY` isn't set the
+  endpoint returns 503 with a helpful message instead of hanging.
+
+### What we don't do (v1, deferred to Phase 6)
+
+- **Multi-marketplace translation** — generating once and writing
+  IT / DE / FR / ES / UK / US in one pass. Needs the publishing
+  layer that lands in Phase 6 step 9–10. v1 generates for the
+  wizard's current marketplace only.
+- **AI-vs-user-edit diff tracking** — useful telemetry for
+  measuring AI hit-rate but adds real complexity. Save the final
+  value only; add the diff log later when there's a place to view
+  it.
+- **A+ Content / EBC** — beyond plain Amazon-safe HTML, the
+  rich-content generator that produces image-rich modules and
+  comparison tables ships in Phase 6 with the publishing path.
+- **Quality scoring** — "this title is 87/100 by Amazon best
+  practices". Insights badges stand in for v1; a real score
+  follows once we have a rubric to grade against.
+- **Brand-voice profile** — saving the user's editing patterns
+  per brand so the next product matches.
+

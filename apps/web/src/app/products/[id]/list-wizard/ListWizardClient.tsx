@@ -9,6 +9,7 @@ import WizardNav from './components/WizardNav'
 import PlaceholderStep from './components/PlaceholderStep'
 import Step1Identifiers from './steps/Step1Identifiers'
 import Step2GtinExemption from './steps/Step2GtinExemption'
+import Step6Content from './steps/Step6Content'
 import { STEPS, findStep } from './lib/steps'
 
 export interface WizardData {
@@ -247,6 +248,7 @@ export default function ListWizardClient({
           }
           if (currentStep === 1) return <Step1Identifiers {...stepProps} />
           if (currentStep === 2) return <Step2GtinExemption {...stepProps} />
+          if (currentStep === 6) return <Step6Content {...stepProps} />
           return <PlaceholderStep step={step} />
         })()}
       </div>

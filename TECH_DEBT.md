@@ -122,3 +122,19 @@ When the user marks an application REJECTED and pastes Amazon's email, we could 
 Sellers could forward Amazon's approval / rejection email to a Nexus inbox; we extract the case ID + outcome and update the application automatically. Avoids the manual "Mark as approved" click.
 
 **Deferred** because it needs an inbound-email pipeline (SES / Postmark / Mailgun), which we don't have yet.
+
+## 13. Phase 5.5 → Phase 6 — multi-marketplace translation flow
+
+v1 generates content for the wizard's current marketplace. The "generate IT once, translate to DE / FR / ES / UK / US in one pass and write each into ChannelListing" flow needs the publishing layer that lands in Phase 6 (steps 9 and 10). Spec'd but consciously deferred.
+
+## 14. Phase 5.5 → AI vs user-edit telemetry
+
+Every AI generation could store its `aiVersion` next to the user's final value, so we can later measure: which fields the user edits most, how heavy the edits are, and whether quality drifts when product types change. Building the storage now is YAGNI — adding the diff log is a single migration + small client patch when we want the data.
+
+## 15. Phase 5.5 → quality scoring + brand-voice profiles
+
+After generation, we could score the title / bullets / description against an Amazon-best-practices rubric (length, brand position, keyword density, …) and surface a percentage. We could also save the user's editing patterns per brand ("prefers terse bullets, no emojis, technical tone") so the next product matches without prompting. Both deferred until we have a quality team or rubric author to define the scoring.
+
+## 16. Phase 5.5 → A+ Content (EBC) generator
+
+Beyond plain Amazon-safe HTML, sellers eventually want rich Amazon Brand Content — image-rich modules, comparison tables, brand storytelling sections. Ships with the publishing path in Phase 6.
