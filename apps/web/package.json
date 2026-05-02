@@ -15,7 +15,9 @@
     "@hookform/resolvers": "^5.2.2",
     "@nexus/database": "*",
     "@tanstack/react-table": "^8.21.3",
+    "@tanstack/react-virtual": "^3.13.24",
     "axios": "^1.15.2",
+    "immer": "^10.2.0",
     "lucide-react": "^0.263.1",
     "next": "^16.2.4",
     "react": "^18.2.0",
@@ -23,6 +25,7 @@
     "react-dropzone": "^15.0.0",
     "react-hook-form": "^7.73.1",
     "recharts": "^3.8.1",
+    "use-immer": "^0.11.0",
     "xlsx": "^0.18.5",
     "zod": "^4.3.6"
   },
