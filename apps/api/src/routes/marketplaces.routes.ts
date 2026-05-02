@@ -25,6 +25,65 @@ const MARKETPLACES = [
 ] as const
 
 const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
+  // GET /api/sidebar/counts — aggregate counters for the sidebar.
+  // Single endpoint covers everything the sidebar needs so navigation
+  // doesn't fan out into a dozen queries on every page load. 30s cache.
+  fastify.get('/sidebar/counts', async (_request, reply) => {
+    try {
+      reply.header('Cache-Control', 'private, max-age=30')
+
+      const [
+        totalProducts,
+        pimPending,
+        totalListings,
+        listingsByChannel,
+        pendingOrders,
+        syncIssues,
+        connectedChannels,
+      ] = await Promise.all([
+        prisma.product.count({ where: { parentId: null } }),
+        prisma.product.count({ where: { reviewStatus: 'PENDING_REVIEW' } }),
+        prisma.channelListing.count(),
+        prisma.channelListing.groupBy({
+          by: ['channel', 'marketplace'],
+          _count: { _all: true },
+        }),
+        // Order table is empty in dev; wrap in try/catch so a missing
+        // table or schema mismatch doesn't break the whole sidebar.
+        prisma.order
+          .count({ where: { status: 'PENDING' } })
+          .catch(() => 0),
+        prisma.channelListing.count({ where: { lastSyncStatus: 'FAILED' } }),
+        prisma.marketplace.count({ where: { isActive: true } }),
+      ])
+
+      // Group listings by channel + per-marketplace breakdown
+      const channelCounts: Record<
+        string,
+        { total: number; markets: Record<string, number> }
+      > = {}
+      for (const row of listingsByChannel) {
+        const ch = row.channel as string
+        const mp = row.marketplace as string
+        const cnt = (row._count as any)._all ?? 0
+        if (!channelCounts[ch]) channelCounts[ch] = { total: 0, markets: {} }
+        channelCounts[ch].total += cnt
+        channelCounts[ch].markets[mp] = cnt
+      }
+
+      return {
+        catalog: { products: totalProducts, pimPending },
+        listings: { total: totalListings, byChannel: channelCounts },
+        operations: { pendingOrders },
+        monitoring: { syncIssues },
+        system: { connectedChannels },
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[sidebar/counts] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // POST /api/marketplaces/seed — idempotent seed of the 17 marketplaces
   fastify.post('/marketplaces/seed', async (_request, reply) => {
     try {

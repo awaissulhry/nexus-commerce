@@ -9,6 +9,7 @@ import MasterDataTab from './tabs/MasterDataTab'
 import VariationsTab from './tabs/VariationsTab'
 import ChannelListingTab from './tabs/ChannelListingTab'
 import { cn } from '@/lib/utils'
+import { useTrackRecentlyViewed } from '@/lib/use-recently-viewed'
 
 type TopTab = 'master' | 'variations' | string // also "AMAZON" / "EBAY" / "SHOPIFY_GLOBAL" etc
 
@@ -69,6 +70,14 @@ export default function ProductEditClient({
   // Per-channel selected marketplace (key by channel)
   const [marketSelection, setMarketSelection] = useState<Record<string, string>>({})
   const [unsavedChanges, setUnsavedChanges] = useState(false)
+
+  // Push this product onto the sidebar's "Recently viewed" list
+  useTrackRecentlyViewed({
+    id: product.id,
+    label: product.sku,
+    href: `/products/${product.id}/edit`,
+    type: 'product',
+  })
 
   const orderedChannels = CHANNEL_ORDER.filter((c) => marketplaces[c]?.length)
 

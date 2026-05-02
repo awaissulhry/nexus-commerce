@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import AppSidebar from "@/components/layout/AppSidebar";
+import CommandPalette from "@/components/CommandPalette";
 
 export const metadata: Metadata = {
   title: "Nexus Commerce",
@@ -21,6 +22,7 @@ export default function RootLayout({
             <div className="p-6">{children}</div>
           </main>
         </div>
+        <CommandPalette />
       </body>
     </html>
   );
