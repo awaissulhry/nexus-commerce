@@ -17,10 +17,13 @@ import {
   type Row,
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { produce } from 'immer'
+import { AlertCircle, CheckCircle2, WifiOff } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
 import { EditableCell, type EditableMeta } from './EditableCell'
 import PreviewChangesModal from './PreviewChangesModal'
+import { cn } from '@/lib/utils'
 
 export interface BulkProduct {
   id: string
@@ -58,10 +61,24 @@ interface CellChange {
   timestamp: number
 }
 
+interface ApiError {
+  id: string
+  field: string
+  error: string
+}
+
+type SaveStatus =
+  | { kind: 'idle' }
+  | { kind: 'dirty' }
+  | { kind: 'saving' }
+  | { kind: 'saved'; count: number; at: number }
+  | { kind: 'partial'; saved: number; failed: number }
+  | { kind: 'error'; message: string }
+
 const ROW_HEIGHT = 36
 const HEADER_HEIGHT = 36
 
-// ── Editable column metas (module scope = stable identity) ────────────
+// ── Editable column metas ─────────────────────────────────────────────
 const META_NAME: EditableMeta = { editable: true, fieldType: 'text' }
 const META_BRAND: EditableMeta = { editable: true, fieldType: 'text' }
 const META_STATUS: EditableMeta = {
@@ -98,6 +115,7 @@ const META_STOCK: EditableMeta = {
 // ── Helpers passed to all editable cells via closure ──────────────────
 interface EditCtx {
   onCommit: (rowId: string, columnId: string, value: unknown) => void
+  cellErrors: Map<string, string>
 }
 
 function fmtMargin(cost: number | null, price: number): string {
@@ -105,21 +123,19 @@ function fmtMargin(cost: number | null, price: number): string {
   return `${((1 - cost / price) * 100).toFixed(0)}%`
 }
 
-// Cell renderers reference editCtxRef so that the renderers stay stable
-// (no new ColumnDef array per render) while still seeing latest commit
-// callbacks. The ref is set once per render before useReactTable runs.
 const editCtxRef: { current: EditCtx } = {
   current: {
     onCommit: () => {
       /* no-op until parent wires it */
     },
+    cellErrors: new Map(),
   },
 }
 
 function makeEditableRenderer(meta: EditableMeta) {
-  // Inner function is stable — captured from module scope.
   return function EditableCellRenderer(ctx: CellContext<BulkProduct, unknown>) {
     const value = ctx.getValue()
+    const cellKey = `${ctx.row.original.id}:${ctx.column.id}`
     return (
       <EditableCell
         rowId={ctx.row.original.id}
@@ -127,6 +143,7 @@ function makeEditableRenderer(meta: EditableMeta) {
         initialValue={value}
         meta={meta}
         onCommit={editCtxRef.current.onCommit}
+        cellError={editCtxRef.current.cellErrors.get(cellKey)}
       />
     )
   }
@@ -163,11 +180,6 @@ const columns: ColumnDef<BulkProduct>[] = [
     accessorKey: 'status',
     header: 'Status',
     size: 110,
-    // Status uses a dedicated renderer so the *display* shows a Badge
-    // when not editing, but clicking it switches to the select. Wrap
-    // EditableCell in a render that picks display vs edit by checking
-    // isEditing through CSS — simpler: always use EditableCell which
-    // shows raw text when not editing. Acceptable for Phase B.
     cell: makeEditableRenderer(META_STATUS),
   },
   {
@@ -230,7 +242,6 @@ const columns: ColumnDef<BulkProduct>[] = [
 
 const TABLE_MIN_WIDTH = columns.reduce((sum, c) => sum + (c.size ?? 100), 0)
 
-// ── Memoized row ──────────────────────────────────────────────────────
 const TableRow = memo(
   function TableRow({ row, top }: { row: Row<BulkProduct>; top: number }) {
     return (
@@ -282,16 +293,34 @@ export default function BulkOperationsClient() {
   const [error, setError] = useState<string | null>(null)
   const [fetchMs, setFetchMs] = useState<number | null>(null)
 
-  // Phase B state
   const [changes, setChanges] = useState<Map<string, CellChange>>(new Map())
+  const [cellErrors, setCellErrors] = useState<Map<string, string>>(new Map())
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>({ kind: 'idle' })
+  const [online, setOnline] = useState(true)
 
-  // Stable onCommit — use a ref to avoid recreating on every render
-  // while still picking up the latest products array for old-value lookup.
+  // Refs for stable callbacks
   const productsRef = useRef(products)
+  const changesRef = useRef(changes)
   useEffect(() => {
     productsRef.current = products
   }, [products])
+  useEffect(() => {
+    changesRef.current = changes
+  }, [changes])
+
+  // Online / offline
+  useEffect(() => {
+    if (typeof navigator !== 'undefined') setOnline(navigator.onLine)
+    const onOnline = () => setOnline(true)
+    const onOffline = () => setOnline(false)
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
+    return () => {
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('offline', onOffline)
+    }
+  }, [])
 
   const handleCommit = useCallback(
     (rowId: string, columnId: string, newValue: unknown) => {
@@ -302,7 +331,6 @@ export default function BulkOperationsClient() {
 
       setChanges((prev) => {
         const next = new Map(prev)
-        // If the new value matches original, drop the change entry
         if (looselyEqual(newValue, oldValue)) {
           next.delete(key)
         } else {
@@ -316,16 +344,150 @@ export default function BulkOperationsClient() {
         }
         return next
       })
+
+      // Clear any previous error for this cell when user re-edits it
+      setCellErrors((prev) => {
+        if (!prev.has(key)) return prev
+        const next = new Map(prev)
+        next.delete(key)
+        return next
+      })
+
+      // Reset saved-pulse if user starts editing again
+      if (saveStatus.kind === 'saved' || saveStatus.kind === 'partial') {
+        setSaveStatus({ kind: 'dirty' })
+      } else if (saveStatus.kind === 'idle') {
+        setSaveStatus({ kind: 'dirty' })
+      }
     },
-    []
+    [saveStatus.kind]
   )
 
-  // Push the latest commit handler into the module-level ref so cell
-  // renderers see it. This intentionally does NOT cause memoized cells
-  // to re-render — the renderer reads from the ref each time it's
-  // invoked, but the renderer itself is stable.
-  editCtxRef.current = { onCommit: handleCommit }
+  // Push latest commit handler + cellErrors snapshot into the
+  // module-level ref so cell renderers see them.
+  editCtxRef.current = { onCommit: handleCommit, cellErrors }
 
+  // ── Save flow ──────────────────────────────────────────────────────
+  const handleSave = useCallback(async () => {
+    const currentChanges = changesRef.current
+    if (currentChanges.size === 0) return
+    if (saveStatus.kind === 'saving') return
+
+    setSaveStatus({ kind: 'saving' })
+    setCellErrors(new Map()) // clear previous errors before retrying
+
+    const changesArray = Array.from(currentChanges.values()).map((c) => ({
+      id: c.rowId,
+      field: c.columnId,
+      value: c.newValue,
+    }))
+
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/products/bulk`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ changes: changesArray }),
+      })
+
+      const result = (await res.json().catch(() => ({}))) as {
+        success?: boolean
+        updated?: number
+        errors?: ApiError[]
+        error?: string
+        message?: string
+      }
+
+      if (!res.ok) {
+        // Total failure — keep all changes in UI for retry
+        setSaveStatus({
+          kind: 'error',
+          message: result.error ?? result.message ?? `HTTP ${res.status}`,
+        })
+        if (Array.isArray(result.errors)) {
+          // Validation-only failure: mark each rejected cell
+          const map = new Map<string, string>()
+          for (const e of result.errors) {
+            map.set(`${e.id}:${e.field}`, e.error)
+          }
+          setCellErrors(map)
+        }
+        return
+      }
+
+      const errs: ApiError[] = result.errors ?? []
+      const failedKeys = new Set(errs.map((e) => `${e.id}:${e.field}`))
+      const succeededChanges = changesArray.filter(
+        (c) => !failedKeys.has(`${c.id}:${c.field}`)
+      )
+
+      // Apply successful changes to products[] via immer — gives us
+      // O(saved rows) object-identity changes. Cells in unchanged rows
+      // skip re-render.
+      if (succeededChanges.length > 0) {
+        setProducts((prev) =>
+          produce(prev, (draft) => {
+            for (const c of succeededChanges) {
+              const product = draft.find((p) => p.id === c.id)
+              if (product) {
+                ;(product as unknown as Record<string, unknown>)[c.field] = c.value
+              }
+            }
+          })
+        )
+      }
+
+      // Drop only the saved entries from the changesMap. Failed ones
+      // stay so the user can fix or retry.
+      setChanges((prev) => {
+        if (succeededChanges.length === 0) return prev
+        const next = new Map(prev)
+        for (const c of succeededChanges) {
+          next.delete(`${c.id}:${c.field}`)
+        }
+        return next
+      })
+
+      // Mark failed cells with red borders + tooltips
+      if (errs.length > 0) {
+        const map = new Map<string, string>()
+        for (const e of errs) {
+          map.set(`${e.id}:${e.field}`, e.error)
+        }
+        setCellErrors(map)
+        setSaveStatus({
+          kind: 'partial',
+          saved: succeededChanges.length,
+          failed: errs.length,
+        })
+      } else {
+        setSaveStatus({
+          kind: 'saved',
+          count: succeededChanges.length,
+          at: Date.now(),
+        })
+        // Auto-fade saved status after 3s
+        setTimeout(() => {
+          setSaveStatus((s) => (s.kind === 'saved' ? { kind: 'idle' } : s))
+        }, 3000)
+      }
+    } catch (err: any) {
+      setSaveStatus({ kind: 'error', message: err?.message ?? String(err) })
+    }
+  }, [saveStatus.kind])
+
+  // Cmd/Ctrl+S to save
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault()
+        handleSave()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [handleSave])
+
+  // Initial fetch
   useEffect(() => {
     let cancelled = false
     const start = performance.now()
@@ -369,34 +531,52 @@ export default function BulkOperationsClient() {
   const totalSize = rowVirtualizer.getTotalSize()
   const pendingCount = changes.size
 
+  const saveLabel =
+    saveStatus.kind === 'saving'
+      ? 'Saving…'
+      : pendingCount === 0
+      ? 'No changes'
+      : `Save ${pendingCount} change${pendingCount === 1 ? '' : 's'}`
+
   return (
     <div className="flex-1 min-h-0 px-6 pb-6 flex flex-col">
-      {/* Phase B status bar — pending count + (disabled) Save */}
-      <div className="flex-shrink-0 mb-3 flex items-center justify-between">
+      {/* Offline banner */}
+      {!online && (
+        <div className="flex-shrink-0 mb-3 flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-[12px] text-amber-800">
+          <WifiOff className="w-3.5 h-3.5 flex-shrink-0" />
+          <span>You're offline. Changes are kept locally and will save when you reconnect.</span>
+        </div>
+      )}
+
+      {/* Action bar — pending count, preview, save */}
+      <div className="flex-shrink-0 mb-3 flex items-center justify-between gap-3 flex-wrap">
         <div className="text-[12px] text-slate-500">
           {loading
             ? 'Loading…'
-            : `${products.length.toLocaleString()} rows · click any cell to edit · Tab to next, Enter to commit, Esc to cancel`}
+            : `${products.length.toLocaleString()} rows · click any cell to edit · Tab/Enter/Esc · Cmd+S to save`}
         </div>
-        <div className="flex items-center gap-3">
-          {pendingCount > 0 && (
-            <span className="text-[12px] text-amber-700">
-              {pendingCount} unsaved change{pendingCount === 1 ? '' : 's'}
-            </span>
-          )}
+        <div className="flex items-center gap-2">
           <Button
-            variant="primary"
+            variant="secondary"
             size="sm"
             disabled={pendingCount === 0}
             onClick={() => setPreviewOpen(true)}
           >
-            {pendingCount === 0
-              ? 'No changes'
-              : `Preview ${pendingCount} change${pendingCount === 1 ? '' : 's'}`}
+            Preview
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={pendingCount === 0 || saveStatus.kind === 'saving' || !online}
+            loading={saveStatus.kind === 'saving'}
+            onClick={handleSave}
+          >
+            {saveLabel}
           </Button>
         </div>
       </div>
 
+      {/* Table container */}
       <div
         ref={containerRef}
         className="flex-1 min-h-0 overflow-auto bg-white border border-slate-200 rounded-lg"
@@ -434,16 +614,13 @@ export default function BulkOperationsClient() {
         )}
       </div>
 
-      <div className="flex-shrink-0 mt-2 flex items-center justify-between text-[11px] text-slate-500 px-1">
-        <span>
-          {fetchMs != null
-            ? `Fetched in ${fetchMs}ms`
-            : loading
-            ? 'Fetching…'
-            : ''}
-        </span>
-        <span>Phase B (editing) · save (C), filters (D), polish (E) coming next</span>
-      </div>
+      {/* Status bar */}
+      <StatusBar
+        status={saveStatus}
+        pendingCount={pendingCount}
+        fetchMs={fetchMs}
+        loading={loading}
+      />
 
       <PreviewChangesModal
         open={previewOpen}
@@ -451,6 +628,72 @@ export default function BulkOperationsClient() {
         changes={changes}
         products={products}
       />
+    </div>
+  )
+}
+
+function StatusBar({
+  status,
+  pendingCount,
+  fetchMs,
+  loading,
+}: {
+  status: SaveStatus
+  pendingCount: number
+  fetchMs: number | null
+  loading: boolean
+}) {
+  const left = (() => {
+    if (loading) return <span>Fetching…</span>
+    if (status.kind === 'saving') return <span>Saving {pendingCount} change{pendingCount === 1 ? '' : 's'}…</span>
+    if (status.kind === 'saved')
+      return (
+        <span className="flex items-center gap-1.5 text-green-700">
+          <CheckCircle2 className="w-3 h-3" />
+          Saved {status.count} change{status.count === 1 ? '' : 's'}
+        </span>
+      )
+    if (status.kind === 'partial')
+      return (
+        <span className="flex items-center gap-1.5 text-amber-700">
+          <AlertCircle className="w-3 h-3" />
+          Saved {status.saved}, {status.failed} failed — see red cells
+        </span>
+      )
+    if (status.kind === 'error')
+      return (
+        <span className="flex items-center gap-1.5 text-red-700">
+          <AlertCircle className="w-3 h-3" />
+          Save failed: {status.message}
+        </span>
+      )
+    if (pendingCount > 0)
+      return (
+        <span>
+          {pendingCount} unsaved change{pendingCount === 1 ? '' : 's'} ·{' '}
+          <kbd className="text-[10px] bg-slate-100 px-1 rounded">Cmd+S</kbd> to save
+        </span>
+      )
+    return <span>All changes saved</span>
+  })()
+
+  return (
+    <div
+      className={cn(
+        'flex-shrink-0 mt-2 flex items-center justify-between text-[11px] px-1',
+        status.kind === 'saved' && 'text-green-700',
+        status.kind === 'partial' && 'text-amber-700',
+        status.kind === 'error' && 'text-red-700',
+        status.kind !== 'saved' &&
+          status.kind !== 'partial' &&
+          status.kind !== 'error' &&
+          'text-slate-500'
+      )}
+    >
+      <span className="flex items-center gap-1.5">{left}</span>
+      <span className="text-slate-500">
+        {fetchMs != null ? `Initial fetch: ${fetchMs}ms` : ''}
+      </span>
     </div>
   )
 }

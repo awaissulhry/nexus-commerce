@@ -30,6 +30,10 @@ interface Props {
   initialValue: unknown
   meta: EditableMeta
   onCommit: (rowId: string, columnId: string, value: unknown) => void
+  /** Set when a backend save rejected this specific cell. undefined for
+   * the vast majority of cells; only failed cells re-render when this
+   * map updates. */
+  cellError?: string
 }
 
 const defaultFormat = (v: unknown): string => {
@@ -70,6 +74,7 @@ export const EditableCell = memo(
     initialValue,
     meta,
     onCommit,
+    cellError,
   }: Props) {
     const [isEditing, setIsEditing] = useState(false)
     const [draftValue, setDraftValue] = useState<unknown>(initialValue)
@@ -183,10 +188,12 @@ export const EditableCell = memo(
             enterEdit()
           }
         }}
+        title={cellError}
         className={cn(
           'w-full h-full px-2 flex items-center text-[13px] cursor-cell',
           'focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-inset',
-          isDirty && 'bg-yellow-50',
+          isDirty && !cellError && 'bg-yellow-50',
+          cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
           meta.numeric && 'tabular-nums justify-end'
         )}
       >
@@ -200,7 +207,8 @@ export const EditableCell = memo(
     prev.columnId === next.columnId &&
     shallowEquals(prev.initialValue, next.initialValue) &&
     prev.meta === next.meta &&
-    prev.onCommit === next.onCommit
+    prev.onCommit === next.onCommit &&
+    prev.cellError === next.cellError
 )
 
 function shallowEquals(a: unknown, b: unknown): boolean {

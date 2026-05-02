@@ -65,13 +65,244 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  // PATCH /api/products/bulk — Phase C work. Stub returning 501 for now
-  // so the route exists during Phase A scroll testing without anyone
-  // accidentally hitting a 404.
-  fastify.patch('/products/bulk', async (_request, reply) => {
-    return reply
-      .code(501)
-      .send({ error: 'Bulk patch endpoint ships in Phase C.' })
+  // PATCH /api/products/bulk
+  //
+  // Body: { changes: Array<{ id: string; field: string; value: unknown }> }
+  //
+  // Validates each change against ALLOWED_FIELDS, type-coerces numeric
+  // fields, and applies the survivors in a single Prisma $transaction
+  // (10s timeout). Returns:
+  //   { success, updated, errors?: [{ id, field, error }] }
+  //
+  // status semantics:
+  //   - 200 success: every change applied (errors: undefined)
+  //   - 200 partial: some applied, some rejected at validation;
+  //     status: 'PARTIAL' in audit log; client uses errors[] to mark
+  //     red borders on the failed cells
+  //   - 400 if every change failed validation (nothing was applied)
+  //   - 500 if the transaction itself threw (nothing was applied)
+  //
+  // Every request — even validation-only failures — writes an audit
+  // row to BulkOperation.
+  fastify.patch<{
+    Body: { changes: Array<{ id: string; field: string; value: unknown }> }
+  }>('/products/bulk', async (request, reply) => {
+    const { changes } = request.body ?? {}
+    if (!Array.isArray(changes) || changes.length === 0) {
+      return reply.code(400).send({ error: 'No changes provided' })
+    }
+    if (changes.length > 1000) {
+      return reply.code(400).send({ error: 'Max 1000 changes per request' })
+    }
+
+    const ALLOWED_FIELDS = new Set([
+      'name',
+      'basePrice',
+      'costPrice',
+      'minMargin',
+      'minPrice',
+      'maxPrice',
+      'totalStock',
+      'lowStockThreshold',
+      'brand',
+      'manufacturer',
+      'upc',
+      'ean',
+      'weightValue',
+      'status',
+      'fulfillmentChannel',
+    ])
+    const NUMERIC_FIELDS = new Set([
+      'basePrice',
+      'costPrice',
+      'minMargin',
+      'minPrice',
+      'maxPrice',
+      'weightValue',
+    ])
+    const INTEGER_FIELDS = new Set(['totalStock', 'lowStockThreshold'])
+    const STATUS_VALUES = new Set(['ACTIVE', 'DRAFT', 'INACTIVE'])
+    const CHANNEL_VALUES = new Set(['FBA', 'FBM'])
+
+    interface Validated {
+      id: string
+      field: string
+      value: any
+    }
+    interface ChangeError {
+      id: string
+      field: string
+      error: string
+    }
+
+    const validated: Validated[] = []
+    const errors: ChangeError[] = []
+
+    for (const c of changes) {
+      if (!c?.id || typeof c.id !== 'string') {
+        errors.push({ id: c?.id ?? '', field: c?.field ?? '', error: 'Missing id' })
+        continue
+      }
+      if (!c.field || !ALLOWED_FIELDS.has(c.field)) {
+        errors.push({ id: c.id, field: c.field ?? '', error: 'Field not editable' })
+        continue
+      }
+
+      let value: any = c.value
+
+      if (NUMERIC_FIELDS.has(c.field)) {
+        if (value === '' || value === null || value === undefined) {
+          value = null
+        } else {
+          const n = Number(value)
+          if (Number.isNaN(n)) {
+            errors.push({ id: c.id, field: c.field, error: 'Invalid number' })
+            continue
+          }
+          if (n < 0) {
+            errors.push({ id: c.id, field: c.field, error: 'Must be ≥ 0' })
+            continue
+          }
+          value = n
+        }
+      } else if (INTEGER_FIELDS.has(c.field)) {
+        if (value === '' || value === null || value === undefined) {
+          value = 0
+        } else {
+          const n = parseInt(String(value), 10)
+          if (Number.isNaN(n)) {
+            errors.push({ id: c.id, field: c.field, error: 'Invalid integer' })
+            continue
+          }
+          if (n < 0) {
+            errors.push({ id: c.id, field: c.field, error: 'Must be ≥ 0' })
+            continue
+          }
+          value = n
+        }
+      } else if (c.field === 'status') {
+        const v = String(value ?? '').toUpperCase()
+        if (!STATUS_VALUES.has(v)) {
+          errors.push({
+            id: c.id,
+            field: c.field,
+            error: `Status must be one of ${Array.from(STATUS_VALUES).join(', ')}`,
+          })
+          continue
+        }
+        value = v
+      } else if (c.field === 'fulfillmentChannel') {
+        if (value === '' || value === null || value === undefined) {
+          value = null
+        } else {
+          const v = String(value).toUpperCase()
+          if (!CHANNEL_VALUES.has(v)) {
+            errors.push({
+              id: c.id,
+              field: c.field,
+              error: `Channel must be one of ${Array.from(CHANNEL_VALUES).join(', ')}`,
+            })
+            continue
+          }
+          value = v
+        }
+      } else {
+        // text fields — trim, coerce empty string to null only for
+        // optional fields. name is required, leave as-is.
+        if (typeof value !== 'string' && value !== null && value !== undefined) {
+          value = String(value)
+        }
+        if (c.field === 'name') {
+          if (!value || (typeof value === 'string' && value.trim().length === 0)) {
+            errors.push({ id: c.id, field: c.field, error: 'Name cannot be empty' })
+            continue
+          }
+          value = (value as string).trim()
+        } else if (typeof value === 'string') {
+          const trimmed = value.trim()
+          value = trimmed === '' ? null : trimmed
+        }
+      }
+
+      validated.push({ id: c.id, field: c.field, value })
+    }
+
+    // Nothing survived validation — do not open a transaction
+    if (validated.length === 0) {
+      await prisma.bulkOperation.create({
+        data: {
+          changeCount: changes.length,
+          productCount: new Set(changes.map((c) => c.id)).size,
+          changes: changes as any,
+          status: 'FAILED',
+          errors: errors as any,
+        },
+      })
+      return reply.code(400).send({ errors })
+    }
+
+    // Apply survivors atomically. If any individual update fails (e.g.
+    // a referenced product no longer exists), the entire transaction
+    // rolls back; we return all surviving validation errors plus the
+    // single transaction error.
+    try {
+      const startTs = Date.now()
+      const productIds = new Set(validated.map((v) => v.id))
+      // Array form runs all updates in a single transaction. Doesn't
+      // accept `timeout` (that's the callback form), but the default
+      // is 5s — plenty for 1000 simple updates.
+      await prisma.$transaction(
+        validated.map((v) =>
+          prisma.product.update({
+            where: { id: v.id },
+            data: { [v.field]: v.value } as any,
+          })
+        ),
+        { isolationLevel: 'ReadCommitted' }
+      )
+      const elapsedMs = Date.now() - startTs
+
+      const overallStatus =
+        errors.length === 0
+          ? 'SUCCESS'
+          : 'PARTIAL'
+
+      await prisma.bulkOperation.create({
+        data: {
+          changeCount: changes.length,
+          productCount: productIds.size,
+          changes: validated as any,
+          status: overallStatus,
+          errors: errors.length ? (errors as any) : undefined,
+        },
+      })
+
+      return {
+        success: true,
+        updated: validated.length,
+        errors: errors.length ? errors : undefined,
+        elapsedMs,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[products/bulk] transaction failed')
+      await prisma.bulkOperation
+        .create({
+          data: {
+            changeCount: changes.length,
+            productCount: new Set(changes.map((c) => c.id)).size,
+            changes: changes as any,
+            status: 'FAILED',
+            errors: [{ error: error?.message ?? String(error) }] as any,
+          },
+        })
+        .catch(() => {
+          /* don't mask the real error with an audit-log failure */
+        })
+      return reply.code(500).send({
+        error: 'Bulk update failed',
+        message: error?.message ?? String(error),
+      })
+    }
   })
 
   // ── Performance-test seeding (admin-only — no auth gate but uses

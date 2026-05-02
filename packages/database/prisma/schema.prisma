@@ -1381,3 +1381,21 @@ model OutboundSyncQueue {
   @@index([nextRetryAt])
 }
 
+// ── Phase 5: Bulk Operations Audit Log ───────────────────────────────
+// Records every PATCH /api/products/bulk request for traceability.
+// userId left nullable until auth is wired; populated as null for now.
+model BulkOperation {
+  id           String   @id @default(cuid())
+  userId       String?
+  productCount Int
+  changeCount  Int
+  changes      Json     // [{ id, field, oldValue, newValue }]
+  status       String   // SUCCESS | PARTIAL | FAILED
+  errors       Json?    // [{ id, field, error }]
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId])
+  @@index([status])
+}
+
