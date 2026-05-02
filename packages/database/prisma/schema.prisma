@@ -1419,3 +1419,59 @@ model BulkOperation {
   @@index([status])
 }
 
+// ── Phase D.3f: Live category schema sync ────────────────────────────
+// Cached snapshots of Amazon `getDefinitionsProductType` (and eventually
+// eBay equivalents). One row per (channel, marketplace, productType,
+// schemaVersion). The active row for a given (channel, marketplace,
+// productType) is the most recently fetched one whose `expiresAt > now`
+// AND `isActive`. Older rows are kept around so SchemaChange diffing
+// has a previous version to compare against.
+model CategorySchema {
+  id               String   @id @default(cuid())
+  channel          String
+  // Nullable because some channels (eBay) may not be marketplace-scoped
+  // at the schema level.
+  marketplace      String?
+  productType      String
+  // Provider-supplied version identifier. For Amazon this is
+  // `meta.version` from the response; lets us detect "schema changed"
+  // without diffing the entire JSON blob.
+  schemaVersion    String
+  // The full provider response — JSON Schema with `properties`,
+  // `required`, etc. Big (50–500KB) but TOASTed by Postgres.
+  schemaDefinition Json
+  // Variation themes block from the schema (Amazon: `variation_theme`
+  // enum at the top level). Null if the type doesn't vary.
+  variationThemes  Json?
+  fetchedAt        DateTime @default(now())
+  // 24h after fetchedAt by default — the service refreshes when
+  // `now > expiresAt`. Manual force-refresh writes a new row.
+  expiresAt        DateTime
+  isActive         Boolean  @default(true)
+
+  @@unique([channel, marketplace, productType, schemaVersion])
+  @@index([channel, marketplace, productType])
+  @@index([expiresAt])
+}
+
+// Append-only log of every detected schema change (added/removed
+// fields, required-flag flips). Used to surface "Amazon changed X"
+// notifications and identify products that may need attention.
+model SchemaChange {
+  id               String   @id @default(cuid())
+  channel          String
+  marketplace      String?
+  productType      String
+  // FIELD_ADDED | FIELD_REMOVED | FIELD_TYPE_CHANGED | REQUIRED_CHANGED
+  changeType       String
+  fieldId          String
+  oldValue         Json?
+  newValue         Json?
+  detectedAt       DateTime @default(now())
+  // Snapshot of product IDs in this catalog using `productType` at
+  // detection time. Empty until we wire the lookup.
+  affectedProducts String[] @default([])
+
+  @@index([channel, marketplace, productType])
+  @@index([detectedAt])
+}
