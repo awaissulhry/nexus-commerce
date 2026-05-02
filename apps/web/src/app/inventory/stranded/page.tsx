@@ -41,7 +41,7 @@ export default async function StrandedInventoryPage() {
         title="Stranded Inventory"
         subtitle={`${stranded.length} product${stranded.length !== 1 ? "s" : ""} without active listings`}
         breadcrumbs={[
-          { label: "Inventory", href: "/inventory" },
+          { label: "Products", href: "/products" },
           { label: "Stranded Inventory" },
         ]}
       />

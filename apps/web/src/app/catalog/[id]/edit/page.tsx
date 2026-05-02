@@ -59,10 +59,10 @@ export default async function EditProductPage({ params }: PageProps) {
         </Link>
         <span className="text-gray-300">|</span>
         <Link
-          href="/inventory"
+          href="/products"
           className="text-gray-500 hover:text-gray-700 transition-colors"
         >
-          Inventory
+          Products
         </Link>
       </div>
 

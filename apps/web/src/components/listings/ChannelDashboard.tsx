@@ -125,7 +125,7 @@ export default async function ChannelDashboard({ channel, label }: Props) {
             icon={ShoppingBag}
             title={`No ${label} listings yet`}
             description={`Publish products to ${label} marketplaces to see them here.`}
-            action={{ label: 'Go to Catalog', href: '/inventory' }}
+            action={{ label: 'Go to Catalog', href: '/products' }}
           />
         ) : (
           <ul className="space-y-1 -my-1">

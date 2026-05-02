@@ -45,6 +45,174 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     return { fields, count: fields.length }
   })
 
+  // GET /api/products — paginated catalog list for the /products page.
+  //
+  // Distinct from /products/bulk-fetch (bulk-ops, returns everything)
+  // and /amazon/products/list (Amazon-only, hard-capped at 50). This
+  // is the "browse the master catalog" endpoint:
+  //
+  //   ?page=1&limit=50&search=airmesh
+  //   ?status=ACTIVE,DRAFT&channels=AMAZON,EBAY&stockLevel=low
+  //   ?sort=updated|created|sku|name|price-asc|price-desc|stock-asc|stock-desc
+  //
+  // limit is clamped to 200 to prevent accidental fetch-all calls.
+  // parentId=null is enforced so variations don't flood the page;
+  // child SKUs live on the variations tab of /products/[id]/edit.
+  fastify.get<{
+    Querystring: {
+      page?: string
+      limit?: string
+      search?: string
+      status?: string
+      channels?: string
+      stockLevel?: string
+      sort?: string
+    }
+  }>('/products', async (request, reply) => {
+    try {
+      const q = request.query
+      const page = Math.max(parseInt(q.page ?? '1', 10) || 1, 1)
+      const limit = Math.max(
+        Math.min(parseInt(q.limit ?? '50', 10) || 50, 200),
+        1,
+      )
+      const search = (q.search ?? '').trim()
+      const statusList = (q.status ?? '')
+        .split(',')
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean)
+      const channelList = (q.channels ?? '')
+        .split(',')
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean)
+      const stockLevel = (q.stockLevel ?? 'all').toLowerCase()
+      const sort = q.sort ?? 'updated'
+
+      const where: any = { parentId: null }
+      if (search) {
+        where.OR = [
+          { sku: { contains: search, mode: 'insensitive' } },
+          { name: { contains: search, mode: 'insensitive' } },
+          { brand: { contains: search, mode: 'insensitive' } },
+          { gtin: { contains: search } },
+        ]
+      }
+      if (statusList.length > 0) {
+        where.status = { in: statusList }
+      }
+      if (channelList.length > 0) {
+        where.syncChannels = { hasSome: channelList }
+      }
+      if (stockLevel === 'in') {
+        where.totalStock = { gt: 0 }
+      } else if (stockLevel === 'low') {
+        where.totalStock = { gt: 0, lte: 5 }
+      } else if (stockLevel === 'out') {
+        where.totalStock = 0
+      }
+
+      const orderBy: any = (() => {
+        switch (sort) {
+          case 'created':
+            return { createdAt: 'desc' }
+          case 'sku':
+            return { sku: 'asc' }
+          case 'name':
+            return { name: 'asc' }
+          case 'price-asc':
+            return { basePrice: 'asc' }
+          case 'price-desc':
+            return { basePrice: 'desc' }
+          case 'stock-asc':
+            return { totalStock: 'asc' }
+          case 'stock-desc':
+            return { totalStock: 'desc' }
+          case 'updated':
+          default:
+            return { updatedAt: 'desc' }
+        }
+      })()
+
+      const [rawProducts, total, statsRows] = await Promise.all([
+        prisma.product.findMany({
+          where,
+          orderBy,
+          take: limit,
+          skip: (page - 1) * limit,
+          select: {
+            id: true,
+            sku: true,
+            name: true,
+            brand: true,
+            basePrice: true,
+            totalStock: true,
+            status: true,
+            syncChannels: true,
+            updatedAt: true,
+            createdAt: true,
+            isParent: true,
+            cloudImages: {
+              select: { url: true, type: true, sortOrder: true },
+              orderBy: { sortOrder: 'asc' },
+              take: 1,
+            },
+          },
+        }),
+        prisma.product.count({ where }),
+        // Stats reflect the FILTERED set so the header counts match
+        // what's actually browsable. Five small aggregates.
+        Promise.all([
+          prisma.product.count({ where }),
+          prisma.product.count({
+            where: { ...where, status: 'ACTIVE' },
+          }),
+          prisma.product.count({
+            where: { ...where, status: 'DRAFT' },
+          }),
+          prisma.product.count({
+            where: { ...where, totalStock: { gt: 0 } },
+          }),
+          prisma.product.count({
+            where: { ...where, totalStock: 0 },
+          }),
+        ]),
+      ])
+
+      const products = rawProducts.map((p) => ({
+        id: p.id,
+        sku: p.sku,
+        name: p.name,
+        brand: p.brand,
+        basePrice: Number(p.basePrice),
+        totalStock: p.totalStock,
+        status: p.status,
+        syncChannels: p.syncChannels,
+        updatedAt: p.updatedAt,
+        createdAt: p.createdAt,
+        isParent: p.isParent,
+        imageUrl: p.cloudImages[0]?.url ?? null,
+      }))
+
+      return {
+        products,
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+        stats: {
+          total: statsRows[0],
+          active: statsRows[1],
+          draft: statsRows[2],
+          inStock: statsRows[3],
+          outOfStock: statsRows[4],
+        },
+      }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[products list] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
   // GET /api/products/bulk-fetch — single optimized SELECT for the
   // bulk-operations table. Plain Decimal coercion to numbers so the
   // client can sort/edit without parseFloat-ing everywhere.

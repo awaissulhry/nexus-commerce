@@ -28,7 +28,7 @@ interface Command {
 
 const COMMANDS: Command[] = [
   // Navigation
-  { id: 'goto-products', label: 'Go to Products', icon: Package, href: '/inventory', group: 'Navigation' },
+  { id: 'goto-products', label: 'Go to Products', icon: Package, href: '/products', group: 'Navigation' },
   { id: 'goto-listings', label: 'Go to All Listings', icon: Boxes, href: '/listings', group: 'Navigation' },
   { id: 'goto-orders', label: 'Go to Orders', icon: FileText, href: '/orders', group: 'Navigation' },
   { id: 'goto-pricing', label: 'Go to Pricing', icon: Tag, href: '/pricing', group: 'Navigation' },

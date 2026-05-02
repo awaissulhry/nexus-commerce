@@ -584,3 +584,153 @@ keywords — all in the marketplace's language.
 - **Brand-voice profile** — saving the user's editing patterns
   per brand so the next product matches.
 
+---
+
+# Products Rebuild — `/inventory` → `/products`
+
+Date: 2026-05-02
+
+The legacy `/inventory` browse page had three compounding bugs that
+silently hid catalog rows:
+
+1. **Hard 50-product cap.** The page hit
+   `/api/amazon/products/list?topLevelOnly=1&limit=50` with no
+   pagination affordance. Anyone with > 50 products saw a truncated
+   list that looked complete.
+2. **Amazon-only filter.** The endpoint applied
+   `where: { syncChannels: { has: 'AMAZON' } }`. Products created
+   from CSV / XLSX / ZIP upload that hadn't been synced to Amazon yet
+   were invisible — including everything in the bulk-operations
+   pipeline.
+3. **Misleading total count.** The header counter reflected the
+   filtered + capped slice, not the true catalog size, so the user
+   had no signal that products were missing.
+
+## What replaced it
+
+A new `/products` route built fresh against a new
+`GET /api/products` endpoint that paginates correctly, filters
+across all channels (and unfiltered by default), and returns
+**stats matching the filtered view** so the header counters are
+coherent with what's browsable.
+
+### API — `apps/api/src/routes/products.routes.ts`
+
+`GET /api/products` accepts:
+
+- `page`, `limit` (default 1 / 50; 200 max)
+- `search` — matches SKU / name / brand / GTIN (case-insensitive)
+- `status` — comma-separated: `ACTIVE`, `DRAFT`, `INACTIVE`
+- `channels` — comma-separated: `AMAZON`, `EBAY`, `SHOPIFY`,
+  `WOOCOMMERCE`
+- `stockLevel` — `all` | `in` | `low` (1–5) | `out` (=0)
+- `sort` — `updated` | `created` | `sku` | `name` |
+  `price-asc` | `price-desc` | `stock-asc` | `stock-desc`
+
+Returns `{ products, page, limit, total, totalPages, stats }`
+where `stats = { total, active, draft, inStock, outOfStock }`
+reflects the *filtered* set (so the header counters and the rows
+the user is browsing always agree).
+
+The `where` clause uses `parentId: null` to hide variations from
+the top-level browse — variations show up inside the parent's
+edit page.
+
+The select uses the `cloudImages` relation (the `Image` model
+ordered by `sortOrder`), not the legacy `images` relation
+(`ProductImage`). Card image is `p.cloudImages[0]?.url`.
+
+### UI — `apps/web/src/app/products/`
+
+- `page.tsx` — server component, server-renders page 1 of 50 from
+  the new endpoint with `cache: 'no-store'`. Falls back to an
+  empty state with the underlying error string if the fetch fails.
+- `ProductsClient.tsx` — client shell. Owns search (200ms
+  debounce), filters, sort, page, page size, view mode (grid /
+  table), and selection. Refetches on any state change via a
+  `fetchKey` JSON useMemo; `isInitialMount` ref skips the very
+  first effect run because the server already provided initial
+  data. Filter / search / sort changes reset `page` to 1.
+  Selection clears whenever the visible product set changes — a
+  selection that points at rows you can't see anymore would be
+  confusing.
+- `components/GridView.tsx` — responsive
+  `grid-cols-[repeat(auto-fill,minmax(220px,1fr))]` of cards.
+  Native `<img loading="lazy">` with `onError` swap to a Package
+  icon (no `next/image` to keep the path simple). Status badge,
+  stock indicator (red ≤ 0, amber ≤ 5, emerald otherwise),
+  channel dots (orange / blue / emerald / purple per channel).
+- `components/TableView.tsx` — TanStack `react-table` core model
+  (no virtualization at v1; 200-row max page is fine without it).
+  ~10 columns: select checkbox, image thumb (40×40), SKU, Name,
+  Status, Stock, Price, Channels, Updated. Row click navigates
+  to `/products/[id]/edit`; cmd/ctrl/middle-click opens in a new
+  tab. Checkbox `stopPropagation`'s the row click. The header
+  checkbox is tri-state via the DOM `indeterminate` ref.
+- `components/PaginationStrip.tsx` — Prev / Next + "X – Y of Z"
+  indicator. Hides when total = 0.
+- `components/ProductFilters.tsx` — dropdown panel: Status
+  (multi-check), Channel (multi-check), Stock level (radio).
+  Active count badge on the trigger; Reset all button inside.
+- `components/SortMenu.tsx` — 8 sort options, single-select
+  dropdown.
+- `components/SelectionBar.tsx` — fixed bottom-center pill that
+  appears when ≥ 1 row is selected. Count + Export CSV +
+  Cancel. Export builds a CSV blob client-side from the selected
+  `ProductRow[]` (id / sku / name / brand / status / basePrice /
+  totalStock / syncChannels / imageUrl / updatedAt / createdAt),
+  with proper quote-escaping. No server endpoint needed.
+
+### Migration
+
+- `apps/web/src/app/inventory/page.tsx` — replaced with a
+  `redirect('/products')`. Bookmarks and any stale internal link
+  bounce. Sub-routes under `/inventory/*` (upload, manage, fba,
+  stranded, resolve, etc.) are unchanged in v1.
+- `apps/web/src/components/layout/AppSidebar.tsx` — main
+  Catalog → Products nav item now points at `/products`. The
+  `active` predicate matches both `/products*` and `/inventory*`
+  so users on the redirect path still see the correct highlight.
+- 11 internal user-facing links migrated: command palette,
+  legacy `Sidebar.tsx`, breadcrumbs in `/inventory/{stranded,
+  resolve, fba}`, EmptyState CTAs in `/listings`,
+  `/fulfillment/stock`, `/pim/review`,
+  `ChannelMarketView`, `ChannelDashboard`, the back button in
+  `/products/[id]/edit/ProductEditClient.tsx`, the
+  `/catalog/[id]/edit` "Inventory" link, the `/catalog/page.tsx`
+  redirect target, and the `/performance/health` "View Products"
+  CTA.
+- `revalidatePath` calls in `inventory/manage/actions.ts`,
+  `actions/listings.ts`, and `pricing/actions.ts` were extended
+  to also revalidate `/products` so price / stock / link edits
+  show up immediately after the migration.
+
+### What we *don't* do (v1, deferred)
+
+- **URL state.** Search / filter / sort / page do not sync to the
+  URL. Sharing a filtered view via link, browser back/forward
+  through filter states, and "open this page in a new tab with
+  my filters" all fall back to the default view. Will be added
+  via `searchParams` once we settle the route between server-
+  rendered first-paint and client-controlled re-fetches.
+- **Bulk edit.** Selecting rows + clicking "Edit price" / "Edit
+  stock" inline. v1 ships with **Export CSV** of the selection
+  only — the user opens the CSV in their tool of choice, edits,
+  and re-imports via `/bulk-operations`. Real bulk-edit-in-place
+  needs the same patch endpoint and per-cell validation as the
+  bulk grid; we'll add it once the pattern stabilises.
+- **Single-product creation page.** "New product" routes to
+  `/bulk-operations#upload`. A form-based one-product creator
+  is a deferred design — v1's flow is: upload → review in bulk
+  grid → edit page.
+- **Faceted search counts.** Filter dropdowns don't show "(123)"
+  counts per option. Real faceting needs a second aggregate
+  query per filter axis; not worth it until the user complains.
+- **Image hosting via `next/image`.** Native `<img>` is plenty
+  for thumbnails up to 220 px, avoids a deploy-time domain
+  allowlist, and degrades gracefully to a Package icon on load
+  failure.
+- **Server-driven sorting on derived columns.** The Updated
+  column shows a relative timestamp computed client-side; for
+  sort, the server orders by `updatedAt` directly.
+

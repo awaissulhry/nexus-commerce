@@ -241,7 +241,7 @@ export default function GeneratorPage() {
         title="AI Listing Generator"
         subtitle="Generate eBay-optimized listings from your products"
         breadcrumbs={[
-          { label: 'Inventory', href: '/inventory' },
+          { label: 'Products', href: '/products' },
           { label: 'Generate Listings' },
         ]}
       />

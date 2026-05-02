@@ -248,7 +248,7 @@ export default function PIMReviewPage() {
           icon={Layers}
           title="No variation groups detected"
           description="Either every product is already grouped, or there aren't enough similar items to detect a pattern. Re-run detection after importing more products."
-          action={{ label: 'View Catalog', href: '/inventory' }}
+          action={{ label: 'View Catalog', href: '/products' }}
         />
       ) : (
         <div className="space-y-3">

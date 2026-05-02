@@ -42,6 +42,7 @@ export async function quickUpdateItem(
 
     revalidatePath("/inventory/manage");
     revalidatePath("/inventory");
+    revalidatePath("/products");
 
     return { success: true };
   } catch (error: any) {
@@ -126,6 +127,7 @@ export async function bulkUpdateItems(
 
     revalidatePath("/inventory/manage");
     revalidatePath("/inventory");
+    revalidatePath("/products");
 
     return { success: true, affected };
   } catch (error: any) {

@@ -16,6 +16,7 @@ export async function updateProductPrice(
 
     revalidatePath("/pricing");
     revalidatePath("/inventory");
+    revalidatePath("/products");
     return { success: true };
   } catch (error) {
     console.error("Error updating price:", error);

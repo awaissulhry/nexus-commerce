@@ -38,7 +38,7 @@ const NAV_SECTIONS: NavSectionConfig[] = [
     label: "Inventory",
     icon: "📋",
     items: [
-      { label: "Manage All Inventory", href: "/inventory", icon: "📊" },
+      { label: "Manage All Inventory", href: "/products", icon: "📊" },
       { label: "Manage FBA Inventory", href: "/inventory/fba", icon: "🏭" },
       { label: "FBA Shipments", href: "/inventory/shipments", icon: "🚚", disabled: true },
       { label: "Stranded Inventory", href: "/inventory/stranded", icon: "⚠️" },

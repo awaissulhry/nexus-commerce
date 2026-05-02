@@ -139,7 +139,7 @@ export default async function ChannelResolverPage() {
         title="Resolve Unmatched Listings"
         subtitle="Link eBay listings to your Nexus products"
         breadcrumbs={[
-          { label: 'Inventory', href: '/inventory' },
+          { label: 'Products', href: '/products' },
           { label: 'Resolve Listings' },
         ]}
       />

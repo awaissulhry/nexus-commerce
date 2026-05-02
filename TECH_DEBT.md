@@ -138,3 +138,47 @@ After generation, we could score the title / bullets / description against an Am
 ## 16. Phase 5.5 → A+ Content (EBC) generator
 
 Beyond plain Amazon-safe HTML, sellers eventually want rich Amazon Brand Content — image-rich modules, comparison tables, brand storytelling sections. Ships with the publishing path in Phase 6.
+
+## 17. /products → URL state for filters / search / sort / page
+
+The new `/products` browse page keeps all filter / search / sort / page state in client React state. That means a filtered view can't be shared via link, browser back / forward doesn't round-trip filter changes, and opening "the same page in a new tab" loses the user's context.
+
+**Proper fix:** mirror state to `searchParams` via `useSearchParams` + `router.replace` (or a Next App Router parallel-route URL state lib). Has to be designed carefully so the server-rendered first paint can also read the params and the client doesn't refetch immediately on hydration.
+
+Deferred until at least one user asks for a shareable filtered view.
+
+## 18. /products → bulk edit in place
+
+The selection bar exposes **Export CSV** only. Bulk-edit-in-place — select 50 rows, click "Set price", set value, save — is the obvious next feature but needs the same `PATCH /api/products/bulk` endpoint, per-cell validation, optimistic update path, and undo stack as the bulk-operations grid. Pulling that out cleanly into a reusable hook is the prerequisite work; until then v1 punts users to the existing bulk-operations grid.
+
+## 19. /products → single-product create form
+
+"New product" routes to `/bulk-operations#upload` for v1. A form-based one-product creator (SKU, name, brand, base price, initial stock, images) is a deferred design — the bulk-operations flow handles single-product paste fine, and the CSV / XLSX path covers everything else.
+
+Worth designing once we have a clear "from scratch, no upload" use case (e.g. a brand owner adding a single SKU at a time).
+
+## 20. /products → faceted search counts
+
+Filter dropdowns currently list options without counts ("Active" / "Draft" / "Inactive", not "Active (1,247)"). Real faceting needs a second aggregate query per filter axis (or one query with `groupBy` over each), and care to make sure the counts respect the *other* active filters. Not worth it until users actually ask "how many drafts do I have right now."
+
+## 21. /products → API endpoint for products edit page
+
+`/products/[id]/edit/page.tsx` still fetches `${backend}/api/inventory/${id}` — the old endpoint. The browse page moved to `/api/products`, but the per-product GET was left on the legacy route to avoid cascading the migration.
+
+**Proper fix:** add `GET /api/products/:id` and switch the edit page over. Low-risk because the response shape is already well-known; just file moves and route registration.
+
+## 22. /products → server-side sorting on derived columns
+
+`sort` accepts `updated`, `created`, `sku`, `name`, `price-asc/desc`, `stock-asc/desc`. All of these map to literal columns. "Channel count", "image count", "days since last sync" — anything *derived* — would need either a generated column or a `Prisma.$queryRaw` with `ORDER BY` on a computed expression.
+
+Not needed for v1 sort options; flag here so the next person adding a column knows the boundary.
+
+## 23. /inventory sub-routes → `/products/*`
+
+Only the top-level browse page moved. `/inventory/upload`, `/inventory/manage`, `/inventory/fba`, `/inventory/stranded`, `/inventory/resolve`, etc. still live under `/inventory/*`. Breadcrumbs were retargeted to point back at `/products`, so the user-visible nav is consistent, but the URLs themselves are inconsistent.
+
+**Proper fix:** rename each sub-route to live under `/products/*` (e.g. `/products/upload`, `/products/fba`). Each move is small but they touch deep links, server actions' `revalidatePath` calls, and the legacy `Sidebar.tsx`. Doing them one at a time as the relevant pages are next touched is fine.
+
+## 24. /inventory legacy components & types not deleted
+
+`@/types/inventory`, `@/components/inventory/*`, and `@/app/inventory/manage/*` are still used by the surviving `/inventory/*` sub-routes. They will be untangled as those sub-routes get migrated (item 23). Don't delete eagerly — the new `/products` route imports its own types from `./ProductsClient` and is fully decoupled.

@@ -109,7 +109,7 @@ export default function ProductEditClient({
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <button
-              onClick={() => router.push('/inventory')}
+              onClick={() => router.push('/products')}
               className="p-1 -m-1 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900"
               aria-label="Back"
             >

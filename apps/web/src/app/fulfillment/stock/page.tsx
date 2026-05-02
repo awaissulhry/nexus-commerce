@@ -34,7 +34,7 @@ export default async function StockOverviewPage() {
           icon={Warehouse}
           title="No stock data yet"
           description="Import products from Amazon or upload a CSV to populate the catalog. Stock levels will appear once products are linked to a fulfillment channel."
-          action={{ label: 'Go to Catalog', href: '/inventory' }}
+          action={{ label: 'Go to Catalog', href: '/products' }}
         />
       ) : (
         <StockClient rows={rows} />

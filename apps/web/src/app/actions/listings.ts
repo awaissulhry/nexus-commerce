@@ -22,6 +22,7 @@ export async function linkListingToProduct(listingId: string, productId: string)
 
     // Revalidate the listings page to show the updated state
     revalidatePath('/inventory')
+    revalidatePath('/products')
 
     return { success: true, message: 'Listing linked successfully' }
   } catch (error) {

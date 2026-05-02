@@ -82,7 +82,7 @@ export default async function FBAInventoryPage() {
         title="Manage FBA Inventory"
         subtitle={`${data.length} FBA product${data.length !== 1 ? "s" : ""}`}
         breadcrumbs={[
-          { label: "Inventory", href: "/inventory" },
+          { label: "Products", href: "/products" },
           { label: "Manage FBA Inventory" },
         ]}
       />

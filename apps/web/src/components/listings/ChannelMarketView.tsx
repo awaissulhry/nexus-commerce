@@ -67,7 +67,7 @@ export default async function ChannelMarketView({
           icon={ShoppingBag}
           title={`No listings on ${channelLabel} ${friendly}`}
           description="Publish products to this marketplace to see listings here."
-          action={{ label: 'Go to Catalog', href: '/inventory' }}
+          action={{ label: 'Go to Catalog', href: '/products' }}
         />
       ) : (
         <ListingsTable listings={listings} scopedToChannel scopedToMarket />

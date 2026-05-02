@@ -30,7 +30,7 @@ export default async function AllListingsPage() {
           icon={Boxes}
           title="No listings yet"
           description="Publish products to channels to see listings appear here. Open a product and use the channel tabs to create one."
-          action={{ label: 'View Catalog', href: '/inventory' }}
+          action={{ label: 'View Catalog', href: '/products' }}
         />
       ) : (
         <ListingsTable listings={listings} />

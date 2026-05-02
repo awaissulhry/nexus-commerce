@@ -144,11 +144,16 @@ export default function AppSidebar() {
 
         <NavGroup label="Catalog">
           <NavItem
-            href="/inventory"
+            href="/products"
             icon={Package}
             label="Products"
             count={counts.catalog?.products}
-            active={pathname === '/inventory' || pathname.startsWith('/inventory/')}
+            active={
+              pathname === '/products' ||
+              pathname.startsWith('/products/') ||
+              pathname === '/inventory' ||
+              pathname.startsWith('/inventory/')
+            }
           />
           <NavItem
             href="/pim/review"
