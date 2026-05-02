@@ -113,17 +113,13 @@ function flattenAmazonField(name: string, schema: any): FlatField | null {
   const label = valueSchema.title ?? schema.title ?? humanize(name)
 
   if (Array.isArray(valueSchema.enum)) {
-    const enumNames = Array.isArray(valueSchema.enumNames)
-      ? valueSchema.enumNames
-      : null
-    // Display the human-readable label when present, but keep the raw
-    // enum value on the wire so the backend stores Amazon's expected
-    // identifier.
-    const options = enumNames
-      ? valueSchema.enum.map(
-          (v: string, i: number) => enumNames[i] ?? String(v),
-        )
-      : valueSchema.enum.map((v: unknown) => String(v))
+    // Use the raw enum values as the wire format — Amazon expects
+    // identifiers like "male" / "female" when the listing is
+    // published, not the human-readable labels in `enumNames`. The UI
+    // can render `enumNames[i]` if/when we surface a separate display
+    // map; for now the bulk-grid select shows the wire value, which
+    // matches the existing hardcoded pattern.
+    const options = valueSchema.enum.map((v: unknown) => String(v))
     return {
       label,
       type: 'select',

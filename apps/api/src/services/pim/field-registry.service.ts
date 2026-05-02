@@ -237,8 +237,10 @@ export async function getAvailableFields(
         })
         dynamicFields.push(...fromSchema)
       }
-    } catch {
-      // Swallow — fallthrough to hardcoded fields below.
+    } catch (err) {
+      // Don't break the whole request — log + fall back to hardcoded.
+      // eslint-disable-next-line no-console
+      console.error('[field-registry] dynamic lookup failed:', err)
     }
   }
 
