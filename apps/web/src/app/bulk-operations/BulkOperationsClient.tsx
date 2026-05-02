@@ -18,7 +18,15 @@ import {
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { produce } from 'immer'
-import { AlertCircle, CheckCircle2, Lock, WifiOff } from 'lucide-react'
+import {
+  AlertCircle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Lock,
+  WifiOff,
+} from 'lucide-react'
+import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
 import { EditableCell, type EditableMeta } from './EditableCell'
@@ -34,6 +42,17 @@ import {
   DEFAULT_VIEWS,
   type SavedView,
 } from './lib/saved-views'
+import {
+  buildHierarchy,
+  loadDisplayMode,
+  saveDisplayMode,
+  loadExpandedParents,
+  saveExpandedParents,
+  aggregateDisplayValue,
+  isAggregatableField,
+  type DisplayMode,
+  type HierarchyRow,
+} from './lib/hierarchy'
 import { cn } from '@/lib/utils'
 
 export interface BulkProduct {
@@ -109,6 +128,19 @@ const editCtxRef: { current: EditCtx } = {
   current: {
     onCommit: () => {},
     cellErrors: new Map(),
+  },
+}
+
+// ── Hierarchy ctx ────────────────────────────────────────────────────
+interface HierarchyCtx {
+  mode: DisplayMode
+  onToggle: (parentId: string) => void
+}
+
+const hierarchyCtxRef: { current: HierarchyCtx } = {
+  current: {
+    mode: 'flat',
+    onToggle: () => {},
   },
 }
 
@@ -224,16 +256,61 @@ function buildColumnFromField(field: FieldDef): ColumnDef<BulkProduct> {
   // Stash the FieldDef on meta so the header row can reach helpText
   // and the editable flag without recomputing per-render.
   const meta = { fieldDef: field }
-  if (field.editable) {
+
+  // ── SKU column gets hierarchy-aware rendering in hierarchy mode ──
+  if (field.id === 'sku') {
     return {
       id: field.id,
       accessorKey: field.id as string,
       header: field.label,
       size,
       meta,
-      cell: makeEditableRenderer(fieldToMeta(field)),
+      cell: (ctx) => <SkuCell ctx={ctx} field={field} />,
     }
   }
+
+  if (field.editable) {
+    const editMeta = fieldToMeta(field)
+    const editRenderer = makeEditableRenderer(editMeta)
+    // For aggregatable fields (totalStock, basePrice), parents in
+    // hierarchy mode show a computed display instead of the editable
+    // cell — children render normally.
+    if (isAggregatableField(field.id)) {
+      return {
+        id: field.id,
+        accessorKey: field.id as string,
+        header: field.label,
+        size,
+        meta,
+        cell: (ctx) => {
+          const row = ctx.row.original as Partial<HierarchyRow>
+          const hier = row._hier
+          if (
+            hierarchyCtxRef.current.mode === 'hierarchy' &&
+            hier?.level === 0 &&
+            hier.hasChildren
+          ) {
+            const display = aggregateDisplayValue(row as HierarchyRow, field.id)
+            return (
+              <span className="px-2 text-[12px] tabular-nums italic text-slate-500 truncate">
+                {display ?? '—'}
+              </span>
+            )
+          }
+          return editRenderer(ctx)
+        },
+      }
+    }
+    return {
+      id: field.id,
+      accessorKey: field.id as string,
+      header: field.label,
+      size,
+      meta,
+      cell: editRenderer,
+    }
+  }
+
   return {
     id: field.id,
     accessorKey: field.id as string,
@@ -242,6 +319,83 @@ function buildColumnFromField(field: FieldDef): ColumnDef<BulkProduct> {
     meta,
     cell: ({ getValue }) => <ReadOnlyCell value={getValue()} field={field} />,
   }
+}
+
+// ── SKU cell with hierarchy-aware chrome ──────────────────────────────
+function SkuCell({
+  ctx,
+  field,
+}: {
+  ctx: CellContext<BulkProduct, unknown>
+  field: FieldDef
+}) {
+  const sku = ctx.getValue<string>()
+  const row = ctx.row.original as Partial<HierarchyRow>
+  const hier = row._hier
+  const inHierarchy = hierarchyCtxRef.current.mode === 'hierarchy' && hier
+  const isParent = !!hier?.hasChildren
+  const indent = (hier?.level ?? 0) * 24
+
+  if (!inHierarchy) {
+    return (
+      <ReadOnlyCell
+        value={sku}
+        field={field}
+      />
+    )
+  }
+
+  return (
+    <div
+      className="flex items-center gap-1 h-full"
+      style={{ paddingLeft: 8 + indent }}
+    >
+      {isParent ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            hierarchyCtxRef.current.onToggle(row.id ?? '')
+          }}
+          className="w-4 h-4 flex items-center justify-center rounded hover:bg-slate-200 text-slate-500 hover:text-slate-900 flex-shrink-0"
+          title={hier?.isExpanded ? 'Collapse children' : 'Expand children'}
+        >
+          {hier?.isExpanded ? (
+            <ChevronDown className="w-3 h-3" />
+          ) : (
+            <ChevronRight className="w-3 h-3" />
+          )}
+        </button>
+      ) : hier && hier.level > 0 ? (
+        <span className="w-4 flex-shrink-0" />
+      ) : null}
+      <span
+        className={cn(
+          'font-mono text-[12px] truncate',
+          isParent ? 'text-slate-900 font-semibold' : 'text-slate-700'
+        )}
+      >
+        {sku}
+      </span>
+      {isParent && (
+        <Badge variant="default" size="sm" className="ml-auto flex-shrink-0">
+          {hier?.childCount}
+        </Badge>
+      )}
+      {hier && hier.level > 0 && hier.variations && Object.keys(hier.variations).length > 0 && (
+        <div className="ml-auto flex flex-wrap gap-1 max-w-[60%] justify-end overflow-hidden">
+          {Object.entries(hier.variations)
+            .slice(0, 3)
+            .map(([k, v]) => (
+              <Badge key={k} variant="info" size="sm">
+                <span className="opacity-70">{k}:</span>
+                <span className="ml-1">{v}</span>
+              </Badge>
+            ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ── Memoized row ──────────────────────────────────────────────────────
@@ -322,6 +476,10 @@ export default function BulkOperationsClient() {
     DEFAULT_VIEWS[0].columnIds
   )
 
+  // ── Hierarchy display state ──────────────────────────────────────
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('flat')
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set())
+
   // Hydrate localStorage state on mount
   useEffect(() => {
     setSavedViews(loadAllViews())
@@ -332,10 +490,33 @@ export default function BulkOperationsClient() {
     setVisibleColumnIds(view.columnIds)
     if (view.channels) setEnabledChannels(view.channels)
     if (view.productTypes) setEnabledProductTypes(view.productTypes)
+    setDisplayMode(loadDisplayMode())
+    setExpandedParents(loadExpandedParents())
     const onChange = () => setSavedViews(loadAllViews())
     window.addEventListener('nexus:views-changed', onChange)
     return () => window.removeEventListener('nexus:views-changed', onChange)
   }, [])
+
+  // Persist hierarchy state when it changes (separate effect — runs
+  // after hydrate + every user-driven update).
+  useEffect(() => {
+    saveDisplayMode(displayMode)
+  }, [displayMode])
+  useEffect(() => {
+    saveExpandedParents(expandedParents)
+  }, [expandedParents])
+
+  const toggleExpanded = useCallback((parentId: string) => {
+    setExpandedParents((prev) => {
+      const next = new Set(prev)
+      if (next.has(parentId)) next.delete(parentId)
+      else next.add(parentId)
+      return next
+    })
+  }, [])
+
+  // Push hierarchy ctx into the module ref so cell renderers see it
+  hierarchyCtxRef.current = { mode: displayMode, onToggle: toggleExpanded }
 
   // Refs for stable callbacks
   const productsRef = useRef(products)
@@ -599,8 +780,14 @@ export default function BulkOperationsClient() {
     [dynamicColumns]
   )
 
+  // Build display rows based on mode
+  const displayRows = useMemo(() => {
+    if (displayMode !== 'hierarchy') return products
+    return buildHierarchy(products, expandedParents)
+  }, [products, displayMode, expandedParents])
+
   const table = useReactTable({
-    data: products,
+    data: displayRows as BulkProduct[],
     columns: dynamicColumns,
     getCoreRowModel: getCoreRowModel(),
   })
@@ -684,10 +871,20 @@ export default function BulkOperationsClient() {
       )}
 
       <div className="flex-shrink-0 mb-3 flex items-center justify-between gap-3 flex-wrap">
-        <div className="text-[12px] text-slate-500">
-          {loading
-            ? 'Loading…'
-            : `${products.length.toLocaleString()} rows · Showing ${visibleColumnIds.length} of ${allFields.length} columns · click any cell to edit · Cmd+S to save`}
+        <div className="flex items-center gap-3 flex-wrap">
+          <DisplayModeToggle mode={displayMode} onChange={setDisplayMode} />
+          {displayMode === 'hierarchy' && (
+            <ExpandCollapseControls
+              products={products}
+              expandedParents={expandedParents}
+              onChange={setExpandedParents}
+            />
+          )}
+          <span className="text-[12px] text-slate-500">
+            {loading
+              ? 'Loading…'
+              : `${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · Cmd+S to save`}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <ColumnSelector
@@ -887,4 +1084,91 @@ function looselyEqual(a: unknown, b: unknown): boolean {
   if (a == null || b == null) return false
   if (typeof a === 'number' && typeof b === 'number') return a === b
   return String(a) === String(b)
+}
+
+function DisplayModeToggle({
+  mode,
+  onChange,
+}: {
+  mode: DisplayMode
+  onChange: (m: DisplayMode) => void
+}) {
+  const opts: Array<{ id: DisplayMode; label: string; tooltip: string; disabled?: boolean }> = [
+    { id: 'flat', label: 'Flat', tooltip: 'All products in a single list' },
+    {
+      id: 'hierarchy',
+      label: 'Hierarchy',
+      tooltip: 'Parents and children grouped — click chevrons to expand',
+    },
+    {
+      id: 'grouped',
+      label: 'Grouped Edit',
+      tooltip: 'Hierarchical with cascade editing — ships in D.3c',
+      disabled: true,
+    },
+  ]
+  return (
+    <div className="flex items-center gap-0.5 border border-slate-200 rounded-md p-0.5 bg-white">
+      {opts.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          disabled={o.disabled}
+          onClick={() => !o.disabled && onChange(o.id)}
+          title={o.tooltip}
+          className={cn(
+            'h-6 px-2.5 text-[11px] rounded transition-colors',
+            mode === o.id
+              ? 'bg-slate-100 text-slate-900 font-semibold'
+              : 'text-slate-600 hover:text-slate-900',
+            o.disabled && 'opacity-40 cursor-not-allowed'
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function ExpandCollapseControls({
+  products,
+  expandedParents,
+  onChange,
+}: {
+  products: BulkProduct[]
+  expandedParents: Set<string>
+  onChange: (s: Set<string>) => void
+}) {
+  // Compute parent IDs from products (those that are parented BY children)
+  const parentIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const p of products) {
+      if (p.parentId) ids.add(p.parentId)
+    }
+    return ids
+  }, [products])
+
+  return (
+    <div className="flex items-center gap-2 text-[11px] text-slate-500">
+      <button
+        type="button"
+        onClick={() => onChange(new Set(parentIds))}
+        className="hover:text-slate-900"
+      >
+        Expand all
+      </button>
+      <span className="text-slate-300">·</span>
+      <button
+        type="button"
+        onClick={() => onChange(new Set())}
+        className="hover:text-slate-900"
+      >
+        Collapse all
+      </button>
+      <span className="text-slate-400 tabular-nums">
+        {expandedParents.size}/{parentIds.size} expanded
+      </span>
+    </div>
+  )
 }
