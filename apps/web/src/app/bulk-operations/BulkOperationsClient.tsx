@@ -568,33 +568,24 @@ function SkuCell({
 
 // ── Memoized row ──────────────────────────────────────────────────────
 //
-// Step 1 selection: the row receives three primitive selection props
-// computed in the parent's virtualizer loop. The memo comparator
-// includes them so a row only re-renders when this row gains/loses
-// range-membership or active-cell focus — not when *any* selection
-// changes anywhere in the grid.
+// Selection is rendered as TWO absolutely-positioned overlays in the
+// virtualized body (see SelectionOverlays below): one thin border for
+// the range and one thick border for the active cell. That keeps the
+// cells themselves entirely unaware of selection state, so changing
+// the selection re-renders only those overlays — not every visible
+// row. The cell wrapper just owns the click handler.
 const TableRow = memo(
   function TableRow({
     row,
     rowIdx,
     top,
-    selRangeColMin,
-    selRangeColMax,
-    selActiveColIdx,
   }: {
     row: Row<BulkProduct>
     rowIdx: number
     top: number
-    /** Bumped when the visible-column set changes; forces a row
-     * re-render so cells map onto the new columns. */
+    /** Bumped when the visible-column set OR sizes change; forces a
+     *  re-render so body cells track header widths during a drag. */
     columnsKey: string
-    /** Minimum/maximum column index of the selection range that
-     *  intersects this row, or -1 if no intersection. */
-    selRangeColMin: number
-    selRangeColMax: number
-    /** Column index of the active cell within this row, -1 if active
-     *  cell isn't on this row. */
-    selActiveColIdx: number
   }) {
     const hier = (row.original as Partial<HierarchyRow>)._hier
     const isAggregateRow =
@@ -611,14 +602,6 @@ const TableRow = memo(
         }}
       >
         {row.getVisibleCells().map((cell, colIdx) => {
-          const inRange =
-            selRangeColMin !== -1 &&
-            colIdx >= selRangeColMin &&
-            colIdx <= selRangeColMax
-          const isActive = selActiveColIdx === colIdx
-          // Parent aggregate cells (Sum stock, basePrice on a parent
-          // in hierarchy mode) render a non-interactive aggregate
-          // value — exclude them from selection per the spec.
           const fieldId = (cell.column.columnDef.meta as any)?.fieldDef
             ?.id as string | undefined
           const isParentAggregateCell =
@@ -645,11 +628,8 @@ const TableRow = memo(
                   : undefined
               }
               className={cn(
-                'overflow-hidden border-r border-slate-100/60 last:border-r-0 relative',
-                'select-none transition-colors duration-100',
-                selectable && !inRange && !isActive && 'hover:bg-slate-50',
-                inRange && !isActive && 'bg-blue-50/80 hover:bg-blue-100/80',
-                isActive && 'ring-2 ring-blue-600 ring-inset z-10',
+                'overflow-hidden border-r border-slate-100/60 last:border-r-0 relative select-none',
+                selectable && 'hover:bg-slate-50',
               )}
               style={{ width: cell.column.getSize(), flexShrink: 0 }}
             >
@@ -664,11 +644,35 @@ const TableRow = memo(
     prev.row.original === next.row.original &&
     prev.rowIdx === next.rowIdx &&
     prev.top === next.top &&
-    (prev as any).columnsKey === (next as any).columnsKey &&
-    prev.selRangeColMin === next.selRangeColMin &&
-    prev.selRangeColMax === next.selRangeColMax &&
-    prev.selActiveColIdx === next.selActiveColIdx
+    (prev as any).columnsKey === (next as any).columnsKey,
 )
+
+// Two absolutely-positioned overlays that draw the selection on top
+// of the table body. Single-element renders, no per-cell re-paints.
+function SelectionOverlays({
+  rangeRect,
+  activeRect,
+}: {
+  rangeRect: { top: number; left: number; width: number; height: number } | null
+  activeRect: { top: number; left: number; width: number; height: number } | null
+}) {
+  return (
+    <>
+      {rangeRect && (
+        <div
+          className="absolute pointer-events-none border border-blue-400 bg-blue-50/40 z-10"
+          style={rangeRect}
+        />
+      )}
+      {activeRect && (
+        <div
+          className="absolute pointer-events-none border-2 border-blue-600 z-20"
+          style={activeRect}
+        />
+      )}
+    </>
+  )
+}
 
 function SkeletonRow({ top, colCount }: { top: number; colCount: number }) {
   return (
@@ -1254,7 +1258,13 @@ export default function BulkOperationsClient() {
   // so memoized rows know to re-render on column changes. We use a
   // stable string key — when it changes, the memo comparator sees a
   // different value and re-runs.
-  const columnsKey = useMemo(() => visibleColumnIds.join('|'), [visibleColumnIds])
+  // Include columnSizing in the fingerprint so a header drag also
+  // re-renders TableRow (whose memo comparator otherwise sees no
+  // change in props and keeps the body cells at the old widths).
+  const columnsKey = useMemo(
+    () => `${visibleColumnIds.join('|')}#${JSON.stringify(columnSizing)}`,
+    [visibleColumnIds, columnSizing],
+  )
 
   const tableMinWidth = useMemo(
     () => dynamicColumns.reduce((sum, c) => sum + (c.size ?? 120), 0),
@@ -1296,6 +1306,45 @@ export default function BulkOperationsClient() {
   const headerCells = table.getHeaderGroups()[0]?.headers ?? []
   const totalSize = rowVirtualizer.getTotalSize()
   const pendingCount = changes.size
+
+  // ── Selection overlay geometry ─────────────────────────────────
+  // Compute the (left, width) of every visible column once per render
+  // so the selection overlays know where to draw. Cheap — just walks
+  // the visible-leaf-columns array.
+  const visibleLeafCols = table.getVisibleLeafColumns()
+  const colLefts: number[] = []
+  {
+    let acc = 0
+    for (const col of visibleLeafCols) {
+      colLefts.push(acc)
+      acc += col.getSize()
+    }
+  }
+  const rangeRect = (() => {
+    if (!rangeBounds) return null
+    const left = colLefts[rangeBounds.minCol] ?? 0
+    let width = 0
+    for (let i = rangeBounds.minCol; i <= rangeBounds.maxCol; i++) {
+      width += visibleLeafCols[i]?.getSize() ?? 0
+    }
+    return {
+      top: rangeBounds.minRow * ROW_HEIGHT,
+      left,
+      width,
+      height:
+        (rangeBounds.maxRow - rangeBounds.minRow + 1) * ROW_HEIGHT,
+    }
+  })()
+  const activeRect = (() => {
+    if (!selection.active) return null
+    const a = selection.active
+    return {
+      top: a.rowIdx * ROW_HEIGHT,
+      left: colLefts[a.colIdx] ?? 0,
+      width: visibleLeafCols[a.colIdx]?.getSize() ?? 0,
+      height: ROW_HEIGHT,
+    }
+  })()
 
   // D.3d: track which visible columns are channel-prefixed AND
   // whether any pending change targets one. Used to drive the banner
@@ -1530,30 +1579,17 @@ export default function BulkOperationsClient() {
                 />
               )
             const row = rows[vRow.index]
-            const rowIdx = vRow.index
-            const inRange =
-              rangeBounds &&
-              rowIdx >= rangeBounds.minRow &&
-              rowIdx <= rangeBounds.maxRow
-            const selRangeColMin = inRange ? rangeBounds!.minCol : -1
-            const selRangeColMax = inRange ? rangeBounds!.maxCol : -1
-            const selActiveColIdx =
-              selection.active && selection.active.rowIdx === rowIdx
-                ? selection.active.colIdx
-                : -1
             return (
               <TableRow
                 key={row.id}
                 row={row}
-                rowIdx={rowIdx}
+                rowIdx={vRow.index}
                 top={vRow.start}
                 columnsKey={columnsKey}
-                selRangeColMin={selRangeColMin}
-                selRangeColMax={selRangeColMax}
-                selActiveColIdx={selActiveColIdx}
               />
             )
           })}
+          <SelectionOverlays rangeRect={rangeRect} activeRect={activeRect} />
         </div>
 
         {error && (
