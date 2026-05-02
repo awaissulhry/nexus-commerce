@@ -1217,6 +1217,15 @@ export default function BulkOperationsClient() {
     return () => window.removeEventListener('keydown', onKey)
   }, [handleSave])
 
+  // ── Step 3: copy flash state ────────────────────────────────────
+  // The copy listener itself is registered further down (after the
+  // table is declared) — this state lives up here so the StatusBar
+  // and the copyCtxRef both see it.
+  const [copyFlash, setCopyFlash] = useState<{
+    count: number
+    at: number
+  } | null>(null)
+
   // ── Initial fetch (products + fields + marketplaces in parallel) ──
   useEffect(() => {
     let cancelled = false
@@ -1382,6 +1391,74 @@ export default function BulkOperationsClient() {
   })
 
   const rows = table.getRowModel().rows
+
+  // ── Step 3: copy selection as TSV ────────────────────────────────
+  // The handler is registered once on document; it pulls the latest
+  // selection + table refs from copyCtxRef so we don't re-attach the
+  // listener every time selection changes.
+  const copyCtxRef = useRef<{
+    bounds: typeof rangeBounds
+    table: typeof table
+  }>({ bounds: rangeBounds, table })
+  copyCtxRef.current.bounds = rangeBounds
+  copyCtxRef.current.table = table
+  useEffect(() => {
+    const onCopy = (e: ClipboardEvent) => {
+      const bounds = copyCtxRef.current.bounds
+      if (!bounds) return
+      // Don't intercept native copy when the user is editing or
+      // selected text inside a regular input/textarea.
+      const ae = document.activeElement as HTMLElement | null
+      if (ae) {
+        const tag = ae.tagName
+        if (
+          tag === 'INPUT' ||
+          tag === 'TEXTAREA' ||
+          ae.isContentEditable
+        ) {
+          return
+        }
+      }
+      const tbl = copyCtxRef.current.table
+      const tableRows = tbl.getRowModel().rows
+      const cols = tbl.getVisibleLeafColumns()
+      const tsvRows: string[] = []
+      for (let r = bounds.minRow; r <= bounds.maxRow; r++) {
+        const row = tableRows[r]
+        if (!row) continue
+        const cells: string[] = []
+        for (let c = bounds.minCol; c <= bounds.maxCol; c++) {
+          const col = cols[c]
+          if (!col) {
+            cells.push('')
+            continue
+          }
+          let v: unknown
+          try {
+            v = row.getValue(col.id)
+          } catch {
+            v = undefined
+          }
+          cells.push(toTsvCell(v))
+        }
+        tsvRows.push(cells.join('\t'))
+      }
+      const tsv = tsvRows.join('\n')
+      e.clipboardData?.setData('text/plain', tsv)
+      e.preventDefault()
+      const count =
+        (bounds.maxRow - bounds.minRow + 1) *
+        (bounds.maxCol - bounds.minCol + 1)
+      const at = Date.now()
+      setCopyFlash({ count, at })
+      // Auto-clear after 2s, but only if no newer copy has happened.
+      window.setTimeout(() => {
+        setCopyFlash((curr) => (curr && curr.at === at ? null : curr))
+      }, 2000)
+    }
+    document.addEventListener('copy', onCopy)
+    return () => document.removeEventListener('copy', onCopy)
+  }, [])
 
   const containerRef = useRef<HTMLDivElement>(null)
   const rowVirtualizer = useVirtualizer({
@@ -1700,6 +1777,7 @@ export default function BulkOperationsClient() {
         fetchMs={fetchMs}
         loading={loading}
         selectedCellCount={selectedCellCount}
+        copyFlashCount={copyFlash?.count ?? null}
       />
 
       <PreviewChangesModal
@@ -1729,6 +1807,7 @@ function StatusBar({
   fetchMs,
   loading,
   selectedCellCount,
+  copyFlashCount,
 }: {
   status: SaveStatus
   pendingCount: number
@@ -1737,6 +1816,9 @@ function StatusBar({
   /** 0 when nothing is selected; otherwise how many cells the
    *  current range covers. */
   selectedCellCount: number
+  /** Non-null for ~2s after a successful copy — drives the green
+   *  "Copied N cells" pill. */
+  copyFlashCount: number | null
 }) {
   const left = (() => {
     if (loading) return <span>Fetching…</span>
@@ -1792,18 +1874,43 @@ function StatusBar({
     >
       <span className="flex items-center gap-1.5">{left}</span>
       <span className="flex items-center gap-3 text-slate-500">
-        {selectedCellCount > 1 && (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded text-[12px]">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
-            <span className="text-blue-900 tabular-nums">
-              {selectedCellCount} cells selected
+        {copyFlashCount != null ? (
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-green-50 border border-green-200 rounded text-[12px]">
+            <CheckCircle2 className="w-3 h-3 text-green-600" />
+            <span className="text-green-900 tabular-nums">
+              Copied {copyFlashCount} cell{copyFlashCount === 1 ? '' : 's'}
             </span>
           </span>
+        ) : (
+          selectedCellCount > 1 && (
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded text-[12px]">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
+              <span className="text-blue-900 tabular-nums">
+                {selectedCellCount} cells selected
+              </span>
+            </span>
+          )
         )}
         {fetchMs != null && <span>Initial fetch: {fetchMs}ms</span>}
       </span>
     </div>
   )
+}
+
+/**
+ * RFC 4180-style escaping applied to TSV. If a cell value contains a
+ * tab, newline, or double-quote, the whole cell is wrapped in double
+ * quotes and embedded quotes are doubled. Otherwise it's emitted as
+ * plain text. Excel, Sheets, Numbers and Notion all paste this format
+ * back into their grids correctly.
+ */
+function toTsvCell(value: unknown): string {
+  if (value == null) return ''
+  const str = String(value)
+  if (/[\t\n"]/.test(str)) {
+    return '"' + str.replace(/"/g, '""') + '"'
+  }
+  return str
 }
 
 function looselyEqual(a: unknown, b: unknown): boolean {
