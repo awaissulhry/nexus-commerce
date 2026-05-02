@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useMemo, useRef } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import {
   flexRender,
   getCoreRowModel,
@@ -10,6 +10,7 @@ import {
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Badge } from '@/components/ui/Badge'
+import { getBackendUrl } from '@/lib/backend-url'
 
 export interface BulkProduct {
   id: string
@@ -42,17 +43,13 @@ export interface BulkProduct {
 const ROW_HEIGHT = 36
 const HEADER_HEIGHT = 36
 
-// ── Pure cell formatters (no React state, cheap to call) ──────────────
-function fmtMoney(v: number | null): string {
-  if (v == null) return ''
-  return v.toFixed(2)
-}
+// ── Pure cell formatters ──────────────────────────────────────────────
 function fmtMargin(cost: number | null, price: number): string {
   if (cost == null || price <= 0) return ''
   return `${((1 - cost / price) * 100).toFixed(0)}%`
 }
 
-// ── Memoized status / channel badges ──────────────────────────────────
+// ── Memoized cell components ──────────────────────────────────────────
 const StatusBadge = memo(function StatusBadge({ value }: { value: string }) {
   const variant =
     value === 'ACTIVE'
@@ -82,10 +79,7 @@ const ChannelBadge = memo(function ChannelBadge({
   )
 })
 
-// ── Column definitions ────────────────────────────────────────────────
-// Phase A: read-only render. Phase B replaces these cell renderers with
-// the EditableCell component. Stable identity (defined at module scope)
-// so React Table doesn't think columns changed every render.
+// ── Column defs (module scope = stable identity) ──────────────────────
 const columns: ColumnDef<BulkProduct>[] = [
   {
     id: 'sku',
@@ -93,9 +87,7 @@ const columns: ColumnDef<BulkProduct>[] = [
     header: 'SKU',
     size: 220,
     cell: ({ getValue }) => (
-      <span className="font-mono text-[12px] text-slate-900">
-        {getValue<string>()}
-      </span>
+      <span className="font-mono text-[12px] text-slate-900">{getValue<string>()}</span>
     ),
   },
   {
@@ -113,7 +105,7 @@ const columns: ColumnDef<BulkProduct>[] = [
     id: 'brand',
     accessorKey: 'brand',
     header: 'Brand',
-    size: 120,
+    size: 140,
     cell: ({ getValue }) => {
       const v = getValue<string | null>()
       return v ? (
@@ -146,7 +138,7 @@ const columns: ColumnDef<BulkProduct>[] = [
     size: 90,
     cell: ({ getValue }) => (
       <span className="text-[13px] tabular-nums text-slate-900">
-        €{fmtMoney(getValue<number>())}
+        €{getValue<number>().toFixed(2)}
       </span>
     ),
   },
@@ -213,19 +205,11 @@ const columns: ColumnDef<BulkProduct>[] = [
   },
 ]
 
-// Total of all column sizes — used to enforce min table width so columns
-// stay aligned with their headers when the viewport is narrower.
 const TABLE_MIN_WIDTH = columns.reduce((sum, c) => sum + (c.size ?? 100), 0)
 
-// ── Memoized row — re-renders only when its row data changes ──────────
+// ── Memoized row ──────────────────────────────────────────────────────
 const TableRow = memo(
-  function TableRow({
-    row,
-    top,
-  }: {
-    row: Row<BulkProduct>
-    top: number
-  }) {
+  function TableRow({ row, top }: { row: Row<BulkProduct>; top: number }) {
     return (
       <div
         className="absolute left-0 right-0 flex border-b border-slate-100 hover:bg-slate-50/70"
@@ -247,31 +231,72 @@ const TableRow = memo(
       </div>
     )
   },
-  // Custom equality — row data is immutable from the server fetch in
-  // Phase A, so reference equality is enough. The `top` prop changes
-  // on every scroll frame for visible rows; that's expected.
   (prev, next) => prev.row.original === next.row.original && prev.top === next.top
 )
 
-interface Props {
-  initialProducts: BulkProduct[]
+// ── Skeleton row ──────────────────────────────────────────────────────
+function SkeletonRow({ top }: { top: number }) {
+  return (
+    <div
+      className="absolute left-0 right-0 flex border-b border-slate-100 animate-pulse"
+      style={{ height: ROW_HEIGHT, transform: `translateY(${top}px)` }}
+    >
+      {columns.map((c) => (
+        <div
+          key={c.id}
+          className="flex items-center px-3"
+          style={{ width: c.size ?? 100, flexShrink: 0 }}
+        >
+          <div className="h-3 bg-slate-200 rounded w-3/4" />
+        </div>
+      ))}
+    </div>
+  )
 }
 
-export default function BulkOperationsClient({ initialProducts }: Props) {
-  const products = initialProducts
+export default function BulkOperationsClient() {
+  const [products, setProducts] = useState<BulkProduct[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [fetchMs, setFetchMs] = useState<number | null>(null)
+
+  // Fetch on mount only — server component now ships a tiny shell, the
+  // client downloads the (gzipped) JSON directly. At 10k rows this is
+  // ~1 MB on the wire instead of ~6 MB in the HTML.
+  useEffect(() => {
+    let cancelled = false
+    const start = performance.now()
+    fetch(`${getBackendUrl()}/api/products/bulk-fetch`, { cache: 'no-store' })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        if (cancelled) return
+        setProducts(Array.isArray(data.products) ? data.products : [])
+        setFetchMs(Math.round(performance.now() - start))
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setError(err?.message ?? String(err))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const table = useReactTable({
     data: products,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    // No filter / sort state in Phase A; comes in Phase D.
   })
 
   const rows = table.getRowModel().rows
 
   const containerRef = useRef<HTMLDivElement>(null)
   const rowVirtualizer = useVirtualizer({
-    count: rows.length,
+    count: loading ? 20 : rows.length, // skeleton count while loading
     getScrollElement: () => containerRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 10,
@@ -305,25 +330,31 @@ export default function BulkOperationsClient({ initialProducts }: Props) {
         </div>
 
         {/* Virtualized rows */}
-        <div
-          className="relative"
-          style={{ height: totalSize, minWidth: TABLE_MIN_WIDTH }}
-        >
+        <div className="relative" style={{ height: totalSize, minWidth: TABLE_MIN_WIDTH }}>
           {rowVirtualizer.getVirtualItems().map((vRow) => {
+            if (loading) return <SkeletonRow key={vRow.key} top={vRow.start} />
             const row = rows[vRow.index]
-            return (
-              <TableRow key={row.id} row={row} top={vRow.start} />
-            )
+            return <TableRow key={row.id} row={row} top={vRow.start} />
           })}
         </div>
+
+        {error && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/90">
+            <div className="text-[13px] text-red-700 bg-red-50 border border-red-200 rounded-md px-4 py-2">
+              Failed to load: {error}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex-shrink-0 mt-2 flex items-center justify-between text-[11px] text-slate-500 px-1">
         <span>
-          {products.length.toLocaleString()} rows · Phase A: read-only · scroll test
+          {loading
+            ? 'Loading…'
+            : `${products.length.toLocaleString()} rows · Phase A: read-only · scroll test`}
         </span>
         <span>
-          Phase B (editable cells), C (save), D (filters) coming next
+          {fetchMs != null && `Fetched in ${fetchMs}ms · `}Phase B (editable cells), C (save), D (filters) coming next
         </span>
       </div>
     </div>

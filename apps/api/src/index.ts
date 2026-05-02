@@ -1,6 +1,7 @@
 import "./db.js"; // ensure dotenv loads before anything else
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import compress from "@fastify/compress";
 import { listingsRoutes } from "./routes/listings.js";
 import { inventoryRoutes } from "./routes/inventory.js";
 import { aiRoutes } from "./routes/ai.js";
@@ -39,6 +40,15 @@ import productsRoutes from "./routes/products.routes.js";
 import { logger } from "./utils/logger.js";
 
 const app = Fastify({ logger: true });
+
+// Compress responses (gzip / brotli). Threshold 1KB so small payloads
+// don't pay the compression cost. Critical for /products/bulk-fetch
+// at 10k rows (5.4 MB JSON → ~1 MB on the wire).
+app.register(compress, {
+  global: true,
+  threshold: 1024,
+  encodings: ['gzip', 'deflate'],
+});
 
 // Register CORS to allow cross-origin requests from frontend (Port 3000)
 app.register(cors, {
