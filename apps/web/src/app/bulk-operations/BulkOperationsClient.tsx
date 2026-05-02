@@ -31,7 +31,12 @@ import {
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
-import { EditableCell, type EditableMeta } from './EditableCell'
+import {
+  EditableCell,
+  editHandlers,
+  editKey,
+  type EditableMeta,
+} from './EditableCell'
 import PreviewChangesModal from './PreviewChangesModal'
 import CascadeChoiceModal from './components/CascadeChoiceModal'
 import ColumnSelector, { type FieldDef } from './components/ColumnSelector'
@@ -146,6 +151,9 @@ interface EditCtx {
   resetKeys: Map<string, number>
   /** cellKey → true if its pending change is a cascade (orange tint) */
   cascadeKeys: Set<string>
+  /** Step 3.5: Enter / Tab inside the input commits then moves the
+   *  selection by this delta (Excel semantics). */
+  onCommitNavigate: (dRow: number, dCol: number) => void
 }
 
 const editCtxRef: { current: EditCtx } = {
@@ -154,6 +162,7 @@ const editCtxRef: { current: EditCtx } = {
     cellErrors: new Map(),
     resetKeys: new Map(),
     cascadeKeys: new Set(),
+    onCommitNavigate: () => {},
   },
 }
 
@@ -186,6 +195,7 @@ const selectCtxRef: { current: SelectCtx } = {
   current: { select: () => {}, beginDrag: () => {} },
 }
 
+
 interface CellCoord {
   rowIdx: number
   colIdx: number
@@ -212,6 +222,7 @@ function makeEditableRenderer(meta: EditableMeta) {
         cellError={editCtxRef.current.cellErrors.get(cellKey)}
         resetKey={editCtxRef.current.resetKeys.get(cellKey)}
         cellCascading={editCtxRef.current.cascadeKeys.has(cellKey)}
+        onCommitNavigate={editCtxRef.current.onCommitNavigate}
       />
     )
   }
@@ -764,11 +775,22 @@ export default function BulkOperationsClient() {
     anchor: null,
     active: null,
   })
+  // Mirror selection in a ref so the global keydown listener can read
+  // the latest value without re-attaching the document handler each
+  // time selection changes.
+  const selectionRef = useRef<SelectionState>(selection)
+  selectionRef.current = selection
+
   const select = useCallback(
     (rowIdx: number, colIdx: number, shift: boolean) => {
-      setSelection((prev) =>
-        shift && prev.anchor
-          ? { anchor: prev.anchor, active: { rowIdx, colIdx } }
+      // Step 3.5: edit-on-click is covered by onDoubleClick on the
+      // EditableCell — within ~500ms the browser groups the second
+      // click as a dblclick. Beyond that window, two clicks are
+      // intentional re-selection (no edit). So plain click is
+      // selection-only here.
+      setSelection((s) =>
+        shift && s.anchor
+          ? { anchor: s.anchor, active: { rowIdx, colIdx } }
           : {
               anchor: { rowIdx, colIdx },
               active: { rowIdx, colIdx },
@@ -1069,11 +1091,24 @@ export default function BulkOperationsClient() {
     }
     return s
   }, [changes])
+  // Step 3.5: stable wrapper that EditableCell receives as
+  // onCommitNavigate. The actual navigation function (moveSelection)
+  // is defined further down in this component, so we forward through
+  // a ref. The wrapper identity is stable forever, so passing it as a
+  // prop never busts EditableCell's memo.
+  const commitNavigateRef = useRef<(dRow: number, dCol: number) => void>(
+    () => {},
+  )
+  const onCommitNavigate = useCallback((dRow: number, dCol: number) => {
+    commitNavigateRef.current(dRow, dCol)
+  }, [])
+
   editCtxRef.current = {
     onCommit: handleCommit,
     cellErrors,
     resetKeys,
     cascadeKeys,
+    onCommitNavigate,
   }
   allFieldsRef.current = allFields
 
@@ -1392,6 +1427,134 @@ export default function BulkOperationsClient() {
 
   const rows = table.getRowModel().rows
 
+  // Mirror table on a ref so the keydown / requestEdit paths read
+  // the latest visible-leaf-columns + row model without depending on
+  // a particular render's closure.
+  const tableRef = useRef(table)
+  tableRef.current = table
+
+  // ── Step 3.5: imperative edit + global keyboard nav ─────────────
+  // Resolve a (rowIdx, colIdx) selection coord to its real row+column
+  // ids and dispatch the edit handler that the EditableCell at those
+  // coords registered. Read-only / parent-aggregate cells silently
+  // skip — they won't have a registered handler.
+  const requestEditAt = useCallback(
+    (rowIdx: number, colIdx: number, prefill?: string) => {
+      const tbl = tableRef.current
+      const row = tbl.getRowModel().rows[rowIdx]
+      const col = tbl.getVisibleLeafColumns()[colIdx]
+      if (!row || !col) return
+      const handler = editHandlers.get(editKey(row.original.id, col.id))
+      handler?.(prefill)
+    },
+    [],
+  )
+  // Move/extend selection by a delta, clamped to the data bounds.
+  // Used by Tab / Shift+Tab / arrow keys.
+  const moveSelection = useCallback(
+    (dRow: number, dCol: number, extend: boolean) => {
+      const tbl = tableRef.current
+      const rowCount = tbl.getRowModel().rows.length
+      const colCount = tbl.getVisibleLeafColumns().length
+      if (rowCount === 0 || colCount === 0) return
+      setSelection((curr) => {
+        const baseAnchor = curr.anchor ?? { rowIdx: 0, colIdx: 0 }
+        const baseActive = curr.active ?? baseAnchor
+        const nextActive = {
+          rowIdx: Math.min(
+            Math.max(baseActive.rowIdx + dRow, 0),
+            rowCount - 1,
+          ),
+          colIdx: Math.min(
+            Math.max(baseActive.colIdx + dCol, 0),
+            colCount - 1,
+          ),
+        }
+        return extend
+          ? { anchor: baseAnchor, active: nextActive }
+          : { anchor: nextActive, active: nextActive }
+      })
+    },
+    [],
+  )
+  // Wire the forward ref now that moveSelection exists. EditableCell
+  // calls this on Enter / Tab inside the input — Excel semantics:
+  // commit + move selection.
+  commitNavigateRef.current = (dRow, dCol) => moveSelection(dRow, dCol, false)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const sel = selectionRef.current
+      if (!sel.active) return
+      const ae = document.activeElement as HTMLElement | null
+      // While editing or typing in a real input/search, let the
+      // browser handle the key naturally — EditableCell's input has
+      // its own keydown for Enter/Escape/Tab.
+      if (
+        ae &&
+        (ae.tagName === 'INPUT' ||
+          ae.tagName === 'TEXTAREA' ||
+          ae.isContentEditable)
+      ) {
+        return
+      }
+      // Don't swallow modifier-key chords (Cmd+S, Cmd+C, …).
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+
+      const key = e.key
+      if (key === 'F2' || key === 'Enter') {
+        e.preventDefault()
+        requestEditAt(sel.active.rowIdx, sel.active.colIdx)
+        return
+      }
+      if (key === 'Escape') {
+        e.preventDefault()
+        setSelection({ anchor: null, active: null })
+        return
+      }
+      if (key === 'Tab') {
+        e.preventDefault()
+        moveSelection(0, e.shiftKey ? -1 : 1, false)
+        return
+      }
+      if (key === 'ArrowUp') {
+        e.preventDefault()
+        moveSelection(-1, 0, e.shiftKey)
+        return
+      }
+      if (key === 'ArrowDown') {
+        e.preventDefault()
+        moveSelection(1, 0, e.shiftKey)
+        return
+      }
+      if (key === 'ArrowLeft') {
+        e.preventDefault()
+        moveSelection(0, -1, e.shiftKey)
+        return
+      }
+      if (key === 'ArrowRight') {
+        e.preventDefault()
+        moveSelection(0, 1, e.shiftKey)
+        return
+      }
+      // Type-to-edit: any single printable character starts a fresh
+      // edit on the active cell with the typed character as the new
+      // value. Skip control keys (length > 1) and pure whitespace
+      // chords.
+      if (key.length === 1) {
+        e.preventDefault()
+        requestEditAt(sel.active.rowIdx, sel.active.colIdx, key)
+        return
+      }
+      if (key === 'Backspace' || key === 'Delete') {
+        e.preventDefault()
+        requestEditAt(sel.active.rowIdx, sel.active.colIdx, '')
+        return
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [moveSelection, requestEditAt])
+
   // ── Step 3: copy selection as TSV ────────────────────────────────
   // The handler is registered once on document; it pulls the latest
   // selection + table refs from copyCtxRef so we don't re-attach the
@@ -1405,20 +1568,10 @@ export default function BulkOperationsClient() {
   useEffect(() => {
     const onCopy = (e: ClipboardEvent) => {
       const bounds = copyCtxRef.current.bounds
-      const ae = document.activeElement as HTMLElement | null
-      // eslint-disable-next-line no-console
-      console.log('[COPY] fired', {
-        bounds,
-        activeTag: ae?.tagName,
-        isCE: ae?.isContentEditable,
-      })
-      if (!bounds) {
-        // eslint-disable-next-line no-console
-        console.log('[COPY] BAIL: no bounds')
-        return
-      }
+      if (!bounds) return
       // Don't intercept native copy when the user is editing or
       // selected text inside a regular input/textarea.
+      const ae = document.activeElement as HTMLElement | null
       if (ae) {
         const tag = ae.tagName
         if (
@@ -1426,39 +1579,27 @@ export default function BulkOperationsClient() {
           tag === 'TEXTAREA' ||
           ae.isContentEditable
         ) {
-          // eslint-disable-next-line no-console
-          console.log('[COPY] BAIL: input/textarea/CE focused')
           return
         }
       }
       const tbl = copyCtxRef.current.table
       const tableRows = tbl.getRowModel().rows
       const cols = tbl.getVisibleLeafColumns()
-      // eslint-disable-next-line no-console
-      console.log('[COPY] tableRows.length', tableRows.length, 'cols', cols.map((c) => c.id))
       const tsvRows: string[] = []
       for (let r = bounds.minRow; r <= bounds.maxRow; r++) {
         const row = tableRows[r]
-        if (!row) {
-          // eslint-disable-next-line no-console
-          console.log('[COPY] missing row at index', r)
-          continue
-        }
+        if (!row) continue
         const cells: string[] = []
         for (let c = bounds.minCol; c <= bounds.maxCol; c++) {
           const col = cols[c]
           if (!col) {
-            // eslint-disable-next-line no-console
-            console.log('[COPY] missing col at index', c)
             cells.push('')
             continue
           }
           let v: unknown
           try {
             v = row.getValue(col.id)
-          } catch (err) {
-            // eslint-disable-next-line no-console
-            console.log('[COPY] getValue threw', col.id, err)
+          } catch {
             v = undefined
           }
           cells.push(toTsvCell(v))
@@ -1466,16 +1607,7 @@ export default function BulkOperationsClient() {
         tsvRows.push(cells.join('\t'))
       }
       const tsv = tsvRows.join('\n')
-      // eslint-disable-next-line no-console
-      console.log('[COPY] tsvRows', tsvRows)
-      // eslint-disable-next-line no-console
-      console.log('[COPY] tsv', JSON.stringify(tsv))
       e.clipboardData?.setData('text/plain', tsv)
-      // eslint-disable-next-line no-console
-      console.log(
-        '[COPY] readback',
-        JSON.stringify(e.clipboardData?.getData('text/plain')),
-      )
       e.preventDefault()
       const count =
         (bounds.maxRow - bounds.minRow + 1) *
@@ -1913,11 +2045,13 @@ function StatusBar({
             </span>
           </span>
         ) : (
-          selectedCellCount > 1 && (
+          selectedCellCount > 0 && (
             <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded text-[12px]">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
               <span className="text-blue-900 tabular-nums">
-                {selectedCellCount} cells selected
+                {selectedCellCount === 1
+                  ? '1 cell · Enter or type to edit'
+                  : `${selectedCellCount} cells · Enter to edit active`}
               </span>
             </span>
           )

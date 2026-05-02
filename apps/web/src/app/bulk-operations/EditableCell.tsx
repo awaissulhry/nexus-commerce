@@ -10,6 +10,22 @@ import {
 } from 'react'
 import { cn } from '@/lib/utils'
 
+/**
+ * Imperative edit-handler registry used by Step 3.5 keyboard handling.
+ *
+ * Each EditableCell registers a callback under its `${rowId}:${columnId}`
+ * key so the BulkOperationsClient keydown listener can request edit
+ * on the active cell (F2, Enter, or any printable key) without
+ * re-rendering the cell on every selection change. The optional
+ * prefill argument replaces the cell value with the typed character
+ * for type-to-edit.
+ */
+export type EditHandler = (prefill?: string) => void
+export const editHandlers: Map<string, EditHandler> = new Map()
+export function editKey(rowId: string, columnId: string) {
+  return `${rowId}:${columnId}`
+}
+
 export type FieldType = 'text' | 'number' | 'select'
 
 export interface EditableMeta {
@@ -43,6 +59,10 @@ interface Props {
   /** True when this cell's pending change is a cascade. Drives the
    * orange-tinted background instead of yellow. */
   cellCascading?: boolean
+  /** Step 3.5: pressing Enter / Tab / Shift+Tab inside the input
+   * commits and asks the parent to move the selection by the given
+   * delta (Excel semantics). */
+  onCommitNavigate?: (dRow: number, dCol: number) => void
 }
 
 const defaultFormat = (v: unknown): string => {
@@ -86,6 +106,7 @@ export const EditableCell = memo(
     cellError,
     resetKey,
     cellCascading,
+    onCommitNavigate,
   }: Props) {
     const [isEditing, setIsEditing] = useState(false)
     const [draftValue, setDraftValue] = useState<unknown>(initialValue)
@@ -107,19 +128,47 @@ export const EditableCell = memo(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [resetKey])
 
-    const enterEdit = useCallback(() => {
-      setIsEditing(true)
-      // Focus + select after the input mounts
-      requestAnimationFrame(() => {
-        const el = inputRef.current
-        if (el) {
-          el.focus()
-          if ('select' in el && typeof el.select === 'function') {
-            el.select()
-          }
+    // Step 3.5: enterEdit can be called with a prefill character.
+    //   - undefined: opened via dblclick / F2 / Enter — keep current
+    //     value, select-all so any next keystroke replaces it.
+    //   - any string: opened via type-to-replace — start the draft at
+    //     the typed character with the cursor at the end.
+    const enterEdit = useCallback(
+      (prefill?: string) => {
+        if (prefill !== undefined) {
+          setDraftValue(prefill)
         }
-      })
-    }, [])
+        setIsEditing(true)
+        requestAnimationFrame(() => {
+          const el = inputRef.current
+          if (!el) return
+          el.focus()
+          if (prefill === undefined) {
+            if ('select' in el && typeof el.select === 'function') {
+              el.select()
+            }
+          } else if (
+            'setSelectionRange' in el &&
+            typeof (el as HTMLInputElement).setSelectionRange === 'function'
+          ) {
+            const len = prefill.length
+            ;(el as HTMLInputElement).setSelectionRange(len, len)
+          }
+        })
+      },
+      [],
+    )
+
+    // Register/unregister the imperative edit handler so the parent's
+    // keyboard listener can request edit on the active cell without
+    // re-rendering this cell on every selection change.
+    useEffect(() => {
+      const k = `${rowId}:${columnId}`
+      editHandlers.set(k, enterEdit)
+      return () => {
+        if (editHandlers.get(k) === enterEdit) editHandlers.delete(k)
+      }
+    }, [rowId, columnId, enterEdit])
 
     const handleBlur = useCallback(() => {
       setIsEditing(false)
@@ -134,16 +183,21 @@ export const EditableCell = memo(
         if (e.key === 'Enter') {
           e.preventDefault()
           inputRef.current?.blur()
+          // Excel: Enter in edit mode commits + moves down.
+          onCommitNavigate?.(1, 0)
+        } else if (e.key === 'Tab') {
+          e.preventDefault()
+          inputRef.current?.blur()
+          // Tab moves right; Shift+Tab moves left.
+          onCommitNavigate?.(0, e.shiftKey ? -1 : 1)
         } else if (e.key === 'Escape') {
           e.preventDefault()
           setDraftValue(initialValue)
           setIsEditing(false)
           // Don't commit; isDirty stays as it was before this edit
         }
-        // Tab is left to native behaviour — the browser moves focus
-        // to the next focusable input, which is an adjacent cell.
       },
-      [initialValue]
+      [initialValue, onCommitNavigate]
     )
 
     if (isEditing) {
@@ -198,21 +252,14 @@ export const EditableCell = memo(
 
     return (
       <div
-        role="button"
-        tabIndex={0}
-        onClick={enterEdit}
-        onFocus={enterEdit}
-        onKeyDown={(e) => {
-          // F2 or Enter to enter edit mode when focused via Tab
-          if (e.key === 'Enter' || e.key === 'F2') {
-            e.preventDefault()
-            enterEdit()
-          }
-        }}
+        // Step 3.5: single-click is selection-only (handled by the
+        // wrapper above us). Double-click enters edit. The parent's
+        // global keydown drives F2 / Enter / type-to-replace based on
+        // the registered editHandlers entry above.
+        onDoubleClick={() => enterEdit()}
         title={cellError ?? (cellCascading && isDirty ? 'Will cascade to children' : undefined)}
         className={cn(
           'w-full h-full px-2 flex items-center text-[13px] cursor-cell',
-          'focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-inset',
           isDirty && !cellError && !cellCascading && 'bg-yellow-50',
           isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
           cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
@@ -232,7 +279,8 @@ export const EditableCell = memo(
     prev.onCommit === next.onCommit &&
     prev.cellError === next.cellError &&
     prev.resetKey === next.resetKey &&
-    prev.cellCascading === next.cellCascading
+    prev.cellCascading === next.cellCascading &&
+    prev.onCommitNavigate === next.onCommitNavigate
 )
 
 function shallowEquals(a: unknown, b: unknown): boolean {

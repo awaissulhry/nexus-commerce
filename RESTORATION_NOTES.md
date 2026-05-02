@@ -300,3 +300,37 @@ Kept:
 - `GET /api/amazon/products/debug-hierarchy`, `/products/list`, `/products/count`,
   `GET /api/amazon/products/:id/children`, `GET /api/amazon/products` (catalog import)
 
+
+---
+
+## Bulk-ops click behaviour change (Step 3.5)
+
+Date: 2026-05-02
+
+**Changed.** Single click on a cell in `/bulk-operations` no longer
+enters edit mode. Editing is now reached the way Excel, Sheets, and
+Shopify Admin do it:
+
+| Gesture / key | Behaviour |
+|---|---|
+| Single click | Selects the cell (blue ring, cell becomes the active end of the selection range) |
+| Shift+click | Extends the range from the current anchor |
+| Click + drag | Rectangle selection |
+| Double click | Enters edit mode |
+| Selected + Enter / F2 | Enters edit mode (existing value preserved, select-all so any keystroke replaces it) |
+| Selected + any printable key | Enters edit mode and replaces the cell value with that key |
+| Selected + Escape | Clears the selection |
+| Selected + arrow keys | Moves the active cell (Shift+arrow extends the range) |
+| Selected + Tab / Shift+Tab | Moves the active cell right / left |
+| Editing + Enter | Commits, moves selection down |
+| Editing + Tab / Shift+Tab | Commits, moves selection right / left |
+| Editing + Escape | Cancels the edit, selection remains |
+
+**Why.** The old single-click-to-edit pattern fought multi-cell
+selection (which we just shipped) and prevented the spreadsheet
+keyboard model — copy/paste, Tab navigation, type-to-replace, etc.
+
+**Anything to watch for.** Users who have built muscle memory around
+the old behaviour will need a moment to adjust. The status-bar pill
+now nudges them: `1 cell · Enter or type to edit`.
+
