@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { Card } from '@/components/ui/Card'
+import { Input } from '@/components/ui/Input'
 
 interface Props {
   product: any
@@ -27,41 +29,58 @@ export default function MasterDataTab({ product, onChange }: Props) {
     maxPrice: product.maxPrice ?? '',
   })
 
-  const update = (field: string, value: string) => {
+  const update = (field: keyof typeof data, value: string) => {
     setData((prev) => ({ ...prev, [field]: value }))
     onChange()
   }
 
   return (
-    <div className="space-y-6">
-      <Section
-        title="Identity"
-        subtitle="Core product information shared across all channels"
-      >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Master SKU" value={data.sku} onChange={(v) => update('sku', v)} mono />
-          <Field label="Product Name" value={data.name} onChange={(v) => update('name', v)} />
-          <Field label="Brand" value={data.brand} onChange={(v) => update('brand', v)} />
-          <Field
+    <div className="space-y-4">
+      <Card title="Identity" description="Core information shared across all channels">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
+          <Input
+            label="Master SKU"
+            value={data.sku}
+            mono
+            onChange={(e) => update('sku', e.target.value)}
+          />
+          <Input
+            label="Product Name"
+            value={data.name}
+            onChange={(e) => update('name', e.target.value)}
+          />
+          <Input
+            label="Brand"
+            value={data.brand}
+            onChange={(e) => update('brand', e.target.value)}
+          />
+          <Input
             label="Manufacturer"
             value={data.manufacturer}
-            onChange={(v) => update('manufacturer', v)}
+            onChange={(e) => update('manufacturer', e.target.value)}
           />
-          <Field label="UPC" value={data.upc} onChange={(v) => update('upc', v)} mono />
-          <Field label="EAN" value={data.ean} onChange={(v) => update('ean', v)} mono />
+          <Input
+            label="UPC"
+            value={data.upc}
+            mono
+            onChange={(e) => update('upc', e.target.value)}
+          />
+          <Input
+            label="EAN"
+            value={data.ean}
+            mono
+            onChange={(e) => update('ean', e.target.value)}
+          />
         </div>
-      </Section>
+      </Card>
 
-      <Section
-        title="Physical Attributes"
-        subtitle="Default dimensions — variants can override"
-      >
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Field
+      <Card title="Physical Attributes" description="Defaults for fulfillment fees and shipping. Variants can override.">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3">
+          <Input
             label="Weight"
-            value={String(data.weightValue ?? '')}
-            onChange={(v) => update('weightValue', v)}
             type="number"
+            value={String(data.weightValue ?? '')}
+            onChange={(e) => update('weightValue', e.target.value)}
           />
           <SelectField
             label="Unit"
@@ -76,24 +95,23 @@ export default function MasterDataTab({ product, onChange }: Props) {
           />
           <div />
           <div />
-
-          <Field
+          <Input
             label="Length"
+            type="number"
             value={String(data.dimLength ?? '')}
-            onChange={(v) => update('dimLength', v)}
-            type="number"
+            onChange={(e) => update('dimLength', e.target.value)}
           />
-          <Field
+          <Input
             label="Width"
+            type="number"
             value={String(data.dimWidth ?? '')}
-            onChange={(v) => update('dimWidth', v)}
-            type="number"
+            onChange={(e) => update('dimWidth', e.target.value)}
           />
-          <Field
+          <Input
             label="Height"
-            value={String(data.dimHeight ?? '')}
-            onChange={(v) => update('dimHeight', v)}
             type="number"
+            value={String(data.dimHeight ?? '')}
+            onChange={(e) => update('dimHeight', e.target.value)}
           />
           <SelectField
             label="Unit"
@@ -106,99 +124,40 @@ export default function MasterDataTab({ product, onChange }: Props) {
             ]}
           />
         </div>
-      </Section>
+      </Card>
 
-      <Section
-        title="Pricing Rules"
-        subtitle="Master pricing constraints applied across all channels"
-      >
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Field
+      <Card title="Pricing Rules" description="Constraints applied across all channels">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3">
+          <Input
             label="Cost Price"
-            value={String(data.costPrice ?? '')}
-            onChange={(v) => update('costPrice', v)}
             type="number"
             prefix="€"
+            value={String(data.costPrice ?? '')}
+            onChange={(e) => update('costPrice', e.target.value)}
           />
-          <Field
-            label="Min Margin %"
-            value={String(data.minMargin ?? '')}
-            onChange={(v) => update('minMargin', v)}
+          <Input
+            label="Min Margin"
             type="number"
             suffix="%"
+            value={String(data.minMargin ?? '')}
+            onChange={(e) => update('minMargin', e.target.value)}
           />
-          <Field
+          <Input
             label="Min Price"
+            type="number"
+            prefix="€"
             value={String(data.minPrice ?? '')}
-            onChange={(v) => update('minPrice', v)}
-            type="number"
-            prefix="€"
+            onChange={(e) => update('minPrice', e.target.value)}
           />
-          <Field
+          <Input
             label="Max Price"
-            value={String(data.maxPrice ?? '')}
-            onChange={(v) => update('maxPrice', v)}
             type="number"
             prefix="€"
+            value={String(data.maxPrice ?? '')}
+            onChange={(e) => update('maxPrice', e.target.value)}
           />
         </div>
-      </Section>
-    </div>
-  )
-}
-
-function Section({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string
-  subtitle?: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="bg-white border border-slate-200 rounded-lg p-6">
-      <h2 className="text-base font-semibold mb-1">{title}</h2>
-      {subtitle && <p className="text-xs text-slate-500 mb-4">{subtitle}</p>}
-      {children}
-    </div>
-  )
-}
-
-interface FieldProps {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  type?: string
-  mono?: boolean
-  prefix?: string
-  suffix?: string
-}
-
-function Field({ label, value, onChange, type = 'text', mono, prefix, suffix }: FieldProps) {
-  return (
-    <div>
-      <label className="block text-xs font-medium text-slate-700 mb-1">{label}</label>
-      <div className="relative">
-        {prefix && (
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">
-            {prefix}
-          </span>
-        )}
-        <input
-          type={type}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className={`w-full border border-slate-200 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-            prefix ? 'pl-7' : ''
-          } ${suffix ? 'pr-8' : ''} ${mono ? 'font-mono' : ''}`}
-        />
-        {suffix && (
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">
-            {suffix}
-          </span>
-        )}
-      </div>
+      </Card>
     </div>
   )
 }
@@ -215,12 +174,12 @@ function SelectField({
   options: Array<{ value: string; label: string }>
 }) {
   return (
-    <div>
-      <label className="block text-xs font-medium text-slate-700 mb-1">{label}</label>
+    <div className="space-y-1">
+      <label className="text-[12px] font-medium text-slate-700">{label}</label>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-slate-200 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full h-8 rounded-md border border-slate-200 hover:border-slate-300 bg-white text-[13px] text-slate-900 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>

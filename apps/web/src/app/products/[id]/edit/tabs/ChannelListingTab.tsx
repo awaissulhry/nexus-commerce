@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
-import {
-  Sparkles,
-  ArrowDownToLine,
-  ArrowUpFromLine,
-} from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Sparkles, ArrowDownToLine, ArrowUpFromLine, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button } from '@/components/ui/Button'
+import { Card } from '@/components/ui/Card'
+import { Input } from '@/components/ui/Input'
+import { Badge } from '@/components/ui/Badge'
+import { cn } from '@/lib/utils'
 
 interface MarketInfo {
   code: string
@@ -46,17 +47,16 @@ interface Props {
   onSave: (updated: Listing) => void
 }
 
-const CHANNEL_LIMITS: Record<
-  string,
-  {
-    title: number
-    bulletCount?: number
-    bulletLength?: number
-    keywords?: number
-    images?: number
-    subtitle?: number
-  }
-> = {
+interface ChannelLimits {
+  title: number
+  bulletCount?: number
+  bulletLength?: number
+  keywords?: number
+  images?: number
+  subtitle?: number
+}
+
+const CHANNEL_LIMITS: Record<string, ChannelLimits> = {
   AMAZON: { title: 200, bulletCount: 5, bulletLength: 500, keywords: 250, images: 9 },
   EBAY: { title: 80, subtitle: 55, images: 12 },
   SHOPIFY: { title: 255, images: 250 },
@@ -64,9 +64,43 @@ const CHANNEL_LIMITS: Record<
   ETSY: { title: 140, images: 10 },
 }
 
-const COUNTRY_FLAGS: Record<string, string> = {
-  IT: '🇮🇹', DE: '🇩🇪', FR: '🇫🇷', ES: '🇪🇸', UK: '🇬🇧',
-  NL: '🇳🇱', SE: '🇸🇪', PL: '🇵🇱', US: '🇺🇸', GLOBAL: '🌍',
+interface FormState {
+  title: string
+  description: string
+  bulletPoints: string[]
+  searchKeywords: string
+  price: string
+  quantity: number
+  isPublished: boolean
+  listingStatus: string
+}
+
+interface ValidationErrors {
+  title?: string
+  bulletPoints?: string
+  description?: string
+  price?: string
+  quantity?: string
+}
+
+function validate(data: FormState, channel: string, limits: ChannelLimits): ValidationErrors {
+  const errors: ValidationErrors = {}
+  if (!data.title.trim()) {
+    errors.title = 'Title is required'
+  } else if (data.title.length > limits.title) {
+    errors.title = `Title exceeds ${limits.title} character limit`
+  }
+  if (channel === 'AMAZON' && limits.bulletLength) {
+    const tooLong = data.bulletPoints.find((b) => b.length > limits.bulletLength!)
+    if (tooLong) errors.bulletPoints = `Bullets cannot exceed ${limits.bulletLength} characters`
+  }
+  if (data.price === '' || Number(data.price) <= 0) {
+    errors.price = 'A valid price is required'
+  }
+  if (Number.isNaN(data.quantity) || data.quantity < 0) {
+    errors.quantity = 'Stock cannot be negative'
+  }
+  return errors
 }
 
 export default function ChannelListingTab({
@@ -81,32 +115,36 @@ export default function ChannelListingTab({
   const limits = CHANNEL_LIMITS[channel] ?? { title: 200 }
   const isNew = !listing
 
-  const initialBullets = (() => {
+  const initialBullets = useMemo(() => {
     const arr = listing?.bulletPointsOverride ?? []
     const padded = [...arr]
     while (padded.length < (limits.bulletCount ?? 5)) padded.push('')
     return padded.slice(0, limits.bulletCount ?? 5)
-  })()
+  }, [listing, limits.bulletCount])
 
-  const [data, setData] = useState({
+  const [data, setData] = useState<FormState>({
     title: listing?.title ?? product.name ?? '',
     description: listing?.description ?? '',
     bulletPoints: initialBullets,
-    searchKeywords: '', // future: pull from platformAttributes
+    searchKeywords: '',
     price: listing?.price != null ? String(listing.price) : String(product.basePrice ?? ''),
-    quantity:
-      listing?.quantity != null ? listing.quantity : Number(product.totalStock ?? 0),
+    quantity: listing?.quantity != null ? listing.quantity : Number(product.totalStock ?? 0),
     isPublished: !!listing?.isPublished,
     listingStatus: listing?.listingStatus ?? 'DRAFT',
   })
   const [saving, setSaving] = useState(false)
-  const [statusMsg, setStatusMsg] = useState<string | null>(null)
+  const [pulling, setPulling] = useState(false)
+  const [statusMsg, setStatusMsg] = useState<{ kind: 'info' | 'error' | 'success'; text: string } | null>(null)
+  const [touched, setTouched] = useState(false)
 
-  const update = <K extends keyof typeof data>(field: K, value: (typeof data)[K]) => {
+  const errors = validate(data, channel, limits)
+  const hasErrors = Object.keys(errors).length > 0
+
+  const update = <K extends keyof FormState>(field: K, value: FormState[K]) => {
     setData((prev) => ({ ...prev, [field]: value }))
+    setTouched(true)
     onChange()
   }
-
   const updateBullet = (idx: number, value: string) => {
     const next = [...data.bulletPoints]
     next[idx] = value
@@ -115,15 +153,15 @@ export default function ChannelListingTab({
 
   async function handlePullFromChannel() {
     if (channel !== 'AMAZON') {
-      setStatusMsg(`Pull not implemented for ${channel} yet`)
+      setStatusMsg({ kind: 'info', text: `Pull from ${channel} ships in Phase 4.` })
       return
     }
     if (!product.amazonAsin) {
-      setStatusMsg('No ASIN on this product — cannot pull from Amazon.')
+      setStatusMsg({ kind: 'error', text: 'No ASIN on this product — cannot pull from Amazon.' })
       return
     }
+    setPulling(true)
     try {
-      setStatusMsg('Pulling from Amazon…')
       const res = await fetch(
         `${getBackendUrl()}/api/amazon/test-catalog-api?asin=${product.amazonAsin}`
       )
@@ -131,22 +169,29 @@ export default function ChannelListingTab({
       const summary = result?.data?.summaries?.[0] ?? result?.summaries?.[0]
       if (summary?.itemName) {
         update('title', summary.itemName)
-        setStatusMsg('Pulled latest data from Amazon ✓')
+        setStatusMsg({ kind: 'success', text: 'Pulled latest title from Amazon.' })
       } else if (result?.error) {
-        setStatusMsg(`Amazon error: ${result.error}`)
+        setStatusMsg({ kind: 'error', text: `Amazon: ${result.error}` })
       } else {
-        setStatusMsg('Pull returned no data.')
+        setStatusMsg({ kind: 'info', text: 'Amazon returned no usable data.' })
       }
     } catch (e) {
-      setStatusMsg(`Pull failed: ${(e as Error).message}`)
+      setStatusMsg({ kind: 'error', text: `Pull failed: ${(e as Error).message}` })
+    } finally {
+      setPulling(false)
     }
   }
 
   function handleAITranslate() {
-    setStatusMsg('AI translation coming soon — Phase 4.')
+    setStatusMsg({ kind: 'info', text: 'AI translation ships in Phase 4.' })
   }
 
   async function handleSave() {
+    if (hasErrors) {
+      setTouched(true)
+      setStatusMsg({ kind: 'error', text: 'Fix the errors above before saving.' })
+      return
+    }
     setSaving(true)
     setStatusMsg(null)
     try {
@@ -173,222 +218,207 @@ export default function ChannelListingTab({
       }
       const updated = await res.json()
       onSave(updated)
-      setStatusMsg('Saved ✓')
+      setStatusMsg({ kind: 'success', text: 'Saved.' })
     } catch (e) {
-      setStatusMsg(`Save failed: ${(e as Error).message}`)
+      setStatusMsg({ kind: 'error', text: `Save failed: ${(e as Error).message}` })
     } finally {
       setSaving(false)
     }
   }
 
   function handlePushPlaceholder() {
-    setStatusMsg(`Push to ${channel} coming in Phase 4.`)
+    setStatusMsg({ kind: 'info', text: `Push to ${channel} ships in Phase 4.` })
   }
 
-  const flag = COUNTRY_FLAGS[marketInfo.code] ?? '🌍'
   const margin =
     product.costPrice && Number(data.price) > 0
       ? ((1 - Number(product.costPrice) / Number(data.price)) * 100).toFixed(1)
       : null
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* ── Status bar ─────────────────────────────────────────── */}
-      <div className="bg-white border border-slate-200 rounded-lg p-4">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-4">
-            <div className="text-2xl">{flag}</div>
-            <div>
-              <div className="font-medium">{marketInfo.name}</div>
-              <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+      <Card noPadding>
+        <div className="px-4 py-3 flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <Badge mono variant={isNew ? 'warning' : 'info'}>
+              {marketInfo.code}
+            </Badge>
+            <div className="min-w-0">
+              <div className="text-[13px] font-semibold text-slate-900 truncate">
+                {marketInfo.name}
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
                 {isNew ? (
-                  <span className="text-amber-600">⚠ Not yet listed on this marketplace</span>
+                  <span>Not yet listed on this marketplace</span>
                 ) : (
                   <>
                     <span>
-                      Status: <span className="font-medium">{data.listingStatus}</span>
+                      Status: <span className="font-medium text-slate-700">{data.listingStatus}</span>
                     </span>
                     {listing?.externalListingId && (
                       <>
                         <span>·</span>
-                        <span>
-                          ID: <span className="font-mono">{listing.externalListingId}</span>
-                        </span>
+                        <span className="font-mono">{listing.externalListingId}</span>
                       </>
                     )}
-                    <span>·</span>
-                    <span>{marketInfo.currency}</span>
-                    <span>·</span>
-                    <span>{marketInfo.language.toUpperCase()}</span>
                   </>
                 )}
+                <span>·</span>
+                <span>{marketInfo.currency}</span>
+                <span>·</span>
+                <span className="uppercase tracking-wide">{marketInfo.language}</span>
               </div>
             </div>
           </div>
 
-          <div className="flex gap-2 flex-wrap">
-            <button
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={pulling}
+              icon={<ArrowDownToLine className="w-3.5 h-3.5" />}
               onClick={handlePullFromChannel}
-              className="px-3 py-1.5 text-xs border border-slate-200 rounded-md hover:bg-slate-50 flex items-center gap-1"
             >
-              <ArrowDownToLine className="w-3.5 h-3.5" /> Pull from {channel}
-            </button>
-            <button
+              Pull
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Sparkles className="w-3.5 h-3.5" />}
               onClick={handleAITranslate}
-              className="px-3 py-1.5 text-xs bg-purple-50 border border-purple-200 text-purple-700 rounded-md hover:bg-purple-100 flex items-center gap-1"
             >
-              <Sparkles className="w-3.5 h-3.5" /> AI Translate
-            </button>
-            <button
+              Translate
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              loading={saving}
+              disabled={hasErrors}
               onClick={handleSave}
-              disabled={saving}
-              className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
             >
-              {saving ? 'Saving…' : 'Save Draft'}
-            </button>
-            <button
+              Save Draft
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<ArrowUpFromLine className="w-3.5 h-3.5" />}
               onClick={handlePushPlaceholder}
-              className="px-3 py-1.5 text-xs bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-1"
             >
-              <ArrowUpFromLine className="w-3.5 h-3.5" /> Push to {channel}
-            </button>
+              Push
+            </Button>
           </div>
         </div>
         {statusMsg && (
-          <div className="mt-3 text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded px-3 py-2">
-            {statusMsg}
+          <div
+            className={cn(
+              'border-t px-4 py-2 text-[12px] flex items-center gap-2',
+              statusMsg.kind === 'success' && 'border-green-200 bg-green-50 text-green-700',
+              statusMsg.kind === 'error' && 'border-red-200 bg-red-50 text-red-700',
+              statusMsg.kind === 'info' && 'border-slate-200 bg-slate-50 text-slate-700'
+            )}
+          >
+            {statusMsg.kind === 'error' && <AlertTriangle className="w-3.5 h-3.5" />}
+            {statusMsg.text}
           </div>
         )}
-      </div>
+      </Card>
 
       {/* ── Title ──────────────────────────────────────────────── */}
-      <div className="bg-white border border-slate-200 rounded-lg p-6">
-        <div className="flex items-center justify-between mb-2">
-          <label className="text-sm font-medium">Title</label>
-          <span
-            className={`text-xs ${
-              data.title.length > limits.title ? 'text-red-600' : 'text-slate-500'
-            }`}
-          >
-            {data.title.length} / {limits.title}
-          </span>
-        </div>
-        <textarea
+      <Card title="Title">
+        <Input
           value={data.title}
           onChange={(e) => update('title', e.target.value)}
-          rows={2}
-          className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder={`Enter ${marketInfo.language ?? 'product'} title…`}
+          charLimit={limits.title}
+          placeholder={`Enter ${marketInfo.language?.toUpperCase() ?? 'product'} title`}
+          error={touched ? errors.title : undefined}
         />
-      </div>
+      </Card>
 
       {/* ── Bullets (Amazon only) ─────────────────────────────── */}
       {channel === 'AMAZON' && limits.bulletCount && (
-        <div className="bg-white border border-slate-200 rounded-lg p-6">
-          <h3 className="text-sm font-medium mb-3">Bullet Points</h3>
-          <div className="space-y-2">
+        <Card title="Bullet Points" description={`Up to ${limits.bulletCount} bullets, ${limits.bulletLength} chars each`}>
+          <div className="space-y-3">
             {data.bulletPoints.map((bullet, idx) => (
-              <div key={idx}>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs text-slate-600">Bullet {idx + 1}</label>
-                  <span
-                    className={`text-[10px] ${
-                      bullet.length > (limits.bulletLength ?? 500)
-                        ? 'text-red-600'
-                        : 'text-slate-400'
-                    }`}
-                  >
-                    {bullet.length} / {limits.bulletLength}
-                  </span>
-                </div>
-                <input
-                  type="text"
-                  value={bullet}
-                  onChange={(e) => updateBullet(idx, e.target.value)}
-                  className="w-full border border-slate-200 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder={`Bullet point ${idx + 1}…`}
-                />
-              </div>
+              <Input
+                key={idx}
+                label={`Bullet ${idx + 1}`}
+                value={bullet}
+                charLimit={limits.bulletLength}
+                onChange={(e) => updateBullet(idx, e.target.value)}
+                placeholder={`Bullet point ${idx + 1}`}
+              />
             ))}
+            {touched && errors.bulletPoints && (
+              <p className="text-[11px] text-red-600">{errors.bulletPoints}</p>
+            )}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* ── Description ────────────────────────────────────────── */}
-      <div className="bg-white border border-slate-200 rounded-lg p-6">
-        <label className="block text-sm font-medium mb-2">Description</label>
+      <Card title="Description">
         <textarea
           value={data.description}
           onChange={(e) => update('description', e.target.value)}
           rows={6}
-          className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-          placeholder={`Enter ${marketInfo.language ?? 'product'} description (HTML supported)…`}
+          className="w-full border border-slate-200 hover:border-slate-300 rounded-md px-3 py-2 text-[13px] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors font-mono"
+          placeholder={`Enter ${marketInfo.language?.toUpperCase() ?? 'product'} description (HTML supported)`}
         />
-      </div>
+      </Card>
 
       {/* ── Pricing & Stock ──────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white border border-slate-200 rounded-lg p-6">
-          <h3 className="text-sm font-medium mb-3">Pricing</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card title="Pricing">
           <div className="space-y-3">
-            <div>
-              <label className="block text-xs text-slate-600 mb-1">
-                Price ({marketInfo.currency})
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={data.price}
-                onChange={(e) => update('price', e.target.value)}
-                className="w-full border border-slate-200 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+            <Input
+              label={`Price (${marketInfo.currency})`}
+              type="number"
+              step="0.01"
+              value={data.price}
+              onChange={(e) => update('price', e.target.value)}
+              error={touched ? errors.price : undefined}
+            />
             {margin != null && (
-              <div className="text-xs text-slate-600 bg-slate-50 p-2 rounded">
-                Margin: <strong>{margin}%</strong> from cost {marketInfo.currency}
-                {Number(product.costPrice).toFixed(2)}
+              <div className="text-[12px] text-slate-600 bg-slate-50 border border-slate-200 px-3 py-2 rounded">
+                Margin <span className="font-semibold tabular-nums">{margin}%</span> from cost{' '}
+                <span className="tabular-nums">
+                  {marketInfo.currency} {Number(product.costPrice).toFixed(2)}
+                </span>
               </div>
             )}
           </div>
-        </div>
+        </Card>
 
-        <div className="bg-white border border-slate-200 rounded-lg p-6">
-          <h3 className="text-sm font-medium mb-3">Inventory</h3>
-          <div>
-            <label className="block text-xs text-slate-600 mb-1">Stock</label>
-            <input
-              type="number"
-              value={data.quantity}
-              onChange={(e) => update('quantity', Number(e.target.value))}
-              className="w-full border border-slate-200 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </div>
+        <Card title="Inventory">
+          <Input
+            label="Stock"
+            type="number"
+            value={String(data.quantity)}
+            onChange={(e) => update('quantity', Number(e.target.value))}
+            error={touched ? errors.quantity : undefined}
+          />
+        </Card>
       </div>
 
       {/* ── Search Keywords (Amazon only) ────────────────────── */}
       {channel === 'AMAZON' && limits.keywords && (
-        <div className="bg-white border border-slate-200 rounded-lg p-6">
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-sm font-medium">Search Keywords</label>
-            <span
-              className={`text-xs ${
-                data.searchKeywords.length > limits.keywords
-                  ? 'text-red-600'
-                  : 'text-slate-500'
-              }`}
-            >
-              {data.searchKeywords.length} / {limits.keywords}
-            </span>
-          </div>
+        <Card
+          title="Search Keywords"
+          description="Comma-separated. Persistence in Phase 4 once platformAttributes JSON shape is locked."
+        >
           <textarea
             value={data.searchKeywords}
             onChange={(e) => update('searchKeywords', e.target.value)}
             rows={3}
-            className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Comma-separated keywords (saved in Phase 4 once platformAttributes JSON support lands)…"
+            maxLength={limits.keywords + 50}
+            className="w-full border border-slate-200 hover:border-slate-300 rounded-md px-3 py-2 text-[13px] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+            placeholder="motorcycle jacket, summer, mesh, breathable"
           />
-        </div>
+          <div className="text-[10px] text-slate-500 text-right mt-1 tabular-nums">
+            {data.searchKeywords.length} / {limits.keywords}
+          </div>
+        </Card>
       )}
     </div>
   )

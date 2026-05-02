@@ -1,6 +1,9 @@
 'use client'
 
 import { Plus, Edit2, Trash2 } from 'lucide-react'
+import { Card } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
 
 interface Props {
   parent: any
@@ -9,8 +12,6 @@ interface Props {
 }
 
 export default function VariationsTab({ parent, childrenList }: Props) {
-  // Resolve axes: prefer the explicit array, fall back to the slash/" / "
-  // separated variationTheme string.
   const variationAxes: string[] =
     Array.isArray(parent.variationAxes) && parent.variationAxes.length > 0
       ? parent.variationAxes
@@ -29,65 +30,65 @@ export default function VariationsTab({ parent, childrenList }: Props) {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white border border-slate-200 rounded-lg p-6">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <h2 className="text-base font-semibold mb-1">Variation Configuration</h2>
-            <p className="text-xs text-slate-500">
-              {childrenList.length} variation{childrenList.length === 1 ? '' : 's'}
-              {variationAxes.length > 0
-                ? ` across ${variationAxes.length} ${variationAxes.length === 1 ? 'axis' : 'axes'}`
-                : ''}
-            </p>
-          </div>
-          <button className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">
-            <Plus className="w-3.5 h-3.5 inline mr-1" /> Add Variation
-          </button>
-        </div>
-
+    <div className="space-y-4">
+      <Card
+        title="Variation Configuration"
+        description={`${childrenList.length} variation${
+          childrenList.length === 1 ? '' : 's'
+        }${
+          variationAxes.length > 0
+            ? ` across ${variationAxes.length} ${
+                variationAxes.length === 1 ? 'axis' : 'axes'
+              }`
+            : ''
+        }`}
+        action={
+          <Button variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5" />}>
+            Add Variation
+          </Button>
+        }
+      >
         {variationAxes.length > 0 ? (
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-1.5 flex-wrap">
             {variationAxes.map((axis) => (
-              <span
-                key={axis}
-                className="px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded text-xs"
-              >
+              <Badge key={axis} variant="info">
                 {axis}
-              </span>
+              </Badge>
             ))}
           </div>
         ) : (
-          <p className="text-xs text-slate-400 italic">
-            No variation axes defined yet. Set them via PIM auto-detect or manually.
+          <p className="text-[11px] text-slate-400 italic">
+            No variation axes defined. Set them via PIM auto-detect or manually.
           </p>
         )}
-      </div>
+      </Card>
 
-      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+      <Card noPadding>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-[13px]">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-700">SKU</th>
+                <th className="px-4 py-2 text-left text-[11px] font-semibold text-slate-700 uppercase tracking-wide">
+                  SKU
+                </th>
                 {variationAxes.map((axis) => (
                   <th
                     key={axis}
-                    className="px-4 py-2.5 text-left text-xs font-medium text-slate-700"
+                    className="px-4 py-2 text-left text-[11px] font-semibold text-slate-700 uppercase tracking-wide"
                   >
                     {axis}
                   </th>
                 ))}
-                <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-700">
+                <th className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700 uppercase tracking-wide">
                   Price
                 </th>
-                <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-700">
+                <th className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700 uppercase tracking-wide">
                   Stock
                 </th>
-                <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-700">
+                <th className="px-4 py-2 text-left text-[11px] font-semibold text-slate-700 uppercase tracking-wide">
                   ASIN
                 </th>
-                <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-700">
+                <th className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700 uppercase tracking-wide">
                   Actions
                 </th>
               </tr>
@@ -97,7 +98,7 @@ export default function VariationsTab({ parent, childrenList }: Props) {
                 <tr>
                   <td
                     colSpan={5 + variationAxes.length}
-                    className="px-4 py-6 text-center text-xs text-slate-400"
+                    className="px-4 py-6 text-center text-[12px] text-slate-400"
                   >
                     No variations linked to this product.
                   </td>
@@ -105,36 +106,43 @@ export default function VariationsTab({ parent, childrenList }: Props) {
               )}
               {childrenList.map((child) => (
                 <tr key={child.id} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="px-4 py-2.5 font-mono text-xs">{child.sku}</td>
+                  <td className="px-4 py-2 font-mono text-[12px] text-slate-900">
+                    {child.sku}
+                  </td>
                   {variationAxes.map((axis) => {
                     const value = getAttr(child, axis)
                     return (
-                      <td key={axis} className="px-4 py-2.5 text-xs">
+                      <td key={axis} className="px-4 py-2 text-[12px] text-slate-700">
                         {value ?? <span className="text-slate-400">—</span>}
                       </td>
                     )
                   })}
-                  <td className="px-4 py-2.5 tabular-nums">€{Number(child.basePrice ?? child.price ?? 0).toFixed(2)}</td>
-                  <td className="px-4 py-2.5">
+                  <td className="px-4 py-2 text-right tabular-nums text-slate-900">
+                    €{Number(child.basePrice ?? child.price ?? 0).toFixed(2)}
+                  </td>
+                  <td className="px-4 py-2 text-right tabular-nums">
                     <span
                       className={
                         Number(child.totalStock ?? child.stock ?? 0) > 0
-                          ? 'text-slate-900 tabular-nums'
-                          : 'text-red-600 tabular-nums'
+                          ? 'text-slate-900'
+                          : 'text-red-600'
                       }
                     >
                       {child.totalStock ?? child.stock ?? 0}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 font-mono text-xs">
+                  <td className="px-4 py-2 font-mono text-[12px] text-slate-700">
                     {child.amazonAsin ?? <span className="text-slate-400">—</span>}
                   </td>
-                  <td className="px-4 py-2.5 text-right">
-                    <button className="p-1 hover:bg-slate-100 rounded text-slate-600" title="Edit">
+                  <td className="px-4 py-2 text-right">
+                    <button
+                      className="p-1 rounded hover:bg-slate-200 text-slate-600 transition-colors"
+                      title="Edit"
+                    >
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      className="p-1 hover:bg-slate-100 rounded text-red-600 ml-1"
+                      className="p-1 rounded hover:bg-slate-200 text-red-600 ml-1 transition-colors"
                       title="Unlink from master"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -145,7 +153,7 @@ export default function VariationsTab({ parent, childrenList }: Props) {
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
     </div>
   )
 }
