@@ -466,10 +466,21 @@ function SkuCell({
     )
   }
 
+  // For child rows in hierarchy mode, the variation pairs (Size/Color
+  // etc.) sit adjacent to the SKU so the SKU truncates first and the
+  // badges keep their natural width. Capped at 3 visible; any extras
+  // collapse into a +N pill whose title tooltip lists them all.
+  const variationPairs =
+    hier && hier.level > 0 && hier.variations
+      ? Object.entries(hier.variations)
+      : []
+  const visibleVariations = variationPairs.slice(0, 3)
+  const hiddenVariations = variationPairs.slice(3)
+
   return (
     <div
-      className="flex items-center gap-1 h-full"
-      style={{ paddingLeft: 8 + indent }}
+      className="flex items-center gap-1.5 h-full text-[13px]"
+      style={{ paddingLeft: indent + 12 }}
     >
       {isParent ? (
         <button
@@ -478,7 +489,7 @@ function SkuCell({
             e.stopPropagation()
             hierarchyCtxRef.current.onToggle(row.id ?? '')
           }}
-          className="w-4 h-4 flex items-center justify-center rounded hover:bg-slate-200 text-slate-500 hover:text-slate-900 flex-shrink-0"
+          className="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-200 text-slate-500 hover:text-slate-900 flex-shrink-0"
           title={hier?.isExpanded ? 'Collapse children' : 'Expand children'}
         >
           {hier?.isExpanded ? (
@@ -488,11 +499,11 @@ function SkuCell({
           )}
         </button>
       ) : hier && hier.level > 0 ? (
-        <span className="w-4 flex-shrink-0" />
+        <span className="w-5 flex-shrink-0" />
       ) : null}
       <span
         className={cn(
-          'font-mono text-[12px] truncate',
+          'font-mono text-[12px] truncate min-w-0',
           isParent ? 'text-slate-900 font-semibold' : 'text-slate-700'
         )}
       >
@@ -503,16 +514,26 @@ function SkuCell({
           {hier?.childCount}
         </Badge>
       )}
-      {hier && hier.level > 0 && hier.variations && Object.keys(hier.variations).length > 0 && (
-        <div className="ml-auto flex flex-wrap gap-1 max-w-[60%] justify-end overflow-hidden">
-          {Object.entries(hier.variations)
-            .slice(0, 3)
-            .map(([k, v]) => (
-              <Badge key={k} variant="info" size="sm">
-                <span className="opacity-70">{k}:</span>
-                <span className="ml-1">{v}</span>
-              </Badge>
-            ))}
+      {visibleVariations.length > 0 && (
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {visibleVariations.map(([k, v]) => (
+            <span
+              key={k}
+              className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-medium whitespace-nowrap"
+            >
+              {k}: {v}
+            </span>
+          ))}
+          {hiddenVariations.length > 0 && (
+            <span
+              className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-medium cursor-help whitespace-nowrap"
+              title={hiddenVariations
+                .map(([k, v]) => `${k}: ${v}`)
+                .join(', ')}
+            >
+              +{hiddenVariations.length}
+            </span>
+          )}
         </div>
       )}
     </div>
