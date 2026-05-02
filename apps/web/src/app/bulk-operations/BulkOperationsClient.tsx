@@ -88,6 +88,7 @@ export interface BulkProduct {
   variantAttributes: unknown
   updatedAt: string
   productType?: string | null
+  categoryAttributes?: Record<string, unknown> | null
   buyBoxPrice?: number | null
   competitorPrice?: number | null
   parentAsin?: string | null
@@ -291,6 +292,27 @@ function channelAccessorFn(field: FieldDef) {
   }
 }
 
+/** For category-attribute fields (attr_armorType, attr_dotCertification…),
+ *  the value lives in row.categoryAttributes[stripped] (jsonb). */
+function categoryAttrAccessorFn(field: FieldDef) {
+  const stripped = field.id.replace(/^attr_/, '')
+  return (row: BulkProduct) => {
+    const ca = row.categoryAttributes as Record<string, unknown> | null | undefined
+    if (!ca) return null
+    return ca[stripped] ?? null
+  }
+}
+
+/** Whether this product can carry the field's category attribute.
+ *  attr_* fields are productType-specific — e.g. attr_dotCertification
+ *  only applies to HELMET. For everything else this is true. */
+function fieldAppliesToProduct(field: FieldDef, row: BulkProduct): boolean {
+  if (!field.productTypes || field.productTypes.length === 0) return true
+  const pt = row.productType ?? null
+  if (!pt) return false
+  return field.productTypes.includes(pt)
+}
+
 function buildColumnFromField(field: FieldDef): ColumnDef<BulkProduct> {
   const size = field.width ?? 120
   // Stash the FieldDef on meta so the header row can reach helpText
@@ -298,6 +320,7 @@ function buildColumnFromField(field: FieldDef): ColumnDef<BulkProduct> {
   const meta = { fieldDef: field }
 
   const isChannelField = !!field.channel
+  const isCategoryAttrField = field.id.startsWith('attr_')
 
   // ── SKU column gets hierarchy-aware rendering in hierarchy mode ──
   if (field.id === 'sku') {
@@ -312,9 +335,12 @@ function buildColumnFromField(field: FieldDef): ColumnDef<BulkProduct> {
   }
 
   // For channel-scoped fields, use accessorFn → row._channelListing.<stripped>.
+  // For category-attr fields, use accessorFn → row.categoryAttributes[stripped].
   // For regular Product fields, use accessorKey → row[field.id].
   const accessor = isChannelField
     ? { accessorFn: channelAccessorFn(field) }
+    : isCategoryAttrField
+    ? { accessorFn: categoryAttrAccessorFn(field) }
     : { accessorKey: field.id as string }
 
   if (field.editable) {
@@ -334,6 +360,28 @@ function buildColumnFromField(field: FieldDef): ColumnDef<BulkProduct> {
             return (
               <span className="px-2 text-[11px] italic text-amber-600 truncate">
                 Select marketplace
+              </span>
+            )
+          }
+          return editRenderer(ctx)
+        },
+      } as ColumnDef<BulkProduct>
+    }
+    // For category-attribute fields, gate on productType. Products of
+    // a different type (or no type) get a non-editable "—" cell so the
+    // column can stay visible for mixed grids without surprising edits.
+    if (isCategoryAttrField) {
+      return {
+        id: field.id,
+        ...accessor,
+        header: field.label,
+        size,
+        meta,
+        cell: (ctx) => {
+          if (!fieldAppliesToProduct(field, ctx.row.original)) {
+            return (
+              <span className="px-2 text-[12px] text-slate-300 truncate">
+                —
               </span>
             )
           }
@@ -837,6 +885,14 @@ export default function BulkOperationsClient() {
                   }
                 }
                 ;((product as any)._channelListing as Record<string, unknown>)[stripped] = c.value
+              } else if (c.field.startsWith('attr_')) {
+                // Category-attribute field — merge into categoryAttributes
+                // mirroring the backend's atomic jsonb || merge.
+                const stripped = c.field.replace(/^attr_/, '')
+                if (!product.categoryAttributes) {
+                  product.categoryAttributes = {}
+                }
+                ;(product.categoryAttributes as Record<string, unknown>)[stripped] = c.value
               } else {
                 ;(product as unknown as Record<string, unknown>)[c.field] = c.value
               }
