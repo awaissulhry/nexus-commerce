@@ -5,6 +5,7 @@ const SETTINGS_TABS = [
   { label: 'Notifications', href: '/settings/notifications', icon: '🔔' },
   { label: 'API Keys', href: '/settings/api-keys', icon: '🔑' },
   { label: 'Profile', href: '/settings/profile', icon: '👤' },
+  { label: 'Terminology', href: '/settings/terminology', icon: '🌐' },
 ]
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {

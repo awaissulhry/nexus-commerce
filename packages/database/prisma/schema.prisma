@@ -684,6 +684,27 @@ model ProductImage {
 // apps/api/src/routes/images.ts — were Express dead code never
 // registered with the Fastify app. Use ProductImage instead.)
 
+// P0 #27: Per-brand / per-marketplace terminology glossary fed into
+// the AI listing-content generator. `brand = null` rows apply to
+// every brand in the marketplace; `brand = "X"` rows narrow to brand X.
+// `avoid` is the list of words the model keeps producing that the
+// human seller doesn't want (Giubbotto vs Giacca for motorcycle
+// jackets in IT, etc.).
+model TerminologyPreference {
+  id          String   @id @default(cuid())
+  brand       String?
+  marketplace String
+  language    String
+  preferred   String
+  avoid       String[] @default([])
+  context     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([brand, marketplace])
+  @@index([marketplace])
+}
+
 model MarketplaceSync {
   id             String   @id @default(cuid())
   product        Product  @relation(fields: [productId], references: [id])

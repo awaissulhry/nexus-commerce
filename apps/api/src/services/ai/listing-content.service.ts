@@ -48,6 +48,12 @@ export interface ProductContext {
   categoryAttributes: unknown
 }
 
+export interface TerminologyEntry {
+  preferred: string
+  avoid: string[]
+  context: string | null
+}
+
 export interface GenerationParams {
   product: ProductContext
   marketplace: string
@@ -55,6 +61,9 @@ export interface GenerationParams {
   /** 0–4. Higher values nudge temperature so regenerations yield
    *  visibly different copy. */
   variant?: number
+  /** Per-brand / per-marketplace terminology to inject into every
+   *  prompt. Fetched by the route from TerminologyPreference. */
+  terminology?: TerminologyEntry[]
 }
 
 export interface TitleResult {
@@ -163,6 +172,26 @@ export class ListingContentService {
 
   // ── Prompt builders ────────────────────────────────────────────
 
+  /**
+   * P0 #27: brand terminology block. Returns a "STRICTLY FOLLOW"
+   * preferences section if any preferences are configured, or an
+   * empty string if none. Goes into every prompt before the JSON
+   * return contract.
+   */
+  private terminologyBlock(entries: TerminologyEntry[] | undefined): string {
+    if (!entries || entries.length === 0) return ''
+    const lines = entries.map((e) => {
+      const ctx = e.context ? ` (${e.context})` : ''
+      if (!e.avoid || e.avoid.length === 0) {
+        return `- Use "${e.preferred}"${ctx}.`
+      }
+      return `- Use "${e.preferred}" instead of: ${e.avoid
+        .map((a) => `"${a}"`)
+        .join(', ')}${ctx}.`
+    })
+    return `\n\nTerminology preferences (STRICTLY FOLLOW — do not substitute synonyms):\n${lines.join('\n')}`
+  }
+
   private contextBlock(product: ProductContext): string {
     const lines: string[] = []
     lines.push(`- Name: ${product.name}`)
@@ -222,7 +251,7 @@ Requirements:
 - Add variation details (size, colour, material) at the end if applicable
 - Natural language — no keyword stuffing, no SHOUTING CAPS, no emojis
 - Optimised for ${params.marketplace} customer search behaviour
-- Write in ${language}
+- Write in ${language}${this.terminologyBlock(params.terminology)}
 
 Return JSON only — no markdown, no commentary, no surrounding text:
 {
@@ -249,7 +278,7 @@ Per-bullet requirements:
 - Active voice, customer-benefit focus (not feature dumps)
 - Naturally include searchable keywords; no keyword stuffing
 - No emojis, no excessive punctuation, no SHOUTING outside the header
-- Write in ${language}
+- Write in ${language}${this.terminologyBlock(params.terminology)}
 
 Bullet themes (one per bullet, in this order):
 1. Premium quality, protection, or safety
@@ -285,7 +314,7 @@ HTML constraints (Amazon's Listing API restrictions):
 - No inline styles, no class attributes, no other tags
 - No <html>, <head>, <body>, <div>
 - Total length 1000–2500 characters of HTML
-- Write in ${language}
+- Write in ${language}${this.terminologyBlock(params.terminology)}
 
 Return JSON only:
 {
@@ -308,7 +337,7 @@ Hard requirements:
 - Do NOT repeat words already in the product title (Amazon ignores those)
 - Mix ${language} + English where it makes sense (catches both audiences)
 - Include synonyms, common misspellings, and use-case phrases (e.g. "summer riding")
-- Include compatible items where relevant (e.g. for jackets: "helmet pants gloves")
+- Include compatible items where relevant (e.g. for jackets: "helmet pants gloves")${this.terminologyBlock(params.terminology)}
 
 Return JSON only:
 {

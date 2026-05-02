@@ -82,6 +82,16 @@ const listingContentRoutes: FastifyPluginAsync = async (fastify) => {
       if (!product) {
         return reply.code(404).send({ error: 'Product not found' })
       }
+      // P0 #27: pull brand+marketplace terminology to inject into the
+      // prompt. brand=null rows apply to every brand in the marketplace.
+      const terminology = await prisma.terminologyPreference.findMany({
+        where: {
+          marketplace: marketplace.toUpperCase(),
+          OR: [{ brand: product.brand }, { brand: null }],
+        },
+        select: { preferred: true, avoid: true, context: true },
+        orderBy: [{ brand: 'desc' }, { preferred: 'asc' }],
+      })
       try {
         const result = await service.generate({
           product: {
@@ -111,6 +121,7 @@ const listingContentRoutes: FastifyPluginAsync = async (fastify) => {
           marketplace,
           fields: requested,
           variant: typeof variant === 'number' ? variant : 0,
+          terminology,
         })
         return result
       } catch (err: any) {

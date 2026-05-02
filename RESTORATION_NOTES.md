@@ -734,3 +734,155 @@ ordered by `sortOrder`), not the legacy `images` relation
   column shows a relative timestamp computed client-side; for
   sort, the server orders by `updatedAt` directly.
 
+---
+
+# P0 cleanup (post-Phase 5.5, 2026-05-02 → 03)
+
+Three reliability improvements landed before the user paused for real Xavia operations.
+
+## P0 #0 — Schema-migration drift CI gate
+
+`packages/database/scripts/check-schema-drift.mjs` parses
+`schema.prisma` for every `model X` (and any `@@map("y")`), scans every
+`prisma/migrations/*/migration.sql` for `CREATE TABLE [IF NOT EXISTS] "X"`,
+and exits non-zero if any model lacks a `CREATE TABLE`. ~50ms; no shadow
+database needed (deliberately simpler than `prisma migrate diff`, which
+requires a live shadow Postgres). Catches the *exact* class of bug that
+took `/products` down — a Prisma model with no migration creating its
+table — at commit time, before the runtime crash.
+
+Wired three places:
+- `npm run check:drift` (root + `@nexus/database`)
+- `.githooks/pre-push` runs it before the existing apps/web + apps/api
+  builds. Install per-clone with `git config core.hooksPath .githooks`
+  (documented in DEVELOPMENT.md). No real CI yet, so this hook is the
+  only barrier to a broken push.
+- `node packages/database/scripts/check-schema-drift.mjs` directly.
+
+The first run found two more orphans beyond the known `Image`:
+`ChannelConnection` (eBay auth flow uses it ~12 times — runtime risk
+in production today, just not exercised) and `DraftListing` (zero
+callers, pure orphan from Phase 5 design that never landed). Both are
+allow-listed in the script with a `TECH_DEBT #31 / #32` reference; the
+gate's job is preventing *new* drift, while pre-existing drift is
+documented and being worked off.
+
+Limitations: column-level drift (model has a field but no migration
+adds the column) is out of scope — that would need a real shadow DB
+and is best left to CI when we add it. `@@map` is supported but
+unused.
+
+## P0 #8 — GTIN wizard image validator (verification + dead-code purge)
+
+The original hypothesis ("the validator is broken at runtime by the
+same `Image`-table-missing root cause") **was wrong.** Verified live:
+`POST /api/gtin-exemption/<id>/validate-images` against the existing
+Xavia DRAFT returned 200 with the expected empty validation set. The
+GTIN routes already select the `images` relation (`ProductImage`),
+not `cloudImages` (the orphan `Image` model).
+
+What was actually orphan and dangerous:
+
+- `apps/api/src/services/image.service.ts` (571 LOC) — only consumer
+  of `prisma.image`, written for color-based variant assignment and
+  never finished.
+- `apps/api/src/routes/images.ts` (279 LOC) — Express-style router
+  that imports `ImageService`. The whole `apps/api` uses Fastify;
+  this file was never registered with the running server.
+- `apps/api/src/services/__tests__/image.integration.test.ts` (363
+  LOC) — test for the dead service.
+- `apps/api/src/routes/index.ts` — also dead (its `setupRoutes` is
+  never imported); fixed the leftover `images.js` import to keep
+  typecheck green.
+- `model Image { … }` in `schema.prisma` — orphan model, no migration.
+
+Net: −1,213 LOC dead code + the orphan model gone. Drift gate now
+passes with 44 models (was 45) and the allow-list is down to two
+entries (ChannelConnection + DraftListing).
+
+## P0 #27 — Italian terminology glossary
+
+The Phase 5.5 AI generator was producing "Giubbotto" (padded/winter
+jacket) when the user (Xavia, motorcycle gear, Amazon IT) needed
+"Giacca" (generic jacket). The fix is a brand glossary fed into every
+AI prompt.
+
+Schema (`packages/database/prisma/schema.prisma`):
+
+```prisma
+model TerminologyPreference {
+  id          String   @id @default(cuid())
+  brand       String?      // null = applies to every brand in the marketplace
+  marketplace String       // 'IT', 'DE', …
+  language    String       // 'it', 'de', …
+  preferred   String       // the word the AI should use
+  avoid       String[]     // words it keeps producing that are wrong
+  context     String?      // e.g. "motorcycle jacket", "summer mesh"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([brand, marketplace])
+  @@index([marketplace])
+}
+```
+
+Migration `20260502_phase_p0_27_terminology` is idempotent (`CREATE
+TABLE IF NOT EXISTS` + `CREATE INDEX IF NOT EXISTS`) and seeds seven
+Xavia/IT entries via `INSERT … ON CONFLICT DO NOTHING`:
+
+| Preferred  | Avoid                  | Context |
+|---|---|---|
+| Giacca     | Giubbotto, Bomber      | motorcycle jacket — user-confirmed |
+| Pantaloni  | Brache                 | motorcycle pants |
+| Casco      | Elmetto                | motorcycle helmet — Elmetto is military/construction |
+| Stivali    | Scarpe, Scarponi       | motorcycle boots |
+| Protezioni | Armatura               | body armour — Armatura sounds medieval |
+| Pelle      | Cuoio                  | leather garment material |
+| Rete       | Maglia                 | mesh / breathable fabric |
+
+Each row's `context` documents the reasoning so the user can audit
++ refine via the admin UI. The user explicitly approved Giacca/Giubbotto
+on 2026-05-03 and asked the assistant to "do its best" for the rest.
+
+API (`apps/api/src/routes/terminology.routes.ts`): full CRUD —
+`GET /api/terminology?brand=&marketplace=`, `POST`, `PATCH /:id`,
+`DELETE /:id`. `brand=__none__` returns only defaults; otherwise the
+list query returns brand-specific + brand-null defaults so the AI
+prompt receives both.
+
+AI prompt injection (`apps/api/src/services/ai/listing-content.service.ts`):
+new `terminologyBlock(entries)` helper. Every prompt builder (title,
+bullets, description, keywords) appends:
+
+> Terminology preferences (STRICTLY FOLLOW — do not substitute
+> synonyms):
+> - Use "Giacca" instead of: "Giubbotto", "Bomber" (motorcycle jacket).
+> - …
+
+before the JSON return contract. The route fetches the matching
+preferences (`brand: product.brand` UNION `brand: null`,
+`marketplace: marketplace`) and passes them through `GenerationParams.terminology`.
+
+Admin UI at `/settings/terminology` (`apps/web/src/app/settings/terminology/`):
+table + add modal + inline edit + delete-with-confirmation. New
+"Terminology" tab in the Settings sub-nav.
+
+Verification path (run after Railway redeploys): open the listing
+wizard for a Xavia jacket product, navigate to Step 6 (Content),
+click "Generate all content" with marketplace IT. The title should
+consistently use "Giacca" across regenerations. Add new preferences
+inline in `/settings/terminology` as more drift surfaces.
+
+### What we don't do (v1, deferred)
+
+- **Constrained decoding** — preferences are a prompt instruction, not
+  a hard constraint. If Gemini ignores the preference (low probability
+  given the "STRICTLY FOLLOW" framing, but possible), the user has to
+  regenerate. A real fix uses logit-biased decoding or post-generation
+  rewriting; v1 ships the prompt approach.
+- **Per-product / per-category overrides** — preferences apply per
+  brand × marketplace. A "different rule for racing leather vs. mesh"
+  scenario isn't supported until the user asks.
+- **Audit log** — when preferences change, no record of who edited
+  what / when. Add when the team grows past one user.
+

@@ -327,9 +327,9 @@ Verify with the live API before declaring done — hit the eBay auth endpoint an
 ## Triage summary
 
 **🔴 P0 — tackle next:**
-- **0** Schema-migration drift gate ✅ landed 2026-05-02 (script + npm script + .githooks/pre-push). Allow-list captures pre-existing drift that's worked off via 31/32.
+- **0** ✅ Schema-migration drift gate landed 2026-05-02 (script + npm script + .githooks/pre-push). Allow-list captures pre-existing drift that's worked off via 31/32.
 - **8** ✅ Resolved 2026-05-02 — verified GTIN wizard validator was already on the correct ProductImage relation; deleted the orphan `Image` model + dead Express service & route (~1,213 lines). Demoted to P2 for the remaining UX polish.
-- **27** Brand-terminology glossary for AI title generation (Giubbotto / Giacca regression actively undermining the 5.5 feature)
+- **27** ✅ Resolved 2026-05-02 — TerminologyPreference table + CRUD API + AI prompt injection + admin UI at `/settings/terminology`. Seeded with 7 Xavia/IT entries (Giacca, Pantaloni, Casco, Stivali, Protezioni, Pelle, Rete). Verify post-deploy that "Giacca" wins consistently in regenerations; add new preferences inline as drift surfaces.
 - **31** ChannelConnection has no migration — eBay OAuth + listing path is broken at runtime, just not exercised yet
 
 **🟡 P1 — backlog (informed by real usage):**
