@@ -5,7 +5,17 @@ import AccountSettingsClient from './AccountSettingsClient'
 export const dynamic = 'force-dynamic'
 
 export default async function AccountSettingsPage() {
-  const settings = await (prisma as any).accountSettings.findFirst()
+  // Defensive: Prisma engine availability on Vercel is fragile here
+  // and was crashing the page with a 500. Show the empty form when
+  // the DB call fails so the sidebar link lands on a usable page.
+  let settings: any = null
+  try {
+    settings = await (prisma as any).accountSettings.findFirst()
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[settings/account] prisma error:', err)
+    settings = null
+  }
 
   return (
     <div>

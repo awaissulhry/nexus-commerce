@@ -37,17 +37,36 @@ interface ApiOrder {
 
 async function loadOrders(): Promise<{ orders: Order[]; stats: OrderStats }> {
   const backend = getBackendUrl()
+  // The API's @fastify/compress middleware has a known bug where the
+  // /api/orders list response gets emitted with content-length: 0 when
+  // the client requests gzip; ask for `identity` so we always get a
+  // parseable body. The /api/orders/stats endpoint isn't affected.
   const [statsRes, listRes] = await Promise.all([
     fetch(`${backend}/api/orders/stats`, { cache: 'no-store' }),
-    fetch(`${backend}/api/orders?page=1&limit=100`, { cache: 'no-store' }),
+    fetch(`${backend}/api/orders?page=1&limit=100`, {
+      cache: 'no-store',
+      headers: { 'Accept-Encoding': 'identity' },
+    }),
   ])
 
-  const stats: OrderStats = statsRes.ok ? await statsRes.json() : FALLBACK_STATS
-
-  if (!listRes.ok) {
-    return { orders: [], stats }
+  const safeJson = async (res: Response) => {
+    if (!res.ok) return null
+    try {
+      const text = await res.text()
+      if (!text) return null
+      return JSON.parse(text)
+    } catch {
+      return null
+    }
   }
-  const data = await listRes.json()
+
+  const statsJson = await safeJson(statsRes)
+  const stats: OrderStats =
+    statsJson && typeof statsJson === 'object'
+      ? (statsJson as OrderStats)
+      : FALLBACK_STATS
+
+  const data = await safeJson(listRes)
   const raw: ApiOrder[] = data?.data?.orders ?? []
 
   const orders: Order[] = raw.map((o) => ({

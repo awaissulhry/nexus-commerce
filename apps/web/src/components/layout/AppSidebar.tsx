@@ -161,10 +161,13 @@ export default function AppSidebar() {
             active={pathname.startsWith('/pim')}
           />
           <NavItem
-            href="/inventory/upload"
+            href="/bulk-operations"
             icon={FileSpreadsheet}
             label="Bulk Operations"
-            active={pathname === '/inventory/upload'}
+            active={
+              pathname === '/bulk-operations' ||
+              pathname.startsWith('/bulk-operations/')
+            }
           />
         </NavGroup>
 
@@ -297,7 +300,10 @@ export default function AppSidebar() {
             href="/insights"
             icon={BarChart3}
             label="Insights"
-            active={pathname.startsWith('/insights')}
+            active={
+              pathname.startsWith('/insights') ||
+              pathname === '/dashboard/overview'
+            }
           />
         </NavGroup>
 
