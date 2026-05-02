@@ -38,6 +38,11 @@ import {
   type EditableMeta,
 } from './EditableCell'
 import PreviewChangesModal from './PreviewChangesModal'
+import PastePreviewModal, {
+  type PasteCell,
+  type PasteError,
+  type PastePreview,
+} from './PastePreviewModal'
 import CascadeChoiceModal from './components/CascadeChoiceModal'
 import ColumnSelector, { type FieldDef } from './components/ColumnSelector'
 import MarketplaceSelector, {
@@ -1444,8 +1449,8 @@ export default function BulkOperationsClient() {
       const row = tbl.getRowModel().rows[rowIdx]
       const col = tbl.getVisibleLeafColumns()[colIdx]
       if (!row || !col) return
-      const handler = editHandlers.get(editKey(row.original.id, col.id))
-      handler?.(prefill)
+      const handle = editHandlers.get(editKey(row.original.id, col.id))
+      handle?.enterEdit(prefill)
     },
     [],
   )
@@ -1622,6 +1627,160 @@ export default function BulkOperationsClient() {
     document.addEventListener('copy', onCopy)
     return () => document.removeEventListener('copy', onCopy)
   }, [])
+
+  // ── Step 4: paste from clipboard with preview ────────────────────
+  // The paste handler reads from the same refs as copy. It builds a
+  // "plan" (cells that will change) + "errors" (cells skipped due to
+  // read-only / type mismatch / out-of-bounds) and shows the modal
+  // before any state mutation. Apply commits via writeChange and uses
+  // editHandlers.applyValue to set the visible cells' draftValue so
+  // they immediately render with the dirty (yellow) tint.
+  const [pastePreview, setPastePreview] = useState<PastePreview | null>(null)
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const sel = selectionRef.current
+      if (!sel.active) return
+      const ae = document.activeElement as HTMLElement | null
+      if (
+        ae &&
+        (ae.tagName === 'INPUT' ||
+          ae.tagName === 'TEXTAREA' ||
+          ae.isContentEditable)
+      ) {
+        return
+      }
+      const text = e.clipboardData?.getData('text/plain') ?? ''
+      if (!text) return
+
+      const sourceGrid = parseTsv(text)
+      if (sourceGrid.length === 0) return
+      e.preventDefault()
+
+      const tbl = tableRef.current
+      const tableRows = tbl.getRowModel().rows
+      const visibleCols = tbl.getVisibleLeafColumns()
+      const startRow = sel.active.rowIdx
+      const startCol = sel.active.colIdx
+
+      // 1×1 source + multi-cell selection → fill the entire range
+      // with the single value (Excel behaviour).
+      const isSingleSource =
+        sourceGrid.length === 1 && sourceGrid[0].length === 1
+      const rangeRows = rangeBounds
+        ? rangeBounds.maxRow - rangeBounds.minRow + 1
+        : 1
+      const rangeCols = rangeBounds
+        ? rangeBounds.maxCol - rangeBounds.minCol + 1
+        : 1
+      const fillRange =
+        isSingleSource && rangeBounds && (rangeRows > 1 || rangeCols > 1)
+      const sourceRows = fillRange ? rangeRows : sourceGrid.length
+      const sourceCols = fillRange
+        ? rangeCols
+        : Math.max(...sourceGrid.map((r) => r.length))
+      const anchorRow = fillRange ? rangeBounds!.minRow : startRow
+      const anchorCol = fillRange ? rangeBounds!.minCol : startCol
+
+      const plan: PasteCell[] = []
+      const errors: PasteError[] = []
+      for (let dr = 0; dr < sourceRows; dr++) {
+        const targetRow = anchorRow + dr
+        if (targetRow >= tableRows.length) break
+        const row = tableRows[targetRow]
+        if (!row) continue
+        for (let dc = 0; dc < sourceCols; dc++) {
+          const targetCol = anchorCol + dc
+          if (targetCol >= visibleCols.length) break
+          const col = visibleCols[targetCol]
+          if (!col) continue
+          const fieldDef = allFieldsRef.current.find((f) => f.id === col.id)
+          const sku = row.original.sku ?? ''
+          const fieldLabel = fieldDef?.label ?? col.id
+          if (!fieldDef?.editable) {
+            errors.push({
+              rowIdx: targetRow,
+              colIdx: targetCol,
+              sku,
+              fieldLabel,
+              reason: 'Read-only',
+            })
+            continue
+          }
+          const sourceR = fillRange ? 0 : dr
+          const sourceC = fillRange ? 0 : dc
+          const raw = sourceGrid[sourceR]?.[sourceC] ?? ''
+          const coerced = coercePasteValue(raw, fieldDef)
+          if (coerced.error) {
+            errors.push({
+              rowIdx: targetRow,
+              colIdx: targetCol,
+              sku,
+              fieldLabel,
+              reason: coerced.error,
+            })
+            continue
+          }
+          let oldValue: unknown
+          try {
+            oldValue = row.getValue(col.id)
+          } catch {
+            oldValue = undefined
+          }
+          // Skip no-op cells from the changes plan but still flow
+          // through so applying expands the selection over them.
+          plan.push({
+            rowIdx: targetRow,
+            colIdx: targetCol,
+            rowId: row.original.id,
+            columnId: col.id,
+            oldValue,
+            newValue: coerced.value,
+            sku,
+            fieldLabel,
+          })
+        }
+      }
+      if (plan.length === 0 && errors.length === 0) return
+      setPastePreview({ plan, errors })
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
+  }, [rangeBounds])
+
+  const applyPaste = useCallback(() => {
+    setPastePreview((curr) => {
+      if (!curr) return null
+      // Apply each cell: bump the visible cell's draftValue (yellow
+      // tint) AND register the change in the changes Map. Cells that
+      // were virtualised out at paste time won't have a registered
+      // applyValue handler — the changes Map still picks them up so
+      // a save flushes them, but they won't show yellow until the
+      // user scrolls back. Tracked in TECH_DEBT.
+      let minR = Infinity,
+        maxR = -Infinity,
+        minC = Infinity,
+        maxC = -Infinity
+      for (const c of curr.plan) {
+        editHandlers.get(editKey(c.rowId, c.columnId))?.applyValue(c.newValue)
+        writeChange(c.rowId, c.columnId, c.newValue, false)
+        if (c.rowIdx < minR) minR = c.rowIdx
+        if (c.rowIdx > maxR) maxR = c.rowIdx
+        if (c.colIdx < minC) minC = c.colIdx
+        if (c.colIdx > maxC) maxC = c.colIdx
+      }
+      // Expand the selection over the pasted region so the user can
+      // see what just changed. Falls back to current selection if no
+      // changes were applied (e.g., pure errors).
+      if (curr.plan.length > 0) {
+        setSelection({
+          anchor: { rowIdx: minR, colIdx: minC },
+          active: { rowIdx: maxR, colIdx: maxC },
+        })
+      }
+      return null
+    })
+  }, [writeChange])
+  const cancelPaste = useCallback(() => setPastePreview(null), [])
 
   const containerRef = useRef<HTMLDivElement>(null)
   const rowVirtualizer = useVirtualizer({
@@ -1950,6 +2109,12 @@ export default function BulkOperationsClient() {
         products={products}
       />
 
+      <PastePreviewModal
+        preview={pastePreview}
+        onCancel={cancelPaste}
+        onApply={applyPaste}
+      />
+
       <CascadeChoiceModal
         open={cascadeModal !== null}
         fieldLabel={cascadeModal?.fieldLabel ?? ''}
@@ -2076,6 +2241,101 @@ function toTsvCell(value: unknown): string {
     return '"' + str.replace(/"/g, '""') + '"'
   }
   return str
+}
+
+/**
+ * Inverse of toTsvCell: parse a TSV string into a 2D grid handling
+ * RFC 4180 quoting, escaped "" inside quoted cells, and CRLF / LF /
+ * CR as row separators. Tabs separate cells.
+ */
+function parseTsv(text: string): string[][] {
+  const result: string[][] = []
+  let row: string[] = []
+  let cell = ''
+  let inQuotes = false
+  let i = 0
+  const n = text.length
+  while (i < n) {
+    const ch = text[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          cell += '"'
+          i += 2
+          continue
+        }
+        inQuotes = false
+        i++
+        continue
+      }
+      cell += ch
+      i++
+      continue
+    }
+    if (ch === '"' && cell === '') {
+      inQuotes = true
+      i++
+      continue
+    }
+    if (ch === '\t') {
+      row.push(cell)
+      cell = ''
+      i++
+      continue
+    }
+    if (ch === '\r' && text[i + 1] === '\n') {
+      row.push(cell)
+      result.push(row)
+      row = []
+      cell = ''
+      i += 2
+      continue
+    }
+    if (ch === '\n' || ch === '\r') {
+      row.push(cell)
+      result.push(row)
+      row = []
+      cell = ''
+      i++
+      continue
+    }
+    cell += ch
+    i++
+  }
+  // Flush trailing cell — but don't push a phantom empty row when the
+  // input ended with a final newline.
+  if (cell !== '' || row.length > 0) {
+    row.push(cell)
+    result.push(row)
+  }
+  return result
+}
+
+/** Coerce a raw clipboard string to the target field's value type. */
+function coercePasteValue(
+  raw: string,
+  field: FieldDef | undefined,
+): { value: unknown; error?: string } {
+  if (!field) return { value: raw }
+  const trimmed = raw.trim()
+  if (trimmed === '') return { value: null }
+  if (field.type === 'number') {
+    const num = Number(trimmed)
+    if (Number.isNaN(num)) return { value: null, error: 'Not a number' }
+    return { value: num }
+  }
+  if (field.type === 'select' && field.options && field.options.length > 0) {
+    if (!field.options.includes(trimmed)) {
+      return {
+        value: null,
+        error: `Must be one of: ${field.options.slice(0, 6).join(', ')}${
+          field.options.length > 6 ? '…' : ''
+        }`,
+      }
+    }
+    return { value: trimmed }
+  }
+  return { value: trimmed }
 }
 
 function looselyEqual(a: unknown, b: unknown): boolean {

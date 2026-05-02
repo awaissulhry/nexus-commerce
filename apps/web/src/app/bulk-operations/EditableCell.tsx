@@ -11,17 +11,26 @@ import {
 import { cn } from '@/lib/utils'
 
 /**
- * Imperative edit-handler registry used by Step 3.5 keyboard handling.
+ * Imperative edit handlers registered by each EditableCell under its
+ * `${rowId}:${columnId}` key.
  *
- * Each EditableCell registers a callback under its `${rowId}:${columnId}`
- * key so the BulkOperationsClient keydown listener can request edit
- * on the active cell (F2, Enter, or any printable key) without
- * re-rendering the cell on every selection change. The optional
- * prefill argument replaces the cell value with the typed character
- * for type-to-edit.
+ *   enterEdit(prefill?)
+ *     - undefined    → Step 3.5 keyboard / dblclick path. Open the
+ *                      input with the existing value selected.
+ *     - any string   → type-to-replace; the typed character becomes
+ *                      the new draft, cursor sits at end.
+ *
+ *   applyValue(value)
+ *     - Step 4 paste path. Sets the cell's local draftValue without
+ *       opening edit mode, so the cell renders the pasted value with
+ *       the dirty (yellow) tint immediately. The parent is responsible
+ *       for also writing the change into the changesMap.
  */
-export type EditHandler = (prefill?: string) => void
-export const editHandlers: Map<string, EditHandler> = new Map()
+export interface EditHandle {
+  enterEdit: (prefill?: string) => void
+  applyValue: (value: unknown) => void
+}
+export const editHandlers: Map<string, EditHandle> = new Map()
 export function editKey(rowId: string, columnId: string) {
   return `${rowId}:${columnId}`
 }
@@ -159,14 +168,18 @@ export const EditableCell = memo(
       [],
     )
 
-    // Register/unregister the imperative edit handler so the parent's
-    // keyboard listener can request edit on the active cell without
-    // re-rendering this cell on every selection change.
+    // Register/unregister the imperative edit handlers so the parent
+    // can drive the cell from outside (keyboard nav, paste) without
+    // re-rendering it on every selection change.
     useEffect(() => {
       const k = `${rowId}:${columnId}`
-      editHandlers.set(k, enterEdit)
+      const handle: EditHandle = {
+        enterEdit,
+        applyValue: (v) => setDraftValue(v),
+      }
+      editHandlers.set(k, handle)
       return () => {
-        if (editHandlers.get(k) === enterEdit) editHandlers.delete(k)
+        if (editHandlers.get(k) === handle) editHandlers.delete(k)
       }
     }, [rowId, columnId, enterEdit])
 

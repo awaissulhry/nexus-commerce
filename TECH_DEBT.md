@@ -43,10 +43,12 @@ Found during the sidebar audit but not linked from `AppSidebar.tsx`. They show u
 
 **Proper fix:** Either let them age out and run a one-shot `DELETE FROM "CategorySchema" WHERE "schemaVersion" = 'unknown'` at any point, or accept and ignore. Worth a single cleanup migration if we touch this area again.
 
-## 5. Bulk-ops spreadsheet: type-to-replace not yet wired
+## 5. Bulk-ops paste: scrolled-out cells don't show the yellow tint
 
-**Symptom:** In Excel, typing a printable key with a cell selected (no edit mode) starts a fresh edit — the typed character replaces the cell's value. Step 5 of the spreadsheet selection rollout shipped F2 / Enter / double-click to enter edit mode but skipped type-to-replace.
+**Symptom:** When a paste operation targets cells that are currently virtualised out of view (rowVirtualizer hasn't rendered them), only the changes Map gets the entry — the EditableCell's local `draftValue` doesn't get updated because the cell isn't mounted, so its `applyValue` handler isn't in the registry. When the user scrolls back to those cells, they re-mount with `initialValue` from the unsaved products array and `isDirty` evaluates false — no yellow tint, even though a save would still flush them.
 
-**Why deferred:** Implementing it cleanly requires a global `keydown` listener with input-element exclusions (search bar, marketplace selector, header filters, modals) and careful interaction with browser shortcuts. Independently testable in a follow-up — flagged here so we don't forget it.
+**Surfaced at:** Step 4 (paste with preview).
 
-**Proper fix:** Add a window keydown listener gated on `document.activeElement?.tagName !== 'INPUT' && tagName !== 'TEXTAREA' && !isContentEditable`, ignore modifier-key chords, and on a printable key press call `enterEdit(active.row, active.col, prefillValue=key)`. Verify modals (CascadeChoiceModal, PreviewChangesModal, MarketplaceSelector) still capture their own keys.
+**Workaround:** None for now. The user sees yellow on visible cells immediately and the save still applies all changes (visible + scrolled-out). The mismatch is purely cosmetic and disappears after a save.
+
+**Proper fix:** Pass a `pendingValue` prop down to EditableCell when there's an entry in the changes Map for it. EditableCell's `useState(() => …)` initialiser seeds `draftValue` from `pendingValue ?? initialValue` so the yellow tint shows on first mount. Memo comparator already includes the relevant fields; one extra prop keyed on cellKey is enough.
