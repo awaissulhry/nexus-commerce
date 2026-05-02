@@ -161,18 +161,20 @@ const EBAY_FIELDS: FieldDefinition[] = [
 ]
 
 // ── Category-specific (e.g. OUTERWEAR, HELMET) ────────────────────────
-// All editable: false in D.1 — these write to Product.categoryAttributes
-// JSON which needs custom write logic in D.3.
+// D.3e: editable: true. Backend stores values in Product.categoryAttributes
+// JSON via atomic jsonb || merge. The `productTypes` array gates display:
+// rows whose productType doesn't match render "—" so values from
+// unrelated categories never leak into the wrong cell.
 const CATEGORY_FIELDS_BY_TYPE: Record<string, FieldDefinition[]> = {
   OUTERWEAR: [
-    { id: 'attr_armorType', label: 'Armor Type', type: 'select', options: ['Level 1', 'Level 2', 'No Armor'], category: 'category', productTypes: ['OUTERWEAR'], editable: false, width: 120 },
-    { id: 'attr_ceCertification', label: 'CE Certification', type: 'text', category: 'category', productTypes: ['OUTERWEAR'], editable: false, width: 140 },
-    { id: 'attr_waterproofRating', label: 'Waterproof', type: 'select', options: ['Yes', 'Water Resistant', 'No'], category: 'category', productTypes: ['OUTERWEAR'], editable: false, width: 130 },
+    { id: 'attr_armorType', label: 'Armor Type', type: 'select', options: ['Level 1', 'Level 2', 'No Armor'], category: 'category', productTypes: ['OUTERWEAR'], editable: true, width: 120, helpText: 'CE certification level for impact protection' },
+    { id: 'attr_ceCertification', label: 'CE Certification', type: 'text', category: 'category', productTypes: ['OUTERWEAR'], editable: true, width: 140, helpText: 'EN-numbered certification reference' },
+    { id: 'attr_waterproofRating', label: 'Waterproof', type: 'select', options: ['Yes', 'Water Resistant', 'No'], category: 'category', productTypes: ['OUTERWEAR'], editable: true, width: 130 },
   ],
   HELMET: [
-    { id: 'attr_dotCertification', label: 'DOT', type: 'text', category: 'category', productTypes: ['HELMET'], editable: false, width: 100 },
-    { id: 'attr_eceNumber', label: 'ECE', type: 'text', category: 'category', productTypes: ['HELMET'], editable: false, width: 100 },
-    { id: 'attr_helmetType', label: 'Type', type: 'select', options: ['Full Face', 'Modular', 'Open Face', 'Off-Road'], category: 'category', productTypes: ['HELMET'], editable: false, width: 120 },
+    { id: 'attr_dotCertification', label: 'DOT', type: 'text', category: 'category', productTypes: ['HELMET'], editable: true, width: 100, helpText: 'US DOT FMVSS 218 certification number' },
+    { id: 'attr_eceNumber', label: 'ECE', type: 'text', category: 'category', productTypes: ['HELMET'], editable: true, width: 100, helpText: 'European ECE 22.06 (or .05) certification number' },
+    { id: 'attr_helmetType', label: 'Helmet Type', type: 'select', options: ['Full Face', 'Modular', 'Open Face', 'Off-Road'], category: 'category', productTypes: ['HELMET'], editable: true, width: 120 },
   ],
 }
 

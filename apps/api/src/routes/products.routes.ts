@@ -1,7 +1,10 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
-import { getAvailableFields } from '../services/pim/field-registry.service.js'
+import {
+  getAvailableFields,
+  getFieldDefinition,
+} from '../services/pim/field-registry.service.js'
 
 /**
  * Routes for bulk-operations: optimized fetch + atomic patch.
@@ -75,6 +78,9 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           // ── D.3a additions — verify migration applied ────────────
           gtin: true,
           cascadedFields: true,
+          // ── D.3e: needed for category-specific attribute display
+          categoryAttributes: true,
+          productType: true,
         },
         // Parents first via parentId asc (NULLs first in Postgres asc),
         // then SKU.
@@ -210,6 +216,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       Object.prototype.hasOwnProperty.call(CHANNEL_FIELD_MAP, f)
     const channelOf = (f: string): 'AMAZON' | 'EBAY' | null =>
       f.startsWith('amazon_') ? 'AMAZON' : f.startsWith('ebay_') ? 'EBAY' : null
+    const isCategoryAttrField = (f: string) => f.startsWith('attr_')
     const NUMERIC_FIELDS = new Set([
       'basePrice',
       'costPrice',
@@ -243,9 +250,38 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         continue
       }
       const isCh = isChannelField(c.field ?? '')
-      if (!c.field || (!ALLOWED_FIELDS.has(c.field) && !isCh)) {
+      const isAttr = isCategoryAttrField(c.field ?? '')
+      if (
+        !c.field ||
+        (!ALLOWED_FIELDS.has(c.field) && !isCh && !isAttr)
+      ) {
         errors.push({ id: c.id, field: c.field ?? '', error: 'Field not editable' })
         continue
+      }
+      // For attr_* fields, the registry must have it AND be editable
+      // (e.g., attr_armorType is editable, but a hypothetical typo
+      // like attr_unknown wouldn't be).
+      if (isAttr) {
+        const def = getFieldDefinition(c.field)
+        if (!def || !def.editable) {
+          errors.push({
+            id: c.id,
+            field: c.field,
+            error: 'Unknown or read-only category attribute',
+          })
+          continue
+        }
+        // Validate select options
+        if (def.type === 'select' && def.options && c.value !== null) {
+          if (!def.options.includes(String(c.value))) {
+            errors.push({
+              id: c.id,
+              field: c.field,
+              error: `Must be one of: ${def.options.join(', ')}`,
+            })
+            continue
+          }
+        }
       }
       // Channel fields require marketplaceContext to know which
       // ChannelListing to upsert.
@@ -270,6 +306,25 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       let value: any = c.value
+
+      // Category attributes (attr_*) — text + select fields. Trim text,
+      // pass select values through (validation already gated above).
+      if (isAttr) {
+        if (typeof value !== 'string' && value !== null && value !== undefined) {
+          value = String(value)
+        }
+        if (typeof value === 'string') {
+          const trimmed = value.trim()
+          value = trimmed === '' ? null : trimmed
+        }
+        validated.push({
+          id: c.id,
+          field: c.field,
+          value,
+          cascade: !!c.cascade,
+        })
+        continue
+      }
 
       // Channel fields are all text in D.3d (title, description). Trim,
       // null on empty.
@@ -490,8 +545,52 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
 
+      // ── D.3e: pre-group attr_* changes per product ────────────────
+      // We MERGE everything for one product into a single jsonb in
+      // one UPDATE rather than emitting one statement per attr.
+      // Map<productId, Record<strippedKey, value>> — separate maps
+      // for direct vs cascade so cascade fan-out can read its own group.
+      const attrDirectByProduct = new Map<string, Record<string, any>>()
+      const attrCascadeByProduct = new Map<string, Record<string, any>>()
+      const attrCascadeFieldNames = new Map<string, string[]>() // for cascadedFields tracking
+
+      for (const v of validated) {
+        if (!isCategoryAttrField(v.field)) continue
+        const stripped = v.field.replace(/^attr_/, '')
+        const target = v.cascade ? attrCascadeByProduct : attrDirectByProduct
+        let bag = target.get(v.id)
+        if (!bag) {
+          bag = {}
+          target.set(v.id, bag)
+        }
+        bag[stripped] = v.value
+        if (v.cascade) {
+          let names = attrCascadeFieldNames.get(v.id)
+          if (!names) {
+            names = []
+            attrCascadeFieldNames.set(v.id, names)
+          }
+          names.push(v.field)
+        }
+      }
+
+      // attr_* writers — use jsonb merge: COALESCE ensures null becomes
+      // empty object first; the || operator does shallow merge so
+      // existing keys not in the patch are preserved.
+      const writeAttrMerge = (productId: string, patch: Record<string, any>) =>
+        prisma.$executeRaw`
+          UPDATE "Product"
+          SET "categoryAttributes" = COALESCE("categoryAttributes", '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb
+          WHERE id = ${productId}
+        `
+
       for (const v of validated) {
         const isCh = isChannelField(v.field)
+        const isAttr = isCategoryAttrField(v.field)
+
+        // Skip individual attr_* loop iterations — handled in batched
+        // writes below the main loop.
+        if (isAttr) continue
 
         if (v.cascade) {
           // Cascade applies to the parent itself + all its children.
@@ -569,6 +668,46 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
               data: { [v.field]: v.value } as any,
             })
           )
+        }
+      }
+
+      // ── D.3e: emit batched attr_* writes ───────────────────────────
+      // Direct attr edits — one merged UPDATE per product. For children
+      // we also array_remove the attr_* field names from cascadedFields
+      // so a direct override clears the "inherited" marker (matching
+      // the non-attr child override semantics above).
+      for (const [productId, patch] of attrDirectByProduct) {
+        updates.push(writeAttrMerge(productId, patch))
+        if (childIdSet.has(productId)) {
+          for (const stripped of Object.keys(patch)) {
+            const fieldName = `attr_${stripped}`
+            updates.push(
+              prisma.$executeRaw`
+                UPDATE "Product"
+                SET "cascadedFields" = array_remove("cascadedFields", ${fieldName})
+                WHERE id = ${productId}
+              `
+            )
+          }
+        }
+      }
+
+      // Cascade attr edits — merge into parent + every child, then
+      // push the prefixed field names onto each child's cascadedFields.
+      for (const [parentId, patch] of attrCascadeByProduct) {
+        updates.push(writeAttrMerge(parentId, patch))
+        const kids = childrenByParent.get(parentId) ?? []
+        const fieldNames = attrCascadeFieldNames.get(parentId) ?? []
+        for (const childId of kids) {
+          updates.push(writeAttrMerge(childId, patch))
+          for (const fieldName of fieldNames) {
+            updates.push(
+              prisma.product.update({
+                where: { id: childId },
+                data: { cascadedFields: { push: fieldName } } as any,
+              })
+            )
+          }
         }
       }
 
