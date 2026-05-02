@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import { getAvailableFields } from '../services/pim/field-registry.service.js'
 
 /**
  * Routes for bulk-operations: optimized fetch + atomic patch.
@@ -7,6 +8,24 @@ import prisma from '../db.js'
  * and /api/products/bulk.
  */
 const productsRoutes: FastifyPluginAsync = async (fastify) => {
+  // GET /api/pim/fields — return field definitions for the column
+  // selector. Optional filters:
+  //   ?channels=AMAZON,EBAY     — include those channels' fields
+  //   ?productTypes=OUTERWEAR   — include category-specific fields
+  // Cached 5 min since registry is static at runtime.
+  fastify.get('/pim/fields', async (request, reply) => {
+    reply.header('Cache-Control', 'private, max-age=300')
+    const q = request.query as { channels?: string; productTypes?: string }
+    const fields = getAvailableFields({
+      channels: q.channels?.split(',').map((s) => s.trim()).filter(Boolean),
+      productTypes: q.productTypes
+        ?.split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    })
+    return { fields, count: fields.length }
+  })
+
   // GET /api/products/bulk-fetch — single optimized SELECT for the
   // bulk-operations table. Plain Decimal coercion to numbers so the
   // client can sort/edit without parseFloat-ing everywhere.
