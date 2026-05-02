@@ -1463,6 +1463,31 @@ model CategorySchema {
   @@index([expiresAt])
 }
 
+// ── Phase 5.3: Listing wizard ────────────────────────────────────────
+// One row per (productId, channel, marketplace) wizard session.
+// state holds the per-step JSON (see lib/wizard-state in apps/web).
+// Status transitions: DRAFT → SUBMITTED → LIVE | FAILED. Future
+// phases (5.4 / 5.5 / Phase 6) flesh out the per-step content; the
+// shell here just persists progress so the user can resume.
+model ListingWizard {
+  id          String   @id @default(cuid())
+  productId   String
+  channel     String   // AMAZON | EBAY | SHOPIFY | WOOCOMMERCE
+  marketplace String   // IT | DE | FR | … | GLOBAL for non-Amazon
+
+  currentStep Int      @default(1)
+  state       Json     @default("{}")
+
+  status      String   @default("DRAFT") // DRAFT | SUBMITTED | LIVE | FAILED
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  completedAt DateTime?
+
+  @@index([productId, channel, marketplace])
+  @@index([status])
+}
+
 // Append-only log of every detected schema change (added/removed
 // fields, required-flag flips). Used to surface "Amazon changed X"
 // notifications and identify products that may need attention.

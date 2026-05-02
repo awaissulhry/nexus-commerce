@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ChevronLeft, AlertCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import ListOnChannelDropdown from './ListOnChannelDropdown'
 import MasterDataTab from './tabs/MasterDataTab'
 import VariationsTab from './tabs/VariationsTab'
 import ChannelListingTab from './tabs/ChannelListingTab'
@@ -136,6 +137,7 @@ export default function ProductEditClient({
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            <ListOnChannelDropdown productId={product.id} />
             <Button variant="ghost" size="sm" onClick={() => router.refresh()}>
               Discard
             </Button>
