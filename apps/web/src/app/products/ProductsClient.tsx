@@ -3,17 +3,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
+  ChevronDown,
+  FileSpreadsheet,
+  FolderArchive,
+  Grid,
   LayoutGrid,
   Loader2,
   Package,
   Plus,
   Search,
+  Sparkles,
   Table as TableIcon,
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import UploadModal from '../bulk-operations/UploadModal'
 import GridView from './components/GridView'
 import TableView from './components/TableView'
 import PaginationStrip from './components/PaginationStrip'
@@ -90,6 +96,10 @@ export default function ProductsClient({
   const [pageSize, setPageSize] = useState(50)
   const [view, setView] = useState<ViewMode>('grid')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [uploadOpen, setUploadOpen] = useState(false)
+  // Bumped on upload-apply so the fetch effect re-runs and shows the
+  // newly imported rows without a full page reload.
+  const [refetchTick, setRefetchTick] = useState(0)
 
   // Refetch products whenever any filter / search / sort / page / size
   // changes. The server returns matching stats so the header counts
@@ -102,8 +112,9 @@ export default function ProductsClient({
         sort,
         page,
         pageSize,
+        refetchTick,
       }),
-    [debouncedSearch, filters, sort, page, pageSize],
+    [debouncedSearch, filters, sort, page, pageSize, refetchTick],
   )
 
   // Skip the very first fetch — we already have initialProducts from
@@ -248,7 +259,7 @@ export default function ProductsClient({
             )}
           </p>
         </div>
-        <NewProductDropdown />
+        <AddProductsMenu onUploadClick={() => setUploadOpen(true)} />
       </header>
 
       <div className="sticky top-0 z-10 bg-slate-50/90 backdrop-blur-sm pt-1 -mx-6 px-6 pb-3">
@@ -353,7 +364,7 @@ export default function ProductsClient({
         activeFilterCount > 0 ? (
           <NoResultsState onReset={resetAll} />
         ) : (
-          <EmptyCatalogState />
+          <EmptyCatalogState onUploadClick={() => setUploadOpen(true)} />
         )
       ) : view === 'grid' ? (
         <GridView products={products} />
@@ -381,43 +392,245 @@ export default function ProductsClient({
         products={selectedProducts}
         onClear={clearSelection}
       />
+
+      <UploadModal
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        onApplied={() => setRefetchTick((t) => t + 1)}
+      />
     </div>
   )
 }
 
-function NewProductDropdown() {
-  // v1: routes to bulk-operations Upload modal. Single-product
-  // creation page is a deferred design.
-  return (
-    <a
-      href="/bulk-operations#upload"
-      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-[13px] font-medium bg-blue-600 text-white hover:bg-blue-700"
-      title="Single-product creation coming soon — for now use the upload flow"
-    >
-      <Plus className="w-3.5 h-3.5" />
-      New product
-    </a>
-  )
-}
+function AddProductsMenu({ onUploadClick }: { onUploadClick: () => void }) {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
 
-function EmptyCatalogState() {
+  useEffect(() => {
+    if (!open) return
+    const onClick = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (triggerRef.current?.contains(t) || panelRef.current?.contains(t))
+        return
+      setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
   return (
-    <div className="border border-slate-200 rounded-lg bg-white px-6 py-16 text-center">
-      <Package className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-      <h3 className="text-[15px] font-semibold text-slate-900 mb-1">
-        Your catalog is empty
-      </h3>
-      <p className="text-[13px] text-slate-600 mb-4 max-w-md mx-auto">
-        Start by importing a CSV / XLSX file, or add a single product through
-        the bulk-operations grid.
-      </p>
-      <a
-        href="/bulk-operations"
+    <div className="relative">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
         className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-[13px] font-medium bg-blue-600 text-white hover:bg-blue-700"
+        aria-haspopup="menu"
+        aria-expanded={open}
       >
-        Open bulk operations
-      </a>
+        <Plus className="w-3.5 h-3.5" />
+        Add products
+        <ChevronDown className="w-3 h-3 -mr-0.5 opacity-80" />
+      </button>
+      {open && (
+        <div
+          ref={panelRef}
+          className="absolute right-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-lg shadow-lg z-30 py-1"
+          role="menu"
+        >
+          <MenuItem
+            icon={FileSpreadsheet}
+            title="Upload CSV / Excel"
+            subtitle="Best for many products at once"
+            onClick={() => {
+              setOpen(false)
+              onUploadClick()
+            }}
+          />
+          <MenuItem
+            icon={FolderArchive}
+            title="Upload ZIP folder"
+            subtitle="Multi-file with images and descriptions"
+            onClick={() => {
+              setOpen(false)
+              onUploadClick()
+            }}
+          />
+          <div className="my-1 border-t border-slate-100" />
+          <MenuItem
+            icon={Grid}
+            title="Bulk operations"
+            subtitle="Spreadsheet-style bulk editing"
+            href="/bulk-operations"
+            onClick={() => setOpen(false)}
+          />
+          <div className="my-1 border-t border-slate-100" />
+          <MenuItem
+            icon={Sparkles}
+            title="Single product (coming soon)"
+            subtitle="Guided form with type, images, channels"
+            disabled
+          />
+        </div>
+      )}
     </div>
+  )
+}
+
+function MenuItem({
+  icon: Icon,
+  title,
+  subtitle,
+  onClick,
+  href,
+  disabled,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  title: string
+  subtitle: string
+  onClick?: () => void
+  href?: string
+  disabled?: boolean
+}) {
+  const inner = (
+    <>
+      <Icon
+        className={cn(
+          'w-4 h-4 mt-0.5 flex-shrink-0',
+          disabled ? 'text-slate-300' : 'text-slate-500',
+        )}
+      />
+      <div className="flex flex-col text-left">
+        <span
+          className={cn(
+            'text-[13px] font-medium',
+            disabled ? 'text-slate-400' : 'text-slate-900',
+          )}
+        >
+          {title}
+        </span>
+        <span className="text-[11px] text-slate-500">{subtitle}</span>
+      </div>
+    </>
+  )
+  const cls = cn(
+    'w-full flex items-start gap-2.5 px-3 py-2 text-left',
+    disabled
+      ? 'cursor-default'
+      : 'cursor-pointer hover:bg-slate-50 active:bg-slate-100',
+  )
+  if (disabled) {
+    return (
+      <div className={cls} role="menuitem" aria-disabled="true">
+        {inner}
+      </div>
+    )
+  }
+  if (href) {
+    return (
+      <a href={href} className={cls} role="menuitem" onClick={onClick}>
+        {inner}
+      </a>
+    )
+  }
+  return (
+    <button type="button" className={cls} role="menuitem" onClick={onClick}>
+      {inner}
+    </button>
+  )
+}
+
+function EmptyCatalogState({ onUploadClick }: { onUploadClick: () => void }) {
+  return (
+    <div className="border border-slate-200 rounded-lg bg-white px-6 py-12">
+      <div className="max-w-2xl mx-auto text-center">
+        <Package className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+        <h3 className="text-[16px] font-semibold text-slate-900 mb-1">
+          Your catalog is empty
+        </h3>
+        <p className="text-[13px] text-slate-600 mb-6">
+          Get started by adding your first products. You have a few options:
+        </p>
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-3 max-w-2xl mx-auto">
+        <EmptyTile
+          icon={FileSpreadsheet}
+          title="Upload CSV / Excel"
+          body="Bulk import many products via spreadsheet."
+          cta="Upload file"
+          onClick={onUploadClick}
+        />
+        <EmptyTile
+          icon={FolderArchive}
+          title="Upload ZIP folder"
+          body="Multi-file archive with images and rich descriptions."
+          cta="Upload ZIP"
+          onClick={onUploadClick}
+        />
+      </div>
+
+      <div className="max-w-2xl mx-auto mt-3 px-4 py-3 border border-slate-200 rounded-lg bg-slate-50 flex items-center justify-between gap-3 flex-wrap">
+        <div className="text-[13px] text-slate-700">
+          Already have products in your catalog? Open Bulk Operations to view
+          and edit them.
+        </div>
+        <a
+          href="/bulk-operations"
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-[12px] font-medium bg-white border border-slate-200 text-slate-700 hover:bg-slate-100"
+        >
+          <Grid className="w-3.5 h-3.5" />
+          Open bulk operations
+        </a>
+      </div>
+
+      <div className="max-w-2xl mx-auto mt-2 text-center">
+        <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-400">
+          <Sparkles className="w-3.5 h-3.5" />
+          Single-product creation form coming soon
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function EmptyTile({
+  icon: Icon,
+  title,
+  body,
+  cta,
+  onClick,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  title: string
+  body: string
+  cta: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="border border-slate-200 rounded-lg bg-white p-5 text-left hover:border-blue-300 hover:bg-blue-50/30 transition-colors group"
+    >
+      <Icon className="w-6 h-6 text-slate-400 group-hover:text-blue-600 mb-3" />
+      <div className="text-[14px] font-semibold text-slate-900 mb-1">
+        {title}
+      </div>
+      <div className="text-[12px] text-slate-600 mb-4">{body}</div>
+      <span className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[12px] font-medium bg-blue-600 text-white group-hover:bg-blue-700">
+        <Plus className="w-3 h-3" />
+        {cta}
+      </span>
+    </button>
   )
 }
 

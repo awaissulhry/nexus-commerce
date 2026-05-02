@@ -151,9 +151,13 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             updatedAt: true,
             createdAt: true,
             isParent: true,
-            cloudImages: {
-              select: { url: true, type: true, sortOrder: true },
-              orderBy: { sortOrder: 'asc' },
+            // Use ProductImage (the table that actually exists in
+            // Postgres) — the Image model is in schema.prisma but its
+            // table was never migrated. Order by createdAt so the
+            // oldest upload (typically the MAIN image) wins ties.
+            images: {
+              select: { url: true, type: true },
+              orderBy: { createdAt: 'asc' },
               take: 1,
             },
           },
@@ -190,7 +194,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         updatedAt: p.updatedAt,
         createdAt: p.createdAt,
         isParent: p.isParent,
-        imageUrl: p.cloudImages[0]?.url ?? null,
+        imageUrl: p.images[0]?.url ?? null,
       }))
 
       return {
