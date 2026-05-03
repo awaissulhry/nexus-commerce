@@ -37,6 +37,7 @@ import listingWizardRoutes from "./routes/listing-wizard.routes.js";
 import gtinExemptionRoutes from "./routes/gtin-exemption.routes.js";
 import listingContentRoutes from "./routes/listing-content.routes.js";
 import terminologyRoutes from "./routes/terminology.routes.js";
+import bulkOperationsRoutes from "./routes/bulk-operations.routes.js";
 // Queue/worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS — Phase 2 will flip it on.
 // import { startJobs } from "./jobs/sync.job.js";
 // import { initializeBullMQWorker } from "./workers/bullmq-sync.worker.js";
@@ -112,6 +113,7 @@ app.register(listingWizardRoutes, { prefix: '/api' });
 app.register(gtinExemptionRoutes, { prefix: '/api' });
 app.register(listingContentRoutes, { prefix: '/api' });
 app.register(terminologyRoutes, { prefix: '/api' });
+app.register(bulkOperationsRoutes, { prefix: '/api' });
 
 const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 8080;
 

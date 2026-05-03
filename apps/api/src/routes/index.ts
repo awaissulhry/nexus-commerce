@@ -17,7 +17,8 @@ import { logger } from '../utils/logger.js';
 import { errorHandler, notFoundHandler } from '../middleware/error-handler.js';
 
 // Import route modules
-import bulkActionsRouter from './bulk-actions.routes.js';
+// bulk-actions Express router removed 2026-05-03 — ported to Fastify
+// in /routes/bulk-operations.routes.ts (Phase B-5).
 import pricingRulesRouter from './pricing-rules.routes.js';
 import syncHealthRouter from './sync-health.routes.js';
 import { matrixRoutes } from './matrix.routes.js';
@@ -35,17 +36,11 @@ export async function setupRoutes(app: Express): Promise<void> {
   // API Routes
   // ============================================================================
 
-  /**
-   * Bulk Actions Routes
-   * POST   /api/bulk-actions              - Create job
-   * GET    /api/bulk-actions              - List pending jobs
-   * GET    /api/bulk-actions/:id          - Get job status
-   * POST   /api/bulk-actions/:id/process  - Start processing
-   * POST   /api/bulk-actions/:id/cancel   - Cancel job
-   * POST   /api/bulk-actions/:id/rollback - Create rollback job
-   */
-  app.use('/api/bulk-actions', bulkActionsRouter);
-  logger.info('Registered bulk-actions routes');
+  // (Phase B-5: bulk-actions Express router replaced by the
+  // Fastify version at /routes/bulk-operations.routes.ts. The new
+  // routes are registered in apps/api/src/index.ts at /api/bulk-operations
+  // — this whole routes/index.ts file is unused dead code; leaving
+  // it as-is rather than performing a separate cleanup here.)
 
   /**
    * Pricing Rules Routes
