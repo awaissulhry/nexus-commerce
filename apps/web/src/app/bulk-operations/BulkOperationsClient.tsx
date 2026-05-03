@@ -1969,6 +1969,14 @@ export default function BulkOperationsClient() {
     data: displayRows as BulkProduct[],
     columns: dynamicColumns,
     getCoreRowModel: getCoreRowModel(),
+    // Stable row id keyed off the product id (NOT row position).
+    // Without this, collapsing a parent in hierarchy mode shrinks
+    // the visible-rows array and React reconciles by position —
+    // <TableRow key="3"> at position 3 maps to a different product
+    // after the collapse, but its child EditableCell components
+    // keep their draftValue state, leaking the previous row's
+    // SKU / title into the new one with a yellow dirty tint.
+    getRowId: (row) => row.id,
     enableColumnResizing: true,
     columnResizeMode: 'onChange',
     state: { columnSizing },
@@ -2707,10 +2715,14 @@ export default function BulkOperationsClient() {
         pendingChannelChanges={pendingChannelChanges}
       />
 
-      <div className="flex-shrink-0 mb-1 flex items-center justify-between gap-4 flex-wrap">
-        {/* Left group: how + what data is shown (views, filters, search).
-            flex-shrink-0 here keeps the inner cluster cohesive when the
-            parent wraps — the group moves as a unit. */}
+      {/* Sticky toolbar — single row, never wraps. Left group is "what
+          am I looking at" (mode → expand → search → filter); right group
+          is "what am I doing to it" (context → history → views → write).
+          A compact status tail sits between the two groups when there's
+          room, so the standalone status row below is gone. Below ~1100px
+          the row scrolls horizontally rather than stacking. */}
+      <div className="flex-shrink-0 mb-3 flex items-center gap-3 px-1 pb-2 border-b border-slate-200 overflow-x-auto bg-white">
+        {/* Left group */}
         <div className="flex items-center gap-2 flex-shrink-0">
           <DisplayModeToggle mode={displayMode} onChange={setDisplayMode} />
           {displayMode === 'hierarchy' && (
@@ -2730,7 +2742,7 @@ export default function BulkOperationsClient() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search SKU, name, brand…"
-              className="h-7 pl-7 pr-7 text-[12px] border border-slate-200 rounded-md w-48 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="h-7 pl-7 pr-7 text-[12px] border border-slate-200 rounded-md w-40 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
             {searchQuery && (
               <button
@@ -2753,8 +2765,19 @@ export default function BulkOperationsClient() {
           />
         </div>
 
-        {/* Right group: write actions, ordered context → history → views → commit. */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        {/* Status tail — fills available space between the groups. Hidden
+            below xl so the action buttons keep their breathing room. */}
+        <div className="hidden xl:block flex-1 min-w-0 text-[11px] text-slate-500 tabular-nums truncate">
+          {loading
+            ? 'Loading…'
+            : filteredProducts.length === products.length
+            ? `${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`
+            : `${filteredProducts.length.toLocaleString()} of ${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`}
+        </div>
+
+        {/* Right group — ml-auto kicks in below xl when the status tail
+            is hidden, so the write actions still hug the right edge. */}
+        <div className="flex items-center gap-2 flex-shrink-0 ml-auto xl:ml-0">
           <MarketplaceSelector
             value={marketplaceContext}
             onChange={setMarketplaceContext}
@@ -2862,17 +2885,6 @@ export default function BulkOperationsClient() {
             {saveLabel}
           </Button>
         </div>
-      </div>
-
-      {/* Toolbar status row — sits below the actions so the toolbar
-          itself stays a single horizontal line at any reasonable
-          width. Mirrors the pattern in /products. */}
-      <div className="flex-shrink-0 mb-3 text-[11px] text-slate-500 px-1 tabular-nums">
-        {loading
-          ? 'Loading…'
-          : filteredProducts.length === products.length
-          ? `${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`
-          : `${filteredProducts.length.toLocaleString()} of ${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`}
       </div>
 
       <div
