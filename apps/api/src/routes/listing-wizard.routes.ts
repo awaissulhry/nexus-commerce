@@ -25,6 +25,7 @@ import {
 } from '../services/listing-wizard/product-types.service.js'
 import { SchemaParserService } from '../services/listing-wizard/schema-parser.service.js'
 import { VariationsService } from '../services/listing-wizard/variations.service.js'
+import { SubmissionService } from '../services/listing-wizard/submission.service.js'
 
 const amazonService = new AmazonService()
 const categorySchemaService = new CategorySchemaService(
@@ -41,6 +42,7 @@ const schemaParserService = new SchemaParserService(
   categorySchemaService,
 )
 const variationsService = new VariationsService(prisma as any)
+const submissionService = new SubmissionService(prisma as any)
 
 interface StartBody {
   productId?: string
@@ -489,16 +491,124 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
-  // Phase 5.3 ships the route stub so the client can wire its
-  // submit button without a 404. The actual SP-API push lands in
-  // Phase 6 after the per-step content is filled in.
+  // ── Step 9 — Review ───────────────────────────────────────────
+  // GET /api/listing-wizard/:id/review
+  //
+  // Returns the validation report (per-step status) plus the prepared
+  // channel payload. Lets the user inspect exactly what would be sent
+  // before they hit Submit.
+  fastify.get<{ Params: { id: string } }>(
+    '/listing-wizard/:id/review',
+    async (request, reply) => {
+      const wizard = await prisma.listingWizard.findUnique({
+        where: { id: request.params.id },
+      })
+      if (!wizard) {
+        return reply.code(404).send({ error: 'Wizard not found' })
+      }
+      const w = {
+        id: wizard.id,
+        channel: wizard.channel,
+        marketplace: wizard.marketplace,
+        state: (wizard.state ?? {}) as Record<string, any>,
+      }
+      const report = submissionService.validate(w)
+      const amazonPayload =
+        wizard.channel.toUpperCase() === 'AMAZON'
+          ? submissionService.composeAmazonPayload(w)
+          : null
+      return {
+        wizard: {
+          id: wizard.id,
+          channel: wizard.channel,
+          marketplace: wizard.marketplace,
+          status: wizard.status,
+          currentStep: wizard.currentStep,
+        },
+        report,
+        amazonPayload,
+      }
+    },
+  )
+
+  // ── Step 10 — Submit ──────────────────────────────────────────
+  // POST /api/listing-wizard/:id/submit
+  //
+  // Validates the wizard state and, if ready, transitions to
+  // SUBMITTED. The actual channel push (Amazon putListingsItem,
+  // Shopify createProduct, etc.) is the missing integration —
+  // tracked in TECH_DEBT. For now this endpoint:
+  //
+  //   1. validates state with SubmissionService.validate()
+  //   2. composes the channel payload (so the user can see what
+  //      would be sent)
+  //   3. transitions wizard.status to SUBMITTED so the UI moves
+  //      forward and the user can see the prepared payload
+  //
+  // When the channel client lands, this same handler picks up the
+  // payload, dispatches it, and updates status based on the result.
   fastify.post<{ Params: { id: string } }>(
     '/listing-wizard/:id/submit',
-    async (_request, reply) => {
-      return reply.code(501).send({
-        error:
-          'Submit is not yet implemented — the channel push lands in Phase 6 once the per-step data is collected.',
+    async (request, reply) => {
+      const wizard = await prisma.listingWizard.findUnique({
+        where: { id: request.params.id },
       })
+      if (!wizard) {
+        return reply.code(404).send({ error: 'Wizard not found' })
+      }
+      if (wizard.status !== 'DRAFT') {
+        return reply.code(409).send({
+          error: `Wizard is already ${wizard.status.toLowerCase()}.`,
+        })
+      }
+      const w = {
+        id: wizard.id,
+        channel: wizard.channel,
+        marketplace: wizard.marketplace,
+        state: (wizard.state ?? {}) as Record<string, any>,
+      }
+      const report = submissionService.validate(w)
+      if (!report.ready) {
+        return reply.code(400).send({
+          error: 'Wizard state has incomplete steps.',
+          report,
+        })
+      }
+      const amazonPayload =
+        wizard.channel.toUpperCase() === 'AMAZON'
+          ? submissionService.composeAmazonPayload(w)
+          : null
+      const updated = await prisma.listingWizard.update({
+        where: { id: wizard.id },
+        data: {
+          status: 'SUBMITTED',
+          completedAt: new Date(),
+          state: {
+            ...(w.state as Record<string, any>),
+            submission: {
+              submittedAt: new Date().toISOString(),
+              channelPayloadPending: true,
+              integrationStatus:
+                'channel-publish-pending — actual push not yet wired',
+            },
+          } as any,
+        },
+      })
+      return {
+        wizard: {
+          id: updated.id,
+          status: updated.status,
+          completedAt: updated.completedAt,
+        },
+        report,
+        amazonPayload,
+        // Honest about what's wired vs not. UI surfaces this so the
+        // user knows the row was saved but hasn't actually been
+        // pushed to Amazon yet.
+        channelPushed: false,
+        channelPushReason:
+          'The Amazon SP-API putListingsItem integration is not yet wired. The wizard state is saved as SUBMITTED so the prepared payload is reviewable; the actual channel push lands in a future phase. See TECH_DEBT entry on listing-wizard publish.',
+      }
     },
   )
 }

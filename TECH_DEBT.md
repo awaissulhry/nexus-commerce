@@ -451,6 +451,69 @@ them (PRICING / INVENTORY / ATTRIBUTE)? The cross-targeting policy in
 `getItemsForJob` already handles the expansion direction; what's
 missing is the UI affordance and the scope-mode wiring.
 
+## 35. 🟡 Listing wizard — channel publish not yet wired
+
+**Surfaced at:** Listing wizard Steps 9/10 closeout. The ten-step
+wizard is now end-to-end navigable (audit + rebuild on 2026-05-03 →
+2026-05-04). State validation, payload composition, and the SUBMIT
+state transition all work. The actual channel push to Amazon (and
+Shopify, eBay, WooCommerce) is the remaining piece.
+
+**What works today:**
+
+- All 10 steps render real components (Steps 1, 2, 6 from earlier
+  phases; 3, 4, 5, 7, 8, 9, 10 added in this round).
+- `POST /api/listing-wizard/:id/submit` validates state, composes
+  the Amazon listings payload (wraps each user-supplied attribute
+  in the `[{ marketplace_id, value }]` convention, builds the
+  `purchasable_offer`, attaches main + alt image URLs in
+  `main_product_image_locator` / `other_product_image_locator`,
+  records variation theme + child SKUs), transitions wizard.status
+  to SUBMITTED, and returns the prepared payload so the user can
+  inspect what *would* be sent.
+- The endpoint response includes
+  `channelPushed: false` and a human-readable
+  `channelPushReason` so the UI can be honest about what's wired.
+
+**What's missing:**
+
+- **Amazon SP-API `putListingsItem` integration.** No
+  `putListingsItem` wrapper exists in `apps/api/src/services/marketplaces/amazon.service.ts`
+  (only `getListingsItem` for read). Building this means: take the
+  composed payload, call SP-API with `productType`, `requirements:
+  LISTING`, the wrapped attributes, plus the seller + marketplace
+  IDs; capture the submission ID; poll `getListingsItem` /
+  `getListingsItemIssues` until the listing is `BUYABLE` or surface
+  the specific issues. ~6-10 hours, plus integration testing.
+- **Shopify**: `ShopifyService.createProduct` already exists
+  (`apps/api/src/services/marketplaces/shopify.service.ts:320`) —
+  just needs an adapter that maps wizard state → its signature.
+  ~1-2 hours.
+- **WooCommerce**: no `createProduct` exists; only PUT for
+  existing rows. Building create is straightforward (POST to
+  `/products` with the same shape as the PUT). ~1-2 hours.
+- **eBay**: blocked behind Phase 2A (see #31, #33).
+- **Per-channel status polling** to surface "submitted → indexed →
+  searchable" once the push lands. The `state.submission` slot is
+  already wired in the schema for this.
+- **Variation publishing** — when `state.variations.includedSkus`
+  has children, each child needs its own `putListingsItem` call
+  (Amazon publishes children as siblings of the parent under the
+  variation theme). The composition layer surfaces them on
+  `amazonPayload.childSkus`; the per-child payload still needs to
+  be expanded.
+
+**Workaround:** Users walk the wizard, hit Submit, see the prepared
+payload, and copy it manually into Seller Central if they need to
+list right now. Wizard state is preserved as SUBMITTED with the
+prepared payload in `state.submission` so nothing is lost when the
+integration eventually lands.
+
+**Why this isn't in scope for the current round:** The channel-push
+integrations are substantial backend work that benefit from a
+dedicated phase with credentialed integration testing. They aren't
+gated on the wizard UI, which is what this round delivered.
+
 ---
 
 ## Triage summary
@@ -475,6 +538,7 @@ missing is the UI affordance and the scope-mode wiring.
 - **30** `/products` show + filter by category / productType
 - **33** Rewrite `ebay-orders.service.ts` against Phase 26 unified Order schema (orders sync flow currently broken)
 - **34** Bulk operations Path A-Lite deferrals — rollback, `LISTING_SYNC` handler, queue infra for big jobs, `DELETE` action, "selected items" scope
+- **35** Listing wizard — channel publish not yet wired (Amazon `putListingsItem`, Shopify adapter, WooCommerce create, eBay blocked, status polling, variation expansion)
 
 **🟢 P2 — when in the area:**
 - **4** CategorySchema "unknown" rows
