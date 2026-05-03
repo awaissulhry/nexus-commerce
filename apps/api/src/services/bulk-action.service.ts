@@ -5,16 +5,11 @@
  */
 
 import { prisma } from '@nexus/database';
+import type { BulkActionJob, PrismaClient } from '@prisma/client';
 import { logger } from '../utils/logger.js';
 import { amazonProvider } from '../providers/amazon.provider.js';
 import { ebayProvider } from '../providers/ebay.provider.js';
 import type { MarketplaceProvider } from '../providers/types.js';
-
-// TODO Phase B-2: replace `any` with `BulkActionJob` from @prisma/client.
-// The "type isn't being generated" comment is outdated — the model
-// has had a migration since 20260423 — but removing the alias is its
-// own commit so we can audit the resulting type errors cleanly.
-type BulkActionJob = any;
 
 // (Removed: a stubbed Decimal mock class whose `.plus()` returned
 // `this`, breaking every PRICING_UPDATE math op silently. Phase B-3
@@ -73,7 +68,7 @@ export interface ProcessJobResult {
 }
 
 export class BulkActionService {
-  constructor(private prisma: any = prisma) {}
+  constructor(private prisma: PrismaClient = prisma) {}
 
   /**
    * Create a new bulk action job
@@ -511,9 +506,12 @@ export class BulkActionService {
         });
       }
 
-      // Handle filter-based queries
+      // Handle filter-based queries. job.filters is `JsonValue | null`
+      // from Prisma; cast at the boundary since downstream expects an
+      // object shape. Phase B-4 replaces this with a properly-typed
+      // ScopeFilters parser.
       if (job.filters) {
-        return await this.getItemsByFilters(job.filters);
+        return await this.getItemsByFilters(job.filters as Record<string, any>);
       }
 
       return [];
@@ -527,23 +525,29 @@ export class BulkActionService {
   }
 
   /**
-   * Private helper: Process a single item based on action type
+   * Private helper: Process a single item based on action type.
+   * Casts JsonValue boundaries to Record at the dispatcher so each
+   * handler can keep its `Record<string, any>` signature. Phase B-3
+   * will replace these casts with per-action-type Zod parses for
+   * real validation.
    */
   private async processItem(
     item: any,
     job: BulkActionJob
   ): Promise<{ status: 'processed' | 'skipped' }> {
+    const payload = (job.actionPayload ?? {}) as Record<string, any>;
+    const channel = job.channel ?? undefined;
     switch (job.actionType) {
       case 'PRICING_UPDATE':
-        return await this.processPricingUpdate(item, job.actionPayload, job.channel);
+        return await this.processPricingUpdate(item, payload, channel);
       case 'INVENTORY_UPDATE':
-        return await this.processInventoryUpdate(item, job.actionPayload, job.channel);
+        return await this.processInventoryUpdate(item, payload, channel);
       case 'STATUS_UPDATE':
-        return await this.processStatusUpdate(item, job.actionPayload);
+        return await this.processStatusUpdate(item, payload);
       case 'ATTRIBUTE_UPDATE':
-        return await this.processAttributeUpdate(item, job.actionPayload);
+        return await this.processAttributeUpdate(item, payload);
       case 'LISTING_SYNC':
-        return await this.processListingSync(item, job.actionPayload, job.channel);
+        return await this.processListingSync(item, payload, channel);
       default:
         throw new Error(`Unknown action type: ${job.actionType}`);
     }
