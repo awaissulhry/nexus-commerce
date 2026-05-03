@@ -31,6 +31,7 @@ import {
   Undo2,
   Upload,
   WifiOff,
+  Wand2,
   X,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
@@ -44,6 +45,7 @@ import {
 } from './EditableCell'
 import PreviewChangesModal from './PreviewChangesModal'
 import UploadModal from './UploadModal'
+import BulkOperationModal from './BulkOperationModal'
 import FilterDropdown from './components/FilterDropdown'
 import PastePreviewModal, {
   type PasteCell,
@@ -987,6 +989,7 @@ export default function BulkOperationsClient() {
   const [cascadeModal, setCascadeModal] = useState<CascadeModalState | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [bulkOpModalOpen, setBulkOpModalOpen] = useState(false)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>({ kind: 'idle' })
   const [online, setOnline] = useState(true)
 
@@ -2815,6 +2818,15 @@ export default function BulkOperationsClient() {
           <Button
             variant="secondary"
             size="sm"
+            onClick={() => setBulkOpModalOpen(true)}
+            title="Apply price / stock / status / attribute changes to a scoped subset of products"
+          >
+            <Wand2 className="w-3.5 h-3.5 mr-1.5" />
+            Bulk apply
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => setUploadOpen(true)}
           >
             <Upload className="w-3.5 h-3.5 mr-1.5" />
@@ -2986,6 +2998,40 @@ export default function BulkOperationsClient() {
           // Selection + pending edits are local state and unaffected.
           reloadProducts()
         }}
+      />
+
+      <BulkOperationModal
+        open={bulkOpModalOpen}
+        onClose={() => {
+          setBulkOpModalOpen(false)
+          // Refresh the grid in case the bulk apply changed visible
+          // rows (price/stock/status/attribute updates).
+          reloadProducts()
+        }}
+        currentFilters={(() => {
+          // Map the grid's filterState (status[]/channels[]/stockLevel)
+          // to ScopeFilters. Imperfect but covers the common case.
+          // Channels intentionally not mapped — Product.syncChannels[]
+          // ≠ ChannelListing.marketplace; would need channel-to-marketplace
+          // resolution that's not worth the lift for v1.
+          const scope: {
+            status?: 'DRAFT' | 'ACTIVE' | 'INACTIVE'
+            stockMin?: number
+            stockMax?: number
+          } = {}
+          if (filterState.status.length === 1) {
+            scope.status = filterState.status[0] as
+              | 'DRAFT'
+              | 'ACTIVE'
+              | 'INACTIVE'
+          }
+          if (filterState.stockLevel === 'in') scope.stockMin = 1
+          else if (filterState.stockLevel === 'low') {
+            scope.stockMin = 1
+            scope.stockMax = 5
+          } else if (filterState.stockLevel === 'out') scope.stockMax = 0
+          return scope
+        })()}
       />
 
       <CascadeChoiceModal
