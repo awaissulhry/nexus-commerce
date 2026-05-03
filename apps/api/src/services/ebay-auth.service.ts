@@ -20,7 +20,14 @@ export class EbayAuthService {
   private clientSecret: string;
   private ruName: string;
   private environment: "SANDBOX" | "PRODUCTION";
-  private baseUrl: string;
+  // eBay splits its OAuth surface across TWO domains:
+  //   - auth.ebay.com  → user-facing /oauth2/authorize page
+  //   - api.ebay.com   → /identity/v1/oauth2/{token,revoke}, /sell/*
+  // Sending the user to api.ebay.com/oauth/authorize returns 404; that
+  // path doesn't exist. Keep them as separate fields so each consumer
+  // hits the right host.
+  private authBaseUrl: string;
+  private apiBaseUrl: string;
 
   constructor() {
     this.clientId = process.env.EBAY_CLIENT_ID || "";
@@ -41,11 +48,13 @@ export class EbayAuthService {
       logger.warn("EBAY_RUNAME not configured. OAuth2 flow will fail with 'unauthorized_client' from eBay.");
     }
 
-    // Set base URL based on environment
-    this.baseUrl =
-      this.environment === "SANDBOX"
-        ? "https://api.sandbox.ebay.com"
-        : "https://api.ebay.com";
+    if (this.environment === "SANDBOX") {
+      this.authBaseUrl = "https://auth.sandbox.ebay.com";
+      this.apiBaseUrl = "https://api.sandbox.ebay.com";
+    } else {
+      this.authBaseUrl = "https://auth.ebay.com";
+      this.apiBaseUrl = "https://api.ebay.com";
+    }
   }
 
   /**
@@ -70,7 +79,7 @@ export class EbayAuthService {
       state,
     });
 
-    return `${this.baseUrl}/oauth/authorize?${params.toString()}`;
+    return `${this.authBaseUrl}/oauth2/authorize?${params.toString()}`;
   }
 
   /**
@@ -80,7 +89,7 @@ export class EbayAuthService {
    */
   async exchangeCodeForToken(code: string, _redirectUriIgnored?: string): Promise<EbayTokenResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/identity/v1/oauth2/token`, {
+      const response = await fetch(`${this.apiBaseUrl}/identity/v1/oauth2/token`, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
@@ -114,7 +123,7 @@ export class EbayAuthService {
    */
   async refreshAccessToken(refreshToken: string): Promise<EbayTokenResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/identity/v1/oauth2/token`, {
+      const response = await fetch(`${this.apiBaseUrl}/identity/v1/oauth2/token`, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
@@ -275,7 +284,7 @@ export class EbayAuthService {
 
       // Call eBay revocation endpoint
       try {
-        const response = await fetch(`${this.baseUrl}/identity/v1/oauth2/token/revoke`, {
+        const response = await fetch(`${this.apiBaseUrl}/identity/v1/oauth2/token/revoke`, {
           method: "POST",
           headers: {
             "Content-Type": "application/x-www-form-urlencoded",
@@ -326,7 +335,7 @@ export class EbayAuthService {
     storeFrontUrl?: string;
   }> {
     try {
-      const response = await fetch(`${this.baseUrl}/sell/account/v1/seller`, {
+      const response = await fetch(`${this.apiBaseUrl}/sell/account/v1/seller`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${accessToken}`,
