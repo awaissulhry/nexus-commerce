@@ -14,6 +14,7 @@ import Step4Attributes from './steps/Step4Attributes'
 import Step5Variations from './steps/Step5Variations'
 import Step6Content from './steps/Step6Content'
 import Step7Images from './steps/Step7Images'
+import Step8Pricing from './steps/Step8Pricing'
 import { STEPS, findStep } from './lib/steps'
 
 export interface WizardData {
@@ -280,6 +281,7 @@ export default function ListWizardClient({
           }
           if (currentStep === 6) return <Step6Content {...stepProps} />
           if (currentStep === 7) return <Step7Images {...stepProps} />
+          if (currentStep === 8) return <Step8Pricing {...stepProps} />
           return <PlaceholderStep step={step} />
         })()}
       </div>

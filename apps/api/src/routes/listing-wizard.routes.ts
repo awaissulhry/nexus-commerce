@@ -438,6 +438,57 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── Step 8 — Pricing ─────────────────────────────────────────
+  // GET /api/listing-wizard/:id/pricing-context
+  //
+  // Returns the product's basePrice + costPrice, plus default
+  // marketplace fee assumptions for the wizard's channel. The
+  // frontend uses these to seed the calculator without re-fetching
+  // the master product.
+  fastify.get<{ Params: { id: string } }>(
+    '/listing-wizard/:id/pricing-context',
+    async (request, reply) => {
+      const wizard = await prisma.listingWizard.findUnique({
+        where: { id: request.params.id },
+      })
+      if (!wizard) {
+        return reply.code(404).send({ error: 'Wizard not found' })
+      }
+      const product = await prisma.product.findUnique({
+        where: { id: wizard.productId },
+        select: {
+          basePrice: true,
+          costPrice: true,
+          minPrice: true,
+          maxPrice: true,
+          buyBoxPrice: true,
+          competitorPrice: true,
+        },
+      })
+      if (!product) {
+        return reply.code(404).send({ error: 'Product not found' })
+      }
+      const currency = currencyForMarketplace(wizard.marketplace)
+      const fees = defaultFeesForChannel(wizard.channel)
+      return {
+        currency,
+        product: {
+          basePrice: Number(product.basePrice),
+          costPrice: product.costPrice ? Number(product.costPrice) : null,
+          minPrice: product.minPrice ? Number(product.minPrice) : null,
+          maxPrice: product.maxPrice ? Number(product.maxPrice) : null,
+          buyBoxPrice: product.buyBoxPrice
+            ? Number(product.buyBoxPrice)
+            : null,
+          competitorPrice: product.competitorPrice
+            ? Number(product.competitorPrice)
+            : null,
+        },
+        fees,
+      }
+    },
+  )
+
   // Phase 5.3 ships the route stub so the client can wire its
   // submit button without a 404. The actual SP-API push lands in
   // Phase 6 after the per-step content is filled in.
@@ -450,6 +501,57 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       })
     },
   )
+}
+
+// ── pricing helpers ────────────────────────────────────────────
+
+function currencyForMarketplace(marketplace: string): string {
+  const upper = marketplace.toUpperCase()
+  if (upper === 'US' || upper === 'CA' || upper === 'MX') return 'USD'
+  if (upper === 'UK' || upper === 'GB') return 'GBP'
+  if (upper === 'JP') return 'JPY'
+  if (upper === 'AU') return 'AUD'
+  // EU marketplaces (IT, DE, FR, ES, NL, BE, SE, PL) all use EUR
+  // when listing on Amazon.
+  return 'EUR'
+}
+
+function defaultFeesForChannel(channel: string): {
+  referralPercent: number
+  fulfillmentFee: number
+  notes: string
+} {
+  const ch = channel.toUpperCase()
+  if (ch === 'AMAZON') {
+    // 15% is the modal Amazon referral fee for clothing/accessories;
+    // categories like electronics are 8%, jewelry 20%. Surfaced as a
+    // default the user can override per listing.
+    return {
+      referralPercent: 15,
+      fulfillmentFee: 3.5,
+      notes:
+        'Amazon clothing/accessories default — 15% referral, ~€3.50 FBA. Override per category as needed.',
+    }
+  }
+  if (ch === 'SHOPIFY') {
+    return {
+      referralPercent: 0,
+      fulfillmentFee: 0,
+      notes: 'Shopify takes payment-processing fees, not referral fees.',
+    }
+  }
+  if (ch === 'EBAY') {
+    return {
+      referralPercent: 12.9,
+      fulfillmentFee: 0.3,
+      notes: 'eBay default — 12.9% final value fee + 30c per order.',
+    }
+  }
+  return {
+    referralPercent: 10,
+    fulfillmentFee: 0,
+    notes: 'Generic default. Override per channel.',
+  }
 }
 
 export default listingWizardRoutes
