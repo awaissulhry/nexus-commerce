@@ -9,6 +9,7 @@ import WizardNav from './components/WizardNav'
 import PlaceholderStep from './components/PlaceholderStep'
 import Step1Identifiers from './steps/Step1Identifiers'
 import Step2GtinExemption from './steps/Step2GtinExemption'
+import Step3ProductType from './steps/Step3ProductType'
 import Step6Content from './steps/Step6Content'
 import { STEPS, findStep } from './lib/steps'
 
@@ -248,6 +249,18 @@ export default function ListWizardClient({
           }
           if (currentStep === 1) return <Step1Identifiers {...stepProps} />
           if (currentStep === 2) return <Step2GtinExemption {...stepProps} />
+          if (currentStep === 3) {
+            // Step 3 (Product Type) is Amazon-only — Shopify and
+            // WooCommerce don't have an equivalent SKU-level taxonomy
+            // pipeline, and eBay is blocked behind Phase 2A. For other
+            // channels we render the placeholder card with the existing
+            // "ships in Phase 6" copy so the user can still walk the
+            // shell.
+            if (initialWizard.channel === 'AMAZON') {
+              return <Step3ProductType {...stepProps} />
+            }
+            return <PlaceholderStep step={step} />
+          }
           if (currentStep === 6) return <Step6Content {...stepProps} />
           return <PlaceholderStep step={step} />
         })()}

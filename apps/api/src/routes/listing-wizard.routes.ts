@@ -17,6 +17,23 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import { AmazonService } from '../services/marketplaces/amazon.service.js'
+import { CategorySchemaService } from '../services/categories/schema-sync.service.js'
+import {
+  ProductTypesService,
+  type ProductTypeListItem,
+} from '../services/listing-wizard/product-types.service.js'
+
+const amazonService = new AmazonService()
+const categorySchemaService = new CategorySchemaService(
+  prisma as any,
+  amazonService,
+)
+const productTypesService = new ProductTypesService(
+  prisma as any,
+  amazonService,
+  categorySchemaService,
+)
 
 interface StartBody {
   productId?: string
@@ -152,6 +169,124 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         },
       })
       return { wizard: next }
+    },
+  )
+
+  // ── Step 3 — Product Type picker ──────────────────────────────
+  // GET /api/listing-wizard/product-types?channel=AMAZON&marketplace=IT&search=jacket
+  //
+  // Returns a candidate list. Live SP-API results when configured;
+  // bundled fallback otherwise so the picker works pre-keys.
+  fastify.get('/listing-wizard/product-types', async (request, reply) => {
+    const q = request.query as {
+      channel?: string
+      marketplace?: string
+      search?: string
+    }
+    if (!q.channel) {
+      return reply.code(400).send({ error: 'channel is required' })
+    }
+    try {
+      const items = await productTypesService.listProductTypes({
+        channel: q.channel,
+        marketplace: q.marketplace ?? null,
+        search: q.search,
+      })
+      return { items, count: items.length }
+    } catch (err) {
+      fastify.log.error({ err }, '[listing-wizard] product-types failed')
+      return reply.code(500).send({
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  })
+
+  // POST /api/listing-wizard/:id/suggest-product-types
+  // Body: { candidates: ProductTypeListItem[] }
+  //
+  // Returns ranked suggestions. Falls back to rule-based ranking when
+  // GEMINI_API_KEY is unset, never blocking — the manual picker stays
+  // usable.
+  fastify.post<{
+    Params: { id: string }
+    Body: { candidates?: ProductTypeListItem[] }
+  }>(
+    '/listing-wizard/:id/suggest-product-types',
+    async (request, reply) => {
+      const wizard = await prisma.listingWizard.findUnique({
+        where: { id: request.params.id },
+      })
+      if (!wizard) {
+        return reply.code(404).send({ error: 'Wizard not found' })
+      }
+      const product = await prisma.product.findUnique({
+        where: { id: wizard.productId },
+        select: {
+          id: true,
+          name: true,
+          brand: true,
+          productType: true,
+          description: true,
+        },
+      })
+      if (!product) {
+        return reply.code(404).send({ error: 'Product not found' })
+      }
+      const candidates = Array.isArray(request.body?.candidates)
+        ? request.body!.candidates
+        : []
+      try {
+        const result = await productTypesService.suggestProductTypes(
+          {
+            productId: product.id,
+            name: product.name,
+            brand: product.brand,
+            productType: product.productType,
+            description: product.description,
+          },
+          candidates,
+        )
+        return result
+      } catch (err) {
+        fastify.log.error(
+          { err },
+          '[listing-wizard] suggest-product-types failed',
+        )
+        return reply.code(500).send({
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    },
+  )
+
+  // POST /api/listing-wizard/:id/prefetch-schema
+  // Body: { productType: string }
+  //
+  // Fire-and-forget warm of the CategorySchema cache so Step 4 lands
+  // instantly. Returns { ok, reason? } so the UI can know whether the
+  // warm worked but doesn't block.
+  fastify.post<{
+    Params: { id: string }
+    Body: { productType?: string }
+  }>(
+    '/listing-wizard/:id/prefetch-schema',
+    async (request, reply) => {
+      const wizard = await prisma.listingWizard.findUnique({
+        where: { id: request.params.id },
+      })
+      if (!wizard) {
+        return reply.code(404).send({ error: 'Wizard not found' })
+      }
+      const productType = request.body?.productType?.trim()
+      if (!productType) {
+        return reply.code(400).send({ error: 'productType is required' })
+      }
+      const result = await productTypesService.prefetchSchema({
+        channel: wizard.channel,
+        marketplace: wizard.marketplace,
+        productType,
+      })
+      return result
     },
   )
 
