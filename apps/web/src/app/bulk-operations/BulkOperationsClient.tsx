@@ -2661,9 +2661,9 @@ export default function BulkOperationsClient() {
         pendingChannelChanges={pendingChannelChanges}
       />
 
-      <div className="flex-shrink-0 mb-3 flex items-center justify-between gap-4 flex-wrap">
-        {/* Left group: how + what data is shown (views, filters, search, status). */}
-        <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex-shrink-0 mb-1 flex items-center justify-between gap-4 overflow-x-auto">
+        {/* Left group: how + what data is shown (views, filters, search). */}
+        <div className="flex items-center gap-2 flex-shrink-0">
           <DisplayModeToggle mode={displayMode} onChange={setDisplayMode} />
           {displayMode === 'hierarchy' && (
             <ExpandCollapseControls
@@ -2682,7 +2682,7 @@ export default function BulkOperationsClient() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search SKU, name, brand…"
-              className="h-7 pl-7 pr-7 text-[12px] border border-slate-200 rounded-md w-56 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="h-7 pl-7 pr-7 text-[12px] border border-slate-200 rounded-md w-48 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
             {searchQuery && (
               <button
@@ -2703,18 +2703,10 @@ export default function BulkOperationsClient() {
             onReset={resetFilters}
             activeCount={activeFilterCount}
           />
-
-          <span className="text-[12px] text-slate-500 ml-1">
-            {loading
-              ? 'Loading…'
-              : filteredProducts.length === products.length
-              ? `${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`
-              : `${filteredProducts.length.toLocaleString()} of ${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`}
-          </span>
         </div>
 
         {/* Right group: write actions, ordered context → history → views → commit. */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <MarketplaceSelector
             value={marketplaceContext}
             onChange={setMarketplaceContext}
@@ -2813,6 +2805,17 @@ export default function BulkOperationsClient() {
             {saveLabel}
           </Button>
         </div>
+      </div>
+
+      {/* Toolbar status row — sits below the actions so the toolbar
+          itself stays a single horizontal line at any reasonable
+          width. Mirrors the pattern in /products. */}
+      <div className="flex-shrink-0 mb-3 text-[11px] text-slate-500 px-1 tabular-nums">
+        {loading
+          ? 'Loading…'
+          : filteredProducts.length === products.length
+          ? `${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`
+          : `${filteredProducts.length.toLocaleString()} of ${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`}
       </div>
 
       <div
