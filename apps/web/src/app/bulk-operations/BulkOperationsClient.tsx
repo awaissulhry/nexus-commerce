@@ -2088,6 +2088,41 @@ export default function BulkOperationsClient() {
     [writeChange, pushHistoryEntry],
   )
 
+  // Clear every editable cell inside the current selection range.
+  // Mirrors commitFill's batch-write pattern so a multi-cell delete
+  // is a single history entry (Cmd+Z reverts the whole clear).
+  // Falls back gracefully on a 1×1 selection — that's just the active
+  // cell.
+  const clearSelectionRange = useCallback(() => {
+    const rb = rangeBoundsRef.current
+    if (!rb) return false
+    const tbl = tableRef.current
+    const tableRows = tbl.getRowModel().rows
+    const cols = tbl.getVisibleLeafColumns()
+    const allFields = allFieldsRef.current
+    const batch: HistoryDelta[] = []
+    let appliedAny = false
+    for (let r = rb.minRow; r <= rb.maxRow; r++) {
+      const row = tableRows[r]
+      if (!row) continue
+      for (let c = rb.minCol; c <= rb.maxCol; c++) {
+        const col = cols[c]
+        if (!col) continue
+        const fieldDef = allFields.find((f) => f.id === col.id)
+        if (!fieldDef?.editable) continue
+        editHandlers
+          .get(editKey(row.original.id, col.id))
+          ?.applyValue('')
+        writeChange(row.original.id, col.id, '', false, batch)
+        appliedAny = true
+      }
+    }
+    if (batch.length > 0) {
+      pushHistoryEntry({ cells: batch, timestamp: Date.now() })
+    }
+    return appliedAny
+  }, [writeChange, pushHistoryEntry])
+
   const beginFill = useCallback(() => {
     const rb = rangeBoundsRef.current
     if (!rb) return
@@ -2212,13 +2247,21 @@ export default function BulkOperationsClient() {
       }
       if (key === 'Backspace' || key === 'Delete') {
         e.preventDefault()
-        requestEditAt(sel.active.rowIdx, sel.active.colIdx, '')
+        // Multi-cell delete: clears every editable cell in the range
+        // as one batch history entry. Single-cell selection still
+        // works (1×1 range). If the range produced no edits (all
+        // cells read-only), fall back to the original active-cell
+        // edit-mode-with-empty-string so the user gets feedback.
+        const cleared = clearSelectionRange()
+        if (!cleared) {
+          requestEditAt(sel.active.rowIdx, sel.active.colIdx, '')
+        }
         return
       }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [moveSelection, requestEditAt])
+  }, [moveSelection, requestEditAt, clearSelectionRange])
 
   // ── Step 3: copy selection as TSV ────────────────────────────────
   // The handler is registered once on document; it pulls the latest
@@ -2661,8 +2704,10 @@ export default function BulkOperationsClient() {
         pendingChannelChanges={pendingChannelChanges}
       />
 
-      <div className="flex-shrink-0 mb-1 flex items-center justify-between gap-4 overflow-x-auto">
-        {/* Left group: how + what data is shown (views, filters, search). */}
+      <div className="flex-shrink-0 mb-1 flex items-center justify-between gap-4 flex-wrap">
+        {/* Left group: how + what data is shown (views, filters, search).
+            flex-shrink-0 here keeps the inner cluster cohesive when the
+            parent wraps — the group moves as a unit. */}
         <div className="flex items-center gap-2 flex-shrink-0">
           <DisplayModeToggle mode={displayMode} onChange={setDisplayMode} />
           {displayMode === 'hierarchy' && (
