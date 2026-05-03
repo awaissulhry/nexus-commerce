@@ -190,9 +190,13 @@ export function ChannelsClient() {
         throw new Error('Failed to revoke connection')
       }
 
-      const newConnections = new Map(connections)
-      newConnections.delete(connectionId)
-      setConnections(newConnections)
+      // Refetch from the server rather than mutating local state.
+      // Original code did `newConnections.delete(connectionId)` but
+      // the Map is keyed by channelType ('EBAY'), not connectionId,
+      // so the delete was a no-op and the UI kept rendering the old
+      // active state. Refetch matches server state exactly and picks
+      // up isActive=false on the now-revoked row.
+      await loadConnections()
       setStatusMsg({ kind: 'success', text: 'Connection revoked.' })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Revocation failed'
