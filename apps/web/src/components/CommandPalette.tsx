@@ -36,7 +36,7 @@ const COMMANDS: Command[] = [
   { id: 'goto-health', label: 'Go to Sync Health', icon: HeartPulse, href: '/dashboard/health', group: 'Navigation' },
   // Catalog actions
   { id: 'pim-review', label: 'Review detected PIM groups', icon: Layers, href: '/pim/review', group: 'Catalog' },
-  { id: 'bulk-upload', label: 'Bulk upload products', icon: Upload, href: '/inventory/upload', group: 'Catalog' },
+  { id: 'bulk-upload', label: 'Bulk upload products', icon: Upload, href: '/bulk-operations', group: 'Catalog' },
   // System
   { id: 'connections', label: 'Manage channel connections', icon: Plug, href: '/settings/channels', group: 'System' },
   { id: 'settings', label: 'Open Settings', icon: SettingsIcon, href: '/settings/account', group: 'System' },
@@ -49,16 +49,44 @@ export default function CommandPalette() {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement | null>(null)
 
-  // Open on ⌘K / Ctrl+K, close on Esc, also listen for sidebar's
-  // dispatched event so the search icon button works.
+  // ⌘K opens the palette; ⌘P/⌘L/⌘O/⌘, navigate directly to the most-
+  // used pages without going through the palette. Direct shortcuts
+  // are skipped when focus is in an input/textarea/contenteditable so
+  // they don't hijack typing.
   useEffect(() => {
+    const isTypingTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false
+      const tag = target.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
+      if (target.isContentEditable) return true
+      return false
+    }
+    const directShortcuts: Record<string, string> = {
+      p: '/products',
+      l: '/listings',
+      o: '/orders',
+      ',': '/settings/account',
+    }
     const onKey = (e: KeyboardEvent) => {
-      const isCmdK = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k'
-      if (isCmdK) {
+      const isMod = e.metaKey || e.ctrlKey
+      const k = e.key.toLowerCase()
+      if (isMod && k === 'k') {
         e.preventDefault()
         setOpen((o) => !o)
-      } else if (e.key === 'Escape' && open) {
+        return
+      }
+      if (e.key === 'Escape' && open) {
         setOpen(false)
+        return
+      }
+      // Direct nav shortcuts — skip when modifier-less or when the
+      // user is typing into a field. Also skip when the palette is
+      // open (its own keydown handler owns navigation in that case).
+      if (!isMod || open || isTypingTarget(e.target)) return
+      const dest = directShortcuts[k] ?? directShortcuts[e.key]
+      if (dest) {
+        e.preventDefault()
+        router.push(dest)
       }
     }
     const onOpenEvent = () => setOpen(true)
@@ -68,7 +96,7 @@ export default function CommandPalette() {
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('nexus:open-command-palette', onOpenEvent)
     }
-  }, [open])
+  }, [open, router])
 
   // Reset query + focus input each time we open
   useEffect(() => {

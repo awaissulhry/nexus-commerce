@@ -166,9 +166,16 @@ export default function AppSidebar() {
     }
     fetchCounts()
     const id = window.setInterval(fetchCounts, 60_000)
+    // Refetch when the user returns to the tab — covers the "I left
+    // this open overnight" case where the polling interval kept
+    // ticking but the data is now stale relative to what they'd
+    // expect on focus.
+    const onFocus = () => fetchCounts()
+    window.addEventListener('focus', onFocus)
     return () => {
       cancelled = true
       window.clearInterval(id)
+      window.removeEventListener('focus', onFocus)
     }
   }, [])
 
