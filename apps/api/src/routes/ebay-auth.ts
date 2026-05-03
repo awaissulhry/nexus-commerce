@@ -241,6 +241,46 @@ export async function ebayAuthRoutes(app: FastifyInstance) {
   );
 
   /**
+   * GET /api/ebay/auth/connections
+   * List all eBay channel connections (active + inactive). The
+   * /settings/channels UI consumes this to render the "Connected"
+   * state after a successful OAuth flow. Sorted updatedAt desc so
+   * the most recent connection wins if there are duplicates.
+   */
+  app.get("/api/ebay/auth/connections", async (_request, reply) => {
+    try {
+      const connections = await prisma.channelConnection.findMany({
+        where: { channelType: "EBAY" },
+        orderBy: { updatedAt: "desc" },
+      });
+      return reply.send({
+        success: true,
+        connections: connections.map((c) => ({
+          id: c.id,
+          channelType: c.channelType,
+          isActive: c.isActive,
+          sellerName: c.ebaySignInName,
+          storeName: c.ebayStoreName,
+          storeFrontUrl: c.ebayStoreFrontUrl,
+          tokenExpiresAt: c.ebayTokenExpiresAt,
+          lastSyncAt: c.lastSyncAt,
+          lastSyncStatus: c.lastSyncStatus,
+          lastSyncError: c.lastSyncError,
+          createdAt: c.createdAt,
+          updatedAt: c.updatedAt,
+        })),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error("Error listing connections", { error: message });
+      return reply.status(500).send({
+        success: false,
+        error: message,
+      });
+    }
+  });
+
+  /**
    * GET /api/ebay/auth/connection/:connectionId
    * Get the status of an eBay connection
    */

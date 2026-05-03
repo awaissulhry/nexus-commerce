@@ -52,9 +52,34 @@ export function ChannelsClient() {
     try {
       setLoading(true)
       setStatusMsg(null)
-      // In a real app, fetch from API. Schema's ChannelConnection table
-      // exists but no list endpoint is wired yet — start empty.
+      // Fetch all eBay channel connections from the API. Backend
+      // returns them sorted updatedAt desc; we iterate in REVERSE so
+      // the most recent wins the Map.set on duplicate channelType.
+      // Active connections also win over inactive ones.
+      const res = await fetch(
+        `${getBackendUrl()}/api/ebay/auth/connections`,
+        { cache: 'no-store' },
+      )
+      if (!res.ok) {
+        throw new Error(`Failed to load connections (HTTP ${res.status})`)
+      }
+      const data = (await res.json()) as {
+        success: boolean
+        connections?: ChannelConnection[]
+      }
+      const list = data.connections ?? []
       const newConnections = new Map<string, ChannelConnection>()
+      // Sort: active first, then most recent. Last write wins, so
+      // iterate in REVERSE preference order — least preferred first.
+      const sorted = [...list].sort((a, b) => {
+        if (a.isActive !== b.isActive) return a.isActive ? -1 : 1
+        return 0 // backend already sorted by updatedAt desc within isActive group
+      })
+      // Iterate reverse so the first (highest priority) item lands
+      // last in Map.set and wins.
+      for (let i = sorted.length - 1; i >= 0; i--) {
+        newConnections.set(sorted[i].channelType, sorted[i])
+      }
       setConnections(newConnections)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load connections'
