@@ -12,6 +12,10 @@ import {
   type PlanRow,
 } from '../services/products/bulk-upload.service.js'
 import { parseZipUpload } from '../services/products/bulk-zip-upload.service.js'
+import {
+  seedRealisticXavia,
+  IMPORT_SOURCE as XAVIA_REALISTIC_IMPORT_SOURCE,
+} from '../services/seed-xavia-realistic.service.js'
 
 /**
  * Routes for bulk-operations: optimized fetch + atomic patch.
@@ -1104,6 +1108,47 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const r = await prisma.product.deleteMany({
         where: { importSource: 'PERFORMANCE_TEST' },
+      })
+      return { ok: true, deleted: r.count }
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // POST /api/admin/seed-xavia-realistic
+  // Generates ~67 parent products + ~1,272 ProductVariation rows
+  // covering 6 motorcycle-gear categories with multi-dimensional
+  // variations. Idempotent (Product.sku and ProductVariation.sku
+  // are unique). See services/seed-xavia-realistic.service.ts for
+  // the full template definitions.
+  fastify.post('/admin/seed-xavia-realistic', async (_request, reply) => {
+    const startTs = Date.now()
+    try {
+      const summary = await seedRealisticXavia(prisma as any, () => {
+        // Quiet — would flood Railway logs at 67 parent rows. The
+        // returned summary already has the byCategory counts.
+      })
+      return {
+        ok: true,
+        elapsedMs: Date.now() - startTs,
+        ...summary,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[seed-xavia-realistic] failed')
+      return reply.code(500).send({
+        ok: false,
+        error: error?.message ?? String(error),
+      })
+    }
+  })
+
+  // DELETE /api/admin/cleanup-xavia-realistic
+  // Removes every Product row marked importSource =
+  // 'XAVIA_REALISTIC_TEST'. Cascades to ProductVariation via FK.
+  fastify.delete('/admin/cleanup-xavia-realistic', async (_request, reply) => {
+    try {
+      const r = await prisma.product.deleteMany({
+        where: { importSource: XAVIA_REALISTIC_IMPORT_SOURCE },
       })
       return { ok: true, deleted: r.count }
     } catch (error: any) {
