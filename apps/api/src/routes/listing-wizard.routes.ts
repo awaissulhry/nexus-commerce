@@ -23,6 +23,7 @@ import {
   ProductTypesService,
   type ProductTypeListItem,
 } from '../services/listing-wizard/product-types.service.js'
+import { SchemaParserService } from '../services/listing-wizard/schema-parser.service.js'
 
 const amazonService = new AmazonService()
 const categorySchemaService = new CategorySchemaService(
@@ -32,6 +33,10 @@ const categorySchemaService = new CategorySchemaService(
 const productTypesService = new ProductTypesService(
   prisma as any,
   amazonService,
+  categorySchemaService,
+)
+const schemaParserService = new SchemaParserService(
+  prisma as any,
   categorySchemaService,
 )
 
@@ -287,6 +292,68 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         productType,
       })
       return result
+    },
+  )
+
+  // ── Step 4 — Required Attributes ──────────────────────────────
+  // GET /api/listing-wizard/:id/required-fields
+  //
+  // Returns a flat field manifest for the productType selected in
+  // Step 3. Smart defaults are sourced from the master product so the
+  // user can confirm rather than re-type. Unsupported field shapes
+  // are surfaced as kind='unsupported' so the UI can degrade
+  // gracefully without crashing on exotic schema corners.
+  fastify.get<{ Params: { id: string } }>(
+    '/listing-wizard/:id/required-fields',
+    async (request, reply) => {
+      const wizard = await prisma.listingWizard.findUnique({
+        where: { id: request.params.id },
+      })
+      if (!wizard) {
+        return reply.code(404).send({ error: 'Wizard not found' })
+      }
+      const state = (wizard.state ?? {}) as Record<string, any>
+      const productType = state?.productType?.productType
+      if (typeof productType !== 'string' || productType.length === 0) {
+        return reply.code(409).send({
+          error:
+            'Pick a product type in Step 3 first — required-fields needs a productType to render.',
+        })
+      }
+      const product = await prisma.product.findUnique({
+        where: { id: wizard.productId },
+        select: {
+          name: true,
+          brand: true,
+          description: true,
+          productType: true,
+        },
+      })
+      if (!product) {
+        return reply.code(404).send({ error: 'Product not found' })
+      }
+      try {
+        const manifest = await schemaParserService.getRequiredFields({
+          channel: wizard.channel,
+          marketplace: wizard.marketplace,
+          productType,
+          product: {
+            name: product.name,
+            brand: product.brand,
+            description: product.description,
+            productType: product.productType,
+          },
+        })
+        return manifest
+      } catch (err) {
+        fastify.log.error(
+          { err },
+          '[listing-wizard] required-fields failed',
+        )
+        const msg = err instanceof Error ? err.message : String(err)
+        const isAuth = /SP-API not configured|credentials|auth/i.test(msg)
+        return reply.code(isAuth ? 503 : 500).send({ error: msg })
+      }
     },
   )
 

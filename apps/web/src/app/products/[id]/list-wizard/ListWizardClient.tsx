@@ -10,6 +10,7 @@ import PlaceholderStep from './components/PlaceholderStep'
 import Step1Identifiers from './steps/Step1Identifiers'
 import Step2GtinExemption from './steps/Step2GtinExemption'
 import Step3ProductType from './steps/Step3ProductType'
+import Step4Attributes from './steps/Step4Attributes'
 import Step6Content from './steps/Step6Content'
 import { STEPS, findStep } from './lib/steps'
 
@@ -260,6 +261,12 @@ export default function ListWizardClient({
               return <Step3ProductType {...stepProps} />
             }
             return <PlaceholderStep step={step} />
+          }
+          if (currentStep === 4) {
+            // Step 4 reads the productType selected in Step 3, so
+            // it's also Amazon-only for now. The component itself
+            // handles the non-Amazon case with a "skipping" message.
+            return <Step4Attributes {...stepProps} />
           }
           if (currentStep === 6) return <Step6Content {...stepProps} />
           return <PlaceholderStep step={step} />
