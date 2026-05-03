@@ -51,13 +51,58 @@ const submissionService = new SubmissionService(prisma as any)
 
 interface StartBody {
   productId?: string
+  // New multi-channel signature.
+  channels?: Array<{ platform?: string; marketplace?: string }>
+  // Legacy single-channel signature; auto-wrapped into channels[]
+  // on the way through. Kept for the existing /products/:id/edit
+  // entry point and old deep-links.
   channel?: string
   marketplace?: string
 }
 
+interface MarketplaceOption {
+  code: string
+  label: string
+}
+
+interface PlatformStatus {
+  platform: 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'WOOCOMMERCE'
+  connected: boolean
+  reason?: 'not_implemented' | 'no_credentials' | 'inactive' | 'error'
+  marketplaces: MarketplaceOption[]
+}
+
+const AMAZON_MARKETPLACES: MarketplaceOption[] = [
+  { code: 'IT', label: 'Italy' },
+  { code: 'DE', label: 'Germany' },
+  { code: 'FR', label: 'France' },
+  { code: 'ES', label: 'Spain' },
+  { code: 'UK', label: 'United Kingdom' },
+  { code: 'US', label: 'United States' },
+  { code: 'CA', label: 'Canada' },
+  { code: 'MX', label: 'Mexico' },
+]
+
+const EBAY_MARKETPLACES: MarketplaceOption[] = [
+  { code: 'IT', label: 'Italy' },
+  { code: 'DE', label: 'Germany' },
+  { code: 'FR', label: 'France' },
+  { code: 'ES', label: 'Spain' },
+  { code: 'UK', label: 'United Kingdom' },
+  { code: 'US', label: 'United States' },
+]
+
 interface PatchBody {
   currentStep?: number
   state?: Record<string, unknown>
+  // Per-channel overrides keyed by "PLATFORM:MARKET". PATCHed slices
+  // are shallow-merged with existing channelStates, same pattern as
+  // `state`.
+  channelStates?: Record<string, Record<string, unknown>>
+  // Phase B: Step 1 (Channels & Markets) writes the final channels
+  // selection here. The handler recomputes channelsHash from the
+  // submitted array.
+  channels?: Array<{ platform?: string; marketplace?: string }>
   status?: string
 }
 
@@ -69,22 +114,105 @@ const VALID_CHANNELS = new Set([
 ])
 
 const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
+  // ── Phase B — Step 1 connection-status surface ────────────────
+  // GET /api/listing-wizard/connection-status
+  //
+  // Single endpoint the new Step 1 (Channels & Markets) consults to
+  // know which platforms are usable + which marketplaces are valid
+  // per platform. Honest about state: Amazon = env-var driven, eBay =
+  // ChannelConnection.isActive, Shopify/Woo = not_implemented.
+  fastify.get('/listing-wizard/connection-status', async (_request, reply) => {
+    try {
+      // Amazon: configured if any of the SP-API credential env vars
+      // are set. Use the same "isConfigured" check the AmazonService
+      // does internally so this stays in sync.
+      const amazonConnected = amazonService.isConfigured()
+
+      // eBay: any active ChannelConnection of channelType=EBAY counts.
+      const ebayActive = await prisma.channelConnection.count({
+        where: { channelType: 'EBAY', isActive: true },
+      })
+      const ebayConnected = ebayActive > 0
+
+      const platforms: PlatformStatus[] = [
+        {
+          platform: 'AMAZON',
+          connected: amazonConnected,
+          reason: amazonConnected ? undefined : 'no_credentials',
+          marketplaces: AMAZON_MARKETPLACES,
+        },
+        {
+          platform: 'EBAY',
+          connected: ebayConnected,
+          reason: ebayConnected ? undefined : 'inactive',
+          marketplaces: EBAY_MARKETPLACES,
+        },
+        {
+          platform: 'SHOPIFY',
+          connected: false,
+          reason: 'not_implemented',
+          marketplaces: [{ code: 'GLOBAL', label: 'Shopify Store' }],
+        },
+        {
+          platform: 'WOOCOMMERCE',
+          connected: false,
+          reason: 'not_implemented',
+          marketplaces: [{ code: 'GLOBAL', label: 'WooCommerce Store' }],
+        },
+      ]
+      return { platforms }
+    } catch (err) {
+      fastify.log.error(
+        { err },
+        '[listing-wizard] connection-status failed',
+      )
+      return reply.code(500).send({
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  })
+
   fastify.post<{ Body: StartBody }>(
     '/listing-wizard/start',
     async (request, reply) => {
-      const { productId, channel, marketplace } = request.body ?? {}
-      if (!productId || !channel || !marketplace) {
-        return reply.code(400).send({
-          error: 'productId, channel, and marketplace are all required',
-        })
+      const body = request.body ?? {}
+      if (!body.productId) {
+        return reply.code(400).send({ error: 'productId is required' })
       }
-      if (!VALID_CHANNELS.has(channel)) {
-        return reply
-          .code(400)
-          .send({ error: `Unsupported channel: ${channel}` })
+
+      // Multi-channel input (Phase B canonical form): { productId,
+      // channels: [{platform, marketplace}, ...] }.
+      // Legacy input (kept for /products/:id/edit deep-links and old
+      // bookmarks): { productId, channel, marketplace } — we wrap
+      // into a single-entry channels[] array.
+      let inputChannels: Array<{ platform?: string; marketplace?: string }>
+      if (Array.isArray(body.channels)) {
+        inputChannels = body.channels
+      } else if (body.channel && body.marketplace) {
+        inputChannels = [
+          { platform: body.channel, marketplace: body.marketplace },
+        ]
+      } else {
+        // No channels at all — caller can pick them in Step 1. We
+        // start the draft with an empty channels array; the wizard
+        // refuses to advance past Step 1 until at least one is
+        // selected. This is the path the new "List on channels"
+        // entry from /products/:id/edit will use.
+        inputChannels = []
       }
+
+      const channels = normalizeChannels(inputChannels)
+      // Validate platforms when any were passed in.
+      for (const c of channels) {
+        if (!VALID_CHANNELS.has(c.platform)) {
+          return reply
+            .code(400)
+            .send({ error: `Unsupported platform: ${c.platform}` })
+        }
+      }
+
       const product = await prisma.product.findUnique({
-        where: { id: productId },
+        where: { id: body.productId },
         select: {
           id: true,
           sku: true,
@@ -99,11 +227,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       if (!product) {
         return reply.code(404).send({ error: 'Product not found' })
       }
-      // Phase A backwards-compat: /start still accepts legacy single
-      // (channel, marketplace) bodies. We wrap them into a single-entry
-      // channels[] array. Phase B widens this to accept the full array
-      // directly.
-      const channels = normalizeChannels([{ platform: channel, marketplace }])
+
       const hash = channelsHash(channels)
 
       // Find an existing DRAFT wizard for this exact channels-set so
@@ -111,7 +235,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       // and a new one starts fresh.
       let wizard = await prisma.listingWizard.findFirst({
         where: {
-          productId,
+          productId: body.productId,
           channelsHash: hash,
           status: 'DRAFT',
         },
@@ -120,7 +244,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       if (!wizard) {
         wizard = await prisma.listingWizard.create({
           data: {
-            productId,
+            productId: body.productId,
             channels: channels as any,
             channelsHash: hash,
             currentStep: 1,
@@ -178,14 +302,50 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         ...((wizard.state as Record<string, unknown> | null) ?? {}),
         ...((body.state ?? {}) as Record<string, unknown>),
       }
+      // channelStates merge — outer keys (channel keys) shallow-merge,
+      // inner slices replace wholesale (caller is expected to spread
+      // their existing slice if they want to merge inside).
+      const mergedChannelStates: Record<string, Record<string, unknown>> = {
+        ...((wizard.channelStates as Record<string, Record<string, unknown>> | null) ??
+          {}),
+        ...((body.channelStates ?? {}) as Record<
+          string,
+          Record<string, unknown>
+        >),
+      }
+
+      // Phase B: Step 1 writes the channels selection here. We
+      // recompute channelsHash so the resume key stays consistent.
+      // PATCHing channels is only allowed while the wizard is in
+      // DRAFT (already gated above).
+      let channelsUpdate:
+        | { channels: any; channelsHash: string }
+        | null = null
+      if (Array.isArray(body.channels)) {
+        const next = normalizeChannels(body.channels)
+        for (const c of next) {
+          if (!VALID_CHANNELS.has(c.platform)) {
+            return reply
+              .code(400)
+              .send({ error: `Unsupported platform: ${c.platform}` })
+          }
+        }
+        channelsUpdate = {
+          channels: next as any,
+          channelsHash: channelsHash(next),
+        }
+      }
+
       const next = await prisma.listingWizard.update({
         where: { id: wizard.id },
         data: {
           currentStep:
             typeof body.currentStep === 'number'
-              ? Math.min(Math.max(body.currentStep, 1), 10)
+              ? Math.min(Math.max(body.currentStep, 1), 11)
               : wizard.currentStep,
           state: merged as any,
+          channelStates: mergedChannelStates as any,
+          ...(channelsUpdate ?? {}),
         },
       })
       return { wizard: next }

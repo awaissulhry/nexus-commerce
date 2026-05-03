@@ -1,20 +1,35 @@
-import { redirect } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import ListWizardClient, {
   type WizardData,
   type WizardProduct,
+  type ChannelTuple,
 } from './ListWizardClient'
 
 export const dynamic = 'force-dynamic'
 
-interface StartResponse {
-  wizard?: WizardData
+interface RawWizardResponse {
+  wizard?: {
+    id: string
+    productId: string
+    channels?: ChannelTuple[]
+    channelsHash?: string
+    currentStep: number
+    state: Record<string, unknown> | null
+    channelStates?: Record<string, Record<string, unknown>> | null
+    submissions?: unknown[] | null
+    status: string
+  }
   product?: WizardProduct
   error?: string
 }
 
 interface PageProps {
   params: Promise<{ id: string }>
+  // Phase B: query params are now optional. If `?channel=` + `?marketplace=`
+  // are present, we kick off a single-channel wizard for back-compat
+  // with old deep-links and the existing /products/:id/edit entry.
+  // Without them, the wizard starts empty and the user picks channels
+  // in Step 1.
   searchParams: Promise<{ channel?: string; marketplace?: string }>
 }
 
@@ -25,19 +40,22 @@ export default async function ListWizardPage({
   const { id: productId } = await params
   const { channel, marketplace } = await searchParams
 
-  if (!channel || !marketplace) {
-    // No channel/marketplace specified — bounce back to the product
-    // edit page so the user can pick a target.
-    redirect(`/products/${productId}/edit`)
+  const backend = getBackendUrl()
+
+  // Build the /start body. Phase B accepts either the legacy
+  // (channel, marketplace) pair or no channels at all (Step 1 picks).
+  const startBody: Record<string, unknown> = { productId }
+  if (channel && marketplace) {
+    startBody.channel = channel
+    startBody.marketplace = marketplace
   }
 
-  const backend = getBackendUrl()
   let res: Response
   try {
     res = await fetch(`${backend}/api/listing-wizard/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ productId, channel, marketplace }),
+      body: JSON.stringify(startBody),
       cache: 'no-store',
     })
   } catch {
@@ -53,7 +71,7 @@ export default async function ListWizardPage({
   if (!res.ok) {
     let detail = `HTTP ${res.status}`
     try {
-      const json = (await res.json()) as StartResponse
+      const json = (await res.json()) as RawWizardResponse
       if (json.error) detail = json.error
     } catch {
       /* ignore — fall back to status code */
@@ -67,7 +85,7 @@ export default async function ListWizardPage({
     )
   }
 
-  const json = (await res.json()) as StartResponse
+  const json = (await res.json()) as RawWizardResponse
   if (!json.wizard || !json.product) {
     return (
       <FailureView
@@ -78,9 +96,24 @@ export default async function ListWizardPage({
     )
   }
 
-  return (
-    <ListWizardClient initialWizard={json.wizard} product={json.product} />
-  )
+  // Map the raw response (Json columns are unknown shape) into the
+  // typed WizardData the client expects.
+  const wizard: WizardData = {
+    id: json.wizard.id,
+    productId: json.wizard.productId,
+    channels: Array.isArray(json.wizard.channels) ? json.wizard.channels : [],
+    channelsHash: json.wizard.channelsHash,
+    currentStep: json.wizard.currentStep,
+    state: (json.wizard.state ?? {}) as Record<string, unknown>,
+    channelStates: (json.wizard.channelStates ?? {}) as Record<
+      string,
+      Record<string, unknown>
+    >,
+    submissions: (json.wizard.submissions ?? []) as unknown[],
+    status: json.wizard.status,
+  }
+
+  return <ListWizardClient initialWizard={wizard} product={json.product} />
 }
 
 function FailureView({

@@ -17,15 +17,25 @@ import Step7Images from './steps/Step7Images'
 import Step8Pricing from './steps/Step8Pricing'
 import Step9Review from './steps/Step9Review'
 import Step10Submit from './steps/Step10Submit'
+import Step1Channels from './steps/Step1Channels'
 import { STEPS, findStep } from './lib/steps'
+
+export interface ChannelTuple {
+  platform: string
+  marketplace: string
+}
 
 export interface WizardData {
   id: string
   productId: string
-  channel: string
-  marketplace: string
+  /** Multi-channel selection. Phase B: array may be empty when the
+   *  user hasn't reached Step 1 yet. */
+  channels: ChannelTuple[]
+  channelsHash?: string
   currentStep: number
   state: Record<string, unknown>
+  channelStates?: Record<string, Record<string, unknown>>
+  submissions?: unknown[]
   status: string
 }
 
@@ -48,6 +58,17 @@ export interface StepProps {
     options?: { advance?: boolean },
   ) => Promise<void>
   product: WizardProduct
+  /** Phase B canonical multi-channel selection. */
+  channels: ChannelTuple[]
+  /** Step 1 commits the user's selection here, optionally advancing. */
+  updateWizardChannels: (
+    next: ChannelTuple[],
+    options?: { advance?: boolean },
+  ) => Promise<void>
+  /** Backwards-compat: first entry of channels[]. Phase D-G widen
+   *  individual steps off these props. Throws conceptually if
+   *  channels is empty — Step 1 enforces non-empty before advancing,
+   *  so downstream steps can rely on these being defined. */
   channel: string
   marketplace: string
 }
@@ -77,24 +98,31 @@ export default function ListWizardClient({
   const [wizardState, setWizardState] = useState<Record<string, unknown>>(
     initialWizard.state ?? {},
   )
+  const [channels, setChannels] = useState<ChannelTuple[]>(
+    initialWizard.channels ?? [],
+  )
   const [saveState, setSaveState] = useState<SaveState>('idle')
 
   // Keep the latest values on a ref so the save fn closure doesn't
   // capture stale state when called from event handlers.
-  const stateRef = useRef({ wizardState, currentStep })
-  stateRef.current = { wizardState, currentStep }
+  const stateRef = useRef({ wizardState, currentStep, channels })
+  stateRef.current = { wizardState, currentStep, channels }
 
-  // Persist (currentStep, state) to the backend. Fire-and-forget so
-  // step transitions feel instant; the saved indicator updates when
-  // the request settles.
+  // Persist (currentStep, state, channels) to the backend.
+  // Fire-and-forget so step transitions feel instant; the saved
+  // indicator updates when the request settles.
   const persist = useCallback(
     async (overrides?: {
       currentStep?: number
       state?: Record<string, unknown>
+      channels?: ChannelTuple[]
     }): Promise<boolean> => {
-      const target = {
+      const target: Record<string, unknown> = {
         currentStep: overrides?.currentStep ?? stateRef.current.currentStep,
         state: overrides?.state ?? stateRef.current.wizardState,
+      }
+      if (overrides?.channels !== undefined) {
+        target.channels = overrides.channels
       }
       setSaveState('saving')
       try {
@@ -226,7 +254,36 @@ export default function ListWizardClient({
     [currentStep, persist],
   )
 
+  // Step 1's commit path. Persists channels[] AND optionally bumps
+  // currentStep. We pass channels through the same persist() call so
+  // the wizard row update is atomic.
+  const updateWizardChannels = useCallback(
+    async (next: ChannelTuple[], options?: { advance?: boolean }) => {
+      setChannels(next)
+      if (options?.advance) {
+        const target = Math.min(currentStep + 1, STEPS.length)
+        setCompletedSteps((prev) => {
+          if (prev.has(currentStep)) return prev
+          const set = new Set(prev)
+          set.add(currentStep)
+          return set
+        })
+        setCurrentStep(target)
+        await persist({ currentStep: target, channels: next })
+      } else {
+        await persist({ channels: next })
+      }
+    },
+    [currentStep, persist],
+  )
+
   const step = findStep(currentStep) ?? STEPS[0]
+  // Single source of truth for "first channel" used by step components
+  // not yet widened to multi-channel. Phase D-G replace these reads
+  // with full channels[] usage. Empty array (Step 1 not yet completed)
+  // → empty strings, which the downstream steps treat as "no channel
+  // selected" and refuse to render until Step 1 is done.
+  const firstChannel = channels[0] ?? { platform: '', marketplace: '' }
 
   return (
     <div className="flex flex-col h-screen bg-slate-50">
@@ -234,8 +291,7 @@ export default function ListWizardClient({
         productId={product.id}
         productSku={product.sku}
         productName={product.name}
-        channel={initialWizard.channel}
-        marketplace={initialWizard.marketplace}
+        channels={channels}
         onClose={handleClose}
       />
       <WizardStepper
@@ -250,42 +306,48 @@ export default function ListWizardClient({
             wizardState,
             updateWizardState,
             product,
-            channel: initialWizard.channel,
-            marketplace: initialWizard.marketplace,
+            channels,
+            updateWizardChannels,
+            channel: firstChannel.platform,
+            marketplace: firstChannel.marketplace,
           }
-          if (currentStep === 1) return <Step1Identifiers {...stepProps} />
-          if (currentStep === 2) return <Step2GtinExemption {...stepProps} />
-          if (currentStep === 3) {
-            // Step 3 (Product Type) is Amazon-only — Shopify and
-            // WooCommerce don't have an equivalent SKU-level taxonomy
-            // pipeline, and eBay is blocked behind Phase 2A. For other
-            // channels we render the placeholder card with the existing
-            // "ships in Phase 6" copy so the user can still walk the
-            // shell.
-            if (initialWizard.channel === 'AMAZON') {
+
+          // ── Phase B step routing ────────────────────────────────
+          // Step 1: Channels & Markets (NEW)
+          if (currentStep === 1) return <Step1Channels {...stepProps} />
+
+          // After Step 1 the user must have at least one channel
+          // selected. If they're on a later step but the array is
+          // empty (resumed wizard pre-Step-1), bounce them back.
+          if (channels.length === 0) {
+            return <NeedsChannelsBlock onPickChannels={() => navigateTo(1)} />
+          }
+
+          // Step 2: Product Type (was Step 3 in the old flow).
+          if (currentStep === 2) {
+            if (firstChannel.platform === 'AMAZON') {
               return <Step3ProductType {...stepProps} />
             }
             return <PlaceholderStep step={step} />
           }
-          if (currentStep === 4) {
-            // Step 4 reads the productType selected in Step 3, so
-            // it's also Amazon-only for now. The component itself
-            // handles the non-Amazon case with a "skipping" message.
-            return <Step4Attributes {...stepProps} />
-          }
-          if (currentStep === 5) {
-            // Step 5 (Variations) works for any channel — it just
-            // surfaces parent → children + a theme picker. Themes
-            // come from the cached Amazon schema today; for other
-            // channels the theme dropdown is empty until those
-            // schemas are wired.
-            return <Step5Variations {...stepProps} />
-          }
-          if (currentStep === 6) return <Step6Content {...stepProps} />
+          // Step 3: Identifiers (was Step 1).
+          if (currentStep === 3) return <Step1Identifiers {...stepProps} />
+          // Step 4: GTIN Exemption (was Step 2; conditional in Phase C).
+          if (currentStep === 4) return <Step2GtinExemption {...stepProps} />
+          // Step 5: Required Attributes (was Step 4).
+          if (currentStep === 5) return <Step4Attributes {...stepProps} />
+          // Step 6: Variations (was Step 5).
+          if (currentStep === 6) return <Step5Variations {...stepProps} />
+          // Step 7: Images (was Step 7 — same number).
           if (currentStep === 7) return <Step7Images {...stepProps} />
-          if (currentStep === 8) return <Step8Pricing {...stepProps} />
-          if (currentStep === 9) return <Step9Review {...stepProps} />
-          if (currentStep === 10) return <Step10Submit {...stepProps} />
+          // Step 8: Content (was Step 6).
+          if (currentStep === 8) return <Step6Content {...stepProps} />
+          // Step 9: Pricing (was Step 8).
+          if (currentStep === 9) return <Step8Pricing {...stepProps} />
+          // Step 10: Review (was Step 9).
+          if (currentStep === 10) return <Step9Review {...stepProps} />
+          // Step 11: Submit (was Step 10).
+          if (currentStep === 11) return <Step10Submit {...stepProps} />
           return <PlaceholderStep step={step} />
         })()}
       </div>
@@ -296,6 +358,34 @@ export default function ListWizardClient({
         onContinue={handleContinue}
         onSaveAndExit={handleClose}
       />
+    </div>
+  )
+}
+
+function NeedsChannelsBlock({
+  onPickChannels,
+}: {
+  onPickChannels: () => void
+}) {
+  return (
+    <div className="max-w-xl mx-auto py-12 px-6">
+      <div className="border border-amber-200 bg-amber-50 rounded-lg px-4 py-4 text-center">
+        <h3 className="text-[14px] font-semibold text-amber-900">
+          Pick channels first
+        </h3>
+        <p className="mt-1 text-[12px] text-amber-800">
+          The rest of the wizard adapts to your channel selection. Head
+          back to Step 1 and pick at least one (platform, marketplace)
+          to keep going.
+        </p>
+        <button
+          type="button"
+          onClick={onPickChannels}
+          className="mt-3 h-8 px-3 rounded-md bg-amber-600 text-white text-[12px] font-medium hover:bg-amber-700"
+        >
+          Go to Step 1
+        </button>
+      </div>
     </div>
   )
 }

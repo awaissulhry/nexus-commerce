@@ -1,6 +1,11 @@
 /**
- * Phase 5.3 step config. The wizard renders one PlaceholderStep per
- * entry until the corresponding phase fills in the real component.
+ * Phase B step config — multi-channel rebuild.
+ *
+ * New step order moves Channels & Markets to position 1 (so the
+ * user picks their targets up front and every downstream step
+ * operates against that set), pushes Identifiers down to 3 because
+ * GTIN rules depend on the chosen category, and reflows the rest
+ * to land Submission at 11.
  */
 
 export interface StepConfig {
@@ -8,17 +13,47 @@ export interface StepConfig {
   title: string
   shortLabel: string
   description: string
-  /** Which phase ships the real content for this step. */
-  filledIn: '5.4' | '5.5' | 'Phase 6'
-  /** Short blurb shown inside the placeholder card so the user can see
-   *  what the step will eventually do. */
+  /** Marker for the Phase / commit that fills this step's component
+   *  in. Steps that already shipped reference their original phase;
+   *  Phase B reorders them. */
+  filledIn:
+    | '5.4'
+    | '5.5'
+    | 'Phase 6'
+    | 'Phase B'
+    | 'Phase C'
+    | 'Phase D'
+    | 'Phase E'
+    | 'Phase F'
+    | 'Phase G'
+    | 'Phase H'
+    | 'Phase I'
+    | 'Phase J'
   preview: string
 }
 
 export const STEPS: StepConfig[] = [
   {
     id: 1,
-    title: 'Product Identifiers',
+    title: 'Channels & Markets',
+    shortLabel: 'Channels',
+    description: 'Pick the platforms and marketplaces to publish to',
+    filledIn: 'Phase B',
+    preview:
+      'Multi-select across Amazon, eBay, Shopify, WooCommerce. Per-platform marketplace chips (IT, DE, FR, ES, UK). Connection status indicator per platform — disconnected channels are flagged before you commit.',
+  },
+  {
+    id: 2,
+    title: 'Product Type',
+    shortLabel: 'Type',
+    description: 'Pick the category for each selected channel',
+    filledIn: 'Phase 6',
+    preview:
+      'Per-channel category picker: Amazon productTypes from cached schema, eBay categories from Taxonomy API (Phase 2A). AI-suggested matches with rule-based fallback when no API key is present.',
+  },
+  {
+    id: 3,
+    title: 'Identifiers',
     shortLabel: 'Identifiers',
     description: 'UPC, EAN, GTIN — or apply for an exemption',
     filledIn: '5.4',
@@ -26,88 +61,81 @@ export const STEPS: StepConfig[] = [
       'Smart UPC/GTIN detection with three exemption paths: have a code, brand-registered already, or apply now.',
   },
   {
-    id: 2,
+    id: 4,
     title: 'GTIN Exemption',
     shortLabel: 'Exemption',
-    description: 'One-click brand exemption application',
-    filledIn: '5.4',
+    description: 'One-click brand exemption — auto-skipped when valid',
+    filledIn: 'Phase C',
     preview:
-      'Auto-fills brand info, generates the brand letter PDF, uploads the trademark certificate, submits to Amazon SP-API, and tracks the exemption status here.',
-  },
-  {
-    id: 3,
-    title: 'Product Type',
-    shortLabel: 'Type',
-    description: 'Amazon product category',
-    filledIn: 'Phase 6',
-    preview:
-      'AI-suggested category match against the live Amazon schema (already cached in CategorySchema from D.3f).',
-  },
-  {
-    id: 4,
-    title: 'Required Attributes',
-    shortLabel: 'Attributes',
-    description: 'Category-specific fields',
-    filledIn: 'Phase 6',
-    preview:
-      'Renders the required-fields form built dynamically from the cached category schema; smart defaults from the master product.',
+      'Auto-fills brand info, generates the brand letter PDF, uploads the trademark certificate, submits to Amazon SP-API. Step is auto-skipped when the product already has a GTIN or the brand has an approved exemption.',
   },
   {
     id: 5,
-    title: 'Variations',
-    shortLabel: 'Variations',
-    description: 'Size, color, etc.',
-    filledIn: 'Phase 6',
+    title: 'Required Attributes',
+    shortLabel: 'Attributes',
+    description: 'Multi-channel union of required + optional fields',
+    filledIn: 'Phase D',
     preview:
-      'Pulls children from the master product, lets the user pick a variation theme, and validates against the category schema.',
+      'Union of required + recommended attributes across every selected channel, with per-field tags showing which channels need it. Smart defaults from the master product; per-channel overrides for fields that vary.',
   },
   {
     id: 6,
-    title: 'Content',
-    shortLabel: 'Content',
-    description: 'Title, bullets, description',
-    filledIn: '5.5',
+    title: 'Variations',
+    shortLabel: 'Variations',
+    description: 'Per-platform variation themes',
+    filledIn: 'Phase E',
     preview:
-      'Gemini-powered SEO-optimised title, five bullets, HTML description, and 250-char backend keywords — with side-by-side review and one-click regen.',
+      'Common themes (intersection across selected platforms) shown prominently; platform-specific themes as alternatives. Per-variation include/exclude toggles.',
   },
   {
     id: 7,
     title: 'Images',
     shortLabel: 'Images',
-    description: 'Validate against marketplace requirements',
-    filledIn: 'Phase 6',
+    description: 'Multi-scope, variation-aware, drag-to-reorder',
+    filledIn: 'Phase F',
     preview:
-      'Checks the master product images against Amazon’s rules (1000px+, white background for main, etc.) and surfaces fixes.',
+      'Image set scoped GLOBAL → PLATFORM → MARKETPLACE with optional variation specificity. Drag-to-reorder, primary picker, per-channel validation overlay (Amazon white-bg + 1000px, eBay relaxed, Shopify any).',
   },
   {
     id: 8,
-    title: 'Pricing',
-    shortLabel: 'Pricing',
-    description: 'Set marketplace price',
-    filledIn: 'Phase 6',
+    title: 'Content',
+    shortLabel: 'Content',
+    description: 'Title, bullets, description — per-channel tabs',
+    filledIn: 'Phase G',
     preview:
-      'Margin-aware price recommendation using costPrice, marketplace fees, and competitor data.',
+      'Per-channel tabs with AI dedup: same (language, format-rules) → one Gemini call, broadcast to matching channels. Apply-to-all for shared content; per-channel edit for overrides.',
   },
   {
     id: 9,
-    title: 'Review',
-    shortLabel: 'Review',
-    description: 'Verify before submission',
-    filledIn: 'Phase 6',
+    title: 'Pricing',
+    shortLabel: 'Pricing',
+    description: 'Base price + per-marketplace overrides',
+    filledIn: 'Phase H',
     preview:
-      'Final pre-submit summary with diff against the existing listing (if any) and a publish checklist.',
+      'Base price with override grid per (platform, marketplace). Per-channel fee + currency display, margin calculator, repricing-band warnings.',
   },
   {
     id: 10,
-    title: 'Submission',
-    shortLabel: 'Submit',
-    description: 'Track listing status',
-    filledIn: 'Phase 6',
+    title: 'Review',
+    shortLabel: 'Review',
+    description: 'Multi-channel summary before submit',
+    filledIn: 'Phase I',
     preview:
-      'Pushes via SP-API or the channel’s native API and polls the live status (submitted → indexed → searchable).',
+      'Per-channel cards with prepared payload, validation status, and conflict detection across channels. Hard validation per channel before Submit unlocks.',
+  },
+  {
+    id: 11,
+    title: 'Submit',
+    shortLabel: 'Submit',
+    description: 'Parallel publish with retry-failed-only',
+    filledIn: 'Phase J',
+    preview:
+      'Parallel orchestration to all selected channels, status polling every 3s, retry-failed-individually so successful channels stay live while you fix the failures.',
   },
 ]
 
 export function findStep(id: number): StepConfig | undefined {
   return STEPS.find((s) => s.id === id)
 }
+
+export const TOTAL_STEPS = STEPS.length
