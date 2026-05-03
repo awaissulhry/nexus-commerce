@@ -410,6 +410,34 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── Step 7 — Images ──────────────────────────────────────────
+  // GET /api/listing-wizard/:id/images
+  //
+  // Returns the master product's image rows in display order (MAIN
+  // first). The frontend reorders + filters in-place; the saved
+  // ordering lives in wizardState.images.orderedUrls.
+  fastify.get<{ Params: { id: string } }>(
+    '/listing-wizard/:id/images',
+    async (request, reply) => {
+      const wizard = await prisma.listingWizard.findUnique({
+        where: { id: request.params.id },
+      })
+      if (!wizard) {
+        return reply.code(404).send({ error: 'Wizard not found' })
+      }
+      const rows = await prisma.productImage.findMany({
+        where: { productId: wizard.productId },
+        orderBy: [{ type: 'asc' }, { createdAt: 'asc' }],
+        select: { id: true, url: true, alt: true, type: true },
+      })
+      // Sort MAIN to the front; alphabetical orderBy gets us close
+      // (ALT < LIFESTYLE < MAIN < SWATCH) but we want MAIN first.
+      const main = rows.filter((r) => r.type === 'MAIN')
+      const rest = rows.filter((r) => r.type !== 'MAIN')
+      return { images: [...main, ...rest] }
+    },
+  )
+
   // Phase 5.3 ships the route stub so the client can wire its
   // submit button without a 404. The actual SP-API push lands in
   // Phase 6 after the per-step content is filled in.
