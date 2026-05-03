@@ -326,17 +326,17 @@ export class EbayAuthService {
   }
 
   /**
-   * Get seller information from eBay API.
-   * Requires valid access token. Uses /commerce/identity/v1/user
-   * (the canonical "who is the authenticated user?" endpoint) since
-   * /sell/account/v1/seller doesn't exist on eBay's production API
-   * (returns 404 — that was the bug behind the Test 500 + the
-   * empty sellerName on saved connections).
+   * Probe a sell-scoped endpoint to confirm the access token is
+   * valid. Returns the seller-registration / selling-limit payload
+   * which is at least *something* the UI can display.
    *
-   * Store-front URL is NOT returned by the identity endpoint; it
-   * requires the separate /sell/stores/v1/store call which needs an
-   * additional scope. Skipped for v1 — Test only needs to confirm
-   * the token works and surface the seller name.
+   * Why this endpoint: the canonical "who is the authenticated
+   * user?" call is /commerce/identity/v1/user, which requires the
+   * `commerce.identity.readonly` OAuth scope. Our token only has
+   * sell.* scopes, so identity returns 404. /sell/account/v1/privilege
+   * works with the sell.account scope we already have. Doesn't
+   * surface a username — see TECH_DEBT for the path to add identity
+   * scope (requires re-authorising existing connections).
    */
   async getSellerInfo(accessToken: string): Promise<{
     signInName: string;
@@ -344,7 +344,7 @@ export class EbayAuthService {
     storeFrontUrl?: string;
   }> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/commerce/identity/v1/user`, {
+      const response = await fetch(`${this.apiBaseUrl}/sell/account/v1/privilege`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -362,24 +362,23 @@ export class EbayAuthService {
       }
 
       const data = (await response.json()) as {
-        userId?: string;
-        username?: string;
-        email?: string;
-        accountType?: "INDIVIDUAL" | "BUSINESS";
-        businessAccount?: { name?: string; doingBusinessAs?: string };
-        individualAccount?: { firstName?: string; lastName?: string };
+        sellerRegistrationCompleted?: boolean;
+        sellingLimit?: {
+          amount?: { value?: string; currency?: string };
+          quantity?: number;
+        };
       };
 
-      // Pick the most informative store-name available — for business
-      // accounts that's `businessAccount.name`; for individuals there
-      // is no store, leave undefined.
-      const storeName =
-        data.businessAccount?.doingBusinessAs ?? data.businessAccount?.name;
+      // The privilege endpoint doesn't include a name. Surface a
+      // meaningful placeholder so the UI doesn't render "Seller:
+      // null" — the user still gets validation that the token works.
+      // When we add the identity scope, this gets replaced with the
+      // actual username.
+      const signInName = data.sellerRegistrationCompleted
+        ? "eBay seller (verified)"
+        : "eBay seller";
 
-      return {
-        signInName: data.username || data.email || "Unknown",
-        storeName,
-      };
+      return { signInName };
     } catch (error) {
       logger.error("Error fetching seller info", { error });
       throw error;

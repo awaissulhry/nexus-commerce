@@ -315,6 +315,16 @@ Verified at Phase 1 push: `/api/ebay/auth/create-connection` returns 201 (was 50
 1. **Delete the model.** Lowest-risk default — if no code uses it, the schema doesn't need to describe it. Ship a one-line schema.prisma diff and remove the allow-list line.
 2. **Land the migration.** Only if there's a concrete plan to use it in the next sprint. Otherwise option 1 is correct (YAGNI).
 
+## 34. 🟢 eBay OAuth scopes don't include `commerce.identity.readonly`
+
+**Symptom:** Connected channel cards show no seller username/store-name. The Test endpoint can confirm "token is valid" but cannot retrieve the seller's identifying info.
+
+**Root cause:** `services/ebay-auth.service.ts` requests scopes `api_scope`, `sell.account`, `sell.inventory`, `sell.fulfillment`. Getting the seller's username requires `commerce.identity.readonly` (the `/commerce/identity/v1/user` endpoint enforces this scope; with sell-only scopes the call returns 404). v1 falls back to `/sell/account/v1/privilege` which confirms token validity but doesn't return a name — UI shows "eBay seller (verified)" placeholder.
+
+**Proper fix:** Add `commerce.identity.readonly` to the scope list in `generateAuthorizationUrl()`. Then point `getSellerInfo()` back at `/commerce/identity/v1/user` (the previous attempt is preserved in git history at `98a094f`).
+
+**Catch:** existing eBay connections were authorized with the smaller scope set. Their refresh tokens won't get the new scope by simply rotating — eBay refresh keeps the original scope envelope. Each existing connection must re-authorize (click "Disconnect" → "Connect eBay" again). That's why this is P2 — Xavia has only one real eBay account today; one re-auth click after the scope change is fine.
+
 ## 33. 🟡 ebay-orders.service.ts targets pre-Phase-26 Order schema
 
 **Symptom:** Surfaced by the P0 #31 audit. `apps/api/src/services/ebay-orders.service.ts` writes orders using field names from a previous Order schema iteration (Phase < 26):
