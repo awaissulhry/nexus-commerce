@@ -58,16 +58,68 @@ const COUNTRY_NAMES: Record<string, string> = {
   SE: 'Sweden',
   PL: 'Poland',
   US: 'United States',
+  CA: 'Canada',
+  MX: 'Mexico',
   GLOBAL: 'Global',
 }
+
+// Channels and the marketplaces we support listing to. Surfacing
+// these statically (rather than deriving from existing listings)
+// lets the sidebar show all destinations even when zero listings
+// exist — important right after OAuth completes, before anything
+// has been published.
+const SUPPORTED_MARKETS: Record<string, string[]> = {
+  AMAZON: ['IT', 'DE', 'FR', 'ES', 'UK', 'US', 'NL', 'SE', 'PL', 'CA', 'MX'],
+  EBAY: ['IT', 'DE', 'FR', 'ES', 'UK', 'US'],
+}
+
+const EXPAND_STATE_KEY = 'sidebar:expandedChannels'
 
 export default function AppSidebar() {
   const pathname = usePathname() ?? '/'
   const [counts, setCounts] = useState<SidebarCounts>({})
+  // SSR-safe init: default Amazon-expanded; useEffect below rehydrates
+  // from localStorage so the user's last expand/collapse state persists
+  // across page navigations.
   const [expandedChannels, setExpandedChannels] = useState<Set<string>>(
-    new Set(['AMAZON'])
+    new Set(['AMAZON']),
   )
+  const [ebayConnected, setEbayConnected] = useState(false)
   const recent = useRecentlyViewed()
+
+  // Hydrate expand state from localStorage on mount.
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(EXPAND_STATE_KEY)
+      if (raw) {
+        const arr = JSON.parse(raw) as string[]
+        if (Array.isArray(arr)) setExpandedChannels(new Set(arr))
+      }
+    } catch {
+      /* localStorage unavailable / parse failure → keep default */
+    }
+  }, [])
+
+  // Fetch eBay connection status once. The /api/ebay/auth/connections
+  // endpoint returns all rows; ANY active row means the user can
+  // publish to any eBay marketplace they're registered for (eBay
+  // OAuth is single-token / multi-marketplace, unlike Amazon SP-API).
+  useEffect(() => {
+    let cancelled = false
+    fetch(`${getBackendUrl()}/api/ebay/auth/connections`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return
+        const list = (data.connections ?? []) as Array<{ isActive?: boolean }>
+        setEbayConnected(list.some((c) => c.isActive === true))
+      })
+      .catch(() => {
+        /* swallow — sidebar must never crash the shell */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -96,6 +148,14 @@ export default function AppSidebar() {
       const next = new Set(prev)
       if (next.has(channel)) next.delete(channel)
       else next.add(channel)
+      try {
+        window.localStorage.setItem(
+          EXPAND_STATE_KEY,
+          JSON.stringify(Array.from(next)),
+        )
+      } catch {
+        /* ignore — storage quota / privacy mode */
+      }
       return next
     })
   }
@@ -189,6 +249,7 @@ export default function AppSidebar() {
             label="Amazon"
             count={counts.listings?.byChannel?.AMAZON?.total}
             markets={counts.listings?.byChannel?.AMAZON?.markets}
+            supportedMarkets={SUPPORTED_MARKETS.AMAZON}
             expanded={expandedChannels.has('AMAZON')}
             onToggle={() => toggleChannel('AMAZON')}
             pathname={pathname}
@@ -198,6 +259,8 @@ export default function AppSidebar() {
             label="eBay"
             count={counts.listings?.byChannel?.EBAY?.total}
             markets={counts.listings?.byChannel?.EBAY?.markets}
+            supportedMarkets={SUPPORTED_MARKETS.EBAY}
+            connectionStatus={ebayConnected ? 'connected' : 'not-connected'}
             expanded={expandedChannels.has('EBAY')}
             onToggle={() => toggleChannel('EBAY')}
             pathname={pathname}
@@ -470,6 +533,14 @@ interface ChannelNavProps {
   label: string
   count?: number
   markets?: Record<string, number>
+  /** Statically declared marketplaces this channel supports. Merged
+   *  with `markets` (real listing counts) so destinations always
+   *  appear in the dropdown even when no listings exist yet. */
+  supportedMarkets?: string[]
+  /** Per-channel connection state. Currently only eBay surfaces this
+   *  (single OAuth token covers all eBay marketplaces). When set,
+   *  controls the status dot colour per marketplace. */
+  connectionStatus?: 'connected' | 'not-connected'
   expanded: boolean
   onToggle: () => void
   pathname: string
@@ -480,13 +551,24 @@ function ChannelNav({
   label,
   count,
   markets,
+  supportedMarkets,
+  connectionStatus,
   expanded,
   onToggle,
   pathname,
 }: ChannelNavProps) {
   const channelPath = `/listings/${channel.toLowerCase()}`
   const isOnChannel = pathname.startsWith(channelPath)
-  const hasMarkets = markets && Object.keys(markets).length > 0
+
+  // Merge supported markets (always show) with real listing counts.
+  // Supported markets default to count 0 so the user sees them
+  // immediately after OAuth, before any publish has happened.
+  const mergedMarkets = new Map<string, number>()
+  for (const code of supportedMarkets ?? []) mergedMarkets.set(code, 0)
+  for (const [code, n] of Object.entries(markets ?? {})) {
+    mergedMarkets.set(code, n as number)
+  }
+  const hasMarkets = mergedMarkets.size > 0
 
   return (
     <div>
@@ -497,7 +579,7 @@ function ChannelNav({
           'w-[calc(100%-16px)] flex items-center gap-2.5 mx-2 px-3 py-1.5 rounded-md text-[13px] transition-colors',
           isOnChannel
             ? 'bg-blue-600 text-white font-medium'
-            : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+            : 'text-slate-300 hover:bg-slate-800 hover:text-white',
         )}
       >
         <ShoppingBag className="w-4 h-4 flex-shrink-0" />
@@ -508,7 +590,7 @@ function ChannelNav({
               'text-[10px] tabular-nums px-1.5 py-0.5 rounded mr-1',
               isOnChannel
                 ? 'bg-blue-700 text-blue-100'
-                : 'bg-slate-800 text-slate-400'
+                : 'bg-slate-800 text-slate-400',
             )}
           >
             {count}
@@ -524,9 +606,21 @@ function ChannelNav({
 
       {expanded && hasMarkets && (
         <div className="mt-0.5 space-y-0.5">
-          {Object.entries(markets!).map(([code, mcount]) => {
+          {Array.from(mergedMarkets.entries()).map(([code, mcount]) => {
             const marketHref = `${channelPath}/${code.toLowerCase()}`
             const active = pathname === marketHref
+            // Status dot: only meaningful when connectionStatus is
+            // provided (eBay today). For Amazon we don't have a
+            // per-channel connection state, so leave the dot off.
+            const dotClass =
+              connectionStatus === 'connected'
+                ? mcount > 0
+                  ? 'bg-emerald-500' // connected + has listings
+                  : 'bg-amber-500' // connected, 0 listings yet
+                : connectionStatus === 'not-connected'
+                  ? 'bg-slate-600'
+                  : null
+
             return (
               <Link
                 key={code}
@@ -535,24 +629,48 @@ function ChannelNav({
                   'flex items-center gap-2.5 mx-2 ml-9 px-3 py-1 rounded-md text-[12px] transition-colors',
                   active
                     ? 'bg-blue-600/30 text-white'
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                    : 'text-slate-400 hover:bg-slate-800 hover:text-white',
                 )}
               >
+                {dotClass && (
+                  <span
+                    className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', dotClass)}
+                    aria-hidden="true"
+                  />
+                )}
                 <span className="font-mono text-[10px] font-semibold bg-slate-800 px-1.5 py-0.5 rounded text-slate-300">
                   {code}
                 </span>
                 <span className="flex-1 truncate">{COUNTRY_NAMES[code] ?? code}</span>
-                <span className="text-[10px] tabular-nums text-slate-500">{mcount}</span>
+                {connectionStatus === 'not-connected' ? (
+                  <span className="text-[10px] text-slate-500">—</span>
+                ) : mcount > 0 ? (
+                  <span className="text-[10px] tabular-nums text-slate-500">
+                    {mcount}
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-slate-600">0</span>
+                )}
               </Link>
             )
           })}
-          <Link
-            href={`${channelPath}/add-market`}
-            className="flex items-center gap-2.5 mx-2 ml-9 px-3 py-1 rounded-md text-[11px] text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors"
-          >
-            <Plus className="w-3 h-3" />
-            <span>Add Market</span>
-          </Link>
+          {connectionStatus === 'not-connected' ? (
+            <Link
+              href="/settings/channels"
+              className="flex items-center gap-2.5 mx-2 ml-9 px-3 py-1 rounded-md text-[11px] text-blue-400 hover:bg-slate-800 hover:text-blue-300 transition-colors"
+            >
+              <Plug className="w-3 h-3" />
+              <span>Connect {label}</span>
+            </Link>
+          ) : (
+            <Link
+              href={`${channelPath}/add-market`}
+              className="flex items-center gap-2.5 mx-2 ml-9 px-3 py-1 rounded-md text-[11px] text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors"
+            >
+              <Plus className="w-3 h-3" />
+              <span>Add Market</span>
+            </Link>
+          )}
         </div>
       )}
     </div>
