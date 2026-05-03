@@ -11,6 +11,7 @@ import {
   Boxes,
   ChevronRight,
   ChevronDown,
+  ChevronUp,
   ShoppingBag,
   FileText,
   Tag,
@@ -74,6 +75,12 @@ const SUPPORTED_MARKETS: Record<string, string[]> = {
 }
 
 const EXPAND_STATE_KEY = 'sidebar:expandedChannels'
+
+// Compact-by-default. Channels with > MAX_VISIBLE + 1 markets show
+// the top N and a "See all" link (Linear/Vercel/Stripe pattern). The
+// "+ 1" rule avoids "See all 6" that hides only one row — when the
+// hidden count is ≤ 1 we just show everything.
+const MAX_VISIBLE_MARKETS = 5
 
 export default function AppSidebar() {
   const pathname = usePathname() ?? '/'
@@ -559,6 +566,12 @@ function ChannelNav({
 }: ChannelNavProps) {
   const channelPath = `/listings/${channel.toLowerCase()}`
   const isOnChannel = pathname.startsWith(channelPath)
+  // Per-channel "show all markets" toggle is intentionally NOT
+  // persisted — the sidebar should default to its compact state on
+  // every page load. expand/collapse of the channel itself is
+  // persisted (see EXPAND_STATE_KEY in the parent), but density
+  // resets so users never land on a 100-row sidebar.
+  const [showAllMarkets, setShowAllMarkets] = useState(false)
 
   // Merge supported markets (always show) with real listing counts.
   // Supported markets default to count 0 so the user sees them
@@ -568,45 +581,81 @@ function ChannelNav({
   for (const [code, n] of Object.entries(markets ?? {})) {
     mergedMarkets.set(code, n as number)
   }
-  const hasMarkets = mergedMarkets.size > 0
+  const allMarketEntries = Array.from(mergedMarkets.entries())
+  const hasMarkets = allMarketEntries.length > 0
+  // If hiding ≤ 1 row, just show everything — "See all 6" hiding 1
+  // would be silly. Threshold = MAX_VISIBLE + 1 (so 6 stays inline,
+  // 7+ gets the overflow treatment).
+  const overflowThreshold = MAX_VISIBLE_MARKETS + 1
+  const needsOverflow = allMarketEntries.length > overflowThreshold
+  const visibleMarkets =
+    !needsOverflow || showAllMarkets
+      ? allMarketEntries
+      : allMarketEntries.slice(0, MAX_VISIBLE_MARKETS)
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={onToggle}
+      {/* Two-target row: name area is a Link to the channel landing
+          page; the chevron is a separate button that toggles expand.
+          Click the platform → navigate. Click the chevron → expand.
+          Visually unified via the parent flex container's hover
+          state. */}
+      <div
         className={cn(
-          'w-[calc(100%-16px)] flex items-center gap-2.5 mx-2 px-3 py-1.5 rounded-md text-[13px] transition-colors',
-          isOnChannel
-            ? 'bg-blue-600 text-white font-medium'
-            : 'text-slate-300 hover:bg-slate-800 hover:text-white',
+          'flex items-center mx-2 rounded-md transition-colors',
+          isOnChannel ? 'bg-blue-600' : 'hover:bg-slate-800',
         )}
       >
-        <ShoppingBag className="w-4 h-4 flex-shrink-0" />
-        <span className="flex-1 truncate text-left">{label}</span>
-        {count !== undefined && count > 0 && (
-          <span
+        <Link
+          href={channelPath}
+          className={cn(
+            'flex-1 min-w-0 flex items-center gap-2.5 px-3 py-1.5 text-[13px] rounded-l-md',
+            isOnChannel
+              ? 'text-white font-medium'
+              : 'text-slate-300 hover:text-white',
+            !hasMarkets && (isOnChannel ? '' : 'rounded-r-md'),
+          )}
+        >
+          <ShoppingBag className="w-4 h-4 flex-shrink-0" />
+          <span className="flex-1 truncate text-left">{label}</span>
+          {count !== undefined && count > 0 && (
+            <span
+              className={cn(
+                'text-[10px] tabular-nums px-1.5 py-0.5 rounded',
+                isOnChannel
+                  ? 'bg-blue-700 text-blue-100'
+                  : 'bg-slate-800 text-slate-400',
+              )}
+            >
+              {count}
+            </span>
+          )}
+        </Link>
+        {hasMarkets && (
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-label={`${expanded ? 'Collapse' : 'Expand'} ${label} marketplaces`}
+            aria-expanded={expanded}
             className={cn(
-              'text-[10px] tabular-nums px-1.5 py-0.5 rounded mr-1',
+              'flex-shrink-0 px-2 py-1.5 rounded-r-md transition-colors',
               isOnChannel
-                ? 'bg-blue-700 text-blue-100'
-                : 'bg-slate-800 text-slate-400',
+                ? 'text-blue-100 hover:bg-blue-700'
+                : 'text-slate-400 hover:bg-slate-700/60 hover:text-white',
             )}
           >
-            {count}
-          </span>
+            {expanded ? (
+              <ChevronDown className="w-3 h-3" />
+            ) : (
+              <ChevronRight className="w-3 h-3" />
+            )}
+          </button>
         )}
-        {hasMarkets &&
-          (expanded ? (
-            <ChevronDown className="w-3 h-3 flex-shrink-0" />
-          ) : (
-            <ChevronRight className="w-3 h-3 flex-shrink-0" />
-          ))}
-      </button>
+      </div>
 
       {expanded && hasMarkets && (
         <div className="mt-0.5 space-y-0.5">
-          {Array.from(mergedMarkets.entries()).map(([code, mcount]) => {
+          {visibleMarkets.map(([code, mcount]) => {
             const marketHref = `${channelPath}/${code.toLowerCase()}`
             const active = pathname === marketHref
             // Status dot: only meaningful when connectionStatus is
@@ -654,6 +703,28 @@ function ChannelNav({
               </Link>
             )
           })}
+          {needsOverflow &&
+            (showAllMarkets ? (
+              <button
+                type="button"
+                onClick={() => setShowAllMarkets(false)}
+                className="w-[calc(100%-16px)] flex items-center gap-2.5 mx-2 ml-9 px-3 py-1 rounded-md text-[11px] text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors"
+              >
+                <ChevronUp className="w-3 h-3" />
+                <span>Show fewer</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowAllMarkets(true)}
+                className="w-[calc(100%-16px)] flex items-center gap-2.5 mx-2 ml-9 px-3 py-1 rounded-md text-[11px] text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors"
+              >
+                <ChevronDown className="w-3 h-3" />
+                <span>
+                  See all {allMarketEntries.length} markets
+                </span>
+              </button>
+            ))}
           {connectionStatus === 'not-connected' ? (
             <Link
               href="/settings/channels"
