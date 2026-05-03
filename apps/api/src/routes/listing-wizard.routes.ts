@@ -24,6 +24,7 @@ import {
   type ProductTypeListItem,
 } from '../services/listing-wizard/product-types.service.js'
 import { SchemaParserService } from '../services/listing-wizard/schema-parser.service.js'
+import { VariationsService } from '../services/listing-wizard/variations.service.js'
 
 const amazonService = new AmazonService()
 const categorySchemaService = new CategorySchemaService(
@@ -39,6 +40,7 @@ const schemaParserService = new SchemaParserService(
   prisma as any,
   categorySchemaService,
 )
+const variationsService = new VariationsService(prisma as any)
 
 interface StartBody {
   productId?: string
@@ -353,6 +355,57 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         const msg = err instanceof Error ? err.message : String(err)
         const isAuth = /SP-API not configured|credentials|auth/i.test(msg)
         return reply.code(isAuth ? 503 : 500).send({ error: msg })
+      }
+    },
+  )
+
+  // ── Step 5 — Variations ───────────────────────────────────────
+  // GET /api/listing-wizard/:id/variations?theme=SIZE_COLOR
+  //
+  // Returns the children of the master product plus the available
+  // variation themes pulled from the cached CategorySchema. When a
+  // theme is passed, each child is annotated with which required
+  // attributes it's missing so the UI can flag incomplete rows.
+  fastify.get<{ Params: { id: string }; Querystring: { theme?: string } }>(
+    '/listing-wizard/:id/variations',
+    async (request, reply) => {
+      const wizard = await prisma.listingWizard.findUnique({
+        where: { id: request.params.id },
+      })
+      if (!wizard) {
+        return reply.code(404).send({ error: 'Wizard not found' })
+      }
+      const state = (wizard.state ?? {}) as Record<string, any>
+      const productType = state?.productType?.productType
+      let cachedThemes: unknown = null
+      if (typeof productType === 'string' && productType.length > 0) {
+        const schema = await prisma.categorySchema.findFirst({
+          where: {
+            channel: wizard.channel,
+            marketplace: wizard.marketplace,
+            productType,
+            isActive: true,
+          },
+          orderBy: { fetchedAt: 'desc' },
+          select: { variationThemes: true },
+        })
+        cachedThemes = schema?.variationThemes ?? null
+      }
+      try {
+        const payload = await variationsService.getVariationsPayload({
+          productId: wizard.productId,
+          selectedTheme: request.query?.theme ?? null,
+          cachedThemes,
+        })
+        return payload
+      } catch (err) {
+        fastify.log.error(
+          { err },
+          '[listing-wizard] variations failed',
+        )
+        return reply.code(500).send({
+          error: err instanceof Error ? err.message : String(err),
+        })
       }
     },
   )

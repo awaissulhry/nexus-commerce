@@ -11,6 +11,7 @@ import Step1Identifiers from './steps/Step1Identifiers'
 import Step2GtinExemption from './steps/Step2GtinExemption'
 import Step3ProductType from './steps/Step3ProductType'
 import Step4Attributes from './steps/Step4Attributes'
+import Step5Variations from './steps/Step5Variations'
 import Step6Content from './steps/Step6Content'
 import { STEPS, findStep } from './lib/steps'
 
@@ -267,6 +268,14 @@ export default function ListWizardClient({
             // it's also Amazon-only for now. The component itself
             // handles the non-Amazon case with a "skipping" message.
             return <Step4Attributes {...stepProps} />
+          }
+          if (currentStep === 5) {
+            // Step 5 (Variations) works for any channel — it just
+            // surfaces parent → children + a theme picker. Themes
+            // come from the cached Amazon schema today; for other
+            // channels the theme dropdown is empty until those
+            // schemas are wired.
+            return <Step5Variations {...stepProps} />
           }
           if (currentStep === 6) return <Step6Content {...stepProps} />
           return <PlaceholderStep step={step} />
