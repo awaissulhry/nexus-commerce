@@ -10,18 +10,15 @@ import { amazonProvider } from '../providers/amazon.provider.js';
 import { ebayProvider } from '../providers/ebay.provider.js';
 import type { MarketplaceProvider } from '../providers/types.js';
 
-// Type aliases for Prisma types that aren't being generated
+// TODO Phase B-2: replace `any` with `BulkActionJob` from @prisma/client.
+// The "type isn't being generated" comment is outdated — the model
+// has had a migration since 20260423 — but removing the alias is its
+// own commit so we can audit the resulting type errors cleanly.
 type BulkActionJob = any;
 
-// Mock Decimal class for type compatibility
-class Decimal {
-  constructor(value: any) {
-    return value;
-  }
-  plus(other: any) { return this; }
-  lessThan(other: any) { return false; }
-  greaterThan(other: any) { return false; }
-}
+// (Removed: a stubbed Decimal mock class whose `.plus()` returned
+// `this`, breaking every PRICING_UPDATE math op silently. Phase B-3
+// rewrites the pricing handler with plain JS arithmetic.)
 
 export type BulkActionType =
   | 'PRICING_UPDATE'
@@ -552,114 +549,64 @@ export class BulkActionService {
     }
   }
 
-  /**
-   * Private helper: Process pricing update
-   */
+  // ── Operation handlers — stubs in B-1, real implementations in B-3 ──
+  //
+  // Each handler is intentionally a `throw new Error('Not yet
+  // implemented')` so processJob's loop wraps it in the existing
+  // try/catch (line 253–267) and the affected items count toward
+  // failedItems with a clear error log entry. This means a job
+  // submitted today will FAIL deterministically per item rather
+  // than silently no-op (the original handlers were silent: pricing
+  // math returned `this`, attribute writes targeted a non-existent
+  // column, status updates ran on the wrong table). Failing loud
+  // is better than silent corruption.
+  //
+  // Audit findings these stubs replace:
+  //   - PRICING_UPDATE: Decimal mock made every price update a no-op
+  //   - INVENTORY_UPDATE: shape worked but mixed with the stub anyway
+  //   - STATUS_UPDATE: ran prisma.product.update with a variation id
+  //   - ATTRIBUTE_UPDATE: wrote to non-existent marketplaceMetadata
+  //   - LISTING_SYNC: referenced item.imageUrl (no such field)
+
   private async processPricingUpdate(
-    item: any,
-    payload: Record<string, any>,
-    channel?: string
+    _item: any,
+    _payload: Record<string, any>,
+    _channel?: string
   ): Promise<{ status: 'processed' | 'skipped' }> {
-    const newPrice = new Decimal(item.price).plus(new Decimal(payload.priceAdjustment || 0));
-
-    // Validate price constraints
-    if (payload.minPrice && newPrice.lessThan(new Decimal(payload.minPrice))) {
-      return { status: 'skipped' };
-    }
-
-    if (payload.maxPrice && newPrice.greaterThan(new Decimal(payload.maxPrice))) {
-      return { status: 'skipped' };
-    }
-
-    // Update in database
-    await this.prisma.productVariation.update({
-      where: { id: item.id },
-      data: { price: newPrice }
-    });
-
-    // Sync to marketplace if channel is specified
-    if (channel && item.sku) {
-      await this.syncPriceToMarketplace(item.sku, newPrice, channel);
-    }
-
-    return { status: 'processed' };
+    throw new Error('PRICING_UPDATE handler not yet implemented (Phase B-3)');
   }
 
-  /**
-   * Private helper: Process inventory update
-   */
   private async processInventoryUpdate(
-    item: any,
-    payload: Record<string, any>,
-    channel?: string
+    _item: any,
+    _payload: Record<string, any>,
+    _channel?: string
   ): Promise<{ status: 'processed' | 'skipped' }> {
-    const newStock = Math.max(0, (item.stock || 0) + (payload.quantityChange || 0));
-
-    await this.prisma.productVariation.update({
-      where: { id: item.id },
-      data: { stock: newStock }
-    });
-
-    // Sync to marketplace if channel is specified
-    if (channel && item.sku) {
-      await this.syncStockToMarketplace(item.sku, newStock, channel);
-    }
-
-    return { status: 'processed' };
+    throw new Error('INVENTORY_UPDATE handler not yet implemented (Phase B-3)');
   }
 
-  /**
-   * Private helper: Process status update
-   */
   private async processStatusUpdate(
-    item: any,
-    payload: Record<string, any>
+    _item: any,
+    _payload: Record<string, any>
   ): Promise<{ status: 'processed' | 'skipped' }> {
-    await this.prisma.product.update({
-      where: { id: item.id },
-      data: { status: payload.newStatus }
-    });
-
-    return { status: 'processed' };
+    throw new Error('STATUS_UPDATE handler not yet implemented (Phase B-3)');
   }
 
-  /**
-   * Private helper: Process attribute update
-   */
   private async processAttributeUpdate(
-    item: any,
-    payload: Record<string, any>
+    _item: any,
+    _payload: Record<string, any>
   ): Promise<{ status: 'processed' | 'skipped' }> {
-    const currentMetadata = item.marketplaceMetadata || {};
-
-    await this.prisma.productVariation.update({
-      where: { id: item.id },
-      data: {
-        marketplaceMetadata: {
-          ...currentMetadata,
-          ...payload.attributes
-        }
-      }
-    });
-
-    return { status: 'processed' };
+    throw new Error('ATTRIBUTE_UPDATE handler not yet implemented (Phase B-3)');
   }
 
-  /**
-   * Private helper: Process listing sync
-   */
   private async processListingSync(
-    item: any,
-    payload: Record<string, any>,
-    channel?: string
+    _item: any,
+    _payload: Record<string, any>,
+    _channel?: string
   ): Promise<{ status: 'processed' | 'skipped' }> {
-    // Sync to marketplace if channel is specified
-    if (channel && item.sku) {
-      await this.syncListingToMarketplace(item, channel);
-    }
-
-    logger.debug(`Processing listing sync for item`, { itemId: item.id, channel });
-    return { status: 'processed' };
+    // LISTING_SYNC is deferred to v2 entirely — depends on resolving
+    // parent Product + first VariantImage which the original code
+    // didn't handle. Tracked as TECH_DEBT.
+    throw new Error('LISTING_SYNC deferred to v2 (see TECH_DEBT)');
   }
 
   /**
@@ -850,11 +797,15 @@ export class BulkActionService {
   }
 
   /**
-   * Private helper: Build Prisma where clause from filters
+   * Private helper: Build Prisma where clause from filters.
+   * TODO Phase B-4: rewrite as a proper translator from user-facing
+   * filter shape ({brand, category, marketplace, status, stockMin,
+   * stockMax}) to a Prisma where clause spanning Product +
+   * ProductVariation. Current passthrough is a stub left in place
+   * so filter-based jobs don't 500 on bare-shape filters during the
+   * cleanup phase.
    */
   private buildFilterWhere(filters: Record<string, any>): Record<string, any> {
-    // Implement filter building logic based on your filter structure
-    // Example: { status: 'ACTIVE', stock: { lt: 10 } }
     return filters;
   }
 }
