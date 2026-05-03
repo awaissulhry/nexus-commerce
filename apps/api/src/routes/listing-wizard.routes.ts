@@ -26,6 +26,11 @@ import {
 import { SchemaParserService } from '../services/listing-wizard/schema-parser.service.js'
 import { VariationsService } from '../services/listing-wizard/variations.service.js'
 import { SubmissionService } from '../services/listing-wizard/submission.service.js'
+import {
+  channelsHash,
+  legacyFirstChannel,
+  normalizeChannels,
+} from '../services/listing-wizard/channels.js'
 
 const amazonService = new AmazonService()
 const categorySchemaService = new CategorySchemaService(
@@ -94,14 +99,20 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       if (!product) {
         return reply.code(404).send({ error: 'Product not found' })
       }
-      // Find an existing DRAFT wizard for this combo so the user can
-      // resume; SUBMITTED/LIVE/FAILED wizards are terminal and a new
-      // one starts fresh.
+      // Phase A backwards-compat: /start still accepts legacy single
+      // (channel, marketplace) bodies. We wrap them into a single-entry
+      // channels[] array. Phase B widens this to accept the full array
+      // directly.
+      const channels = normalizeChannels([{ platform: channel, marketplace }])
+      const hash = channelsHash(channels)
+
+      // Find an existing DRAFT wizard for this exact channels-set so
+      // the user can resume; SUBMITTED/LIVE/FAILED wizards are terminal
+      // and a new one starts fresh.
       let wizard = await prisma.listingWizard.findFirst({
         where: {
           productId,
-          channel,
-          marketplace,
+          channelsHash: hash,
           status: 'DRAFT',
         },
         orderBy: { createdAt: 'desc' },
@@ -110,8 +121,8 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         wizard = await prisma.listingWizard.create({
           data: {
             productId,
-            channel,
-            marketplace,
+            channels: channels as any,
+            channelsHash: hash,
             currentStep: 1,
             state: {},
             status: 'DRAFT',
@@ -290,9 +301,10 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       if (!productType) {
         return reply.code(400).send({ error: 'productType is required' })
       }
+      const first = legacyFirstChannel(wizard)
       const result = await productTypesService.prefetchSchema({
-        channel: wizard.channel,
-        marketplace: wizard.marketplace,
+        channel: first.channel,
+        marketplace: first.marketplace,
         productType,
       })
       return result
@@ -337,9 +349,10 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: 'Product not found' })
       }
       try {
+        const first = legacyFirstChannel(wizard)
         const manifest = await schemaParserService.getRequiredFields({
-          channel: wizard.channel,
-          marketplace: wizard.marketplace,
+          channel: first.channel,
+          marketplace: first.marketplace,
           productType,
           product: {
             name: product.name,
@@ -381,10 +394,11 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       const productType = state?.productType?.productType
       let cachedThemes: unknown = null
       if (typeof productType === 'string' && productType.length > 0) {
+        const first = legacyFirstChannel(wizard)
         const schema = await prisma.categorySchema.findFirst({
           where: {
-            channel: wizard.channel,
-            marketplace: wizard.marketplace,
+            channel: first.channel,
+            marketplace: first.marketplace,
             productType,
             isActive: true,
           },
@@ -470,8 +484,9 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       if (!product) {
         return reply.code(404).send({ error: 'Product not found' })
       }
-      const currency = currencyForMarketplace(wizard.marketplace)
-      const fees = defaultFeesForChannel(wizard.channel)
+      const first = legacyFirstChannel(wizard)
+      const currency = currencyForMarketplace(first.marketplace)
+      const fees = defaultFeesForChannel(first.channel)
       return {
         currency,
         product: {
@@ -506,22 +521,22 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       if (!wizard) {
         return reply.code(404).send({ error: 'Wizard not found' })
       }
+      const first = legacyFirstChannel(wizard)
       const w = {
         id: wizard.id,
-        channel: wizard.channel,
-        marketplace: wizard.marketplace,
+        channel: first.channel,
+        marketplace: first.marketplace,
         state: (wizard.state ?? {}) as Record<string, any>,
       }
       const report = submissionService.validate(w)
       const amazonPayload =
-        wizard.channel.toUpperCase() === 'AMAZON'
+        first.channel.toUpperCase() === 'AMAZON'
           ? submissionService.composeAmazonPayload(w)
           : null
       return {
         wizard: {
           id: wizard.id,
-          channel: wizard.channel,
-          marketplace: wizard.marketplace,
+          channels: wizard.channels,
           status: wizard.status,
           currentStep: wizard.currentStep,
         },
@@ -561,10 +576,11 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           error: `Wizard is already ${wizard.status.toLowerCase()}.`,
         })
       }
+      const first = legacyFirstChannel(wizard)
       const w = {
         id: wizard.id,
-        channel: wizard.channel,
-        marketplace: wizard.marketplace,
+        channel: first.channel,
+        marketplace: first.marketplace,
         state: (wizard.state ?? {}) as Record<string, any>,
       }
       const report = submissionService.validate(w)
@@ -575,7 +591,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
       const amazonPayload =
-        wizard.channel.toUpperCase() === 'AMAZON'
+        first.channel.toUpperCase() === 'AMAZON'
           ? submissionService.composeAmazonPayload(w)
           : null
       const updated = await prisma.listingWizard.update({

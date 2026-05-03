@@ -62,18 +62,18 @@ enum PricingRuleType {
 }
 
 model Product {
-  id         String  @id @default(cuid())
-  sku        String  @unique
-  name       String
-  basePrice  Decimal @db.Decimal(10, 2)
-  totalStock Int     @default(0)
-  lowStockThreshold Int @default(10)  // Phase 23.2: Alert threshold for low-stock situations
+  id                String  @id @default(cuid())
+  sku               String  @unique
+  name              String
+  basePrice         Decimal @db.Decimal(10, 2)
+  totalStock        Int     @default(0)
+  lowStockThreshold Int     @default(10) // Phase 23.2: Alert threshold for low-stock situations
 
   // Marketplace mapping (parent-level: non-buyable parent ASIN, shared eBay listing ID)
-  amazonAsin         String?
-  ebayItemId         String?
-  ebayTitle          String?
-  shopifyProductId   String?
+  amazonAsin           String?
+  ebayItemId           String?
+  ebayTitle            String?
+  shopifyProductId     String?
   woocommerceProductId Int?
 
   // Identifiers (used for standalone products with no variations)
@@ -111,14 +111,14 @@ model Product {
   // ── NEW: Dynamic PIM Fields (Phase 7) ─────────────────────────────
   // Amazon product type (e.g., "LUGGAGE", "OUTERWEAR", "ELECTRONICS")
   productType String?
-  
+
   // Flexible JSON storage for category-specific attributes
   // Structure: { "voltage": "110V", "apparel_size": "M", "material": "Cotton" }
   categoryAttributes Json?
 
   // Pricing intelligence
   costPrice       Decimal? @db.Decimal(10, 2) // Cost of goods for margin calc
-  minMargin       Decimal? @db.Decimal(5, 2)  // Minimum acceptable margin percentage (e.g., 15 for 15%)
+  minMargin       Decimal? @db.Decimal(5, 2) // Minimum acceptable margin percentage (e.g., 15 for 15%)
   minPrice        Decimal? @db.Decimal(10, 2) // Pricing floor
   maxPrice        Decimal? @db.Decimal(10, 2) // Pricing ceiling
   buyBoxPrice     Decimal? @db.Decimal(10, 2) // Current Buy Box price
@@ -132,90 +132,92 @@ model Product {
   b2bMinQty Int? // Minimum B2B quantity
 
   // ── Parent/Child Hierarchy (Amazon Catalog Sync) ─────────────────
-  isParent          Boolean   @default(false)  // TRUE if this is a master parent
-  parentId          String?                    // Self-relation: parent product ID
-  parent            Product?  @relation("ProductHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
-  children          Product[] @relation("ProductHierarchy")  // Child variations
-  
+  isParent Boolean   @default(false) // TRUE if this is a master parent
+  parentId String? // Self-relation: parent product ID
+  parent   Product?  @relation("ProductHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children Product[] @relation("ProductHierarchy") // Child variations
+
   // ── Amazon Parent ASIN (non-buyable) ────────────────────────────
-  parentAsin        String?   // Parent ASIN from Amazon (non-buyable)
-  
+  parentAsin String? // Parent ASIN from Amazon (non-buyable)
+
   // ── Fulfillment Channel ─────────────────────────────────────────
-  fulfillmentChannel FulfillmentMethod?  // FBA or FBM (default for all variations)
-  
+  fulfillmentChannel FulfillmentMethod? // FBA or FBM (default for all variations)
+
   // ── Shipping Template (FBM only) ────────────────────────────────
-  shippingTemplate  String?   // e.g., "Xavia FBM Shipping Template"
-  
+  shippingTemplate String? // e.g., "Xavia FBM Shipping Template"
+
   // ── Sync Metadata ───────────────────────────────────────────────
-  lastAmazonSync    DateTime?
-  amazonSyncStatus  String?   // SUCCESS, FAILED, PENDING
-  amazonSyncError   String?
+  lastAmazonSync   DateTime?
+  amazonSyncStatus String? // SUCCESS, FAILED, PENDING
+  amazonSyncError  String?
 
   // ── PHASE 9: Master Catalog Metadata ──────────────────────────────
   // Indicates this is a master product (not a variation)
   isMasterProduct Boolean @default(true)
-  
+
   // Master product reference (for variations)
-  masterProductId String?
-  masterProduct   Product?  @relation("MasterVariations", fields: [masterProductId], references: [id], onDelete: Cascade)
+  masterProductId  String?
+  masterProduct    Product?  @relation("MasterVariations", fields: [masterProductId], references: [id], onDelete: Cascade)
   masterVariations Product[] @relation("MasterVariations")
 
   // ── PHASE D.3: Bulk-ops cascade + master-level GTIN ──────────────
   // Tracks which fields on this row were inherited from a parent
   // cascade. Updated by PATCH /api/products/bulk when cascade=true.
-  cascadedFields        String[]  @default([])
+  cascadedFields String[] @default([])
   // Master-level GTIN for products without variations (Amazon accepts
   // GTIN at master OR variant level). Per-variant GTIN lives on
   // ProductVariation.gtin.
-  gtin                  String?
+  gtin           String?
 
   // ── PHASE 31: PIM Master Catalog Fields ──────────────────────────
   // True master entity flag (vs. isMasterProduct which is legacy)
-  isMaster              Boolean   @default(false)
+  isMaster          Boolean   @default(false)
   // Internal master SKU (separate from channel SKUs)
-  masterSku             String?
+  masterSku         String?
   // Variation axes for master products: ["Color", "Size", "BodyType"]
-  variationAxes         String[]  @default([])
+  variationAxes     String[]  @default([])
   // Channels this master is currently linked to (resolved listings)
-  linkedToChannels      String[]  @default([])
+  linkedToChannels  String[]  @default([])
   // Where this product came from
-  importSource          String?   // "AMAZON_AUTO_IMPORT" | "MANUAL" | "CSV_UPLOAD"
-  importedAt            DateTime?
+  importSource      String? // "AMAZON_AUTO_IMPORT" | "MANUAL" | "CSV_UPLOAD"
+  importedAt        DateTime?
   // Review workflow state
-  reviewStatus          String?   // "PENDING_REVIEW" | "APPROVED" | "MERGED"
+  reviewStatus      String? // "PENDING_REVIEW" | "APPROVED" | "MERGED"
   // For child products: per-variant attribute values
   // Example: {"Color": "Black", "Size": "M", "BodyType": "Men"}
-  variantAttributes     Json?
+  variantAttributes Json?
 
   // ── PHASE 20: SSOT Indicators ────────────────────────────────────
   // Track which channels this product is synced to
-  syncChannels    String[]  @default([])  // ["AMAZON", "EBAY", "SHOPIFY"]
-  
+  syncChannels String[] @default([]) // ["AMAZON", "EBAY", "SHOPIFY"]
+
   // Overall validation state for this product
-  validationStatus String @default("VALID")  // VALID, WARNING, ERROR
+  validationStatus String   @default("VALID") // VALID, WARNING, ERROR
   validationErrors String[]
-  
+
   // Track if this product has any channel-specific overrides
   hasChannelOverrides Boolean @default(false)
-  
+
   // Last time any channel override was modified
   lastChannelOverrideAt DateTime?
 
   // Relations
-  variations          ProductVariation[]
-  images              ProductImage[]
-  channelListings     ChannelListing[]
+  variations           ProductVariation[]
+  images               ProductImage[]
+  listingImages        ListingImage[] // Phase A: per-listing image set (multi-scope)
+  listingWizards       ListingWizard[] // Phase A: multi-channel wizards for this product
+  channelListings      ChannelListing[]
   channelListingImages ChannelListingImage[]
-  listings            Listing[]
-  draftListings       DraftListing[]  // Phase 5: AI Listing Generator
-  stockLogs           StockLog[]
-  marketplaceSyncs    MarketplaceSync[]
-  fbaShipmentItems    FBAShipmentItem[]
-  pricingRuleProducts PricingRuleProduct[]
-  syncHealthLogs      SyncHealthLog[]
-  syncLogs            SyncLog[]
-  orderItems          OrderItem[]  // Phase 2: Orders & Financials
-  outboundSyncQueue   OutboundSyncQueue[]  // Phase 8: Outbound Sync Engine
+  listings             Listing[]
+  draftListings        DraftListing[] // Phase 5: AI Listing Generator
+  stockLogs            StockLog[]
+  marketplaceSyncs     MarketplaceSync[]
+  fbaShipmentItems     FBAShipmentItem[]
+  pricingRuleProducts  PricingRuleProduct[]
+  syncHealthLogs       SyncHealthLog[]
+  syncLogs             SyncLog[]
+  orderItems           OrderItem[] // Phase 2: Orders & Financials
+  outboundSyncQueue    OutboundSyncQueue[] // Phase 8: Outbound Sync Engine
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -251,7 +253,7 @@ model ProductVariation {
 
   // ── Inventory (always per-variant) ────────────────────────────────
   stock Int @default(0)
-  
+
   // ── Stock Buffer (hide stock when low) ────────────────────────────
   // When stock falls below this threshold, the product is hidden from listings
   // Useful for preventing overselling or managing low-stock situations
@@ -274,15 +276,19 @@ model ProductVariation {
   fulfillmentMethod FulfillmentMethod?
 
   // ── Per-variant marketplace IDs ───────────────────────────────────
-  amazonAsin         String? // Child ASIN (buyable)
-  ebayVariationId    String? // eBay variation identifier
-  shopifyVariantId   String? // Shopify variant ID
+  amazonAsin             String? // Child ASIN (buyable)
+  ebayVariationId        String? // eBay variation identifier
+  shopifyVariantId       String? // Shopify variant ID
   woocommerceVariationId Int? // WooCommerce variation ID
-  etsyListingId      String? // Etsy listing ID
-  etsySku            String? // Etsy SKU
+  etsyListingId          String? // Etsy listing ID
+  etsySku                String? // Etsy SKU
 
   // ── Per-variant images ────────────────────────────────────────────
-  images VariantImage[]
+  images        VariantImage[]
+  // Phase A: per-listing image set, scoped by GLOBAL/PLATFORM/MARKETPLACE
+  // and optionally tied to this specific variation. ProductImage stays
+  // as the master gallery; ListingImage is the per-listing surface.
+  listingImages ListingImage[]
 
   // ── Per-variant channel listings ──────────────────────────────────
   channelListings VariantChannelListing[]
@@ -342,41 +348,41 @@ model VariantImage {
 // ── Per-variant channel listing ───────────────────────────────────────────
 
 model VariantChannelListing {
-  id                  String           @id @default(cuid())
-  variant             ProductVariation @relation(fields: [variantId], references: [id], onDelete: Cascade)
-  variantId           String
-  channelId           String? // References Channel.id (legacy)
-  
+  id        String           @id @default(cuid())
+  variant   ProductVariation @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  variantId String
+  channelId String? // References Channel.id (legacy)
+
   // eBay Connection Reference
   channelConnection   ChannelConnection? @relation(fields: [channelConnectionId], references: [id], onDelete: Cascade)
   channelConnectionId String?
-  
+
   // Channel Type
-  channel             String? // "AMAZON", "EBAY", "SHOPIFY", etc.
-  
+  channel String? // "AMAZON", "EBAY", "SHOPIFY", etc.
+
   // Channel-specific SKU and IDs
-  channelSku          String? // SKU as known by the channel
-  channelProductId    String? // Channel-specific ID (child ASIN, eBay variation spec)
-  externalListingId   String? // eBay ItemID (12-digit number)
-  externalSku         String? // eBay custom SKU
-  
+  channelSku        String? // SKU as known by the channel
+  channelProductId  String? // Channel-specific ID (child ASIN, eBay variation spec)
+  externalListingId String? // eBay ItemID (12-digit number)
+  externalSku       String? // eBay custom SKU
+
   // Pricing & Inventory
-  channelPrice        Decimal          @db.Decimal(10, 2)
-  channelQuantity     Int              @default(0)
-  currentPrice        Decimal?         @db.Decimal(10, 2) // Alternative price field
-  quantity            Int?             // Alternative quantity field
-  quantitySold        Int              @default(0)
-  
+  channelPrice    Decimal  @db.Decimal(10, 2)
+  channelQuantity Int      @default(0)
+  currentPrice    Decimal? @db.Decimal(10, 2) // Alternative price field
+  quantity        Int? // Alternative quantity field
+  quantitySold    Int      @default(0)
+
   // Listing Details
-  channelCategoryId   String?
-  listingStatus       String           @default("PENDING") // PENDING, ACTIVE, INACTIVE, ERROR, ENDED, UNSOLD, SOLD
-  listingUrl          String?
-  
+  channelCategoryId String?
+  listingStatus     String  @default("PENDING") // PENDING, ACTIVE, INACTIVE, ERROR, ENDED, UNSOLD, SOLD
+  listingUrl        String?
+
   // Sync Tracking
   channelSpecificData Json? // Any channel-specific fields
   lastSyncedAt        DateTime?
   lastSyncStatus      String? // SUCCESS, FAILED, PENDING
-  syncRetryCount      Int              @default(0)
+  syncRetryCount      Int       @default(0)
   lastSyncError       String?
 
   @@unique([variantId, channelId])
@@ -389,138 +395,138 @@ model VariantChannelListing {
 // ── PHASE 9: Channel Listing (Platform-Specific Data) ──────────────────────
 
 model ChannelListing {
-  id                String  @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // ── Master Product Reference ────────────────────────────────────
-  product           Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  productId         String
-  
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+
   // ── Phase 23.2: Stock Buffer (Overselling Protection) ──────────
   // Units to reserve; marketplace sees (actualStock - stockBuffer)
-  stockBuffer       Int     @default(0)
-  
+  stockBuffer Int @default(0)
+
   // ── Channel & Market Identification ─────────────────────────────
   // Examples: "AMAZON_US", "AMAZON_DE", "EBAY_US", "EBAY_DE", "SHOPIFY", etc.
-  channelMarket     String  // Composite key: CHANNEL_REGION (legacy)
-  channel           String  // "AMAZON", "EBAY", "SHOPIFY", "WOOCOMMERCE", "ETSY"
-  region            String  // "US", "DE", "UK", "FR", "JP", etc.
+  channelMarket String // Composite key: CHANNEL_REGION (legacy)
+  channel       String // "AMAZON", "EBAY", "SHOPIFY", "WOOCOMMERCE", "ETSY"
+  region        String // "US", "DE", "UK", "FR", "JP", etc.
   // Phase 31b: clean per-marketplace key alongside legacy channelMarket.
   // Values: country code ("IT", "DE", "FR", ...) for region-scoped channels,
   // or "GLOBAL" for single-store channels (Shopify, WooCommerce, Etsy).
-  marketplace       String  @default("DEFAULT")
-  
+  marketplace   String @default("DEFAULT")
+
   // ── Platform-Specific Identifiers ───────────────────────────────
   // Amazon: Parent ASIN (non-buyable) or child ASIN (buyable)
   // eBay: ItemID (12-digit number)
   // Shopify: Product ID
   externalListingId String?
-  externalParentId  String?  // For Amazon parent ASIN
-  
+  externalParentId  String? // For Amazon parent ASIN
+
   // ── PHASE 15: Analytics Grouping Key ────────────────────────────
   // For Amazon: ASIN (groups FBA/FBM under single ASIN for analytics)
   // For eBay: ItemID (groups variations under single listing)
   // For Shopify: Product ID (groups variants)
-  platformProductId String?  // Analytics grouping key
-  
+  platformProductId String? // Analytics grouping key
+
   // ── Platform-Specific Title & Description ──────────────────────
   // Can differ from master product name
-  title             String?
-  description       String?  // HTML or plain text
-  
+  title       String?
+  description String? // HTML or plain text
+
   // ── Platform-Specific Pricing ──────────────────────────────────
   // Overrides master basePrice if set
-  price             Decimal? @db.Decimal(10, 2)
-  salePrice         Decimal? @db.Decimal(10, 2)
-  
+  price     Decimal? @db.Decimal(10, 2)
+  salePrice Decimal? @db.Decimal(10, 2)
+
   // ── PHASE 28: Pricing Rules & Adjustments ──────────────────────
-  pricingRule       PricingRuleType @default(FIXED)  // FIXED, MATCH_AMAZON, PERCENT_OF_MASTER
-  priceAdjustmentPercent Decimal? @db.Decimal(5, 2)  // For PERCENT_OF_MASTER rule (e.g., 10 for +10%)
-  
+  pricingRule            PricingRuleType @default(FIXED) // FIXED, MATCH_AMAZON, PERCENT_OF_MASTER
+  priceAdjustmentPercent Decimal?        @db.Decimal(5, 2) // For PERCENT_OF_MASTER rule (e.g., 10 for +10%)
+
   // ── Platform-Specific Inventory ────────────────────────────────
   // Overrides master totalStock if set
-  quantity          Int?
-  
+  quantity Int?
+
   // ── Platform-Specific Attributes ───────────────────────────────
   // JSON structure varies by platform:
   // Amazon: { browseNodeId, bulletPoints, searchTerms, aplus_content }
   // eBay: { itemSpecifics, categoryId, conditionId, returnPolicy }
   // Shopify: { tags, vendor, collections }
   platformAttributes Json?
-  
+
   // ── PHASE 12b: Variation Matrix ────────────────────────────────
   // Platform-specific variation theme (e.g., "Size", "Color", "SizeColor")
   // Defines how child products are grouped into multi-variant listings
-  variationTheme    String?
+  variationTheme   String?
   // Mapping of master variant attributes to platform-specific formatting
   // Example: { "Size": "SizeMap", "Color": "ColorMap" }
-  variationMapping  Json?
-  
+  variationMapping Json?
+
   // ── Listing Status & Sync Tracking ─────────────────────────────
-  listingStatus     String  @default("DRAFT")  // DRAFT, ACTIVE, INACTIVE, ENDED, ERROR
-  lastSyncedAt      DateTime?
-  lastSyncStatus    String?  // SUCCESS, FAILED, PENDING
-  lastSyncError     String?
-  syncRetryCount    Int     @default(0)
-  
+  listingStatus  String    @default("DRAFT") // DRAFT, ACTIVE, INACTIVE, ENDED, ERROR
+  lastSyncedAt   DateTime?
+  lastSyncStatus String? // SUCCESS, FAILED, PENDING
+  lastSyncError  String?
+  syncRetryCount Int       @default(0)
+
   // ── Sync Control Flags ─────────────────────────────────────────
   // When true, next sync will pull from master product
-  syncFromMaster    Boolean @default(false)
+  syncFromMaster Boolean @default(false)
   // When true, this listing is locked from syncing
-  syncLocked        Boolean @default(false)
-  
+  syncLocked     Boolean @default(false)
+
   // ── PHASE 15: Publishing Control ────────────────────────────────
   // Master toggle: when false, this listing will not sync to the platform
-  isPublished       Boolean @default(true)
-  
+  isPublished Boolean @default(true)
+
   // ── PHASE 20: SSOT Override Toggles ────────────────────────────
   // When true, use master product value; when false, use channel-specific override
-  followMasterTitle       Boolean @default(true)
-  followMasterDescription Boolean @default(true)
-  followMasterPrice       Boolean @default(true)
-  followMasterQuantity    Boolean @default(true)
-  followMasterImages      Boolean @default(true)
+  followMasterTitle        Boolean @default(true)
+  followMasterDescription  Boolean @default(true)
+  followMasterPrice        Boolean @default(true)
+  followMasterQuantity     Boolean @default(true)
+  followMasterImages       Boolean @default(true)
   followMasterBulletPoints Boolean @default(true)
-  
+
   // ── PHASE 20: SSOT Master Data References ──────────────────────
   // Store master values for quick comparison and cascade logic
-  masterTitle             String?
-  masterDescription       String?
-  masterPrice             Decimal? @db.Decimal(10, 2)
-  masterQuantity          Int?
-  masterBulletPoints      String[]
-  
+  masterTitle        String?
+  masterDescription  String?
+  masterPrice        Decimal? @db.Decimal(10, 2)
+  masterQuantity     Int?
+  masterBulletPoints String[]
+
   // ── PHASE 20: Channel-Specific Overrides ───────────────────────
   // These are the actual values used when followMaster* = false
-  titleOverride           String?
-  descriptionOverride     String?
-  priceOverride           Decimal? @db.Decimal(10, 2)
-  quantityOverride        Int?
-  bulletPointsOverride    String[]
-  
+  titleOverride        String?
+  descriptionOverride  String?
+  priceOverride        Decimal? @db.Decimal(10, 2)
+  quantityOverride     Int?
+  bulletPointsOverride String[]
+
   // ── PHASE 20: Sync Status Tracking ────────────────────────────
   // Real-time sync state for this specific channel listing
-  syncStatus              String  @default("IDLE")  // IDLE, PENDING, SYNCING, IN_SYNC, FAILED
-  syncRetryLastAt         DateTime?
-  
+  syncStatus      String    @default("IDLE") // IDLE, PENDING, SYNCING, IN_SYNC, FAILED
+  syncRetryLastAt DateTime?
+
   // ── PHASE 20: Validation State ───────────────────────────────
   // Track validation errors per channel
-  validationStatus        String  @default("VALID")  // VALID, WARNING, ERROR
-  validationErrors        String[]
-  
+  validationStatus String   @default("VALID") // VALID, WARNING, ERROR
+  validationErrors String[]
+
   // ── PHASE 20: Audit Trail ────────────────────────────────────
   // Track when overrides were last modified
-  lastOverrideAt          DateTime?
-  lastOverrideBy          String?  // User ID or system identifier
-  
+  lastOverrideAt DateTime?
+  lastOverrideBy String? // User ID or system identifier
+
   // ── Relations ───────────────────────────────────────────────────
-  offers                  Offer[]
-  images                  ChannelListingImage[]
-  outboundSyncQueue       OutboundSyncQueue[]
-  overrideHistory         ChannelListingOverride[]
-  
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
-  
+  offers            Offer[]
+  images            ChannelListingImage[]
+  outboundSyncQueue OutboundSyncQueue[]
+  overrideHistory   ChannelListingOverride[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([productId, channelMarket])
   @@unique([productId, channel, marketplace], name: "productId_channel_marketplace")
   @@index([productId])
@@ -537,19 +543,19 @@ model ChannelListing {
 // Static reference data: which (channel, code) pairs are valid for listings,
 // plus their localization metadata. Seeded via seed-marketplaces.ts.
 model Marketplace {
-  id              String   @id @default(cuid())
-  channel         String   // "AMAZON" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY"
-  code            String   // "IT" | "DE" | "FR" | "GLOBAL" | ...
-  name            String   // "Amazon Italy"
-  marketplaceId   String?  // SP-API marketplace ID e.g. "APJ6JRA9NG5V4"
-  region          String   // "EU" | "NA" | "FE" | "GLOBAL"
-  currency        String   // "EUR" | "GBP" | "USD"
-  language        String   // "it" | "de" | "fr" | "en"
-  domainUrl       String?  // "amazon.it" | "ebay.de"
-  isActive        Boolean  @default(true)
+  id            String  @id @default(cuid())
+  channel       String // "AMAZON" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY"
+  code          String // "IT" | "DE" | "FR" | "GLOBAL" | ...
+  name          String // "Amazon Italy"
+  marketplaceId String? // SP-API marketplace ID e.g. "APJ6JRA9NG5V4"
+  region        String // "EU" | "NA" | "FE" | "GLOBAL"
+  currency      String // "EUR" | "GBP" | "USD"
+  language      String // "it" | "de" | "fr" | "en"
+  domainUrl     String? // "amazon.it" | "ebay.de"
+  isActive      Boolean @default(true)
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([channel, code])
   @@index([channel])
@@ -558,31 +564,31 @@ model Marketplace {
 // ── PHASE 20: Channel Listing Override (Audit Trail) ──────────────────────
 
 model ChannelListingOverride {
-  id                    String  @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // ── Channel Listing Reference ──────────────────────────────────
-  channelListing        ChannelListing @relation(fields: [channelListingId], references: [id], onDelete: Cascade)
-  channelListingId      String
-  
+  channelListing   ChannelListing @relation(fields: [channelListingId], references: [id], onDelete: Cascade)
+  channelListingId String
+
   // ── Override Field & Values ────────────────────────────────────
   // Which field was overridden (e.g., "price", "title", "description")
-  fieldName             String
+  fieldName     String
   // Previous value (before override)
-  previousValue         String?
+  previousValue String?
   // New value (after override)
-  newValue              String?
+  newValue      String?
   // Whether this override is currently active
-  isActive              Boolean @default(true)
-  
+  isActive      Boolean @default(true)
+
   // ── Audit Information ──────────────────────────────────────────
   // User or system that made the change
-  changedBy             String?
+  changedBy String?
   // Reason for the override
-  reason                String?
-  
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  
+  reason    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([channelListingId])
   @@index([fieldName])
   @@index([isActive])
@@ -591,44 +597,44 @@ model ChannelListingOverride {
 // ── PHASE 9: Offer (Fulfillment-Specific SKU & Pricing) ──────────────────
 
 model Offer {
-  id                String  @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // ── Channel Listing Reference ──────────────────────────────────
-  channelListing    ChannelListing @relation(fields: [channelListingId], references: [id], onDelete: Cascade)
-  channelListingId  String
-  
+  channelListing   ChannelListing @relation(fields: [channelListingId], references: [id], onDelete: Cascade)
+  channelListingId String
+
   // ── Fulfillment Method ─────────────────────────────────────────
   // "FBA" (Fulfillment by Amazon), "FBM" (Fulfilled by Merchant), etc.
   fulfillmentMethod FulfillmentMethod
-  
+
   // ── Offer-Specific SKU ─────────────────────────────────────────
   // Different SKU per fulfillment method (e.g., "PRODUCT-FBA" vs "PRODUCT-FBM")
-  sku               String
-  
+  sku String
+
   // ── Offer-Specific Pricing ─────────────────────────────────────
   // Overrides channel listing price if set
-  price             Decimal? @db.Decimal(10, 2)
-  
+  price Decimal? @db.Decimal(10, 2)
+
   // ── Offer-Specific Inventory ──────────────────────────────────
   // Overrides channel listing quantity if set
-  quantity          Int?
-  
+  quantity Int?
+
   // ── Offer Status ───────────────────────────────────────────────
-  isActive          Boolean @default(true)
-  
+  isActive Boolean @default(true)
+
   // ── Offer-Specific Metadata ────────────────────────────────────
   // FBA: { shipmentId, fcCode, prepRequired }
   // FBM: { shippingTemplate, handlingTime, shippingCost }
-  offerMetadata     Json?
-  
+  offerMetadata Json?
+
   // ── Sync Tracking ──────────────────────────────────────────────
-  lastSyncedAt      DateTime?
-  lastSyncStatus    String?
-  lastSyncError     String?
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
+  lastSyncedAt   DateTime?
+  lastSyncStatus String?
+  lastSyncError  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([channelListingId, fulfillmentMethod])
   @@index([channelListingId])
   @@index([fulfillmentMethod])
@@ -638,31 +644,31 @@ model Offer {
 // ── PHASE 9: Channel Listing Image (Platform-Specific Images) ──────────────
 
 model ChannelListingImage {
-  id                String  @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // ── Can link to either Master Product OR Channel Listing ────────
   // If productId is set: master image (inherited by all listings)
   // If channelListingId is set: platform-specific image override
-  product           Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  productId         String?
-  
-  channelListing    ChannelListing? @relation(fields: [channelListingId], references: [id], onDelete: Cascade)
-  channelListingId  String?
-  
+  product   Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String?
+
+  channelListing   ChannelListing? @relation(fields: [channelListingId], references: [id], onDelete: Cascade)
+  channelListingId String?
+
   // ── Image Data ─────────────────────────────────────────────────
-  url               String
-  alt               String?
-  type              String  // "MAIN", "ALT", "LIFESTYLE", "SWATCH"
-  sortOrder         Int     @default(0)
-  
+  url       String
+  alt       String?
+  type      String // "MAIN", "ALT", "LIFESTYLE", "SWATCH"
+  sortOrder Int     @default(0)
+
   // ── Platform-Specific Metadata ────────────────────────────────
   // Amazon: { asin, imageType }
   // eBay: { pictureURL, galleryType }
-  platformMetadata  Json?
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
+  platformMetadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([productId])
   @@index([channelListingId])
 }
@@ -735,12 +741,12 @@ model Listing {
   channel      Channel  @relation(fields: [channelId], references: [id])
   channelId    String
   channelPrice Decimal  @db.Decimal(10, 2)
-  
+
   // Phase 23.2: Stock buffer to prevent overselling on high-velocity channels
-  stockBuffer  Int      @default(0) // Units to reserve; marketplace sees (actualStock - buffer)
-  
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  stockBuffer Int @default(0) // Units to reserve; marketplace sees (actualStock - buffer)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([productId, channelId])
 }
@@ -748,26 +754,26 @@ model Listing {
 // ── AI Listing Generator (Phase 5) ─────────────────────────────────────
 
 model DraftListing {
-  id                String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Product Reference
-  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  productId         String
-  
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+
   // AI-Generated Content
-  ebayTitle         String   // Max 80 chars (eBay limit)
-  categoryId        String   // eBay category ID
-  itemSpecifics     Json     // { "Brand": "Sony", "Color": "Black", ... }
-  htmlDescription   String   // Mobile-responsive HTML (max 4000 chars)
-  
+  ebayTitle       String // Max 80 chars (eBay limit)
+  categoryId      String // eBay category ID
+  itemSpecifics   Json // { "Brand": "Sony", "Color": "Black", ... }
+  htmlDescription String // Mobile-responsive HTML (max 4000 chars)
+
   // Status & Metadata
-  status            String   @default("DRAFT") // DRAFT, PUBLISHED, ARCHIVED
-  publishedAt       DateTime? // When listing was published to eBay
-  
+  status      String    @default("DRAFT") // DRAFT, PUBLISHED, ARCHIVED
+  publishedAt DateTime? // When listing was published to eBay
+
   // Audit Trail
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([productId])
   @@index([status])
   @@index([createdAt])
@@ -786,14 +792,14 @@ model StockLog {
 // ── FBA Shipments ──────────────────────────────────────────────────────────
 
 model FBAShipment {
-  id            String         @id @default(cuid())
-  shipmentId    String         @unique // Amazon shipment ID
+  id            String            @id @default(cuid())
+  shipmentId    String            @unique // Amazon shipment ID
   name          String? // Shipment plan name
-  status        ShipmentStatus @default(WORKING)
+  status        ShipmentStatus    @default(WORKING)
   destinationFC String // Fulfillment center code (e.g., "MXP5")
   items         FBAShipmentItem[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
 }
 
 model FBAShipmentItem {
@@ -809,32 +815,32 @@ model FBAShipmentItem {
 // ── Pricing Rules ──────────────────────────────────────────────────────────
 
 model PricingRule {
-  id         String               @id @default(cuid())
-  name       String
-  type       String // MATCH_LOW, PERCENTAGE_BELOW, COST_PLUS_MARGIN, FIXED_PRICE, DYNAMIC_MARGIN
+  id          String  @id @default(cuid())
+  name        String
+  type        String // MATCH_LOW, PERCENTAGE_BELOW, COST_PLUS_MARGIN, FIXED_PRICE, DYNAMIC_MARGIN
   description String? // Human-readable rule description
-  
+
   // ── Priority & Execution (Phase 1 Enhancement) ──────────────────
   // Lower priority number = higher precedence (0 = highest)
-  priority   Int                  @default(100)
-  
+  priority Int @default(100)
+
   // ── Margin Thresholds (Phase 1 Enhancement) ──────────────────────
   // Minimum acceptable margin percentage (e.g., 15 for 15%)
-  minMarginPercent Decimal?        @db.Decimal(5, 2)
+  minMarginPercent Decimal? @db.Decimal(5, 2)
   // Maximum acceptable margin percentage (e.g., 50 for 50%)
-  maxMarginPercent Decimal?        @db.Decimal(5, 2)
-  
+  maxMarginPercent Decimal? @db.Decimal(5, 2)
+
   // ── Rule Configuration ───────────────────────────────────────────
   parameters Json // Rule-specific config
-  isActive   Boolean              @default(true)
-  
+  isActive   Boolean @default(true)
+
   // ── Relations ────────────────────────────────────────────────────
   products   PricingRuleProduct[]
   variations PricingRuleVariation[]
-  
+
   // ── Audit Trail ──────────────────────────────────────────────────
-  createdAt  DateTime             @default(now())
-  updatedAt  DateTime             @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model PricingRuleProduct {
@@ -853,10 +859,10 @@ model PricingRuleProduct {
 // Links pricing rules to specific product variations for granular control
 
 model PricingRuleVariation {
-  id        String           @id @default(cuid())
-  rule      PricingRule      @relation(fields: [ruleId], references: [id], onDelete: Cascade)
-  ruleId    String
-  variation ProductVariation @relation(fields: [variationId], references: [id], onDelete: Cascade)
+  id          String           @id @default(cuid())
+  rule        PricingRule      @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  ruleId      String
+  variation   ProductVariation @relation(fields: [variationId], references: [id], onDelete: Cascade)
   variationId String
 
   @@unique([ruleId, variationId])
@@ -868,40 +874,40 @@ model PricingRuleVariation {
 // Tracks failed imports, conflict resolutions, and duplicate variation errors per channel
 
 model SyncHealthLog {
-  id                String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // ── Identification ───────────────────────────────────────────────────
-  channel           String   // AMAZON, EBAY, SHOPIFY, WOOCOMMERCE, ETSY
-  syncJobId         String?  // Reference to the sync job that triggered this log
-  
+  channel   String // AMAZON, EBAY, SHOPIFY, WOOCOMMERCE, ETSY
+  syncJobId String? // Reference to the sync job that triggered this log
+
   // ── Error Classification ─────────────────────────────────────────────
-  errorType         String   // IMPORT_FAILED, CONFLICT_DETECTED, DUPLICATE_VARIATION, VALIDATION_ERROR, MAPPING_ERROR, RATE_LIMIT, AUTHENTICATION_ERROR
-  severity          String   @default("WARNING") // INFO, WARNING, ERROR, CRITICAL
-  
+  errorType String // IMPORT_FAILED, CONFLICT_DETECTED, DUPLICATE_VARIATION, VALIDATION_ERROR, MAPPING_ERROR, RATE_LIMIT, AUTHENTICATION_ERROR
+  severity  String @default("WARNING") // INFO, WARNING, ERROR, CRITICAL
+
   // ── Entity References ────────────────────────────────────────────────
-  productId         String?  // Reference to Product if applicable
-  product           Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
-  variationId       String?  // Reference to ProductVariation if applicable
-  variation         ProductVariation? @relation(fields: [variationId], references: [id], onDelete: SetNull)
-  
+  productId   String? // Reference to Product if applicable
+  product     Product?          @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variationId String? // Reference to ProductVariation if applicable
+  variation   ProductVariation? @relation(fields: [variationId], references: [id], onDelete: SetNull)
+
   // ── Error Details ────────────────────────────────────────────────────
-  errorMessage      String   // Human-readable error message
-  errorDetails      Json?    // Detailed error context (stack trace, API response, etc.)
-  
+  errorMessage String // Human-readable error message
+  errorDetails Json? // Detailed error context (stack trace, API response, etc.)
+
   // ── Conflict Resolution ──────────────────────────────────────────────
-  conflictType      String?  // PRICE_MISMATCH, INVENTORY_MISMATCH, ATTRIBUTE_MISMATCH, DUPLICATE_SKU, DUPLICATE_ASIN
-  conflictData      Json?    // Data about the conflict (e.g., {"local": {...}, "remote": {...}})
-  resolutionStatus  String   @default("UNRESOLVED") // UNRESOLVED, AUTO_RESOLVED, MANUAL_RESOLVED, IGNORED
-  resolutionNotes   String?  // Notes on how the conflict was resolved
-  
+  conflictType     String? // PRICE_MISMATCH, INVENTORY_MISMATCH, ATTRIBUTE_MISMATCH, DUPLICATE_SKU, DUPLICATE_ASIN
+  conflictData     Json? // Data about the conflict (e.g., {"local": {...}, "remote": {...}})
+  resolutionStatus String  @default("UNRESOLVED") // UNRESOLVED, AUTO_RESOLVED, MANUAL_RESOLVED, IGNORED
+  resolutionNotes  String? // Notes on how the conflict was resolved
+
   // ── Duplicate Variation Tracking ─────────────────────────────────────
   duplicateVariationIds String[] // Array of variation IDs that are duplicates
-  
+
   // ── Audit Trail ──────────────────────────────────────────────────────
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  resolvedAt        DateTime? // When the issue was resolved
-  
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  resolvedAt DateTime? // When the issue was resolved
+
   @@index([channel])
   @@index([errorType])
   @@index([severity])
@@ -915,48 +921,48 @@ model SyncHealthLog {
 // Tracks asynchronous bulk actions (Pricing, Inventory, Status) with progress tracking
 
 model BulkActionJob {
-  id                String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // ── Job Identification ───────────────────────────────────────────────
-  jobName           String   // User-friendly name for the bulk action
-  actionType        String   // PRICING_UPDATE, INVENTORY_UPDATE, STATUS_UPDATE, ATTRIBUTE_UPDATE, LISTING_SYNC
-  channel           String?  // Target channel (null = all channels)
-  
+  jobName    String // User-friendly name for the bulk action
+  actionType String // PRICING_UPDATE, INVENTORY_UPDATE, STATUS_UPDATE, ATTRIBUTE_UPDATE, LISTING_SYNC
+  channel    String? // Target channel (null = all channels)
+
   // ── Scope & Targeting ────────────────────────────────────────────────
-  targetProductIds  String[] // Array of product IDs to process
+  targetProductIds   String[] // Array of product IDs to process
   targetVariationIds String[] // Array of variation IDs to process (if empty, applies to all variations)
-  filters           Json?    // Query filters for dynamic targeting (e.g., {"status": "ACTIVE", "stock": {"lt": 10}})
-  
+  filters            Json? // Query filters for dynamic targeting (e.g., {"status": "ACTIVE", "stock": {"lt": 10}})
+
   // ── Action Configuration ─────────────────────────────────────────────
-  actionPayload     Json     // The actual changes to apply (structure depends on actionType)
+  actionPayload Json // The actual changes to apply (structure depends on actionType)
   // Example for PRICING_UPDATE: {"priceAdjustment": 5.00, "adjustmentType": "FIXED"}
   // Example for INVENTORY_UPDATE: {"quantityChange": -10, "reason": "Manual adjustment"}
   // Example for STATUS_UPDATE: {"newStatus": "INACTIVE"}
-  
+
   // ── Progress Tracking ────────────────────────────────────────────────
-  status            String   @default("PENDING") // PENDING, QUEUED, IN_PROGRESS, COMPLETED, FAILED, PARTIALLY_COMPLETED, CANCELLED
-  totalItems        Int      @default(0) // Total items to process
-  processedItems    Int      @default(0) // Items successfully processed
-  failedItems       Int      @default(0) // Items that failed
-  skippedItems      Int      @default(0) // Items skipped (e.g., already in desired state)
-  progressPercent   Int      @default(0) // 0-100
-  
+  status          String @default("PENDING") // PENDING, QUEUED, IN_PROGRESS, COMPLETED, FAILED, PARTIALLY_COMPLETED, CANCELLED
+  totalItems      Int    @default(0) // Total items to process
+  processedItems  Int    @default(0) // Items successfully processed
+  failedItems     Int    @default(0) // Items that failed
+  skippedItems    Int    @default(0) // Items skipped (e.g., already in desired state)
+  progressPercent Int    @default(0) // 0-100
+
   // ── Error Handling ───────────────────────────────────────────────────
-  errorLog          Json?    // Array of errors encountered: [{"itemId": "...", "error": "...", "timestamp": "..."}]
-  lastError         String?  // Most recent error message
-  
+  errorLog  Json? // Array of errors encountered: [{"itemId": "...", "error": "...", "timestamp": "..."}]
+  lastError String? // Most recent error message
+
   // ── Rollback Support ─────────────────────────────────────────────────
-  isRollbackable    Boolean  @default(true) // Can this job be rolled back?
-  rollbackJobId     String?  // Reference to rollback job if one was created
-  rollbackData      Json?    // Snapshot of original values for rollback
-  
+  isRollbackable Boolean @default(true) // Can this job be rolled back?
+  rollbackJobId  String? // Reference to rollback job if one was created
+  rollbackData   Json? // Snapshot of original values for rollback
+
   // ── Execution Details ────────────────────────────────────────────────
-  createdBy         String?  // User ID who created the job
-  createdAt         DateTime @default(now())
-  startedAt         DateTime? // When processing began
-  completedAt       DateTime? // When processing finished
-  updatedAt         DateTime @updatedAt
-  
+  createdBy   String? // User ID who created the job
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime? // When processing began
+  completedAt DateTime? // When processing finished
+  updatedAt   DateTime  @updatedAt
+
   @@index([actionType])
   @@index([channel])
   @@index([status])
@@ -1049,30 +1055,30 @@ model ApiKey {
 }
 
 model UserProfile {
-  id          String   @id @default(cuid())
-  displayName String   @default("")
-  email       String   @default("")
-  avatarUrl   String   @default("")
+  id           String   @id @default(cuid())
+  displayName  String   @default("")
+  email        String   @default("")
+  avatarUrl    String   @default("")
   // Password stored as bcrypt hash
-  passwordHash String  @default("")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  passwordHash String   @default("")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 // ── Webhook Event Tracking ─────────────────────────────────────────
 
 model WebhookEvent {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   channel     String // SHOPIFY, WOOCOMMERCE, ETSY
   eventType   String // product/update, inventory/update, order/create, etc.
   externalId  String // Unique ID from marketplace (for idempotency)
   payload     Json // Raw webhook payload
   signature   String? // Webhook signature for verification
-  isProcessed Boolean  @default(false)
+  isProcessed Boolean   @default(false)
   processedAt DateTime?
   error       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@unique([channel, externalId])
   @@index([isProcessed])
@@ -1082,14 +1088,14 @@ model WebhookEvent {
 // ── Marketplace Credentials ────────────────────────────────────────
 
 model MarketplaceCredential {
-  id              String   @id @default(cuid())
-  channel         String // SHOPIFY, WOOCOMMERCE, ETSY
-  credentialType  String // ACCESS_TOKEN, REFRESH_TOKEN, API_KEY, API_SECRET, WEBHOOK_SECRET
-  encryptedValue  String // AES-256-GCM encrypted
-  expiresAt       DateTime?
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String    @id @default(cuid())
+  channel        String // SHOPIFY, WOOCOMMERCE, ETSY
+  credentialType String // ACCESS_TOKEN, REFRESH_TOKEN, API_KEY, API_SECRET, WEBHOOK_SECRET
+  encryptedValue String // AES-256-GCM encrypted
+  expiresAt      DateTime?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@unique([channel, credentialType])
   @@index([channel])
@@ -1114,26 +1120,26 @@ model RateLimitLog {
 // ── Amazon Catalog Sync Logging ─────────────────────────────────────────
 
 model SyncLog {
-  id                String    @id @default(cuid())
-  product           Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-  productId         String
-  
-  syncType          String    // "AMAZON_CATALOG", "AMAZON_INVENTORY", "AMAZON_PRICING"
-  status            String    // "PENDING", "IN_PROGRESS", "SUCCESS", "FAILED"
-  
-  itemsProcessed    Int       @default(0)
-  itemsSuccessful   Int       @default(0)
-  itemsFailed       Int       @default(0)
-  
-  startedAt         DateTime  @default(now())
-  completedAt       DateTime?
-  
-  errorMessage      String?
-  details           Json?     // Detailed sync results
-  
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  
+  id        String  @id @default(cuid())
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+
+  syncType String // "AMAZON_CATALOG", "AMAZON_INVENTORY", "AMAZON_PRICING"
+  status   String // "PENDING", "IN_PROGRESS", "SUCCESS", "FAILED"
+
+  itemsProcessed  Int @default(0)
+  itemsSuccessful Int @default(0)
+  itemsFailed     Int @default(0)
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  errorMessage String?
+  details      Json? // Detailed sync results
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([productId])
   @@index([status])
   @@index([syncType])
@@ -1142,18 +1148,18 @@ model SyncLog {
 // ── Sync Error Tracking ────────────────────────────────────────────
 
 model SyncError {
-  id          String   @id @default(cuid())
-  channel     String // SHOPIFY, WOOCOMMERCE, ETSY
-  errorType   String // RATE_LIMIT, AUTHENTICATION, VALIDATION, NETWORK, etc.
+  id           String    @id @default(cuid())
+  channel      String // SHOPIFY, WOOCOMMERCE, ETSY
+  errorType    String // RATE_LIMIT, AUTHENTICATION, VALIDATION, NETWORK, etc.
   errorMessage String
-  errorStack  String?
-  context     Json? // Additional context (product ID, variant ID, etc.)
-  retryCount  Int      @default(0)
-  maxRetries  Int      @default(3)
-  nextRetryAt DateTime?
-  resolvedAt  DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  errorStack   String?
+  context      Json? // Additional context (product ID, variant ID, etc.)
+  retryCount   Int       @default(0)
+  maxRetries   Int       @default(3)
+  nextRetryAt  DateTime?
+  resolvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@index([channel])
   @@index([errorType])
@@ -1177,28 +1183,28 @@ enum OrderStatus {
 }
 
 model Order {
-  id                    String    @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // ── Phase 26: Unified Order Command ──────────────────────────────────
   // Cross-channel order ingestion
-  channel               OrderChannel
-  channelOrderId        String    // Unique per channel
-  status                OrderStatus @default(PENDING)
-  totalPrice            Decimal   @db.Decimal(12, 2)
-  customerName          String
-  customerEmail         String
-  shippingAddress       Json      // { street, city, state, postalCode, country }
-  
+  channel         OrderChannel
+  channelOrderId  String // Unique per channel
+  status          OrderStatus  @default(PENDING)
+  totalPrice      Decimal      @db.Decimal(12, 2)
+  customerName    String
+  customerEmail   String
+  shippingAddress Json // { street, city, state, postalCode, country }
+
   // Relations
   items                 OrderItem[]
   financialTransactions FinancialTransaction[]
-  
+
   // Metadata
-  amazonMetadata        Json?
-  ebayMetadata          Json?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-  
+  amazonMetadata Json?
+  ebayMetadata   Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
   @@unique([channel, channelOrderId])
   @@index([channel])
   @@index([status])
@@ -1207,71 +1213,71 @@ model Order {
 }
 
 model OrderItem {
-  id                    String    @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Order Reference
-  order                 Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  orderId               String
-  
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId String
+
   // Product Reference
-  product               Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
-  productId             String?
-  
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productId String?
+
   // ── Phase 26: Unified Order Item ────────────────────────────────────
-  sku                   String
-  quantity              Int
-  price                 Decimal   @db.Decimal(10, 2)
-  
+  sku      String
+  quantity Int
+  price    Decimal @db.Decimal(10, 2)
+
   // Metadata
-  amazonMetadata        Json?
-  ebayMetadata          Json?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-  
+  amazonMetadata Json?
+  ebayMetadata   Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
   @@index([orderId])
   @@index([productId])
   @@index([sku])
 }
 
 model FinancialTransaction {
-  id                    String    @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Channel-specific Transaction IDs
-  amazonTransactionId   String?   // Nullable for non-Amazon transactions
-  ebayTransactionId     String?   // eBay transaction ID
-  
+  amazonTransactionId String? // Nullable for non-Amazon transactions
+  ebayTransactionId   String? // eBay transaction ID
+
   // Order Reference
-  order                 Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  orderId               String
-  
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId String
+
   // Transaction Details
-  transactionType       String    // "Order", "Refund", "FBA_Fee", "Shipping_Fee", "Tax", "Adjustment", "eBay_Fee", "PayPal_Fee"
-  transactionDate       DateTime
-  
+  transactionType String // "Order", "Refund", "FBA_Fee", "Shipping_Fee", "Tax", "Adjustment", "eBay_Fee", "PayPal_Fee"
+  transactionDate DateTime
+
   // Financial Amounts
-  amount                Decimal   @db.Decimal(12, 2)
-  currencyCode          String    @default("USD")
-  
+  amount       Decimal @db.Decimal(12, 2)
+  currencyCode String  @default("USD")
+
   // Fee Breakdown
-  amazonFee             Decimal   @db.Decimal(10, 2)  @default(0)
-  fbaFee                Decimal   @db.Decimal(10, 2)  @default(0)
-  paymentServicesFee    Decimal   @db.Decimal(10, 2)  @default(0)
-  ebayFee               Decimal   @db.Decimal(10, 2)  @default(0)  // eBay final value fee
-  paypalFee             Decimal   @db.Decimal(10, 2)  @default(0)  // PayPal transaction fee
-  otherFees             Decimal   @db.Decimal(10, 2)  @default(0)
-  
+  amazonFee          Decimal @default(0) @db.Decimal(10, 2)
+  fbaFee             Decimal @default(0) @db.Decimal(10, 2)
+  paymentServicesFee Decimal @default(0) @db.Decimal(10, 2)
+  ebayFee            Decimal @default(0) @db.Decimal(10, 2) // eBay final value fee
+  paypalFee          Decimal @default(0) @db.Decimal(10, 2) // PayPal transaction fee
+  otherFees          Decimal @default(0) @db.Decimal(10, 2)
+
   // Net Revenue Calculation
-  grossRevenue          Decimal   @db.Decimal(12, 2)
-  netRevenue            Decimal   @db.Decimal(12, 2)
-  
+  grossRevenue Decimal @db.Decimal(12, 2)
+  netRevenue   Decimal @db.Decimal(12, 2)
+
   // Status
-  status                String    // "Pending", "Completed", "Reversed"
-  
+  status String // "Pending", "Completed", "Reversed"
+
   // Metadata
-  amazonMetadata        Json?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-  
+  amazonMetadata Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
   @@index([orderId])
   @@index([transactionType])
   @@index([transactionDate])
@@ -1279,84 +1285,84 @@ model FinancialTransaction {
 }
 
 model ChannelConnection {
-  id                    String    @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Channel Type
-  channelType           String    // "AMAZON", "EBAY", "SHOPIFY", "WOOCOMMERCE", "ETSY"
-  
+  channelType String // "AMAZON", "EBAY", "SHOPIFY", "WOOCOMMERCE", "ETSY"
+
   // eBay OAuth2 Credentials
-  ebayAccessToken       String?   // Current access token
-  ebayRefreshToken      String?   // Refresh token (long-lived)
-  ebayTokenExpiresAt    DateTime? // Token expiration timestamp
-  ebayDevId             String?   // eBay Developer ID (from app)
-  ebayAppId             String?   // eBay App ID (from app)
-  ebaySignInName        String?   // eBay seller username
-  ebayStoreName         String?   // eBay store name
-  ebayStoreFrontUrl     String?   // eBay store URL
-  
+  ebayAccessToken    String? // Current access token
+  ebayRefreshToken   String? // Refresh token (long-lived)
+  ebayTokenExpiresAt DateTime? // Token expiration timestamp
+  ebayDevId          String? // eBay Developer ID (from app)
+  ebayAppId          String? // eBay App ID (from app)
+  ebaySignInName     String? // eBay seller username
+  ebayStoreName      String? // eBay store name
+  ebayStoreFrontUrl  String? // eBay store URL
+
   // Connection Status
-  isActive              Boolean   @default(false)
-  lastSyncAt            DateTime?
-  lastSyncStatus        String?   // "SUCCESS", "FAILED", "PARTIAL"
-  lastSyncError         String?
-  
+  isActive       Boolean   @default(false)
+  lastSyncAt     DateTime?
+  lastSyncStatus String? // "SUCCESS", "FAILED", "PARTIAL"
+  lastSyncError  String?
+
   // Metadata
-  connectionMetadata    Json?     // Additional eBay-specific data
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-  
+  connectionMetadata Json? // Additional eBay-specific data
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
   // Relations
-  variantListings       VariantChannelListing[]
-  
+  variantListings VariantChannelListing[]
+
   @@index([channelType])
   @@index([isActive])
 }
 
 model OutboundSyncQueue {
-  id                String              @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // ── PHASE 9: Support both Product and ChannelListing changes ────
   // At least one must be set
-  productId         String?
-  product           Product?            @relation(fields: [productId], references: [id], onDelete: Cascade)
-  
-  channelListingId  String?
-  channelListing    ChannelListing?     @relation(fields: [channelListingId], references: [id], onDelete: Cascade)
-  
-  offerId           String?
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  channelListingId String?
+  channelListing   ChannelListing? @relation(fields: [channelListingId], references: [id], onDelete: Cascade)
+
+  offerId String?
   // Note: Offer doesn't have direct relation; tracked via channelListingId
-  
+
   // ── Target channel ─────────────────────────────────────────────
-  targetChannel     SyncChannel         @default(AMAZON)
-  targetRegion      String?             // e.g., "US", "DE" (for regional syncs)
-  
+  targetChannel SyncChannel @default(AMAZON)
+  targetRegion  String? // e.g., "US", "DE" (for regional syncs)
+
   // ── Sync status ────────────────────────────────────────────────
-  syncStatus        OutboundSyncStatus  @default(PENDING)
-  
+  syncStatus OutboundSyncStatus @default(PENDING)
+
   // ── Payload (what to sync) ─────────────────────────────────────
-  payload           Json                // { "price": 99.99, "quantity": 50, "title": "...", "offers": [...] }
-  
+  payload Json // { "price": 99.99, "quantity": 50, "title": "...", "offers": [...] }
+
   // ── Error tracking ─────────────────────────────────────────────
-  errorMessage      String?
-  errorCode         String?
-  retryCount        Int                 @default(0)
-  maxRetries        Int                 @default(3)
-  
+  errorMessage String?
+  errorCode    String?
+  retryCount   Int     @default(0)
+  maxRetries   Int     @default(3)
+
   // ── Timestamps ─────────────────────────────────────────────────
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  syncedAt          DateTime?           // When successfully synced
-  nextRetryAt       DateTime?           // When to retry if failed
-  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  syncedAt    DateTime? // When successfully synced
+  nextRetryAt DateTime? // When to retry if failed
+
   // ── PHASE 12a: Grace Period (Undo Sync) ─────────────────────────
   // If set, Autopilot will not process this item until holdUntil <= NOW()
   // Allows 5-minute window to cancel syncs before they go live
-  holdUntil         DateTime?           // Hold sync until this time (grace period)
-  
+  holdUntil DateTime? // Hold sync until this time (grace period)
+
   // ── Metadata ───────────────────────────────────────────────────
-  syncType          String              // "PRICE_UPDATE", "QUANTITY_UPDATE", "LISTING_SYNC", "OFFER_SYNC", "FULL_SYNC"
-  externalListingId String?             // Amazon ASIN or eBay ItemID
-  
+  syncType          String // "PRICE_UPDATE", "QUANTITY_UPDATE", "LISTING_SYNC", "OFFER_SYNC", "FULL_SYNC"
+  externalListingId String? // Amazon ASIN or eBay ItemID
+
   @@index([productId])
   @@index([channelListingId])
   @@index([syncStatus])
@@ -1368,30 +1374,30 @@ model OutboundSyncQueue {
 // Records every PATCH /api/products/bulk request for traceability.
 // userId left nullable until auth is wired; populated as null for now.
 model BulkOperation {
-  id                String   @id @default(cuid())
-  userId            String?
-  productCount      Int
-  changeCount       Int
-  changes           Json     // [{ id, field, oldValue, newValue }]
-  status            String   // SUCCESS | PARTIAL | FAILED | PENDING_APPLY
-  errors            Json?    // [{ id, field, error }]
+  id           String  @id @default(cuid())
+  userId       String?
+  productCount Int
+  changeCount  Int
+  changes      Json // [{ id, field, oldValue, newValue }]
+  status       String // SUCCESS | PARTIAL | FAILED | PENDING_APPLY
+  errors       Json? // [{ id, field, error }]
 
   // ── Phase D.3: Cascade audit ─────────────────────────────────────
   // How many cascade fan-outs this operation triggered (0 if no
   // cascade flags were set in the request).
-  cascadeCount      Int      @default(0)
+  cascadeCount     Int      @default(0)
   // Product IDs of every child that was updated as a cascade target.
   // Useful for "undo" — replay these in reverse.
-  affectedChildren  String[] @default([])
+  affectedChildren String[] @default([])
 
   // ── Phase D.4: CSV/XLSX upload preview state ────────────────────
   // status='PENDING_APPLY' rows hold a parsed-and-validated upload
   // waiting on user confirmation; expiresAt clears stale rows.
-  expiresAt         DateTime?
-  completedAt       DateTime?
-  uploadFilename    String?
+  expiresAt      DateTime?
+  completedAt    DateTime?
+  uploadFilename String?
 
-  createdAt         DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([createdAt])
   @@index([userId])
@@ -1449,13 +1455,13 @@ model CategorySchema {
 //   REJECTED       — user reported Amazon's rejection + reason
 //   ABANDONED      — user cancelled before submitting
 model GtinExemptionApplication {
-  id                    String   @id @default(cuid())
-  brandName             String
-  productIds            String[] // products this exemption covers
-  marketplace           String   // IT | DE | FR | …
+  id          String   @id @default(cuid())
+  brandName   String
+  productIds  String[] // products this exemption covers
+  marketplace String // IT | DE | FR | …
 
   // Brand verification path
-  brandRegistrationType String   // TRADEMARK | BRAND_STAND_IN | WEBSITE_ONLY
+  brandRegistrationType String // TRADEMARK | BRAND_STAND_IN | WEBSITE_ONLY
   trademarkNumber       String?
   trademarkCountry      String?
   trademarkDate         DateTime?
@@ -1471,16 +1477,16 @@ model GtinExemptionApplication {
   imageValidation       Json?
 
   // User-driven status
-  status                String   @default("DRAFT")
-  amazonCaseId          String?  // user-pasted after Seller Central submit
-  rejectionReason       String?  // user-pasted from Amazon's email
+  status          String  @default("DRAFT")
+  amazonCaseId    String? // user-pasted after Seller Central submit
+  rejectionReason String? // user-pasted from Amazon's email
 
-  createdAt             DateTime @default(now())
-  packageGeneratedAt    DateTime?
-  submittedAt           DateTime?
-  approvedAt            DateTime?
-  rejectedAt            DateTime?
-  updatedAt             DateTime @updatedAt
+  createdAt          DateTime  @default(now())
+  packageGeneratedAt DateTime?
+  submittedAt        DateTime?
+  approvedAt         DateTime?
+  rejectedAt         DateTime?
+  updatedAt          DateTime  @updatedAt
 
   @@index([status])
   @@index([brandName])
@@ -1493,23 +1499,108 @@ model GtinExemptionApplication {
 // Status transitions: DRAFT → SUBMITTED → LIVE | FAILED. Future
 // phases (5.4 / 5.5 / Phase 6) flesh out the per-step content; the
 // shell here just persists progress so the user can resume.
+// Phase A: multi-channel rebuild. Single (channel, marketplace) columns
+// became a `channels` JSON array of { platform, marketplace } tuples,
+// with companion `channelStates` for per-channel overrides + `submissions`
+// for per-channel publish tracking. Resume key is now hashed-channels-set
+// rather than a single channel pair.
 model ListingWizard {
-  id          String   @id @default(cuid())
-  productId   String
-  channel     String   // AMAZON | EBAY | SHOPIFY | WOOCOMMERCE
-  marketplace String   // IT | DE | FR | … | GLOBAL for non-Amazon
+  id        String @id @default(cuid())
+  productId String
 
-  currentStep Int      @default(1)
-  state       Json     @default("{}")
+  // [{platform: "AMAZON", marketplace: "IT"}, ...]. Order is the
+  // user-selection order from Step 1. Hash below is order-insensitive
+  // so resume keys stay stable if a user re-orders later.
+  channels Json
 
-  status      String   @default("DRAFT") // DRAFT | SUBMITTED | LIVE | FAILED
+  // md5 of the canonical (sorted) channels set. Indexed via the
+  // unique constraint below.
+  channelsHash String
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  currentStep Int @default(1)
+
+  // Shared state across all selected channels: identifiers,
+  // gtinExemption, base values for attributes / content / pricing.
+  // Image data lives in the ListingImage table (multi-scope).
+  state Json @default("{}")
+
+  // Per-channel overrides keyed by "PLATFORM:MARKET" (e.g. "AMAZON:DE").
+  //   { "AMAZON:DE": { categories: {...}, attributes: {...}, ... } }
+  channelStates Json @default("{}")
+
+  // [{platform, marketplace, status, submissionId?, error?, ...}, ...].
+  // One entry per (platform, marketplace) tuple after submit.
+  submissions Json @default("[]")
+
+  status String @default("DRAFT") // DRAFT | SUBMITTED | LIVE | FAILED
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   completedAt DateTime?
 
-  @@index([productId, channel, marketplace])
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, channelsHash, status])
+  @@index([productId])
   @@index([status])
+}
+
+// Phase A: per-listing image set with multi-scope and variation-aware
+// targeting. ProductImage stays as the master gallery (source of truth);
+// ListingImage entries either reference a master image (via
+// `sourceProductImageId`) or have their own uploads. Resolution at
+// publish time cascades from most-specific (variant + marketplace) to
+// most-general (no variant + GLOBAL).
+model ListingImage {
+  id          String  @id @default(cuid())
+  productId   String
+  variationId String? // NULL = product-level; set = variation-specific
+
+  scope       ImageScope @default(GLOBAL)
+  platform    String? // Required when scope ∈ {PLATFORM, MARKETPLACE}
+  marketplace String? // Required when scope = MARKETPLACE
+
+  url      String
+  filename String?
+  // 0-indexed, scoped to the (productId, variationId, scope, platform,
+  // marketplace) bucket. Reorder writes are bulk-replace within bucket.
+  position Int
+  role     ImageRole @default(GALLERY)
+
+  width              Int?
+  height             Int?
+  fileSize           Int?
+  mimeType           String?
+  hasWhiteBackground Boolean? // computed by validation service
+
+  // When this image was copied from the master ProductImage gallery,
+  // points back at the source. NULL for direct uploads.
+  sourceProductImageId String?
+
+  uploadedAt DateTime @default(now())
+  uploadedBy String?
+
+  product   Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variation ProductVariation? @relation(fields: [variationId], references: [id], onDelete: Cascade)
+
+  @@index([productId, scope, platform, marketplace])
+  @@index([productId, variationId, scope])
+  @@index([productId, position])
+}
+
+enum ImageScope {
+  GLOBAL // All channels, all variations within the variationId scope
+  PLATFORM // Specific platform, all its markets
+  MARKETPLACE // Specific platform + market combo
+}
+
+enum ImageRole {
+  MAIN
+  GALLERY
+  INFOGRAPHIC
+  LIFESTYLE
+  SIZE_CHART
+  SWATCH
 }
 
 // Append-only log of every detected schema change (added/removed
