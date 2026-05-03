@@ -5,7 +5,12 @@
  */
 
 import { prisma } from '@nexus/database';
-import type { BulkActionJob, PrismaClient } from '@prisma/client';
+import type {
+  BulkActionJob,
+  PrismaClient,
+  Product,
+  ProductVariation,
+} from '@prisma/client';
 import { logger } from '../utils/logger.js';
 import { amazonProvider } from '../providers/amazon.provider.js';
 import { ebayProvider } from '../providers/ebay.provider.js';
@@ -537,79 +542,256 @@ export class BulkActionService {
   ): Promise<{ status: 'processed' | 'skipped' }> {
     const payload = (job.actionPayload ?? {}) as Record<string, any>;
     const channel = job.channel ?? undefined;
+    // Dispatcher casts to the entity each handler expects. Phase B-4
+    // will replace these casts with a typed-getItemsForJob that
+    // returns the right entity per action type, so the cast becomes
+    // redundant + the compiler can verify the dispatch.
     switch (job.actionType) {
       case 'PRICING_UPDATE':
-        return await this.processPricingUpdate(item, payload, channel);
+        return await this.processPricingUpdate(
+          item as ProductVariation,
+          payload,
+          channel,
+        );
       case 'INVENTORY_UPDATE':
-        return await this.processInventoryUpdate(item, payload, channel);
+        return await this.processInventoryUpdate(
+          item as ProductVariation,
+          payload,
+          channel,
+        );
       case 'STATUS_UPDATE':
-        return await this.processStatusUpdate(item, payload);
+        return await this.processStatusUpdate(
+          item as Product | ProductVariation,
+          payload,
+        );
       case 'ATTRIBUTE_UPDATE':
-        return await this.processAttributeUpdate(item, payload);
+        return await this.processAttributeUpdate(
+          item as ProductVariation,
+          payload,
+        );
       case 'LISTING_SYNC':
-        return await this.processListingSync(item, payload, channel);
+        return await this.processListingSync(
+          item as ProductVariation | Product,
+          payload,
+          channel,
+        );
       default:
         throw new Error(`Unknown action type: ${job.actionType}`);
     }
   }
 
-  // ── Operation handlers — stubs in B-1, real implementations in B-3 ──
+  // ── Operation handlers ──────────────────────────────────────────────
   //
-  // Each handler is intentionally a `throw new Error('Not yet
-  // implemented')` so processJob's loop wraps it in the existing
-  // try/catch (line 253–267) and the affected items count toward
-  // failedItems with a clear error log entry. This means a job
-  // submitted today will FAIL deterministically per item rather
-  // than silently no-op (the original handlers were silent: pricing
-  // math returned `this`, attribute writes targeted a non-existent
-  // column, status updates ran on the wrong table). Failing loud
-  // is better than silent corruption.
+  // Each handler:
+  //   - Validates payload shape inline (throw on bad input → counted
+  //     as a failed item by processJob's try/catch)
+  //   - Operates on its target entity (PRICING/INVENTORY/ATTRIBUTE
+  //     write to ProductVariation; STATUS writes to Product)
+  //   - Returns 'processed' on success, 'skipped' for soft-validation
+  //     failures (e.g. price below configured floor)
   //
-  // Audit findings these stubs replace:
-  //   - PRICING_UPDATE: Decimal mock made every price update a no-op
-  //   - INVENTORY_UPDATE: shape worked but mixed with the stub anyway
-  //   - STATUS_UPDATE: ran prisma.product.update with a variation id
-  //   - ATTRIBUTE_UPDATE: wrote to non-existent marketplaceMetadata
-  //   - LISTING_SYNC: referenced item.imageUrl (no such field)
+  // Marketplace sync (the `_channel` arg) is deferred to v2 — the
+  // existing sync helpers in this file are kept but unwired. v1 only
+  // updates the local DB.
 
+  /**
+   * PRICING_UPDATE — set / adjust per-variation price.
+   *
+   * Payload:
+   *   adjustmentType: 'ABSOLUTE' | 'PERCENT' | 'DELTA'
+   *   value: number              (the multiplier / delta / absolute)
+   *   minPrice?: number          (skip if computed price below floor)
+   *   maxPrice?: number          (skip if computed price above ceiling)
+   */
   private async processPricingUpdate(
-    _item: any,
-    _payload: Record<string, any>,
-    _channel?: string
+    item: ProductVariation,
+    payload: Record<string, any>,
+    _channel?: string,
   ): Promise<{ status: 'processed' | 'skipped' }> {
-    throw new Error('PRICING_UPDATE handler not yet implemented (Phase B-3)');
+    const adjustmentType = payload.adjustmentType as
+      | 'ABSOLUTE'
+      | 'PERCENT'
+      | 'DELTA'
+      | undefined;
+    const rawValue = payload.value;
+    const value =
+      typeof rawValue === 'number' ? rawValue : Number(rawValue);
+    if (!adjustmentType || Number.isNaN(value)) {
+      throw new Error(
+        'Invalid PRICING_UPDATE payload: adjustmentType + numeric value required',
+      );
+    }
+
+    // Prisma Decimal columns are returned as Decimal instances; coerce
+    // to number for math then write back as a fixed-2 string (Prisma
+    // accepts string for Decimal columns).
+    const currentPrice = Number(item.price);
+    let newPrice: number;
+    switch (adjustmentType) {
+      case 'ABSOLUTE':
+        newPrice = value;
+        break;
+      case 'PERCENT':
+        newPrice = currentPrice * (1 + value / 100);
+        break;
+      case 'DELTA':
+        newPrice = currentPrice + value;
+        break;
+    }
+
+    // Soft constraints — skip rather than fail so the rest of the job
+    // continues. Hard constraint: never write a negative price.
+    if (newPrice < 0) return { status: 'skipped' };
+    if (
+      typeof payload.minPrice === 'number' &&
+      newPrice < payload.minPrice
+    ) {
+      return { status: 'skipped' };
+    }
+    if (
+      typeof payload.maxPrice === 'number' &&
+      newPrice > payload.maxPrice
+    ) {
+      return { status: 'skipped' };
+    }
+
+    await this.prisma.productVariation.update({
+      where: { id: item.id },
+      data: { price: newPrice.toFixed(2) },
+    });
+
+    return { status: 'processed' };
   }
 
+  /**
+   * INVENTORY_UPDATE — set / adjust per-variation stock.
+   *
+   * Payload:
+   *   adjustmentType: 'ABSOLUTE' | 'DELTA'
+   *   value: number              (set-to or delta)
+   */
   private async processInventoryUpdate(
-    _item: any,
-    _payload: Record<string, any>,
-    _channel?: string
+    item: ProductVariation,
+    payload: Record<string, any>,
+    _channel?: string,
   ): Promise<{ status: 'processed' | 'skipped' }> {
-    throw new Error('INVENTORY_UPDATE handler not yet implemented (Phase B-3)');
+    const adjustmentType = payload.adjustmentType as
+      | 'ABSOLUTE'
+      | 'DELTA'
+      | undefined;
+    const rawValue = payload.value;
+    const value =
+      typeof rawValue === 'number' ? rawValue : Number(rawValue);
+    if (!adjustmentType || Number.isNaN(value)) {
+      throw new Error(
+        'Invalid INVENTORY_UPDATE payload: adjustmentType + numeric value required',
+      );
+    }
+
+    const currentStock = item.stock ?? 0;
+    let newStock: number;
+    switch (adjustmentType) {
+      case 'ABSOLUTE':
+        newStock = value;
+        break;
+      case 'DELTA':
+        newStock = currentStock + value;
+        break;
+    }
+    // Stock is an integer column — clamp ≥ 0 + floor any decimals.
+    newStock = Math.max(0, Math.floor(newStock));
+
+    await this.prisma.productVariation.update({
+      where: { id: item.id },
+      data: { stock: newStock },
+    });
+
+    return { status: 'processed' };
   }
 
+  /**
+   * STATUS_UPDATE — set product status (DRAFT / ACTIVE / INACTIVE).
+   *
+   * Payload:
+   *   status: 'DRAFT' | 'ACTIVE' | 'INACTIVE'
+   *
+   * Status lives on Product. `item` may be a Product (when scope is
+   * targetProductIds) or a ProductVariation (when scope is filters /
+   * targetVariationIds). Resolve to parent productId via the
+   * `productId` field present on variations only.
+   */
   private async processStatusUpdate(
-    _item: any,
-    _payload: Record<string, any>
+    item: Product | ProductVariation,
+    payload: Record<string, any>,
   ): Promise<{ status: 'processed' | 'skipped' }> {
-    throw new Error('STATUS_UPDATE handler not yet implemented (Phase B-3)');
+    const VALID = ['DRAFT', 'ACTIVE', 'INACTIVE'] as const;
+    const newStatus = payload.status;
+    if (!VALID.includes(newStatus)) {
+      throw new Error(
+        `Invalid STATUS_UPDATE payload: status must be one of ${VALID.join(', ')}`,
+      );
+    }
+
+    // ProductVariation has `productId`; Product does not. Use that as
+    // the type discriminator without depending on a class instance.
+    const productId =
+      'productId' in item && item.productId ? item.productId : item.id;
+
+    await this.prisma.product.update({
+      where: { id: productId },
+      data: { status: newStatus },
+    });
+
+    return { status: 'processed' };
   }
 
+  /**
+   * ATTRIBUTE_UPDATE — set one key inside ProductVariation.variationAttributes.
+   *
+   * Payload:
+   *   attributeName: string      (the JSON key to write)
+   *   value: any                 (the value — primitive or object/array)
+   *
+   * variationAttributes is a Json? column. We read the existing object
+   * (default {} if null), shallow-merge the new key, write back.
+   */
   private async processAttributeUpdate(
-    _item: any,
-    _payload: Record<string, any>
+    item: ProductVariation,
+    payload: Record<string, any>,
   ): Promise<{ status: 'processed' | 'skipped' }> {
-    throw new Error('ATTRIBUTE_UPDATE handler not yet implemented (Phase B-3)');
+    const attributeName = payload.attributeName;
+    if (
+      typeof attributeName !== 'string' ||
+      attributeName.trim().length === 0
+    ) {
+      throw new Error(
+        'Invalid ATTRIBUTE_UPDATE payload: attributeName required (non-empty string)',
+      );
+    }
+
+    const raw = item.variationAttributes;
+    const current =
+      raw && typeof raw === 'object' && !Array.isArray(raw)
+        ? (raw as Record<string, unknown>)
+        : {};
+    const updated = { ...current, [attributeName]: payload.value };
+
+    await this.prisma.productVariation.update({
+      where: { id: item.id },
+      data: { variationAttributes: updated },
+    });
+
+    return { status: 'processed' };
   }
 
   private async processListingSync(
-    _item: any,
+    _item: ProductVariation | Product,
     _payload: Record<string, any>,
-    _channel?: string
+    _channel?: string,
   ): Promise<{ status: 'processed' | 'skipped' }> {
-    // LISTING_SYNC is deferred to v2 entirely — depends on resolving
-    // parent Product + first VariantImage which the original code
-    // didn't handle. Tracked as TECH_DEBT.
+    // Deferred to v2 — needs parent Product + first VariantImage
+    // resolution + verified marketplace provider write paths. Out of
+    // v1 scope per the audit.
     throw new Error('LISTING_SYNC deferred to v2 (see TECH_DEBT)');
   }
 
