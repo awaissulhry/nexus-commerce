@@ -357,6 +357,100 @@ The field divergence happened during the Phase 26 unified-Order-Command refactor
 
 Estimated 1–2h. Out of P0 #31 scope; do as soon as Xavia actually wants eBay orders synced (they don't yet).
 
+## 34. 🟡 Bulk operations — Path A-Lite deferrals (rollback, LISTING_SYNC, queue infra, DELETE, "selected items" scope)
+
+**Surfaced at:** Issue B closeout — Path A-Lite shipped a working
+filtered-bulk-operations stack (4 of 5 action types, scope picker UI,
+preview, execute+poll) but explicitly deferred five pieces. Listed
+together so they get reconsidered as one batch when the next bulk-ops
+ask lands.
+
+### 34a. Rollback infrastructure
+
+**Symptom:** `BulkActionJob.rollbackData` exists in the schema and
+`bulk-action.service.ts` has a `rollback()` stub, but no per-item
+before-state is captured during processing. The "Undo" path is
+non-functional; `isRollbackable` is set to `true` for the four real
+handlers but actually pressing Undo would do nothing useful.
+
+**Workaround:** No rollback button in the UI. If a user runs the wrong
+bulk op, they re-run it with the inverse value (proven viable in B-8
+Test 5: a STATUS_UPDATE → DRAFT was reverted with a second STATUS_UPDATE
+→ ACTIVE in seconds).
+
+**Proper fix:** During `processJob`, before each `prisma.update`,
+capture `{itemId, field, oldValue}` into an array; persist as
+`rollbackData` JSON when the job completes. New endpoint `POST
+/api/bulk-operations/:id/rollback` creates a sibling job with inverted
+operations and links it via `rollbackJobId`. UI gets an "Undo this
+operation" button on completed-job cards. Estimated 1 day.
+
+### 34b. `LISTING_SYNC` handler
+
+**Symptom:** The 5th action type is still a stub. Selecting it in the
+modal would 500 at execute time (well — it would throw and the job
+would land in `FAILED` state).
+
+**Workaround:** Modal currently only exposes the 4 working action
+types. `LISTING_SYNC` is filterable in the schema but not selectable
+in the UI.
+
+**Proper fix:** Implement `LISTING_SYNC` against the BullMQ outbound
+queue (`outboundSyncQueue`). For each variation, enqueue a per-channel
+sync job; mark the bulk job COMPLETED once all child jobs settle. This
+is gated on Phase 2 (Redis enabled on Railway) — until then the queue
+is Proxy-backed and `add()` would either succeed silently or fail at
+runtime depending on env.
+
+### 34c. Queue / worker infrastructure for >100-item jobs
+
+**Symptom:** v1's `processJob` runs synchronously in-process, in a
+single function call, updating the job row every 10 items. For
+Xavia-scale (~1.3k variations, completes in <100ms in B-8 Test 5)
+this is fine. For 50k-item jobs it would block the Node event loop
+for minutes.
+
+**Workaround:** "We're not at that scale yet."
+
+**Proper fix:** Move `processJob` body into a BullMQ worker. The HTTP
+endpoint enqueues, returns immediately; worker processes in chunks of
+N with `WORKER_CONCURRENCY` set; cancel flag becomes a Redis-backed
+check that the worker polls between chunks. Same gating as 34b —
+needs Phase 2.
+
+### 34d. `DELETE` action type
+
+**Symptom:** Original Issue B spec listed bulk-delete as an operation;
+Path A-Lite dropped it from scope. Not in the `BulkActionType` enum,
+not in the modal.
+
+**Workaround:** Users can multi-select rows in the grid and use the
+existing per-row delete via the bulk-edit grid (the delete UX that
+landed in commit `1b923f2`).
+
+**Proper fix:** Add `DELETE` to `BulkActionType`, implement a handler
+that uses `cascadeDeleteProducts` (the helper added in `9ba5aa4` for
+the cleanup endpoints), wire to a fifth modal config. Defer until a
+user actually asks for it; the per-row grid delete is fine for now.
+
+### 34e. "Selected items only" scope
+
+**Symptom:** The modal currently exposes "All matching filter" or
+"Specific subset (filters)." The grid has row selection state, but
+the modal can't take a selection — `targetVariationIds[]` and
+`targetProductIds[]` are populated only via filter resolution.
+
+**Workaround:** Users replicate their selection via filters (e.g.
+filter by SKU prefix, then bulk apply to "All matching filter").
+
+**Proper fix:** Pass `selectedRowIds` from the grid to the modal as a
+prop; add a third scope mode "Selected rows (N)." Resolve the
+question of what "select two parent products" means — operate on
+those two parents (STATUS_UPDATE) or expand to every variation under
+them (PRICING / INVENTORY / ATTRIBUTE)? The cross-targeting policy in
+`getItemsForJob` already handles the expansion direction; what's
+missing is the UI affordance and the scope-mode wiring.
+
 ---
 
 ## Triage summary
@@ -380,6 +474,7 @@ Estimated 1–2h. Out of P0 #31 scope; do as soon as Xavia actually wants eBay o
 - **29** `/products` "needs photos" filter (and sibling hygiene filters)
 - **30** `/products` show + filter by category / productType
 - **33** Rewrite `ebay-orders.service.ts` against Phase 26 unified Order schema (orders sync flow currently broken)
+- **34** Bulk operations Path A-Lite deferrals — rollback, `LISTING_SYNC` handler, queue infra for big jobs, `DELETE` action, "selected items" scope
 
 **🟢 P2 — when in the area:**
 - **4** CategorySchema "unknown" rows

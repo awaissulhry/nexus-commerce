@@ -886,3 +886,163 @@ inline in `/settings/terminology` as more drift surfaces.
 - **Audit log** — when preferences change, no record of who edited
   what / when. Add when the team grows past one user.
 
+---
+
+# Filtered Bulk Operations — Issue B (Path A-Lite, 2026-05-02)
+
+The `/bulk-operations` page already had the BullMQ-style scaffolding (job
+row, state machine, progress polling) for filtered operations, but the
+actual handlers had been stubbed with a `Decimal` mock that returned
+`this` from every arithmetic call, the dispatcher was typed as `any`, and
+the only filter that worked was "all variations of the supplied product
+ids." Two of four handlers wrote to columns that no longer exist
+(`marketplaceMetadata`), and one handler called `prisma.product.update`
+with a variation id. Frontend had no UI to invoke any of it — the orphan
+Express route at `/api/bulk-actions` was the only entry point, and it
+wasn't registered.
+
+Path A-Lite: keep the working state-machine scaffolding (~150 LOC of
+status / progress / cancel that's perfectly fine), rewrite the broken
+handlers, port to Fastify, build the scope-picker UI, defer rollback
+and LISTING_SYNC to v2. Eight commits, one per phase, so each piece
+could be reviewed and reverted independently.
+
+## Phases
+
+**B-1 (`b8289ca`) — stub broken handlers, remove Decimal mock.** Deleted
+the `class Decimal { plus() { return this } }` shim and replaced four
+handler bodies with `throw new Error('not implemented')`. Pure cleanup;
+nothing called these from a registered route, so the stubs broke
+nothing.
+
+**B-2 (`def2b7a`) — real Prisma types, no `any` escapes.** Removed
+`type BulkActionJob = any`, plumbed real `BulkActionJob` and
+`Prisma.BulkActionJobUpdateInput` types through the service. Cast at one
+boundary only: `(job.actionPayload ?? {}) as Record<string, any>` in the
+dispatcher, since `JsonValue` cannot be narrowed without a runtime check
+the schema doesn't provide.
+
+**B-3 (`a64c9c3`) — implement 4 operation handlers.** Replaced the
+stubs:
+
+| Handler | Strategy |
+|---|---|
+| `PRICING_UPDATE` | Plain JS `Number(item.price) * (1 + value/100)` then write `.toFixed(2)` string into the Decimal column. PERCENT / FIXED / SET modes; `minPrice` / `maxPrice` cause skips with a reason. |
+| `INVENTORY_UPDATE` | DELTA / SET on `ProductVariation.stock`. Skip-on-negative-result. Writes a `StockLog` per change. |
+| `STATUS_UPDATE` | Updates `Product.status`. If invoked with variation ids, walks `'productId' in item` to dedupe up to parent products. |
+| `ATTRIBUTE_UPDATE` | Writes to the real `ProductVariation.variationAttributes` Json column (the original wrote to a non-existent `marketplaceMetadata`). Merge-or-replace mode. |
+
+`LISTING_SYNC` stays stubbed — it would need the BullMQ outbound queue
+which is still gated behind Phase 2.
+
+**B-4 (`c403bce`) — filter translator + per-action-type dispatcher.**
+Added an `ACTION_ENTITY` map that pins each action type to the entity
+it operates on (`product` for STATUS_UPDATE, `variation` for the rest),
+plus `buildProductFilterWhere` / `buildVariationFilterWhere` that
+translate the real schema field names (`brand`, `productType`,
+`marketplace`, `status`, `stockMin`, `stockMax`) into Prisma `where`
+clauses. The user spec used spec-fiction names (`category`,
+`stockQuantity`, `marketplaceId`) that don't exist on the model — fixed
+silently. Cross-targeting policy: STATUS given variation ids walks up
+to distinct parent products; variation actions given product ids
+expand to all children.
+
+**B-5 (`d273c86`) — Express → Fastify port.** New
+`apps/api/src/routes/bulk-operations.routes.ts` registered at
+`/api/bulk-operations/*` with six endpoints (POST `/`, GET `/`,
+GET `/:id`, POST `/:id/process`, POST `/:id/cancel`, plus the
+preview endpoint added in B-6). Reuses `CreateBulkJobSchema` for
+zod validation. State-machine guards return 409, missing job 404,
+server errors 500. Deleted the Express orphan
+`bulk-actions.routes.ts` (it was never registered anyway).
+
+**B-6 (`44e62ce`) — preview endpoint.** `POST /preview` runs the same
+scope-resolution + handler simulation but without writing. Returns
+`affectedCount`, `sampleSize`, and a sample list of `{itemId, before,
+after, status: 'processed' | 'skipped', reason?}` for the first N
+items. Frontend uses this for the "Preview" step before the user
+confirms execute. No DB write happens — preview mode short-circuits
+the dispatcher before any Prisma `update()` call.
+
+**Pre-7 (`f5bc30c` + `9ba5aa4`) — realistic Xavia seed + cleanup
+hardening.** Verification of B-6 turned up zero `ProductVariation`
+rows in the DB — every Xavia product was a no-variation parent, so
+the variation handlers had nothing to bind against. Rather than
+expand the handlers to operate on Product-level (the user's "Path A"
+option), we generated realistic data: 67 parent products + 1,272
+variations across 6 motorcycle gear categories (race jacket, touring
+jacket, mesh jacket, leather gloves, race boots, helmet) via
+`apps/api/src/services/seed-xavia-realistic.service.ts`. Variation
+dimensions are size + color; product dimensions are gender / athlete /
+fit / graphics. Constraints encoded: Marquez/Bagnaia race-replicas
+men's-only, Tall fit excluded for women. Stock distribution is a
+bell curve centered on the middle size, ±20% jitter. Idempotent via
+`upsert({where:{sku}})` on Product and `createMany({skipDuplicates})`
+on ProductVariation. Marker: `importSource = 'XAVIA_REALISTIC_TEST'`.
+
+`cascadeDeleteProducts` helper added because the cleanup path was
+hitting `MarketplaceSync_productId_fkey` violations — five FKs don't
+cascade (`ProductImage`, `MarketplaceSync`, `Listing`, `StockLog`,
+`FBAShipmentItem`). Helper deletes them in a `$transaction` before
+the Product. Two new admin endpoints registered:
+`POST /api/admin/seed-xavia-realistic` and
+`DELETE /api/admin/cleanup-xavia-realistic`. The 9,756
+`PERFORMANCE_TEST` products also got cleaned up as part of the seed
+run.
+
+**B-7 (`1cfa375`) — frontend scope picker modal.** New
+`apps/web/src/app/bulk-operations/BulkOperationModal.tsx` (~700 LOC)
+with four operation configs, a 6-field scope filter form, 250ms-debounced
+preview fetch with `previewSeq.current` cancellation, execute that
+fires `POST /api/bulk-operations` → `POST /:id/process` → polls
+`GET /:id` every 2s until terminal state, sample-diff table with
+processed/skipped badges, and stat cards on completion. Wired into
+`BulkOperationsClient.tsx` via a "Bulk apply" button between the
+Cols/Reset divider and the Upload button. Grid filterState is mapped
+to ScopeFilters where the schema lines up; `channels[]` is
+intentionally not mapped because the grid filter targets
+`Product.syncChannels[]` (string array) but bulk-ops scope targets
+`ProductVariation.marketplace` (single string per channel listing) —
+two different semantics, mapping them silently would surprise users.
+
+## B-8 verification (this commit)
+
+Six test cases, run against the freshly-seeded catalog (1,272
+variations / 67 parents):
+
+| # | Scope | Action | Expected | Result |
+|---|---|---|---|---|
+| 1 | brand=Xavia | PRICING +5% PERCENT | preview only, full catalog | `affectedCount=1272`, math correct (599→628.95) ✅ |
+| 2 | brand=Xavia + minPrice 700 | PRICING +5% PERCENT | preview only, partial set | `affectedCount=288`, Generic 599 items correctly `status=skipped` with `reason: 'below minPrice'` ✅ |
+| 3 | productType=HELMET | STATUS_UPDATE → DRAFT | preview, 12 parents (matches seed count) | `affectedCount=12` ✅ |
+| 4 | productType=LEATHER_GLOVES | INVENTORY DELTA -10 | preview, 210 variations | math correct (e.g. 47→37) ✅ |
+| 5 | 2 helmet productIds | STATUS_UPDATE → DRAFT | full execute cycle, then revert | Job `cmoq8ftra0000o401fro5mkvl` completed in 76ms, 2 processed / 0 failed / 0 skipped, both products visible as DRAFT, second job reverted both back to ACTIVE ✅ |
+| 6 | n/a | cancel mid-run | n/a — `cancelJob` only operates on `PENDING`/`QUEUED`; `processJob` runs synchronously in-process and doesn't check a cancel flag mid-loop | Mid-run cancellation is a v2 item (TECH_DEBT #34); v1 cancel covers the "I queued this but haven't started it yet" case which works |
+
+Test 1's `affectedCount=1272` is also the implicit >100-item validation
+— the v1 in-process `processJob` walks the whole set in a single
+function call, updating the job row every 10 items.
+
+## What we don't do (v1, deferred)
+
+See TECH_DEBT.md #34 for the full list. Headline items:
+
+- **Rollback** — `rollbackData` capture is wired in the schema and the
+  service has a stub `rollback()` method, but no real before-state is
+  recorded and no UI exposes it. v2.
+- **`LISTING_SYNC`** — handler is still a stub. Needs the BullMQ
+  outbound queue, which is gated behind Phase 2 (Redis on Railway).
+- **Mid-run cancellation** — `processJob` doesn't poll a cancel flag
+  inside its item loop. Cancel only works pre-start. Fine for
+  Xavia-scale (≤2k items, completes in seconds); a real fix needs the
+  worker queue.
+- **`DELETE` operation** — was on the original spec but not in
+  Path A-Lite scope. Add when a user actually asks to bulk-delete.
+- **"Selected items only" scope** — modal currently does "All matching
+  filter" or "Specific subset (filters)." The grid has row selection,
+  but feeding `selectedIds[]` straight into `targetVariationIds[]` /
+  `targetProductIds[]` needs a couple of UI changes and the right
+  cross-targeting decision (does selecting two parent rows mean
+  "operate on these two products" or "operate on every variation
+  underneath"?). Defer until the user picks one.
+
