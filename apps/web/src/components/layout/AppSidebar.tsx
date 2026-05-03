@@ -11,7 +11,6 @@ import {
   Boxes,
   ChevronRight,
   ChevronDown,
-  ChevronUp,
   ShoppingBag,
   FileText,
   Tag,
@@ -37,6 +36,7 @@ import {
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useRecentlyViewed } from '@/lib/use-recently-viewed'
+import MarketsModal from './MarketsModal'
 
 interface SidebarCounts {
   catalog?: { products?: number; pimPending?: number }
@@ -58,29 +58,51 @@ const COUNTRY_NAMES: Record<string, string> = {
   NL: 'Netherlands',
   SE: 'Sweden',
   PL: 'Poland',
+  BE: 'Belgium',
+  AT: 'Austria',
+  CH: 'Switzerland',
+  IE: 'Ireland',
+  TR: 'Turkey',
   US: 'United States',
   CA: 'Canada',
   MX: 'Mexico',
+  BR: 'Brazil',
+  AE: 'UAE',
+  SA: 'Saudi Arabia',
+  JP: 'Japan',
+  AU: 'Australia',
+  HK: 'Hong Kong',
+  SG: 'Singapore',
+  MY: 'Malaysia',
   GLOBAL: 'Global',
 }
 
-// Channels and the marketplaces we support listing to. Surfacing
-// these statically (rather than deriving from existing listings)
-// lets the sidebar show all destinations even when zero listings
-// exist — important right after OAuth completes, before anything
-// has been published.
+// Sidebar shows the priority markets first (Xavia's primaries: EU
+// core minus US since US is a different language and lower priority
+// for an Italian motorcycle-gear brand). The "See all" modal exposes
+// the full SUPPORTED_MARKETS list grouped by region.
+const PRIORITY_MARKETS: Record<string, string[]> = {
+  AMAZON: ['IT', 'DE', 'FR', 'ES', 'UK'],
+  EBAY: ['IT', 'DE', 'FR', 'ES', 'UK'],
+}
+
+// Full list of marketplaces each channel supports. Surfaced via the
+// modal; the sidebar shows only the priority subset above by default.
 const SUPPORTED_MARKETS: Record<string, string[]> = {
-  AMAZON: ['IT', 'DE', 'FR', 'ES', 'UK', 'US', 'NL', 'SE', 'PL', 'CA', 'MX'],
-  EBAY: ['IT', 'DE', 'FR', 'ES', 'UK', 'US'],
+  AMAZON: [
+    'IT', 'DE', 'FR', 'ES', 'UK', 'NL', 'SE', 'PL', 'BE', 'TR',
+    'US', 'CA', 'MX', 'BR',
+    'AE', 'SA',
+    'JP', 'AU',
+  ],
+  EBAY: [
+    'IT', 'DE', 'FR', 'ES', 'UK', 'NL', 'BE', 'AT', 'CH', 'IE', 'PL',
+    'US', 'CA',
+    'AU', 'HK', 'SG', 'MY',
+  ],
 }
 
 const EXPAND_STATE_KEY = 'sidebar:expandedChannels'
-
-// Compact-by-default. Channels with > MAX_VISIBLE + 1 markets show
-// the top N and a "See all" link (Linear/Vercel/Stripe pattern). The
-// "+ 1" rule avoids "See all 6" that hides only one row — when the
-// hidden count is ≤ 1 we just show everything.
-const MAX_VISIBLE_MARKETS = 5
 
 export default function AppSidebar() {
   const pathname = usePathname() ?? '/'
@@ -256,7 +278,9 @@ export default function AppSidebar() {
             label="Amazon"
             count={counts.listings?.byChannel?.AMAZON?.total}
             markets={counts.listings?.byChannel?.AMAZON?.markets}
+            priorityMarkets={PRIORITY_MARKETS.AMAZON}
             supportedMarkets={SUPPORTED_MARKETS.AMAZON}
+            countryNames={COUNTRY_NAMES}
             expanded={expandedChannels.has('AMAZON')}
             onToggle={() => toggleChannel('AMAZON')}
             pathname={pathname}
@@ -266,7 +290,9 @@ export default function AppSidebar() {
             label="eBay"
             count={counts.listings?.byChannel?.EBAY?.total}
             markets={counts.listings?.byChannel?.EBAY?.markets}
+            priorityMarkets={PRIORITY_MARKETS.EBAY}
             supportedMarkets={SUPPORTED_MARKETS.EBAY}
+            countryNames={COUNTRY_NAMES}
             connectionStatus={ebayConnected ? 'connected' : 'not-connected'}
             expanded={expandedChannels.has('EBAY')}
             onToggle={() => toggleChannel('EBAY')}
@@ -540,10 +566,16 @@ interface ChannelNavProps {
   label: string
   count?: number
   markets?: Record<string, number>
-  /** Statically declared marketplaces this channel supports. Merged
-   *  with `markets` (real listing counts) so destinations always
-   *  appear in the dropdown even when no listings exist yet. */
+  /** Markets to render directly in the sidebar dropdown (typically
+   *  5). Order is the priority order — first in the array shows
+   *  first. */
+  priorityMarkets?: string[]
+  /** Full set of markets this channel supports. Shown in the
+   *  "All markets" modal. Always a superset of priorityMarkets. */
   supportedMarkets?: string[]
+  /** Country-name lookup. Passed in so the modal doesn't have to
+   *  duplicate it. */
+  countryNames?: Record<string, string>
   /** Per-channel connection state. Currently only eBay surfaces this
    *  (single OAuth token covers all eBay marketplaces). When set,
    *  controls the status dot colour per marketplace. */
@@ -558,7 +590,9 @@ function ChannelNav({
   label,
   count,
   markets,
+  priorityMarkets,
   supportedMarkets,
+  countryNames,
   connectionStatus,
   expanded,
   onToggle,
@@ -566,32 +600,27 @@ function ChannelNav({
 }: ChannelNavProps) {
   const channelPath = `/listings/${channel.toLowerCase()}`
   const isOnChannel = pathname.startsWith(channelPath)
-  // Per-channel "show all markets" toggle is intentionally NOT
-  // persisted — the sidebar should default to its compact state on
-  // every page load. expand/collapse of the channel itself is
-  // persisted (see EXPAND_STATE_KEY in the parent), but density
-  // resets so users never land on a 100-row sidebar.
-  const [showAllMarkets, setShowAllMarkets] = useState(false)
+  const [modalOpen, setModalOpen] = useState(false)
 
-  // Merge supported markets (always show) with real listing counts.
-  // Supported markets default to count 0 so the user sees them
-  // immediately after OAuth, before any publish has happened.
-  const mergedMarkets = new Map<string, number>()
-  for (const code of supportedMarkets ?? []) mergedMarkets.set(code, 0)
+  // The full set used by the modal: every supported market with its
+  // real listing count merged in.
+  const fullMarkets = new Map<string, number>()
+  for (const code of supportedMarkets ?? []) fullMarkets.set(code, 0)
   for (const [code, n] of Object.entries(markets ?? {})) {
-    mergedMarkets.set(code, n as number)
+    fullMarkets.set(code, n as number)
   }
-  const allMarketEntries = Array.from(mergedMarkets.entries())
-  const hasMarkets = allMarketEntries.length > 0
-  // If hiding ≤ 1 row, just show everything — "See all 6" hiding 1
-  // would be silly. Threshold = MAX_VISIBLE + 1 (so 6 stays inline,
-  // 7+ gets the overflow treatment).
-  const overflowThreshold = MAX_VISIBLE_MARKETS + 1
-  const needsOverflow = allMarketEntries.length > overflowThreshold
-  const visibleMarkets =
-    !needsOverflow || showAllMarkets
-      ? allMarketEntries
-      : allMarketEntries.slice(0, MAX_VISIBLE_MARKETS)
+
+  // The inline subset rendered in the sidebar: priority markets only.
+  // Inline list deliberately stays small — the modal handles the long
+  // tail. If priorityMarkets isn't provided, fall back to the first
+  // few supported markets.
+  const inlineCodes = priorityMarkets ?? (supportedMarkets ?? []).slice(0, 5)
+  const inlineMarkets: Array<[string, number]> = inlineCodes.map((code) => [
+    code,
+    fullMarkets.get(code) ?? 0,
+  ])
+  const hasMarkets = fullMarkets.size > 0
+  const hasOverflow = fullMarkets.size > inlineCodes.length
 
   return (
     <div>
@@ -655,7 +684,7 @@ function ChannelNav({
 
       {expanded && hasMarkets && (
         <div className="mt-0.5 space-y-0.5">
-          {visibleMarkets.map(([code, mcount]) => {
+          {inlineMarkets.map(([code, mcount]) => {
             const marketHref = `${channelPath}/${code.toLowerCase()}`
             const active = pathname === marketHref
             // Status dot: only meaningful when connectionStatus is
@@ -690,7 +719,9 @@ function ChannelNav({
                 <span className="font-mono text-[10px] font-semibold bg-slate-800 px-1.5 py-0.5 rounded text-slate-300">
                   {code}
                 </span>
-                <span className="flex-1 truncate">{COUNTRY_NAMES[code] ?? code}</span>
+                <span className="flex-1 truncate">
+                  {countryNames?.[code] ?? COUNTRY_NAMES[code] ?? code}
+                </span>
                 {connectionStatus === 'not-connected' ? (
                   <span className="text-[10px] text-slate-500">—</span>
                 ) : mcount > 0 ? (
@@ -703,28 +734,16 @@ function ChannelNav({
               </Link>
             )
           })}
-          {needsOverflow &&
-            (showAllMarkets ? (
-              <button
-                type="button"
-                onClick={() => setShowAllMarkets(false)}
-                className="w-[calc(100%-16px)] flex items-center gap-2.5 mx-2 ml-9 px-3 py-1 rounded-md text-[11px] text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors"
-              >
-                <ChevronUp className="w-3 h-3" />
-                <span>Show fewer</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setShowAllMarkets(true)}
-                className="w-[calc(100%-16px)] flex items-center gap-2.5 mx-2 ml-9 px-3 py-1 rounded-md text-[11px] text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors"
-              >
-                <ChevronDown className="w-3 h-3" />
-                <span>
-                  See all {allMarketEntries.length} markets
-                </span>
-              </button>
-            ))}
+          {hasOverflow && (
+            <button
+              type="button"
+              onClick={() => setModalOpen(true)}
+              className="w-[calc(100%-16px)] flex items-center gap-2.5 mx-2 ml-9 px-3 py-1 rounded-md text-[11px] text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors"
+            >
+              <Search className="w-3 h-3" />
+              <span>See all {fullMarkets.size} markets</span>
+            </button>
+          )}
           {connectionStatus === 'not-connected' ? (
             <Link
               href="/settings/channels"
@@ -744,6 +763,16 @@ function ChannelNav({
           )}
         </div>
       )}
+
+      <MarketsModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        channelLabel={label}
+        channelPath={channelPath}
+        markets={fullMarkets}
+        countryNames={countryNames ?? COUNTRY_NAMES}
+        connectionStatus={connectionStatus}
+      />
     </div>
   )
 }
