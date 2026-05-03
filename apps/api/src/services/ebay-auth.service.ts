@@ -326,8 +326,17 @@ export class EbayAuthService {
   }
 
   /**
-   * Get seller information from eBay API
-   * Requires valid access token
+   * Get seller information from eBay API.
+   * Requires valid access token. Uses /commerce/identity/v1/user
+   * (the canonical "who is the authenticated user?" endpoint) since
+   * /sell/account/v1/seller doesn't exist on eBay's production API
+   * (returns 404 — that was the bug behind the Test 500 + the
+   * empty sellerName on saved connections).
+   *
+   * Store-front URL is NOT returned by the identity endpoint; it
+   * requires the separate /sell/stores/v1/store call which needs an
+   * additional scope. Skipped for v1 — Test only needs to confirm
+   * the token works and surface the seller name.
    */
   async getSellerInfo(accessToken: string): Promise<{
     signInName: string;
@@ -335,7 +344,7 @@ export class EbayAuthService {
     storeFrontUrl?: string;
   }> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/sell/account/v1/seller`, {
+      const response = await fetch(`${this.apiBaseUrl}/commerce/identity/v1/user`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -352,12 +361,24 @@ export class EbayAuthService {
         throw new Error(`Failed to fetch seller info: ${response.statusText}`);
       }
 
-      const data = (await response.json()) as any;
+      const data = (await response.json()) as {
+        userId?: string;
+        username?: string;
+        email?: string;
+        accountType?: "INDIVIDUAL" | "BUSINESS";
+        businessAccount?: { name?: string; doingBusinessAs?: string };
+        individualAccount?: { firstName?: string; lastName?: string };
+      };
+
+      // Pick the most informative store-name available — for business
+      // accounts that's `businessAccount.name`; for individuals there
+      // is no store, leave undefined.
+      const storeName =
+        data.businessAccount?.doingBusinessAs ?? data.businessAccount?.name;
 
       return {
         signInName: data.username || data.email || "Unknown",
-        storeName: data.storeName,
-        storeFrontUrl: data.storeFrontUrl,
+        storeName,
       };
     } catch (error) {
       logger.error("Error fetching seller info", { error });

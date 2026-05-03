@@ -27,6 +27,61 @@ interface ChannelDef {
   description: string
 }
 
+/**
+ * Honest time formatter — relative for short deltas (eBay tokens
+ * expire in 2h, "next year" was misleading) and absolute for longer
+ * ones. Returns a tuple so callers can colour stale/expired states.
+ */
+function formatRelative(iso: string): { text: string; tone: 'ok' | 'warn' | 'danger' } {
+  const target = new Date(iso).getTime()
+  const now = Date.now()
+  const deltaMs = target - now // positive = future, negative = past
+  const absMs = Math.abs(deltaMs)
+  const absMin = Math.floor(absMs / 60000)
+  const absHr = Math.floor(absMs / 3_600_000)
+  const absDay = Math.floor(absMs / 86_400_000)
+
+  // Far future / past — show absolute date+time
+  if (absDay >= 1) {
+    const formatted = new Date(iso).toLocaleString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    })
+    return { text: formatted, tone: deltaMs >= 0 ? 'ok' : 'warn' }
+  }
+
+  // Within 24h — relative phrasing with hours and minutes
+  let text: string
+  if (deltaMs >= 0) {
+    if (absMin < 1) text = 'in <1m'
+    else if (absHr < 1) text = `in ${absMin}m`
+    else text = `in ${absHr}h ${absMin % 60}m`
+  } else {
+    if (absMin < 1) text = 'just now'
+    else if (absHr < 1) text = `${absMin}m ago`
+    else text = `${absHr}h ${absMin % 60}m ago`
+  }
+
+  // Token-expiry semantics: <5m = danger (client should refresh),
+  // <30m = warn, otherwise ok. Past = danger.
+  let tone: 'ok' | 'warn' | 'danger'
+  if (deltaMs < 0) tone = 'danger'
+  else if (absMin < 5) tone = 'danger'
+  else if (absMin < 30) tone = 'warn'
+  else tone = 'ok'
+  return { text, tone }
+}
+
+const TONE_CLASS: Record<'ok' | 'warn' | 'danger', string> = {
+  ok: 'text-slate-900',
+  warn: 'text-amber-700',
+  danger: 'text-red-700',
+}
+
 const CHANNELS: ChannelDef[] = [
   { type: 'AMAZON', name: 'Amazon', description: 'Connect your Amazon seller account' },
   { type: 'EBAY', name: 'eBay', description: 'Connect your eBay seller account' },
@@ -256,27 +311,22 @@ export function ChannelsClient() {
                       <span className="text-slate-900 truncate">{connection.storeName}</span>
                     </div>
                   )}
-                  {connection.tokenExpiresAt && (
-                    <div className="flex justify-between gap-2">
-                      <span className="text-slate-500">Token expires</span>
-                      <span className="text-slate-900 tabular-nums">
-                        {new Date(connection.tokenExpiresAt).toLocaleDateString('en-GB', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                        })}
-                      </span>
-                    </div>
-                  )}
+                  {connection.tokenExpiresAt && (() => {
+                    const r = formatRelative(connection.tokenExpiresAt)
+                    return (
+                      <div className="flex justify-between gap-2">
+                        <span className="text-slate-500">Token expires</span>
+                        <span className={cn('tabular-nums', TONE_CLASS[r.tone])}>
+                          {r.text}
+                        </span>
+                      </div>
+                    )
+                  })()}
                   {connection.lastSyncAt && (
                     <div className="flex justify-between gap-2">
                       <span className="text-slate-500">Last sync</span>
                       <span className="text-slate-900 tabular-nums">
-                        {new Date(connection.lastSyncAt).toLocaleDateString('en-GB', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                        })}
+                        {formatRelative(connection.lastSyncAt).text}
                       </span>
                     </div>
                   )}
