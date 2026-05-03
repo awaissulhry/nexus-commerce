@@ -5,6 +5,7 @@
  */
 
 import { prisma } from '@nexus/database';
+import { Prisma } from '@prisma/client';
 import type {
   BulkActionJob,
   PrismaClient,
@@ -26,6 +27,38 @@ export type BulkActionType =
   | 'STATUS_UPDATE'
   | 'ATTRIBUTE_UPDATE'
   | 'LISTING_SYNC';
+
+/**
+ * Which Prisma entity each action type operates on. Keeps
+ * getItemsForJob honest — STATUS lives on Product, everything
+ * else lives on ProductVariation. Phase B-4's per-action-type
+ * dispatcher consumes this so the filter+fetch path picks the
+ * right table.
+ */
+const ACTION_ENTITY = {
+  PRICING_UPDATE: 'variation',
+  INVENTORY_UPDATE: 'variation',
+  STATUS_UPDATE: 'product',
+  ATTRIBUTE_UPDATE: 'variation',
+  LISTING_SYNC: 'variation',
+} as const satisfies Record<BulkActionType, 'product' | 'variation'>;
+
+/**
+ * User-facing scope filter shape — what the frontend scope picker
+ * sends, what /preview and /create accept. Field names match the
+ * actual Product / ProductVariation / ChannelListing schema (the
+ * spec's `category`, `stockQuantity`, `marketplaceId` are wrong;
+ * real names are productType, stock, marketplace).
+ */
+export interface ScopeFilters {
+  brand?: string;
+  productType?: string;
+  /** Marketplace key on ChannelListing — e.g. "IT", "DE", "GLOBAL". */
+  marketplace?: string;
+  status?: 'DRAFT' | 'ACTIVE' | 'INACTIVE';
+  stockMin?: number;
+  stockMax?: number;
+}
 
 export type BulkActionStatus =
   | 'PENDING'
@@ -89,8 +122,14 @@ export class BulkActionService {
       } else if (input.targetProductIds?.length) {
         totalItems = input.targetProductIds.length;
       } else if (input.filters) {
-        // Count items matching filters
-        totalItems = await this.countItemsByFilters(input.filters);
+        // Count items matching filters, scoped to the action's
+        // target entity (Product for STATUS, ProductVariation for
+        // PRICING/INVENTORY/ATTRIBUTE/LISTING_SYNC).
+        const target = ACTION_ENTITY[input.actionType];
+        totalItems = await this.countItemsByFilters(
+          input.filters as ScopeFilters,
+          target,
+        );
       }
 
       if (totalItems === 0) {
@@ -495,35 +534,79 @@ export class BulkActionService {
   }
 
   /**
-   * Private helper: Get items to process based on job configuration
+   * Resolve the items a job will process. Returns Product[] or
+   * ProductVariation[] depending on the action's target entity.
+   * Targeting precedence:
+   *   1. Explicit targetProductIds / targetVariationIds (fast path,
+   *      no filter translation needed)
+   *   2. ScopeFilters (translated to Prisma where clause)
+   *   3. Empty
+   *
+   * Cross-targeting policy: if a Product-targeted action is given
+   * variation ids, walk up to parent products. If a Variation-
+   * targeted action is given product ids, expand to all child
+   * variations. Keeps the scope-picker UX flexible without forcing
+   * the caller to pre-resolve.
    */
-  private async getItemsForJob(job: BulkActionJob): Promise<Array<{ id: string; [key: string]: any }>> {
+  private async getItemsForJob(
+    job: BulkActionJob,
+  ): Promise<Product[] | ProductVariation[]> {
     try {
+      const target = ACTION_ENTITY[job.actionType as BulkActionType];
+
+      if (target === 'product') {
+        if (job.targetProductIds && job.targetProductIds.length > 0) {
+          return await this.prisma.product.findMany({
+            where: { id: { in: job.targetProductIds } },
+          });
+        }
+        if (job.targetVariationIds && job.targetVariationIds.length > 0) {
+          // Resolve variations → distinct parent product ids
+          const variations = await this.prisma.productVariation.findMany({
+            where: { id: { in: job.targetVariationIds } },
+            select: { productId: true },
+          });
+          const productIds = Array.from(
+            new Set(variations.map((v) => v.productId)),
+          );
+          return await this.prisma.product.findMany({
+            where: { id: { in: productIds } },
+          });
+        }
+        if (job.filters) {
+          return await this.prisma.product.findMany({
+            where: this.buildProductFilterWhere(
+              job.filters as ScopeFilters,
+            ),
+          });
+        }
+        return [];
+      }
+
+      // target === 'variation'
       if (job.targetVariationIds && job.targetVariationIds.length > 0) {
         return await this.prisma.productVariation.findMany({
-          where: { id: { in: job.targetVariationIds } }
+          where: { id: { in: job.targetVariationIds } },
         });
       }
-
       if (job.targetProductIds && job.targetProductIds.length > 0) {
-        return await this.prisma.product.findMany({
-          where: { id: { in: job.targetProductIds } }
+        // Expand parent products → all their variations
+        return await this.prisma.productVariation.findMany({
+          where: { productId: { in: job.targetProductIds } },
         });
       }
-
-      // Handle filter-based queries. job.filters is `JsonValue | null`
-      // from Prisma; cast at the boundary since downstream expects an
-      // object shape. Phase B-4 replaces this with a properly-typed
-      // ScopeFilters parser.
       if (job.filters) {
-        return await this.getItemsByFilters(job.filters as Record<string, any>);
+        return await this.prisma.productVariation.findMany({
+          where: this.buildVariationFilterWhere(
+            job.filters as ScopeFilters,
+          ),
+        });
       }
-
       return [];
     } catch (error) {
       logger.error('Failed to get items for job', {
         jobId: job.id,
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       });
       throw error;
     }
@@ -948,50 +1031,99 @@ export class BulkActionService {
   }
 
   /**
-   * Private helper: Count items matching filters
+   * Count items matching the given ScopeFilters, scoped to the
+   * action's target entity. Used by createJob to populate totalItems
+   * up front (so the progress bar has a denominator from the start).
    */
-  private async countItemsByFilters(filters: Record<string, any>): Promise<number> {
+  private async countItemsByFilters(
+    filters: ScopeFilters,
+    target: 'product' | 'variation',
+  ): Promise<number> {
     try {
-      // Implement filter-based counting logic
-      // This is a placeholder - extend based on your filter structure
-      const count = await this.prisma.productVariation.count({
-        where: this.buildFilterWhere(filters)
+      if (target === 'product') {
+        return await this.prisma.product.count({
+          where: this.buildProductFilterWhere(filters),
+        });
+      }
+      return await this.prisma.productVariation.count({
+        where: this.buildVariationFilterWhere(filters),
       });
-      return count;
     } catch (error) {
       logger.warn('Failed to count items by filters, returning 0', {
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       });
       return 0;
     }
   }
 
   /**
-   * Private helper: Get items by filters
+   * Translate ScopeFilters → Prisma.ProductWhereInput.
+   * Used by STATUS_UPDATE (and any other Product-targeted action).
+   *
+   *   - brand / productType / status → direct columns on Product
+   *   - marketplace → some ChannelListing on this product matches
+   *   - stockMin / stockMax → Product.totalStock (aggregate)
    */
-  private async getItemsByFilters(filters: Record<string, any>): Promise<Array<{ id: string; [key: string]: any }>> {
-    try {
-      return await this.prisma.productVariation.findMany({
-        where: this.buildFilterWhere(filters)
-      });
-    } catch (error) {
-      logger.error('Failed to get items by filters', {
-        error: error instanceof Error ? error.message : String(error)
-      });
-      return [];
+  private buildProductFilterWhere(
+    filters: ScopeFilters,
+  ): Prisma.ProductWhereInput {
+    const where: Prisma.ProductWhereInput = {};
+    if (filters.brand) where.brand = filters.brand;
+    if (filters.productType) where.productType = filters.productType;
+    if (filters.status) where.status = filters.status;
+    if (filters.marketplace) {
+      where.channelListings = {
+        some: { marketplace: filters.marketplace },
+      };
     }
+    if (filters.stockMin !== undefined || filters.stockMax !== undefined) {
+      const stockClause: Prisma.IntFilter = {};
+      if (filters.stockMin !== undefined) stockClause.gte = filters.stockMin;
+      if (filters.stockMax !== undefined) stockClause.lte = filters.stockMax;
+      where.totalStock = stockClause;
+    }
+    return where;
   }
 
   /**
-   * Private helper: Build Prisma where clause from filters.
-   * TODO Phase B-4: rewrite as a proper translator from user-facing
-   * filter shape ({brand, category, marketplace, status, stockMin,
-   * stockMax}) to a Prisma where clause spanning Product +
-   * ProductVariation. Current passthrough is a stub left in place
-   * so filter-based jobs don't 500 on bare-shape filters during the
-   * cleanup phase.
+   * Translate ScopeFilters → Prisma.ProductVariationWhereInput.
+   * Used by PRICING / INVENTORY / ATTRIBUTE updates.
+   *
+   *   - brand / productType / status / marketplace → routed through
+   *     the .product relation (those columns live on the parent)
+   *   - stockMin / stockMax → ProductVariation.stock (per-variant)
    */
-  private buildFilterWhere(filters: Record<string, any>): Record<string, any> {
-    return filters;
+  private buildVariationFilterWhere(
+    filters: ScopeFilters,
+  ): Prisma.ProductVariationWhereInput {
+    const where: Prisma.ProductVariationWhereInput = {};
+    const productClause: Prisma.ProductWhereInput = {};
+    let useProductClause = false;
+    if (filters.brand) {
+      productClause.brand = filters.brand;
+      useProductClause = true;
+    }
+    if (filters.productType) {
+      productClause.productType = filters.productType;
+      useProductClause = true;
+    }
+    if (filters.status) {
+      productClause.status = filters.status;
+      useProductClause = true;
+    }
+    if (filters.marketplace) {
+      productClause.channelListings = {
+        some: { marketplace: filters.marketplace },
+      };
+      useProductClause = true;
+    }
+    if (useProductClause) where.product = productClause;
+    if (filters.stockMin !== undefined || filters.stockMax !== undefined) {
+      const stockClause: Prisma.IntFilter = {};
+      if (filters.stockMin !== undefined) stockClause.gte = filters.stockMin;
+      if (filters.stockMax !== undefined) stockClause.lte = filters.stockMax;
+      where.stock = stockClause;
+    }
+    return where;
   }
 }
