@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { cn } from '@/lib/utils'
+import { getBackendUrl } from '@/lib/backend-url'
 
 interface ChannelConnection {
   id: string
@@ -68,7 +69,7 @@ export function ChannelsClient() {
       setConnectingChannel('EBAY')
       setStatusMsg(null)
 
-      const response = await fetch('/api/ebay/auth/initiate', {
+      const response = await fetch(`${getBackendUrl()}/api/ebay/auth/initiate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -99,7 +100,7 @@ export function ChannelsClient() {
     if (!confirm('Are you sure you want to disconnect this channel?')) return
 
     try {
-      const response = await fetch('/api/ebay/auth/revoke', {
+      const response = await fetch(`${getBackendUrl()}/api/ebay/auth/revoke`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ connectionId }),
@@ -123,7 +124,7 @@ export function ChannelsClient() {
     try {
       setTestingId(connectionId)
       const response = await fetch(
-        `/api/ebay/auth/test?connectionId=${connectionId}`
+        `${getBackendUrl()}/api/ebay/auth/test?connectionId=${connectionId}`,
       )
 
       if (!response.ok) {

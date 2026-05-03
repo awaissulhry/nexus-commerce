@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { getBackendUrl } from "@/lib/backend-url";
 
 export default function EbayCallbackContent() {
   const router = useRouter();
@@ -39,7 +40,7 @@ export default function EbayCallbackContent() {
         }
 
         // Create ChannelConnection in database first
-        const createResponse = await fetch("/api/ebay/auth/create-connection", {
+        const createResponse = await fetch(`${getBackendUrl()}/api/ebay/auth/create-connection`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -54,7 +55,7 @@ export default function EbayCallbackContent() {
         const { connectionId } = await createResponse.json();
 
         // Exchange code for tokens
-        const callbackResponse = await fetch("/api/ebay/auth/callback", {
+        const callbackResponse = await fetch(`${getBackendUrl()}/api/ebay/auth/callback`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
