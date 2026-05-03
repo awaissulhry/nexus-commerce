@@ -2661,8 +2661,9 @@ export default function BulkOperationsClient() {
         pendingChannelChanges={pendingChannelChanges}
       />
 
-      <div className="flex-shrink-0 mb-3 flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex-shrink-0 mb-3 flex items-center justify-between gap-4 flex-wrap">
+        {/* Left group: how + what data is shown (views, filters, search, status). */}
+        <div className="flex items-center gap-2 flex-wrap">
           <DisplayModeToggle mode={displayMode} onChange={setDisplayMode} />
           {displayMode === 'hierarchy' && (
             <ExpandCollapseControls
@@ -2671,15 +2672,9 @@ export default function BulkOperationsClient() {
               onChange={setExpandedParents}
             />
           )}
-          <span className="text-[12px] text-slate-500">
-            {loading
-              ? 'Loading…'
-              : filteredProducts.length === products.length
-              ? `${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · Cmd+S to save`
-              : `${filteredProducts.length.toLocaleString()} of ${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · Cmd+S to save`}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
+
+          <div className="w-px h-5 bg-slate-200" aria-hidden="true" />
+
           <div className="relative flex items-center">
             <Search className="absolute left-2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
             <input
@@ -2708,6 +2703,27 @@ export default function BulkOperationsClient() {
             onReset={resetFilters}
             activeCount={activeFilterCount}
           />
+
+          <span className="text-[12px] text-slate-500 ml-1">
+            {loading
+              ? 'Loading…'
+              : filteredProducts.length === products.length
+              ? `${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`
+              : `${filteredProducts.length.toLocaleString()} of ${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`}
+          </span>
+        </div>
+
+        {/* Right group: write actions, ordered context → history → views → commit. */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <MarketplaceSelector
+            value={marketplaceContext}
+            onChange={setMarketplaceContext}
+            options={marketplaceOptions}
+            pulse={showContextBanner}
+          />
+
+          <div className="w-px h-5 bg-slate-200" aria-hidden="true" />
+
           <div className="flex items-center gap-0.5 border border-slate-200 rounded-md">
             <button
               type="button"
@@ -2731,31 +2747,6 @@ export default function BulkOperationsClient() {
               <Redo2 className="w-3.5 h-3.5" />
             </button>
           </div>
-          <MarketplaceSelector
-            value={marketplaceContext}
-            onChange={setMarketplaceContext}
-            options={marketplaceOptions}
-            pulse={showContextBanner}
-          />
-          {Object.keys(columnSizing).length > 0 && (
-            <button
-              type="button"
-              onClick={resetColumnWidths}
-              title="Reset column widths to defaults"
-              className="inline-flex items-center gap-1 h-7 px-2 text-[11px] text-slate-600 border border-slate-200 rounded-md hover:bg-slate-50 hover:text-slate-900"
-            >
-              <RotateCcw className="w-3 h-3" />
-              Reset widths
-            </button>
-          )}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setUploadOpen(true)}
-          >
-            <Upload className="w-3.5 h-3.5 mr-1.5" />
-            Upload
-          </Button>
           <ColumnSelector
             allFields={allFields}
             visibleColumnIds={visibleColumnIds}
@@ -2770,6 +2761,28 @@ export default function BulkOperationsClient() {
             onSaveAsView={handleSaveAsView}
             onDeleteView={handleDeleteView}
           />
+          {Object.keys(columnSizing).length > 0 && (
+            <button
+              type="button"
+              onClick={resetColumnWidths}
+              title="Reset column widths to defaults"
+              className="inline-flex items-center gap-1 h-7 px-2 text-[11px] text-slate-600 border border-slate-200 rounded-md hover:bg-slate-50 hover:text-slate-900"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Reset widths
+            </button>
+          )}
+
+          <div className="w-px h-5 bg-slate-200" aria-hidden="true" />
+
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setUploadOpen(true)}
+          >
+            <Upload className="w-3.5 h-3.5 mr-1.5" />
+            Upload
+          </Button>
           <Button
             variant="secondary"
             size="sm"
