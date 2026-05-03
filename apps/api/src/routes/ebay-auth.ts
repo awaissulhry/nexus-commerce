@@ -92,28 +92,19 @@ export async function ebayAuthRoutes(app: FastifyInstance) {
    * Initiates the OAuth2 flow by generating authorization URL
    * Returns the URL where user should be redirected to authorize the app
    */
-  app.post<{ Body: InitiateAuthBody }>(
+  app.post<{ Body: Partial<InitiateAuthBody> }>(
     "/api/ebay/auth/initiate",
     async (request, reply) => {
       try {
-        const { redirectUri } = request.body;
-
-        if (!redirectUri) {
-          return reply.status(400).send({
-            success: false,
-            error: "redirectUri is required",
-          });
-        }
-
-        // Generate state token for CSRF protection
+        // The body redirectUri is no longer used — the service reads
+        // EBAY_RUNAME from env and uses it as the OAuth `redirect_uri`
+        // query value (eBay requires the RuName, not the literal URL).
+        // Body is accepted for backwards compat with the old frontend
+        // but ignored.
         const state = randomBytes(32).toString("hex");
-
-        // Store state in session/cache (in production, use Redis or similar)
-        // For now, we'll include it in the response and validate on callback
-        const authUrl = ebayAuthService.generateAuthorizationUrl(state, redirectUri);
+        const authUrl = ebayAuthService.generateAuthorizationUrl(state);
 
         logger.info("eBay OAuth2 authorization URL generated", {
-          redirectUri,
           state: state.substring(0, 8) + "...",
         });
 
@@ -201,10 +192,9 @@ export async function ebayAuthRoutes(app: FastifyInstance) {
 
         // Exchange code for tokens
         // @ts-ignore - request.body may contain redirectUri from callback
-        const tokenData = await ebayAuthService.exchangeCodeForToken(
-          code,
-          (request.body as any).redirectUri || "http://localhost:3000/settings/channels"
-        );
+        // Service reads EBAY_RUNAME from env; second arg is unused
+        // (kept for backwards compat with the old call shape).
+        const tokenData = await ebayAuthService.exchangeCodeForToken(code);
 
         // Get seller information
         let sellerInfo = undefined;

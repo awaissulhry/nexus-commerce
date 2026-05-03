@@ -18,16 +18,27 @@ interface EbayTokenResponse {
 export class EbayAuthService {
   private clientId: string;
   private clientSecret: string;
+  private ruName: string;
   private environment: "SANDBOX" | "PRODUCTION";
   private baseUrl: string;
 
   constructor() {
     this.clientId = process.env.EBAY_CLIENT_ID || "";
     this.clientSecret = process.env.EBAY_CLIENT_SECRET || "";
+    // EBAY_RUNAME is the eBay-assigned alias that goes into the
+    // OAuth `redirect_uri` query param AND the token-exchange body.
+    // The actual destination URL where eBay sends the user lives in
+    // the eBay developer console under that RuName ("Your auth
+    // accepted URL"). Don't conflate the two — eBay will reject the
+    // request if the literal URL is sent in `redirect_uri`.
+    this.ruName = process.env.EBAY_RUNAME || "";
     this.environment = (process.env.EBAY_ENVIRONMENT as "SANDBOX" | "PRODUCTION") || "PRODUCTION";
 
     if (!this.clientId || !this.clientSecret) {
       logger.warn("eBay credentials not configured. OAuth2 flow will fail.");
+    }
+    if (!this.ruName) {
+      logger.warn("EBAY_RUNAME not configured. OAuth2 flow will fail with 'unauthorized_client' from eBay.");
     }
 
     // Set base URL based on environment
@@ -38,14 +49,18 @@ export class EbayAuthService {
   }
 
   /**
-   * Generate OAuth2 authorization URL for user consent
-   * User will be redirected to eBay to authorize the application
+   * Generate OAuth2 authorization URL for user consent.
+   * The `redirect_uri` query param must be the eBay RuName, not the
+   * literal callback URL. eBay maps RuName → URL on its side using
+   * the developer console config. The optional caller-provided URL
+   * is ignored (kept in the signature for backwards compat with the
+   * frontend that used to send it).
    */
-  generateAuthorizationUrl(state: string, redirectUri: string): string {
+  generateAuthorizationUrl(state: string, _redirectUriIgnored?: string): string {
     const params = new URLSearchParams({
       client_id: this.clientId,
       response_type: "code",
-      redirect_uri: redirectUri,
+      redirect_uri: this.ruName,
       scope: [
         "https://api.ebay.com/oauth/api_scope",
         "https://api.ebay.com/oauth/api_scope/sell.account",
@@ -59,12 +74,13 @@ export class EbayAuthService {
   }
 
   /**
-   * Exchange authorization code for access token
-   * Called after user grants permission on eBay
+   * Exchange authorization code for access token.
+   * Same RuName rule as the auth URL: the token endpoint expects
+   * the RuName in `redirect_uri`, not the literal callback URL.
    */
-  async exchangeCodeForToken(code: string, redirectUri: string): Promise<EbayTokenResponse> {
+  async exchangeCodeForToken(code: string, _redirectUriIgnored?: string): Promise<EbayTokenResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/oauth/token`, {
+      const response = await fetch(`${this.baseUrl}/identity/v1/oauth2/token`, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
@@ -73,7 +89,7 @@ export class EbayAuthService {
         body: new URLSearchParams({
           grant_type: "authorization_code",
           code,
-          redirect_uri: redirectUri,
+          redirect_uri: this.ruName,
         }).toString(),
       });
 
@@ -98,7 +114,7 @@ export class EbayAuthService {
    */
   async refreshAccessToken(refreshToken: string): Promise<EbayTokenResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/oauth/token`, {
+      const response = await fetch(`${this.baseUrl}/identity/v1/oauth2/token`, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
@@ -259,7 +275,7 @@ export class EbayAuthService {
 
       // Call eBay revocation endpoint
       try {
-        const response = await fetch(`${this.baseUrl}/oauth/token/revoke`, {
+        const response = await fetch(`${this.baseUrl}/identity/v1/oauth2/token/revoke`, {
           method: "POST",
           headers: {
             "Content-Type": "application/x-www-form-urlencoded",
