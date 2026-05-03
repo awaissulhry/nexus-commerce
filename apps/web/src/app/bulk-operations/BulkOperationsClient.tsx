@@ -2721,8 +2721,16 @@ export default function BulkOperationsClient() {
                  Preview / Save) on the right — Save is always visible
                  without horizontal scrolling at any reasonable width.
           Row 2: secondary tools (undo/redo, columns, reset widths)
-                 on the left, status text on the right. */}
-      <div className="flex-shrink-0 mb-3 flex flex-col gap-1.5 px-1 pb-2 border-b border-slate-200 bg-white">
+                 on the left, status text on the right.
+
+          `relative z-30` is load-bearing: the table container below
+          uses `contain: strict` which creates its own stacking context.
+          Without an explicit stacking context here, popovers in the
+          toolbar (Filter / Marketplace / Cols) render UNDER the table
+          even though they are at z-30 internally. Elevating the whole
+          toolbar wrapper above the table's SC keeps the popovers
+          visually on top whenever they expand downward over the grid. */}
+      <div className="flex-shrink-0 mb-3 flex flex-col gap-1.5 px-1 pb-2 border-b border-slate-200 bg-white relative z-30">
         {/* ── Row 1 — primary scope + write actions ─────────────────── */}
         <div className="flex items-center gap-2 flex-wrap">
           {/* Left: scope */}
