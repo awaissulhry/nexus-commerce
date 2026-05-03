@@ -1102,14 +1102,84 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   )
 
+  // Helper: delete a set of Products + every dependent row whose FK
+  // doesn't cascade. Five tables in the schema reference Product
+  // without `onDelete: Cascade` (ProductImage, MarketplaceSync,
+  // Listing, StockLog, FBAShipmentItem) — bare deleteMany on Product
+  // hits a FK violation if any of those have rows. This wraps the
+  // dependents + the Product delete in a single transaction.
+  const cascadeDeleteProducts = async (
+    where: Prisma.ProductWhereInput,
+  ): Promise<{
+    deleted: number
+    dependents: {
+      productImages: number
+      marketplaceSyncs: number
+      listings: number
+      stockLogs: number
+      fbaShipmentItems: number
+    }
+  }> => {
+    const products = await prisma.product.findMany({
+      where,
+      select: { id: true },
+    })
+    const ids = products.map((p) => p.id)
+    if (ids.length === 0) {
+      return {
+        deleted: 0,
+        dependents: {
+          productImages: 0,
+          marketplaceSyncs: 0,
+          listings: 0,
+          stockLogs: 0,
+          fbaShipmentItems: 0,
+        },
+      }
+    }
+    const productIdFilter = { productId: { in: ids } }
+    const result = await prisma.$transaction(async (tx) => {
+      const productImages = await tx.productImage.deleteMany({
+        where: productIdFilter,
+      })
+      const marketplaceSyncs = await tx.marketplaceSync.deleteMany({
+        where: productIdFilter,
+      })
+      const listings = await tx.listing.deleteMany({
+        where: productIdFilter,
+      })
+      const stockLogs = await tx.stockLog.deleteMany({
+        where: productIdFilter,
+      })
+      const fbaShipmentItems = await tx.fBAShipmentItem.deleteMany({
+        where: productIdFilter,
+      })
+      const products = await tx.product.deleteMany({
+        where: { id: { in: ids } },
+      })
+      return {
+        deleted: products.count,
+        dependents: {
+          productImages: productImages.count,
+          marketplaceSyncs: marketplaceSyncs.count,
+          listings: listings.count,
+          stockLogs: stockLogs.count,
+          fbaShipmentItems: fbaShipmentItems.count,
+        },
+      }
+    })
+    return result
+  }
+
   // DELETE /api/admin/cleanup-bulk-test
   // Removes every Product row marked importSource = 'PERFORMANCE_TEST'.
+  // Cascades manually to dependents that don't FK-cascade.
   fastify.delete('/admin/cleanup-bulk-test', async (_request, reply) => {
     try {
-      const r = await prisma.product.deleteMany({
-        where: { importSource: 'PERFORMANCE_TEST' },
+      const result = await cascadeDeleteProducts({
+        importSource: 'PERFORMANCE_TEST',
       })
-      return { ok: true, deleted: r.count }
+      return { ok: true, ...result }
     } catch (error: any) {
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
@@ -1144,13 +1214,15 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
 
   // DELETE /api/admin/cleanup-xavia-realistic
   // Removes every Product row marked importSource =
-  // 'XAVIA_REALISTIC_TEST'. Cascades to ProductVariation via FK.
+  // 'XAVIA_REALISTIC_TEST'. Uses the same cascade helper as
+  // cleanup-bulk-test in case a future code path syncs these
+  // products into MarketplaceSync / Listing / etc.
   fastify.delete('/admin/cleanup-xavia-realistic', async (_request, reply) => {
     try {
-      const r = await prisma.product.deleteMany({
-        where: { importSource: XAVIA_REALISTIC_IMPORT_SOURCE },
+      const result = await cascadeDeleteProducts({
+        importSource: XAVIA_REALISTIC_IMPORT_SOURCE,
       })
-      return { ok: true, deleted: r.count }
+      return { ok: true, ...result }
     } catch (error: any) {
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
