@@ -2838,6 +2838,7 @@ export default function BulkOperationsClient() {
 
         {/* ── Row 2 — secondary tools + status ──────────────────────── */}
         <div className="flex items-center gap-2 flex-wrap text-[11px]">
+          {/* Left: history. */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <div className="flex items-center gap-0.5 border border-slate-200 rounded-md">
               <button
@@ -2862,6 +2863,19 @@ export default function BulkOperationsClient() {
                 <Redo2 className="w-3.5 h-3.5" />
               </button>
             </div>
+          </div>
+
+          {/* Middle: status, fills available space. */}
+          <div className="flex-1 min-w-0 text-slate-500 tabular-nums truncate">
+            {loading
+              ? 'Loading…'
+              : filteredProducts.length === products.length
+              ? `${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`
+              : `${filteredProducts.length.toLocaleString()} of ${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`}
+          </div>
+
+          {/* Right: view tools. */}
+          <div className="flex items-center gap-2 flex-shrink-0">
             <ColumnSelector
               allFields={allFields}
               visibleColumnIds={visibleColumnIds}
@@ -2887,14 +2901,6 @@ export default function BulkOperationsClient() {
                 Reset widths
               </button>
             )}
-          </div>
-
-          <div className="ml-auto text-slate-500 tabular-nums truncate min-w-0">
-            {loading
-              ? 'Loading…'
-              : filteredProducts.length === products.length
-              ? `${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`
-              : `${filteredProducts.length.toLocaleString()} of ${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`}
           </div>
         </div>
       </div>
