@@ -2715,175 +2715,179 @@ export default function BulkOperationsClient() {
         pendingChannelChanges={pendingChannelChanges}
       />
 
-      {/* Sticky toolbar — single row, never wraps. Left group is "what
-          am I looking at" (mode → expand → search → filter); right group
-          is "what am I doing to it" (context → history → views → write).
-          A compact status tail sits between the two groups when there's
-          room, so the standalone status row below is gone. Below ~1100px
-          the row scrolls horizontally rather than stacking. */}
-      <div className="flex-shrink-0 mb-3 flex items-center gap-3 px-1 pb-2 border-b border-slate-200 overflow-x-auto bg-white">
-        {/* Left group */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <DisplayModeToggle mode={displayMode} onChange={setDisplayMode} />
-          {displayMode === 'hierarchy' && (
-            <ExpandCollapseControls
-              products={products}
-              expandedParents={expandedParents}
-              onChange={setExpandedParents}
-            />
-          )}
+      {/* Two-row toolbar.
+          Row 1: scope (mode/expand/search/filter) on the left,
+                 marketplace + write actions (Bulk apply / Upload /
+                 Preview / Save) on the right — Save is always visible
+                 without horizontal scrolling at any reasonable width.
+          Row 2: secondary tools (undo/redo, columns, reset widths)
+                 on the left, status text on the right. */}
+      <div className="flex-shrink-0 mb-3 flex flex-col gap-1.5 px-1 pb-2 border-b border-slate-200 bg-white">
+        {/* ── Row 1 — primary scope + write actions ─────────────────── */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Left: scope */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <DisplayModeToggle mode={displayMode} onChange={setDisplayMode} />
+            {displayMode === 'hierarchy' && (
+              <ExpandCollapseControls
+                products={products}
+                expandedParents={expandedParents}
+                onChange={setExpandedParents}
+              />
+            )}
 
-          <div className="w-px h-5 bg-slate-200" aria-hidden="true" />
+            <div className="w-px h-5 bg-slate-200" aria-hidden="true" />
 
-          <div className="relative flex items-center">
-            <Search className="absolute left-2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search SKU, name, brand…"
-              className="h-7 pl-7 pr-7 text-[12px] border border-slate-200 rounded-md w-40 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            <div className="relative flex items-center">
+              <Search className="absolute left-2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search SKU, name, brand…"
+                className="h-7 pl-7 pr-7 text-[12px] border border-slate-200 rounded-md w-40 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-1.5 text-slate-400 hover:text-slate-700"
+                  aria-label="Clear search"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+            <FilterDropdown
+              open={filterOpen}
+              onOpenChange={setFilterOpen}
+              value={filterState}
+              onChange={setFilterState}
+              onReset={resetFilters}
+              activeCount={activeFilterCount}
             />
-            {searchQuery && (
+          </div>
+
+          {/* Right: marketplace + write actions */}
+          <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
+            <MarketplaceSelector
+              value={marketplaceContext}
+              onChange={setMarketplaceContext}
+              options={marketplaceOptions}
+              pulse={showContextBanner}
+            />
+
+            <div className="w-px h-5 bg-slate-200" aria-hidden="true" />
+
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setBulkOpModalOpen(true)}
+              title="Apply price / stock / status / attribute changes to a scoped subset of products"
+            >
+              <Wand2 className="w-3.5 h-3.5 mr-1.5" />
+              Bulk apply
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setUploadOpen(true)}
+            >
+              <Upload className="w-3.5 h-3.5 mr-1.5" />
+              Upload
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={pendingCount === 0}
+              onClick={() => setPreviewOpen(true)}
+            >
+              Preview
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={
+                pendingCount === 0 ||
+                saveStatus.kind === 'saving' ||
+                !online ||
+                hasUnsavablePendingChanges
+              }
+              loading={saveStatus.kind === 'saving'}
+              onClick={handleSave}
+              title={
+                hasUnsavablePendingChanges
+                  ? `${pendingChannelChanges} channel change${
+                      pendingChannelChanges === 1 ? '' : 's'
+                    } need a marketplace context to save`
+                  : undefined
+              }
+            >
+              {saveLabel}
+            </Button>
+          </div>
+        </div>
+
+        {/* ── Row 2 — secondary tools + status ──────────────────────── */}
+        <div className="flex items-center gap-2 flex-wrap text-[11px]">
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-0.5 border border-slate-200 rounded-md">
               <button
                 type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-1.5 text-slate-400 hover:text-slate-700"
-                aria-label="Clear search"
+                onClick={undo}
+                disabled={!canUndo}
+                title="Undo (⌘Z)"
+                aria-label="Undo"
+                className="h-7 px-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-default rounded-l-md"
               >
-                <X className="w-3 h-3" />
+                <Undo2 className="w-3.5 h-3.5" />
+              </button>
+              <div className="w-px h-4 bg-slate-200" />
+              <button
+                type="button"
+                onClick={redo}
+                disabled={!canRedo}
+                title="Redo (⌘⇧Z)"
+                aria-label="Redo"
+                className="h-7 px-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-default rounded-r-md"
+              >
+                <Redo2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <ColumnSelector
+              allFields={allFields}
+              visibleColumnIds={visibleColumnIds}
+              onVisibleChange={setVisibleColumnIds}
+              enabledChannels={enabledChannels}
+              onEnabledChannelsChange={setEnabledChannels}
+              enabledProductTypes={enabledProductTypes}
+              onEnabledProductTypesChange={setEnabledProductTypes}
+              views={savedViews}
+              activeViewId={activeViewIdState}
+              onSelectView={handleSelectView}
+              onSaveAsView={handleSaveAsView}
+              onDeleteView={handleDeleteView}
+            />
+            {Object.keys(columnSizing).length > 0 && (
+              <button
+                type="button"
+                onClick={resetColumnWidths}
+                title="Reset column widths to defaults"
+                className="inline-flex items-center gap-1 h-7 px-2 text-slate-600 border border-slate-200 rounded-md hover:bg-slate-50 hover:text-slate-900"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Reset widths
               </button>
             )}
           </div>
-          <FilterDropdown
-            open={filterOpen}
-            onOpenChange={setFilterOpen}
-            value={filterState}
-            onChange={setFilterState}
-            onReset={resetFilters}
-            activeCount={activeFilterCount}
-          />
-        </div>
 
-        {/* Status tail — fills available space between the groups. Hidden
-            below xl so the action buttons keep their breathing room. */}
-        <div className="hidden xl:block flex-1 min-w-0 text-[11px] text-slate-500 tabular-nums truncate">
-          {loading
-            ? 'Loading…'
-            : filteredProducts.length === products.length
-            ? `${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`
-            : `${filteredProducts.length.toLocaleString()} of ${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`}
-        </div>
-
-        {/* Right group — ml-auto kicks in below xl when the status tail
-            is hidden, so the write actions still hug the right edge. */}
-        <div className="flex items-center gap-2 flex-shrink-0 ml-auto xl:ml-0">
-          <MarketplaceSelector
-            value={marketplaceContext}
-            onChange={setMarketplaceContext}
-            options={marketplaceOptions}
-            pulse={showContextBanner}
-          />
-
-          <div className="w-px h-5 bg-slate-200" aria-hidden="true" />
-
-          <div className="flex items-center gap-0.5 border border-slate-200 rounded-md">
-            <button
-              type="button"
-              onClick={undo}
-              disabled={!canUndo}
-              title="Undo (⌘Z)"
-              aria-label="Undo"
-              className="h-7 px-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-default rounded-l-md"
-            >
-              <Undo2 className="w-3.5 h-3.5" />
-            </button>
-            <div className="w-px h-4 bg-slate-200" />
-            <button
-              type="button"
-              onClick={redo}
-              disabled={!canRedo}
-              title="Redo (⌘⇧Z)"
-              aria-label="Redo"
-              className="h-7 px-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-default rounded-r-md"
-            >
-              <Redo2 className="w-3.5 h-3.5" />
-            </button>
+          <div className="ml-auto text-slate-500 tabular-nums truncate min-w-0">
+            {loading
+              ? 'Loading…'
+              : filteredProducts.length === products.length
+              ? `${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`
+              : `${filteredProducts.length.toLocaleString()} of ${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`}
           </div>
-          <ColumnSelector
-            allFields={allFields}
-            visibleColumnIds={visibleColumnIds}
-            onVisibleChange={setVisibleColumnIds}
-            enabledChannels={enabledChannels}
-            onEnabledChannelsChange={setEnabledChannels}
-            enabledProductTypes={enabledProductTypes}
-            onEnabledProductTypesChange={setEnabledProductTypes}
-            views={savedViews}
-            activeViewId={activeViewIdState}
-            onSelectView={handleSelectView}
-            onSaveAsView={handleSaveAsView}
-            onDeleteView={handleDeleteView}
-          />
-          {Object.keys(columnSizing).length > 0 && (
-            <button
-              type="button"
-              onClick={resetColumnWidths}
-              title="Reset column widths to defaults"
-              className="inline-flex items-center gap-1 h-7 px-2 text-[11px] text-slate-600 border border-slate-200 rounded-md hover:bg-slate-50 hover:text-slate-900"
-            >
-              <RotateCcw className="w-3 h-3" />
-              Reset widths
-            </button>
-          )}
-
-          <div className="w-px h-5 bg-slate-200" aria-hidden="true" />
-
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setBulkOpModalOpen(true)}
-            title="Apply price / stock / status / attribute changes to a scoped subset of products"
-          >
-            <Wand2 className="w-3.5 h-3.5 mr-1.5" />
-            Bulk apply
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setUploadOpen(true)}
-          >
-            <Upload className="w-3.5 h-3.5 mr-1.5" />
-            Upload
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={pendingCount === 0}
-            onClick={() => setPreviewOpen(true)}
-          >
-            Preview
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={
-              pendingCount === 0 ||
-              saveStatus.kind === 'saving' ||
-              !online ||
-              hasUnsavablePendingChanges
-            }
-            loading={saveStatus.kind === 'saving'}
-            onClick={handleSave}
-            title={
-              hasUnsavablePendingChanges
-                ? `${pendingChannelChanges} channel change${
-                    pendingChannelChanges === 1 ? '' : 's'
-                  } need a marketplace context to save`
-                : undefined
-            }
-          >
-            {saveLabel}
-          </Button>
         </div>
       </div>
 
