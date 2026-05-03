@@ -66,6 +66,55 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
   )
 
   /**
+   * POST /api/bulk-operations/preview
+   * Resolve scope + simulate the operation against the first N items
+   * without writing. Returns the affected count plus a sample list
+   * of current → new values per item. The frontend uses this for
+   * the "Preview" step before the user confirms execute.
+   *
+   * Same body shape as POST /bulk-operations (createJob). No DB
+   * write happens — even if the body is valid, no job row is
+   * created until the user calls the create endpoint separately.
+   */
+  fastify.post<{
+    Body: CreateBody & { sampleSize?: number }
+  }>(
+    '/bulk-operations/preview',
+    async (request, reply) => {
+      const parsed = CreateBulkJobSchema.safeParse(request.body)
+      if (!parsed.success) {
+        return reply.code(400).send({
+          success: false,
+          error: 'Invalid request body',
+          details: parsed.error.issues.map((i) => ({
+            path: i.path.join('.'),
+            message: i.message,
+          })),
+        })
+      }
+      const sampleSize = Math.min(
+        Math.max(request.body?.sampleSize ?? 10, 1),
+        50,
+      )
+      try {
+        const result = await bulkActionService.previewJob(
+          parsed.data,
+          sampleSize,
+        )
+        return reply.send({ success: true, ...result })
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : String(error)
+        fastify.log.error(
+          { err: error },
+          '[bulk-operations] preview failed',
+        )
+        return reply.code(500).send({ success: false, error: message })
+      }
+    },
+  )
+
+  /**
    * GET /api/bulk-operations
    * List jobs that are still pending (PENDING or QUEUED). Useful for
    * a "recent operations" panel; completed/failed jobs are not in

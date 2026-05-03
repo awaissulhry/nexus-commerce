@@ -534,6 +534,225 @@ export class BulkActionService {
   }
 
   /**
+   * Preview a job without writing. Returns the affected count plus
+   * a sample of N items showing current → new values per the action
+   * payload. Used by the frontend scope picker so the user can
+   * review changes before clicking Execute.
+   *
+   * Same input shape as createJob — same Zod validation should run
+   * at the route layer before reaching this method.
+   */
+  async previewJob(
+    input: CreateJobInput,
+    sampleSize = 10,
+  ): Promise<{
+    affectedCount: number;
+    sampleItems: Array<{
+      id: string;
+      sku: string | null;
+      name: string | null;
+      currentValue: unknown;
+      newValue: unknown;
+      status: 'processed' | 'skipped';
+    }>;
+  }> {
+    const target = ACTION_ENTITY[input.actionType];
+
+    // ── Affected count (no DB write, no item load) ────────────────
+    let affectedCount = 0;
+    if (target === 'product') {
+      if (input.targetProductIds?.length) {
+        affectedCount = input.targetProductIds.length;
+      } else if (input.targetVariationIds?.length) {
+        // Distinct parent products — match the resolution
+        // getItemsForJob does for the same case.
+        const variations = await this.prisma.productVariation.findMany({
+          where: { id: { in: input.targetVariationIds } },
+          select: { productId: true },
+        });
+        affectedCount = new Set(variations.map((v) => v.productId)).size;
+      } else if (input.filters) {
+        affectedCount = await this.countItemsByFilters(
+          input.filters as ScopeFilters,
+          target,
+        );
+      }
+    } else {
+      // variation
+      if (input.targetVariationIds?.length) {
+        affectedCount = input.targetVariationIds.length;
+      } else if (input.targetProductIds?.length) {
+        // All variations of these products
+        affectedCount = await this.prisma.productVariation.count({
+          where: { productId: { in: input.targetProductIds } },
+        });
+      } else if (input.filters) {
+        affectedCount = await this.countItemsByFilters(
+          input.filters as ScopeFilters,
+          target,
+        );
+      }
+    }
+
+    // ── Sample items via getItemsForJob with a take cap ───────────
+    // Build a synthetic job-shaped object so we can reuse the
+    // existing entity-resolution logic without persisting anything.
+    const synthetic = {
+      id: 'preview',
+      actionType: input.actionType,
+      targetProductIds: input.targetProductIds ?? [],
+      targetVariationIds: input.targetVariationIds ?? [],
+      filters: input.filters ?? null,
+    } as unknown as BulkActionJob;
+    const samples = await this.getItemsForJob(synthetic, {
+      limit: sampleSize,
+    });
+
+    const payload = (input.actionPayload ?? {}) as Record<string, any>;
+    const sampleItems = samples.map((item) => {
+      const computed = this.computePreview(item, input.actionType, payload);
+      return {
+        id: item.id,
+        sku: 'sku' in item ? item.sku : null,
+        name: 'name' in item ? item.name : null,
+        currentValue: computed.currentValue,
+        newValue: computed.newValue,
+        status: computed.status,
+      };
+    });
+
+    return { affectedCount, sampleItems };
+  }
+
+  /**
+   * Pure compute: given an item + action + payload, return what the
+   * handler WOULD write, without writing. Mirrors the math in each
+   * processX handler. If the handlers' math drifts from this, the
+   * preview lies — keep them in sync (B-3 + B-6 are the canonical
+   * pair).
+   */
+  private computePreview(
+    item: Product | ProductVariation,
+    actionType: BulkActionType,
+    payload: Record<string, any>,
+  ): { currentValue: unknown; newValue: unknown; status: 'processed' | 'skipped' } {
+    switch (actionType) {
+      case 'PRICING_UPDATE': {
+        const variation = item as ProductVariation;
+        const currentPrice = Number(variation.price);
+        const adjustmentType = payload.adjustmentType;
+        const value = Number(payload.value);
+        if (Number.isNaN(value)) {
+          throw new Error(
+            'Invalid PRICING_UPDATE payload: numeric value required',
+          );
+        }
+        let newPrice: number;
+        switch (adjustmentType) {
+          case 'ABSOLUTE':
+            newPrice = value;
+            break;
+          case 'PERCENT':
+            newPrice = currentPrice * (1 + value / 100);
+            break;
+          case 'DELTA':
+            newPrice = currentPrice + value;
+            break;
+          default:
+            throw new Error(
+              `Invalid PRICING_UPDATE adjustmentType: ${adjustmentType}`,
+            );
+        }
+        let status: 'processed' | 'skipped' = 'processed';
+        if (newPrice < 0) status = 'skipped';
+        else if (
+          typeof payload.minPrice === 'number' &&
+          newPrice < payload.minPrice
+        )
+          status = 'skipped';
+        else if (
+          typeof payload.maxPrice === 'number' &&
+          newPrice > payload.maxPrice
+        )
+          status = 'skipped';
+        return {
+          currentValue: currentPrice.toFixed(2),
+          newValue: newPrice.toFixed(2),
+          status,
+        };
+      }
+
+      case 'INVENTORY_UPDATE': {
+        const variation = item as ProductVariation;
+        const currentStock = variation.stock ?? 0;
+        const adjustmentType = payload.adjustmentType;
+        const value = Number(payload.value);
+        if (Number.isNaN(value)) {
+          throw new Error(
+            'Invalid INVENTORY_UPDATE payload: numeric value required',
+          );
+        }
+        let newStock: number;
+        switch (adjustmentType) {
+          case 'ABSOLUTE':
+            newStock = value;
+            break;
+          case 'DELTA':
+            newStock = currentStock + value;
+            break;
+          default:
+            throw new Error(
+              `Invalid INVENTORY_UPDATE adjustmentType: ${adjustmentType}`,
+            );
+        }
+        newStock = Math.max(0, Math.floor(newStock));
+        return {
+          currentValue: currentStock,
+          newValue: newStock,
+          status: 'processed',
+        };
+      }
+
+      case 'STATUS_UPDATE': {
+        // ACTION_ENTITY.STATUS_UPDATE = 'product' so getItemsForJob
+        // returns Product. Variation-shaped items shouldn't reach
+        // this branch in practice; the type-guard handles the edge
+        // case anyway.
+        const currentStatus =
+          'status' in item && typeof item.status === 'string'
+            ? item.status
+            : null;
+        return {
+          currentValue: currentStatus,
+          newValue: payload.status,
+          status: 'processed',
+        };
+      }
+
+      case 'ATTRIBUTE_UPDATE': {
+        const variation = item as ProductVariation;
+        const raw = variation.variationAttributes;
+        const attrs =
+          raw && typeof raw === 'object' && !Array.isArray(raw)
+            ? (raw as Record<string, unknown>)
+            : {};
+        const currentValue = attrs[payload.attributeName] ?? null;
+        return {
+          currentValue,
+          newValue: payload.value,
+          status: 'processed',
+        };
+      }
+
+      case 'LISTING_SYNC':
+        throw new Error('LISTING_SYNC deferred to v2 (see TECH_DEBT)');
+
+      default:
+        throw new Error(`Unknown action type: ${actionType}`);
+    }
+  }
+
+  /**
    * Resolve the items a job will process. Returns Product[] or
    * ProductVariation[] depending on the action's target entity.
    * Targeting precedence:
@@ -550,14 +769,17 @@ export class BulkActionService {
    */
   private async getItemsForJob(
     job: BulkActionJob,
+    options?: { limit?: number },
   ): Promise<Product[] | ProductVariation[]> {
     try {
       const target = ACTION_ENTITY[job.actionType as BulkActionType];
+      const take = options?.limit;
 
       if (target === 'product') {
         if (job.targetProductIds && job.targetProductIds.length > 0) {
           return await this.prisma.product.findMany({
             where: { id: { in: job.targetProductIds } },
+            ...(take ? { take } : {}),
           });
         }
         if (job.targetVariationIds && job.targetVariationIds.length > 0) {
@@ -571,6 +793,7 @@ export class BulkActionService {
           );
           return await this.prisma.product.findMany({
             where: { id: { in: productIds } },
+            ...(take ? { take } : {}),
           });
         }
         if (job.filters) {
@@ -578,6 +801,7 @@ export class BulkActionService {
             where: this.buildProductFilterWhere(
               job.filters as ScopeFilters,
             ),
+            ...(take ? { take } : {}),
           });
         }
         return [];
@@ -587,12 +811,14 @@ export class BulkActionService {
       if (job.targetVariationIds && job.targetVariationIds.length > 0) {
         return await this.prisma.productVariation.findMany({
           where: { id: { in: job.targetVariationIds } },
+          ...(take ? { take } : {}),
         });
       }
       if (job.targetProductIds && job.targetProductIds.length > 0) {
         // Expand parent products → all their variations
         return await this.prisma.productVariation.findMany({
           where: { productId: { in: job.targetProductIds } },
+          ...(take ? { take } : {}),
         });
       }
       if (job.filters) {
@@ -600,6 +826,7 @@ export class BulkActionService {
           where: this.buildVariationFilterWhere(
             job.filters as ScopeFilters,
           ),
+          ...(take ? { take } : {}),
         });
       }
       return [];
