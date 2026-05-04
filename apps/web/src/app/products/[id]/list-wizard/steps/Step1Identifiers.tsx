@@ -45,9 +45,17 @@ function isValidGtin(raw: string): boolean {
 }
 
 export default function Step1Identifiers(props: StepProps) {
-  const { wizardState, updateWizardState, product, marketplace } = props
+  const { wizardState, updateWizardState, product, marketplace, channels } =
+    props
   const existingGtin = detectGtin(product)
   const stateSlice = (wizardState.identifiers ?? {}) as Identifiers
+
+  // P.2 — when no Amazon channels are selected, the exemption paths
+  // ("have brand exemption" / "apply now") aren't applicable. The
+  // user only needs to confirm/enter a GTIN/UPC/EAN code if their
+  // channels need one. eBay, Shopify, Woo each handle identifiers
+  // differently but none use Amazon's brand-exemption concept.
+  const hasAmazon = channels.some((c) => c.platform === 'AMAZON')
 
   // Default selection logic:
   //  - existing GTIN on the product → "have-code"
@@ -66,6 +74,17 @@ export default function Step1Identifiers(props: StepProps) {
   const [cacheLoading, setCacheLoading] = useState(true)
   const [cacheError, setCacheError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+
+  // P.2 — coerce path to 'have-code' when no Amazon channels are
+  // selected. The exemption paths are hidden in that case; if a
+  // resumed wizard had 'apply-now' set under a previous channel set,
+  // this prevents the path picker from showing nothing checked.
+  useEffect(() => {
+    if (!hasAmazon && path !== 'have-code') {
+      setPath('have-code')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasAmazon])
 
   // Look up an existing approved or pending exemption for this brand
   // + marketplace combo. If approved, we suggest the user skip
@@ -221,6 +240,10 @@ export default function Step1Identifiers(props: StepProps) {
           </div>
         </Option>
 
+        {/* P.2 — exemption paths only matter when an Amazon channel
+            is selected. eBay / Shopify / Woo handle identifiers
+            differently and don't have Amazon's brand-exemption flow. */}
+        {hasAmazon && (
         <Option
           checked={path === 'have-exemption'}
           onChange={() => setPath('have-exemption')}
@@ -252,7 +275,9 @@ export default function Step1Identifiers(props: StepProps) {
             )}
           </div>
         </Option>
+        )}
 
+        {hasAmazon && (
         <Option
           checked={path === 'apply-now'}
           onChange={() => setPath('apply-now')}
@@ -265,6 +290,16 @@ export default function Step1Identifiers(props: StepProps) {
             appears below once you select this path.
           </p>
         </Option>
+        )}
+
+        {!hasAmazon && (
+          <div className="text-[11px] text-slate-500 px-2 py-1.5 italic">
+            No Amazon channels selected — only the GTIN/UPC/EAN code
+            path is shown here. Brand exemptions are an Amazon-only
+            concept; eBay / Shopify / WooCommerce handle identifiers
+            without an exemption flow.
+          </div>
+        )}
       </div>
 
       {/* Phase L.1 — GTIN exemption form embedded inline when the user
