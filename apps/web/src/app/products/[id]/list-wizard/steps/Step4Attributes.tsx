@@ -141,6 +141,10 @@ export default function Step4Attributes({
   )
   const [showAllOptional, setShowAllOptional] = useState(false)
   const [aiBusyFields, setAiBusyFields] = useState<Set<string>>(new Set())
+  // M.1 — tabbed view. activeTab is either 'base' (Shared base
+  // editor) or a channel key like "AMAZON:IT". Marketplace sub-tabs
+  // are derived from the active platform on render.
+  const [activeTab, setActiveTab] = useState<string>('base')
   // L.4 — translate-busy keys are "<fieldId>:<channelKey>" so per-
   // channel translate buttons can spin independently.
   const [translateBusy, setTranslateBusy] = useState<Set<string>>(new Set())
@@ -532,68 +536,86 @@ export default function Step4Attributes({
         </div>
       )}
 
+      {/* M.1 — tab navigation: Shared base + per-platform tabs */}
       {manifest && manifest.fields.length > 0 && (
-        <div className="space-y-3">
-          {manifest.fields.map((field) => {
-            const fieldUnsatisfied = unsatisfied
-              .filter((u) => u.id === field.id)
-              .map((u) => u.channelKey)
-            return (
-              <FieldCard
-                key={field.id}
-                field={field}
-                baseValue={values[field.id]}
-                onBaseChange={(v) => setBase(field.id, v)}
-                onAIGenerate={
-                  AI_SUPPORTED_FIELDS.has(field.id)
-                    ? () => aiGenerate(field.id)
-                    : undefined
-                }
-                aiBusy={aiBusyFields.has(field.id)}
-                onTranslate={onTranslate}
-                translateBusy={translateBusy}
-                overrides={Object.fromEntries(
-                  Object.entries(overrides).map(([k, slice]) => [
-                    k,
-                    slice[field.id],
-                  ]),
-                )}
-                onOverrideChange={(channelKey, v) =>
-                  setOverride(channelKey, field.id, v)
-                }
-                variations={manifest.variations}
-                variantValues={Object.fromEntries(
-                  manifest.variations.map((v) => [
-                    v.id,
-                    variantAttrs[v.id]?.[field.id],
-                  ]),
-                )}
-                onVariantChange={(variationId, v) => {
-                  setVariantAttrs((prev) => {
-                    const slice = { ...(prev[variationId] ?? {}) }
-                    if (v === undefined || v === '' || v === null) {
-                      delete slice[field.id]
-                    } else {
-                      slice[field.id] = v
-                    }
-                    return { ...prev, [variationId]: slice }
-                  })
-                }}
-                variantsExpanded={expandedVariants.has(field.id)}
-                onToggleVariants={() =>
-                  setExpandedVariants((prev) => {
-                    const next = new Set(prev)
-                    if (next.has(field.id)) next.delete(field.id)
-                    else next.add(field.id)
-                    return next
-                  })
-                }
-                expanded={expandedFields.has(field.id)}
-                onToggleExpanded={() => toggleExpanded(field.id)}
-                unsatisfiedChannels={fieldUnsatisfied}
-              />
+        <AttributesTabStrip
+          channels={channels}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          unsatisfied={unsatisfied}
+        />
+      )}
+
+      {manifest && manifest.fields.length > 0 && (
+        <div className="space-y-3 mt-3">
+          {manifest.fields
+            .filter((field) =>
+              activeTab === 'base'
+                ? true
+                : field.requiredFor.includes(activeTab) ||
+                  field.optionalFor.includes(activeTab),
             )
-          })}
+            .map((field) => {
+              const fieldUnsatisfied = unsatisfied
+                .filter((u) => u.id === field.id)
+                .map((u) => u.channelKey)
+              return (
+                <FieldCard
+                  key={field.id}
+                  field={field}
+                  viewMode={activeTab === 'base' ? 'base' : { channelKey: activeTab }}
+                  baseValue={values[field.id]}
+                  onBaseChange={(v) => setBase(field.id, v)}
+                  onAIGenerate={
+                    AI_SUPPORTED_FIELDS.has(field.id)
+                      ? () => aiGenerate(field.id)
+                      : undefined
+                  }
+                  aiBusy={aiBusyFields.has(field.id)}
+                  onTranslate={onTranslate}
+                  translateBusy={translateBusy}
+                  overrides={Object.fromEntries(
+                    Object.entries(overrides).map(([k, slice]) => [
+                      k,
+                      slice[field.id],
+                    ]),
+                  )}
+                  onOverrideChange={(channelKey, v) =>
+                    setOverride(channelKey, field.id, v)
+                  }
+                  variations={manifest.variations}
+                  variantValues={Object.fromEntries(
+                    manifest.variations.map((v) => [
+                      v.id,
+                      variantAttrs[v.id]?.[field.id],
+                    ]),
+                  )}
+                  onVariantChange={(variationId, v) => {
+                    setVariantAttrs((prev) => {
+                      const slice = { ...(prev[variationId] ?? {}) }
+                      if (v === undefined || v === '' || v === null) {
+                        delete slice[field.id]
+                      } else {
+                        slice[field.id] = v
+                      }
+                      return { ...prev, [variationId]: slice }
+                    })
+                  }}
+                  variantsExpanded={expandedVariants.has(field.id)}
+                  onToggleVariants={() =>
+                    setExpandedVariants((prev) => {
+                      const next = new Set(prev)
+                      if (next.has(field.id)) next.delete(field.id)
+                      else next.add(field.id)
+                      return next
+                    })
+                  }
+                  expanded={expandedFields.has(field.id)}
+                  onToggleExpanded={() => toggleExpanded(field.id)}
+                  unsatisfiedChannels={fieldUnsatisfied}
+                />
+              )
+            })}
         </div>
       )}
 
@@ -633,6 +655,7 @@ export default function Step4Attributes({
 
 function FieldCard({
   field,
+  viewMode,
   baseValue,
   onBaseChange,
   overrides,
@@ -651,6 +674,7 @@ function FieldCard({
   translateBusy,
 }: {
   field: UnionField
+  viewMode: 'base' | { channelKey: string }
   baseValue: Primitive | undefined
   onBaseChange: (v: Primitive) => void
   overrides: Record<string, Primitive | undefined>
@@ -669,6 +693,17 @@ function FieldCard({
   translateBusy?: Set<string>
 }) {
   const supportsAI = AI_SUPPORTED_FIELDS.has(field.id)
+  const isChannelView = typeof viewMode === 'object'
+  const activeChannelKey = isChannelView ? viewMode.channelKey : null
+  const isRequiredHere =
+    activeChannelKey !== null && field.requiredFor.includes(activeChannelKey)
+  const isOptionalHere =
+    activeChannelKey !== null && field.optionalFor.includes(activeChannelKey)
+  const channelOverrideValue = activeChannelKey
+    ? overrides[activeChannelKey]
+    : undefined
+  const channelInherits =
+    isChannelView && isEmpty(channelOverrideValue) && !isEmpty(baseValue)
   const hasUnsatisfied = unsatisfiedChannels.length > 0
   const overrideCount = Object.values(overrides).filter(
     (v) => !isEmpty(v),
@@ -689,23 +724,49 @@ function FieldCard({
       <div className="mb-1.5 flex items-baseline justify-between gap-3 flex-wrap">
         <label className="text-[13px] font-medium text-slate-900">
           {field.label}
-          <span className="text-rose-600 ml-0.5">*</span>
+          {(viewMode === 'base'
+            ? field.requiredFor.length > 0
+            : isRequiredHere) && <span className="text-rose-600 ml-0.5">*</span>}
           <span className="ml-2 text-[11px] font-mono font-normal text-slate-400">
             {field.id}
           </span>
         </label>
         <div className="flex items-center gap-1.5 flex-wrap">
-          {field.requiredFor.length > 0 && (
-            <ChannelTagGroup
-              tone="required"
-              channels={field.requiredFor}
-            />
-          )}
-          {field.optionalFor.length > 0 && (
-            <ChannelTagGroup
-              tone="optional"
-              channels={field.optionalFor}
-            />
+          {/* In Shared base view, show all channel chips so the user
+              sees the full surface. In a per-channel view, show only a
+              single status badge for the active channel. */}
+          {viewMode === 'base' ? (
+            <>
+              {field.requiredFor.length > 0 && (
+                <ChannelTagGroup
+                  tone="required"
+                  channels={field.requiredFor}
+                />
+              )}
+              {field.optionalFor.length > 0 && (
+                <ChannelTagGroup
+                  tone="optional"
+                  channels={field.optionalFor}
+                />
+              )}
+            </>
+          ) : (
+            <span
+              className={cn(
+                'text-[10px] uppercase tracking-wide font-medium px-1.5 py-0.5 border rounded',
+                isRequiredHere
+                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                  : isOptionalHere
+                  ? 'bg-slate-50 text-slate-600 border-slate-200'
+                  : 'bg-slate-50 text-slate-400 border-slate-200',
+              )}
+            >
+              {isRequiredHere
+                ? 'Required'
+                : isOptionalHere
+                ? 'Optional'
+                : 'Not used'}
+            </span>
           )}
         </div>
       </div>
@@ -739,7 +800,65 @@ function FieldCard({
         </div>
       )}
 
-      <FieldInput field={field} value={baseValue} onChange={onBaseChange} />
+      {viewMode === 'base' ? (
+        <FieldInput field={field} value={baseValue} onChange={onBaseChange} />
+      ) : (
+        // M.1 — channel-tab view: render the channel's override
+        // value as the primary input. Empty falls through to the
+        // base value (placeholder shows the inheritance source).
+        <div className="flex items-center gap-2">
+          <div className="flex-1">
+            <FieldInput
+              field={field}
+              value={channelOverrideValue}
+              onChange={(v) =>
+                onOverrideChange(activeChannelKey!, v)
+              }
+              placeholder={
+                channelInherits
+                  ? `Inherits base: ${formatValue(baseValue)}`
+                  : '— (leave empty to use base)'
+              }
+            />
+          </div>
+          <OverrideMenu
+            channelKey={activeChannelKey!}
+            hasBase={!isEmpty(baseValue)}
+            otherChannels={Object.entries(overrides)
+              .filter(([k, v]) => k !== activeChannelKey && !isEmpty(v))
+              .map(([k]) => k)}
+            otherValues={Object.fromEntries(
+              Object.entries(overrides)
+                .filter(([k, v]) => k !== activeChannelKey && !isEmpty(v))
+                .map(([k, v]) => [k, v as Primitive]),
+            )}
+            hasValue={!isEmpty(channelOverrideValue)}
+            supportsTranslate={
+              AI_SUPPORTED_FIELDS.has(field.id) && !isEmpty(baseValue)
+            }
+            translateBusy={
+              translateBusy?.has(`${field.id}:${activeChannelKey}`) ?? false
+            }
+            onCopyFromBase={() => {
+              if (!isEmpty(baseValue)) {
+                onOverrideChange(activeChannelKey!, baseValue as Primitive)
+              }
+            }}
+            onCopyFrom={(sourceKey) => {
+              const v = overrides[sourceKey]
+              if (!isEmpty(v)) {
+                onOverrideChange(activeChannelKey!, v as Primitive)
+              }
+            }}
+            onTranslate={() =>
+              onTranslate?.(field.id, activeChannelKey!)
+            }
+            onClear={() =>
+              onOverrideChange(activeChannelKey!, undefined)
+            }
+          />
+        </div>
+      )}
 
       {field.examples && field.examples.length > 0 && field.kind !== 'enum' && (
         <p className="mt-1.5 text-[11px] text-slate-400">
@@ -748,11 +867,17 @@ function FieldCard({
       )}
       {field.maxLength && field.kind !== 'enum' && (
         <p className="mt-1 text-[11px] text-slate-400">
-          {currentLength(baseValue)} / {field.maxLength} characters
+          {currentLength(
+            viewMode === 'base' ? baseValue : channelOverrideValue,
+          )}{' '}
+          / {field.maxLength} characters
         </p>
       )}
 
-      {field.requiredFor.length > 1 && (
+      {/* "Override per channel" expandable only relevant in Shared
+          base view — channel-specific tabs already focus the user on
+          one channel. */}
+      {viewMode === 'base' && field.requiredFor.length > 1 && (
         <div className="mt-3 border-t border-slate-100 pt-2">
           <button
             type="button"
@@ -1128,6 +1253,177 @@ async function fetchPatch(
   } catch {
     /* swallow — caller's debounce will retry on next change */
   }
+}
+
+// M.1 — platform tabs at top, marketplace sub-tabs below.
+function AttributesTabStrip({
+  channels,
+  activeTab,
+  onTabChange,
+  unsatisfied,
+}: {
+  channels: Array<{ platform: string; marketplace: string }>
+  activeTab: string
+  onTabChange: (tab: string) => void
+  unsatisfied: Array<{ id: string; channelKey: string }>
+}) {
+  // Group channels by platform → list of marketplaces.
+  const byPlatform = useMemo(() => {
+    const m = new Map<string, string[]>()
+    for (const c of channels) {
+      const arr = m.get(c.platform) ?? []
+      arr.push(c.marketplace)
+      m.set(c.platform, arr)
+    }
+    return Array.from(m.entries())
+  }, [channels])
+
+  const unsatisfiedByChannel = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const u of unsatisfied) {
+      counts.set(u.channelKey, (counts.get(u.channelKey) ?? 0) + 1)
+    }
+    return counts
+  }, [unsatisfied])
+
+  // Active platform — derived from active tab when it's a channel key.
+  const activePlatform = activeTab === 'base'
+    ? null
+    : activeTab.split(':')[0]
+
+  return (
+    <div className="border-b border-slate-200">
+      {/* Top row — Shared base + one tab per platform */}
+      <div className="flex items-end gap-1 overflow-x-auto">
+        <TabButton
+          label="Shared base"
+          active={activeTab === 'base'}
+          onClick={() => onTabChange('base')}
+        />
+        {byPlatform.map(([platform, marketplaces]) => {
+          const isActive =
+            activeTab !== 'base' && activeTab.startsWith(`${platform}:`)
+          // Total unsatisfied across this platform's channels.
+          const total = marketplaces.reduce(
+            (sum, m) =>
+              sum + (unsatisfiedByChannel.get(`${platform}:${m}`) ?? 0),
+            0,
+          )
+          return (
+            <TabButton
+              key={platform}
+              label={platform}
+              active={isActive}
+              badge={total > 0 ? String(total) : undefined}
+              onClick={() => {
+                // Activate this platform's first marketplace by
+                // default. If the user was already on this platform's
+                // tab, leave the active sub-tab as-is.
+                if (!isActive) {
+                  const first = marketplaces[0]
+                  if (first) onTabChange(`${platform}:${first}`)
+                }
+              }}
+            />
+          )
+        })}
+      </div>
+
+      {/* Sub-row — marketplaces for the active platform */}
+      {activePlatform && (
+        <div className="flex items-center gap-1 px-2 py-1.5 bg-slate-50 border-t border-slate-100 overflow-x-auto">
+          {byPlatform
+            .find(([p]) => p === activePlatform)?.[1]
+            .map((m) => {
+              const channelKey = `${activePlatform}:${m}`
+              const isActive = activeTab === channelKey
+              const count = unsatisfiedByChannel.get(channelKey) ?? 0
+              return (
+                <SubTabButton
+                  key={m}
+                  label={m}
+                  active={isActive}
+                  badge={count > 0 ? String(count) : undefined}
+                  onClick={() => onTabChange(channelKey)}
+                />
+              )
+            })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TabButton({
+  label,
+  active,
+  badge,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  badge?: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'px-3 py-2 text-[12px] font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 flex-shrink-0',
+        active
+          ? 'border-blue-600 text-blue-700'
+          : 'border-transparent text-slate-600 hover:text-slate-900',
+      )}
+    >
+      {label}
+      {badge && (
+        <span
+          className={cn(
+            'text-[10px] font-mono px-1 rounded',
+            active
+              ? 'bg-amber-100 text-amber-700'
+              : 'bg-amber-50 text-amber-600',
+          )}
+          title={`${badge} required field${badge === '1' ? '' : 's'} unsatisfied`}
+        >
+          {badge}
+        </span>
+      )}
+    </button>
+  )
+}
+
+function SubTabButton({
+  label,
+  active,
+  badge,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  badge?: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'h-7 px-2 text-[11px] font-mono font-medium rounded inline-flex items-center gap-1.5 transition-colors flex-shrink-0',
+        active
+          ? 'bg-blue-100 text-blue-800'
+          : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900',
+      )}
+    >
+      {label}
+      {badge && (
+        <span className="text-[10px] bg-amber-100 text-amber-700 px-1 rounded">
+          {badge}
+        </span>
+      )}
+    </button>
+  )
 }
 
 function OverrideMenu({
