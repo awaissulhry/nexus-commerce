@@ -1651,23 +1651,11 @@ export default function BulkOperationsClient() {
   const dynamicColumns = useMemo<ColumnDef<BulkProduct>[]>(() => {
     const out: ColumnDef<BulkProduct>[] = []
     for (const g of groupedFields) {
-      if (collapsedGroups.has(g.key)) {
-        // Single placeholder column stands in for the whole group so
-        // the body doesn't render any of its cells. Click the band
-        // chip to expand.
-        const hiddenCount = g.fields.length
-        out.push({
-          id: `__group_${g.key}`,
-          header: '',
-          size: 80,
-          cell: () => (
-            <span className="px-2 text-[10px] italic text-slate-400 truncate">
-              — {hiddenCount} hidden —
-            </span>
-          ),
-        } as ColumnDef<BulkProduct>)
-        continue
-      }
+      // CC.2 — collapsed groups vanish from the column header + body
+      // entirely. The chip stays in the band (rendered separately
+      // below) as a discoverable affordance. No more placeholder
+      // column / "{N} hidden" filler.
+      if (collapsedGroups.has(g.key)) continue
       for (const field of g.fields) {
         out.push(buildColumnFromField(field))
       }

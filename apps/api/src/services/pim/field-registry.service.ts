@@ -66,7 +66,11 @@ const UNIVERSAL_FIELDS: FieldDefinition[] = [
   { id: 'brand', label: 'Brand', type: 'text', category: 'universal', editable: true, width: 160 },
   { id: 'manufacturer', label: 'Manufacturer', type: 'text', category: 'universal', editable: true, width: 160 },
   { id: 'status', label: 'Status', type: 'select', options: ['ACTIVE', 'DRAFT', 'INACTIVE'], category: 'universal', editable: true, width: 110 },
-  { id: 'productType', label: 'Product Type', type: 'text', category: 'universal', editable: false, width: 130, helpText: 'Set via Amazon import; drives category-specific fields' },
+  // CC.1 — productType is now editable (master-level). Drives the
+  // schema-driven attribute set; per-listing override still happens
+  // via Q.5's platformAttributes.productType in the per-product
+  // editor's Listing Setup card.
+  { id: 'productType', label: 'Product Type', type: 'text', category: 'universal', editable: true, width: 160, helpText: 'Master Amazon productType — drives category-specific attribute fields. Per-channel overrides happen in the per-product editor.' },
   // D.5: description is HTML-string content shown on listings. Made
   // editable in the registry primarily for the ZIP-upload path
   // (description.html files); the spreadsheet grid can edit it too,
@@ -148,6 +152,18 @@ const AMAZON_FIELDS: FieldDefinition[] = [
   { id: 'amazon_bullets', label: 'Amazon Bullets', type: 'text', channel: 'AMAZON', category: 'amazon', editable: false, width: 300, helpText: 'Bullet array writes ship in a follow-up phase' },
   { id: 'amazon_searchKeywords', label: 'Search Keywords', type: 'text', channel: 'AMAZON', category: 'amazon', editable: false, width: 250, helpText: 'No backing column yet' },
   { id: 'amazon_browseNode', label: 'Browse Node', type: 'text', channel: 'AMAZON', category: 'amazon', editable: false, width: 130, helpText: 'No backing column yet' },
+  // CC.1 — variation theme stored on ChannelListing.variationTheme;
+  // editable across both channels via the same column.
+  {
+    id: 'amazon_variationTheme',
+    label: 'Variation Theme',
+    type: 'text',
+    channel: 'AMAZON',
+    category: 'amazon',
+    editable: true,
+    width: 180,
+    helpText: 'ChannelListing.variationTheme — e.g. SIZE, COLOR, SIZE_NAME/COLOR_NAME. Defines how variant axes report to Amazon.',
+  },
 ]
 
 const EBAY_FIELDS: FieldDefinition[] = [
@@ -173,6 +189,18 @@ const EBAY_FIELDS: FieldDefinition[] = [
   },
   { id: 'ebay_format', label: 'Listing Format', type: 'select', options: ['FixedPrice', 'Auction', 'StoreInventory'], channel: 'EBAY', category: 'ebay', editable: false, width: 130, helpText: 'No backing column yet' },
   { id: 'ebay_duration', label: 'Duration', type: 'select', options: ['GTC', 'Days_7', 'Days_30'], channel: 'EBAY', category: 'ebay', editable: false, width: 100, helpText: 'No backing column yet' },
+  // CC.1 — same variationTheme column on ChannelListing, surfaced
+  // per-channel for parity with amazon_variationTheme.
+  {
+    id: 'ebay_variationTheme',
+    label: 'Variation Theme',
+    type: 'text',
+    channel: 'EBAY',
+    category: 'ebay',
+    editable: true,
+    width: 180,
+    helpText: 'ChannelListing.variationTheme — defines how variant axes report to eBay.',
+  },
 ]
 
 // ── Category-specific (e.g. OUTERWEAR, HELMET) ────────────────────────

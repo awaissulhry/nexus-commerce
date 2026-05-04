@@ -502,6 +502,10 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       'gtin',
       'status',
       'fulfillmentChannel',
+      // CC.1 — master Amazon productType. Drives the schema-driven
+      // attribute set; per-listing override stays in
+      // platformAttributes.productType (Q.5).
+      'productType',
     ])
     // D.3d: prefixed channel fields write to ChannelListing instead of
     // Product. Only the suffixes in this set are wired today; the rest
@@ -511,6 +515,10 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       amazon_description: 'description',
       ebay_title: 'title',
       ebay_description: 'description',
+      // CC.1 — variationTheme on ChannelListing, surfaced per-channel
+      // in the registry. Same target column for both prefixes.
+      amazon_variationTheme: 'variationTheme',
+      ebay_variationTheme: 'variationTheme',
     }
     const isChannelField = (f: string) =>
       Object.prototype.hasOwnProperty.call(CHANNEL_FIELD_MAP, f)
