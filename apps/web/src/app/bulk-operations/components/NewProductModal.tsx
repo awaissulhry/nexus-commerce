@@ -5,6 +5,7 @@ import { AlertCircle, Loader2, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import ProductTypePicker from '@/components/products/ProductTypePicker'
 
 type Mode = 'parent' | 'variant'
 
@@ -43,6 +44,13 @@ export default function NewProductModal({
   const [basePrice, setBasePrice] = useState('0')
   const [totalStock, setTotalStock] = useState('0')
   const [productType, setProductType] = useState('')
+  // X.4 — channel + marketplace context drives the product-type
+  // picker. Defaults to AMAZON:IT (Xavia primary market) so the most
+  // common case loads without the user having to fill them in first.
+  const [pickerChannel, setPickerChannel] = useState<
+    'AMAZON' | 'EBAY'
+  >('AMAZON')
+  const [pickerMarketplace, setPickerMarketplace] = useState<string>('IT')
   const [parentId, setParentId] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -241,19 +249,59 @@ export default function NewProductModal({
           </Field>
 
           {mode === 'parent' ? (
-            <Field label="Product type *">
-              <input
-                type="text"
-                value={productType}
-                onChange={(e) => setProductType(e.target.value)}
-                placeholder="e.g. OUTERWEAR, MOTORCYCLE_PROTECTIVE_GEAR"
-                className={cn(inputCls, 'font-mono')}
-              />
-              <p className="mt-1 text-[10px] text-slate-500">
-                Drives the schema-driven attribute set. Use the Amazon
-                productType identifier; can be edited later.
-              </p>
-            </Field>
+            <>
+              {/* X.4 — channel + marketplace context for the picker.
+                  Side-by-side selectors so the dropdown below has a
+                  source. Defaults to AMAZON:IT. */}
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Channel">
+                  <select
+                    value={pickerChannel}
+                    onChange={(e) =>
+                      setPickerChannel(
+                        e.target.value as 'AMAZON' | 'EBAY',
+                      )
+                    }
+                    className={inputCls}
+                  >
+                    <option value="AMAZON">Amazon</option>
+                    <option value="EBAY">eBay</option>
+                  </select>
+                </Field>
+                <Field label="Marketplace">
+                  <select
+                    value={pickerMarketplace}
+                    onChange={(e) => setPickerMarketplace(e.target.value)}
+                    className={inputCls}
+                  >
+                    <option value="IT">Italy (IT)</option>
+                    <option value="DE">Germany (DE)</option>
+                    <option value="FR">France (FR)</option>
+                    <option value="ES">Spain (ES)</option>
+                    <option value="UK">United Kingdom (UK)</option>
+                    <option value="NL">Netherlands (NL)</option>
+                    <option value="SE">Sweden (SE)</option>
+                    <option value="PL">Poland (PL)</option>
+                    <option value="US">United States (US)</option>
+                  </select>
+                </Field>
+              </div>
+
+              <Field label="Product type *">
+                <ProductTypePicker
+                  channel={pickerChannel}
+                  marketplace={pickerMarketplace}
+                  value={productType}
+                  onChange={setProductType}
+                  placeholder={`Pick a ${pickerChannel} product type`}
+                />
+                <p className="mt-1 text-[10px] text-slate-500">
+                  Drives the schema-driven attribute set. Pick from the
+                  channel's live taxonomy — refresh in the picker if
+                  Amazon's list seems stale.
+                </p>
+              </Field>
+            </>
           ) : (
             <Field label="Initial stock">
               <input

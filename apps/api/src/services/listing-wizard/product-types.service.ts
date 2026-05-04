@@ -69,36 +69,71 @@ export class ProductTypesService {
     private readonly schemas: CategorySchemaService,
   ) {}
 
+  /** X.2 — in-memory cache of the FULL Amazon productType list per
+   *  marketplace. The SP-API call is identical regardless of search
+   *  term (we get the full list and filter client-side), so caching
+   *  by `${marketplace}` collapses N keystrokes into one network hit
+   *  for the lifetime of a TTL.
+   *
+   *  Cache misses trigger a fresh fetch; cache hits return the stored
+   *  array and pay the filter cost in-process. `forceRefresh` from
+   *  the route bypasses on demand (UI "Refresh" button).
+   */
+  private listCache = new Map<
+    string,
+    { items: ProductTypeListItem[]; expiresAt: number }
+  >()
+  private static readonly LIST_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
+
   // ── 1. List ────────────────────────────────────────────────────
 
   async listProductTypes(opts: {
     channel: string
     marketplace: string | null
     search?: string
+    /** X.2 — bypass the in-memory cache (UI manual-refresh path). */
+    forceRefresh?: boolean
   }): Promise<ProductTypeListItem[]> {
     const channel = opts.channel.toUpperCase()
     if (channel !== 'AMAZON') {
-      // For now only Amazon has a meaningful productType taxonomy in
-      // this pipeline. Shopify/Woo skip Step 3 entirely; eBay is
-      // blocked behind Phase 2A.
       return []
     }
 
     const search = opts.search?.trim().toLowerCase() ?? ''
+    const cacheKey = `AMAZON:${opts.marketplace ?? '*'}`
 
-    // Try the live SP-API search first when configured. It returns
-    // marketplace-specific results and is keyword-aware, so it beats
-    // the bundled list when available. If anything goes wrong (no
-    // creds, network, throttle), fall back to the bundled list silently.
+    // Cache hit — apply the search client-side and return.
+    if (!opts.forceRefresh) {
+      const cached = this.listCache.get(cacheKey)
+      if (cached && cached.expiresAt > Date.now()) {
+        return search
+          ? cached.items.filter((i) => itemMatchesSearch(i, search))
+          : cached.items
+      }
+    }
+
+    // Cache miss / expired / forced — fetch the FULL list from SP-API
+    // (no search keywords) and store. Live results are then filtered
+    // for the request's search term, but the cache keeps the unfiltered
+    // payload so subsequent searches don't re-fetch.
     const live = await this.fetchLiveAmazonProductTypes({
       marketplace: opts.marketplace,
-      search,
+      search: '',
     }).catch(() => null)
 
     if (live && live.length > 0) {
-      return live
+      this.listCache.set(cacheKey, {
+        items: live,
+        expiresAt: Date.now() + ProductTypesService.LIST_TTL_MS,
+      })
+      return search
+        ? live.filter((i) => itemMatchesSearch(i, search))
+        : live
     }
 
+    // SP-API unavailable / unconfigured — bundled fallback. Don't
+    // cache the bundled list (it's already in-memory) so a SP-API
+    // recovery is picked up on the next call.
     return this.searchBundled(search)
   }
 
@@ -291,6 +326,21 @@ function matchesSearch(b: BundledProductType, search: string): boolean {
   if (b.productType.toLowerCase().includes(search)) return true
   if (b.displayName.toLowerCase().includes(search)) return true
   return b.keywords.some((k) => k.toLowerCase().includes(search))
+}
+
+/** X.2 — filter a cached list of ProductTypeListItem by typed search.
+ *  Mirrors matchesSearch's logic but operates on the (productType,
+ *  displayName) pair we get back from SP-API. No keywords field, so
+ *  this matches against just those two surfaces. */
+function itemMatchesSearch(
+  i: ProductTypeListItem,
+  search: string,
+): boolean {
+  if (!search) return true
+  const lower = search.toLowerCase()
+  if (i.productType.toLowerCase().includes(lower)) return true
+  if (i.displayName.toLowerCase().includes(lower)) return true
+  return false
 }
 
 function humanise(productType: string): string {

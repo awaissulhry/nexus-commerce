@@ -613,6 +613,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       channel?: string
       marketplace?: string
       search?: string
+      refresh?: string
     }
     if (!q.channel) {
       return reply.code(400).send({ error: 'channel is required' })
@@ -622,6 +623,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         channel: q.channel,
         marketplace: q.marketplace ?? null,
         search: q.search,
+        forceRefresh: q.refresh === '1' || q.refresh === 'true',
       })
       return { items, count: items.length }
     } catch (err) {

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, CheckCircle2, Copy, Loader2, RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import ProductTypePicker from '@/components/products/ProductTypePicker'
 import ChannelGroupsManager, {
   type ChannelGroup,
 } from '../[id]/list-wizard/components/ChannelGroupsManager'
@@ -940,6 +941,8 @@ export default function ChannelFieldEditor({
         productType={setupValues.productType}
         variationTheme={setupValues.variationTheme}
         masterProductType={(product?.productType as string | undefined) ?? ''}
+        channel={channel}
+        marketplace={marketplace}
         onChange={setSetup}
       />
 
@@ -1275,37 +1278,50 @@ function ListingSetupCard({
   productType,
   variationTheme,
   masterProductType,
+  channel,
+  marketplace,
   onChange,
 }: {
   productType: string
   variationTheme: string
   masterProductType: string
+  channel: string
+  marketplace: string
   onChange: (key: 'productType' | 'variationTheme', value: string) => void
 }) {
   const inheriting =
     productType === '' ||
     (productType === masterProductType && masterProductType !== '')
+  // X.4 — Picker is Amazon-only today; for other channels keep the
+  // free-text fallback. Cast through the picker's union so non-Amazon
+  // channels render the manual-entry path it ships with.
+  const pickerChannel = channel.toUpperCase() as
+    | 'AMAZON'
+    | 'EBAY'
+    | 'SHOPIFY'
+    | 'WOOCOMMERCE'
+    | 'ETSY'
   return (
     <div className="border border-slate-200 rounded-lg bg-white px-4 py-3">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
         <div className="space-y-1">
           <label className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
-            Amazon product type
+            {channel} product type
           </label>
-          <input
-            type="text"
+          <ProductTypePicker
+            channel={pickerChannel}
+            marketplace={marketplace}
             value={productType}
-            onChange={(e) => onChange('productType', e.target.value)}
+            onChange={(v) => onChange('productType', v)}
             placeholder={
               masterProductType
                 ? `Inherits master: ${masterProductType}`
-                : 'e.g. OUTERWEAR, MOTORCYCLE_PROTECTIVE_GEAR'
+                : `Pick a ${channel} product type`
             }
-            className="w-full h-8 px-2 text-[13px] font-mono border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
           <p className="text-[10px] text-slate-400">
             {inheriting
-              ? 'Using the master product’s product type. Override here if this listing should map to a different Amazon category.'
+              ? 'Using the master product’s product type. Override here if this listing should map to a different category.'
               : 'Per-listing override active. Schema below reflects this product type.'}
           </p>
         </div>
