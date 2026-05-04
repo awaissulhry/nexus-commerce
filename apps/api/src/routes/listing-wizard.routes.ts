@@ -505,23 +505,76 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         orderBy: { updatedAt: 'desc' },
       })
 
-      // Coverage check: each selected (marketplace, productType)
-      // counts as covered when there's an APPROVED exemption with
-      // the same productType OR with productType = NULL (legacy
-      // any-category match) for that marketplace.
-      const allCovered = amazonChannels.every((c) => {
+      // P.1 — per-channel resolution. Each Amazon channel reports
+      // its own status given the productType picked for that channel
+      // (or the fallback). The top-level `needed` flag is the union
+      // — true when ANY channel still needs an application.
+      type PerChannelStatus = {
+        needed: boolean
+        reason:
+          | 'has_gtin'
+          | 'existing_exemption'
+          | 'in_progress'
+          | 'needed'
+          | 'no_product_type'
+        applicationId?: string
+        status?: string
+      }
+      const perChannel: Record<string, PerChannelStatus> = {}
+      for (const c of amazonChannels) {
+        const channelKey = `${c.platform}:${c.marketplace}`
         const wantProductType = productTypeByMarketplace.get(c.marketplace) ?? null
-        return exemptions.some(
+
+        if (!wantProductType) {
+          perChannel[channelKey] = {
+            needed: true,
+            reason: 'no_product_type',
+          }
+          continue
+        }
+
+        const approved = exemptions.find(
           (e) =>
             e.marketplace === c.marketplace &&
             e.status === 'APPROVED' &&
-            (e.productType === null ||
-              (wantProductType !== null && e.productType === wantProductType)),
+            (e.productType === null || e.productType === wantProductType),
         )
-      })
+        if (approved) {
+          perChannel[channelKey] = {
+            needed: false,
+            reason: 'existing_exemption',
+            applicationId: approved.id,
+          }
+          continue
+        }
 
+        const pending = exemptions.find(
+          (e) =>
+            e.marketplace === c.marketplace &&
+            (e.productType === null || e.productType === wantProductType) &&
+            (e.status === 'SUBMITTED' ||
+              e.status === 'PACKAGE_READY' ||
+              e.status === 'DRAFT'),
+        )
+        if (pending) {
+          perChannel[channelKey] = {
+            needed: true,
+            reason: 'in_progress',
+            applicationId: pending.id,
+            status: pending.status,
+          }
+          continue
+        }
+
+        perChannel[channelKey] = { needed: true, reason: 'needed' }
+      }
+
+      const allCovered = Object.values(perChannel).every((s) => !s.needed)
+
+      // Backwards-compat: keep the existing top-level fields so the
+      // Step 3 / Step 4 callers don't break. perChannel is the new
+      // primary surface for the Step 2 banners (P.1).
       if (allCovered) {
-        // Pick the most recent approval for the UI banner.
         const latest = exemptions.find((e) => e.status === 'APPROVED')
         return {
           needed: false,
@@ -529,26 +582,24 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           applicationId: latest?.id ?? null,
           brand: product.brand,
           marketplaces: amazonChannels.map((c) => c.marketplace),
+          perChannel,
         }
       }
 
-      // Anything pending? (PACKAGE_READY / SUBMITTED / DRAFT)
-      const pending = exemptions.find(
-        (e) =>
-          e.status === 'SUBMITTED' ||
-          e.status === 'PACKAGE_READY' ||
-          e.status === 'DRAFT',
+      const anyPending = Object.values(perChannel).find(
+        (s) => s.reason === 'in_progress',
       )
-      if (pending) {
+      if (anyPending) {
         return {
           needed: true,
           reason: 'in_progress',
-          applicationId: pending.id,
-          status: pending.status,
+          applicationId: anyPending.applicationId,
+          status: anyPending.status,
+          perChannel,
         }
       }
 
-      return { needed: true, reason: 'needed' }
+      return { needed: true, reason: 'needed', perChannel }
     },
   )
 

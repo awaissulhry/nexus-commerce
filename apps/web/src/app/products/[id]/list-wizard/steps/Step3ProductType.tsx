@@ -127,6 +127,57 @@ export default function Step3ProductType({
     [persistPick],
   )
 
+  // P.1 — per-channel GTIN status. Re-fetches whenever any pick
+  // changes so the user sees the live exemption status (auto-covered
+  // / in-progress / needed) right next to each channel's category
+  // pick. We wait one tick after the persist so the server-side
+  // resolution sees the new productType.
+  const [gtinStatusByChannel, setGtinStatusByChannel] = useState<
+    Record<
+      string,
+      {
+        needed: boolean
+        reason:
+          | 'has_gtin'
+          | 'existing_exemption'
+          | 'in_progress'
+          | 'needed'
+          | 'no_product_type'
+        applicationId?: string
+        status?: string
+      }
+    >
+  >({})
+  useEffect(() => {
+    // Only Amazon channels have GTIN exemption concept.
+    const hasAmazon = channels.some((c) => c.platform === 'AMAZON')
+    if (!hasAmazon) {
+      setGtinStatusByChannel({})
+      return
+    }
+    let cancelled = false
+    // 250ms debounce so rapid pick changes coalesce into one fetch.
+    const t = window.setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/listing-wizard/${wizardId}/gtin-status`,
+        )
+        if (!res.ok) return
+        const json = await res.json()
+        if (cancelled) return
+        if (json && typeof json === 'object' && json.perChannel) {
+          setGtinStatusByChannel(json.perChannel)
+        }
+      } catch {
+        /* swallow — UI just shows no banner */
+      }
+    }, 250)
+    return () => {
+      cancelled = true
+      window.clearTimeout(t)
+    }
+  }, [picks, channels, wizardId])
+
   const toggleExpanded = useCallback((channelKey: string) => {
     setExpanded((prev) => {
       const next = new Set(prev)
@@ -194,6 +245,7 @@ export default function Step3ProductType({
               platform={c.platform}
               marketplace={c.marketplace}
               pick={pick}
+              gtinStatus={gtinStatusByChannel[channelKey]}
               expanded={expanded.has(channelKey)}
               onToggle={() => toggleExpanded(channelKey)}
               onPick={(slice) => setPick(channelKey, slice)}
@@ -253,6 +305,59 @@ export default function Step3ProductType({
   )
 }
 
+// P.1 — GTIN status banner shown inline on the Categories step
+// once a productType has been picked for an Amazon channel.
+function GtinStatusBanner({
+  status,
+}: {
+  status: {
+    needed: boolean
+    reason:
+      | 'has_gtin'
+      | 'existing_exemption'
+      | 'in_progress'
+      | 'needed'
+      | 'no_product_type'
+    applicationId?: string
+    status?: string
+  }
+}) {
+  const tone = !status.needed
+    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+    : status.reason === 'in_progress'
+    ? 'border-amber-200 bg-amber-50 text-amber-800'
+    : 'border-slate-200 bg-slate-50 text-slate-700'
+  const headline = (() => {
+    switch (status.reason) {
+      case 'has_gtin':
+        return 'GTIN already on the product — no exemption needed'
+      case 'existing_exemption':
+        return 'Brand has an approved exemption for this category'
+      case 'in_progress':
+        return `Existing exemption application is ${(status.status ?? 'in progress').toLowerCase()}`
+      case 'no_product_type':
+        return 'Pick a product type before checking GTIN status'
+      default:
+        return 'GTIN exemption needed — Step 3 collects it'
+    }
+  })()
+  return (
+    <div
+      className={cn(
+        'border-t px-4 py-2 text-[11px] inline-flex items-start gap-1.5 w-full',
+        tone,
+      )}
+    >
+      {!status.needed ? (
+        <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 text-emerald-600 flex-shrink-0" />
+      ) : (
+        <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+      )}
+      <span>{headline}</span>
+    </div>
+  )
+}
+
 // ── Non-Amazon row: skipped today ───────────────────────────────
 
 function NonAmazonRow({ channelKey }: { channelKey: string }) {
@@ -280,6 +385,7 @@ function ChannelRow({
   platform,
   marketplace,
   pick,
+  gtinStatus,
   expanded,
   onToggle,
   onPick,
@@ -292,6 +398,17 @@ function ChannelRow({
   platform: string
   marketplace: string
   pick?: ProductTypeSlice
+  gtinStatus?: {
+    needed: boolean
+    reason:
+      | 'has_gtin'
+      | 'existing_exemption'
+      | 'in_progress'
+      | 'needed'
+      | 'no_product_type'
+    applicationId?: string
+    status?: string
+  }
   expanded: boolean
   onToggle: () => void
   onPick: (slice: ProductTypeSlice) => void
@@ -356,6 +473,13 @@ function ChannelRow({
           />
         )}
       </div>
+
+      {/* P.1 — GTIN status banner. Renders only for Amazon channels
+          with a productType picked, since GTIN exemption is Amazon-
+          only and category-aware (post-K.7). */}
+      {hasPick && gtinStatus && (
+        <GtinStatusBanner status={gtinStatus} />
+      )}
 
       {expanded && (
         <div className="border-t border-slate-100">
