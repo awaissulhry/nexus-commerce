@@ -118,16 +118,24 @@ export class EbayCategoryService {
   async searchCategories(
     marketplace: string | null,
     query: string,
-    options?: { forceRefresh?: boolean; limit?: number },
+    options?: {
+      forceRefresh?: boolean
+      limit?: number
+      /** HH — when true, throws on auth/network/API errors instead
+       *  of swallowing them as []. Routes that want to surface a
+       *  real error to the UI pass throwOnError; legacy callers that
+       *  expected silent [] don't, preserving back-compat. */
+      throwOnError?: boolean
+    },
   ): Promise<EbayCategoryListItem[]> {
     const trimmed = query.trim()
     if (trimmed.length < 2) return []
     const marketplaceId = normaliseMarketplace(marketplace)
     const treeId = MARKETPLACE_TREE_IDS[marketplaceId]
     if (treeId === undefined) {
-      console.warn(
-        `[EbayCategoryService] Unknown marketplace: ${marketplaceId}`,
-      )
+      const msg = `Unknown eBay marketplace: ${marketplaceId}. Supported: ${Object.keys(MARKETPLACE_TREE_IDS).join(', ')}`
+      console.warn(`[EbayCategoryService] ${msg}`)
+      if (options?.throwOnError) throw new Error(msg)
       return []
     }
     const cacheKey = `${marketplaceId}:${trimmed.toLowerCase()}`
@@ -141,14 +149,12 @@ export class EbayCategoryService {
     try {
       token = await this.getAccessToken()
     } catch (err) {
-      // No credentials → empty list. Picker shows the standard "no
-      // matches" state and the user can type a raw id via the
-      // existing modal text-input fallback.
+      const msg =
+        err instanceof Error ? err.message : String(err)
       console.warn(
-        `[EbayCategoryService] No token available for searchCategories: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
+        `[EbayCategoryService] No token available for searchCategories: ${msg}`,
       )
+      if (options?.throwOnError) throw new Error(`auth: ${msg}`)
       return []
     }
     const apiBase = process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
@@ -165,18 +171,22 @@ export class EbayCategoryService {
         },
       })
     } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : String(err)
       console.warn(
-        `[EbayCategoryService] searchCategories network error: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
+        `[EbayCategoryService] searchCategories network error: ${msg}`,
       )
+      if (options?.throwOnError) throw new Error(`network: ${msg}`)
       return []
     }
     if (!res.ok) {
       const body = await res.text().catch(() => '')
       console.warn(
-        `[EbayCategoryService] searchCategories ${res.status}: ${body}`,
+        `[EbayCategoryService] searchCategories ${res.status}: ${body.slice(0, 300)}`,
       )
+      if (options?.throwOnError) {
+        throw new Error(`eBay ${res.status}: ${body.slice(0, 200)}`)
+      }
       return []
     }
     const json = (await res.json().catch(() => null)) as {
@@ -225,21 +235,60 @@ export class EbayCategoryService {
   }
 
   /**
-   * Get a valid access token for Taxonomy API calls
-   * Uses the same OAuth2 flow as EbayService
+   * HH — get a valid access token for Taxonomy / Metadata API calls.
+   *
+   * Strategy (in order):
+   *  1. Use the seller's OAuth token from an active EBAY
+   *     ChannelConnection. The user already linked their eBay
+   *     account in Settings — that token is good for Taxonomy +
+   *     Metadata API calls, and refreshes automatically via
+   *     ebayAuthService.
+   *  2. Fall back to a Client Credentials (app-only) token using
+   *     EBAY_APP_ID + EBAY_CERT_ID. Only useful for catalog/taxonomy
+   *     queries, not seller-scoped writes. Skipped when the env
+   *     values are blank or look like the placeholder strings the
+   *     repo's .env.example ships with.
+   *
+   * Both paths fail with a SPECIFIC error message so the route can
+   * surface it to the UI instead of returning an empty list that
+   * looks like "no results."
    */
   private async getAccessToken(): Promise<string> {
-    // Return cached token if still valid (with 60s buffer)
+    // 1. Prefer the seller's OAuth token. We import lazily to avoid
+    //    a circular-import / load-order issue with ebayAuthService.
+    try {
+      const { default: prisma } = await import('../db.js')
+      const conn = await prisma.channelConnection.findFirst({
+        where: { channelType: 'EBAY', isActive: true },
+        orderBy: { updatedAt: 'desc' },
+        select: { id: true, ebayAccessToken: true, ebayRefreshToken: true },
+      })
+      if (conn && conn.ebayAccessToken && conn.ebayRefreshToken) {
+        const { ebayAuthService } = await import('./ebay-auth.service.js')
+        return await ebayAuthService.getValidToken(conn.id)
+      }
+    } catch (err) {
+      // Fall through to client-credentials. Don't swallow — log so
+      // ops can see the connection-token attempt was tried.
+      console.warn(
+        '[EbayCategoryService] Connection-token path failed, falling back to client-credentials:',
+        err instanceof Error ? err.message : String(err),
+      )
+    }
+
+    // 2. Cached client-credentials token still valid?
     if (this.accessToken && Date.now() < this.tokenExpiresAt - 60_000) {
       return this.accessToken;
     }
 
     const appId = process.env.EBAY_APP_ID;
     const certId = process.env.EBAY_CERT_ID;
+    const looksLikePlaceholder = (v?: string) =>
+      !v || v === 'your_app_id' || v === 'your_cert_id' || v.length < 8
 
-    if (!appId || !certId) {
+    if (looksLikePlaceholder(appId) || looksLikePlaceholder(certId)) {
       throw new Error(
-        "EBAY_APP_ID and EBAY_CERT_ID environment variables must be set"
+        'No eBay credentials available. Either link an eBay account in /settings/channels (preferred) or set real EBAY_APP_ID + EBAY_CERT_ID env vars.',
       );
     }
 
@@ -262,7 +311,7 @@ export class EbayCategoryService {
       if (!response.ok) {
         const errorBody = await response.text();
         throw new Error(
-          `eBay OAuth token request failed (${response.status}): ${errorBody}`
+          `eBay OAuth token request failed (${response.status}): ${errorBody.slice(0, 300)}`
         );
       }
 
@@ -488,14 +537,21 @@ export class EbayCategoryService {
   async getCategoryAspectsRich(
     categoryId: string,
     marketplace: string | null,
-    options?: { forceRefresh?: boolean; cacheOnly?: boolean },
+    options?: {
+      forceRefresh?: boolean
+      cacheOnly?: boolean
+      /** HH — propagate auth/network/API errors to the caller
+       *  instead of returning []. The Step 4 schema endpoint sets
+       *  this so the wizard surfaces a real error banner. */
+      throwOnError?: boolean
+    },
   ): Promise<EbayAspectRich[]> {
     const marketplaceId = normaliseMarketplace(marketplace);
     const treeId = MARKETPLACE_TREE_IDS[marketplaceId];
     if (treeId === undefined) {
-      console.warn(
-        `[EbayCategoryService] Unknown marketplace: ${marketplaceId}`,
-      );
+      const msg = `Unknown eBay marketplace: ${marketplaceId}`;
+      console.warn(`[EbayCategoryService] ${msg}`);
+      if (options?.throwOnError) throw new Error(msg);
       return [];
     }
     const key = `${marketplaceId}:${categoryId}`;
@@ -518,11 +574,11 @@ export class EbayCategoryService {
     try {
       token = await this.getAccessToken();
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.warn(
-        `[EbayCategoryService] No token for getCategoryAspectsRich: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
+        `[EbayCategoryService] No token for getCategoryAspectsRich: ${msg}`,
       );
+      if (options?.throwOnError) throw new Error(`auth: ${msg}`);
       return [];
     }
     const apiBase = process.env.EBAY_API_BASE ?? "https://api.ebay.com";
@@ -539,18 +595,21 @@ export class EbayCategoryService {
         },
       });
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.warn(
-        `[EbayCategoryService] getCategoryAspectsRich network error: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
+        `[EbayCategoryService] getCategoryAspectsRich network error: ${msg}`,
       );
+      if (options?.throwOnError) throw new Error(`network: ${msg}`);
       return [];
     }
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       console.warn(
-        `[EbayCategoryService] getCategoryAspectsRich ${res.status}: ${body}`,
+        `[EbayCategoryService] getCategoryAspectsRich ${res.status}: ${body.slice(0, 300)}`,
       );
+      if (options?.throwOnError) {
+        throw new Error(`eBay ${res.status}: ${body.slice(0, 200)}`);
+      }
       return [];
     }
     const json = (await res.json().catch(() => null)) as {

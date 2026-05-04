@@ -445,6 +445,128 @@ export async function ebayRoutes(app: FastifyInstance) {
   );
 
   /**
+   * HH — GET /api/ebay/diagnostics
+   * Quick health check: Does an eBay connection exist? Can we get a
+   * usable token? Does a sample Taxonomy call work? Used by Settings
+   * + future surfacing in the wizard's Step 1 platform card so users
+   * can self-diagnose missing creds without reading server logs.
+   *
+   * Query: ?marketplaceId=EBAY_IT (defaults to EBAY_IT for the smoke
+   * test). Doesn't write anything.
+   */
+  app.get<{ Querystring: { marketplaceId?: string } }>(
+    "/api/ebay/diagnostics",
+    async (request, reply) => {
+      const marketplaceId = request.query.marketplaceId?.trim() || "EBAY_IT";
+      const result: {
+        marketplaceId: string;
+        connection: {
+          present: boolean;
+          isActive: boolean;
+          tokenOk: boolean;
+          tokenError?: string;
+        };
+        envCredentials: {
+          appIdSet: boolean;
+          certIdSet: boolean;
+          looksLikePlaceholder: boolean;
+        };
+        sampleSearch: {
+          ok: boolean;
+          itemCount?: number;
+          error?: string;
+        };
+        recommendation: string;
+      } = {
+        marketplaceId,
+        connection: {
+          present: false,
+          isActive: false,
+          tokenOk: false,
+        },
+        envCredentials: {
+          appIdSet: false,
+          certIdSet: false,
+          looksLikePlaceholder: false,
+        },
+        sampleSearch: { ok: false },
+        recommendation: "",
+      };
+
+      // Connection state
+      try {
+        const conn = await prisma.channelConnection.findFirst({
+          where: { channelType: "EBAY" },
+          orderBy: { updatedAt: "desc" },
+        });
+        result.connection.present = !!conn;
+        result.connection.isActive = !!conn?.isActive;
+        if (conn?.isActive && conn.ebayAccessToken && conn.ebayRefreshToken) {
+          try {
+            await ebayAuthService.getValidToken(conn.id);
+            result.connection.tokenOk = true;
+          } catch (err) {
+            result.connection.tokenError =
+              err instanceof Error ? err.message : String(err);
+          }
+        }
+      } catch (err) {
+        result.connection.tokenError =
+          err instanceof Error ? err.message : String(err);
+      }
+
+      // Env credentials state
+      const appId = process.env.EBAY_APP_ID;
+      const certId = process.env.EBAY_CERT_ID;
+      result.envCredentials.appIdSet = !!appId && appId.length > 0;
+      result.envCredentials.certIdSet = !!certId && certId.length > 0;
+      result.envCredentials.looksLikePlaceholder =
+        appId === "your_app_id" ||
+        certId === "your_cert_id" ||
+        (!!appId && appId.length < 8) ||
+        (!!certId && certId.length < 8);
+
+      // Sample Taxonomy call — uses the same token path the wizard
+      // hits, so a green here means the wizard will work too.
+      try {
+        const items = await ebayCategoryService.searchCategories(
+          marketplaceId.replace(/^EBAY_/, ""),
+          "jacket",
+          { throwOnError: true, limit: 3 },
+        );
+        result.sampleSearch.ok = true;
+        result.sampleSearch.itemCount = items.length;
+      } catch (err) {
+        result.sampleSearch.ok = false;
+        result.sampleSearch.error =
+          err instanceof Error ? err.message : String(err);
+      }
+
+      // Pick the most actionable recommendation.
+      if (result.sampleSearch.ok) {
+        result.recommendation = "OK — eBay categories should fetch in the wizard.";
+      } else if (
+        !result.connection.tokenOk &&
+        result.envCredentials.looksLikePlaceholder
+      ) {
+        result.recommendation =
+          "Link an eBay account at /settings/channels (preferred) or set real EBAY_APP_ID + EBAY_CERT_ID env vars.";
+      } else if (!result.connection.tokenOk) {
+        result.recommendation =
+          "Reconnect your eBay account at /settings/channels — current OAuth token cannot be refreshed.";
+      } else if (result.connection.tokenOk) {
+        result.recommendation =
+          "Token is valid but Taxonomy API call failed — check eBay's status page and retry.";
+      } else {
+        result.recommendation =
+          "Set EBAY_APP_ID + EBAY_CERT_ID, or link an eBay account at /settings/channels.";
+      }
+
+      return reply.send({ success: true, ...result });
+    },
+  );
+
+  /**
    * GG.1 — GET /api/ebay/conditions
    * Live condition policy for a (marketplace, categoryId). UI uses
    * this to populate the condition dropdown at submit time so users

@@ -621,6 +621,9 @@ function Picker({
   const [items, setItems] = useState<ProductTypeListItem[]>([])
   const [listLoading, setListLoading] = useState(true)
   const [listError, setListError] = useState<string | null>(null)
+  const [listErrorCode, setListErrorCode] = useState<
+    'auth_missing' | 'auth_failed' | 'upstream' | 'unknown' | null
+  >(null)
   const [suggestions, setSuggestions] = useState<RankedSuggestion[]>(
     currentPick?.aiSuggestions ?? [],
   )
@@ -641,6 +644,7 @@ function Picker({
     let cancelled = false
     setListLoading(true)
     setListError(null)
+    setListErrorCode(null)
     const url = new URL(
       `${getBackendUrl()}/api/listing-wizard/product-types`,
     )
@@ -648,19 +652,43 @@ function Picker({
     if (marketplace) url.searchParams.set('marketplace', marketplace)
     if (debouncedSearch) url.searchParams.set('search', debouncedSearch)
     fetch(url.toString())
-      .then((r) => r.json())
-      .then((data) => {
-        if (cancelled) return
-        if (Array.isArray(data?.items)) {
-          setItems(data.items as ProductTypeListItem[])
-        } else {
-          setItems([])
-          setListError(data?.error ?? 'Failed to load product types')
+      .then(async (r) => {
+        const text = await r.text()
+        let parsed: unknown = null
+        try {
+          parsed = text ? JSON.parse(text) : null
+        } catch {
+          /* non-JSON */
         }
+        return { status: r.status, ok: r.ok, body: parsed }
+      })
+      .then(({ ok, status, body }) => {
+        if (cancelled) return
+        const data = body as
+          | {
+              items?: ProductTypeListItem[]
+              error?: string
+              code?:
+                | 'auth_missing'
+                | 'auth_failed'
+                | 'upstream'
+                | 'unknown'
+            }
+          | null
+        if (ok && Array.isArray(data?.items)) {
+          setItems(data.items)
+          return
+        }
+        setItems([])
+        setListError(
+          data?.error ?? `Failed to load product types (HTTP ${status})`,
+        )
+        setListErrorCode(data?.code ?? 'unknown')
       })
       .catch((err) => {
         if (cancelled) return
         setListError(err instanceof Error ? err.message : String(err))
+        setListErrorCode('unknown')
       })
       .finally(() => {
         if (!cancelled) setListLoading(false)
@@ -786,14 +814,17 @@ function Picker({
           onKeyDown={onListKeyDown}
         >
           {listError && (
-            <div className="flex items-center gap-2 px-3 py-3 text-[12px] text-rose-700">
-              <AlertCircle className="w-3.5 h-3.5" />
-              {listError}
-            </div>
+            <ListErrorBanner
+              code={listErrorCode}
+              message={listError}
+              channel={channel}
+            />
           )}
           {!listError && !listLoading && items.length === 0 && (
             <div className="px-3 py-6 text-[12px] text-slate-500 text-center">
-              No matches.
+              {channel === 'EBAY' && search.trim().length < 2
+                ? 'Type at least 2 characters to search eBay categories.'
+                : 'No matches.'}
             </div>
           )}
           {items.map((item, idx) => {
@@ -1003,6 +1034,62 @@ function SuggestionsPanel({
             })}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// HH — typed error banner for the picker. Renders the right CTA per
+// error code so users hit "the eBay account isn't connected" not
+// "Failed to load product types" with no path forward.
+function ListErrorBanner({
+  code,
+  message,
+  channel,
+}: {
+  code: 'auth_missing' | 'auth_failed' | 'upstream' | 'unknown' | null
+  message: string
+  channel: string
+}) {
+  const isEbay = channel === 'EBAY'
+  const headline = (() => {
+    if (code === 'auth_missing') {
+      return isEbay
+        ? 'eBay credentials not configured.'
+        : 'Channel credentials not configured.'
+    }
+    if (code === 'auth_failed') {
+      return 'eBay rejected the access token. Reconnect your account.'
+    }
+    if (code === 'upstream') {
+      return "eBay's API returned an error — try again in a moment."
+    }
+    return 'Could not load categories.'
+  })()
+  const ctaLabel =
+    code === 'auth_missing' || code === 'auth_failed'
+      ? 'Connect eBay'
+      : null
+  return (
+    <div className="px-3 py-3 border-l-2 border-rose-300 bg-rose-50/40">
+      <div className="flex items-start gap-2 text-[12px] text-rose-800">
+        <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+        <div className="min-w-0 flex-1">
+          <div className="font-medium">{headline}</div>
+          <div className="text-[11px] text-rose-700 mt-0.5 break-words">
+            {message}
+          </div>
+          {ctaLabel && (
+            <a
+              href="/settings/channels"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 mt-2 h-6 px-2 text-[11px] font-medium text-blue-700 border border-blue-200 rounded-md bg-white hover:bg-blue-50"
+            >
+              {ctaLabel}
+            </a>
+          )}
+        </div>
       </div>
     </div>
   )

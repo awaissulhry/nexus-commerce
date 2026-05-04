@@ -724,10 +724,33 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       })
       return { items, count: items.length }
     } catch (err) {
-      fastify.log.error({ err }, '[listing-wizard] product-types failed')
-      return reply.code(500).send({
-        error: err instanceof Error ? err.message : String(err),
-      })
+      // HH — classify the error so the picker UI can render the
+      // right CTA. 'auth_missing' / 'auth_failed' point to Settings;
+      // 'upstream' is an eBay outage retry; 'unknown' falls through
+      // to a generic message.
+      const msg = err instanceof Error ? err.message : String(err)
+      let code: 'auth_missing' | 'auth_failed' | 'upstream' | 'unknown' =
+        'unknown'
+      let httpStatus = 500
+      if (
+        msg.includes('No eBay credentials') ||
+        msg.includes('EBAY_APP_ID')
+      ) {
+        code = 'auth_missing'
+        httpStatus = 502
+      } else if (msg.startsWith('auth:') || /\b401\b|\b403\b/.test(msg)) {
+        code = 'auth_failed'
+        httpStatus = 502
+      } else if (
+        msg.startsWith('network:') ||
+        msg.startsWith('eBay 5') ||
+        /\b5\d{2}\b/.test(msg)
+      ) {
+        code = 'upstream'
+        httpStatus = 502
+      }
+      fastify.log.error({ err, code }, '[listing-wizard] product-types failed')
+      return reply.code(httpStatus).send({ error: msg, code })
     }
   })
 
@@ -1775,7 +1798,10 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
             ebayCategoryService.getCategoryAspectsRich(
               productType,
               marketplace,
-              { forceRefresh: refresh === '1' || refresh === 'true' },
+              {
+                forceRefresh: refresh === '1' || refresh === 'true',
+                throwOnError: true,
+              },
             ),
             ebayCategoryService
               .getItemConditionPolicies(productType, marketplaceId)
@@ -1831,7 +1857,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
                     channelKey,
                     reason: 'fetch_failed',
                     detail:
-                      'eBay aspect fetch returned empty — check EBAY_APP_ID + EBAY_CERT_ID and that the categoryId is valid for this marketplace.',
+                      'eBay returned no aspects for this category. Either link an eBay account in /settings/channels (preferred) or set real EBAY_APP_ID + EBAY_CERT_ID env vars, and confirm the categoryId is a leaf node for this marketplace.',
                   },
                 ]
               : [],
@@ -1842,13 +1868,38 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
             includesAllOptional: true,
           }
         } catch (err) {
+          // HH — same error classification as the product-types route
+          // so the wizard's Step 4 surfaces a Connect-eBay CTA on auth
+          // problems instead of a blank manifest.
+          const msg = err instanceof Error ? err.message : String(err)
+          let code:
+            | 'auth_missing'
+            | 'auth_failed'
+            | 'upstream'
+            | 'unknown' = 'unknown'
+          let httpStatus = 500
+          if (
+            msg.includes('No eBay credentials') ||
+            msg.includes('EBAY_APP_ID')
+          ) {
+            code = 'auth_missing'
+            httpStatus = 502
+          } else if (msg.startsWith('auth:') || /\b401\b|\b403\b/.test(msg)) {
+            code = 'auth_failed'
+            httpStatus = 502
+          } else if (
+            msg.startsWith('network:') ||
+            msg.startsWith('eBay 5') ||
+            /\b5\d{2}\b/.test(msg)
+          ) {
+            code = 'upstream'
+            httpStatus = 502
+          }
           fastify.log.error(
-            { err },
+            { err, code },
             '[products/listings/schema EBAY] failed',
           )
-          return reply.code(500).send({
-            error: err instanceof Error ? err.message : String(err),
-          })
+          return reply.code(httpStatus).send({ error: msg, code })
         }
       }
 

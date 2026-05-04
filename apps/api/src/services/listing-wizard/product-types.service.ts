@@ -121,12 +121,19 @@ export class ProductTypesService {
     // search" empty state).
     if (channel === 'EBAY') {
       const search = opts.search?.trim() ?? ''
-      const items = await this.getEbayCategoryService()
-        .searchCategories(opts.marketplace, search, {
+      // HH — surface eBay errors instead of silently returning [].
+      // The route catches the throw and returns a 502 with the eBay
+      // error string; the picker renders it inline rather than
+      // showing 'No matches' for a credentials problem.
+      const items = await this.getEbayCategoryService().searchCategories(
+        opts.marketplace,
+        search,
+        {
           forceRefresh: opts.forceRefresh,
           limit: 20,
-        })
-        .catch(() => [])
+          throwOnError: true,
+        },
+      )
       return items.map((i) => ({
         productType: i.productType,
         displayName: i.displayName,
