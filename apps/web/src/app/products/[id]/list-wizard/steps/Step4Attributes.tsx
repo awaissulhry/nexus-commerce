@@ -19,6 +19,9 @@ import {
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
+import ChannelGroupsManager, {
+  type ChannelGroup,
+} from '../components/ChannelGroupsManager'
 
 // Mirrors UnionField on the backend (apps/api/src/services/listing-
 // wizard/schema-parser.service.ts). Kept as plain interfaces here so
@@ -145,6 +148,14 @@ export default function Step4Attributes({
   // editor) or a channel key like "AMAZON:IT". Marketplace sub-tabs
   // are derived from the active platform on render.
   const [activeTab, setActiveTab] = useState<string>('base')
+
+  const channelGroups = (wizardState.channelGroups ?? []) as ChannelGroup[]
+  const onChannelGroupsChange = useCallback(
+    (next: ChannelGroup[]) => {
+      void updateWizardState({ channelGroups: next })
+    },
+    [updateWizardState],
+  )
   // L.4 — translate-busy keys are "<fieldId>:<channelKey>" so per-
   // channel translate buttons can spin independently.
   const [translateBusy, setTranslateBusy] = useState<Set<string>>(new Set())
@@ -398,6 +409,32 @@ export default function Step4Attributes({
     [],
   )
 
+  // N.2 — broadcast a field value from one channel to a target list.
+  // Used by OverrideMenu's "Apply to..." section. Empty source values
+  // are no-ops (we don't want to broadcast nothing).
+  const onApplyToChannels = useCallback(
+    (fieldId: string, sourceChannelKey: string, targetKeys: string[]) => {
+      const sourceValue = overrides[sourceChannelKey]?.[fieldId]
+      if (isEmpty(sourceValue)) return
+      setOverrides((prev) => {
+        const next = { ...prev }
+        for (const target of targetKeys) {
+          if (target === sourceChannelKey) continue
+          const slice = { ...(next[target] ?? {}) }
+          slice[fieldId] = sourceValue as Primitive
+          next[target] = slice
+        }
+        return next
+      })
+    },
+    [overrides],
+  )
+
+  const allChannelKeys = useMemo(
+    () => channels.map((c) => `${c.platform}:${c.marketplace}`),
+    [channels],
+  )
+
   const toggleExpanded = useCallback((id: string) => {
     setExpandedFields((prev) => {
       const next = new Set(prev)
@@ -575,6 +612,20 @@ export default function Step4Attributes({
         </div>
       )}
 
+      {/* N.2 — channel groups manager (manual, shared with Steps 7/9).
+          Lets the seller define named channel buckets for the bulk
+          broadcast actions in OverrideMenu / per-variant grid. */}
+      {manifest && channels.length > 0 && (
+        <div className="mb-3">
+          <ChannelGroupsManager
+            groups={channelGroups}
+            availableChannels={channels}
+            onChange={onChannelGroupsChange}
+            defaultCollapsed
+          />
+        </div>
+      )}
+
       {/* M.1 — tab navigation: Shared base + per-platform tabs */}
       {manifest && manifest.fields.length > 0 && (
         <AttributesTabStrip
@@ -613,6 +664,9 @@ export default function Step4Attributes({
                   aiBusy={aiBusyFields.has(field.id)}
                   onTranslate={onTranslate}
                   translateBusy={translateBusy}
+                  channelGroups={channelGroups}
+                  allChannelKeys={allChannelKeys}
+                  onApplyToChannels={onApplyToChannels}
                   overrides={Object.fromEntries(
                     Object.entries(overrides).map(([k, slice]) => [
                       k,
@@ -711,6 +765,9 @@ function FieldCard({
   aiBusy,
   onTranslate,
   translateBusy,
+  channelGroups,
+  allChannelKeys,
+  onApplyToChannels,
 }: {
   field: UnionField
   viewMode: 'base' | { channelKey: string }
@@ -730,6 +787,13 @@ function FieldCard({
   aiBusy?: boolean
   onTranslate?: (fieldId: string, channelKey: string) => void
   translateBusy?: Set<string>
+  channelGroups?: ChannelGroup[]
+  allChannelKeys?: string[]
+  onApplyToChannels?: (
+    fieldId: string,
+    sourceChannelKey: string,
+    targetKeys: string[],
+  ) => void
 }) {
   const supportsAI = AI_SUPPORTED_FIELDS.has(field.id)
   const isChannelView = typeof viewMode === 'object'
@@ -872,6 +936,9 @@ function FieldCard({
                 .map(([k, v]) => [k, v as Primitive]),
             )}
             hasValue={!isEmpty(channelOverrideValue)}
+            currentValue={channelOverrideValue}
+            channelGroups={channelGroups ?? []}
+            allChannelKeys={allChannelKeys ?? []}
             supportsTranslate={
               AI_SUPPORTED_FIELDS.has(field.id) && !isEmpty(baseValue)
             }
@@ -889,6 +956,9 @@ function FieldCard({
                 onOverrideChange(activeChannelKey!, v as Primitive)
               }
             }}
+            onApplyToChannels={(targetKeys) =>
+              onApplyToChannels?.(field.id, activeChannelKey!, targetKeys)
+            }
             onTranslate={() =>
               onTranslate?.(field.id, activeChannelKey!)
             }
@@ -974,6 +1044,9 @@ function FieldCard({
                         otherFilled.map((k) => [k, overrides[k] as Primitive]),
                       )}
                       hasValue={!isEmpty(ov)}
+                      currentValue={ov}
+                      channelGroups={channelGroups ?? []}
+                      allChannelKeys={allChannelKeys ?? []}
                       supportsTranslate={
                         AI_SUPPORTED_FIELDS.has(field.id) &&
                         !isEmpty(baseValue)
@@ -992,6 +1065,9 @@ function FieldCard({
                           onOverrideChange(channelKey, v as Primitive)
                         }
                       }}
+                      onApplyToChannels={(targetKeys) =>
+                        onApplyToChannels?.(field.id, channelKey, targetKeys)
+                      }
                       onTranslate={() =>
                         onTranslate?.(field.id, channelKey)
                       }
@@ -1516,10 +1592,14 @@ function OverrideMenu({
   otherChannels,
   otherValues,
   hasValue,
+  currentValue,
+  channelGroups,
+  allChannelKeys,
   supportsTranslate,
   translateBusy,
   onCopyFromBase,
   onCopyFrom,
+  onApplyToChannels,
   onTranslate,
   onClear,
 }: {
@@ -1528,10 +1608,14 @@ function OverrideMenu({
   otherChannels: string[]
   otherValues: Record<string, Primitive>
   hasValue: boolean
+  currentValue?: Primitive
+  channelGroups: ChannelGroup[]
+  allChannelKeys: string[]
   supportsTranslate: boolean
   translateBusy: boolean
   onCopyFromBase: () => void
   onCopyFrom: (sourceKey: string) => void
+  onApplyToChannels: (targetKeys: string[]) => void
   onTranslate: () => void
   onClear: () => void
 }) {
@@ -1605,6 +1689,84 @@ function OverrideMenu({
                 <Sparkles className="w-3 h-3" />
                 Translate from base for {channelKey.split(':')[1]}
               </button>
+            )}
+            {/* N.2 — apply this channel's value outward to other
+                channels. Only shown when there's a value worth
+                broadcasting. */}
+            {!isEmpty(currentValue) && (
+              <>
+                <div className="border-t border-slate-100 my-1" />
+                <div className="px-3 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+                  Apply this value to
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onApplyToChannels(
+                      allChannelKeys.filter((k) => k !== channelKey),
+                    )
+                    setOpen(false)
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700"
+                >
+                  All other channels{' '}
+                  <span className="text-[10px] text-slate-500">
+                    ({allChannelKeys.length - 1})
+                  </span>
+                </button>
+                {/* Same platform, every other marketplace. */}
+                {(() => {
+                  const platform = channelKey.split(':')[0]
+                  const samePlatform = allChannelKeys.filter(
+                    (k) =>
+                      k !== channelKey && k.startsWith(`${platform}:`),
+                  )
+                  if (samePlatform.length === 0) return null
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onApplyToChannels(samePlatform)
+                        setOpen(false)
+                      }}
+                      className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700"
+                    >
+                      Other {platform} marketplaces{' '}
+                      <span className="text-[10px] text-slate-500">
+                        ({samePlatform.length})
+                      </span>
+                    </button>
+                  )
+                })()}
+                {channelGroups
+                  .filter(
+                    (g) =>
+                      g.channelKeys.length > 0 &&
+                      // Skip groups that ONLY contain this channel.
+                      g.channelKeys.some((k) => k !== channelKey),
+                  )
+                  .map((g) => {
+                    const targets = g.channelKeys.filter(
+                      (k) => k !== channelKey,
+                    )
+                    return (
+                      <button
+                        key={g.id}
+                        type="button"
+                        onClick={() => {
+                          onApplyToChannels(targets)
+                          setOpen(false)
+                        }}
+                        className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700"
+                      >
+                        Group: {g.name}{' '}
+                        <span className="text-[10px] text-slate-500">
+                          ({targets.length})
+                        </span>
+                      </button>
+                    )
+                  })}
+              </>
             )}
             {hasValue && (
               <button
