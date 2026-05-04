@@ -277,8 +277,16 @@ export default function BulkOperationsClient() {
   const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null)
   // V.4 — same shape for the group band so dragging a chip moves all
   // its member fields together.
+  // V.8 — `dragOverGroupSide` ('before'/'after') tracks which half of
+  // the hovered chip the cursor is on, so wide chips become two
+  // distinct hit zones with a vertical drop-line indicator. Without
+  // this, a wide group like Identity (~600px) would only respond to
+  // drops aimed at its centre.
   const [draggedGroupKey, setDraggedGroupKey] = useState<string | null>(null)
   const [dragOverGroupKey, setDragOverGroupKey] = useState<string | null>(null)
+  const [dragOverGroupSide, setDragOverGroupSide] = useState<
+    'before' | 'after' | null
+  >(null)
 
   const reorderColumns = useCallback(
     (sourceId: string, targetId: string) => {
@@ -297,14 +305,15 @@ export default function BulkOperationsClient() {
     [],
   )
 
-  /** V.4 — move every field in `sourceKey` so the first lands just
-   *  before `targetKey`'s first field. Preserves the within-group
-   *  ordering of both source and target so resizing / individual
+  /** V.4 / V.8 — move every field in `sourceKey` to just before or
+   *  just after `targetKey`'s span (per `side`). Preserves within-
+   *  group ordering of both source and target so individual column
    *  reorders inside groups don't get clobbered. */
   const reorderGroups = useCallback(
     (
       sourceKey: string,
       targetKey: string,
+      side: 'before' | 'after',
       groups: Array<{ key: string; fields: FieldDef[] }>,
     ) => {
       if (sourceKey === targetKey) return
@@ -314,10 +323,14 @@ export default function BulkOperationsClient() {
       const sourceIds = new Set(source.fields.map((f) => f.id))
       setVisibleColumnIds((prev) => {
         const without = prev.filter((id) => !sourceIds.has(id))
-        const targetFirstId = target.fields[0]?.id
-        if (!targetFirstId) return prev
-        const insertAt = without.indexOf(targetFirstId)
-        if (insertAt === -1) return prev
+        const anchorId =
+          side === 'before'
+            ? target.fields[0]?.id
+            : target.fields[target.fields.length - 1]?.id
+        if (!anchorId) return prev
+        const anchorIdx = without.indexOf(anchorId)
+        if (anchorIdx === -1) return prev
+        const insertAt = side === 'before' ? anchorIdx : anchorIdx + 1
         const moved = source.fields.map((f) => f.id)
         return [
           ...without.slice(0, insertAt),
@@ -1405,15 +1418,23 @@ export default function BulkOperationsClient() {
   // D.3g: passing `marketplace` lets the backend pull live category
   // attributes from cached Amazon schemas (CategorySchema). Without
   // it we get the static fallback set only.
-  // T.2 — always include AMAZON in channels and productTypesInData in
-  // productTypes so the dynamic-fields branch in field-registry runs
-  // and surfaces every cached schema attribute as an attr_* column.
-  // Defaults to 'IT' when no marketplace target is set (Xavia primary
-  // market) so dynamic fields still resolve out of the box.
+  // T.2 — always include the productTypes seen in data so the dynamic-
+  // fields branch in field-registry runs and surfaces every cached
+  // schema attribute as an attr_* column.
+  // V.7 — also include the active marketplace tab's channel
+  // (primaryContext.channel) so EBAY fields surface when on an EBAY
+  // tab. Defaults to AMAZON when no tab is picked (most common case).
   useEffect(() => {
     const params = new URLSearchParams()
     const channels = new Set<string>(enabledChannels)
-    if (productTypesInData.length > 0) channels.add('AMAZON')
+    // The currently-active marketplace tab drives which channel's
+    // static set + dynamic schema gets pulled. Without a tab, fall
+    // back to AMAZON because the registry's dynamic loader is
+    // Amazon-only (eBay's CategorySchema pipeline isn't built yet).
+    if (primaryContext?.channel) channels.add(primaryContext.channel)
+    if (productTypesInData.length > 0 && channels.size === 0) {
+      channels.add('AMAZON')
+    }
     if (channels.size > 0) params.set('channels', Array.from(channels).join(','))
     // Union of user-enabled types + types actually in the data.
     const typeUnion = Array.from(
@@ -1442,6 +1463,7 @@ export default function BulkOperationsClient() {
     enabledChannels,
     enabledProductTypes,
     productTypesInData,
+    primaryContext?.channel,
     primaryContext?.marketplace,
     schemaWarmth,
   ])
@@ -2763,6 +2785,10 @@ export default function BulkOperationsClient() {
                 dragOverGroupKey === g.key &&
                 draggedGroupKey !== null &&
                 draggedGroupKey !== g.key
+              const showDropBefore =
+                isGroupDropTarget && dragOverGroupSide === 'before'
+              const showDropAfter =
+                isGroupDropTarget && dragOverGroupSide === 'after'
               return (
                 <div
                   key={g.key}
@@ -2770,37 +2796,80 @@ export default function BulkOperationsClient() {
                   onDragStart={(e) => {
                     e.dataTransfer.effectAllowed = 'move'
                     e.dataTransfer.setData('text/plain', `group:${g.key}`)
+                    // V.8 — small custom drag image so very wide group
+                    // chips don't generate a sluggish full-width ghost.
+                    if (e.dataTransfer.setDragImage) {
+                      const ghost = document.createElement('div')
+                      ghost.textContent = g.label
+                      ghost.style.position = 'absolute'
+                      ghost.style.top = '-1000px'
+                      ghost.style.left = '-1000px'
+                      ghost.style.padding = '2px 8px'
+                      ghost.style.background = '#3b82f6'
+                      ghost.style.color = 'white'
+                      ghost.style.fontSize = '11px'
+                      ghost.style.fontWeight = '600'
+                      ghost.style.borderRadius = '4px'
+                      ghost.style.fontFamily = 'system-ui, sans-serif'
+                      document.body.appendChild(ghost)
+                      e.dataTransfer.setDragImage(ghost, 10, 10)
+                      // Defer removal so the browser has captured the
+                      // image before we clean up.
+                      window.setTimeout(() => ghost.remove(), 0)
+                    }
                     setDraggedGroupKey(g.key)
                   }}
                   onDragOver={(e) => {
-                    if (draggedGroupKey && draggedGroupKey !== g.key) {
-                      e.preventDefault()
-                      e.dataTransfer.dropEffect = 'move'
-                      if (dragOverGroupKey !== g.key) {
-                        setDragOverGroupKey(g.key)
-                      }
+                    if (!draggedGroupKey || draggedGroupKey === g.key) return
+                    e.preventDefault()
+                    e.dataTransfer.dropEffect = 'move'
+                    // V.8 — pick before vs after based on cursor x
+                    // relative to chip mid. Gives wide chips two
+                    // distinct hit zones so users don't have to drag
+                    // past the centre to land on the next slot.
+                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                    const side: 'before' | 'after' =
+                      e.clientX < rect.left + rect.width / 2
+                        ? 'before'
+                        : 'after'
+                    if (dragOverGroupKey !== g.key) {
+                      setDragOverGroupKey(g.key)
+                    }
+                    if (dragOverGroupSide !== side) {
+                      setDragOverGroupSide(side)
                     }
                   }}
                   onDrop={(e) => {
                     e.preventDefault()
                     const src = draggedGroupKey
+                    const side = dragOverGroupSide ?? 'before'
                     if (src && src !== g.key) {
-                      reorderGroups(src, g.key, groupedFields)
+                      reorderGroups(src, g.key, side, groupedFields)
                     }
                     setDraggedGroupKey(null)
                     setDragOverGroupKey(null)
+                    setDragOverGroupSide(null)
                   }}
                   onDragEnd={() => {
                     setDraggedGroupKey(null)
                     setDragOverGroupKey(null)
+                    setDragOverGroupSide(null)
                   }}
                   style={{ width, flexShrink: 0, minWidth: 80 }}
                   className={cn(
-                    'border-r-2',
-                    isGroupDropTarget && 'ring-2 ring-blue-400 ring-inset',
+                    'relative border-r border-slate-200/70 last:border-r-0',
                     draggedGroupKey === g.key && 'opacity-40',
                   )}
                 >
+                  {/* V.8 — vertical drop indicator. Sits inside the
+                      chip wrapper (relative parent); the side is
+                      driven by where the cursor entered the chip. */}
+                  {showDropBefore && (
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 z-10 pointer-events-none" />
+                  )}
+                  {showDropAfter && (
+                    <div className="absolute right-0 top-0 bottom-0 w-1 bg-blue-500 z-10 pointer-events-none" />
+                  )}
                   <button
                     type="button"
                     onClick={() => toggleGroupCollapse(g.key)}
