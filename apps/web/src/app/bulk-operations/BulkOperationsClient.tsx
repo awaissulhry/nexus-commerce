@@ -1020,18 +1020,44 @@ export default function BulkOperationsClient() {
     reloadProducts()
   }, [reloadProducts])
 
+  // T.2 — productTypes seen in the loaded products. Drives the fields
+  // fetch so every visible product's required + optional schema
+  // attributes land as columns automatically — without the user
+  // having to enable channels / productTypes manually first.
+  // enabledProductTypes (user-controlled) still drives column visibility,
+  // not what's fetched.
+  const productTypesInData = useMemo(() => {
+    const set = new Set<string>()
+    for (const p of products) {
+      const t = (p.productType ?? '').trim()
+      if (t) set.add(t)
+    }
+    return Array.from(set).sort()
+  }, [products])
+
   // Refetch fields when channels/productTypes/marketplace change.
   // D.3g: passing `marketplace` lets the backend pull live category
   // attributes from cached Amazon schemas (CategorySchema). Without
   // it we get the static fallback set only.
+  // T.2 — always include AMAZON in channels and productTypesInData in
+  // productTypes so the dynamic-fields branch in field-registry runs
+  // and surfaces every cached schema attribute as an attr_* column.
+  // Defaults to 'IT' when no marketplace target is set (Xavia primary
+  // market) so dynamic fields still resolve out of the box.
   useEffect(() => {
     const params = new URLSearchParams()
-    if (enabledChannels.length) params.set('channels', enabledChannels.join(','))
-    if (enabledProductTypes.length)
-      params.set('productTypes', enabledProductTypes.join(','))
-    if (primaryContext?.marketplace) {
-      params.set('marketplace', primaryContext.marketplace)
-    }
+    const channels = new Set<string>(enabledChannels)
+    if (productTypesInData.length > 0) channels.add('AMAZON')
+    if (channels.size > 0) params.set('channels', Array.from(channels).join(','))
+    // Union of user-enabled types + types actually in the data.
+    const typeUnion = Array.from(
+      new Set([...enabledProductTypes, ...productTypesInData]),
+    )
+    if (typeUnion.length > 0) params.set('productTypes', typeUnion.join(','))
+    params.set(
+      'marketplace',
+      primaryContext?.marketplace ?? 'IT',
+    )
     const qs = params.toString()
     const url = `${getBackendUrl()}/api/pim/fields${qs ? `?${qs}` : ''}`
 
@@ -1046,7 +1072,12 @@ export default function BulkOperationsClient() {
     return () => {
       cancelled = true
     }
-  }, [enabledChannels, enabledProductTypes, primaryContext?.marketplace])
+  }, [
+    enabledChannels,
+    enabledProductTypes,
+    productTypesInData,
+    primaryContext?.marketplace,
+  ])
 
   // ── Build columns dynamically from registry + visibility ──────────
   const fieldsById = useMemo(() => {
@@ -2037,6 +2068,33 @@ export default function BulkOperationsClient() {
 
           {/* Right: view tools. */}
           <div className="flex items-center gap-2 flex-shrink-0">
+            {/* T.2 — surface every dynamic schema attribute (attr_*)
+             *  for the productTypes seen in the loaded data. One-shot
+             *  append; user can hide individual ones via Cols. */}
+            {(() => {
+              const attrInData = allFields.filter(
+                (f) =>
+                  f.id.startsWith('attr_') &&
+                  !visibleColumnIds.includes(f.id),
+              )
+              if (attrInData.length === 0) return null
+              return (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setVisibleColumnIds((prev) => [
+                      ...prev,
+                      ...attrInData.map((f) => f.id),
+                    ])
+                  }
+                  title="Add every schema-driven category attribute (attr_*) for the loaded productTypes as columns"
+                  className="inline-flex items-center gap-1 h-7 px-2 text-[11px] font-medium text-blue-700 border border-blue-200 rounded-md hover:bg-blue-50"
+                >
+                  + {attrInData.length} schema field
+                  {attrInData.length === 1 ? '' : 's'}
+                </button>
+              )
+            })()}
             <ColumnSelector
               allFields={allFields}
               visibleColumnIds={visibleColumnIds}
