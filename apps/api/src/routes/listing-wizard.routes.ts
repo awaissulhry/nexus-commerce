@@ -1767,17 +1767,53 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       const upperChannel = channel.toUpperCase()
       if (upperChannel === 'EBAY') {
         try {
-          const aspects = await ebayCategoryService.getCategoryAspectsRich(
-            productType,
-            marketplace,
-            { forceRefresh: refresh === '1' || refresh === 'true' },
-          )
+          // GG.1 — fetch aspects + condition policy in parallel; the
+          // condition is a synthesized field on top of the per-category
+          // aspect schema so the user gets a category-correct dropdown.
+          const marketplaceId = `EBAY_${marketplace.toUpperCase()}`
+          const [aspects, conditions] = await Promise.all([
+            ebayCategoryService.getCategoryAspectsRich(
+              productType,
+              marketplace,
+              { forceRefresh: refresh === '1' || refresh === 'true' },
+            ),
+            ebayCategoryService
+              .getItemConditionPolicies(productType, marketplaceId)
+              .catch(() => []),
+          ])
           const channelKey = `${upperChannel}:${marketplace.toUpperCase()}`
-          const fields = ebayAspectsToUnionFields(
+          const aspectFields = ebayAspectsToUnionFields(
             aspects,
             baseAttributes,
             channelKey,
           )
+          const conditionField =
+            conditions.length > 0
+              ? [
+                  {
+                    id: 'condition',
+                    label: 'Condition',
+                    kind: 'enum',
+                    required: true,
+                    wrapped: false,
+                    options: conditions.map((c) => ({
+                      value: c.conditionId,
+                      label: c.conditionDescription,
+                    })),
+                    requiredFor: [channelKey],
+                    optionalFor: [],
+                    notUsedIn: [],
+                    currentValue:
+                      typeof baseAttributes['condition'] === 'string' ||
+                      typeof baseAttributes['condition'] === 'number'
+                        ? (baseAttributes['condition'] as string | number)
+                        : undefined,
+                    overrides: {},
+                    variantEligible: false,
+                  },
+                ]
+              : []
+          const fields = [...conditionField, ...aspectFields]
           return {
             channels: [
               { platform: upperChannel, marketplace, productType },

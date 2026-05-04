@@ -78,12 +78,26 @@ interface CachedRichAspects {
   expiresAt: number
 }
 
+export interface EbayConditionPolicy {
+  /** eBay's numeric condition id, e.g. "1000" = NEW. */
+  conditionId: string
+  /** Localised label for the user, e.g. "New" / "Nuovo". */
+  conditionDescription: string
+}
+
+interface CachedConditionPolicies {
+  conditions: EbayConditionPolicy[]
+  expiresAt: number
+}
+
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
 export class EbayCategoryService {
   private cache: Map<string, CachedCategory> = new Map();
   private searchCache: Map<string, CachedSearch> = new Map();
   private richCache: Map<string, CachedRichAspects> = new Map();
+  // GG.1 — condition policies per (marketplace, categoryId).
+  private conditionCache: Map<string, CachedConditionPolicies> = new Map();
   private accessToken: string | null = null;
   private tokenExpiresAt = 0;
 
@@ -584,12 +598,94 @@ export class EbayCategoryService {
   }
 
   /**
+   * GG.1 — fetch eBay's allowed item conditions for a given category.
+   * Endpoint: get_item_condition_policies. Categories vary widely:
+   * "New" handhelds vs antique books take very different condition
+   * sets, and submitting an unsupported one is a publish error.
+   *
+   * Cached per (marketplace, categoryId) for 24h.
+   */
+  async getItemConditionPolicies(
+    categoryId: string,
+    marketplace: string | null,
+  ): Promise<EbayConditionPolicy[]> {
+    const marketplaceId = normaliseMarketplace(marketplace);
+    const key = `${marketplaceId}:${categoryId}`;
+    const cached = this.conditionCache.get(key);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.conditions;
+    }
+    let token: string;
+    try {
+      token = await this.getAccessToken();
+    } catch (err) {
+      console.warn(
+        `[EbayCategoryService] No token for getItemConditionPolicies: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return [];
+    }
+    const apiBase = process.env.EBAY_API_BASE ?? "https://api.ebay.com";
+    const url = `${apiBase}/sell/metadata/v1/marketplace/${marketplaceId}/get_item_condition_policies?filter=${encodeURIComponent(
+      `categoryIds:{${categoryId}}`,
+    )}`;
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Accept-Language": "en-US",
+        },
+      });
+    } catch (err) {
+      console.warn(
+        `[EbayCategoryService] getItemConditionPolicies network error: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return [];
+    }
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.warn(
+        `[EbayCategoryService] getItemConditionPolicies ${res.status}: ${body.slice(0, 300)}`,
+      );
+      return [];
+    }
+    const json = (await res.json().catch(() => null)) as {
+      itemConditionPolicies?: Array<{
+        categoryId?: string;
+        itemConditions?: Array<{
+          conditionId?: string;
+          conditionDescription?: string;
+        }>;
+      }>;
+    } | null;
+    const row = (json?.itemConditionPolicies ?? []).find(
+      (r) => r.categoryId === categoryId,
+    );
+    const conditions: EbayConditionPolicy[] = (row?.itemConditions ?? [])
+      .map((c) => ({
+        conditionId: c.conditionId ?? "",
+        conditionDescription: c.conditionDescription ?? "",
+      }))
+      .filter((c) => c.conditionId.length > 0);
+    this.conditionCache.set(key, {
+      conditions,
+      expiresAt: Date.now() + CACHE_TTL,
+    });
+    return conditions;
+  }
+
+  /**
    * Clear cache (useful for testing or manual refresh)
    */
   clearCache(): void {
     this.cache.clear();
     this.searchCache.clear();
     this.richCache.clear();
+    this.conditionCache.clear();
     console.log("[EbayCategoryService] Cache cleared");
   }
 

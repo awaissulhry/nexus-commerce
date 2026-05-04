@@ -7,7 +7,11 @@ import type { FastifyInstance } from "fastify";
 import prisma from "../db.js";
 import { ebaySyncService } from "../services/ebay-sync.service.js";
 import { ebayAuthService } from "../services/ebay-auth.service.js";
+import { ebayAccountService } from "../services/ebay-account.service.js";
+import { EbayCategoryService } from "../services/ebay-category.service.js";
 import { logger } from "../utils/logger.js";
+
+const ebayCategoryService = new EbayCategoryService();
 
 interface SyncInventoryBody {
   connectionId: string;
@@ -439,4 +443,101 @@ export async function ebayRoutes(app: FastifyInstance) {
       }
     },
   );
+
+  /**
+   * GG.1 — GET /api/ebay/conditions
+   * Live condition policy for a (marketplace, categoryId). UI uses
+   * this to populate the condition dropdown at submit time so users
+   * can't pick a condition the category rejects.
+   *
+   * Query: ?marketplaceId=EBAY_IT&categoryId=NNN
+   */
+  app.get<{
+    Querystring: { marketplaceId?: string; categoryId?: string };
+  }>("/api/ebay/conditions", async (request, reply) => {
+    const marketplaceId = request.query.marketplaceId?.trim();
+    const categoryId = request.query.categoryId?.trim();
+    if (!marketplaceId || !categoryId) {
+      return reply.status(400).send({
+        success: false,
+        error: "marketplaceId and categoryId are required",
+      });
+    }
+    try {
+      const conditions = await ebayCategoryService.getItemConditionPolicies(
+        categoryId,
+        marketplaceId,
+      );
+      return reply.send({ success: true, conditions });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error("Error fetching eBay conditions", {
+        error: message,
+        marketplaceId,
+        categoryId,
+      });
+      return reply.status(500).send({ success: false, error: message });
+    }
+  });
+
+  /**
+   * GG.2 — GET /api/ebay/policies
+   * Live seller policies + locations from the Account API. Used
+   * by Settings to let the user pick which policy to use, and by
+   * the publish adapter as a fallback when
+   * ChannelConnection.connectionMetadata.ebayPolicies is missing.
+   *
+   * Query: ?marketplaceId=EBAY_IT[&connectionId=XXX][&refresh=1]
+   * connectionId optional — defaults to first active EBAY connection.
+   */
+  app.get<{
+    Querystring: {
+      marketplaceId?: string;
+      connectionId?: string;
+      refresh?: string;
+    };
+  }>("/api/ebay/policies", async (request, reply) => {
+    const marketplaceId = request.query.marketplaceId?.trim();
+    if (!marketplaceId) {
+      return reply.status(400).send({
+        success: false,
+        error: "marketplaceId is required (e.g. EBAY_IT)",
+      });
+    }
+    let connectionId = request.query.connectionId?.trim();
+    try {
+      if (!connectionId) {
+        const connection = await prisma.channelConnection.findFirst({
+          where: { channelType: "EBAY", isActive: true },
+          orderBy: { updatedAt: "desc" },
+        });
+        if (!connection) {
+          return reply.status(400).send({
+            success: false,
+            error: "No active eBay connection — link an eBay account first.",
+          });
+        }
+        connectionId = connection.id;
+      }
+      const snapshot = await ebayAccountService.getSnapshot(
+        connectionId,
+        marketplaceId,
+        { forceRefresh: request.query.refresh === "1" },
+      );
+      return reply.send({
+        success: true,
+        connectionId,
+        marketplaceId,
+        ...snapshot,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error("Error fetching eBay policies", {
+        error: message,
+        connectionId,
+        marketplaceId,
+      });
+      return reply.status(500).send({ success: false, error: message });
+    }
+  });
 }

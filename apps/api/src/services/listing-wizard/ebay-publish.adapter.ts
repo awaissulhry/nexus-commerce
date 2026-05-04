@@ -19,6 +19,10 @@
 
 import prisma from '../../db.js'
 import { ebayAuthService } from '../ebay-auth.service.js'
+import { ebayAccountService } from '../ebay-account.service.js'
+import { EbayCategoryService } from '../ebay-category.service.js'
+
+const ebayCategoryService = new EbayCategoryService()
 
 export interface EbayPublishResult {
   ok: boolean
@@ -137,34 +141,115 @@ export class EbayPublishAdapter {
 
     // ── Step 2: createOffer ──────────────────────────────────────
     // Fulfillment / payment / return policies are required for a
-    // publishable offer. Production sellers manage these in eBay
-    // Seller Hub; we read three IDs off
-    // ChannelConnection.connectionMetadata.ebayPolicies so a single
-    // account ships without per-marketplace overrides. Phase 2A
-    // expands this to per-marketplace overrides.
+    // publishable offer. Read pre-configured ids from
+    // ChannelConnection.connectionMetadata.ebayPolicies first
+    // (deterministic — what the user explicitly chose). When any
+    // are missing, GG.2 falls back to the seller's first-active
+    // policy of each kind from the live Account API so the wizard
+    // doesn't hard-fail on a fresh account.
     const meta = (connection.connectionMetadata ?? {}) as Record<
       string,
       unknown
     >
-    const policies = ((meta.ebayPolicies ?? {}) as {
+    const configured = ((meta.ebayPolicies ?? {}) as {
       fulfillmentPolicyId?: string
       paymentPolicyId?: string
       returnPolicyId?: string
       merchantLocationKey?: string
     })
+    const policies = {
+      fulfillmentPolicyId: configured.fulfillmentPolicyId,
+      paymentPolicyId: configured.paymentPolicyId,
+      returnPolicyId: configured.returnPolicyId,
+      merchantLocationKey: configured.merchantLocationKey,
+    }
     if (
       !policies.fulfillmentPolicyId ||
       !policies.paymentPolicyId ||
       !policies.returnPolicyId ||
       !policies.merchantLocationKey
     ) {
+      try {
+        const snapshot = await ebayAccountService.getSnapshot(
+          connection.id,
+          payload.marketplaceId,
+        )
+        if (!policies.fulfillmentPolicyId) {
+          policies.fulfillmentPolicyId =
+            snapshot.fulfillmentPolicies[0]?.id
+        }
+        if (!policies.paymentPolicyId) {
+          policies.paymentPolicyId = snapshot.paymentPolicies[0]?.id
+        }
+        if (!policies.returnPolicyId) {
+          policies.returnPolicyId = snapshot.returnPolicies[0]?.id
+        }
+        if (!policies.merchantLocationKey) {
+          policies.merchantLocationKey = snapshot.locations[0]?.key
+        }
+      } catch (err) {
+        return {
+          ok: false,
+          sku: payload.sku,
+          failedStep: 'createOffer',
+          error: `Could not fetch seller policies via Account API: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        }
+      }
+    }
+    if (
+      !policies.fulfillmentPolicyId ||
+      !policies.paymentPolicyId ||
+      !policies.returnPolicyId ||
+      !policies.merchantLocationKey
+    ) {
+      const missing: string[] = []
+      if (!policies.fulfillmentPolicyId) missing.push('fulfillment')
+      if (!policies.paymentPolicyId) missing.push('payment')
+      if (!policies.returnPolicyId) missing.push('return')
+      if (!policies.merchantLocationKey) missing.push('merchantLocation')
       return {
         ok: false,
         sku: payload.sku,
         failedStep: 'createOffer',
-        error:
-          'eBay policies (fulfillment/payment/return + merchantLocationKey) not configured on the connection. Set ChannelConnection.connectionMetadata.ebayPolicies before publishing.',
+        error: `Seller has no ${missing.join(' / ')} policy/location for ${payload.marketplaceId}. Create one in eBay Seller Hub or set ChannelConnection.connectionMetadata.ebayPolicies.`,
       }
+    }
+
+    // GG.1 — validate the picked condition against eBay's live policy
+    // for this category. Submitting a condition the category rejects
+    // is a hard publish error; better to surface it before the round
+    // trip.
+    const requestedCondition = payload.condition ?? 'NEW'
+    try {
+      const allowedConditions =
+        await ebayCategoryService.getItemConditionPolicies(
+          payload.categoryId,
+          payload.marketplaceId,
+        )
+      if (allowedConditions.length > 0) {
+        const ok = allowedConditions.some(
+          (c) =>
+            c.conditionDescription.toUpperCase().replace(/\s+/g, '_') ===
+              requestedCondition.toUpperCase() ||
+            c.conditionId === requestedCondition,
+        )
+        if (!ok) {
+          const labels = allowedConditions
+            .map((c) => c.conditionDescription)
+            .join(', ')
+          return {
+            ok: false,
+            sku: payload.sku,
+            failedStep: 'createInventory',
+            error: `Condition "${requestedCondition}" not allowed for category ${payload.categoryId} on ${payload.marketplaceId}. Allowed: ${labels}.`,
+          }
+        }
+      }
+    } catch {
+      // Soft-fail: condition lookup is advisory. Let eBay return the
+      // canonical error if it disagrees.
     }
 
     const offerBody: Record<string, unknown> = {
