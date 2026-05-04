@@ -1675,6 +1675,94 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       }
     },
   )
+
+  // Q.7 — single-channel GTIN status for the product-edit page. Same
+  // resolution rules as /listing-wizard/:id/gtin-status but scoped to
+  // one (productId, channel, marketplace) — non-Amazon channels return
+  // needed=false.
+  fastify.get<{
+    Params: { id: string; channel: string; marketplace: string }
+  }>(
+    '/products/:id/listings/:channel/:marketplace/gtin-status',
+    async (request, reply) => {
+      const { id, channel, marketplace } = request.params
+      if (channel.toUpperCase() !== 'AMAZON') {
+        return { needed: false, reason: 'non_amazon_channel' }
+      }
+      const product = await prisma.product.findUnique({
+        where: { id },
+        select: { id: true, brand: true, gtin: true, upc: true, ean: true, productType: true },
+      })
+      if (!product) {
+        return reply.code(404).send({ error: `Product ${id} not found` })
+      }
+      const hasIdentifier = !!(product.gtin || product.upc || product.ean)
+      if (hasIdentifier) {
+        return {
+          needed: false,
+          reason: 'has_gtin',
+          identifier: product.gtin ?? product.upc ?? product.ean ?? null,
+        }
+      }
+      if (!product.brand) {
+        return { needed: true, reason: 'needed' }
+      }
+      // Per-listing productType override wins — same resolution as the
+      // schema endpoint above.
+      const listing = await prisma.channelListing.findFirst({
+        where: { productId: id, channel, marketplace },
+        select: { platformAttributes: true },
+      })
+      const platformAttrs =
+        (listing?.platformAttributes as Record<string, any> | null) ?? null
+      const productType =
+        (platformAttrs && typeof platformAttrs.productType === 'string'
+          ? platformAttrs.productType
+          : null) ??
+        product.productType ??
+        null
+      if (!productType) {
+        return { needed: true, reason: 'no_product_type' }
+      }
+
+      const exemptions = await prisma.gtinExemptionApplication.findMany({
+        where: {
+          brandName: product.brand,
+          marketplace,
+        },
+        orderBy: { updatedAt: 'desc' },
+      })
+
+      const approved = exemptions.find(
+        (e) =>
+          e.status === 'APPROVED' &&
+          (e.productType === null || e.productType === productType),
+      )
+      if (approved) {
+        return {
+          needed: false,
+          reason: 'existing_exemption',
+          applicationId: approved.id,
+        }
+      }
+      const pending = exemptions.find(
+        (e) =>
+          (e.productType === null || e.productType === productType) &&
+          (e.status === 'SUBMITTED' ||
+            e.status === 'PACKAGE_READY' ||
+            e.status === 'DRAFT'),
+      )
+      if (pending) {
+        return {
+          needed: true,
+          reason: 'in_progress',
+          applicationId: pending.id,
+          status: pending.status,
+        }
+      }
+      return { needed: true, reason: 'needed' }
+    },
+  )
 }
 
 function computeOverallStatus(

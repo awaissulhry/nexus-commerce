@@ -159,6 +159,17 @@ export default function ChannelFieldEditor({
   const setupSaveTimer = useRef<number | null>(null)
   const setupDirtyRef = useRef<Set<'productType' | 'variationTheme'>>(new Set())
 
+  // Q.7 — GTIN exemption status for this listing. Refetched whenever
+  // productType changes (which we trigger via reloadKey in
+  // flushSetup) so the banner reflects the latest pick.
+  const [gtinStatus, setGtinStatus] = useState<{
+    needed: boolean
+    reason: string
+    identifier?: string | null
+    applicationId?: string
+    status?: string
+  } | null>(null)
+
   const [status, setStatus] = useState<SaveStatus>('idle')
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
   const dirtyRef = useRef<Set<string>>(new Set())
@@ -210,6 +221,27 @@ export default function ChannelFieldEditor({
       cancelled = true
     }
   }, [productId, channel, marketplace, reloadKey, showAllOptional, forceRefresh])
+
+  // ── Q.7 — fetch GTIN exemption status. Refetches when reloadKey
+  // bumps (which happens after a productType change), so the banner
+  // tracks the latest category pick.
+  useEffect(() => {
+    let cancelled = false
+    fetch(
+      `${getBackendUrl()}/api/products/${productId}/listings/${channel}/${marketplace}/gtin-status`,
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (cancelled || !json) return
+        setGtinStatus(json)
+      })
+      .catch(() => {
+        /* non-fatal — banner just won't render */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [productId, channel, marketplace, reloadKey])
 
   // ── Q.3 — fetch sibling listings once on mount ───────────────
   // Also seeds Q.4 variant overrides for the active listing from
@@ -714,6 +746,9 @@ export default function ChannelFieldEditor({
         </div>
       )}
 
+      {/* Q.7 — GTIN exemption banner (Amazon only) */}
+      {gtinStatus && <GtinStatusBanner status={gtinStatus} />}
+
       {/* Q.5 — Listing setup: per-channel productType + variation theme */}
       <ListingSetupCard
         productType={setupValues.productType}
@@ -843,6 +878,56 @@ function SaveStatusPill({
       {status === 'saving' && 'Saving…'}
       {status === 'saved' && 'Saved'}
       {status === 'error' && (message ?? 'Save failed')}
+    </div>
+  )
+}
+
+function GtinStatusBanner({
+  status,
+}: {
+  status: {
+    needed: boolean
+    reason: string
+    identifier?: string | null
+    applicationId?: string
+    status?: string
+  }
+}) {
+  if (status.reason === 'non_amazon_channel') return null
+  const tone = !status.needed
+    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+    : status.reason === 'in_progress'
+    ? 'border-amber-200 bg-amber-50 text-amber-800'
+    : 'border-slate-200 bg-slate-50 text-slate-700'
+  const headline = (() => {
+    switch (status.reason) {
+      case 'has_gtin':
+        return `GTIN already on the master product${
+          status.identifier ? ` (${status.identifier})` : ''
+        } — no exemption needed`
+      case 'existing_exemption':
+        return 'Brand has an approved GTIN exemption for this category'
+      case 'in_progress':
+        return `GTIN exemption application is ${(status.status ?? 'in progress').toLowerCase()}`
+      case 'no_product_type':
+        return 'Set the product type above to check GTIN exemption status'
+      default:
+        return 'GTIN exemption needed for this category — apply via the listing wizard'
+    }
+  })()
+  return (
+    <div
+      className={cn(
+        'border rounded-md px-3 py-2 text-[12px] inline-flex items-start gap-1.5 w-full',
+        tone,
+      )}
+    >
+      {!status.needed ? (
+        <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 text-emerald-600 flex-shrink-0" />
+      ) : (
+        <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+      )}
+      <span>{headline}</span>
     </div>
   )
 }
