@@ -286,8 +286,32 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
         //       value>>) merges into platformAttributes.variants so
         //       per-variant channel overrides ride along on the parent
         //       listing's row.
-        const { attributes, variantAttributes, ...rest } = body
+        // Q.5 — `productType` body field stores into
+        //       platformAttributes.productType so the schema endpoint
+        //       can pick it up as the per-listing override.
+        const { attributes, variantAttributes, productType, ...rest } = body
         const data: Record<string, any> = { ...rest }
+
+        // platformAttributes accumulates across the productType /
+        // attributes / variantAttributes branches below. Seeding from
+        // existing keeps unrelated keys (browseNodeId etc.) intact.
+        const existingPA =
+          (existing?.platformAttributes as Record<string, any> | null) ?? null
+        let nextPA: Record<string, any> | null = null
+        const ensurePA = () => {
+          if (nextPA === null) nextPA = { ...(existingPA ?? {}) }
+          return nextPA
+        }
+
+        if (typeof productType === 'string') {
+          const pa = ensurePA()
+          if (productType.trim() === '') {
+            delete pa.productType
+          } else {
+            pa.productType = productType
+          }
+        }
+
         if (attributes && typeof attributes === 'object') {
           const attrs = attributes as Record<string, unknown>
           const passthrough: Record<string, unknown> = {}
@@ -322,10 +346,6 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
               passthrough[fieldId] = value
             }
           }
-          // Merge into existing platformAttributes.attributes shallowly.
-          const existingPA =
-            (existing?.platformAttributes as Record<string, any> | null) ??
-            null
           const existingAttrs =
             existingPA && typeof existingPA.attributes === 'object'
               ? (existingPA.attributes as Record<string, unknown>)
@@ -338,10 +358,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
               merged[k] = v
             }
           }
-          data.platformAttributes = {
-            ...(existingPA ?? {}),
-            attributes: merged,
-          }
+          ensurePA().attributes = merged
         }
 
         // Q.4 — variant overrides. Same shallow-merge pattern: each
@@ -349,10 +366,6 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
         // PATCH-style edit to one (variation, field) keeps the other
         // fields on that variation untouched.
         if (variantAttributes && typeof variantAttributes === 'object') {
-          const existingPA =
-            (data.platformAttributes as Record<string, any> | undefined) ??
-            (existing?.platformAttributes as Record<string, any> | null) ??
-            null
           const existingVariants =
             existingPA && typeof existingPA.variants === 'object'
               ? (existingPA.variants as Record<string, Record<string, unknown>>)
@@ -378,11 +391,11 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
               mergedVariants[variationId] = next
             }
           }
-          data.platformAttributes = {
-            ...(existingPA ?? {}),
-            ...(data.platformAttributes ?? {}),
-            variants: mergedVariants,
-          }
+          ensurePA().variants = mergedVariants
+        }
+
+        if (nextPA !== null) {
+          data.platformAttributes = nextPA
         }
 
         let listing

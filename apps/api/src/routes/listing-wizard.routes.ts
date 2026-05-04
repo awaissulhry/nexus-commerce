@@ -1600,7 +1600,17 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         where: { productId: id, channel, marketplace },
       })
 
-      const productType = product.productType ?? ''
+      // Q.5 — per-listing productType override stored in
+      // platformAttributes.productType wins over the master product's
+      // productType. Lets sellers list the same product under different
+      // Amazon categories per marketplace.
+      const platformAttrs =
+        (listing?.platformAttributes as Record<string, any> | null) ?? null
+      const listingProductType =
+        platformAttrs && typeof platformAttrs.productType === 'string'
+          ? platformAttrs.productType
+          : null
+      const productType = listingProductType || product.productType || ''
       if (!productType) {
         return reply.code(409).send({
           error:
@@ -1611,8 +1621,6 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       // Seed baseAttributes from the existing listing so the editor
       // shows what's currently saved.
       const baseAttributes: Record<string, unknown> = {}
-      const platformAttrs =
-        (listing?.platformAttributes as Record<string, any> | null) ?? null
       const storedAttrs =
         platformAttrs && typeof platformAttrs.attributes === 'object'
           ? (platformAttrs.attributes as Record<string, unknown>)

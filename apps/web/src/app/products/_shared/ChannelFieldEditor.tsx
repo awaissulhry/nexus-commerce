@@ -26,6 +26,7 @@ interface SiblingListing {
   description: string | null
   bulletPointsOverride: string[] | null
   platformAttributes: Record<string, any> | null
+  variationTheme: string | null
 }
 
 interface Props {
@@ -146,6 +147,18 @@ export default function ChannelFieldEditor({
   // to broadcast values to other channels.
   const [siblings, setSiblings] = useState<SiblingListing[]>([])
 
+  // Q.5 — per-listing setup: productType (overrides master) + variation
+  // theme. Both persist to ChannelListing — productType into
+  // platformAttributes.productType (no migration), variationTheme into
+  // its column. Editing productType triggers a schema reload so the
+  // editor surfaces the right fields.
+  const [setupValues, setSetupValues] = useState<{
+    productType: string
+    variationTheme: string
+  }>({ productType: '', variationTheme: '' })
+  const setupSaveTimer = useRef<number | null>(null)
+  const setupDirtyRef = useRef<Set<'productType' | 'variationTheme'>>(new Set())
+
   const [status, setStatus] = useState<SaveStatus>('idle')
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
   const dirtyRef = useRef<Set<string>>(new Set())
@@ -212,12 +225,20 @@ export default function ChannelFieldEditor({
           for (const l of arr) flat.push(l)
         }
         setSiblings(flat)
-        // Seed variantAttrs from the active listing's variants slice.
+        // Seed variantAttrs + setup values from the active listing.
         const active = flat.find(
           (l) =>
             l.channel.toUpperCase() === channel.toUpperCase() &&
             l.marketplace.toUpperCase() === marketplace.toUpperCase(),
         )
+        const activePT =
+          (active?.platformAttributes?.productType as string | undefined) ??
+          (product?.productType as string | undefined) ??
+          ''
+        setSetupValues({
+          productType: activePT,
+          variationTheme: active?.variationTheme ?? '',
+        })
         const variants = active?.platformAttributes?.variants
         if (variants && typeof variants === 'object') {
           setVariantAttrs(() => {
@@ -251,6 +272,10 @@ export default function ChannelFieldEditor({
     return () => {
       cancelled = true
     }
+    // product?.productType is read inside the effect to seed setup
+    // values, but we don't want a refetch every time the parent
+    // recreates the product object — the seed is one-shot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId, channel, marketplace])
 
   // ── Auto-save dirty fields ───────────────────────────────────
@@ -304,6 +329,68 @@ export default function ChannelFieldEditor({
       }, SAVE_DEBOUNCE_MS)
     },
     [flush],
+  )
+
+  // Q.5 — debounced flush for the listing-setup card. PUTs only the
+  // dirty top-level keys (productType / variationTheme). When
+  // productType changes, the user's expectation is that the schema
+  // refreshes, so we bump reloadKey after a successful save.
+  const flushSetup = useCallback(async () => {
+    const dirty = setupDirtyRef.current
+    if (dirty.size === 0) return
+    const payload: Record<string, unknown> = {}
+    for (const k of dirty) payload[k] = setupValues[k]
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${productId}/listings/${channel}/${marketplace}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      const updated = await res.json()
+      const productTypeChanged = dirty.has('productType')
+      setupDirtyRef.current = new Set()
+      onSaved?.(updated)
+      if (productTypeChanged) {
+        // Refresh the schema since the productType drives the field
+        // union.
+        setReloadKey((k) => k + 1)
+      }
+    } catch (e) {
+      setStatus('error')
+      setStatusMsg(e instanceof Error ? e.message : String(e))
+    }
+  }, [productId, channel, marketplace, setupValues, onSaved])
+
+  const setSetup = useCallback(
+    (key: 'productType' | 'variationTheme', value: string) => {
+      setSetupValues((prev) => ({ ...prev, [key]: value }))
+      setupDirtyRef.current.add(key)
+      setStatus('saving')
+      setStatusMsg(null)
+      if (setupSaveTimer.current) window.clearTimeout(setupSaveTimer.current)
+      setupSaveTimer.current = window.setTimeout(() => {
+        void flushSetup().then(() => {
+          if (
+            dirtyRef.current.size === 0 &&
+            dirtyVariantsRef.current.size === 0 &&
+            setupDirtyRef.current.size === 0
+          ) {
+            setStatus('saved')
+            window.setTimeout(() => {
+              setStatus((s) => (s === 'saved' ? 'idle' : s))
+            }, 1500)
+          }
+        })
+      }, SAVE_DEBOUNCE_MS)
+    },
+    [flushSetup],
   )
 
   // Q.4 — debounced flush for variant overrides. Mirrors the base
@@ -387,8 +474,10 @@ export default function ChannelFieldEditor({
     return () => {
       if (saveTimer.current) window.clearTimeout(saveTimer.current)
       if (variantSaveTimer.current) window.clearTimeout(variantSaveTimer.current)
+      if (setupSaveTimer.current) window.clearTimeout(setupSaveTimer.current)
       if (dirtyRef.current.size > 0) void flush()
       if (dirtyVariantsRef.current.size > 0) void flushVariants()
+      if (setupDirtyRef.current.size > 0) void flushSetup()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -625,6 +714,14 @@ export default function ChannelFieldEditor({
         </div>
       )}
 
+      {/* Q.5 — Listing setup: per-channel productType + variation theme */}
+      <ListingSetupCard
+        productType={setupValues.productType}
+        variationTheme={setupValues.variationTheme}
+        masterProductType={(product?.productType as string | undefined) ?? ''}
+        onChange={setSetup}
+      />
+
       {manifest && (
         <SchemaAgeIndicator
           fetchedAt={manifest.fetchedAtByChannel[channelKey]}
@@ -746,6 +843,65 @@ function SaveStatusPill({
       {status === 'saving' && 'Saving…'}
       {status === 'saved' && 'Saved'}
       {status === 'error' && (message ?? 'Save failed')}
+    </div>
+  )
+}
+
+function ListingSetupCard({
+  productType,
+  variationTheme,
+  masterProductType,
+  onChange,
+}: {
+  productType: string
+  variationTheme: string
+  masterProductType: string
+  onChange: (key: 'productType' | 'variationTheme', value: string) => void
+}) {
+  const inheriting =
+    productType === '' ||
+    (productType === masterProductType && masterProductType !== '')
+  return (
+    <div className="border border-slate-200 rounded-lg bg-white px-4 py-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
+        <div className="space-y-1">
+          <label className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+            Amazon product type
+          </label>
+          <input
+            type="text"
+            value={productType}
+            onChange={(e) => onChange('productType', e.target.value)}
+            placeholder={
+              masterProductType
+                ? `Inherits master: ${masterProductType}`
+                : 'e.g. OUTERWEAR, MOTORCYCLE_PROTECTIVE_GEAR'
+            }
+            className="w-full h-8 px-2 text-[13px] font-mono border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          />
+          <p className="text-[10px] text-slate-400">
+            {inheriting
+              ? 'Using the master product’s product type. Override here if this listing should map to a different Amazon category.'
+              : 'Per-listing override active. Schema below reflects this product type.'}
+          </p>
+        </div>
+        <div className="space-y-1">
+          <label className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+            Variation theme
+          </label>
+          <input
+            type="text"
+            value={variationTheme}
+            onChange={(e) => onChange('variationTheme', e.target.value)}
+            placeholder="e.g. SIZE, COLOR, SIZE_NAME/COLOR_NAME"
+            className="w-full h-8 px-2 text-[13px] font-mono border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          />
+          <p className="text-[10px] text-slate-400">
+            Defines how this listing’s variant axes are reported to the
+            channel. Leave empty for non-variant listings.
+          </p>
+        </div>
+      </div>
     </div>
   )
 }
