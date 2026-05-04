@@ -3226,6 +3226,56 @@ export default function BulkOperationsClient() {
                 Reset widths
               </button>
             )}
+            {/* MM — group expand/collapse-all. Placed in the toolbar so
+                it's always reachable; clicking the band chevrons one
+                by one is fine for a few groups but tedious past 5+. */}
+            {groupedFields.length > 1 && (
+              <div className="inline-flex items-center gap-0.5 h-7 px-1 text-[11px] text-slate-600 border border-slate-200 rounded-md bg-white">
+                <span className="px-1.5 text-slate-400">Groups</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCollapsedGroups((prev) => {
+                      if (prev.size === 0) return prev
+                      saveCollapsedGroups(new Set())
+                      return new Set()
+                    })
+                  }}
+                  disabled={collapsedGroups.size === 0}
+                  title="Expand every group"
+                  className={cn(
+                    'h-5 px-1.5 rounded transition-colors',
+                    collapsedGroups.size === 0
+                      ? 'opacity-40 cursor-not-allowed'
+                      : 'hover:bg-slate-100 hover:text-slate-900',
+                  )}
+                >
+                  Expand all
+                </button>
+                <span className="text-slate-300">·</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const allKeys = new Set(groupedFields.map((g) => g.key))
+                    setCollapsedGroups((prev) => {
+                      if (prev.size >= allKeys.size) return prev
+                      saveCollapsedGroups(allKeys)
+                      return allKeys
+                    })
+                  }}
+                  disabled={collapsedGroups.size >= groupedFields.length}
+                  title="Collapse every group"
+                  className={cn(
+                    'h-5 px-1.5 rounded transition-colors',
+                    collapsedGroups.size >= groupedFields.length
+                      ? 'opacity-40 cursor-not-allowed'
+                      : 'hover:bg-slate-100 hover:text-slate-900',
+                  )}
+                >
+                  Collapse all
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

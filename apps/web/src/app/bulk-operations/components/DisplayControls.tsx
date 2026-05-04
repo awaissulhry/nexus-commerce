@@ -65,21 +65,38 @@ export function ExpandCollapseControls({
   expandedParents: Set<string>
   onChange: (s: Set<string>) => void
 }) {
-  // Compute parent IDs from products (those that are parented BY children).
+  // MM — derive parent ids from `isParent` rather than children's
+  // parentId pointers. The previous walk only counted parents whose
+  // children were also loaded in the same payload, so a parent with
+  // unloaded children produced parentIds.size === 0 and "Expand all"
+  // appeared to do nothing. Using isParent catches every expandable
+  // row regardless of which side of the lazy-load fence its
+  // children sit on.
   const parentIds = useMemo(() => {
     const ids = new Set<string>()
     for (const p of products) {
-      if (p.parentId) ids.add(p.parentId)
+      if (p.isParent) ids.add(p.id)
     }
     return ids
   }, [products])
+
+  const allExpanded =
+    parentIds.size > 0 && expandedParents.size >= parentIds.size
+  const noParents = parentIds.size === 0
 
   return (
     <div className="flex items-center gap-2 text-[11px] text-slate-500">
       <button
         type="button"
         onClick={() => onChange(new Set(parentIds))}
-        className="hover:text-slate-900"
+        disabled={noParents || allExpanded}
+        title={noParents ? 'No parent products loaded' : 'Expand every parent'}
+        className={cn(
+          'transition-colors',
+          noParents || allExpanded
+            ? 'opacity-40 cursor-not-allowed'
+            : 'hover:text-slate-900',
+        )}
       >
         Expand all
       </button>
@@ -87,7 +104,14 @@ export function ExpandCollapseControls({
       <button
         type="button"
         onClick={() => onChange(new Set())}
-        className="hover:text-slate-900"
+        disabled={expandedParents.size === 0}
+        title="Collapse every parent"
+        className={cn(
+          'transition-colors',
+          expandedParents.size === 0
+            ? 'opacity-40 cursor-not-allowed'
+            : 'hover:text-slate-900',
+        )}
       >
         Collapse all
       </button>
