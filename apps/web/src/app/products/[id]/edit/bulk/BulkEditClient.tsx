@@ -85,6 +85,11 @@ interface Props {
   product: Product
   childrenList: Product[]
   fields: MasterFieldDef[]
+  /** Schema-derived attribute fields for the master productType,
+   *  fetched server-side so every required + optional Amazon attribute
+   *  surfaces as an editable column on the master tab (writes to
+   *  Product.categoryAttributes via attr_* prefix). */
+  masterSchemaFields?: UnionField[]
 }
 
 type ActiveTab = 'master' | string // string = `${channel}:${marketplace}` uppercase
@@ -191,6 +196,22 @@ const NEUTRAL_TONE: GroupTone = {
 const DEFAULT_OPEN_MASTER: ReadonlySet<string> = new Set(['universal', 'identifiers'])
 const DEFAULT_OPEN_MARKETPLACE: ReadonlySet<string> = new Set(['Identity'])
 
+/** Master tab dedupe table — schema fields that already have a Product
+ *  column are dropped from the schema projection so the master tab
+ *  doesn't render two editors for the same value. Keys are schema field
+ *  ids; values are the master FieldDef.id they collide with. */
+const MASTER_BY_SCHEMA_ID: Record<string, string> = {
+  item_name: 'name',
+  brand: 'brand',
+  manufacturer: 'manufacturer',
+  product_description: 'description',
+  // weight / dimensions
+  item_weight: 'weightValue',
+  item_dimensions: 'dimLength',
+  // gtins / identifiers
+  externally_assigned_product_identifier: 'gtin',
+}
+
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 const SAVE_DEBOUNCE_MS = 600
 
@@ -268,7 +289,12 @@ function readListingValue(
 
 // ── Component ───────────────────────────────────────────────────
 
-export default function BulkEditClient({ product, childrenList, fields }: Props) {
+export default function BulkEditClient({
+  product,
+  childrenList,
+  fields,
+  masterSchemaFields = [],
+}: Props) {
   const router = useRouter()
 
   // Drop channel-prefixed master fields — we surface channel data via
@@ -277,6 +303,32 @@ export default function BulkEditClient({ product, childrenList, fields }: Props)
     () => fields.filter((f) => f.category !== 'amazon' && f.category !== 'ebay'),
     [fields],
   )
+
+  // Schema-derived attr_* fields for the master productType. These
+  // fold the entire required + optional Amazon attribute set onto the
+  // master tab (where they write to Product.categoryAttributes via
+  // the attr_* prefix that PATCH /api/products/bulk already supports).
+  // Skipped when a static registry id already covers the same attribute
+  // (e.g. attr_brand → registry has `brand` as a Product column).
+  const masterSchemaProjected = useMemo<NormalField[]>(() => {
+    if (masterSchemaFields.length === 0) return []
+    const registryIds = new Set(masterFields.map((f) => f.id))
+    const out: NormalField[] = []
+    for (const f of masterSchemaFields) {
+      if (f.kind === 'unsupported') continue
+      // Skip schema fields whose master equivalent already exists as
+      // a Product column. Otherwise the master tab would render two
+      // editors that fight over storage (e.g. brand vs attr_brand).
+      const masterEquivalent = MASTER_BY_SCHEMA_ID[f.id]
+      if (masterEquivalent && registryIds.has(masterEquivalent)) continue
+      const projected = projectSchemaField(f)
+      // Move from `id` to `attr_<id>` so the bulk PATCH endpoint routes
+      // it into Product.categoryAttributes instead of attempting to
+      // write to a non-existent Product column.
+      out.push({ ...projected, id: `attr_${f.id}` })
+    }
+    return out
+  }, [masterSchemaFields, masterFields])
 
   // ── Tabs ───────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<ActiveTab>('master')
@@ -415,15 +467,30 @@ export default function BulkEditClient({ product, childrenList, fields }: Props)
   // ── Active fields + group ordering for the current tab ────────
   const activeFields: NormalField[] = useMemo(() => {
     if (activeTab === 'master') {
-      return masterFields.map(projectMasterField)
+      // Static registry fields (Product columns) + schema-derived
+      // attr_* fields so every required + optional attribute lands on
+      // the master tab.
+      return [
+        ...masterFields.map(projectMasterField),
+        ...masterSchemaProjected,
+      ]
     }
     const m = manifests.get(activeTab)
     return m ? m.fields.map(projectSchemaField) : []
-  }, [activeTab, masterFields, manifests])
+  }, [activeTab, masterFields, masterSchemaProjected, manifests])
 
-  const groupOrder = activeTab === 'master' ? MASTER_GROUP_ORDER : MARKETPLACE_GROUP_ORDER
+  // Master tab now mixes two group taxonomies: registry categories
+  // (universal / identifiers / pricing / …) for Product columns + schema
+  // group names (Identity / Marketing copy / Variation attributes / …)
+  // for the attr_* fields. Concat the orderings; the rendered group
+  // list naturally drops empty buckets so the user only sees groups
+  // that actually have fields.
+  const groupOrder: ReadonlyArray<string> =
+    activeTab === 'master'
+      ? [...MASTER_GROUP_ORDER, ...MARKETPLACE_GROUP_ORDER]
+      : MARKETPLACE_GROUP_ORDER
   const groupLabel = (key: string) =>
-    activeTab === 'master' ? MASTER_GROUP_LABEL[key as MasterCategory] ?? key : key
+    MASTER_GROUP_LABEL[key as MasterCategory] ?? key
 
   const grouped = useMemo(() => {
     const out: Array<{ key: string; fields: NormalField[] }> = []

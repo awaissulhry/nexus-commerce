@@ -13,11 +13,6 @@ export default async function ProductBulkEditPage({ params }: PageProps) {
   const { id } = await params
   const backend = getBackendUrl()
 
-  // Parent + children + dynamic field set in parallel. Variants come
-  // from /amazon/products/:id/children (same source the edit page uses
-  // for its variations tab); fields registry includes any attr_* keys
-  // applicable to the master productType so the spreadsheet surfaces
-  // them as editable columns alongside the static master fields.
   const productRes = await fetch(`${backend}/api/inventory/${id}`, {
     cache: 'no-store',
   })
@@ -31,23 +26,60 @@ export default async function ProductBulkEditPage({ params }: PageProps) {
     ? `?productTypes=${encodeURIComponent(product.productType)}`
     : ''
 
-  const [childrenRes, fieldsRes] = await Promise.all([
+  // Variants + listings + static registry fields up front. Listings are
+  // needed both for the marketplace tabs (the client refetches anyway)
+  // AND so we can pick a representative AMAZON marketplace to drive the
+  // master-tab schema fetch — that's how every required + optional
+  // Amazon attribute lands as an editable column on the master tab.
+  const [childrenRes, fieldsRes, listingsRes] = await Promise.all([
     fetch(`${backend}/api/amazon/products/${id}/children`, {
       cache: 'no-store',
     }),
     fetch(`${backend}/api/pim/fields${productTypeQs}`, {
       cache: 'no-store',
     }),
+    fetch(`${backend}/api/products/${id}/all-listings`, {
+      cache: 'no-store',
+    }),
   ])
 
   const childrenJson = childrenRes.ok ? await childrenRes.json() : { children: [] }
   const fieldsJson = fieldsRes.ok ? await fieldsRes.json() : { fields: [] }
+  const listingsByChannel: Record<string, Array<{ channel: string; marketplace: string }>> =
+    listingsRes.ok ? await listingsRes.json() : {}
+
+  // Find a representative AMAZON marketplace. First any AMAZON listing,
+  // then fall back to 'IT' (Xavia's primary market) so the master tab
+  // still surfaces the full schema even when nothing is published yet.
+  let masterSchemaFields: unknown[] = []
+  if (product.productType) {
+    const amazonListings = (listingsByChannel?.AMAZON ?? []) as Array<{
+      channel: string
+      marketplace: string
+    }>
+    const repMarketplace = amazonListings[0]?.marketplace ?? 'IT'
+    try {
+      const url = new URL(
+        `${backend}/api/products/${id}/listings/AMAZON/${repMarketplace}/schema`,
+      )
+      url.searchParams.set('all', '1')
+      const res = await fetch(url.toString(), { cache: 'no-store' })
+      if (res.ok) {
+        const json = await res.json()
+        masterSchemaFields = (json.fields ?? []) as unknown[]
+      }
+    } catch {
+      /* non-fatal — master tab falls back to the registry-only column
+       * set when the schema fetch fails (e.g. SP-API unconfigured) */
+    }
+  }
 
   return (
     <BulkEditClient
       product={product}
       childrenList={childrenJson.children ?? []}
       fields={fieldsJson.fields ?? []}
+      masterSchemaFields={masterSchemaFields as any}
     />
   )
 }
