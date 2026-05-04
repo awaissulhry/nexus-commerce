@@ -270,6 +270,64 @@ export default function BulkOperationsClient() {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
     () => loadCollapsedGroups(),
   )
+  // V.3 — column being dragged (HTML5 DnD source). Null when no drag
+  // is in progress. Used by the header cells' onDragOver to draw a
+  // drop-target indicator.
+  const [draggedColumnId, setDraggedColumnId] = useState<string | null>(null)
+  const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null)
+  // V.4 — same shape for the group band so dragging a chip moves all
+  // its member fields together.
+  const [draggedGroupKey, setDraggedGroupKey] = useState<string | null>(null)
+  const [dragOverGroupKey, setDragOverGroupKey] = useState<string | null>(null)
+
+  const reorderColumns = useCallback(
+    (sourceId: string, targetId: string) => {
+      if (sourceId === targetId) return
+      setVisibleColumnIds((prev) => {
+        const fromIdx = prev.indexOf(sourceId)
+        const toIdx = prev.indexOf(targetId)
+        if (fromIdx === -1 || toIdx === -1) return prev
+        const next = prev.slice()
+        const [moved] = next.splice(fromIdx, 1)
+        const insertAt = toIdx < fromIdx ? toIdx : toIdx
+        next.splice(insertAt, 0, moved!)
+        return next
+      })
+    },
+    [],
+  )
+
+  /** V.4 — move every field in `sourceKey` so the first lands just
+   *  before `targetKey`'s first field. Preserves the within-group
+   *  ordering of both source and target so resizing / individual
+   *  reorders inside groups don't get clobbered. */
+  const reorderGroups = useCallback(
+    (
+      sourceKey: string,
+      targetKey: string,
+      groups: Array<{ key: string; fields: FieldDef[] }>,
+    ) => {
+      if (sourceKey === targetKey) return
+      const source = groups.find((g) => g.key === sourceKey)
+      const target = groups.find((g) => g.key === targetKey)
+      if (!source || !target) return
+      const sourceIds = new Set(source.fields.map((f) => f.id))
+      setVisibleColumnIds((prev) => {
+        const without = prev.filter((id) => !sourceIds.has(id))
+        const targetFirstId = target.fields[0]?.id
+        if (!targetFirstId) return prev
+        const insertAt = without.indexOf(targetFirstId)
+        if (insertAt === -1) return prev
+        const moved = source.fields.map((f) => f.id)
+        return [
+          ...without.slice(0, insertAt),
+          ...moved,
+          ...without.slice(insertAt),
+        ]
+      })
+    },
+    [],
+  )
   const toggleGroupCollapse = useCallback((key: string) => {
     setCollapsedGroups((prev) => {
       const next = new Set(prev)
@@ -1399,6 +1457,10 @@ export default function BulkOperationsClient() {
   // chips above the column headers. Order is preserved (the buckets
   // come out in the order they're first hit), so user-driven column
   // ordering carries through to the band.
+  // V.1 — read user-resized column widths off `columnSizing` so the
+  // band chips track the columns underneath in real time. Falls back
+  // to the registry default (`field.width ?? 120`) when the user
+  // hasn't dragged that column.
   const groupedFields = useMemo(() => {
     const result: Array<{
       key: string
@@ -1419,10 +1481,12 @@ export default function BulkOperationsClient() {
         result.push(bucket)
       }
       bucket.fields.push(field)
-      bucket.size += field.width ?? 120
+      const userSized = columnSizing[id]
+      bucket.size +=
+        typeof userSized === 'number' ? userSized : field.width ?? 120
     }
     return result
-  }, [visibleColumnIds, fieldsById])
+  }, [visibleColumnIds, fieldsById, columnSizing])
 
   const dynamicColumns = useMemo<ColumnDef<BulkProduct>[]>(() => {
     const out: ColumnDef<BulkProduct>[] = []
@@ -2320,6 +2384,41 @@ export default function BulkOperationsClient() {
     [activeViewIdState, handleSelectView],
   )
 
+  // V.5 — overwrite the active server template with the current grid
+  // state. Only valid for server-backed views (DEFAULT_VIEWS are
+  // hardcoded). Reuses saveUserView's PATCH branch.
+  const [updateFlash, setUpdateFlash] = useState<'idle' | 'saving' | 'saved'>(
+    'idle',
+  )
+  const activeView = useMemo(
+    () => savedViews.find((v) => v.id === activeViewIdState),
+    [savedViews, activeViewIdState],
+  )
+  const canUpdateActiveView =
+    !!activeView && !!activeView.serverBacked && !isDefaultView(activeView.id)
+  const handleUpdateActiveView = useCallback(async () => {
+    if (!activeView || !canUpdateActiveView) return
+    setUpdateFlash('saving')
+    await saveUserView({
+      id: activeView.id,
+      name: activeView.name,
+      columnIds: visibleColumnIds,
+      filterState,
+      channels: enabledChannels,
+      productTypes: enabledProductTypes,
+    })
+    setSavedViews(loadAllViews())
+    setUpdateFlash('saved')
+    window.setTimeout(() => setUpdateFlash('idle'), 1500)
+  }, [
+    activeView,
+    canUpdateActiveView,
+    visibleColumnIds,
+    filterState,
+    enabledChannels,
+    enabledProductTypes,
+  ])
+
   return (
     <div className="flex-1 min-h-0 px-6 pb-6 flex flex-col">
       {!online && (
@@ -2501,29 +2600,54 @@ export default function BulkOperationsClient() {
 
         {/* ── Row 2 — secondary tools + status ──────────────────────── */}
         <div className="flex items-center gap-2 flex-wrap text-[11px]">
-          {/* Left: history. */}
+          {/* Left: history. V.2 — count badges show stack depth at a
+              glance so undo/redo state is visible in real time. */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <div className="flex items-center gap-0.5 border border-slate-200 rounded-md">
               <button
                 type="button"
                 onClick={undo}
                 disabled={!canUndo}
-                title="Undo (⌘Z)"
+                title={
+                  canUndo
+                    ? `Undo last edit (⌘Z) — ${historyIndex + 1} step${
+                        historyIndex === 0 ? '' : 's'
+                      } available`
+                    : 'Nothing to undo'
+                }
                 aria-label="Undo"
-                className="h-7 px-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-default rounded-l-md"
+                className="h-7 px-1.5 inline-flex items-center gap-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-default rounded-l-md"
               >
                 <Undo2 className="w-3.5 h-3.5" />
+                {canUndo && (
+                  <span className="text-[10px] tabular-nums text-slate-500">
+                    {historyIndex + 1}
+                  </span>
+                )}
               </button>
               <div className="w-px h-4 bg-slate-200" />
               <button
                 type="button"
                 onClick={redo}
                 disabled={!canRedo}
-                title="Redo (⌘⇧Z)"
+                title={
+                  canRedo
+                    ? `Redo (⌘⇧Z) — ${
+                        history.length - 1 - historyIndex
+                      } step${
+                        history.length - 1 - historyIndex === 1 ? '' : 's'
+                      } available`
+                    : 'Nothing to redo'
+                }
                 aria-label="Redo"
-                className="h-7 px-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-default rounded-r-md"
+                className="h-7 px-1.5 inline-flex items-center gap-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-default rounded-r-md"
               >
                 <Redo2 className="w-3.5 h-3.5" />
+                {canRedo && (
+                  <span className="text-[10px] tabular-nums text-slate-500">
+                    {history.length - 1 - historyIndex}
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -2580,6 +2704,28 @@ export default function BulkOperationsClient() {
               onSaveAsView={handleSaveAsView}
               onDeleteView={handleDeleteView}
             />
+            {/* V.5 — overwrite the active server template with current
+                state. Only renders when the active view is server-backed. */}
+            {canUpdateActiveView && (
+              <button
+                type="button"
+                onClick={() => void handleUpdateActiveView()}
+                disabled={updateFlash === 'saving'}
+                title={`Save current columns + filters back to "${activeView?.name}"`}
+                className={cn(
+                  'inline-flex items-center gap-1 h-7 px-2 text-[11px] font-medium border rounded-md transition-colors',
+                  updateFlash === 'saved'
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                    : 'border-slate-200 text-slate-700 hover:bg-slate-50',
+                )}
+              >
+                {updateFlash === 'saving'
+                  ? 'Updating…'
+                  : updateFlash === 'saved'
+                  ? 'Updated'
+                  : `Update "${activeView?.name}"`}
+              </button>
+            )}
             {Object.keys(columnSizing).length > 0 && (
               <button
                 type="button"
@@ -2613,31 +2759,71 @@ export default function BulkOperationsClient() {
               const tone = GROUP_TONE[g.key] ?? NEUTRAL_TONE
               const open = !collapsedGroups.has(g.key)
               const width = open ? g.size : 80
+              const isGroupDropTarget =
+                dragOverGroupKey === g.key &&
+                draggedGroupKey !== null &&
+                draggedGroupKey !== g.key
               return (
-                <button
+                <div
                   key={g.key}
-                  type="button"
-                  onClick={() => toggleGroupCollapse(g.key)}
-                  className={cn(
-                    'flex items-center gap-1 px-2 border-r-2 text-[10px] font-semibold uppercase tracking-wider transition-colors',
-                    tone.band,
-                    tone.text,
-                    'hover:brightness-95',
-                  )}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.effectAllowed = 'move'
+                    e.dataTransfer.setData('text/plain', `group:${g.key}`)
+                    setDraggedGroupKey(g.key)
+                  }}
+                  onDragOver={(e) => {
+                    if (draggedGroupKey && draggedGroupKey !== g.key) {
+                      e.preventDefault()
+                      e.dataTransfer.dropEffect = 'move'
+                      if (dragOverGroupKey !== g.key) {
+                        setDragOverGroupKey(g.key)
+                      }
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    const src = draggedGroupKey
+                    if (src && src !== g.key) {
+                      reorderGroups(src, g.key, groupedFields)
+                    }
+                    setDraggedGroupKey(null)
+                    setDragOverGroupKey(null)
+                  }}
+                  onDragEnd={() => {
+                    setDraggedGroupKey(null)
+                    setDragOverGroupKey(null)
+                  }}
                   style={{ width, flexShrink: 0, minWidth: 80 }}
-                  title={`${open ? 'Collapse' : 'Expand'} ${g.label}`}
+                  className={cn(
+                    'border-r-2',
+                    isGroupDropTarget && 'ring-2 ring-blue-400 ring-inset',
+                    draggedGroupKey === g.key && 'opacity-40',
+                  )}
                 >
-                  <ChevronRight
+                  <button
+                    type="button"
+                    onClick={() => toggleGroupCollapse(g.key)}
                     className={cn(
-                      'w-3 h-3 transition-transform flex-shrink-0',
-                      open && 'rotate-90',
+                      'w-full h-full flex items-center gap-1 px-2 text-[10px] font-semibold uppercase tracking-wider transition-colors cursor-grab active:cursor-grabbing',
+                      tone.band,
+                      tone.text,
+                      'hover:brightness-95',
                     )}
-                  />
-                  <span className="truncate">{g.label}</span>
-                  <span className="opacity-60 tabular-nums flex-shrink-0">
-                    {open ? g.fields.length : `${g.fields.length} hidden`}
-                  </span>
-                </button>
+                    title={`${open ? 'Collapse' : 'Expand'} ${g.label} · drag to reorder`}
+                  >
+                    <ChevronRight
+                      className={cn(
+                        'w-3 h-3 transition-transform flex-shrink-0',
+                        open && 'rotate-90',
+                      )}
+                    />
+                    <span className="truncate">{g.label}</span>
+                    <span className="opacity-60 tabular-nums flex-shrink-0">
+                      {open ? g.fields.length : `${g.fields.length} hidden`}
+                    </span>
+                  </button>
+                </div>
               )
             })}
             {/* Spacer matching the actions column so band aligns. */}
@@ -2658,12 +2844,72 @@ export default function BulkOperationsClient() {
               | undefined)?.fieldDef
             const isReadOnly = fieldDef && !fieldDef.editable
             const isResizing = header.column.getIsResizing()
+            // V.3 — reserved system columns (`__group_*`, `__actions`)
+            // can't be reordered by drag. SKU stays in place too — it
+            // owns hierarchy chrome.
+            const isSystemCol = header.column.id.startsWith('__')
+            const isDraggable = !isSystemCol && header.column.id !== 'sku'
+            const isDropTarget =
+              dragOverColumnId === header.column.id &&
+              draggedColumnId !== null &&
+              draggedColumnId !== header.column.id
             return (
               <div
                 key={header.id}
-                className="relative flex items-center gap-1 px-3 border-r border-slate-200/70 last:border-r-0 text-[11px] font-semibold text-slate-700 uppercase tracking-wider"
+                draggable={isDraggable}
+                onDragStart={
+                  isDraggable
+                    ? (e) => {
+                        e.dataTransfer.effectAllowed = 'move'
+                        e.dataTransfer.setData('text/plain', header.column.id)
+                        setDraggedColumnId(header.column.id)
+                      }
+                    : undefined
+                }
+                onDragOver={
+                  isDraggable
+                    ? (e) => {
+                        if (draggedColumnId && draggedColumnId !== header.column.id) {
+                          e.preventDefault()
+                          e.dataTransfer.dropEffect = 'move'
+                          if (dragOverColumnId !== header.column.id) {
+                            setDragOverColumnId(header.column.id)
+                          }
+                        }
+                      }
+                    : undefined
+                }
+                onDrop={
+                  isDraggable
+                    ? (e) => {
+                        e.preventDefault()
+                        const src = draggedColumnId
+                        if (src && src !== header.column.id) {
+                          reorderColumns(src, header.column.id)
+                        }
+                        setDraggedColumnId(null)
+                        setDragOverColumnId(null)
+                      }
+                    : undefined
+                }
+                onDragEnd={() => {
+                  setDraggedColumnId(null)
+                  setDragOverColumnId(null)
+                }}
+                className={cn(
+                  'relative flex items-center gap-1 px-3 border-r border-slate-200/70 last:border-r-0 text-[11px] font-semibold text-slate-700 uppercase tracking-wider transition-colors',
+                  isDraggable && 'cursor-grab active:cursor-grabbing',
+                  isDropTarget && 'bg-blue-100',
+                  draggedColumnId === header.column.id && 'opacity-40',
+                )}
                 style={{ width: header.getSize(), flexShrink: 0 }}
-                title={fieldDef?.helpText}
+                title={
+                  isDraggable
+                    ? `${fieldDef?.helpText ?? ''}${
+                        fieldDef?.helpText ? ' · ' : ''
+                      }Drag to reorder`
+                    : fieldDef?.helpText
+                }
               >
                 <span className="truncate">
                   {flexRender(
@@ -2681,9 +2927,20 @@ export default function BulkOperationsClient() {
                  *  TanStack's getResizeHandler to track mousedown and
                  *  drive column.size via the columnSizing state. */}
                 <div
-                  onMouseDown={header.getResizeHandler()}
-                  onTouchStart={header.getResizeHandler()}
+                  onMouseDown={(e) => {
+                    e.stopPropagation()
+                    header.getResizeHandler()(e)
+                  }}
+                  onTouchStart={(e) => {
+                    e.stopPropagation()
+                    header.getResizeHandler()(e)
+                  }}
                   onClick={(e) => e.stopPropagation()}
+                  // Drag handlers above would otherwise hijack the
+                  // resize gesture; suppress the drag here so a
+                  // mousedown on the handle stays a resize.
+                  draggable={false}
+                  onDragStart={(e) => e.preventDefault()}
                   className={cn(
                     'absolute top-0 bottom-0 w-1.5 cursor-col-resize select-none touch-none',
                     'right-0 -mr-[3px] z-10',
