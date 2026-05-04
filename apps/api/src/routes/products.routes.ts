@@ -1644,6 +1644,223 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       return csv
     },
   )
+
+  // R.2 — schema-driven bulk attribute update across products ×
+  // marketplaces. Synchronous; returns per-tuple success/error so the
+  // modal can render a result toast without polling. Same field-id
+  // semantics as the per-listing PUT route (item_name → title etc.).
+  fastify.post<{
+    Body: {
+      productIds: string[]
+      marketplaceContexts: Array<{
+        channel: 'AMAZON' | 'EBAY'
+        marketplace: string
+      }>
+      attributes: Record<string, string | number | boolean | null>
+      variantAttributes?: Record<
+        string,
+        Record<string, string | number | boolean | null>
+      >
+    }
+  }>(
+    '/products/bulk-schema-update',
+    async (request, reply) => {
+      const { productIds, marketplaceContexts, attributes, variantAttributes } =
+        request.body ?? {}
+      if (!Array.isArray(productIds) || productIds.length === 0) {
+        return reply.code(400).send({ error: 'productIds required' })
+      }
+      if (productIds.length > 1000) {
+        return reply.code(400).send({ error: 'Max 1000 productIds per request' })
+      }
+      if (
+        !Array.isArray(marketplaceContexts) ||
+        marketplaceContexts.length === 0
+      ) {
+        return reply
+          .code(400)
+          .send({ error: 'marketplaceContexts required (one or more)' })
+      }
+      if (!attributes || typeof attributes !== 'object') {
+        return reply.code(400).send({ error: 'attributes required' })
+      }
+
+      // Pre-load existing listings for every (product × context) so the
+      // shallow-merge into platformAttributes preserves keys we're not
+      // touching. One findMany covers all targets.
+      const targetKeys = marketplaceContexts.flatMap((ctx) =>
+        productIds.map((pid) => ({
+          productId: pid,
+          channel: ctx.channel,
+          marketplace: ctx.marketplace,
+        })),
+      )
+      const existing = await prisma.channelListing.findMany({
+        where: {
+          OR: marketplaceContexts.map((ctx) => ({
+            productId: { in: productIds },
+            channel: ctx.channel,
+            marketplace: ctx.marketplace,
+          })),
+        },
+        select: {
+          id: true,
+          productId: true,
+          channel: true,
+          marketplace: true,
+          platformAttributes: true,
+        },
+      })
+      const existingByKey = new Map(
+        existing.map((l) => [
+          `${l.productId}:${l.channel}:${l.marketplace}`,
+          l,
+        ]),
+      )
+
+      const errors: Array<{
+        productId: string
+        channel: string
+        marketplace: string
+        error: string
+      }> = []
+      let updated = 0
+
+      // Mirror the per-listing PUT logic: split known field ids into
+      // their dedicated columns, merge the rest into
+      // platformAttributes.attributes (and .variants).
+      const ops: any[] = []
+      for (const tk of targetKeys) {
+        const key = `${tk.productId}:${tk.channel}:${tk.marketplace}`
+        const channelMarket = `${tk.channel}_${tk.marketplace}`
+        const data: Record<string, any> = {}
+
+        // Split attributes into columns + passthrough
+        const passthrough: Record<string, unknown> = {}
+        for (const [fieldId, value] of Object.entries(attributes)) {
+          if (fieldId === 'item_name' && typeof value === 'string') {
+            data.title = value
+          } else if (
+            fieldId === 'product_description' &&
+            typeof value === 'string'
+          ) {
+            data.description = value
+          } else if (fieldId === 'bullet_point') {
+            if (typeof value === 'string') {
+              try {
+                const parsed = JSON.parse(value)
+                if (Array.isArray(parsed)) {
+                  data.bulletPointsOverride = parsed.filter(
+                    (s) => typeof s === 'string' && s.length > 0,
+                  )
+                } else {
+                  data.bulletPointsOverride = [value]
+                }
+              } catch {
+                data.bulletPointsOverride = [value]
+              }
+            } else if (Array.isArray(value)) {
+              data.bulletPointsOverride = (value as unknown[]).filter(
+                (s) => typeof s === 'string' && (s as string).length > 0,
+              )
+            }
+          } else {
+            passthrough[fieldId] = value
+          }
+        }
+
+        // platformAttributes shallow merge with existing slice.
+        const ex = existingByKey.get(key)
+        const exPA = (ex?.platformAttributes as Record<string, any> | null) ?? null
+        let nextPA: Record<string, any> | null = null
+        if (Object.keys(passthrough).length > 0) {
+          const exAttrs =
+            exPA && typeof exPA.attributes === 'object'
+              ? (exPA.attributes as Record<string, unknown>)
+              : {}
+          const merged: Record<string, unknown> = { ...exAttrs }
+          for (const [k, v] of Object.entries(passthrough)) {
+            if (v === null || v === undefined || v === '') {
+              delete merged[k]
+            } else {
+              merged[k] = v
+            }
+          }
+          nextPA = { ...(exPA ?? {}), attributes: merged }
+        }
+        if (variantAttributes && typeof variantAttributes === 'object') {
+          const exVariants =
+            exPA && typeof exPA.variants === 'object'
+              ? (exPA.variants as Record<string, Record<string, unknown>>)
+              : {}
+          const mergedVariants: Record<string, Record<string, unknown>> = {
+            ...exVariants,
+          }
+          for (const [variationId, slice] of Object.entries(variantAttributes)) {
+            const prev = mergedVariants[variationId] ?? {}
+            const next: Record<string, unknown> = { ...prev }
+            for (const [fieldId, v] of Object.entries(slice ?? {})) {
+              if (v === null || v === undefined || v === '') {
+                delete next[fieldId]
+              } else {
+                next[fieldId] = v
+              }
+            }
+            if (Object.keys(next).length === 0) {
+              delete mergedVariants[variationId]
+            } else {
+              mergedVariants[variationId] = next
+            }
+          }
+          nextPA = {
+            ...(exPA ?? {}),
+            ...(nextPA ?? {}),
+            variants: mergedVariants,
+          }
+        }
+        if (nextPA !== null) data.platformAttributes = nextPA
+
+        ops.push(
+          prisma.channelListing
+            .upsert({
+              where: {
+                productId_channel_marketplace: {
+                  productId: tk.productId,
+                  channel: tk.channel,
+                  marketplace: tk.marketplace,
+                },
+              },
+              create: {
+                productId: tk.productId,
+                channel: tk.channel,
+                channelMarket,
+                region: tk.marketplace,
+                marketplace: tk.marketplace,
+                listingStatus: 'DRAFT',
+                ...data,
+              } as any,
+              update: data,
+            })
+            .then(() => {
+              updated++
+              return null
+            })
+            .catch((err: unknown) => {
+              errors.push({
+                productId: tk.productId,
+                channel: tk.channel,
+                marketplace: tk.marketplace,
+                error: err instanceof Error ? err.message : String(err),
+              })
+              return null
+            }),
+        )
+      }
+      await Promise.all(ops)
+
+      return { updated, skipped: 0, errors }
+    },
+  )
 }
 
 export default productsRoutes

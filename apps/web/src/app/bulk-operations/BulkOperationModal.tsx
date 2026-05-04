@@ -4,12 +4,20 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
+  Globe,
   Loader2,
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import {
+  FieldInput,
+  type Primitive,
+  type UnionField,
+  type UnionManifest,
+} from '../products/_shared/attribute-editor'
+import type { MarketplaceContext } from './components/MarketplaceSelector'
 
 // ── Operation contract ─────────────────────────────────────────────
 
@@ -18,6 +26,7 @@ type OperationType =
   | 'INVENTORY_UPDATE'
   | 'STATUS_UPDATE'
   | 'ATTRIBUTE_UPDATE'
+  | 'SCHEMA_FIELD_UPDATE'
 
 interface OperationConfig {
   type: OperationType
@@ -252,26 +261,141 @@ interface Props {
   /** Current grid filters (mapped from the bulk-ops page's filterState).
    *  Used as the default when the user picks "current filter result". */
   currentFilters?: ScopeFilters
+  /** R.2 — multi-marketplace targets selected on the page. The
+   *  schema-driven "Set channel attribute" op fans out to every
+   *  entry. Empty disables that op. */
+  marketplaceTargets?: MarketplaceContext[]
+  /** R.2 — product IDs currently visible in the grid (post-search /
+   *  filter). The schema-driven op operates on these directly,
+   *  skipping the BulkActionService preview/job system. Capped at
+   *  1000 by the backend. */
+  visibleProductIds?: string[]
 }
 
 export default function BulkOperationModal({
   open,
   onClose,
   currentFilters,
+  marketplaceTargets = [],
+  visibleProductIds = [],
 }: Props) {
   const [opType, setOpType] = useState<OperationType>('PRICING_UPDATE')
-  const op = OPERATIONS.find((o) => o.type === opType)!
+  const op = OPERATIONS.find((o) => o.type === opType)
+  const isSchemaOp = opType === 'SCHEMA_FIELD_UPDATE'
 
   const [payload, setPayload] = useState<Record<string, unknown>>(
-    op.initialPayload,
+    op?.initialPayload ?? {},
   )
   // Reset payload when op changes
-  useEffect(() => setPayload(op.initialPayload), [opType, op.initialPayload])
+  useEffect(() => setPayload(op?.initialPayload ?? {}), [opType, op?.initialPayload])
 
   const [scopeMode, setScopeMode] = useState<ScopeMode>('filter')
   const [subsetFilters, setSubsetFilters] = useState<ScopeFilters>({})
   const activeFilters: ScopeFilters =
     scopeMode === 'filter' ? currentFilters ?? {} : subsetFilters
+
+  // R.2 — schema-op-specific state. Field manifest is loaded from a
+  // representative product (the first visible id) using the active
+  // page-level marketplace target as the schema lookup key. The
+  // selected field id + value drive the bulk-schema-update PUT.
+  const [schemaManifest, setSchemaManifest] = useState<UnionManifest | null>(
+    null,
+  )
+  const [schemaLoading, setSchemaLoading] = useState(false)
+  const [schemaError, setSchemaError] = useState<string | null>(null)
+  const [schemaFieldId, setSchemaFieldId] = useState<string>('')
+  const [schemaValue, setSchemaValue] = useState<Primitive | undefined>(
+    undefined,
+  )
+  const [schemaResult, setSchemaResult] = useState<{
+    updated: number
+    errors: Array<{
+      productId: string
+      channel: string
+      marketplace: string
+      error: string
+    }>
+  } | null>(null)
+
+  const schemaField: UnionField | undefined = useMemo(
+    () => schemaManifest?.fields.find((f) => f.id === schemaFieldId),
+    [schemaManifest, schemaFieldId],
+  )
+
+  const primaryTarget = marketplaceTargets[0] ?? null
+  const repProductId = visibleProductIds[0] ?? null
+
+  // Load schema for the schema-op when it's active. Refetches when the
+  // representative product or primary target changes.
+  useEffect(() => {
+    if (!open || !isSchemaOp) return
+    if (!primaryTarget || !repProductId) {
+      setSchemaManifest(null)
+      setSchemaError(
+        !primaryTarget
+          ? 'Select one or more marketplace targets in the toolbar first.'
+          : 'No products visible in the grid.',
+      )
+      return
+    }
+    let cancelled = false
+    setSchemaLoading(true)
+    setSchemaError(null)
+    fetch(
+      `${getBackendUrl()}/api/products/${repProductId}/listings/${primaryTarget.channel}/${primaryTarget.marketplace}/schema?all=1`,
+    )
+      .then(async (r) => ({ ok: r.ok, json: await r.json() }))
+      .then(({ ok, json }) => {
+        if (cancelled) return
+        if (!ok) {
+          setSchemaError(json?.error ?? 'Schema lookup failed')
+          setSchemaManifest(null)
+          return
+        }
+        setSchemaManifest(json as UnionManifest)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setSchemaError(err instanceof Error ? err.message : String(err))
+      })
+      .finally(() => {
+        if (!cancelled) setSchemaLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, isSchemaOp, primaryTarget, repProductId])
+
+  const handleSchemaExecute = async () => {
+    if (!schemaFieldId || schemaValue === undefined || schemaValue === '') return
+    if (visibleProductIds.length === 0 || marketplaceTargets.length === 0) return
+    setExecuting(true)
+    setExecuteError(null)
+    setSchemaResult(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/bulk-schema-update`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            productIds: visibleProductIds.slice(0, 1000),
+            marketplaceContexts: marketplaceTargets,
+            attributes: { [schemaFieldId]: schemaValue },
+          }),
+        },
+      )
+      const json = await res.json()
+      if (!res.ok) {
+        throw new Error(json.error ?? `HTTP ${res.status}`)
+      }
+      setSchemaResult({ updated: json.updated ?? 0, errors: json.errors ?? [] })
+    } catch (err) {
+      setExecuteError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setExecuting(false)
+    }
+  }
 
   const [preview, setPreview] = useState<{
     affectedCount: number
@@ -298,6 +422,11 @@ export default function BulkOperationModal({
       setJob(null)
       setExecuting(false)
       setExecuteError(null)
+      setSchemaFieldId('')
+      setSchemaValue(undefined)
+      setSchemaResult(null)
+      setSchemaManifest(null)
+      setSchemaError(null)
     }
   }, [open])
 
@@ -311,8 +440,9 @@ export default function BulkOperationModal({
     return () => document.removeEventListener('keydown', onKey)
   }, [open, executing, onClose])
 
-  // Fetch preview whenever scope or payload changes (debounced).
-  const payloadValid = op.isPayloadValid(payload)
+  // Fetch preview whenever scope or payload changes (debounced). The
+  // schema-op uses its own (non-async-job) flow so it skips this.
+  const payloadValid = isSchemaOp ? true : op?.isPayloadValid(payload) ?? false
   const previewKey = useMemo(
     () =>
       JSON.stringify({
@@ -323,7 +453,7 @@ export default function BulkOperationModal({
     [opType, payload, activeFilters],
   )
   useEffect(() => {
-    if (!open || !payloadValid) {
+    if (!open || !payloadValid || isSchemaOp) {
       setPreview(null)
       return
     }
@@ -338,7 +468,7 @@ export default function BulkOperationModal({
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
-              jobName: `${op.label} (preview)`,
+              jobName: `${op?.label ?? opType} (preview)`,
               actionType: opType,
               filters: activeFilters,
               actionPayload: payload,
@@ -365,7 +495,7 @@ export default function BulkOperationModal({
       }
     }, 250)
     return () => window.clearTimeout(timer)
-  }, [open, payloadValid, previewKey, op.label, opType, payload, activeFilters])
+  }, [open, payloadValid, previewKey, op?.label, opType, payload, activeFilters, isSchemaOp])
 
   // Execute: POST /create → POST /:id/process → poll /:id every 2s.
   const handleExecute = async () => {
@@ -379,7 +509,7 @@ export default function BulkOperationModal({
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
-            jobName: `${op.label} (${new Date().toISOString().slice(0, 19)})`,
+            jobName: `${op?.label ?? opType} (${new Date().toISOString().slice(0, 19)})`,
             actionType: opType,
             filters: activeFilters,
             actionPayload: payload,
@@ -484,15 +614,127 @@ export default function BulkOperationModal({
                   </div>
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => setOpType('SCHEMA_FIELD_UPDATE')}
+                className={cn(
+                  'text-left rounded-md border px-3 py-2 transition-colors',
+                  isSchemaOp
+                    ? 'border-blue-500 bg-blue-50 text-blue-900'
+                    : 'border-slate-200 hover:border-slate-300',
+                )}
+              >
+                <div className="text-[13px] font-medium inline-flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5" />
+                  Set channel attribute
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">
+                  Schema-driven update of any Amazon attribute across the
+                  selected marketplaces. Operates on visible products in
+                  the grid.
+                </div>
+              </button>
             </div>
           </Section>
 
           {/* Operation parameters */}
-          <Section title="Parameters">
-            <div className="space-y-3">{op.renderParams(payload, setPayload)}</div>
-          </Section>
+          {!isSchemaOp && op && (
+            <Section title="Parameters">
+              <div className="space-y-3">{op.renderParams(payload, setPayload)}</div>
+            </Section>
+          )}
 
-          {/* Scope */}
+          {/* R.2 — schema-driven flow: targets banner + field picker +
+              value input. Uses the already-loaded UnionManifest for
+              the representative product to populate the field list. */}
+          {isSchemaOp && (
+            <Section title="Schema-driven update">
+              <SchemaTargetsBanner targets={marketplaceTargets} />
+              <div className="mt-3 space-y-3">
+                {schemaLoading && (
+                  <div className="text-[12px] text-slate-500 inline-flex items-center gap-1.5">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Loading schema fields…
+                  </div>
+                )}
+                {schemaError && (
+                  <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-start gap-2">
+                    <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                    <div>{schemaError}</div>
+                  </div>
+                )}
+                {!schemaLoading &&
+                  !schemaError &&
+                  schemaManifest &&
+                  schemaManifest.fields.length > 0 && (
+                    <>
+                      <Field label="Field">
+                        <select
+                          value={schemaFieldId}
+                          onChange={(e) => {
+                            setSchemaFieldId(e.target.value)
+                            setSchemaValue(undefined)
+                          }}
+                          className={inputCls}
+                        >
+                          <option value="">— Pick a field —</option>
+                          {schemaManifest.fields.map((f) => (
+                            <option key={f.id} value={f.id}>
+                              {f.label} ({f.id})
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      {schemaField && (
+                        <Field label="Value">
+                          <FieldInput
+                            field={schemaField}
+                            value={schemaValue}
+                            onChange={(v) => setSchemaValue(v)}
+                          />
+                          {schemaField.description && (
+                            <p className="mt-1 text-[10px] text-slate-500">
+                              {schemaField.description}
+                            </p>
+                          )}
+                        </Field>
+                      )}
+                    </>
+                  )}
+              </div>
+              <div className="mt-3 text-[11px] text-slate-500">
+                Targets {visibleProductIds.length.toLocaleString()} visible
+                product{visibleProductIds.length === 1 ? '' : 's'} ×{' '}
+                {marketplaceTargets.length} marketplace
+                {marketplaceTargets.length === 1 ? '' : 's'}
+                {visibleProductIds.length > 1000 && (
+                  <span className="text-amber-700">
+                    {' '}
+                    (capped at 1000 — refine the grid filter to narrow it
+                    down)
+                  </span>
+                )}
+                .
+              </div>
+              {schemaResult && (
+                <div className="mt-3 text-[12px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+                  Updated {schemaResult.updated.toLocaleString()} listing
+                  {schemaResult.updated === 1 ? '' : 's'}.
+                  {schemaResult.errors.length > 0 && (
+                    <span className="text-amber-700 ml-1">
+                      {' '}
+                      {schemaResult.errors.length} error
+                      {schemaResult.errors.length === 1 ? '' : 's'} (see
+                      console).
+                    </span>
+                  )}
+                </div>
+              )}
+            </Section>
+          )}
+
+          {/* Scope (job-based ops only) */}
+          {!isSchemaOp && (
           <Section title="Apply to">
             <div className="space-y-2">
               <Radio
@@ -609,9 +851,10 @@ export default function BulkOperationModal({
               )}
             </div>
           </Section>
+          )}
 
-          {/* Preview */}
-          {payloadValid && (
+          {/* Preview (job-based ops only) */}
+          {!isSchemaOp && payloadValid && (
             <Section title="Preview">
               {previewLoading && (
                 <div className="text-[12px] text-slate-500 inline-flex items-center gap-1.5">
@@ -763,7 +1006,7 @@ export default function BulkOperationModal({
           >
             {jobTerminal ? 'Close' : 'Cancel'}
           </Button>
-          {!jobTerminal && (
+          {!jobTerminal && !isSchemaOp && (
             <Button
               variant="primary"
               size="sm"
@@ -779,6 +1022,26 @@ export default function BulkOperationModal({
               {executing
                 ? 'Executing…'
                 : `Apply to ${preview?.affectedCount.toLocaleString() ?? 0}`}
+            </Button>
+          )}
+          {isSchemaOp && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleSchemaExecute}
+              disabled={
+                !schemaFieldId ||
+                schemaValue === undefined ||
+                schemaValue === '' ||
+                visibleProductIds.length === 0 ||
+                marketplaceTargets.length === 0 ||
+                executing
+              }
+              loading={executing}
+            >
+              {executing
+                ? 'Applying…'
+                : `Apply to ${Math.min(visibleProductIds.length, 1000).toLocaleString()} × ${marketplaceTargets.length}`}
             </Button>
           )}
         </div>
@@ -865,6 +1128,37 @@ function Stat({
       </div>
       <div className="text-[10px] text-slate-500 uppercase tracking-wide">
         {label}
+      </div>
+    </div>
+  )
+}
+
+function SchemaTargetsBanner({
+  targets,
+}: {
+  targets: MarketplaceContext[]
+}) {
+  if (targets.length === 0) {
+    return (
+      <div className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 inline-flex items-start gap-2">
+        <Globe className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+        <div>
+          No marketplace targets selected. Use the marketplace picker in
+          the toolbar to pick one or more (Amazon IT / DE / FR …) before
+          running this operation.
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div className="text-[12px] text-blue-800 bg-blue-50 border border-blue-200 rounded px-3 py-2 inline-flex items-start gap-2">
+      <Globe className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+      <div>
+        Will fan out to{' '}
+        <strong className="font-mono">
+          {targets.map((t) => `${t.channel}:${t.marketplace}`).join(', ')}
+        </strong>
+        .
       </div>
     </div>
   )

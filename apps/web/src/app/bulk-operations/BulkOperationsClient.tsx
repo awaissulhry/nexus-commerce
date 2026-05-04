@@ -3051,6 +3051,8 @@ export default function BulkOperationsClient() {
           // rows (price/stock/status/attribute updates).
           reloadProducts()
         }}
+        marketplaceTargets={marketplaceTargets}
+        visibleProductIds={products.map((p) => p.id)}
         currentFilters={(() => {
           // Map the grid's filterState (status[]/channels[]/stockLevel)
           // to ScopeFilters. Imperfect but covers the common case.
