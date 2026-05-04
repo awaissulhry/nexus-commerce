@@ -329,6 +329,7 @@ export function FieldGroupSection({
   unsatisfiedCount,
   filledCount,
   defaultExpanded,
+  headerAction,
   children,
 }: {
   name: string
@@ -337,6 +338,10 @@ export function FieldGroupSection({
   unsatisfiedCount?: number
   filledCount?: number
   defaultExpanded: boolean
+  /** Right-side slot in the header (e.g. a "Copy from sibling"
+   *  dropdown for the edit page). Click events here don't bubble to
+   *  the toggle. */
+  headerAction?: React.ReactNode
   children: React.ReactNode
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded)
@@ -347,12 +352,12 @@ export function FieldGroupSection({
         (unsatisfiedCount ?? 0) > 0 ? 'border-amber-200' : 'border-slate-200',
       )}
     >
-      <button
-        type="button"
-        onClick={() => setExpanded((s) => !s)}
-        className="w-full flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-slate-50 text-left"
-      >
-        <div className="flex items-center gap-2 flex-wrap min-w-0">
+      <div className="flex items-stretch justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => setExpanded((s) => !s)}
+          className="flex-1 flex items-center gap-2 flex-wrap min-w-0 px-4 py-2.5 hover:bg-slate-50 text-left"
+        >
           {expanded ? (
             <ChevronDown className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
           ) : (
@@ -379,8 +384,16 @@ export function FieldGroupSection({
               {filledCount} filled
             </span>
           )}
-        </div>
-      </button>
+        </button>
+        {headerAction && (
+          <div
+            className="flex items-center px-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {headerAction}
+          </div>
+        )}
+      </div>
       {expanded && (
         <div className="border-t border-slate-100 p-3 space-y-3 bg-slate-50/30">
           {children}

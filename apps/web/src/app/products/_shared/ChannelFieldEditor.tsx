@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertCircle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Copy, Loader2, RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import ChannelGroupsManager, {
@@ -623,6 +623,65 @@ export default function ChannelFieldEditor({
     [channelKey, values, siblings, productId, setBase],
   )
 
+  // ── Bulk copy from a sibling listing ─────────────────────────
+  // `fieldIds === null` copies every schema field; otherwise just the
+  // ids passed in (used by the per-group "Copy from..." menu). Empty
+  // sibling values are skipped so we don't blank-out fields the source
+  // didn't fill. One state update + one debounce arming, regardless of
+  // how many fields land — the existing flush will batch everything
+  // into a single PUT.
+  const copyFromSibling = useCallback(
+    (sourceChannelKey: string, fieldIds: string[] | null): number => {
+      const sib = siblings.find(
+        (s) =>
+          `${s.channel}:${s.marketplace}`.toUpperCase() === sourceChannelKey,
+      )
+      if (!sib || !manifest) return 0
+      const ids =
+        fieldIds === null ? manifest.fields.map((f) => f.id) : fieldIds
+      let copied = 0
+      setValues((prev) => {
+        const next = { ...prev }
+        for (const id of ids) {
+          const v = getListingFieldValue(sib, id)
+          if (isEmpty(v)) continue
+          next[id] = v as Primitive
+          dirtyRef.current.add(id)
+          copied++
+        }
+        return next
+      })
+      if (copied === 0) return 0
+      setStatus('saving')
+      setStatusMsg(null)
+      if (saveTimer.current) window.clearTimeout(saveTimer.current)
+      saveTimer.current = window.setTimeout(() => {
+        void flush()
+      }, SAVE_DEBOUNCE_MS)
+      return copied
+    },
+    [siblings, manifest, flush],
+  )
+
+  /** Per-sibling counts of how many of `targetIds` have a value
+   *  available, so the menu surfaces "AMAZON:DE — 12 fields" and the
+   *  user knows what they're getting. */
+  const countSiblingValues = useCallback(
+    (sourceChannelKey: string, targetIds: string[]): number => {
+      const sib = siblings.find(
+        (s) =>
+          `${s.channel}:${s.marketplace}`.toUpperCase() === sourceChannelKey,
+      )
+      if (!sib) return 0
+      let n = 0
+      for (const id of targetIds) {
+        if (!isEmpty(getListingFieldValue(sib, id))) n++
+      }
+      return n
+    },
+    [siblings],
+  )
+
   // ── Q.9 — translate a field for the active channel via Gemini ──
   // The single-channel /generate-content endpoint takes the (channel,
   // marketplace) tuple and returns one group's result. We map the
@@ -787,6 +846,21 @@ export default function ChannelFieldEditor({
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <SaveStatusPill status={status} message={statusMsg} />
         <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Copy ALL fields from another listing of this product. */}
+          {manifest && siblings.length > 1 && (
+            <CopyFromSiblingMenu
+              label="Copy from listing"
+              activeChannelKey={channelKey}
+              siblings={siblings}
+              countSiblingValues={(sourceKey) =>
+                countSiblingValues(
+                  sourceKey,
+                  manifest.fields.map((f) => f.id),
+                )
+              }
+              onPick={(sourceKey) => copyFromSibling(sourceKey, null)}
+            />
+          )}
           {manifest && manifest.optionalFieldCount > 0 && (
             <button
               type="button"
@@ -922,6 +996,28 @@ export default function ChannelFieldEditor({
                 defaultExpanded={
                   requiredCount > 0 || unsatCount > 0 || filledCount > 0
                 }
+                headerAction={
+                  siblings.length > 1 ? (
+                    <CopyFromSiblingMenu
+                      label="Copy from"
+                      compact
+                      activeChannelKey={channelKey}
+                      siblings={siblings}
+                      countSiblingValues={(sourceKey) =>
+                        countSiblingValues(
+                          sourceKey,
+                          group.fields.map((f) => f.id),
+                        )
+                      }
+                      onPick={(sourceKey) =>
+                        copyFromSibling(
+                          sourceKey,
+                          group.fields.map((f) => f.id),
+                        )
+                      }
+                    />
+                  ) : undefined
+                }
               >
                 {group.fields.map((field) => {
                   const fieldUnsatisfied = unsatisfied
@@ -997,6 +1093,102 @@ export default function ChannelFieldEditor({
           {unsatisfied.length} required field
           {unsatisfied.length === 1 ? '' : 's'} still unfilled
         </div>
+      )}
+    </div>
+  )
+}
+
+function CopyFromSiblingMenu({
+  label,
+  compact = false,
+  activeChannelKey,
+  siblings,
+  countSiblingValues,
+  onPick,
+}: {
+  label: string
+  compact?: boolean
+  activeChannelKey: string
+  siblings: SiblingListing[]
+  /** Returns the count of fields the source has values for, given
+   *  the implicit target field set the parent already knows about. */
+  countSiblingValues: (sourceChannelKey: string) => number
+  /** Returns how many fields actually got copied — the menu surfaces
+   *  this as a brief flash so the user sees the action landed. */
+  onPick: (sourceChannelKey: string) => number
+}) {
+  const [open, setOpen] = useState(false)
+  const [flash, setFlash] = useState<string | null>(null)
+  const others = useMemo(
+    () =>
+      siblings
+        .map((s) => ({
+          channelKey: `${s.channel}:${s.marketplace}`.toUpperCase(),
+          listing: s,
+        }))
+        .filter((x) => x.channelKey !== activeChannelKey),
+    [siblings, activeChannelKey],
+  )
+  if (others.length === 0) return null
+  return (
+    <div className="relative flex-shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((s) => !s)}
+        title="Copy field values from another marketplace listing"
+        className={cn(
+          'inline-flex items-center gap-1 border rounded text-[11px] font-medium',
+          compact ? 'h-7 px-2' : 'h-7 px-2.5',
+          flash
+            ? 'border-emerald-300 text-emerald-700 bg-emerald-50'
+            : 'border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+        )}
+      >
+        <Copy className="w-3 h-3" />
+        {flash ?? label}
+      </button>
+      {open && (
+        <>
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded shadow-md py-1 min-w-[220px] text-[12px]">
+            <div className="px-3 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+              Copy values from
+            </div>
+            {others.map(({ channelKey: sourceKey }) => {
+              const n = countSiblingValues(sourceKey)
+              return (
+                <button
+                  key={sourceKey}
+                  type="button"
+                  disabled={n === 0}
+                  onClick={() => {
+                    const copied = onPick(sourceKey)
+                    setOpen(false)
+                    if (copied > 0) {
+                      setFlash(`Copied ${copied}`)
+                      window.setTimeout(() => setFlash(null), 1800)
+                    }
+                  }}
+                  className={cn(
+                    'w-full text-left px-3 py-1.5 hover:bg-slate-50 inline-flex items-center justify-between gap-2',
+                    n === 0
+                      ? 'text-slate-400 cursor-not-allowed'
+                      : 'text-slate-700',
+                  )}
+                >
+                  <span className="font-mono text-[11px]">{sourceKey}</span>
+                  <span className="text-[10px] text-slate-500 tabular-nums">
+                    {n === 0 ? 'no values' : `${n} field${n === 1 ? '' : 's'}`}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </>
       )}
     </div>
   )
