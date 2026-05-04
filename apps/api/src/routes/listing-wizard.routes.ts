@@ -1192,12 +1192,11 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
-  // ── Step 9 — Review ───────────────────────────────────────────
+  // ── Step 10 — Review (Phase I multi-channel) ─────────────────
   // GET /api/listing-wizard/:id/review
   //
-  // Returns the validation report (per-step status) plus the prepared
-  // channel payload. Lets the user inspect exactly what would be sent
-  // before they hit Submit.
+  // Returns per-channel validation reports + per-channel prepared
+  // payloads. Lets the user audit each channel before Submit.
   fastify.get<{ Params: { id: string } }>(
     '/listing-wizard/:id/review',
     async (request, reply) => {
@@ -1207,18 +1206,19 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       if (!wizard) {
         return reply.code(404).send({ error: 'Wizard not found' })
       }
-      const first = legacyFirstChannel(wizard)
+      const channels = normalizeChannels(wizard.channels)
       const w = {
         id: wizard.id,
-        channel: first.channel,
-        marketplace: first.marketplace,
+        channels,
         state: (wizard.state ?? {}) as Record<string, any>,
+        channelStates:
+          ((wizard.channelStates ?? {}) as Record<
+            string,
+            Record<string, any>
+          >) ?? {},
       }
-      const report = submissionService.validate(w)
-      const amazonPayload =
-        first.channel.toUpperCase() === 'AMAZON'
-          ? submissionService.composeAmazonPayload(w)
-          : null
+      const validation = submissionService.validateMultiChannel(w)
+      const payloads = submissionService.composeMultiChannelPayloads(w)
       return {
         wizard: {
           id: wizard.id,
@@ -1226,8 +1226,8 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           status: wizard.status,
           currentStep: wizard.currentStep,
         },
-        report,
-        amazonPayload,
+        validation,
+        payloads,
       }
     },
   )
