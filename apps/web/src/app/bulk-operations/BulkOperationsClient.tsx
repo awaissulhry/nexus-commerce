@@ -105,7 +105,8 @@ import {
   hasMarketplaceContextRef,
 } from './lib/refs'
 import NewProductModal from './components/NewProductModal'
-import { Plus, Trash2 } from 'lucide-react'
+import ReplicateModal from './components/ReplicateModal'
+import { Copy, Plus, Trash2 } from 'lucide-react'
 import { groupForFieldId } from '../products/_shared/attribute-editor'
 import { buildColumnFromField } from './lib/grid-columns'
 import {
@@ -293,6 +294,7 @@ export default function BulkOperationsClient() {
   const [uploadOpen, setUploadOpen] = useState(false)
   const [bulkOpModalOpen, setBulkOpModalOpen] = useState(false)
   const [newProductOpen, setNewProductOpen] = useState(false)
+  const [replicateOpen, setReplicateOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
     () => loadCollapsedGroups(),
   )
@@ -2640,6 +2642,16 @@ export default function BulkOperationsClient() {
               <Plus className="w-3.5 h-3.5 mr-1.5" />
               New product
             </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setReplicateOpen(true)}
+              disabled={products.length === 0}
+              title="Pull title / description / price / attributes from one marketplace and replicate to others across many products"
+            >
+              <Copy className="w-3.5 h-3.5 mr-1.5" />
+              Replicate
+            </Button>
             {selectedRowCount > 1 && (
               <Button
                 variant="secondary"
@@ -3320,6 +3332,34 @@ export default function BulkOperationsClient() {
         parentCandidates={products
           .filter((p) => !p.parentId)
           .map((p) => ({ id: p.id, sku: p.sku, name: p.name }))}
+      />
+
+      <ReplicateModal
+        open={replicateOpen}
+        onClose={() => setReplicateOpen(false)}
+        productIds={(() => {
+          // Scope: prefer selected rows when the cell selection
+          // covers >1 row, else fall through to filtered (visible).
+          if (rangeBounds && rangeBounds.maxRow > rangeBounds.minRow) {
+            const ids: string[] = []
+            const rowModel = tableRef.current.getRowModel().rows
+            for (let r = rangeBounds.minRow; r <= rangeBounds.maxRow; r++) {
+              const row = rowModel[r]
+              if (row) ids.push(row.original.id)
+            }
+            return ids
+          }
+          return filteredProducts.map((p) => p.id)
+        })()}
+        scopeLabel={
+          rangeBounds && rangeBounds.maxRow > rangeBounds.minRow
+            ? 'selected rows'
+            : 'visible rows'
+        }
+        options={marketplaceOptions}
+        onReplicated={() => {
+          void reloadProducts()
+        }}
       />
     </div>
   )

@@ -1861,6 +1861,195 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       return { updated, skipped: 0, errors }
     },
   )
+
+  // AA.1 — replicate listing values from a source marketplace to one
+  // or more target marketplaces, across many products in one call.
+  // For each productId, fetches the source ChannelListing and writes
+  // its values to each target listing.
+  //
+  // Field mapping:
+  //   - title / description / bulletPointsOverride / price / quantity
+  //     copy column-to-column (channel-agnostic, so AMAZON:IT title →
+  //     EBAY:IT title works cleanly).
+  //   - platformAttributes.attributes (Amazon attr_*, eBay aspects)
+  //     copy by identity-match on field id. Same-channel replication
+  //     (AMAZON:IT → AMAZON:DE) hits all attributes; cross-channel
+  //     (AMAZON:IT → EBAY:IT) hits the columns + any attribute id that
+  //     happens to match (rare unless the user chose canonical names).
+  //
+  // Caps: 1000 productIds, 20 targets per request — keeps the
+  // round-trip bounded for catalogs the size of Xavia's.
+  fastify.post<{
+    Body: {
+      productIds: string[]
+      sourceContext: { channel: 'AMAZON' | 'EBAY'; marketplace: string }
+      targetContexts: Array<{
+        channel: 'AMAZON' | 'EBAY'
+        marketplace: string
+      }>
+      /** When true, only the column-mapped fields (title, description,
+       *  bullet points, price, quantity) replicate; attributes are
+       *  skipped entirely. Useful for cross-channel where the
+       *  attribute namespaces don't overlap. */
+      columnsOnly?: boolean
+    }
+  }>('/products/bulk-replicate', async (request, reply) => {
+    const { productIds, sourceContext, targetContexts, columnsOnly } =
+      request.body ?? {}
+
+    if (!Array.isArray(productIds) || productIds.length === 0) {
+      return reply.code(400).send({ error: 'productIds required' })
+    }
+    if (productIds.length > 1000) {
+      return reply.code(400).send({ error: 'Max 1000 productIds per request' })
+    }
+    if (!sourceContext?.channel || !sourceContext?.marketplace) {
+      return reply.code(400).send({ error: 'sourceContext required' })
+    }
+    if (!Array.isArray(targetContexts) || targetContexts.length === 0) {
+      return reply
+        .code(400)
+        .send({ error: 'targetContexts required (one or more)' })
+    }
+    if (targetContexts.length > 20) {
+      return reply
+        .code(400)
+        .send({ error: 'Max 20 target contexts per request' })
+    }
+
+    // Fetch source listings in one query.
+    const sourceListings = await prisma.channelListing.findMany({
+      where: {
+        productId: { in: productIds },
+        channel: sourceContext.channel,
+        marketplace: sourceContext.marketplace,
+      },
+    })
+    const sourceByProductId = new Map(
+      sourceListings.map((l) => [l.productId, l]),
+    )
+
+    // Fetch all target listings (across every (productId × target))
+    // in one query so we can shallow-merge platformAttributes
+    // intelligently rather than blow them away.
+    const targetWhere = {
+      OR: targetContexts.map((tc) => ({
+        productId: { in: productIds },
+        channel: tc.channel,
+        marketplace: tc.marketplace,
+      })),
+    }
+    const existingTargets = await prisma.channelListing.findMany({
+      where: targetWhere,
+    })
+    const targetByKey = new Map(
+      existingTargets.map((l) => [
+        `${l.productId}:${l.channel}:${l.marketplace}`,
+        l,
+      ]),
+    )
+
+    let replicated = 0
+    let skippedNoSource = 0
+    const errors: Array<{
+      productId: string
+      channel: string
+      marketplace: string
+      error: string
+    }> = []
+
+    const ops = await Promise.all(
+      productIds.flatMap((productId) =>
+        targetContexts.map(async (tc) => {
+          const source = sourceByProductId.get(productId)
+          if (!source) {
+            skippedNoSource++
+            return
+          }
+          const targetKey = `${productId}:${tc.channel}:${tc.marketplace}`
+          const existingTarget = targetByKey.get(targetKey) ?? null
+
+          // Build the data payload. Columns flow channel-agnostic.
+          const data: Record<string, unknown> = {
+            title: source.title,
+            description: source.description,
+            bulletPointsOverride: source.bulletPointsOverride,
+          }
+          if (source.price !== null && source.price !== undefined) {
+            data.price = source.price
+          }
+          if (source.quantity !== null && source.quantity !== undefined) {
+            data.quantity = source.quantity
+          }
+
+          // Attributes: identity-match merge unless columnsOnly.
+          if (!columnsOnly) {
+            const sourcePA =
+              (source.platformAttributes as Record<string, any> | null) ?? null
+            const sourceAttrs =
+              sourcePA && typeof sourcePA.attributes === 'object'
+                ? (sourcePA.attributes as Record<string, unknown>)
+                : null
+            if (sourceAttrs) {
+              const existingPA =
+                (existingTarget?.platformAttributes as Record<string, any> | null) ??
+                null
+              const existingAttrs =
+                existingPA && typeof existingPA.attributes === 'object'
+                  ? (existingPA.attributes as Record<string, unknown>)
+                  : {}
+              const merged: Record<string, unknown> = {
+                ...existingAttrs,
+                ...sourceAttrs,
+              }
+              data.platformAttributes = {
+                ...(existingPA ?? {}),
+                attributes: merged,
+              }
+            }
+          }
+
+          const channelMarket = `${tc.channel}_${tc.marketplace}`
+          try {
+            await prisma.channelListing.upsert({
+              where: {
+                productId_channel_marketplace: {
+                  productId,
+                  channel: tc.channel,
+                  marketplace: tc.marketplace,
+                },
+              },
+              create: {
+                productId,
+                channel: tc.channel,
+                marketplace: tc.marketplace,
+                channelMarket,
+                region: tc.marketplace,
+                listingStatus: 'DRAFT',
+                ...data,
+              } as any,
+              update: data as any,
+            })
+            replicated++
+          } catch (e) {
+            errors.push({
+              productId,
+              channel: tc.channel,
+              marketplace: tc.marketplace,
+              error: e instanceof Error ? e.message : String(e),
+            })
+          }
+        }),
+      ),
+    )
+    void ops
+
+    return {
+      replicated,
+      skippedNoSource,
+      errors,
+    }
+  })
 }
 
 export default productsRoutes
