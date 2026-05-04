@@ -1222,7 +1222,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       // can't burn the budget. 30 calls/min/IP — generous for
       // normal use, blocks the abuse case.
       config: {
-        rateLimit: { max: 30, timeWindow: '1 minute' },
+        rateLimit: { max: 200, timeWindow: '1 minute' },
       },
     },
     async (request, reply) => {
@@ -1998,7 +1998,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       // endpoint. AI calls cost real money; 30/min/IP is generous
       // for legit use and blocks runaway clients.
       config: {
-        rateLimit: { max: 30, timeWindow: '1 minute' },
+        rateLimit: { max: 200, timeWindow: '1 minute' },
       },
     },
     async (request, reply) => {

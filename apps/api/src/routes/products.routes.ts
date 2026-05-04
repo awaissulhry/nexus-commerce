@@ -452,12 +452,13 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     // changes loop). Reject early with 413 instead of letting the
     // request OOM the API process.
     bodyLimit: 5 * 1024 * 1024,
-    // NN.5 — per-route rate limit. The global limiter caps reads;
-    // bulk PATCH is the most write-heavy endpoint and gets a
-    // tighter cap so a single client can't queue 100 simultaneous
-    // 1000-row PATCHes.
+    // NN.5 / OO.1 — per-route rate limit. Loosened to 300/min after
+    // the initial 30/min was too tight for genuine bulk-edit
+    // sessions (multiple PATCHes per second when a user is typing
+    // through 50 cells). 300/min still blocks the runaway-loop
+    // case but doesn't get in a real user's way.
     config: {
-      rateLimit: { max: 30, timeWindow: '1 minute' },
+      rateLimit: { max: 300, timeWindow: '1 minute' },
     },
   }, async (request, reply) => {
     const { changes, marketplaceContext, marketplaceContexts } =

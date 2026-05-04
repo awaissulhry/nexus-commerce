@@ -68,26 +68,44 @@ app.register(multipart, {
   },
 });
 
-// NN.5 — global rate limit. Default applies to every route at a
-// generous 200 req/min per IP so normal browsing is unaffected.
-// Hot endpoints (/products/bulk, AI generation, replicate) opt
-// into stricter per-route caps via the route-level config option.
-// In-memory store is fine for single-instance deploys; swap to
-// redis when scaling to multi-instance.
-app.register(rateLimit, {
-  global: true,
-  max: 200,
-  timeWindow: '1 minute',
-  // Skip rate-limit on health checks so monitors don't trip it.
-  allowList: (req) => req.url === '/api/health',
-  errorResponseBuilder: (_req, ctx) => ({
-    statusCode: 429,
-    error: 'Too Many Requests',
-    code: 'rate_limited',
-    message: `Rate limit exceeded — try again in ${Math.ceil(ctx.ttl / 1000)}s`,
-    retryAfter: Math.ceil(ctx.ttl / 1000),
-  }),
-});
+// NN.5 / OO.1 — global rate limit. Default applies to every route
+// at a very generous 2000 req/min per IP so a power user with a
+// busy bulk-ops grid (poll + autoload + schema fetch + write) never
+// hits the cap during normal use. Hot endpoints (/products/bulk,
+// AI generation, replicate) opt into stricter per-route caps via
+// the route-level config option. Allow-list covers read endpoints
+// the UI hits frequently so a fast catalog browsing session can't
+// be locked out.
+//
+// Disable entirely with NEXUS_DISABLE_RATE_LIMIT=1 if a load
+// pattern triggers false positives — preferable to losing work.
+if (process.env.NEXUS_DISABLE_RATE_LIMIT !== '1') {
+  app.register(rateLimit, {
+    global: true,
+    max: 2000,
+    timeWindow: '1 minute',
+    allowList: (req) => {
+      const url = req.url ?? '';
+      // Health checks + the read-heavy product listing endpoints
+      // skip the global limiter entirely so an aggressive grid
+      // never starves them.
+      if (url === '/api/health') return true;
+      if (url.startsWith('/api/products/bulk-fetch')) return true;
+      if (url.startsWith('/api/inventory')) return true;
+      if (url.startsWith('/api/catalog/products')) return true;
+      if (url.startsWith('/api/marketplaces')) return true;
+      if (url.startsWith('/api/pim/fields')) return true;
+      return false;
+    },
+    errorResponseBuilder: (_req, ctx) => ({
+      statusCode: 429,
+      error: 'Too Many Requests',
+      code: 'rate_limited',
+      message: `Rate limit exceeded — try again in ${Math.ceil(ctx.ttl / 1000)}s`,
+      retryAfter: Math.ceil(ctx.ttl / 1000),
+    }),
+  });
+}
 
 // Register CORS to allow cross-origin requests from frontend (Port 3000)
 app.register(cors, {
@@ -157,9 +175,15 @@ async function start() {
     // initializeBulkListWorker();
     // startJobs();
 
-    // NN.14 — daily cron for abandoned wizard cleanup. In-process
-    // for now; switch to a queue worker when running multi-instance.
-    startWizardCleanupCron();
+    // NN.14 / OO.1 — daily cron for abandoned wizard cleanup. Now
+    // gated behind NEXUS_ENABLE_WIZARD_CLEANUP=1 so the destructive
+    // path is opt-in. The cron only deletes DRAFT wizards whose
+    // expiresAt is in the past (NULL expiresAt rows from before the
+    // migration are excluded by the < operator), but until the
+    // operator explicitly opts in we keep it dormant.
+    if (process.env.NEXUS_ENABLE_WIZARD_CLEANUP === '1') {
+      startWizardCleanupCron();
+    }
 
     logger.info('✅ API server initialized (workers disabled — Phase 2)', {
       timestamp: new Date().toISOString(),
