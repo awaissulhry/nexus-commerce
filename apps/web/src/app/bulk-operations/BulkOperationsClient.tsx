@@ -17,6 +17,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { produce } from 'immer'
 import {
+  ChevronRight,
   Lock,
   Redo2,
   RotateCcw,
@@ -102,6 +103,7 @@ import {
 } from './lib/refs'
 import NewProductModal from './components/NewProductModal'
 import { Plus, Trash2 } from 'lucide-react'
+import { groupForFieldId } from '../products/_shared/attribute-editor'
 import { buildColumnFromField } from './lib/grid-columns'
 import {
   computeFillExtension,
@@ -127,6 +129,95 @@ import {
 // Re-export BulkProduct so any sibling file (modals, cells, etc.) that
 // used to import it from this file still finds it here.
 export type { BulkProduct } from './lib/types'
+
+// ── T.3 — column group taxonomy ────────────────────────────────
+//
+// Two layers feed it: registry FieldDefinition.category for Product-
+// column fields, and the schema editor's groupForFieldId() for attr_*
+// (which strips the prefix and maps to Identity / Marketing copy /
+// etc.). Same colour swatches as the per-product editor so both
+// tools share a visual language.
+
+interface GroupTone {
+  band: string
+  text: string
+  ring: string
+}
+
+const GROUP_TONE: Record<string, GroupTone> = {
+  // master (registry) buckets
+  universal: { band: 'bg-slate-100 border-slate-300', text: 'text-slate-900', ring: 'border-slate-300' },
+  identifiers: { band: 'bg-indigo-50 border-indigo-200', text: 'text-indigo-900', ring: 'border-indigo-200' },
+  pricing: { band: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-900', ring: 'border-emerald-200' },
+  inventory: { band: 'bg-amber-50 border-amber-200', text: 'text-amber-900', ring: 'border-amber-200' },
+  physical: { band: 'bg-sky-50 border-sky-200', text: 'text-sky-900', ring: 'border-sky-200' },
+  content: { band: 'bg-violet-50 border-violet-200', text: 'text-violet-900', ring: 'border-violet-200' },
+  // schema buckets (groupForFieldId returns)
+  Identity: { band: 'bg-slate-100 border-slate-300', text: 'text-slate-900', ring: 'border-slate-300' },
+  'Marketing copy': { band: 'bg-violet-50 border-violet-200', text: 'text-violet-900', ring: 'border-violet-200' },
+  'Variation attributes': { band: 'bg-fuchsia-50 border-fuchsia-200', text: 'text-fuchsia-900', ring: 'border-fuchsia-200' },
+  Audience: { band: 'bg-cyan-50 border-cyan-200', text: 'text-cyan-900', ring: 'border-cyan-200' },
+  Categorisation: { band: 'bg-rose-50 border-rose-200', text: 'text-rose-900', ring: 'border-rose-200' },
+  'Pricing & fulfillment': { band: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-900', ring: 'border-emerald-200' },
+  'Physical attributes': { band: 'bg-sky-50 border-sky-200', text: 'text-sky-900', ring: 'border-sky-200' },
+  'Compliance & safety': { band: 'bg-amber-50 border-amber-200', text: 'text-amber-900', ring: 'border-amber-200' },
+  'Other attributes': { band: 'bg-slate-50 border-slate-200', text: 'text-slate-700', ring: 'border-slate-200' },
+}
+
+const NEUTRAL_TONE: GroupTone = {
+  band: 'bg-slate-100 border-slate-200',
+  text: 'text-slate-900',
+  ring: 'border-slate-200',
+}
+
+const GROUP_LABEL: Record<string, string> = {
+  universal: 'Identity',
+  identifiers: 'Identifiers',
+  pricing: 'Pricing',
+  inventory: 'Inventory',
+  physical: 'Physical',
+  content: 'Marketing copy',
+  category: 'Category attributes',
+  amazon: 'Amazon',
+  ebay: 'eBay',
+}
+
+/** Decide which group a FieldDef belongs to. attr_* fields get the
+ *  curated schema-editor group; everything else falls back to its
+ *  registry `category`. */
+function groupKeyForField(field: FieldDef): string {
+  if (field.id.startsWith('attr_')) {
+    const stripped = field.id.replace(/^attr_/, '')
+    return groupForFieldId(stripped)
+  }
+  return field.category
+}
+
+const COLLAPSED_GROUPS_KEY = 'nexus_bulkops_collapsed_groups'
+
+function loadCollapsedGroups(): Set<string> {
+  if (typeof window === 'undefined') return new Set()
+  try {
+    const raw = window.localStorage.getItem(COLLAPSED_GROUPS_KEY)
+    if (!raw) return new Set()
+    const arr = JSON.parse(raw)
+    return Array.isArray(arr) ? new Set(arr) : new Set()
+  } catch {
+    return new Set()
+  }
+}
+
+function saveCollapsedGroups(set: Set<string>) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(
+      COLLAPSED_GROUPS_KEY,
+      JSON.stringify(Array.from(set)),
+    )
+  } catch {
+    /* ignore quota errors */
+  }
+}
 
 /** T.4 — per-row delete trigger. Reads the latest handler off
  *  actionsCtxRef so dynamicColumns can stay memoised on field changes
@@ -173,6 +264,18 @@ export default function BulkOperationsClient() {
   const [uploadOpen, setUploadOpen] = useState(false)
   const [bulkOpModalOpen, setBulkOpModalOpen] = useState(false)
   const [newProductOpen, setNewProductOpen] = useState(false)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
+    () => loadCollapsedGroups(),
+  )
+  const toggleGroupCollapse = useCallback((key: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      saveCollapsedGroups(next)
+      return next
+    })
+  }, [])
   const [saveStatus, setSaveStatus] = useState<SaveStatus>({ kind: 'idle' })
   const [online, setOnline] = useState(true)
 
@@ -1160,17 +1263,60 @@ export default function BulkOperationsClient() {
     return m
   }, [allFields])
 
-  const dynamicColumns = useMemo<ColumnDef<BulkProduct>[]>(() => {
-    const out: ColumnDef<BulkProduct>[] = []
+  // T.3 — bucket visible fields by group so the band can render colour
+  // chips above the column headers. Order is preserved (the buckets
+  // come out in the order they're first hit), so user-driven column
+  // ordering carries through to the band.
+  const groupedFields = useMemo(() => {
+    const result: Array<{
+      key: string
+      label: string
+      fields: FieldDef[]
+      size: number
+    }> = []
+    const byKey = new Map<string, (typeof result)[number]>()
     for (const id of visibleColumnIds) {
       const field = fieldsById.get(id)
       if (!field) continue
-      out.push(buildColumnFromField(field))
+      const key = groupKeyForField(field)
+      const label = GROUP_LABEL[key] ?? key
+      let bucket = byKey.get(key)
+      if (!bucket) {
+        bucket = { key, label, fields: [], size: 0 }
+        byKey.set(key, bucket)
+        result.push(bucket)
+      }
+      bucket.fields.push(field)
+      bucket.size += field.width ?? 120
     }
-    // T.4 — actions column always anchors the right edge. Renders the
-    // delete button per row; not part of visibleColumnIds so users
-    // can't hide it. id starts with `__` to avoid collisions with
-    // FieldDef ids.
+    return result
+  }, [visibleColumnIds, fieldsById])
+
+  const dynamicColumns = useMemo<ColumnDef<BulkProduct>[]>(() => {
+    const out: ColumnDef<BulkProduct>[] = []
+    for (const g of groupedFields) {
+      if (collapsedGroups.has(g.key)) {
+        // Single placeholder column stands in for the whole group so
+        // the body doesn't render any of its cells. Click the band
+        // chip to expand.
+        const hiddenCount = g.fields.length
+        out.push({
+          id: `__group_${g.key}`,
+          header: '',
+          size: 80,
+          cell: () => (
+            <span className="px-2 text-[10px] italic text-slate-400 truncate">
+              — {hiddenCount} hidden —
+            </span>
+          ),
+        } as ColumnDef<BulkProduct>)
+        continue
+      }
+      for (const field of g.fields) {
+        out.push(buildColumnFromField(field))
+      }
+    }
+    // T.4 — actions column always anchors the right edge.
     out.push({
       id: '__actions',
       header: '',
@@ -1184,7 +1330,7 @@ export default function BulkOperationsClient() {
       ),
     } as ColumnDef<BulkProduct>)
     return out
-  }, [visibleColumnIds, fieldsById])
+  }, [groupedFields, collapsedGroups])
 
   // Bumped whenever the column set actually changes; passed to TableRow
   // so memoized rows know to re-render on column changes. We use a
@@ -2228,9 +2374,57 @@ export default function BulkOperationsClient() {
         className="flex-1 min-h-0 overflow-auto bg-white border border-slate-200 rounded-lg select-none"
         style={{ contain: 'strict' }}
       >
+        {/* T.3 — group band: one chip per visible-field group, click
+            chevron to collapse. Sits above the column header row inside
+            the same scroll container so it scrolls horizontally with
+            the table. */}
+        {groupedFields.length > 0 && (
+          <div
+            className="sticky top-0 z-30 bg-white border-b border-slate-200 flex"
+            style={{ minWidth: tableMinWidth, height: 28 }}
+          >
+            {groupedFields.map((g) => {
+              const tone = GROUP_TONE[g.key] ?? NEUTRAL_TONE
+              const open = !collapsedGroups.has(g.key)
+              const width = open ? g.size : 80
+              return (
+                <button
+                  key={g.key}
+                  type="button"
+                  onClick={() => toggleGroupCollapse(g.key)}
+                  className={cn(
+                    'flex items-center gap-1 px-2 border-r-2 text-[10px] font-semibold uppercase tracking-wider transition-colors',
+                    tone.band,
+                    tone.text,
+                    'hover:brightness-95',
+                  )}
+                  style={{ width, flexShrink: 0, minWidth: 80 }}
+                  title={`${open ? 'Collapse' : 'Expand'} ${g.label}`}
+                >
+                  <ChevronRight
+                    className={cn(
+                      'w-3 h-3 transition-transform flex-shrink-0',
+                      open && 'rotate-90',
+                    )}
+                  />
+                  <span className="truncate">{g.label}</span>
+                  <span className="opacity-60 tabular-nums flex-shrink-0">
+                    {open ? g.fields.length : `${g.fields.length} hidden`}
+                  </span>
+                </button>
+              )
+            })}
+            {/* Spacer matching the actions column so band aligns. */}
+            <div style={{ width: 48, flexShrink: 0 }} />
+          </div>
+        )}
         <div
-          className="sticky top-0 z-20 bg-slate-50 border-b border-slate-200 flex"
-          style={{ height: HEADER_HEIGHT, minWidth: tableMinWidth }}
+          className="sticky z-20 bg-slate-50 border-b border-slate-200 flex"
+          style={{
+            top: groupedFields.length > 0 ? 28 : 0,
+            height: HEADER_HEIGHT,
+            minWidth: tableMinWidth,
+          }}
         >
           {headerCells.map((header) => {
             const fieldDef = (header.column.columnDef.meta as
