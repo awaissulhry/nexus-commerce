@@ -14,6 +14,7 @@
  */
 
 import type { PrismaClient } from '@nexus/database'
+import { bundledThemesFor } from './product-types.constants.js'
 
 export interface VariationChild {
   id: string
@@ -254,7 +255,14 @@ export class VariationsService {
         orderBy: { fetchedAt: 'desc' },
         select: { variationThemes: true },
       })
-      const themes = parseThemes(schema?.variationThemes ?? null)
+      let themes = parseThemes(schema?.variationThemes ?? null)
+      // Phase K.2 — when SP-API hasn't been hit (or this productType
+      // isn't in cache yet) the schema's variationThemes is null and
+      // the picker would be empty. Fall back to the bundled common-
+      // theme map so the user can keep moving without configuration.
+      if (themes.length === 0) {
+        themes = parseThemes(bundledThemesFor(productType))
+      }
       themesByChannel[channelKey] = themes
       if (themes.length === 0) {
         missing.push({ channelKey, reason: 'no_themes_in_schema' })

@@ -175,3 +175,87 @@ export function findHintFromNexusProductType(
   const key = nexusProductType.trim().toLowerCase()
   return NEXUS_TO_AMAZON_HINT[key] ?? null
 }
+
+/**
+ * Phase K.2 — bundled fallback for variation themes per productType.
+ * Used by VariationsService when CategorySchema.variationThemes is
+ * null (SP-API not configured, schema not yet fetched, or productType
+ * absent from cache). The values are the conventional Amazon theme
+ * names; the frontend humanises them via the existing
+ * KNOWN_THEME_LABELS map.
+ *
+ * Empty array = no commonly-used theme for that productType (the
+ * frontend then offers the "Custom theme" path so the user can name
+ * their own attribute set).
+ */
+export const BUNDLED_THEMES_BY_PRODUCT_TYPE: Record<string, string[]> = {
+  // Apparel/outerwear
+  OUTERWEAR: ['SIZE_COLOR', 'SIZE_NAME', 'COLOR_NAME'],
+  PANTS: ['SIZE_COLOR', 'SIZE_NAME', 'COLOR_NAME'],
+  SHORTS: ['SIZE_COLOR', 'SIZE_NAME'],
+  SHIRT: ['SIZE_COLOR', 'SIZE_NAME', 'COLOR_NAME'],
+  SWEATER: ['SIZE_COLOR', 'SIZE_NAME', 'COLOR_NAME'],
+  DRESS: ['SIZE_COLOR', 'SIZE_NAME'],
+  SKIRT: ['SIZE_COLOR', 'SIZE_NAME'],
+  SUIT: ['SIZE_COLOR', 'SIZE_NAME'],
+  SLEEPWEAR: ['SIZE_COLOR', 'SIZE_NAME'],
+  UNDERWEAR: ['SIZE_COLOR', 'SIZE_NAME'],
+  SOCKS: ['SIZE_COLOR', 'SIZE_NAME'],
+  SWIMWEAR: ['SIZE_COLOR', 'SIZE_NAME'],
+  ACTIVEWEAR: ['SIZE_COLOR', 'SIZE_NAME'],
+
+  // Footwear
+  SHOES: ['SIZE_COLOR', 'SIZE_NAME'],
+  BOOT: ['SIZE_COLOR', 'SIZE_NAME'],
+  SANDAL: ['SIZE_COLOR', 'SIZE_NAME'],
+  SLIPPER: ['SIZE_COLOR', 'SIZE_NAME'],
+  DRESS_SHOES: ['SIZE_COLOR', 'SIZE_NAME'],
+
+  // Headwear
+  HELMET: ['SIZE_COLOR', 'SIZE_NAME', 'COLOR_NAME'],
+  HAT: ['SIZE_COLOR', 'COLOR_NAME'],
+
+  // Accessories
+  GLOVES: ['SIZE_COLOR', 'SIZE_NAME'],
+  BACKPACK: ['COLOR_NAME', 'STYLE_NAME'],
+  BAG: ['COLOR_NAME', 'STYLE_NAME'],
+  LUGGAGE: ['COLOR_NAME', 'SIZE_NAME'],
+  WALLET: ['COLOR_NAME'],
+  BELT: ['SIZE_COLOR', 'SIZE_NAME'],
+  SUNGLASSES: ['COLOR_NAME', 'STYLE_NAME'],
+  EYEWEAR: ['COLOR_NAME', 'STYLE_NAME'],
+  WATCH: ['COLOR_NAME', 'STYLE_NAME'],
+  SCARF: ['COLOR_NAME', 'PATTERN_NAME'],
+  TIE: ['COLOR_NAME', 'PATTERN_NAME'],
+
+  // Protective gear
+  PROTECTIVE_GEAR: ['SIZE_COLOR', 'SIZE_NAME'],
+  BODY_ARMOR: ['SIZE_COLOR', 'SIZE_NAME'],
+  KNEEPADS: ['SIZE_NAME'],
+  ELBOW_PADS: ['SIZE_NAME'],
+
+  // Sports / outdoor
+  SPORTING_GOODS: ['STYLE_NAME', 'COLOR_NAME'],
+  EXERCISE_MAT: ['COLOR_NAME', 'SIZE_NAME'],
+
+  // Home / kitchen — most are single-axis
+  COOKWARE: ['SIZE_NAME'],
+  KITCHEN_KNIFE: ['STYLE_NAME', 'SIZE_NAME'],
+  DRINKWARE: ['COLOR_NAME', 'SIZE_NAME'],
+  FURNITURE: ['COLOR_NAME', 'STYLE_NAME'],
+  LAMP: ['COLOR_NAME'],
+  RUG: ['COLOR_NAME', 'SIZE_NAME', 'PATTERN_NAME'],
+  CANDLE: ['STYLE_NAME', 'COLOR_NAME'],
+  STORAGE_BOX: ['COLOR_NAME', 'SIZE_NAME'],
+
+  // Electronics
+  HEADPHONES: ['COLOR_NAME'],
+  SPEAKERS: ['COLOR_NAME'],
+  MOBILE_PHONE_CASE: ['COLOR_NAME', 'STYLE_NAME'],
+  CABLES: ['COLOR_NAME', 'SIZE_NAME'],
+}
+
+export function bundledThemesFor(productType: string | null | undefined): string[] {
+  if (!productType) return []
+  return BUNDLED_THEMES_BY_PRODUCT_TYPE[productType.toUpperCase()] ?? []
+}

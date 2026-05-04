@@ -51,8 +51,14 @@ interface VariationsSlice {
   /** Per-channel selected theme (overrides commonTheme for that
    *  channel). Empty/absent → falls back to commonTheme. */
   themeByChannel?: Record<string, string>
+  /** Custom-theme attribute lists keyed by channel. Set when a
+   *  channel uses a CUSTOM_* theme id; the live-annotation logic
+   *  reads this to compute missing attributes. */
+  customAttributesByChannel?: Record<string, string[]>
   includedSkus?: string[]
 }
+
+const CUSTOM_PREFIX = 'CUSTOM__'
 
 const SAVE_DEBOUNCE_MS = 600
 
@@ -76,10 +82,14 @@ export default function Step5Variations({
   const [themeByChannel, setThemeByChannel] = useState<Record<string, string>>(
     slice.themeByChannel ?? {},
   )
+  const [customAttrsByChannel, setCustomAttrsByChannel] = useState<
+    Record<string, string[]>
+  >(slice.customAttributesByChannel ?? {})
   const [includedSkus, setIncludedSkus] = useState<Set<string>>(
     new Set(slice.includedSkus ?? []),
   )
   const [overridesExpanded, setOverridesExpanded] = useState(false)
+  const [customDraft, setCustomDraft] = useState<Record<string, string>>({})
 
   // Fetch payload. Re-fetch when channels or selection changes so the
   // server-side `missingByChannel` annotations track the user's
@@ -159,13 +169,14 @@ export default function Step5Variations({
       void persistThemes(wizardId, {
         commonTheme,
         themeByChannel,
+        customAttrsByChannel,
         includedSkus: Array.from(includedSkus),
         channelKeys: Object.keys(payload.themesByChannel),
       })
     }, SAVE_DEBOUNCE_MS)
     return () => window.clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [commonTheme, themeByChannel, includedSkus, loading, payload])
+  }, [commonTheme, themeByChannel, customAttrsByChannel, includedSkus, loading, payload])
 
   // Effective theme per channel: per-channel override → commonTheme.
   const effectiveTheme = useCallback(
@@ -189,6 +200,14 @@ export default function Step5Variations({
           missingByChannel[channelKey] = []
           continue
         }
+        // Custom theme — required attrs from the user's typed list.
+        if (themeId.startsWith(CUSTOM_PREFIX)) {
+          const customAttrs = customAttrsByChannel[channelKey] ?? []
+          missingByChannel[channelKey] = customAttrs.filter(
+            (k) => !c.attributes[k] || c.attributes[k]!.trim() === '',
+          )
+          continue
+        }
         const theme = (payload.themesByChannel[channelKey] ?? []).find(
           (t) => t.id === themeId,
         )
@@ -202,7 +221,7 @@ export default function Step5Variations({
       }
       return { ...c, missingByChannel }
     })
-  }, [payload, effectiveTheme])
+  }, [payload, effectiveTheme, customAttrsByChannel])
 
   const includedChildren = useMemo(() => {
     return childrenWithLiveAnnotations.filter((c) =>
@@ -228,6 +247,7 @@ export default function Step5Variations({
     await persistThemes(wizardId, {
       commonTheme,
       themeByChannel,
+      customAttrsByChannel,
       includedSkus: Array.from(includedSkus),
       channelKeys,
     })
@@ -236,6 +256,7 @@ export default function Step5Variations({
     blockingChildren.length,
     channelKeys,
     commonTheme,
+    customAttrsByChannel,
     includedChildren.length,
     includedSkus,
     payload,
@@ -395,39 +416,181 @@ export default function Step5Variations({
                     const themes = payload.themesByChannel[channelKey] ?? []
                     const overrideValue = themeByChannel[channelKey] ?? ''
                     const inherits = !overrideValue
+                    const isCustom = overrideValue.startsWith(CUSTOM_PREFIX)
+                    const otherChannels = channelKeys.filter(
+                      (k) => k !== channelKey,
+                    )
                     return (
                       <div
                         key={channelKey}
-                        className="flex items-center gap-2"
+                        className="flex flex-col gap-1.5"
                       >
-                        <span className="text-[11px] font-mono text-slate-600 w-24 flex-shrink-0">
-                          {channelKey}
-                        </span>
-                        <select
-                          value={overrideValue}
-                          onChange={(e) => {
-                            const v = e.target.value
-                            setThemeByChannel((prev) => {
-                              const next = { ...prev }
-                              if (!v) delete next[channelKey]
-                              else next[channelKey] = v
-                              return next
-                            })
-                          }}
-                          disabled={themes.length === 0}
-                          className="flex-1 h-7 px-2 text-[12px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
-                        >
-                          <option value="">
-                            {inherits && commonTheme
-                              ? `Inherits common: ${commonTheme}`
-                              : '— No override —'}
-                          </option>
-                          {themes.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.label} ({t.id})
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-mono text-slate-600 w-24 flex-shrink-0">
+                            {channelKey}
+                          </span>
+                          <select
+                            value={overrideValue}
+                            onChange={(e) => {
+                              const v = e.target.value
+                              if (v === '__CUSTOM_NEW__') {
+                                // Open the custom input on the next render;
+                                // theme stays unset until the user types.
+                                setCustomDraft((prev) => ({
+                                  ...prev,
+                                  [channelKey]: '',
+                                }))
+                                setThemeByChannel((prev) => {
+                                  const next = { ...prev }
+                                  delete next[channelKey]
+                                  return next
+                                })
+                                return
+                              }
+                              if (v.startsWith('__MIRROR__')) {
+                                const sourceKey = v.slice('__MIRROR__'.length)
+                                const sourceTheme =
+                                  themeByChannel[sourceKey] || commonTheme
+                                if (!sourceTheme) return
+                                setThemeByChannel((prev) => ({
+                                  ...prev,
+                                  [channelKey]: sourceTheme,
+                                }))
+                                // If the source has custom attrs, mirror those too.
+                                if (
+                                  sourceTheme.startsWith(CUSTOM_PREFIX) &&
+                                  customAttrsByChannel[sourceKey]
+                                ) {
+                                  setCustomAttrsByChannel((prev) => ({
+                                    ...prev,
+                                    [channelKey]:
+                                      customAttrsByChannel[sourceKey] ?? [],
+                                  }))
+                                }
+                                return
+                              }
+                              setThemeByChannel((prev) => {
+                                const next = { ...prev }
+                                if (!v) delete next[channelKey]
+                                else next[channelKey] = v
+                                return next
+                              })
+                              // Clear custom attrs if switching away from custom.
+                              if (!v.startsWith(CUSTOM_PREFIX)) {
+                                setCustomAttrsByChannel((prev) => {
+                                  const next = { ...prev }
+                                  delete next[channelKey]
+                                  return next
+                                })
+                              }
+                            }}
+                            className="flex-1 h-7 px-2 text-[12px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+                          >
+                            <option value="">
+                              {inherits && commonTheme
+                                ? `Inherits common: ${commonTheme}`
+                                : '— No override —'}
                             </option>
-                          ))}
-                        </select>
+                            {themes.length > 0 && (
+                              <optgroup label="Schema themes">
+                                {themes.map((t) => (
+                                  <option key={t.id} value={t.id}>
+                                    {t.label} ({t.id})
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                            {otherChannels.length > 0 && (
+                              <optgroup label="Mirror from">
+                                {otherChannels.map((k) => (
+                                  <option key={k} value={`__MIRROR__${k}`}>
+                                    Same as {k}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                            {isCustom && (
+                              <optgroup label="Current">
+                                <option value={overrideValue}>
+                                  {overrideValue.replace(CUSTOM_PREFIX, '')} (custom)
+                                </option>
+                              </optgroup>
+                            )}
+                            <optgroup label="Custom">
+                              <option value="__CUSTOM_NEW__">
+                                Custom theme…
+                              </option>
+                            </optgroup>
+                          </select>
+                        </div>
+                        {/* Custom theme inline editor */}
+                        {(isCustom || customDraft[channelKey] !== undefined) && (
+                          <div className="ml-[6.5rem] flex items-center gap-2">
+                            <span className="text-[10px] uppercase tracking-wide text-slate-500 flex-shrink-0">
+                              Attrs:
+                            </span>
+                            <input
+                              type="text"
+                              value={
+                                customDraft[channelKey] !== undefined
+                                  ? customDraft[channelKey] ?? ''
+                                  : (customAttrsByChannel[channelKey] ?? []).join(', ')
+                              }
+                              onChange={(e) =>
+                                setCustomDraft((prev) => ({
+                                  ...prev,
+                                  [channelKey]: e.target.value,
+                                }))
+                              }
+                              onBlur={() => {
+                                const raw = customDraft[channelKey]
+                                if (raw === undefined) return
+                                const parts = raw
+                                  .split(/[,\s]+/)
+                                  .map((s) => s.trim().toLowerCase())
+                                  .filter((s) => s.length > 0)
+                                if (parts.length === 0) {
+                                  // User cleared the input — drop the custom
+                                  // theme entirely.
+                                  setThemeByChannel((prev) => {
+                                    const next = { ...prev }
+                                    delete next[channelKey]
+                                    return next
+                                  })
+                                  setCustomAttrsByChannel((prev) => {
+                                    const next = { ...prev }
+                                    delete next[channelKey]
+                                    return next
+                                  })
+                                  setCustomDraft((prev) => {
+                                    const next = { ...prev }
+                                    delete next[channelKey]
+                                    return next
+                                  })
+                                  return
+                                }
+                                const themeId =
+                                  CUSTOM_PREFIX +
+                                  parts.map((p) => p.toUpperCase()).join('_')
+                                setThemeByChannel((prev) => ({
+                                  ...prev,
+                                  [channelKey]: themeId,
+                                }))
+                                setCustomAttrsByChannel((prev) => ({
+                                  ...prev,
+                                  [channelKey]: parts,
+                                }))
+                                setCustomDraft((prev) => {
+                                  const next = { ...prev }
+                                  delete next[channelKey]
+                                  return next
+                                })
+                              }}
+                              placeholder="size, color, material"
+                              className="flex-1 h-7 px-2 text-[12px] font-mono border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            />
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -626,16 +789,19 @@ async function persistThemes(
   args: {
     commonTheme: string | null
     themeByChannel: Record<string, string>
+    customAttrsByChannel: Record<string, string[]>
     includedSkus: string[]
     channelKeys: string[]
   },
 ): Promise<void> {
-  // Base slice: commonTheme + themeByChannel + includedSkus.
+  // Base slice: commonTheme + themeByChannel + customAttributes +
+  // includedSkus.
   const basePatch = {
     state: {
       variations: {
         commonTheme: args.commonTheme,
         themeByChannel: args.themeByChannel,
+        customAttributesByChannel: args.customAttrsByChannel,
         includedSkus: args.includedSkus,
       },
     },
@@ -643,14 +809,21 @@ async function persistThemes(
   // Per-channel slice: theme that should be used for that channel
   // (override or inherited common). Stored under
   // channelStates[key].variations.theme so submission services can
-  // read a single field per channel without reconciling.
+  // read a single field per channel without reconciling. Custom
+  // themes carry the attribute list alongside.
   const channelStates: Record<string, Record<string, unknown>> = {}
   for (const channelKey of args.channelKeys) {
-    const effective = args.themeByChannel[channelKey] || args.commonTheme || null
+    const effective =
+      args.themeByChannel[channelKey] || args.commonTheme || null
     if (effective) {
-      channelStates[channelKey] = {
-        variations: { theme: effective },
+      const slice: Record<string, unknown> = { theme: effective }
+      if (
+        effective.startsWith(CUSTOM_PREFIX) &&
+        args.customAttrsByChannel[channelKey]
+      ) {
+        slice.customAttributes = args.customAttrsByChannel[channelKey]
       }
+      channelStates[channelKey] = { variations: slice }
     }
   }
   try {
