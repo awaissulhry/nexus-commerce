@@ -416,11 +416,50 @@ export default function BulkEditClient({
   }, [reloadListings])
 
   // ── Fetch schema for the active marketplace tab on activation ──
+  // NN.8 — session-storage cache so schema survives page reloads.
+  // Key includes productType because the schema is type-keyed; if
+  // the user changes productType mid-session, the manifest is
+  // invalid and must be refetched. TTL 30 min — schemas don't
+  // change often but a long-open tab shouldn't show a multi-hour
+  // stale view either.
   const ensureSchema = useCallback(
     async (channelKey: string, force = false) => {
       if (!force && manifests.has(channelKey)) return
       const [channel, marketplace] = channelKey.split(':')
       if (!channel || !marketplace) return
+
+      const cacheKey = `nexus_schema_v1:${product.id}:${channelKey}:${
+        product.productType ?? ''
+      }`
+      const SCHEMA_TTL_MS = 30 * 60 * 1000
+
+      // sessionStorage hit?
+      if (!force && typeof window !== 'undefined') {
+        try {
+          const raw = window.sessionStorage.getItem(cacheKey)
+          if (raw) {
+            const parsed = JSON.parse(raw) as {
+              at: number
+              manifest: UnionManifest
+            }
+            if (
+              parsed?.at &&
+              Date.now() - parsed.at < SCHEMA_TTL_MS &&
+              parsed.manifest
+            ) {
+              setManifests((prev) => {
+                const next = new Map(prev)
+                next.set(channelKey, parsed.manifest)
+                return next
+              })
+              return
+            }
+          }
+        } catch {
+          /* ignore parse errors — fall through to fetch */
+        }
+      }
+
       setSchemaLoading((prev) => new Set(prev).add(channelKey))
       setSchemaErrors((prev) => {
         const next = new Map(prev)
@@ -438,11 +477,22 @@ export default function BulkEditClient({
         if (!res.ok) {
           throw new Error(json?.error ?? `HTTP ${res.status}`)
         }
+        const manifest = json as UnionManifest
         setManifests((prev) => {
           const next = new Map(prev)
-          next.set(channelKey, json as UnionManifest)
+          next.set(channelKey, manifest)
           return next
         })
+        if (typeof window !== 'undefined') {
+          try {
+            window.sessionStorage.setItem(
+              cacheKey,
+              JSON.stringify({ at: Date.now(), manifest }),
+            )
+          } catch {
+            /* quota exceeded — non-fatal */
+          }
+        }
       } catch (e) {
         setSchemaErrors((prev) => {
           const next = new Map(prev)
@@ -457,7 +507,7 @@ export default function BulkEditClient({
         })
       }
     },
-    [manifests, product.id],
+    [manifests, product.id, product.productType],
   )
 
   useEffect(() => {

@@ -17,6 +17,7 @@ import {
   IMPORT_SOURCE as XAVIA_REALISTIC_IMPORT_SOURCE,
 } from '../services/seed-xavia-realistic.service.js'
 import { auditLogService } from '../services/audit-log.service.js'
+import { idempotencyService } from '../services/idempotency.service.js'
 
 /**
  * Routes for bulk-operations: optimized fetch + atomic patch.
@@ -1153,6 +1154,12 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
 
       return {
         success: true,
+        // NN.7 — surface the BulkOperation row id so the client can
+        // show "operation id: bulk_xxx" in the failure toast and a
+        // future "view audit log" panel can drill in. errors already
+        // carry per-(id, field) attribution; the client maps them
+        // into cell-level error highlights.
+        operationId: bulkOp.id,
         updated: validated.length,
         cascadeCount: cascadingParents.length,
         affectedChildren: totalAffectedChildren,
@@ -1997,6 +2004,14 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     const { productIds, sourceContext, targetContexts, columnsOnly } =
       request.body ?? {}
 
+    // NN.2 — idempotency on the replicate fan-out. Double-clicked
+    // 'Replicate' should not write the same target listings twice.
+    const idempotencyKey = request.headers['idempotency-key'] as
+      | string
+      | undefined
+    const cached = idempotencyService.lookup('replicate', idempotencyKey)
+    if (cached) return cached
+
     if (!Array.isArray(productIds) || productIds.length === 0) {
       return reply.code(400).send({ error: 'productIds required' })
     }
@@ -2058,12 +2073,54 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       error: string
     }> = []
 
+    // NN.12 — snapshot the source updatedAt at the start of the run.
+    // If a source listing is edited between this snapshot and the
+    // upsert below, we drop that productId from this batch (the user
+    // can re-run replicate to pick up the new value). Without this,
+    // a concurrent edit to the source can land stale data on N
+    // targets in this fan-out.
+    const sourceSnapshotAt = new Map<string, Date>()
+    for (const s of sourceListings) {
+      sourceSnapshotAt.set(s.productId, s.updatedAt)
+    }
+    const sourceConflicts: string[] = []
+
     const ops = await Promise.all(
       productIds.flatMap((productId) =>
         targetContexts.map(async (tc) => {
           const source = sourceByProductId.get(productId)
           if (!source) {
             skippedNoSource++
+            return
+          }
+          // NN.12 — re-check the source updatedAt right before the
+          // upsert. If it moved, skip and report; the user gets a
+          // 'source changed' entry in errors so they know which
+          // products didn't replicate cleanly.
+          const fresh = await prisma.channelListing.findUnique({
+            where: {
+              productId_channel_marketplace: {
+                productId,
+                channel: sourceContext.channel,
+                marketplace: sourceContext.marketplace,
+              },
+            },
+            select: { updatedAt: true },
+          })
+          const snapshotAt = sourceSnapshotAt.get(productId)
+          if (
+            fresh &&
+            snapshotAt &&
+            fresh.updatedAt.getTime() !== snapshotAt.getTime()
+          ) {
+            sourceConflicts.push(productId)
+            errors.push({
+              productId,
+              channel: tc.channel,
+              marketplace: tc.marketplace,
+              error:
+                'source listing changed during replicate — re-run to pick up the new value',
+            })
             return
           }
           const targetKey = `${productId}:${tc.channel}:${tc.marketplace}`
@@ -2159,11 +2216,15 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     )
     void ops
 
-    return {
+    const responseBody = {
       replicated,
       skippedNoSource,
       errors,
     }
+    // NN.2 — store the replicate result so a duplicate request with
+    // the same Idempotency-Key returns identical bytes.
+    idempotencyService.store('replicate', idempotencyKey, responseBody)
+    return responseBody
   })
 }
 

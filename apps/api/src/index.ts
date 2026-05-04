@@ -39,6 +39,7 @@ import gtinExemptionRoutes from "./routes/gtin-exemption.routes.js";
 import listingContentRoutes from "./routes/listing-content.routes.js";
 import terminologyRoutes from "./routes/terminology.routes.js";
 import bulkOperationsRoutes from "./routes/bulk-operations.routes.js";
+import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
 // Queue/worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS — Phase 2 will flip it on.
 // import { startJobs } from "./jobs/sync.job.js";
 // import { initializeBullMQWorker } from "./workers/bullmq-sync.worker.js";
@@ -155,6 +156,10 @@ async function start() {
     // initializeChannelSyncWorker();
     // initializeBulkListWorker();
     // startJobs();
+
+    // NN.14 — daily cron for abandoned wizard cleanup. In-process
+    // for now; switch to a queue worker when running multi-instance.
+    startWizardCleanupCron();
 
     logger.info('✅ API server initialized (workers disabled — Phase 2)', {
       timestamp: new Date().toISOString(),

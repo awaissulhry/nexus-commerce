@@ -1363,10 +1363,52 @@ export async function catalogRoutes(app: FastifyInstance) {
         });
       }
 
-      // Delete child product
+      // Delete child product. ChannelListings on the child cascade
+      // via FK; this handles their per-channel data automatically.
       await prisma.product.delete({
         where: { id: childId },
       });
+
+      // NN.17 — sweep parent's ChannelListings for any
+      // platformAttributes.variants[childId] entries. The parent's
+      // listing payload often carries a per-variant attribute map
+      // keyed by child variant id. When a variant is deleted, that
+      // map entry must be removed or the next publish push includes
+      // a stale variant reference (eBay rejects, Amazon orphans).
+      try {
+        const parentListings = await prisma.channelListing.findMany({
+          where: { productId: parentId },
+          select: { id: true, platformAttributes: true },
+        });
+        for (const listing of parentListings) {
+          const pa = listing.platformAttributes as
+            | { variants?: Record<string, unknown> }
+            | null;
+          if (
+            !pa ||
+            typeof pa !== 'object' ||
+            !pa.variants ||
+            typeof pa.variants !== 'object' ||
+            !(childId in pa.variants)
+          ) {
+            continue;
+          }
+          const { [childId]: _dropped, ...kept } = pa.variants;
+          await prisma.channelListing.update({
+            where: { id: listing.id },
+            data: {
+              platformAttributes: { ...pa, variants: kept } as any,
+            },
+          });
+        }
+      } catch (err) {
+        // Sweep is best-effort; the parent listing can be re-published
+        // to drop the stale entry. Log + continue.
+        request.log.warn(
+          { err, childId, parentId },
+          '[catalog] parent variants sweep failed',
+        );
+      }
 
       // Check if parent still has children
       const remainingChildren = await prisma.product.count({

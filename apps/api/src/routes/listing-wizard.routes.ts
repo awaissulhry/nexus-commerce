@@ -46,6 +46,7 @@ import {
   legacyFirstChannel,
   normalizeChannels,
 } from '../services/listing-wizard/channels.js'
+import { idempotencyService } from '../services/idempotency.service.js'
 
 const amazonService = new AmazonService()
 const categorySchemaService = new CategorySchemaService(
@@ -389,6 +390,13 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
             currentStep: 1,
             state: {},
             status: 'DRAFT',
+            // NN.14 — DRAFT wizards expire after 30 days. The cleanup
+            // cron deletes anything past expiresAt that's still DRAFT;
+            // SUBMITTED/LIVE/FAILED rows ignore the column. PATCH on
+            // currentStep can extend expiresAt to keep active wizards
+            // alive (separate effect; not done here so an abandoned
+            // wizard reaches expiry naturally).
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           },
         })
       }
@@ -1470,6 +1478,22 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: string } }>(
     '/listing-wizard/:id/submit',
     async (request, reply) => {
+      // NN.2 — idempotency: a double-clicked Submit must not run the
+      // publish orchestration twice. We dedup by Idempotency-Key
+      // header (RFC 7240–style); when missing, we fall back to the
+      // wizardId so accidental retries within the 10-minute window
+      // still get the cached result instead of a second publish.
+      const idempotencyKey =
+        (request.headers['idempotency-key'] as string | undefined) ??
+        `wizard:${request.params.id}`
+      const cached = idempotencyService.lookup(
+        'wizard-submit',
+        idempotencyKey,
+      )
+      if (cached) {
+        return cached
+      }
+
       const wizard = await prisma.listingWizard.findUnique({
         where: { id: request.params.id },
       })
@@ -1541,7 +1565,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         },
       })
 
-      return {
+      const responseBody = {
         wizard: {
           id: updated.id,
           status: updated.status,
@@ -1551,6 +1575,14 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         validation,
         payloads,
       }
+      // NN.2 — store the full response under the idempotency key so
+      // a duplicate submit within 10 min returns identical bytes.
+      idempotencyService.store(
+        'wizard-submit',
+        idempotencyKey,
+        responseBody,
+      )
+      return responseBody
     },
   )
 
