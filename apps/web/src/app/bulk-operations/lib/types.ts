@@ -91,6 +91,23 @@ export interface FilterState {
   status: string[]
   channels: string[]
   stockLevel: 'all' | 'out' | 'low' | 'in'
+  // T.5 — additional dimensions on the filter dropdown.
+  productTypes: string[]
+  parentage: 'any' | 'parent' | 'variant'
+  hasAsin: 'any' | 'yes' | 'no'
+  hasGtin: 'any' | 'yes' | 'no'
+  missingRequired: boolean
+}
+
+export const EMPTY_FILTER_STATE: FilterState = {
+  status: [],
+  channels: [],
+  stockLevel: 'all',
+  productTypes: [],
+  parentage: 'any',
+  hasAsin: 'any',
+  hasGtin: 'any',
+  missingRequired: false,
 }
 
 export interface HistoryDelta {

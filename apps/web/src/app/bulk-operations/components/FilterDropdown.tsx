@@ -3,32 +3,50 @@
 import { useEffect, useRef } from 'react'
 import { Filter } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import type { FilterState } from '../lib/types'
 
-export interface FilterValue {
-  status: string[]
-  channels: string[]
-  stockLevel: 'all' | 'out' | 'low' | 'in'
-}
+// Re-export with the historical name so call sites that imported
+// `FilterValue` keep compiling.
+export type FilterValue = FilterState
 
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
-  value: FilterValue
-  onChange: (next: FilterValue) => void
+  value: FilterState
+  onChange: (next: FilterState) => void
   onReset: () => void
   activeCount: number
+  /** T.5 — productTypes seen in the loaded data, for the productType
+   *  multi-select. */
+  availableProductTypes: string[]
 }
 
 const STATUS_OPTIONS = ['ACTIVE', 'DRAFT', 'INACTIVE'] as const
 const CHANNEL_OPTIONS = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE'] as const
 const STOCK_OPTIONS: Array<{
-  value: FilterValue['stockLevel']
+  value: FilterState['stockLevel']
   label: string
 }> = [
   { value: 'all', label: 'All' },
   { value: 'out', label: 'Out of stock (= 0)' },
   { value: 'low', label: 'Low stock (1–5)' },
   { value: 'in', label: 'In stock (> 0)' },
+]
+const PARENTAGE_OPTIONS: Array<{
+  value: FilterState['parentage']
+  label: string
+}> = [
+  { value: 'any', label: 'Any' },
+  { value: 'parent', label: 'Master / parent only' },
+  { value: 'variant', label: 'Variants only' },
+]
+const TRISTATE_OPTIONS: Array<{
+  value: 'any' | 'yes' | 'no'
+  label: string
+}> = [
+  { value: 'any', label: 'Any' },
+  { value: 'yes', label: 'Yes' },
+  { value: 'no', label: 'No' },
 ]
 
 export default function FilterDropdown({
@@ -38,6 +56,7 @@ export default function FilterDropdown({
   onChange,
   onReset,
   activeCount,
+  availableProductTypes,
 }: Props) {
   const triggerRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -65,7 +84,10 @@ export default function FilterDropdown({
     }
   }, [open, onOpenChange])
 
-  const toggleArrayValue = (key: 'status' | 'channels', v: string) => {
+  const toggleArrayValue = (
+    key: 'status' | 'channels' | 'productTypes',
+    v: string,
+  ) => {
     const arr = value[key]
     const next = arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]
     onChange({ ...value, [key]: next })
@@ -97,10 +119,10 @@ export default function FilterDropdown({
       {open && (
         <div
           ref={panelRef}
-          className="absolute right-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-lg shadow-lg z-30"
+          className="absolute right-0 top-full mt-1 w-80 max-h-[80vh] overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-lg z-30"
           role="dialog"
         >
-          <div className="px-3 py-2 border-b border-slate-200 flex items-center justify-between">
+          <div className="px-3 py-2 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white">
             <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
               Filters
             </span>
@@ -126,7 +148,7 @@ export default function FilterDropdown({
               ))}
             </Section>
 
-            <Section label="Channel">
+            <Section label="Sync channel">
               {CHANNEL_OPTIONS.map((c) => (
                 <Check
                   key={c}
@@ -148,6 +170,82 @@ export default function FilterDropdown({
                   label={opt.label}
                 />
               ))}
+            </Section>
+
+            {availableProductTypes.length > 0 && (
+              <Section
+                label={`Product type (${availableProductTypes.length})`}
+              >
+                <div className="max-h-32 overflow-y-auto space-y-0.5">
+                  {availableProductTypes.map((pt) => (
+                    <Check
+                      key={pt}
+                      checked={value.productTypes.includes(pt)}
+                      onChange={() => toggleArrayValue('productTypes', pt)}
+                      label={pt}
+                      mono
+                    />
+                  ))}
+                </div>
+              </Section>
+            )}
+
+            <Section label="Parentage">
+              {PARENTAGE_OPTIONS.map((opt) => (
+                <Radio
+                  key={opt.value}
+                  checked={value.parentage === opt.value}
+                  onChange={() =>
+                    onChange({ ...value, parentage: opt.value })
+                  }
+                  label={opt.label}
+                />
+              ))}
+            </Section>
+
+            <Section label="Has Amazon ASIN">
+              <div className="flex items-center gap-3">
+                {TRISTATE_OPTIONS.map((opt) => (
+                  <Radio
+                    key={opt.value}
+                    checked={value.hasAsin === opt.value}
+                    onChange={() =>
+                      onChange({ ...value, hasAsin: opt.value })
+                    }
+                    label={opt.label}
+                    inline
+                  />
+                ))}
+              </div>
+            </Section>
+
+            <Section label="Has GTIN / UPC / EAN">
+              <div className="flex items-center gap-3">
+                {TRISTATE_OPTIONS.map((opt) => (
+                  <Radio
+                    key={opt.value}
+                    checked={value.hasGtin === opt.value}
+                    onChange={() =>
+                      onChange({ ...value, hasGtin: opt.value })
+                    }
+                    label={opt.label}
+                    inline
+                  />
+                ))}
+              </div>
+            </Section>
+
+            <Section label="Required-field readiness">
+              <Check
+                checked={value.missingRequired}
+                onChange={() =>
+                  onChange({
+                    ...value,
+                    missingRequired: !value.missingRequired,
+                  })
+                }
+                label="Only show rows with at least one required field unfilled"
+              />
             </Section>
           </div>
         </div>
@@ -177,10 +275,12 @@ function Check({
   checked,
   onChange,
   label,
+  mono,
 }: {
   checked: boolean
   onChange: () => void
   label: string
+  mono?: boolean
 }) {
   return (
     <label className="flex items-center gap-2 text-[12px] text-slate-700 cursor-pointer hover:text-slate-900">
@@ -190,7 +290,7 @@ function Check({
         onChange={onChange}
         className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
       />
-      <span>{label}</span>
+      <span className={mono ? 'font-mono text-[11px]' : undefined}>{label}</span>
     </label>
   )
 }
@@ -199,13 +299,20 @@ function Radio({
   checked,
   onChange,
   label,
+  inline,
 }: {
   checked: boolean
   onChange: () => void
   label: string
+  inline?: boolean
 }) {
   return (
-    <label className="flex items-center gap-2 text-[12px] text-slate-700 cursor-pointer hover:text-slate-900">
+    <label
+      className={cn(
+        'flex items-center gap-2 text-[12px] text-slate-700 cursor-pointer hover:text-slate-900',
+        inline && 'inline-flex',
+      )}
+    >
       <input
         type="radio"
         checked={checked}

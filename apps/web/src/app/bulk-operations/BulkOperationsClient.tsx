@@ -88,6 +88,7 @@ import {
   type ApiError,
   type SaveStatus,
   type SelectionState,
+  EMPTY_FILTER_STATE,
   type FilterState,
   type HistoryDelta,
   type HistoryEntry,
@@ -301,18 +302,18 @@ export default function BulkOperationsClient() {
     const t = window.setTimeout(() => setDebouncedSearch(searchQuery), 150)
     return () => window.clearTimeout(t)
   }, [searchQuery])
-  const [filterState, setFilterState] = useState<FilterState>({
-    status: [],
-    channels: [],
-    stockLevel: 'all',
-  })
+  const [filterState, setFilterState] = useState<FilterState>(EMPTY_FILTER_STATE)
   const activeFilterCount =
     filterState.status.length +
     filterState.channels.length +
-    (filterState.stockLevel !== 'all' ? 1 : 0)
+    (filterState.stockLevel !== 'all' ? 1 : 0) +
+    filterState.productTypes.length +
+    (filterState.parentage !== 'any' ? 1 : 0) +
+    (filterState.hasAsin !== 'any' ? 1 : 0) +
+    (filterState.hasGtin !== 'any' ? 1 : 0) +
+    (filterState.missingRequired ? 1 : 0)
   const resetFilters = useCallback(
-    () =>
-      setFilterState({ status: [], channels: [], stockLevel: 'all' }),
+    () => setFilterState(EMPTY_FILTER_STATE),
     [],
   )
   const [filterOpen, setFilterOpen] = useState(false)
@@ -1354,6 +1355,16 @@ export default function BulkOperationsClient() {
   // the filtered set into the existing hierarchy builder. This means
   // a parent whose children all get filtered out simply vanishes
   // from hierarchy view — same as filtering in any spreadsheet.
+  // T.5 — required-field set used by the missingRequired filter.
+  // Computed once per allFields change; filters by `required: true`.
+  const requiredFieldIds = useMemo(() => {
+    const out: string[] = []
+    for (const f of allFields) {
+      if (f.required && f.editable) out.push(f.id)
+    }
+    return out
+  }, [allFields])
+
   const filteredProducts = useMemo(() => {
     let pool = products
     if (filterState.status.length > 0) {
@@ -1375,6 +1386,45 @@ export default function BulkOperationsClient() {
         return true
       })
     }
+    if (filterState.productTypes.length > 0) {
+      const types = new Set(filterState.productTypes)
+      pool = pool.filter((p) => p.productType && types.has(p.productType))
+    }
+    if (filterState.parentage !== 'any') {
+      pool = pool.filter((p) =>
+        filterState.parentage === 'parent'
+          ? p.isParent === true || p.parentId === null
+          : p.parentId !== null,
+      )
+    }
+    if (filterState.hasAsin !== 'any') {
+      const want = filterState.hasAsin === 'yes'
+      pool = pool.filter((p) => !!p.amazonAsin === want)
+    }
+    if (filterState.hasGtin !== 'any') {
+      const want = filterState.hasGtin === 'yes'
+      pool = pool.filter((p) => {
+        const has = !!(p.gtin || p.upc || p.ean)
+        return has === want
+      })
+    }
+    if (filterState.missingRequired && requiredFieldIds.length > 0) {
+      pool = pool.filter((p) => {
+        for (const id of requiredFieldIds) {
+          if (id.startsWith('attr_')) {
+            const stripped = id.replace(/^attr_/, '')
+            const v = (p.categoryAttributes as Record<string, unknown> | null)?.[
+              stripped
+            ]
+            if (v === null || v === undefined || v === '') return true
+          } else {
+            const v = (p as Record<string, unknown>)[id]
+            if (v === null || v === undefined || v === '') return true
+          }
+        }
+        return false
+      })
+    }
     const q = debouncedSearch.trim().toLowerCase()
     if (q) {
       pool = pool.filter((p) => {
@@ -1385,7 +1435,7 @@ export default function BulkOperationsClient() {
       })
     }
     return pool
-  }, [products, debouncedSearch, filterState])
+  }, [products, debouncedSearch, filterState, requiredFieldIds])
 
   // Build display rows based on mode
   const displayRows = useMemo(() => {
@@ -2201,6 +2251,7 @@ export default function BulkOperationsClient() {
               onChange={setFilterState}
               onReset={resetFilters}
               activeCount={activeFilterCount}
+              availableProductTypes={productTypesInData}
             />
           </div>
 

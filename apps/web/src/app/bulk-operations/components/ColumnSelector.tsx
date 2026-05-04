@@ -29,6 +29,8 @@ export interface FieldDef {
   options?: string[]
   width?: number
   editable: boolean
+  /** T.5 — required-field readiness filter checks this. */
+  required?: boolean
   helpText?: string
 }
 
