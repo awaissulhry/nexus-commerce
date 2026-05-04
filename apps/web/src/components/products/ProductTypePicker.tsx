@@ -19,6 +19,8 @@ export interface ProductTypeListItem {
   productType: string
   displayName: string
   bundled: boolean
+  /** Z.3 — eBay confidence score 0..100. */
+  matchPercentage?: number
 }
 
 interface Props {
@@ -430,6 +432,25 @@ export default function ProductTypePicker({
                     </span>
                   </span>
                   <span className="flex items-center gap-1 flex-shrink-0">
+                    {/* Z.3 — eBay confidence score. Greens at ≥85%,
+                        ambers in the 60–84% range, slate below 60.
+                        Helps the user pick the right leaf when several
+                        sibling categories share a path prefix. */}
+                    {typeof i.matchPercentage === 'number' && (
+                      <span
+                        className={cn(
+                          'text-[10px] tabular-nums font-medium px-1 py-0.5 rounded border',
+                          i.matchPercentage >= 85
+                            ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                            : i.matchPercentage >= 60
+                            ? 'text-amber-700 bg-amber-50 border-amber-200'
+                            : 'text-slate-600 bg-slate-50 border-slate-200',
+                        )}
+                        title={`eBay confidence: ${i.matchPercentage}%`}
+                      >
+                        {Math.round(i.matchPercentage)}%
+                      </span>
+                    )}
                     {i.bundled && (
                       <span
                         className="text-[10px] uppercase tracking-wide font-medium text-amber-700 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded"

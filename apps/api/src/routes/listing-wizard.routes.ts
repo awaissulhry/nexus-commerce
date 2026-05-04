@@ -24,6 +24,10 @@ import {
   type ProductTypeListItem,
 } from '../services/listing-wizard/product-types.service.js'
 import { SchemaParserService } from '../services/listing-wizard/schema-parser.service.js'
+import {
+  EbayCategoryService,
+  type EbayAspectRich,
+} from '../services/ebay-category.service.js'
 import { VariationsService } from '../services/listing-wizard/variations.service.js'
 import { SubmissionService } from '../services/listing-wizard/submission.service.js'
 import {
@@ -62,6 +66,99 @@ const submissionService = new SubmissionService(prisma as any)
 const imageResolutionService = new ImageResolutionService(prisma as any)
 const listingContentService = new ListingContentService(new GeminiService())
 const channelPublishService = new ChannelPublishService()
+const ebayCategoryService = new EbayCategoryService()
+
+/** Z.2 — convert eBay's per-category aspect schema into the same
+ *  UnionField shape the bulk grid + per-product editor render Amazon
+ *  fields with. Mode/dataType/cardinality map to FieldKind:
+ *    SELECTION_ONLY        → 'enum'
+ *    NUMBER + FREE_TEXT    → 'number'
+ *    STRING + FREE_TEXT    → 'text' (or 'longtext' when maxLength > 80)
+ *    cardinality MULTI     → 'string_array' (eBay supports multi-value
+ *                            aspects for things like Material, Pattern)
+ *  Required → required for the active channelKey (we only ever pass a
+ *  single channel into this endpoint, so requiredFor has at most one
+ *  entry). currentValue seeds from baseAttributes for edit-page
+ *  inheritance.
+ */
+function ebayAspectsToUnionFields(
+  aspects: EbayAspectRich[],
+  baseAttributes: Record<string, unknown>,
+  channelKey: string,
+): Array<{
+  id: string
+  label: string
+  description?: string
+  kind: string
+  required: boolean
+  wrapped: boolean
+  options?: Array<{ value: string; label: string }>
+  defaultValue?: string | number | boolean
+  examples?: string[]
+  maxLength?: number
+  minLength?: number
+  unsupportedReason?: string
+  maxItems?: number
+  requiredFor: string[]
+  optionalFor: string[]
+  notUsedIn: string[]
+  currentValue?: string | number | boolean
+  overrides: Record<string, string | number | boolean>
+  divergent?: boolean
+  variantEligible: boolean
+}> {
+  return aspects.map((a) => {
+    const id = aspectIdFromName(a.name)
+    let kind: string
+    if (a.cardinality === 'MULTI' && a.dataType === 'STRING') {
+      kind = 'string_array'
+    } else if (a.mode === 'SELECTION_ONLY' && a.values.length > 0) {
+      kind = 'enum'
+    } else if (a.dataType === 'NUMBER') {
+      kind = 'number'
+    } else if (typeof a.maxLength === 'number' && a.maxLength > 80) {
+      kind = 'longtext'
+    } else {
+      kind = 'text'
+    }
+    const cur = baseAttributes[id]
+    return {
+      id,
+      label: a.name,
+      kind,
+      required: a.required,
+      wrapped: false,
+      options:
+        a.values.length > 0
+          ? a.values.map((v) => ({ value: v, label: v }))
+          : undefined,
+      maxLength: a.maxLength,
+      maxItems: a.cardinality === 'MULTI' ? 20 : undefined,
+      requiredFor: a.required ? [channelKey] : [],
+      optionalFor: a.required ? [] : [channelKey],
+      notUsedIn: [],
+      currentValue:
+        typeof cur === 'string' ||
+        typeof cur === 'number' ||
+        typeof cur === 'boolean'
+          ? cur
+          : undefined,
+      overrides: {},
+      variantEligible: a.variantEligible,
+    }
+  })
+}
+
+/** Convert "Brand Name" → "brand_name" so eBay aspects use the same
+ *  shape (snake_case ids) as Amazon attributes. The user-facing label
+ *  stays as the localised aspect name. */
+function aspectIdFromName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+}
 
 // ── Phase G — language + format derivation for content dedup ────
 const MARKETPLACE_TO_LANGUAGE: Record<string, string> = {
@@ -1644,6 +1741,64 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         baseAttributes['bullet_point'] = JSON.stringify(
           listing!.bulletPointsOverride,
         )
+      }
+
+      // Z.2 — eBay branch. eBay's per-category aspects are the
+      // equivalent of Amazon's CategorySchema; they describe required
+      // + recommended fields with data types and enum values, which
+      // we adapt into the same UnionField/UnionManifest shape so the
+      // frontend renders eBay tabs with the same editor it uses for
+      // Amazon.
+      const upperChannel = channel.toUpperCase()
+      if (upperChannel === 'EBAY') {
+        try {
+          const aspects = await ebayCategoryService.getCategoryAspectsRich(
+            productType,
+            marketplace,
+            { forceRefresh: refresh === '1' || refresh === 'true' },
+          )
+          const channelKey = `${upperChannel}:${marketplace.toUpperCase()}`
+          const fields = ebayAspectsToUnionFields(
+            aspects,
+            baseAttributes,
+            channelKey,
+          )
+          return {
+            channels: [
+              { platform: upperChannel, marketplace, productType },
+            ],
+            schemaVersionByChannel: {
+              [channelKey]: 'ebay-aspects-v1',
+            },
+            fetchedAtByChannel: {
+              [channelKey]: new Date().toISOString(),
+            },
+            fields,
+            channelsMissingSchema: aspects.length === 0
+              ? [
+                  {
+                    channelKey,
+                    reason: 'fetch_failed',
+                    detail:
+                      'eBay aspect fetch returned empty — check EBAY_APP_ID + EBAY_CERT_ID and that the categoryId is valid for this marketplace.',
+                  },
+                ]
+              : [],
+            variations: [],
+            optionalFieldCount: fields.filter(
+              (f) => !f.requiredFor.includes(channelKey),
+            ).length,
+            includesAllOptional: true,
+          }
+        } catch (err) {
+          fastify.log.error(
+            { err },
+            '[products/listings/schema EBAY] failed',
+          )
+          return reply.code(500).send({
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
       }
 
       try {

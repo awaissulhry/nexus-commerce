@@ -37,6 +37,11 @@ export interface ProductTypeListItem {
    *  SP-API call. The UI can render a subtle "offline" badge if it
    *  cares; the wizard treats both sources interchangeably. */
   bundled: boolean
+  /** Z.3 — confidence score 0..100 from eBay's get_category_suggestions.
+   *  Absent for Amazon (its endpoint doesn't return one) and for
+   *  bundled fallback. UI shows a coloured badge for high-confidence
+   *  matches. */
+  matchPercentage?: number
 }
 
 export interface SuggestionContext {
@@ -126,6 +131,7 @@ export class ProductTypesService {
         productType: i.productType,
         displayName: i.displayName,
         bundled: i.bundled,
+        matchPercentage: i.matchPercentage,
       }))
     }
 

@@ -57,11 +57,33 @@ interface CachedSearch {
   expiresAt: number
 }
 
+/** Z.1 — rich aspect schema (data types + enum values + cardinality)
+ *  fetched via get_item_aspects_for_category. The simpler aspects
+ *  shape returned by getCategoryAspects (just name + required) stays
+ *  alongside this for legacy callers (workers/listings.ts). */
+export interface EbayAspectRich {
+  name: string
+  dataType: 'STRING' | 'NUMBER' | 'DATE' | string
+  mode: 'FREE_TEXT' | 'SELECTION_ONLY' | string
+  usage: 'REQUIRED' | 'RECOMMENDED' | 'OPTIONAL' | string
+  required: boolean
+  maxLength?: number
+  cardinality: 'SINGLE' | 'MULTI' | string
+  variantEligible: boolean
+  values: string[]
+}
+
+interface CachedRichAspects {
+  aspects: EbayAspectRich[]
+  expiresAt: number
+}
+
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
 export class EbayCategoryService {
   private cache: Map<string, CachedCategory> = new Map();
   private searchCache: Map<string, CachedSearch> = new Map();
+  private richCache: Map<string, CachedRichAspects> = new Map();
   private accessToken: string | null = null;
   private tokenExpiresAt = 0;
 
@@ -440,10 +462,125 @@ export class EbayCategoryService {
   }
 
   /**
+   * Z.1 — full aspect schema for a category (data types, enum values,
+   * cardinality, max length). Drives the schema-editor / bulk grid
+   * the same way Amazon's CategorySchema does. The simpler
+   * getCategoryAspects() above stays for callers that only need the
+   * required/recommended name list.
+   *
+   * Endpoint: get_item_aspects_for_category. Cached per
+   * (marketplace, categoryId) for 24h via richCache.
+   */
+  async getCategoryAspectsRich(
+    categoryId: string,
+    marketplace: string | null,
+    options?: { forceRefresh?: boolean },
+  ): Promise<EbayAspectRich[]> {
+    const marketplaceId = normaliseMarketplace(marketplace);
+    const treeId = MARKETPLACE_TREE_IDS[marketplaceId];
+    if (treeId === undefined) {
+      console.warn(
+        `[EbayCategoryService] Unknown marketplace: ${marketplaceId}`,
+      );
+      return [];
+    }
+    const key = `${marketplaceId}:${categoryId}`;
+    if (!options?.forceRefresh) {
+      const cached = this.richCache.get(key);
+      if (cached && cached.expiresAt > Date.now()) {
+        return cached.aspects;
+      }
+    }
+    let token: string;
+    try {
+      token = await this.getAccessToken();
+    } catch (err) {
+      console.warn(
+        `[EbayCategoryService] No token for getCategoryAspectsRich: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return [];
+    }
+    const apiBase = process.env.EBAY_API_BASE ?? "https://api.ebay.com";
+    const url = `${apiBase}/commerce/taxonomy/v1/category_tree/${treeId}/get_item_aspects_for_category?category_id=${encodeURIComponent(
+      categoryId,
+    )}`;
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+    } catch (err) {
+      console.warn(
+        `[EbayCategoryService] getCategoryAspectsRich network error: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return [];
+    }
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.warn(
+        `[EbayCategoryService] getCategoryAspectsRich ${res.status}: ${body}`,
+      );
+      return [];
+    }
+    const json = (await res.json().catch(() => null)) as {
+      aspects?: Array<{
+        localizedAspectName?: string;
+        aspectConstraint?: {
+          aspectDataType?: string;
+          aspectMode?: string;
+          aspectRequired?: boolean;
+          aspectUsage?: string;
+          aspectMaxLength?: number;
+          itemToAspectCardinality?: string;
+          aspectEnabledForVariations?: boolean;
+        };
+        aspectValues?: Array<{ localizedValue?: string }>;
+      }>;
+    } | null;
+    const rows = json?.aspects ?? [];
+    const aspects: EbayAspectRich[] = [];
+    for (const a of rows) {
+      const name = a?.localizedAspectName;
+      if (!name) continue;
+      const c = a.aspectConstraint ?? {};
+      aspects.push({
+        name,
+        dataType: (c.aspectDataType ?? "STRING") as EbayAspectRich["dataType"],
+        mode: (c.aspectMode ?? "FREE_TEXT") as EbayAspectRich["mode"],
+        required: !!c.aspectRequired,
+        usage:
+          (c.aspectUsage as EbayAspectRich["usage"]) ?? "RECOMMENDED",
+        maxLength:
+          typeof c.aspectMaxLength === "number" ? c.aspectMaxLength : undefined,
+        cardinality: (c.itemToAspectCardinality ?? "SINGLE") as EbayAspectRich["cardinality"],
+        variantEligible: !!c.aspectEnabledForVariations,
+        values: (a.aspectValues ?? [])
+          .map((v) => v.localizedValue)
+          .filter((v): v is string => typeof v === "string" && v.length > 0),
+      });
+    }
+    this.richCache.set(key, {
+      aspects,
+      expiresAt: Date.now() + CACHE_TTL,
+    });
+    return aspects;
+  }
+
+  /**
    * Clear cache (useful for testing or manual refresh)
    */
   clearCache(): void {
     this.cache.clear();
+    this.searchCache.clear();
+    this.richCache.clear();
     console.log("[EbayCategoryService] Cache cleared");
   }
 
