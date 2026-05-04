@@ -116,11 +116,16 @@ function emitChange() {
 
 /** Fire-and-forget async pull. Call once on mount; the parent's
  *  existing nexus:views-changed listener picks up the cache update
- *  and re-renders the saved-views dropdown. */
+ *  and re-renders the saved-views dropdown. Also runs the one-shot
+ *  legacy-localStorage migration (U.3) — see migrateLegacyViews. */
 export async function hydrateViewsFromServer(): Promise<void> {
   if (hydrating) return
   hydrating = true
   try {
+    // U.3 — migrate any pre-T.6 localStorage saved-views before we
+    // fetch the server list, so the migrated entries land in the same
+    // payload. Idempotent: clears the legacy key on success.
+    await migrateLegacyViews()
     const res = await fetch(`${getBackendUrl()}/api/bulk-ops/templates`, {
       cache: 'no-store',
     })
@@ -136,6 +141,73 @@ export async function hydrateViewsFromServer(): Promise<void> {
      *  hardcoded defaults until the next mount or manual retry */
   } finally {
     hydrating = false
+  }
+}
+
+const LEGACY_STORAGE_KEY = 'nexus_bulkops_views_v1'
+
+/** U.3 — one-shot upload of pre-T.6 localStorage views to the server.
+ *  No-op when the legacy key is empty / missing. Clears the key on
+ *  success so subsequent mounts skip this. Failures keep the legacy
+ *  key intact so the next attempt can retry. */
+async function migrateLegacyViews(): Promise<void> {
+  if (typeof window === 'undefined') return
+  let raw: string | null
+  try {
+    raw = window.localStorage.getItem(LEGACY_STORAGE_KEY)
+  } catch {
+    return
+  }
+  if (!raw) return
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    // Corrupt entry — drop it so we don't keep retrying.
+    try {
+      window.localStorage.removeItem(LEGACY_STORAGE_KEY)
+    } catch {
+      /* ignore */
+    }
+    return
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    try {
+      window.localStorage.removeItem(LEGACY_STORAGE_KEY)
+    } catch {
+      /* ignore */
+    }
+    return
+  }
+  let allOk = true
+  for (const v of parsed as Array<Partial<SavedView>>) {
+    if (!v.name || !Array.isArray(v.columnIds) || v.columnIds.length === 0) {
+      continue
+    }
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/bulk-ops/templates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `${v.name} (migrated)`,
+          columnIds: v.columnIds,
+          enabledChannels: v.channels ?? [],
+          enabledProductTypes: v.productTypes ?? [],
+          // Filter state didn't exist pre-T.6; leave null.
+          filterState: null,
+        }),
+      })
+      if (!res.ok) allOk = false
+    } catch {
+      allOk = false
+    }
+  }
+  if (allOk) {
+    try {
+      window.localStorage.removeItem(LEGACY_STORAGE_KEY)
+    } catch {
+      /* ignore */
+    }
   }
 }
 

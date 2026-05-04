@@ -1207,6 +1207,81 @@ export default function BulkOperationsClient() {
   )
   actionsCtxRef.current = { onDelete: handleDeleteRow }
 
+  // U.2 — batch delete. Reads the active selection rectangle, derives
+  // the unique product ids in its row range, fires DELETE in parallel.
+  // Confirms with row count + a master-cascade warning when any
+  // selected row is a parent. Local state drops rows + any child whose
+  // parentId matches a deleted id (mirrors handleDeleteRow's cascade).
+  const handleBatchDelete = useCallback(async () => {
+    const rb = rangeBoundsRef.current
+    if (!rb) return
+    const rowModel = tableRef.current.getRowModel().rows
+    const selected: Array<{ id: string; sku: string; isParent: boolean }> = []
+    for (let r = rb.minRow; r <= rb.maxRow; r++) {
+      const row = rowModel[r]
+      if (!row) continue
+      selected.push({
+        id: row.original.id,
+        sku: row.original.sku,
+        isParent: !!row.original.isParent,
+      })
+    }
+    if (selected.length === 0) return
+    const parentCount = selected.filter((s) => s.isParent).length
+    const cascadeNote =
+      parentCount > 0
+        ? `\n\n${parentCount} master product${
+            parentCount === 1 ? ' is' : 's are'
+          } in the selection — every variant + ChannelListing + image row underneath will cascade. Cannot be undone.`
+        : '\n\nChannelListings + offers + image rows for each row will also be deleted. Cannot be undone.'
+    if (
+      !window.confirm(
+        `Delete ${selected.length} row${selected.length === 1 ? '' : 's'}?${cascadeNote}`,
+      )
+    )
+      return
+    setSaveStatus({ kind: 'saving' })
+    const failures: string[] = []
+    await Promise.all(
+      selected.map(async (s) => {
+        try {
+          const res = await fetch(
+            `${getBackendUrl()}/api/catalog/products/${s.id}`,
+            { method: 'DELETE' },
+          )
+          if (!res.ok) {
+            const j = await res.json().catch(() => ({}))
+            failures.push(s.sku + ': ' + (j?.error?.message ?? `HTTP ${res.status}`))
+          }
+        } catch (e) {
+          failures.push(s.sku + ': ' + (e instanceof Error ? e.message : String(e)))
+        }
+      }),
+    )
+    const deletedIds = new Set(selected.map((s) => s.id))
+    setProducts((prev) =>
+      prev.filter((p) => !deletedIds.has(p.id) && !deletedIds.has(p.parentId ?? '')),
+    )
+    if (failures.length === 0) {
+      setSaveStatus({ kind: 'saved', count: selected.length, at: Date.now() })
+      window.setTimeout(() => {
+        setSaveStatus((s) => (s.kind === 'saved' ? { kind: 'idle' } : s))
+      }, 2000)
+    } else {
+      setSaveStatus({
+        kind: 'error',
+        message: `${selected.length - failures.length} deleted, ${failures.length} failed: ${failures.slice(0, 3).join('; ')}`,
+      })
+    }
+  }, [])
+
+  // Selected-row count derived from the active selection rectangle —
+  // drives whether the "Delete N rows" toolbar button appears.
+  const selectedRowCount = useMemo(() => {
+    if (!rangeBounds) return 0
+    return rangeBounds.maxRow - rangeBounds.minRow + 1
+  }, [rangeBounds])
+
   // T.2 — productTypes seen in the loaded products. Drives the fields
   // fetch so every visible product's required + optional schema
   // attributes land as columns automatically — without the user
@@ -1221,6 +1296,52 @@ export default function BulkOperationsClient() {
     }
     return Array.from(set).sort()
   }, [products])
+
+  // U.1 — pre-warm CategorySchema for productTypes seen in the data.
+  // T.2's field-registry call only reads CACHED schemas, so a
+  // productType that's never been visited (per-product editor
+  // marketplace tab, etc.) won't surface its dynamic attr_* fields
+  // in the bulk grid. Here we hit the per-product schema endpoint
+  // for one representative product per productType — getSchema()
+  // server-side fetches from SP-API on cache miss, then subsequent
+  // /api/pim/fields calls pick up the warm cache.
+  // Tracks completed (productType, marketplace) pairs in a ref so
+  // re-rendering doesn't duplicate fetches.
+  const prewarmedRef = useRef<Set<string>>(new Set())
+  const [schemaWarmth, setSchemaWarmth] = useState(0)
+  useEffect(() => {
+    if (productTypesInData.length === 0 || products.length === 0) return
+    const marketplace = primaryContext?.marketplace ?? 'IT'
+    const channel = primaryContext?.channel ?? 'AMAZON'
+    if (channel !== 'AMAZON') return // schema cache only matters for Amazon
+    const todo: Array<{ productId: string; productType: string }> = []
+    for (const pt of productTypesInData) {
+      const key = `${marketplace}:${pt}`
+      if (prewarmedRef.current.has(key)) continue
+      const rep = products.find((p) => p.productType === pt)
+      if (!rep) continue
+      todo.push({ productId: rep.id, productType: pt })
+      prewarmedRef.current.add(key)
+    }
+    if (todo.length === 0) return
+    let cancelled = false
+    Promise.all(
+      todo.map((t) =>
+        fetch(
+          `${getBackendUrl()}/api/products/${t.productId}/listings/AMAZON/${marketplace}/schema?all=1`,
+          { cache: 'no-store' },
+        ).catch(() => null),
+      ),
+    ).then(() => {
+      if (cancelled) return
+      // Bump the warmth counter — drives a refetch of /api/pim/fields
+      // so the freshly cached schemas land as columns.
+      setSchemaWarmth((v) => v + 1)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [productTypesInData, products, primaryContext?.marketplace, primaryContext?.channel])
 
   // Refetch fields when channels/productTypes/marketplace change.
   // D.3g: passing `marketplace` lets the backend pull live category
@@ -1264,6 +1385,7 @@ export default function BulkOperationsClient() {
     enabledProductTypes,
     productTypesInData,
     primaryContext?.marketplace,
+    schemaWarmth,
   ])
 
   // ── Build columns dynamically from registry + visibility ──────────
@@ -2316,6 +2438,18 @@ export default function BulkOperationsClient() {
               <Plus className="w-3.5 h-3.5 mr-1.5" />
               New product
             </Button>
+            {selectedRowCount > 1 && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void handleBatchDelete()}
+                title={`Delete ${selectedRowCount} selected rows + their cascades`}
+                className="text-rose-700 border-rose-200 hover:bg-rose-50"
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                Delete {selectedRowCount}
+              </Button>
+            )}
             <Button
               variant="secondary"
               size="sm"
