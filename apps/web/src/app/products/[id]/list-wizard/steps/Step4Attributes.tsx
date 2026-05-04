@@ -141,6 +141,72 @@ export default function Step4Attributes({
   )
   const [showAllOptional, setShowAllOptional] = useState(false)
   const [aiBusyFields, setAiBusyFields] = useState<Set<string>>(new Set())
+  // L.4 — translate-busy keys are "<fieldId>:<channelKey>" so per-
+  // channel translate buttons can spin independently.
+  const [translateBusy, setTranslateBusy] = useState<Set<string>>(new Set())
+
+  const onTranslate = useCallback(
+    async (fieldId: string, channelKey: string) => {
+      const aiKind = AI_FIELD_MAP[fieldId]
+      if (!aiKind) return
+      const busyKey = `${fieldId}:${channelKey}`
+      setTranslateBusy((prev) => {
+        const next = new Set(prev)
+        next.add(busyKey)
+        return next
+      })
+      try {
+        // Generate-content already groups channels by language:platform
+        // server-side; we ask for ALL fields of this kind, then pick
+        // the result whose group covers the requested channelKey.
+        const res = await fetch(
+          `${getBackendUrl()}/api/listing-wizard/${wizardId}/generate-content`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fields: [aiKind], variant: 0 }),
+          },
+        )
+        const json = await res.json()
+        if (!res.ok) return
+        const matchedGroup = (json?.groups ?? []).find((g: any) =>
+          Array.isArray(g.channelKeys) && g.channelKeys.includes(channelKey),
+        )
+        if (!matchedGroup?.result) return
+        let value: string | undefined
+        if (aiKind === 'title') {
+          value = matchedGroup.result.title?.content
+        } else if (aiKind === 'description') {
+          value = matchedGroup.result.description?.content
+        } else if (aiKind === 'keywords') {
+          value = matchedGroup.result.keywords?.content
+        } else if (aiKind === 'bullets') {
+          const bullets = matchedGroup.result.bullets?.content
+          if (Array.isArray(bullets)) {
+            value = JSON.stringify(
+              bullets.filter(
+                (b: unknown) => typeof b === 'string' && b.trim().length > 0,
+              ),
+            )
+          }
+        }
+        if (typeof value === 'string' && value.length > 0) {
+          setOverride(channelKey, fieldId, value as Primitive)
+        }
+      } catch {
+        /* swallow */
+      } finally {
+        setTranslateBusy((prev) => {
+          const next = new Set(prev)
+          next.delete(busyKey)
+          return next
+        })
+      }
+    },
+    // setOverride is stable from useCallback above
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [wizardId],
+  )
 
   // L.2 — fire /generate-content for a single field, take the first
   // selected channel's group, and write the value into state.attributes
@@ -484,6 +550,8 @@ export default function Step4Attributes({
                     : undefined
                 }
                 aiBusy={aiBusyFields.has(field.id)}
+                onTranslate={onTranslate}
+                translateBusy={translateBusy}
                 overrides={Object.fromEntries(
                   Object.entries(overrides).map(([k, slice]) => [
                     k,
@@ -579,6 +647,8 @@ function FieldCard({
   unsatisfiedChannels,
   onAIGenerate,
   aiBusy,
+  onTranslate,
+  translateBusy,
 }: {
   field: UnionField
   baseValue: Primitive | undefined
@@ -595,6 +665,8 @@ function FieldCard({
   unsatisfiedChannels: string[]
   onAIGenerate?: () => void
   aiBusy?: boolean
+  onTranslate?: (fieldId: string, channelKey: string) => void
+  translateBusy?: Set<string>
 }) {
   const supportsAI = AI_SUPPORTED_FIELDS.has(field.id)
   const hasUnsatisfied = unsatisfiedChannels.length > 0
@@ -705,6 +777,9 @@ function FieldCard({
                 const ov = overrides[channelKey]
                 const isUnsatisfied =
                   unsatisfiedChannels.includes(channelKey)
+                const otherFilled = Object.entries(overrides)
+                  .filter(([k, v]) => k !== channelKey && !isEmpty(v))
+                  .map(([k]) => k)
                 return (
                   <div
                     key={channelKey}
@@ -726,6 +801,39 @@ function FieldCard({
                           : `Inherits: ${formatValue(baseValue)}`
                       }
                       compact
+                    />
+                    <OverrideMenu
+                      channelKey={channelKey}
+                      hasBase={!isEmpty(baseValue)}
+                      otherChannels={otherFilled}
+                      otherValues={Object.fromEntries(
+                        otherFilled.map((k) => [k, overrides[k] as Primitive]),
+                      )}
+                      hasValue={!isEmpty(ov)}
+                      supportsTranslate={
+                        AI_SUPPORTED_FIELDS.has(field.id) &&
+                        !isEmpty(baseValue)
+                      }
+                      translateBusy={
+                        translateBusy?.has(`${field.id}:${channelKey}`) ?? false
+                      }
+                      onCopyFromBase={() => {
+                        if (!isEmpty(baseValue)) {
+                          onOverrideChange(channelKey, baseValue as Primitive)
+                        }
+                      }}
+                      onCopyFrom={(sourceKey) => {
+                        const v = overrides[sourceKey]
+                        if (!isEmpty(v)) {
+                          onOverrideChange(channelKey, v as Primitive)
+                        }
+                      }}
+                      onTranslate={() =>
+                        onTranslate?.(field.id, channelKey)
+                      }
+                      onClear={() =>
+                        onOverrideChange(channelKey, undefined)
+                      }
                     />
                   </div>
                 )
@@ -1020,6 +1128,121 @@ async function fetchPatch(
   } catch {
     /* swallow — caller's debounce will retry on next change */
   }
+}
+
+function OverrideMenu({
+  channelKey,
+  hasBase,
+  otherChannels,
+  otherValues,
+  hasValue,
+  supportsTranslate,
+  translateBusy,
+  onCopyFromBase,
+  onCopyFrom,
+  onTranslate,
+  onClear,
+}: {
+  channelKey: string
+  hasBase: boolean
+  otherChannels: string[]
+  otherValues: Record<string, Primitive>
+  hasValue: boolean
+  supportsTranslate: boolean
+  translateBusy: boolean
+  onCopyFromBase: () => void
+  onCopyFrom: (sourceKey: string) => void
+  onTranslate: () => void
+  onClear: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="relative flex-shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((s) => !s)}
+        title="Copy or translate"
+        className="h-6 w-6 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded"
+      >
+        {translateBusy ? (
+          <Loader2 className="w-3 h-3 animate-spin" />
+        ) : (
+          <span className="text-[14px] leading-none">⋯</span>
+        )}
+      </button>
+      {open && (
+        <>
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded shadow-md py-1 min-w-[200px] text-[12px]">
+            {hasBase && (
+              <button
+                type="button"
+                onClick={() => {
+                  onCopyFromBase()
+                  setOpen(false)
+                }}
+                className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700"
+              >
+                Copy from base
+              </button>
+            )}
+            {otherChannels.length > 0 && (
+              <>
+                <div className="px-3 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+                  Copy from
+                </div>
+                {otherChannels.map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => {
+                      onCopyFrom(k)
+                      setOpen(false)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700"
+                  >
+                    <span className="font-mono text-[11px]">{k}</span>
+                    <span className="block text-[10px] text-slate-500 truncate">
+                      {String(otherValues[k]).slice(0, 40)}
+                    </span>
+                  </button>
+                ))}
+              </>
+            )}
+            {supportsTranslate && (
+              <button
+                type="button"
+                onClick={() => {
+                  onTranslate()
+                  setOpen(false)
+                }}
+                className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-blue-700 inline-flex items-center gap-1.5"
+              >
+                <Sparkles className="w-3 h-3" />
+                Translate from base for {channelKey.split(':')[1]}
+              </button>
+            )}
+            {hasValue && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClear()
+                  setOpen(false)
+                }}
+                className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-rose-700 border-t border-slate-100 mt-1"
+              >
+                Clear override
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
 }
 
 function parseStringArray(value: string | undefined): string[] {
