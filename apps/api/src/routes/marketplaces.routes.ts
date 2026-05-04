@@ -238,6 +238,18 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
   )
 
   // PUT /api/products/:id/listings/:channel/:marketplace — upsert
+  //
+  // Accepts the legacy direct-column shape ({ title, description,
+  // bulletPointsOverride, price, quantity, ... }) AND a Q.2 schema-
+  // driven `attributes` payload. When `attributes` is present:
+  //   - item_name           → title
+  //   - product_description → description
+  //   - bullet_point        → bulletPointsOverride[]  (JSON-encoded
+  //                                                    string[] from the
+  //                                                    schema editor)
+  //   - everything else     → platformAttributes.attributes[fieldId]
+  // Existing platformAttributes.attributes entries are merged shallowly
+  // so per-attribute saves don't blow away unrelated fields.
   fastify.put<{
     Params: { id: string; channel: string; marketplace: string }
     Body: Record<string, any>
@@ -246,7 +258,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       try {
         const { id, channel, marketplace } = request.params
-        const data = request.body ?? {}
+        const body = (request.body ?? {}) as Record<string, any>
 
         // Verify the marketplace is configured
         const mp = await prisma.marketplace.findUnique({
@@ -268,6 +280,65 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
         const existing = await prisma.channelListing.findFirst({
           where: { productId: id, channel, marketplace },
         })
+
+        // Q.2 — split out `attributes` into known columns + JSON merge.
+        const { attributes, ...rest } = body
+        const data: Record<string, any> = { ...rest }
+        if (attributes && typeof attributes === 'object') {
+          const attrs = attributes as Record<string, unknown>
+          const passthrough: Record<string, unknown> = {}
+          for (const [fieldId, value] of Object.entries(attrs)) {
+            if (fieldId === 'item_name' && typeof value === 'string') {
+              data.title = value
+            } else if (
+              fieldId === 'product_description' &&
+              typeof value === 'string'
+            ) {
+              data.description = value
+            } else if (fieldId === 'bullet_point') {
+              if (typeof value === 'string') {
+                try {
+                  const parsed = JSON.parse(value)
+                  if (Array.isArray(parsed)) {
+                    data.bulletPointsOverride = parsed.filter(
+                      (s) => typeof s === 'string' && s.length > 0,
+                    )
+                  } else {
+                    data.bulletPointsOverride = [value]
+                  }
+                } catch {
+                  data.bulletPointsOverride = [value]
+                }
+              } else if (Array.isArray(value)) {
+                data.bulletPointsOverride = value.filter(
+                  (s) => typeof s === 'string' && s.length > 0,
+                )
+              }
+            } else {
+              passthrough[fieldId] = value
+            }
+          }
+          // Merge into existing platformAttributes.attributes shallowly.
+          const existingPA =
+            (existing?.platformAttributes as Record<string, any> | null) ??
+            null
+          const existingAttrs =
+            existingPA && typeof existingPA.attributes === 'object'
+              ? (existingPA.attributes as Record<string, unknown>)
+              : {}
+          const merged: Record<string, unknown> = { ...existingAttrs }
+          for (const [k, v] of Object.entries(passthrough)) {
+            if (v === null || v === undefined || v === '') {
+              delete merged[k]
+            } else {
+              merged[k] = v
+            }
+          }
+          data.platformAttributes = {
+            ...(existingPA ?? {}),
+            attributes: merged,
+          }
+        }
 
         let listing
         if (existing) {

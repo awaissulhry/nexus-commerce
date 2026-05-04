@@ -1567,6 +1567,106 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       }
     },
   )
+
+  // Q.2 — single-channel schema for the product-edit page. Same shape
+  // as /listing-wizard/:id/required-fields but scoped to one product +
+  // channel + marketplace; baseAttributes seed comes from the existing
+  // ChannelListing (title → item_name, description → product_description,
+  // bulletPointsOverride → bullet_point JSON, plus everything in
+  // platformAttributes.attributes).
+  fastify.get<{
+    Params: { id: string; channel: string; marketplace: string }
+    Querystring: { refresh?: string; all?: string }
+  }>(
+    '/products/:id/listings/:channel/:marketplace/schema',
+    async (request, reply) => {
+      const { id, channel, marketplace } = request.params
+      const { refresh, all } = request.query
+
+      const product = await prisma.product.findUnique({
+        where: { id },
+        select: {
+          name: true,
+          brand: true,
+          description: true,
+          productType: true,
+        },
+      })
+      if (!product) {
+        return reply.code(404).send({ error: `Product ${id} not found` })
+      }
+
+      const listing = await prisma.channelListing.findFirst({
+        where: { productId: id, channel, marketplace },
+      })
+
+      const productType = product.productType ?? ''
+      if (!productType) {
+        return reply.code(409).send({
+          error:
+            'No product type set on the master product. Pick a product type before configuring channel attributes.',
+        })
+      }
+
+      // Seed baseAttributes from the existing listing so the editor
+      // shows what's currently saved.
+      const baseAttributes: Record<string, unknown> = {}
+      const platformAttrs =
+        (listing?.platformAttributes as Record<string, any> | null) ?? null
+      const storedAttrs =
+        platformAttrs && typeof platformAttrs.attributes === 'object'
+          ? (platformAttrs.attributes as Record<string, unknown>)
+          : {}
+      for (const [k, v] of Object.entries(storedAttrs)) {
+        baseAttributes[k] = v
+      }
+      if (listing?.title && baseAttributes['item_name'] === undefined) {
+        baseAttributes['item_name'] = listing.title
+      }
+      if (listing?.description && baseAttributes['product_description'] === undefined) {
+        baseAttributes['product_description'] = listing.description
+      }
+      if (
+        Array.isArray(listing?.bulletPointsOverride) &&
+        listing!.bulletPointsOverride.length > 0 &&
+        baseAttributes['bullet_point'] === undefined
+      ) {
+        baseAttributes['bullet_point'] = JSON.stringify(
+          listing!.bulletPointsOverride,
+        )
+      }
+
+      try {
+        const manifest = await schemaParserService.getMultiChannelRequiredFields({
+          channels: [{ platform: channel, marketplace }],
+          productTypeByChannel: {
+            [`${channel.toUpperCase()}:${marketplace.toUpperCase()}`]: productType,
+          },
+          fallbackProductType: productType,
+          product: {
+            name: product.name,
+            brand: product.brand,
+            description: product.description,
+            productType: product.productType,
+          },
+          baseAttributes,
+          overridesByChannel: {},
+          productId: id,
+          includeAllOptional: all === '1' || all === 'true',
+          forceRefresh: refresh === '1' || refresh === 'true',
+        })
+        return manifest
+      } catch (err) {
+        fastify.log.error(
+          { err },
+          '[products/listings/schema] failed',
+        )
+        const msg = err instanceof Error ? err.message : String(err)
+        const isAuth = /SP-API not configured|credentials|auth/i.test(msg)
+        return reply.code(isAuth ? 503 : 500).send({ error: msg })
+      }
+    },
+  )
 }
 
 function computeOverallStatus(
