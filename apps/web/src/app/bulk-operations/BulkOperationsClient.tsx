@@ -147,21 +147,21 @@ interface GroupTone {
   ring: string
 }
 
+// W.1 — schema-style keys only. Master (registry) categories map to
+// the same keys so master columns and their attr_* schema equivalents
+// bucket together in one chip (e.g. `brand` (universal) + `attr_brand`
+// (Identity) → both 'Identity').
 const GROUP_TONE: Record<string, GroupTone> = {
-  // master (registry) buckets
-  universal: { band: 'bg-slate-100 border-slate-300', text: 'text-slate-900', ring: 'border-slate-300' },
-  identifiers: { band: 'bg-indigo-50 border-indigo-200', text: 'text-indigo-900', ring: 'border-indigo-200' },
-  pricing: { band: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-900', ring: 'border-emerald-200' },
-  inventory: { band: 'bg-amber-50 border-amber-200', text: 'text-amber-900', ring: 'border-amber-200' },
-  physical: { band: 'bg-sky-50 border-sky-200', text: 'text-sky-900', ring: 'border-sky-200' },
-  content: { band: 'bg-violet-50 border-violet-200', text: 'text-violet-900', ring: 'border-violet-200' },
-  // schema buckets (groupForFieldId returns)
   Identity: { band: 'bg-slate-100 border-slate-300', text: 'text-slate-900', ring: 'border-slate-300' },
+  Identifiers: { band: 'bg-indigo-50 border-indigo-200', text: 'text-indigo-900', ring: 'border-indigo-200' },
   'Marketing copy': { band: 'bg-violet-50 border-violet-200', text: 'text-violet-900', ring: 'border-violet-200' },
   'Variation attributes': { band: 'bg-fuchsia-50 border-fuchsia-200', text: 'text-fuchsia-900', ring: 'border-fuchsia-200' },
   Audience: { band: 'bg-cyan-50 border-cyan-200', text: 'text-cyan-900', ring: 'border-cyan-200' },
   Categorisation: { band: 'bg-rose-50 border-rose-200', text: 'text-rose-900', ring: 'border-rose-200' },
+  Pricing: { band: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-900', ring: 'border-emerald-200' },
+  Inventory: { band: 'bg-amber-50 border-amber-200', text: 'text-amber-900', ring: 'border-amber-200' },
   'Pricing & fulfillment': { band: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-900', ring: 'border-emerald-200' },
+  Physical: { band: 'bg-sky-50 border-sky-200', text: 'text-sky-900', ring: 'border-sky-200' },
   'Physical attributes': { band: 'bg-sky-50 border-sky-200', text: 'text-sky-900', ring: 'border-sky-200' },
   'Compliance & safety': { band: 'bg-amber-50 border-amber-200', text: 'text-amber-900', ring: 'border-amber-200' },
   'Other attributes': { band: 'bg-slate-50 border-slate-200', text: 'text-slate-700', ring: 'border-slate-200' },
@@ -173,27 +173,53 @@ const NEUTRAL_TONE: GroupTone = {
   ring: 'border-slate-200',
 }
 
+// W.1 — keys are now schema-style display names; the label map only
+// translates legacy registry keys for backward compat.
 const GROUP_LABEL: Record<string, string> = {
+  Identity: 'Identity',
+  Identifiers: 'Identifiers',
+  'Marketing copy': 'Marketing copy',
+  Pricing: 'Pricing',
+  Inventory: 'Inventory',
+  Physical: 'Physical',
+  'Variation attributes': 'Variation attributes',
+  Audience: 'Audience',
+  Categorisation: 'Categorisation',
+  'Pricing & fulfillment': 'Pricing & fulfillment',
+  'Physical attributes': 'Physical attributes',
+  'Compliance & safety': 'Compliance & safety',
+  'Other attributes': 'Other attributes',
+}
+
+/** W.1 — registry FieldDefinition.category → unified group key.
+ *  Master Product columns use registry categories (universal /
+ *  pricing / inventory / etc.); attr_* fields use the curated schema
+ *  groups (Identity / Marketing copy / etc.). This map normalises
+ *  master categories to the same key family so equivalent fields
+ *  ('brand' the column + 'attr_brand' the schema attribute) bucket
+ *  into ONE chip instead of two. */
+const REGISTRY_TO_UNIFIED_KEY: Record<string, string> = {
   universal: 'Identity',
   identifiers: 'Identifiers',
   pricing: 'Pricing',
   inventory: 'Inventory',
   physical: 'Physical',
   content: 'Marketing copy',
-  category: 'Category attributes',
-  amazon: 'Amazon',
-  ebay: 'eBay',
+  category: 'Other attributes',
+  amazon: 'Other attributes',
+  ebay: 'Other attributes',
 }
 
 /** Decide which group a FieldDef belongs to. attr_* fields get the
- *  curated schema-editor group; everything else falls back to its
- *  registry `category`. */
+ *  curated schema-editor group; master columns get a normalised key
+ *  via REGISTRY_TO_UNIFIED_KEY so they share a bucket with their
+ *  schema equivalents. */
 function groupKeyForField(field: FieldDef): string {
   if (field.id.startsWith('attr_')) {
     const stripped = field.id.replace(/^attr_/, '')
     return groupForFieldId(stripped)
   }
-  return field.category
+  return REGISTRY_TO_UNIFIED_KEY[field.category] ?? field.category
 }
 
 const COLLAPSED_GROUPS_KEY = 'nexus_bulkops_collapsed_groups'
@@ -288,6 +314,12 @@ export default function BulkOperationsClient() {
     'before' | 'after' | null
   >(null)
 
+  // Bridge ref so reorderColumns can read the latest fieldsById map
+  // without depending on it (fieldsById is computed later in the
+  // render but the callback fires after mount; the ref is updated
+  // each render so the callback sees the current value).
+  const fieldsByIdRef = useRef<Map<string, FieldDef>>(new Map())
+
   const reorderColumns = useCallback(
     (sourceId: string, targetId: string) => {
       if (sourceId === targetId) return
@@ -297,9 +329,38 @@ export default function BulkOperationsClient() {
         if (fromIdx === -1 || toIdx === -1) return prev
         const next = prev.slice()
         const [moved] = next.splice(fromIdx, 1)
-        const insertAt = toIdx < fromIdx ? toIdx : toIdx
-        next.splice(insertAt, 0, moved!)
-        return next
+        next.splice(toIdx, 0, moved!)
+        // W.2 — enforce group contiguity. After the splice we re-bucket
+        // by group key, preserving within-group order, with group order
+        // = first encounter. So a column dropped into another group's
+        // territory pulls back to the end of its own group's block —
+        // the band stays a clean one-chip-per-group view.
+        const fbi = fieldsByIdRef.current
+        const buckets = new Map<string, string[]>()
+        const firstSeen = new Map<string, number>()
+        next.forEach((id, idx) => {
+          const f = fbi.get(id)
+          if (!f) {
+            const k = `__unknown_${idx}`
+            buckets.set(k, [id])
+            firstSeen.set(k, idx)
+            return
+          }
+          const k = groupKeyForField(f)
+          if (!buckets.has(k)) {
+            buckets.set(k, [])
+            firstSeen.set(k, idx)
+          }
+          buckets.get(k)!.push(id)
+        })
+        const groupOrder = Array.from(firstSeen.entries())
+          .sort((a, b) => a[1] - b[1])
+          .map(([k]) => k)
+        const result: string[] = []
+        for (const k of groupOrder) {
+          result.push(...(buckets.get(k) ?? []))
+        }
+        return result
       })
     },
     [],
@@ -1474,6 +1535,7 @@ export default function BulkOperationsClient() {
     for (const f of allFields) m.set(f.id, f)
     return m
   }, [allFields])
+  fieldsByIdRef.current = fieldsById
 
   // T.3 — bucket visible fields by group so the band can render colour
   // chips above the column headers. Order is preserved (the buckets
@@ -1534,11 +1596,13 @@ export default function BulkOperationsClient() {
         out.push(buildColumnFromField(field))
       }
     }
-    // T.4 — actions column always anchors the right edge.
+    // T.4 — actions column always anchors the right edge. W.3 sets
+    // size to defaultColumn.minSize so TanStack doesn't clamp it
+    // (and the band's spacer matches at 60).
     out.push({
       id: '__actions',
       header: '',
-      size: 48,
+      size: 60,
       cell: ({ row }) => (
         <DeleteRowButton
           id={row.original.id}
@@ -2895,8 +2959,9 @@ export default function BulkOperationsClient() {
                 </div>
               )
             })}
-            {/* Spacer matching the actions column so band aligns. */}
-            <div style={{ width: 48, flexShrink: 0 }} />
+            {/* Spacer matching the actions column so band aligns. W.3
+                bumped to 60 (defaultColumn.minSize). */}
+            <div style={{ width: 60, flexShrink: 0 }} />
           </div>
         )}
         <div
