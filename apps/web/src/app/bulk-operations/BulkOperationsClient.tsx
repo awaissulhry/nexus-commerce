@@ -2781,7 +2781,26 @@ export default function BulkOperationsClient() {
       if (!view) return
       setActiveViewIdState(id)
       setActiveViewId(id)
-      setVisibleColumnIds(view.columnIds)
+      // NN.13 — drop columnIds whose registry entry no longer exists
+      // (deleted attribute, removed productType, etc.). Without this,
+      // a stale view keeps trying to render orphan columns and the
+      // grid silently misaligns. When allFields hasn't loaded yet we
+      // accept the view as-is and let the registry hydrate later.
+      if (allFields.length > 0) {
+        const knownIds = new Set(allFields.map((f) => f.id))
+        const filtered = view.columnIds.filter((id) => knownIds.has(id))
+        const droppedCount = view.columnIds.length - filtered.length
+        if (droppedCount > 0) {
+          console.warn(
+            `[bulk-ops] view "${view.name}" had ${droppedCount} stale column id${
+              droppedCount === 1 ? '' : 's'
+            } dropped — attributes no longer in the registry.`,
+          )
+        }
+        setVisibleColumnIds(filtered)
+      } else {
+        setVisibleColumnIds(view.columnIds)
+      }
       setEnabledChannels(view.channels ?? [])
       setEnabledProductTypes(view.productTypes ?? [])
       // T.6 — server-backed templates persist filterState too. Restore
@@ -2799,7 +2818,7 @@ export default function BulkOperationsClient() {
       // when the user later clicks a marketplace tab.
       autoLoadedRef.current.add('__view_loaded__')
     },
-    [savedViews],
+    [savedViews, allFields],
   )
 
   const handleSaveAsView = useCallback(

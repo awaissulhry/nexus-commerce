@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, AlertCircle, TableProperties } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
@@ -71,6 +71,22 @@ export default function ProductEditClient({
   // Per-channel selected marketplace (key by channel)
   const [marketSelection, setMarketSelection] = useState<Record<string, string>>({})
   const [unsavedChanges, setUnsavedChanges] = useState(false)
+
+  // NN.3 — beforeunload guard so closing the tab / hitting back
+  // doesn't silently drop unsaved edits. Only attached when the
+  // dirty flag is set so users without pending changes don't see
+  // the browser's "Leave site?" prompt every navigation.
+  useEffect(() => {
+    if (!unsavedChanges) return
+    function onBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault()
+      // Most browsers ignore the custom message and show their own
+      // localized prompt; we set returnValue for older Safari.
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [unsavedChanges])
 
   // Push this product onto the sidebar's "Recently viewed" list
   useTrackRecentlyViewed({

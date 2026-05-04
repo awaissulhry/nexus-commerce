@@ -197,6 +197,21 @@ export default function ListWizardClient({
     router.push(`/products/${product.id}/edit`)
   }, [persist, router, product.id])
 
+  // NN.3 — beforeunload guard while a save is in flight. If the user
+  // closes the tab between persist() armed and PATCH settled, the
+  // wizard's last state delta vanishes. saveState === 'saving' is a
+  // tight enough window that we don't want to confirm-on-leave when
+  // there's nothing pending — the wizard auto-saves quickly.
+  useEffect(() => {
+    if (saveState !== 'saving') return
+    function onBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [saveState])
+
   // Cmd/Ctrl + arrow shortcuts make stepping through the wizard feel
   // closer to a guided form than a series of clicks. Skip when an
   // input is focused so it doesn't fight text-cursor nav.

@@ -828,6 +828,25 @@ export default function BulkEditClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // NN.3 — beforeunload guard. When the user closes the tab or hits
+  // back, surface the browser's "Leave site?" prompt so the pending
+  // debounce doesn't ship after the page is gone (the unmount flush
+  // races with navigation and frequently loses the last edit).
+  useEffect(() => {
+    function onBeforeUnload(e: BeforeUnloadEvent) {
+      if (
+        status === 'saving' ||
+        masterDirtyRef.current.size > 0 ||
+        channelDirtyRef.current.size > 0
+      ) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [status])
+
   // ── Refresh button (active tab) ────────────────────────────────
   const handleRefresh = useCallback(async () => {
     setStatus('saving')

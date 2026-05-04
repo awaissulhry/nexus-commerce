@@ -63,6 +63,32 @@ export default function ChannelListingTab({
   } | null>(null)
   const isNew = !listing
 
+  // NN.18 — fetch wrapper with 429 handling. Amazon SP-API and eBay
+  // Inventory API both rate-limit per-account. Without retry, a
+  // simple click that lands during a throttle window fails with a
+  // generic "HTTP 429" — useless to the user. We catch 429, parse
+  // Retry-After, surface a clear message, and retry once after the
+  // server-suggested delay (capped at 8s so the UI doesn't hang).
+  async function fetchWithRateLimitRetry(
+    url: string,
+    onWaiting: (seconds: number) => void,
+  ): Promise<Response> {
+    const res = await fetch(url)
+    if (res.status !== 429) return res
+    const retryAfter = res.headers.get('Retry-After')
+    const seconds = (() => {
+      if (!retryAfter) return 3
+      const n = Number(retryAfter)
+      if (Number.isFinite(n)) return Math.min(8, Math.max(1, n))
+      const date = Date.parse(retryAfter)
+      if (!Number.isFinite(date)) return 3
+      return Math.min(8, Math.max(1, Math.ceil((date - Date.now()) / 1000)))
+    })()
+    onWaiting(seconds)
+    await new Promise((r) => window.setTimeout(r, seconds * 1000))
+    return await fetch(url)
+  }
+
   async function handlePullFromChannel() {
     if (channel === 'AMAZON') {
       if (!product.amazonAsin) {
@@ -71,9 +97,21 @@ export default function ChannelListingTab({
       }
       setPulling(true)
       try {
-        const res = await fetch(
+        const res = await fetchWithRateLimitRetry(
           `${getBackendUrl()}/api/amazon/test-catalog-api?asin=${product.amazonAsin}`,
+          (sec) =>
+            setStatusMsg({
+              kind: 'info',
+              text: `Amazon rate-limited — retrying in ${sec}s…`,
+            }),
         )
+        if (res.status === 429) {
+          setStatusMsg({
+            kind: 'error',
+            text: 'Amazon: still rate-limited after retry — try again in a minute.',
+          })
+          return
+        }
         const result = await res.json()
         const summary = result?.data?.summaries?.[0] ?? result?.summaries?.[0]
         if (summary?.itemName) {
@@ -104,7 +142,19 @@ export default function ChannelListingTab({
         const url = new URL(`${getBackendUrl()}/api/ebay/pull-listing`)
         url.searchParams.set('sku', sku)
         url.searchParams.set('marketplace', marketplace)
-        const res = await fetch(url.toString())
+        const res = await fetchWithRateLimitRetry(url.toString(), (sec) =>
+          setStatusMsg({
+            kind: 'info',
+            text: `eBay rate-limited — retrying in ${sec}s…`,
+          }),
+        )
+        if (res.status === 429) {
+          setStatusMsg({
+            kind: 'error',
+            text: 'eBay: still rate-limited after retry — try again in a minute.',
+          })
+          return
+        }
         const result = await res.json()
         if (!res.ok || !result?.success) {
           setStatusMsg({ kind: 'error', text: `eBay: ${result?.error ?? `HTTP ${res.status}`}` })

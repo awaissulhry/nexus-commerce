@@ -43,7 +43,20 @@ interface SubmitResponse {
   validation?: { allReady: boolean; blockingChannels: string[] }
 }
 
-const POLL_INTERVAL_MS = 3000
+// NN.10 — exponential backoff schedule. Starts tight (3s) for the
+// first minute when most adapters resolve, eases off after, hard
+// caps at 15 minutes total elapsed so a stuck publish can't run
+// the polling loop forever and burn the user's battery.
+const POLL_BACKOFF_MS = [
+  3000, 3000, 3000, 3000, // 0-12s: 4 quick checks
+  5000, 5000, 5000, 5000, // 12-32s: ease in
+  8000, 8000, 8000, 8000, // 32-64s: 8s slots
+  15000, 15000, 15000, 15000, // 64-124s
+  30000, 30000, 30000, 30000, // 124-244s: 4-min mark
+  60000, 60000, 60000, 60000, 60000, 60000, // 244-604s: 1-min slots to 10-min mark
+  120000, 120000, 120000, // 604-964s: 2-min slots to 16-min cap
+] as const
+const POLL_TIMEOUT_MS = 15 * 60 * 1000 // 15 minutes
 
 export default function Step10Submit({
   wizardId,
@@ -59,13 +72,42 @@ export default function Step10Submit({
 
   // Poll while any entry is in-flight (PENDING/SUBMITTING/SUBMITTED).
   // NOT_IMPLEMENTED entries are terminal v1 and don't drive polling.
+  // NN.10 — exponential backoff via setTimeout chain instead of
+  // setInterval, so we can vary the gap and stop cleanly. timedOut
+  // surfaces a "stuck for 15 minutes — refresh manually" banner
+  // rather than running a forever loop.
   const pollTimer = useRef<number | null>(null)
+  const pollStartedAt = useRef<number | null>(null)
+  const pollTickRef = useRef<number>(0)
+  const [timedOut, setTimedOut] = useState(false)
+
   const stopPolling = useCallback(() => {
     if (pollTimer.current) {
-      window.clearInterval(pollTimer.current)
+      window.clearTimeout(pollTimer.current)
       pollTimer.current = null
     }
+    pollStartedAt.current = null
+    pollTickRef.current = 0
   }, [])
+
+  const scheduleNextPoll = useCallback(
+    (pollFn: () => void) => {
+      const start = pollStartedAt.current ?? Date.now()
+      const elapsed = Date.now() - start
+      if (elapsed >= POLL_TIMEOUT_MS) {
+        setTimedOut(true)
+        stopPolling()
+        return
+      }
+      const tick = pollTickRef.current
+      const delay =
+        POLL_BACKOFF_MS[Math.min(tick, POLL_BACKOFF_MS.length - 1)] ??
+        120000
+      pollTickRef.current = tick + 1
+      pollTimer.current = window.setTimeout(pollFn, delay)
+    },
+    [stopPolling],
+  )
 
   const poll = useCallback(async () => {
     try {
@@ -76,7 +118,9 @@ export default function Step10Submit({
       const json = (await res.json()) as SubmitResponse & { error?: string }
       if (!res.ok) {
         // Don't break the UI — log the error and keep showing the
-        // last-known state.
+        // last-known state. Schedule another tick so a transient
+        // backend error doesn't strand the polling loop.
+        scheduleNextPoll(poll)
         return
       }
       setSubmissions(json.submissions)
@@ -87,11 +131,24 @@ export default function Step10Submit({
           s.status === 'SUBMITTING' ||
           s.status === 'SUBMITTED',
       )
-      if (!inFlight) stopPolling()
+      if (!inFlight) {
+        stopPolling()
+        return
+      }
+      scheduleNextPoll(poll)
     } catch {
-      /* swallow — next tick retries */
+      // Network error — schedule the next tick instead of dying.
+      scheduleNextPoll(poll)
     }
-  }, [wizardId, stopPolling])
+  }, [wizardId, stopPolling, scheduleNextPoll])
+
+  // NN.10 — manual refresh fallback once polling has timed out.
+  const manualRefresh = useCallback(() => {
+    setTimedOut(false)
+    pollStartedAt.current = Date.now()
+    pollTickRef.current = 0
+    void poll()
+  }, [poll])
 
   useEffect(() => {
     return () => stopPolling()
@@ -123,14 +180,19 @@ export default function Step10Submit({
       )
       if (inFlight) {
         stopPolling()
-        pollTimer.current = window.setInterval(poll, POLL_INTERVAL_MS)
+        // NN.10 — kick off the backoff chain instead of setInterval.
+        // First poll fires immediately so the UI reflects post-submit
+        // state without waiting for the first interval.
+        pollStartedAt.current = Date.now()
+        pollTickRef.current = 0
+        scheduleNextPoll(poll)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setSubmitting(false)
     }
-  }, [wizardId, poll, stopPolling])
+  }, [wizardId, poll, stopPolling, scheduleNextPoll])
 
   const onRetry = useCallback(
     async (channelKey: string) => {
@@ -289,6 +351,31 @@ export default function Step10Submit({
         </p>
       </div>
 
+      {/* NN.10 — polling timed out. Surface a manual-refresh CTA so
+          the user isn't stuck staring at a spinner that's no longer
+          updating. The poll loop is hard-capped at 15 minutes so a
+          stuck channel doesn't run polling forever. */}
+      {timedOut && (
+        <div className="mb-4 border border-amber-200 bg-amber-50 rounded-lg px-4 py-3 flex items-center justify-between">
+          <div className="text-[12px] text-amber-900">
+            <div className="font-semibold">
+              Still waiting after 15 minutes.
+            </div>
+            <div className="text-[11px] text-amber-800 mt-0.5">
+              Polling paused — click Refresh to resume.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={manualRefresh}
+            className="inline-flex items-center gap-1 h-8 px-3 rounded-md text-[12px] font-medium border border-amber-300 text-amber-900 hover:bg-amber-100"
+          >
+            <RotateCw className="w-3 h-3" />
+            Refresh
+          </button>
+        </div>
+      )}
+
       {/* Overall status banner */}
       <div
         className={cn(
@@ -350,7 +437,7 @@ export default function Step10Submit({
           {inFlight ? (
             <span className="inline-flex items-center gap-1.5">
               <Loader2 className="w-3 h-3 animate-spin" />
-              Polling every {POLL_INTERVAL_MS / 1000}s for status updates…
+              Polling for status updates (3s → 5s → 8s, capped at 15min)…
             </span>
           ) : (
             'No channels in flight.'

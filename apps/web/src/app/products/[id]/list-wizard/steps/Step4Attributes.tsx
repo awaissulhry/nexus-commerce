@@ -86,6 +86,15 @@ export default function Step4Attributes({
   // L.4 — translate-busy keys are "<fieldId>:<channelKey>" so per-
   // channel translate buttons can spin independently.
   const [translateBusy, setTranslateBusy] = useState<Set<string>>(new Set())
+  // NN.6 — most recent AI / translate error. Sticky toast at the
+  // bottom of the manifest. Replaced (not stacked) so the user sees
+  // the latest failure, not a noisy log.
+  const [aiError, setAiError] = useState<{
+    field: string
+    channelKey: string | null
+    kind: 'rate_limited' | 'failed' | 'no_result' | 'network'
+    message: string
+  } | null>(null)
 
   const onTranslate = useCallback(
     async (fieldId: string, channelKey: string) => {
@@ -110,11 +119,29 @@ export default function Step4Attributes({
           },
         )
         const json = await res.json()
-        if (!res.ok) return
+        if (!res.ok) {
+          // NN.6 — surface AI / translate errors instead of swallowing.
+          // Most often this is GEMINI_API_KEY missing or rate-limited;
+          // either way the user needs a signal more useful than an
+          // infinite spinner.
+          const code = res.status === 429 ? 'rate_limited' : 'failed'
+          const detail =
+            json?.error ?? `HTTP ${res.status} — translate could not run`
+          setAiError({ field: fieldId, channelKey, kind: code, message: detail })
+          return
+        }
         const matchedGroup = (json?.groups ?? []).find((g: any) =>
           Array.isArray(g.channelKeys) && g.channelKeys.includes(channelKey),
         )
-        if (!matchedGroup?.result) return
+        if (!matchedGroup?.result) {
+          setAiError({
+            field: fieldId,
+            channelKey,
+            kind: 'no_result',
+            message: 'AI returned no content for this channel.',
+          })
+          return
+        }
         let value: string | undefined
         if (aiKind === 'title') {
           value = matchedGroup.result.title?.content
@@ -135,8 +162,13 @@ export default function Step4Attributes({
         if (typeof value === 'string' && value.length > 0) {
           setOverride(channelKey, fieldId, value as Primitive)
         }
-      } catch {
-        /* swallow */
+      } catch (err) {
+        setAiError({
+          field: fieldId,
+          channelKey,
+          kind: 'network',
+          message: err instanceof Error ? err.message : String(err),
+        })
       } finally {
         setTranslateBusy((prev) => {
           const next = new Set(prev)
@@ -201,8 +233,16 @@ export default function Step4Attributes({
         if (typeof value === 'string' && value.length > 0) {
           setValues((prev) => ({ ...prev, [fieldId]: value as Primitive }))
         }
-      } catch {
-        /* swallow — UI shows no error toast for now; user can retry */
+      } catch (err) {
+        // NN.6 — surface generate failures; user shouldn't be staring
+        // at a stopped spinner. Classify so the banner shows the
+        // right CTA (retry vs reconnect vs upstream-down).
+        setAiError({
+          field: fieldId,
+          channelKey: null,
+          kind: 'network',
+          message: err instanceof Error ? err.message : String(err),
+        })
       } finally {
         setAiBusyFields((prev) => {
           const next = new Set(prev)
@@ -747,6 +787,48 @@ export default function Step4Attributes({
           Continue
         </button>
       </div>
+
+      {/* NN.6 — sticky AI / translate error toast. Replaces (not
+          stacks) so the user sees the most recent failure clearly.
+          Click × to dismiss. Classification drives the headline so
+          a quota error reads differently from a network blip. */}
+      {aiError && (
+        <div className="fixed bottom-4 right-4 max-w-md z-40 border border-rose-200 bg-rose-50 rounded-lg shadow-lg px-4 py-3 text-[12px] text-rose-900">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="font-semibold mb-0.5">
+                {aiError.kind === 'rate_limited'
+                  ? 'AI rate-limited'
+                  : aiError.kind === 'no_result'
+                  ? 'AI returned no content'
+                  : aiError.kind === 'network'
+                  ? 'Network error'
+                  : 'AI generation failed'}
+              </div>
+              <div className="text-rose-800 break-words">
+                {aiError.message}
+              </div>
+              <div className="text-[10px] text-rose-600 mt-1">
+                Field: <span className="font-mono">{aiError.field}</span>
+                {aiError.channelKey ? (
+                  <>
+                    {' · '}
+                    <span className="font-mono">{aiError.channelKey}</span>
+                  </>
+                ) : null}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAiError(null)}
+              className="text-rose-500 hover:text-rose-800 flex-shrink-0"
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

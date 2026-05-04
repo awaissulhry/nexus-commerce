@@ -442,7 +442,15 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         marketplace: string
       }>
     }
-  }>('/products/bulk', async (request, reply) => {
+  }>('/products/bulk', {
+    // NN.16 — explicit body limit. Fastify's default is 1MB; bulk
+    // pastes from large catalogs can legitimately reach a few MB,
+    // but anything past 5MB is suspicious (a 5MB JSON body is ~50k
+    // single-field changes, well past the per-request cap on the
+    // changes loop). Reject early with 413 instead of letting the
+    // request OOM the API process.
+    bodyLimit: 5 * 1024 * 1024,
+  }, async (request, reply) => {
     const { changes, marketplaceContext, marketplaceContexts } =
       request.body ?? {}
     // Effective context list: prefer the new array, fall back to the
