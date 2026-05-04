@@ -302,16 +302,31 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         ...((wizard.state as Record<string, unknown> | null) ?? {}),
         ...((body.state ?? {}) as Record<string, unknown>),
       }
-      // channelStates merge — outer keys (channel keys) shallow-merge,
-      // inner slices replace wholesale (caller is expected to spread
-      // their existing slice if they want to merge inside).
-      const mergedChannelStates: Record<string, Record<string, unknown>> = {
-        ...((wizard.channelStates as Record<string, Record<string, unknown>> | null) ??
-          {}),
-        ...((body.channelStates ?? {}) as Record<
+      // channelStates merge — Phase D bumps the depth: the outer key
+      // (channel key) and the inner slice key (attributes /
+      // productType / variations / etc.) both shallow-merge, so a
+      // patch to one slice doesn't blow away sibling slices for the
+      // same channel. Slot contents themselves replace wholesale —
+      // callers spread to retain inner field values.
+      const currentChannelStates =
+        (wizard.channelStates as Record<
           string,
           Record<string, unknown>
-        >),
+        > | null) ?? {}
+      const mergedChannelStates: Record<string, Record<string, unknown>> = {}
+      for (const [k, v] of Object.entries(currentChannelStates)) {
+        mergedChannelStates[k] = { ...v }
+      }
+      for (const [chKey, sliceUpdate] of Object.entries(
+        (body.channelStates ?? {}) as Record<
+          string,
+          Record<string, unknown>
+        >,
+      )) {
+        mergedChannelStates[chKey] = {
+          ...(mergedChannelStates[chKey] ?? {}),
+          ...sliceUpdate,
+        }
       }
 
       // Phase B: Step 1 writes the channels selection here. We
@@ -587,14 +602,23 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
-  // ── Step 4 — Required Attributes ──────────────────────────────
+  // ── Step 5 — Required Attributes (Phase D union) ─────────────
   // GET /api/listing-wizard/:id/required-fields
   //
-  // Returns a flat field manifest for the productType selected in
-  // Step 3. Smart defaults are sourced from the master product so the
-  // user can confirm rather than re-type. Unsupported field shapes
-  // are surfaced as kind='unsupported' so the UI can degrade
-  // gracefully without crashing on exotic schema corners.
+  // Returns the union of required fields across every selected
+  // (channel, marketplace) the wizard targets. Each field carries
+  // requiredFor[] / notUsedIn[] / overrides{} so the UI can render
+  // the per-channel chips and the override editor without a second
+  // round-trip per channel.
+  //
+  // Per-channel productType resolution:
+  //   1. wizardState.channelStates[channelKey].productType.productType
+  //   2. wizardState.productType.productType (legacy shared slot)
+  //   3. (none — channel surfaced in `channelsMissingSchema` with
+  //       reason='no_product_type')
+  //
+  // Non-Amazon channels are listed in `channelsMissingSchema` with
+  // reason='unsupported_channel' for now — eBay lands in Phase 2A.
   fastify.get<{ Params: { id: string } }>(
     '/listing-wizard/:id/required-fields',
     async (request, reply) => {
@@ -604,14 +628,61 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       if (!wizard) {
         return reply.code(404).send({ error: 'Wizard not found' })
       }
-      const state = (wizard.state ?? {}) as Record<string, any>
-      const productType = state?.productType?.productType
-      if (typeof productType !== 'string' || productType.length === 0) {
+
+      const channels = normalizeChannels(wizard.channels)
+      if (channels.length === 0) {
         return reply.code(409).send({
           error:
-            'Pick a product type in Step 3 first — required-fields needs a productType to render.',
+            'No channels selected — pick at least one (platform, marketplace) in Step 1 before configuring attributes.',
         })
       }
+
+      const state = (wizard.state ?? {}) as Record<string, any>
+      const channelStates =
+        ((wizard.channelStates ?? {}) as Record<
+          string,
+          Record<string, any>
+        >) ?? {}
+
+      // Build per-channel productType + overrides maps from the
+      // wizard state slices.
+      const productTypeByChannel: Record<string, string | undefined> = {}
+      const overridesByChannel: Record<string, Record<string, unknown>> = {}
+      for (const c of channels) {
+        const channelKey = `${c.platform}:${c.marketplace}`
+        const slice = channelStates[channelKey] ?? {}
+        const ptSlice = (slice as any).productType
+        if (ptSlice && typeof ptSlice.productType === 'string') {
+          productTypeByChannel[channelKey] = ptSlice.productType
+        }
+        const attrSlice = (slice as any).attributes
+        if (attrSlice && typeof attrSlice === 'object') {
+          overridesByChannel[channelKey] = attrSlice as Record<
+            string,
+            unknown
+          >
+        } else {
+          overridesByChannel[channelKey] = {}
+        }
+      }
+      const fallbackProductType =
+        typeof state?.productType?.productType === 'string'
+          ? (state.productType.productType as string)
+          : undefined
+
+      // Bail early if no channel has a productType resolvable. Step 2
+      // (Product Type) needs to land first.
+      const hasAnyProductType =
+        Object.values(productTypeByChannel).some(
+          (v) => typeof v === 'string' && v.length > 0,
+        ) || (fallbackProductType?.length ?? 0) > 0
+      if (!hasAnyProductType) {
+        return reply.code(409).send({
+          error:
+            'Pick a product type in Step 2 first — required-fields needs at least one productType to render.',
+        })
+      }
+
       const product = await prisma.product.findUnique({
         where: { id: wizard.productId },
         select: {
@@ -624,24 +695,31 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       if (!product) {
         return reply.code(404).send({ error: 'Product not found' })
       }
+
+      const baseAttributes =
+        (state.attributes ?? {}) as Record<string, unknown>
+
       try {
-        const first = legacyFirstChannel(wizard)
-        const manifest = await schemaParserService.getRequiredFields({
-          channel: first.channel,
-          marketplace: first.marketplace,
-          productType,
-          product: {
-            name: product.name,
-            brand: product.brand,
-            description: product.description,
-            productType: product.productType,
+        const manifest = await schemaParserService.getMultiChannelRequiredFields(
+          {
+            channels,
+            productTypeByChannel,
+            fallbackProductType,
+            product: {
+              name: product.name,
+              brand: product.brand,
+              description: product.description,
+              productType: product.productType,
+            },
+            baseAttributes,
+            overridesByChannel,
           },
-        })
+        )
         return manifest
       } catch (err) {
         fastify.log.error(
           { err },
-          '[listing-wizard] required-fields failed',
+          '[listing-wizard] required-fields union failed',
         )
         const msg = err instanceof Error ? err.message : String(err)
         const isAuth = /SP-API not configured|credentials|auth/i.test(msg)

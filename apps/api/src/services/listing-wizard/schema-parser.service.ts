@@ -82,6 +82,51 @@ export interface FieldManifest {
   fields: RenderableField[]
 }
 
+/**
+ * Phase D — multi-channel union of a single field across every
+ * selected (channel, marketplace) the wizard is targeting. The
+ * frontend renders one row per `id` with chips showing where the
+ * field is required vs optional vs absent, plus the base value
+ * + per-channel overrides.
+ */
+export interface UnionField extends RenderableField {
+  /** Channel keys ("PLATFORM:MARKET") where this field is required. */
+  requiredFor: string[]
+  /** Channel keys where this field appears in the schema but is
+   *  optional. Empty in v1 — we only union required fields for now;
+   *  Phase F+ may surface a curated optional set. */
+  optionalFor: string[]
+  /** Channel keys where this field doesn't appear in the schema at
+   *  all (e.g. an Amazon-required attribute on an eBay-only listing). */
+  notUsedIn: string[]
+  /** Current base value from wizardState.attributes. Already typed
+   *  to the field's `kind`. */
+  currentValue?: string | number | boolean
+  /** Per-channel overrides keyed by channel key. Falsy values
+   *  treated as "no override" — the base value applies. */
+  overrides: Record<string, string | number | boolean>
+  /** TRUE when the underlying schema metadata diverges across
+   *  channels (different enum sets, different maxLength). Frontend
+   *  surfaces this so the user knows the merged shape may not fit
+   *  every channel verbatim. */
+  divergent?: boolean
+}
+
+export interface UnionManifest {
+  channels: Array<{ platform: string; marketplace: string; productType: string }>
+  schemaVersionByChannel: Record<string, string>
+  fetchedAtByChannel: Record<string, string>
+  fields: UnionField[]
+  /** Channel keys we couldn't fetch a schema for (no productType set
+   *  yet, or fetch failed). Surfaced so the UI can flag that the
+   *  union is incomplete pending those channels. */
+  channelsMissingSchema: Array<{
+    channelKey: string
+    reason: 'no_product_type' | 'fetch_failed' | 'unsupported_channel'
+    detail?: string
+  }>
+}
+
 interface MasterProduct {
   name: string
   brand?: string | null
@@ -136,6 +181,178 @@ export class SchemaParserService {
       schemaVersion: cached.schemaVersion,
       fetchedAt: cached.fetchedAt.toISOString(),
       fields,
+    }
+  }
+
+  /**
+   * Phase D — union the required-field manifest across every selected
+   * (channel, marketplace) for the wizard. Only Amazon channels
+   * contribute fields today (eBay is Phase 2A; Shopify/Woo don't have
+   * a CategorySchema pipeline). Channels we can't fetch a schema for
+   * are surfaced in `channelsMissingSchema` so the UI can flag them.
+   */
+  async getMultiChannelRequiredFields(opts: {
+    channels: Array<{ platform: string; marketplace: string }>
+    /** Per-channel productType. Map key is "PLATFORM:MARKET". Channels
+     *  with no entry default to `fallbackProductType` if provided. */
+    productTypeByChannel: Record<string, string | undefined>
+    fallbackProductType?: string
+    product: MasterProduct
+    /** Base values from wizardState.attributes, used to populate
+     *  `currentValue` per field. */
+    baseAttributes: Record<string, unknown>
+    /** Per-channel overrides: channelKey → fieldId → value. */
+    overridesByChannel: Record<string, Record<string, unknown>>
+  }): Promise<UnionManifest> {
+    const channels = opts.channels.map((c) => ({
+      ...c,
+      platform: c.platform.toUpperCase(),
+      marketplace: c.marketplace.toUpperCase(),
+    }))
+
+    // Per-channel schema fetch — we only know how to handle Amazon
+    // for now. Build a list of (channelKey, parsed required-field
+    // manifest) tuples for the union pass below.
+    const perChannel: Array<{
+      channelKey: string
+      productType: string
+      fields: RenderableField[]
+      schemaVersion: string
+      fetchedAt: string
+    }> = []
+    const missing: UnionManifest['channelsMissingSchema'] = []
+
+    for (const c of channels) {
+      const channelKey = `${c.platform}:${c.marketplace}`
+      if (c.platform !== 'AMAZON') {
+        missing.push({
+          channelKey,
+          reason: 'unsupported_channel',
+          detail: `Schema for ${c.platform} not yet wired`,
+        })
+        continue
+      }
+      const productType =
+        opts.productTypeByChannel[channelKey] ??
+        opts.fallbackProductType ??
+        ''
+      if (!productType) {
+        missing.push({ channelKey, reason: 'no_product_type' })
+        continue
+      }
+      try {
+        const manifest = await this.getRequiredFields({
+          channel: 'AMAZON',
+          marketplace: c.marketplace,
+          productType,
+          product: opts.product,
+        })
+        perChannel.push({
+          channelKey,
+          productType,
+          fields: manifest.fields,
+          schemaVersion: manifest.schemaVersion,
+          fetchedAt: manifest.fetchedAt,
+        })
+      } catch (err) {
+        missing.push({
+          channelKey,
+          reason: 'fetch_failed',
+          detail: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+
+    // Union pass: for each unique field id seen across channels,
+    // collect requiredFor + notUsedIn membership and pick a canonical
+    // metadata source (first channel where it appeared). Mark
+    // divergence when the metadata differs.
+    const byId = new Map<string, UnionField>()
+    const allChannelKeys = channels.map(
+      (c) => `${c.platform}:${c.marketplace}`,
+    )
+
+    for (const pc of perChannel) {
+      for (const f of pc.fields) {
+        const existing = byId.get(f.id)
+        if (!existing) {
+          const baseRaw = opts.baseAttributes[f.id]
+          const overrides: Record<string, string | number | boolean> = {}
+          for (const [chKey, ovrSlice] of Object.entries(
+            opts.overridesByChannel,
+          )) {
+            const v = ovrSlice?.[f.id]
+            if (v !== undefined && v !== null) {
+              overrides[chKey] = v as string | number | boolean
+            }
+          }
+          byId.set(f.id, {
+            ...f,
+            requiredFor: [pc.channelKey],
+            optionalFor: [],
+            notUsedIn: [],
+            currentValue:
+              baseRaw === undefined || baseRaw === null
+                ? undefined
+                : (baseRaw as string | number | boolean),
+            overrides,
+          })
+        } else {
+          existing.requiredFor.push(pc.channelKey)
+          // Detect divergent metadata: enum sets, maxLength.
+          if (!existing.divergent) {
+            if (
+              (f.maxLength ?? null) !== (existing.maxLength ?? null) ||
+              (f.kind === 'enum' &&
+                JSON.stringify(f.options) !==
+                  JSON.stringify(existing.options))
+            ) {
+              existing.divergent = true
+              // Keep the more-restrictive maxLength when divergent.
+              if (
+                typeof f.maxLength === 'number' &&
+                (typeof existing.maxLength !== 'number' ||
+                  f.maxLength < existing.maxLength)
+              ) {
+                existing.maxLength = f.maxLength
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Compute notUsedIn = (all channels) − (requiredFor) − (perChannel
+    // we couldn't fetch). Channels without a schema can't claim a
+    // field is "not used"; they're just unknown.
+    const fetchedKeys = new Set(perChannel.map((p) => p.channelKey))
+    for (const field of byId.values()) {
+      const requiredSet = new Set(field.requiredFor)
+      field.notUsedIn = allChannelKeys.filter(
+        (k) => fetchedKeys.has(k) && !requiredSet.has(k),
+      )
+    }
+
+    const fieldsArr = Array.from(byId.values())
+
+    return {
+      channels: channels.map((c) => {
+        const key = `${c.platform}:${c.marketplace}`
+        return {
+          platform: c.platform,
+          marketplace: c.marketplace,
+          productType:
+            opts.productTypeByChannel[key] ?? opts.fallbackProductType ?? '',
+        }
+      }),
+      schemaVersionByChannel: Object.fromEntries(
+        perChannel.map((p) => [p.channelKey, p.schemaVersion]),
+      ),
+      fetchedAtByChannel: Object.fromEntries(
+        perChannel.map((p) => [p.channelKey, p.fetchedAt]),
+      ),
+      fields: fieldsArr,
+      channelsMissingSchema: missing,
     }
   }
 }

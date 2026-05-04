@@ -1,9 +1,17 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Loader2,
   RefreshCw,
 } from 'lucide-react'
@@ -11,6 +19,9 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
 
+// Mirrors UnionField on the backend (apps/api/src/services/listing-
+// wizard/schema-parser.service.ts). Kept as plain interfaces here so
+// the frontend doesn't have to import from the API package.
 type FieldKind =
   | 'text'
   | 'longtext'
@@ -19,7 +30,7 @@ type FieldKind =
   | 'boolean'
   | 'unsupported'
 
-interface RenderableField {
+interface UnionField {
   id: string
   label: string
   description?: string
@@ -32,18 +43,27 @@ interface RenderableField {
   maxLength?: number
   minLength?: number
   unsupportedReason?: string
+  requiredFor: string[]
+  optionalFor: string[]
+  notUsedIn: string[]
+  currentValue?: string | number | boolean
+  overrides: Record<string, string | number | boolean>
+  divergent?: boolean
 }
 
-interface FieldManifest {
-  channel: string
-  marketplace: string
-  productType: string
-  schemaVersion: string
-  fetchedAt: string
-  fields: RenderableField[]
+interface UnionManifest {
+  channels: Array<{ platform: string; marketplace: string; productType: string }>
+  schemaVersionByChannel: Record<string, string>
+  fetchedAtByChannel: Record<string, string>
+  fields: UnionField[]
+  channelsMissingSchema: Array<{
+    channelKey: string
+    reason: 'no_product_type' | 'fetch_failed' | 'unsupported_channel'
+    detail?: string
+  }>
 }
 
-type AttributesSlice = Record<string, string | number | boolean>
+type Primitive = string | number | boolean
 
 const SAVE_DEBOUNCE_MS = 600
 
@@ -51,22 +71,33 @@ export default function Step4Attributes({
   wizardState,
   updateWizardState,
   wizardId,
-  channel,
+  channels,
 }: StepProps) {
-  const productTypeSlice = (wizardState.productType ?? {}) as {
-    productType?: string
-    displayName?: string
-  }
-
-  const [manifest, setManifest] = useState<FieldManifest | null>(null)
+  const [manifest, setManifest] = useState<UnionManifest | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
 
-  const initialAttrs = (wizardState.attributes ?? {}) as AttributesSlice
-  const [values, setValues] = useState<AttributesSlice>(initialAttrs)
+  const initialBase = (wizardState.attributes ?? {}) as Record<string, Primitive>
+  const initialOverrides = useMemo(() => {
+    // Pull per-channel overrides out of channelStates if the parent
+    // exposes them (Phase B+ stores them under
+    // wizardState.channelStates_local — but in the common case the
+    // server-side manifest already has them). The local mirror here
+    // is for optimistic updates only; the server returns canonical
+    // values on the next refresh.
+    return {} as Record<string, Record<string, Primitive>>
+  }, [])
 
-  // Debounced persist of `values` into wizardState.attributes.
+  const [values, setValues] = useState<Record<string, Primitive>>(initialBase)
+  const [overrides, setOverrides] = useState<
+    Record<string, Record<string, Primitive>>
+  >(initialOverrides)
+  const [expandedFields, setExpandedFields] = useState<Set<string>>(
+    new Set(),
+  )
+
+  // Debounced persist of `values` (base) → wizardState.attributes.
   const saveTimer = useRef<number | null>(null)
   useEffect(() => {
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
@@ -76,23 +107,38 @@ export default function Step4Attributes({
     return () => {
       if (saveTimer.current) window.clearTimeout(saveTimer.current)
     }
-    // updateWizardState is a stable ref from the wizard shell.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [values])
 
-  // Fetch the required-fields manifest. If the productType isn't set
-  // yet, redirect-style hint to Step 3 — the backend would 409, this
-  // gives a friendlier inline message.
+  // Per-channel override saves use a separate timer so writes to
+  // overrides don't race with base writes.
+  const overrideSaveTimer = useRef<number | null>(null)
   useEffect(() => {
-    if (channel !== 'AMAZON') {
-      setLoading(false)
-      setError(null)
-      setManifest(null)
-      return
+    if (overrideSaveTimer.current) window.clearTimeout(overrideSaveTimer.current)
+    overrideSaveTimer.current = window.setTimeout(() => {
+      // Patch each channel's attributes slice via channelStates.
+      const channelStates: Record<string, Record<string, unknown>> = {}
+      for (const [chKey, slice] of Object.entries(overrides)) {
+        if (Object.keys(slice).length > 0) {
+          channelStates[chKey] = { attributes: slice }
+        }
+      }
+      if (Object.keys(channelStates).length > 0) {
+        void fetchPatch(wizardId, { channelStates })
+      }
+    }, SAVE_DEBOUNCE_MS)
+    return () => {
+      if (overrideSaveTimer.current)
+        window.clearTimeout(overrideSaveTimer.current)
     }
-    if (!productTypeSlice.productType) {
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overrides])
+
+  // Fetch the union manifest.
+  useEffect(() => {
+    if (channels.length === 0) {
       setLoading(false)
-      setError('Pick a product type in Step 3 first.')
+      setError('Pick channels in Step 1 first.')
       return
     }
     let cancelled = false
@@ -109,18 +155,30 @@ export default function Step4Attributes({
           setManifest(null)
           return
         }
-        setManifest(json as FieldManifest)
-        // Seed inputs with smart defaults for any fields the user
-        // hasn't filled yet — without overwriting existing edits.
+        const m = json as UnionManifest
+        setManifest(m)
+        // Seed inputs:
+        //   - base values: existing wizardState.attributes wins, then
+        //     server defaults from product master fill the rest
+        //   - per-channel overrides: server merges from channelStates,
+        //     so trust m.fields[].overrides as the canonical source
         setValues((prev) => {
           const next = { ...prev }
-          for (const f of (json as FieldManifest).fields) {
+          for (const f of m.fields) {
             if (next[f.id] === undefined && f.defaultValue !== undefined) {
-              next[f.id] = f.defaultValue
+              next[f.id] = f.defaultValue as Primitive
             }
           }
           return next
         })
+        const seededOverrides: Record<string, Record<string, Primitive>> = {}
+        for (const f of m.fields) {
+          for (const [chKey, val] of Object.entries(f.overrides)) {
+            if (!seededOverrides[chKey]) seededOverrides[chKey] = {}
+            seededOverrides[chKey][f.id] = val
+          }
+        }
+        setOverrides(seededOverrides)
       })
       .catch((err) => {
         if (cancelled) return
@@ -132,43 +190,63 @@ export default function Step4Attributes({
     return () => {
       cancelled = true
     }
-  }, [channel, productTypeSlice.productType, wizardId, reloadKey])
+  }, [channels, wizardId, reloadKey])
 
-  const setField = useCallback(
-    (id: string, value: string | number | boolean) => {
-      setValues((prev) => ({ ...prev, [id]: value }))
+  const setBase = useCallback((id: string, value: Primitive) => {
+    setValues((prev) => ({ ...prev, [id]: value }))
+  }, [])
+
+  const setOverride = useCallback(
+    (channelKey: string, id: string, value: Primitive | undefined) => {
+      setOverrides((prev) => {
+        const next = { ...prev }
+        const slice = { ...(next[channelKey] ?? {}) }
+        if (value === undefined || value === '' || value === null) {
+          delete slice[id]
+        } else {
+          slice[id] = value
+        }
+        next[channelKey] = slice
+        return next
+      })
     },
     [],
   )
 
-  // Continue is enabled when every required field has a non-empty
-  // value. Unsupported fields don't block — they're flagged for
-  // manual handling but can't be rendered, so we treat them as
-  // 'manually skipped' rather than failing the whole step.
-  const missingFieldIds = useMemo(() => {
-    if (!manifest) return []
-    return manifest.fields
-      .filter((f) => f.required && f.kind !== 'unsupported')
-      .filter((f) => isEmpty(values[f.id]))
-      .map((f) => f.id)
-  }, [manifest, values])
+  const toggleExpanded = useCallback((id: string) => {
+    setExpandedFields((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const unsatisfied = useMemo(() => {
+    if (!manifest) return [] as Array<{ id: string; channelKey: string }>
+    const out: Array<{ id: string; channelKey: string }> = []
+    for (const f of manifest.fields) {
+      if (f.kind === 'unsupported') continue
+      for (const channelKey of f.requiredFor) {
+        const ovr = overrides[channelKey]?.[f.id]
+        if (!isEmpty(ovr)) continue
+        if (!isEmpty(values[f.id])) continue
+        out.push({ id: f.id, channelKey })
+      }
+    }
+    return out
+  }, [manifest, values, overrides])
 
   const onContinue = useCallback(async () => {
-    if (missingFieldIds.length > 0) return
-    await updateWizardState(
-      {
-        attributes: values,
-      },
-      { advance: true },
-    )
-  }, [missingFieldIds.length, updateWizardState, values])
+    if (unsatisfied.length > 0) return
+    await updateWizardState({ attributes: values }, { advance: true })
+  }, [unsatisfied.length, updateWizardState, values])
 
-  if (channel !== 'AMAZON') {
+  if (channels.length === 0) {
     return (
       <div className="max-w-2xl mx-auto py-12 px-6 text-center">
         <p className="text-[13px] text-slate-600">
-          Required attributes only apply to Amazon listings. Skipping for{' '}
-          <span className="font-mono">{channel}</span>.
+          Pick channels in Step 1 before configuring attributes.
         </p>
       </div>
     )
@@ -182,15 +260,9 @@ export default function Step4Attributes({
             Required Attributes
           </h2>
           <p className="text-[13px] text-slate-600 mt-1">
-            Fill the fields Amazon requires for{' '}
-            <span className="font-mono text-slate-800">
-              {productTypeSlice.productType}
-            </span>{' '}
-            <span className="text-slate-500">
-              ({productTypeSlice.displayName ?? '—'})
-            </span>
-            . Smart defaults are pulled from the master product where they
-            line up.
+            Union of every required field across the selected channels.
+            Smart defaults come from the master product; click "Override
+            per channel" on any field that should differ between markets.
           </p>
         </div>
         <button
@@ -198,7 +270,7 @@ export default function Step4Attributes({
           onClick={() => setReloadKey((k) => k + 1)}
           disabled={loading}
           className="inline-flex items-center gap-1 h-7 px-2 text-[11px] text-slate-600 border border-slate-200 rounded hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40 flex-shrink-0"
-          title="Re-fetch the required-fields manifest from the latest schema"
+          title="Re-fetch the required-fields manifest"
         >
           {loading ? (
             <Loader2 className="w-3 h-3 animate-spin" />
@@ -232,48 +304,80 @@ export default function Step4Attributes({
         </div>
       )}
 
+      {manifest && manifest.channelsMissingSchema.length > 0 && (
+        <div className="mb-4 border border-amber-200 bg-amber-50 rounded-md px-3 py-2 text-[12px] text-amber-800">
+          <div className="font-medium mb-1">
+            Schema unavailable for some channels — union may be incomplete
+          </div>
+          <ul className="space-y-0.5 text-[11px]">
+            {manifest.channelsMissingSchema.map((m) => (
+              <li key={m.channelKey}>
+                <span className="font-mono">{m.channelKey}</span> —{' '}
+                <span className="text-amber-700">{m.reason}</span>
+                {m.detail && <span className="text-amber-600"> · {m.detail}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {manifest && manifest.fields.length === 0 && !loading && (
         <div className="border border-slate-200 rounded-lg bg-white px-4 py-6 text-center text-[12px] text-slate-500">
-          No required fields for this product type — nothing to fill in.
+          No required fields across the selected channels.
         </div>
       )}
 
       {manifest && manifest.fields.length > 0 && (
-        <div className="space-y-4">
-          {manifest.fields.map((field) => (
-            <FieldRenderer
-              key={field.id}
-              field={field}
-              value={values[field.id]}
-              onChange={(v) => setField(field.id, v)}
-              isMissing={missingFieldIds.includes(field.id)}
-              marketplace={manifest.marketplace}
-            />
-          ))}
+        <div className="space-y-3">
+          {manifest.fields.map((field) => {
+            const fieldUnsatisfied = unsatisfied
+              .filter((u) => u.id === field.id)
+              .map((u) => u.channelKey)
+            return (
+              <FieldCard
+                key={field.id}
+                field={field}
+                baseValue={values[field.id]}
+                onBaseChange={(v) => setBase(field.id, v)}
+                overrides={Object.fromEntries(
+                  Object.entries(overrides).map(([k, slice]) => [
+                    k,
+                    slice[field.id],
+                  ]),
+                )}
+                onOverrideChange={(channelKey, v) =>
+                  setOverride(channelKey, field.id, v)
+                }
+                expanded={expandedFields.has(field.id)}
+                onToggleExpanded={() => toggleExpanded(field.id)}
+                unsatisfiedChannels={fieldUnsatisfied}
+              />
+            )
+          })}
         </div>
       )}
 
       <div className="mt-8 flex items-center justify-between gap-3">
-        <div className="text-[12px] text-slate-600">
-          {missingFieldIds.length === 0 && manifest ? (
+        <div className="text-[12px]">
+          {unsatisfied.length === 0 && manifest ? (
             <span className="inline-flex items-center gap-1.5 text-emerald-700">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              All required fields complete.
+              All required fields satisfied across selected channels.
             </span>
           ) : (
             <span className="text-amber-700">
-              {missingFieldIds.length} required field
-              {missingFieldIds.length === 1 ? '' : 's'} remaining
+              {unsatisfied.length} field × channel pair
+              {unsatisfied.length === 1 ? '' : 's'} unsatisfied
             </span>
           )}
         </div>
         <button
           type="button"
           onClick={onContinue}
-          disabled={!manifest || missingFieldIds.length > 0}
+          disabled={!manifest || unsatisfied.length > 0}
           className={cn(
             'h-8 px-4 rounded-md text-[13px] font-medium',
-            !manifest || missingFieldIds.length > 0
+            !manifest || unsatisfied.length > 0
               ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
               : 'bg-blue-600 text-white hover:bg-blue-700',
           )}
@@ -285,29 +389,40 @@ export default function Step4Attributes({
   )
 }
 
-// ── Field renderer ──────────────────────────────────────────────
+// ── Field row ───────────────────────────────────────────────────
 
-function FieldRenderer({
+function FieldCard({
   field,
-  value,
-  onChange,
-  isMissing,
-  marketplace,
+  baseValue,
+  onBaseChange,
+  overrides,
+  onOverrideChange,
+  expanded,
+  onToggleExpanded,
+  unsatisfiedChannels,
 }: {
-  field: RenderableField
-  value: string | number | boolean | undefined
-  onChange: (v: string | number | boolean) => void
-  isMissing: boolean
-  marketplace: string
+  field: UnionField
+  baseValue: Primitive | undefined
+  onBaseChange: (v: Primitive) => void
+  overrides: Record<string, Primitive | undefined>
+  onOverrideChange: (channelKey: string, v: Primitive | undefined) => void
+  expanded: boolean
+  onToggleExpanded: () => void
+  unsatisfiedChannels: string[]
 }) {
-  const containerClass = cn(
-    'border rounded-lg bg-white px-4 py-3',
-    isMissing ? 'border-amber-200' : 'border-slate-200',
-  )
+  const hasUnsatisfied = unsatisfiedChannels.length > 0
+  const overrideCount = Object.values(overrides).filter(
+    (v) => !isEmpty(v),
+  ).length
 
   return (
-    <div className={containerClass}>
-      <div className="mb-1.5 flex items-baseline justify-between gap-3">
+    <div
+      className={cn(
+        'border rounded-lg bg-white px-4 py-3',
+        hasUnsatisfied ? 'border-amber-200' : 'border-slate-200',
+      )}
+    >
+      <div className="mb-1.5 flex items-baseline justify-between gap-3 flex-wrap">
         <label className="text-[13px] font-medium text-slate-900">
           {field.label}
           <span className="text-rose-600 ml-0.5">*</span>
@@ -315,17 +430,33 @@ function FieldRenderer({
             {field.id}
           </span>
         </label>
-        {field.wrapped && (
-          <span className="text-[10px] uppercase tracking-wide text-slate-400 font-medium">
-            {marketplace}
-          </span>
-        )}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {field.requiredFor.length > 0 && (
+            <ChannelTagGroup
+              tone="required"
+              channels={field.requiredFor}
+            />
+          )}
+          {field.optionalFor.length > 0 && (
+            <ChannelTagGroup
+              tone="optional"
+              channels={field.optionalFor}
+            />
+          )}
+        </div>
       </div>
       {field.description && (
         <p className="text-[12px] text-slate-500 mb-2">{field.description}</p>
       )}
+      {field.divergent && (
+        <p className="text-[11px] text-amber-700 mb-2">
+          Heads-up: this field's metadata differs across channels (different
+          enum values or length limits). Use overrides per channel if the
+          merged shape doesn't fit one of them.
+        </p>
+      )}
 
-      <FieldInput field={field} value={value} onChange={onChange} />
+      <FieldInput field={field} value={baseValue} onChange={onBaseChange} />
 
       {field.examples && field.examples.length > 0 && field.kind !== 'enum' && (
         <p className="mt-1.5 text-[11px] text-slate-400">
@@ -334,8 +465,63 @@ function FieldRenderer({
       )}
       {field.maxLength && field.kind !== 'enum' && (
         <p className="mt-1 text-[11px] text-slate-400">
-          {currentLength(value)} / {field.maxLength} characters
+          {currentLength(baseValue)} / {field.maxLength} characters
         </p>
+      )}
+
+      {field.requiredFor.length > 1 && (
+        <div className="mt-3 border-t border-slate-100 pt-2">
+          <button
+            type="button"
+            onClick={onToggleExpanded}
+            className="text-[12px] text-slate-600 hover:text-slate-900 inline-flex items-center gap-1"
+          >
+            {expanded ? (
+              <ChevronDown className="w-3 h-3" />
+            ) : (
+              <ChevronRight className="w-3 h-3" />
+            )}
+            Override per channel
+            {overrideCount > 0 && (
+              <span className="text-[10px] font-medium text-blue-700 bg-blue-50 px-1 py-0.5 rounded">
+                {overrideCount}
+              </span>
+            )}
+          </button>
+          {expanded && (
+            <div className="mt-2 space-y-2">
+              {field.requiredFor.map((channelKey) => {
+                const ov = overrides[channelKey]
+                const isUnsatisfied =
+                  unsatisfiedChannels.includes(channelKey)
+                return (
+                  <div
+                    key={channelKey}
+                    className={cn(
+                      'flex items-center gap-2',
+                      isUnsatisfied && 'bg-amber-50/40 -mx-2 px-2 rounded',
+                    )}
+                  >
+                    <span className="text-[11px] font-mono text-slate-600 w-24 flex-shrink-0">
+                      {channelKey}
+                    </span>
+                    <FieldInput
+                      field={field}
+                      value={ov}
+                      onChange={(v) => onOverrideChange(channelKey, v)}
+                      placeholder={
+                        isEmpty(baseValue)
+                          ? '— (leave empty to use base)'
+                          : `Inherits: ${formatValue(baseValue)}`
+                      }
+                      compact
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
       )}
     </div>
   )
@@ -345,18 +531,20 @@ function FieldInput({
   field,
   value,
   onChange,
+  placeholder,
+  compact = false,
 }: {
-  field: RenderableField
-  value: string | number | boolean | undefined
-  onChange: (v: string | number | boolean) => void
+  field: UnionField
+  value: Primitive | undefined
+  onChange: (v: Primitive) => void
+  placeholder?: string
+  compact?: boolean
 }) {
   if (field.kind === 'unsupported') {
     return (
       <div className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
         Can't render this field automatically yet.
-        {field.unsupportedReason ? ` (${field.unsupportedReason})` : ''} Set it
-        directly in Seller Central after submission, or skip this product
-        type for now.
+        {field.unsupportedReason ? ` (${field.unsupportedReason})` : ''}
       </div>
     )
   }
@@ -367,7 +555,10 @@ function FieldInput({
       <select
         value={v}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full h-8 px-2 text-[13px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+        className={cn(
+          'w-full px-2 text-[13px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white',
+          compact ? 'h-7' : 'h-8',
+        )}
       >
         <option value="">— Select —</option>
         {(field.options ?? []).map((opt) => (
@@ -400,6 +591,7 @@ function FieldInput({
       <input
         type="number"
         value={v}
+        placeholder={placeholder}
         onChange={(e) => {
           const raw = e.target.value
           if (raw === '') onChange('')
@@ -408,7 +600,10 @@ function FieldInput({
             if (!Number.isNaN(n)) onChange(n)
           }
         }}
-        className="w-full h-8 px-2 text-[13px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+        className={cn(
+          'w-full px-2 text-[13px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500',
+          compact ? 'h-7' : 'h-8',
+        )}
       />
     )
   }
@@ -419,8 +614,9 @@ function FieldInput({
       <textarea
         value={v}
         onChange={(e) => onChange(e.target.value)}
-        rows={4}
+        rows={compact ? 2 : 4}
         maxLength={field.maxLength}
+        placeholder={placeholder}
         className="w-full px-2 py-1.5 text-[13px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
       />
     )
@@ -434,8 +630,44 @@ function FieldInput({
       value={v}
       onChange={(e) => onChange(e.target.value)}
       maxLength={field.maxLength}
-      className="w-full h-8 px-2 text-[13px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+      placeholder={placeholder}
+      className={cn(
+        'w-full px-2 text-[13px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500',
+        compact ? 'h-7' : 'h-8',
+      )}
     />
+  )
+}
+
+function ChannelTagGroup({
+  tone,
+  channels,
+}: {
+  tone: 'required' | 'optional'
+  channels: string[]
+}) {
+  const toneClass =
+    tone === 'required'
+      ? 'bg-blue-50 text-blue-700 border-blue-200'
+      : 'bg-slate-50 text-slate-600 border-slate-200'
+  const label = tone === 'required' ? 'Required' : 'Optional'
+  return (
+    <div className="inline-flex items-center gap-1 flex-wrap">
+      <span className="text-[10px] uppercase tracking-wide text-slate-500 font-medium">
+        {label}:
+      </span>
+      {channels.map((c) => (
+        <span
+          key={c}
+          className={cn(
+            'inline-flex items-center text-[10px] font-mono font-medium px-1.5 py-0.5 border rounded',
+            toneClass,
+          )}
+        >
+          {c}
+        </span>
+      ))}
+    </div>
   )
 }
 
@@ -451,4 +683,25 @@ function isEmpty(v: unknown): boolean {
 function currentLength(v: unknown): number {
   if (typeof v === 'string') return v.length
   return 0
+}
+
+function formatValue(v: unknown): string {
+  if (v === undefined || v === null) return ''
+  if (typeof v === 'boolean') return v ? 'Yes' : 'No'
+  return String(v)
+}
+
+async function fetchPatch(
+  wizardId: string,
+  body: Record<string, unknown>,
+): Promise<void> {
+  try {
+    await fetch(`${getBackendUrl()}/api/listing-wizard/${wizardId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  } catch {
+    /* swallow — caller's debounce will retry on next change */
+  }
 }
