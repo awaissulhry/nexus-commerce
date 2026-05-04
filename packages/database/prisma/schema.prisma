@@ -1437,6 +1437,11 @@ model BulkOpsTemplate {
   enabledChannels     String[] @default([])
   enabledProductTypes String[] @default([])
 
+  /** W.10 — group keys collapsed in the band when the user saved the
+   *  template. Restored on load so the user's preferred density
+   *  survives. */
+  collapsedGroups String[] @default([])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

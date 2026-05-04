@@ -91,6 +91,12 @@ export const TableRow = memo(
                 'overflow-hidden border-r border-slate-100/60 last:border-r-0 relative select-none',
                 isReadOnlyCell && 'bg-slate-50/40',
                 selectable && 'hover:bg-slate-50',
+                // W.6 — frozen left/right columns. Opaque bg so cells
+                // scrolling underneath don't bleed through.
+                cell.column.id === 'sku' &&
+                  'sticky left-0 z-[5] bg-white',
+                cell.column.id === '__actions' &&
+                  'sticky right-0 z-[5] bg-white',
               )}
               style={{ width: cell.column.getSize(), flexShrink: 0 }}
             >

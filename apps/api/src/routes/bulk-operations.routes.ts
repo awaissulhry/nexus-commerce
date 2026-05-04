@@ -283,6 +283,7 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
       filterState?: Record<string, unknown> | null
       enabledChannels?: string[]
       enabledProductTypes?: string[]
+      collapsedGroups?: string[]
     }
   }>('/bulk-ops/templates', async (request, reply) => {
     const body = request.body ?? {}
@@ -304,6 +305,7 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
           filterState: (body.filterState ?? null) as any,
           enabledChannels: body.enabledChannels ?? [],
           enabledProductTypes: body.enabledProductTypes ?? [],
+          collapsedGroups: body.collapsedGroups ?? [],
         },
       })
       return { template: created }
@@ -325,6 +327,7 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
       filterState?: Record<string, unknown> | null
       enabledChannels?: string[]
       enabledProductTypes?: string[]
+      collapsedGroups?: string[]
     }
   }>('/bulk-ops/templates/:id', async (request, reply) => {
     const { id } = request.params
@@ -338,6 +341,8 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
       data.enabledChannels = body.enabledChannels
     if (Array.isArray(body.enabledProductTypes))
       data.enabledProductTypes = body.enabledProductTypes
+    if (Array.isArray(body.collapsedGroups))
+      data.collapsedGroups = body.collapsedGroups
     try {
       const updated = await prisma.bulkOpsTemplate.update({
         where: { id },

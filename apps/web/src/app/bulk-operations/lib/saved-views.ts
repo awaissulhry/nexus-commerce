@@ -24,6 +24,9 @@ export interface SavedView {
   filterState?: FilterState
   channels?: string[]
   productTypes?: string[]
+  /** W.10 — group keys collapsed in the band when the view was saved.
+   *  Restored on selectView so the user's preferred density survives. */
+  collapsedGroups?: string[]
   isDefault?: boolean
   createdAt: number
   /** Set once the view is server-backed; absent on hardcoded defaults. */
@@ -92,6 +95,7 @@ interface ServerTemplate {
   filterState: FilterState | null
   enabledChannels: string[]
   enabledProductTypes: string[]
+  collapsedGroups: string[]
   createdAt: string
   updatedAt: string
 }
@@ -104,6 +108,7 @@ function fromServer(t: ServerTemplate): SavedView {
     filterState: t.filterState ?? undefined,
     channels: t.enabledChannels,
     productTypes: t.enabledProductTypes,
+    collapsedGroups: t.collapsedGroups ?? [],
     createdAt: new Date(t.createdAt).getTime(),
     serverBacked: true,
   }
@@ -226,6 +231,7 @@ export async function saveUserView(
     filterState: view.filterState ?? null,
     enabledChannels: view.channels ?? [],
     enabledProductTypes: view.productTypes ?? [],
+    collapsedGroups: view.collapsedGroups ?? [],
   }
   // If the id already exists in the server cache, PATCH; otherwise POST.
   const existing = serverViews.find((v) => v.id === view.id)

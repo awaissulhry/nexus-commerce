@@ -2434,6 +2434,11 @@ export default function BulkOperationsClient() {
       // when present; otherwise leave the user's current filters
       // alone so default views don't blank out a deliberate filter.
       if (view.filterState) setFilterState(view.filterState)
+      // W.10 — restore collapsed groups so the user's preferred density
+      // tracks with the view.
+      if (view.collapsedGroups) {
+        setCollapsedGroups(new Set(view.collapsedGroups))
+      }
     },
     [savedViews],
   )
@@ -2453,12 +2458,19 @@ export default function BulkOperationsClient() {
         filterState,
         channels: enabledChannels,
         productTypes: enabledProductTypes,
+        collapsedGroups: Array.from(collapsedGroups),
       })
       setSavedViews(loadAllViews())
       setActiveViewIdState(view.id)
       setActiveViewId(view.id)
     },
-    [visibleColumnIds, enabledChannels, enabledProductTypes, filterState],
+    [
+      visibleColumnIds,
+      enabledChannels,
+      enabledProductTypes,
+      filterState,
+      collapsedGroups,
+    ],
   )
 
   const handleDeleteView = useCallback(
@@ -2495,6 +2507,7 @@ export default function BulkOperationsClient() {
       filterState,
       channels: enabledChannels,
       productTypes: enabledProductTypes,
+      collapsedGroups: Array.from(collapsedGroups),
     })
     setSavedViews(loadAllViews())
     setUpdateFlash('saved')
@@ -2506,6 +2519,7 @@ export default function BulkOperationsClient() {
     filterState,
     enabledChannels,
     enabledProductTypes,
+    collapsedGroups,
   ])
 
   return (
@@ -2963,8 +2977,13 @@ export default function BulkOperationsClient() {
               )
             })}
             {/* Spacer matching the actions column so band aligns. W.3
-                bumped to 60 (defaultColumn.minSize). */}
-            <div style={{ width: 60, flexShrink: 0 }} />
+                bumped to 60 (defaultColumn.minSize). W.6 pins it
+                sticky-right so it stays aligned with the frozen
+                actions column on horizontal scroll. */}
+            <div
+              className="sticky right-0 z-[5] bg-white"
+              style={{ width: 60, flexShrink: 0 }}
+            />
           </div>
         )}
         <div
@@ -3088,6 +3107,15 @@ export default function BulkOperationsClient() {
                   'relative flex items-center gap-1 px-3 border-r border-slate-200/70 last:border-r-0 text-[11px] font-semibold text-slate-700 uppercase tracking-wider transition-colors',
                   isDraggable && 'cursor-grab active:cursor-grabbing',
                   draggedColumnId === header.column.id && 'opacity-40',
+                  // W.6 — pin SKU column to the left + actions to the
+                  // right so they stay visible when the grid scrolls
+                  // horizontally past the viewport. bg-slate-50 matches
+                  // the header row's background so the sticky cell
+                  // obscures non-pinned cells scrolling beneath.
+                  header.column.id === 'sku' &&
+                    'sticky left-0 z-[25] bg-slate-50',
+                  header.column.id === '__actions' &&
+                    'sticky right-0 z-[25] bg-slate-50',
                 )}
                 style={{ width: header.getSize(), flexShrink: 0 }}
                 title={
