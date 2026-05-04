@@ -178,6 +178,11 @@ export class SchemaParserService {
      *  optional set (item_name, manufacturer, etc.) regardless of
      *  this flag, so the wizard's defaults stay useful. */
     includeAllOptional?: boolean
+    /** P.4: when true, force-refresh the schema (bypass the 24h
+     *  cache). Used by the wizard's "Refresh schemas" button to
+     *  pick up upstream changes Amazon makes to required fields,
+     *  enums, etc. without waiting for natural cache expiry. */
+    forceRefresh?: boolean
   }): Promise<FieldManifest & { optionalFieldIds: string[] }> {
     const channel = opts.channel.toUpperCase()
     if (channel !== 'AMAZON') {
@@ -186,11 +191,17 @@ export class SchemaParserService {
       )
     }
 
-    const cached = await this.schemas.getSchema({
-      channel: 'AMAZON',
-      marketplace: opts.marketplace,
-      productType: opts.productType,
-    })
+    const cached = opts.forceRefresh
+      ? await this.schemas.refreshSchema({
+          channel: 'AMAZON',
+          marketplace: opts.marketplace,
+          productType: opts.productType,
+        })
+      : await this.schemas.getSchema({
+          channel: 'AMAZON',
+          marketplace: opts.marketplace,
+          productType: opts.productType,
+        })
 
     const def = (cached.schemaDefinition ?? {}) as Record<string, any>
     const properties = (def.properties ?? {}) as Record<string, any>
@@ -297,6 +308,10 @@ export class SchemaParserService {
     /** K.5 — when true, walks every property in each channel's schema
      *  rather than just required + curated common-optional. */
     includeAllOptional?: boolean
+    /** P.4 — propagated through to the per-channel getRequiredFields
+     *  call so the schema cache is bypassed for every fetch this
+     *  pass. */
+    forceRefresh?: boolean
   }): Promise<UnionManifest> {
     const channels = opts.channels.map((c) => ({
       ...c,
@@ -342,6 +357,7 @@ export class SchemaParserService {
           productType,
           product: opts.product,
           includeAllOptional: opts.includeAllOptional,
+          forceRefresh: opts.forceRefresh,
         })
         perChannel.push({
           channelKey,

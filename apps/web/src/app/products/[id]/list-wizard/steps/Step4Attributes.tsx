@@ -143,6 +143,7 @@ export default function Step4Attributes({
     new Set(),
   )
   const [showAllOptional, setShowAllOptional] = useState(false)
+  const [forceRefresh, setForceRefresh] = useState(false)
   const [aiBusyFields, setAiBusyFields] = useState<Set<string>>(new Set())
   // M.1 — tabbed view. activeTab is either 'base' (Shared base
   // editor) or a channel key like "AMAZON:IT". Marketplace sub-tabs
@@ -342,6 +343,7 @@ export default function Step4Attributes({
       `${getBackendUrl()}/api/listing-wizard/${wizardId}/required-fields`,
     )
     if (showAllOptional) url.searchParams.set('all', '1')
+    if (forceRefresh) url.searchParams.set('refresh', '1')
     fetch(url.toString())
       .then(async (r) => ({ ok: r.ok, status: r.status, json: await r.json() }))
       .then(({ ok, status, json }) => {
@@ -386,7 +388,7 @@ export default function Step4Attributes({
     return () => {
       cancelled = true
     }
-  }, [channels, wizardId, reloadKey, showAllOptional])
+  }, [channels, wizardId, reloadKey, showAllOptional, forceRefresh])
 
   const setBase = useCallback((id: string, value: Primitive) => {
     setValues((prev) => ({ ...prev, [id]: value }))
@@ -515,7 +517,7 @@ export default function Step4Attributes({
             onClick={() => setReloadKey((k) => k + 1)}
             disabled={loading}
             className="inline-flex items-center gap-1 h-7 px-2 text-[11px] text-slate-600 border border-slate-200 rounded hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40"
-            title="Re-fetch the required-fields manifest"
+            title="Re-fetch the required-fields manifest from cache"
           >
             {loading ? (
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -523,6 +525,21 @@ export default function Step4Attributes({
               <RefreshCw className="w-3 h-3" />
             )}
             Refresh
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setForceRefresh(true)
+              setReloadKey((k) => k + 1)
+              // Reset the flag once the network round-trip kicks off.
+              window.setTimeout(() => setForceRefresh(false), 100)
+            }}
+            disabled={loading}
+            className="inline-flex items-center gap-1 h-7 px-2 text-[11px] text-blue-700 border border-blue-200 rounded hover:bg-blue-50 disabled:opacity-40"
+            title="Force-refresh schemas from Amazon SP-API (bypasses 24h cache). Use after Amazon updates required fields, enums, etc."
+          >
+            <RefreshCw className="w-3 h-3" />
+            Refresh schemas
           </button>
         </div>
       </div>
@@ -633,6 +650,17 @@ export default function Step4Attributes({
           activeTab={activeTab}
           onTabChange={setActiveTab}
           unsatisfied={unsatisfied}
+        />
+      )}
+
+      {/* P.4 — schema-age indicator for the active channel tab.
+          Hidden on the Shared base tab (no single channel age) and
+          when the manifest hasn't loaded yet. */}
+      {manifest && activeTab !== 'base' && (
+        <SchemaAgeIndicator
+          fetchedAt={manifest.fetchedAtByChannel[activeTab]}
+          schemaVersion={manifest.schemaVersionByChannel[activeTab]}
+          channelKey={activeTab}
         />
       )}
 
@@ -1833,6 +1861,51 @@ function OverrideMenu({
             )}
           </div>
         </>
+      )}
+    </div>
+  )
+}
+
+// P.4 — surface how stale the cached schema is for the active
+// channel tab. Bands: < 24h (fresh, grey), < 7d (ok, slate), >= 7d
+// (amber, suggest refresh). Channels with no schema yet (e.g.
+// no_product_type) get a "—" indicator.
+function SchemaAgeIndicator({
+  fetchedAt,
+  schemaVersion,
+  channelKey,
+}: {
+  fetchedAt: string | undefined
+  schemaVersion: string | undefined
+  channelKey: string
+}) {
+  if (!fetchedAt) {
+    return (
+      <div className="mt-2 text-[10px] text-slate-400 px-1">
+        Schema for <span className="font-mono">{channelKey}</span>: not yet
+        fetched
+      </div>
+    )
+  }
+  const age = Date.now() - new Date(fetchedAt).getTime()
+  const days = age / (1000 * 60 * 60 * 24)
+  let tone = 'text-slate-500'
+  let label = ''
+  if (days < 1) {
+    label = `fetched ${Math.max(1, Math.round((age / (1000 * 60 * 60))))}h ago`
+    tone = 'text-slate-500'
+  } else if (days < 7) {
+    label = `fetched ${Math.round(days)}d ago`
+    tone = 'text-slate-500'
+  } else {
+    label = `fetched ${Math.round(days)}d ago — consider refreshing`
+    tone = 'text-amber-700'
+  }
+  return (
+    <div className={cn('mt-2 text-[10px] px-1', tone)}>
+      Schema for <span className="font-mono">{channelKey}</span>: {label}
+      {schemaVersion && (
+        <span className="ml-1 text-slate-400">· version {schemaVersion}</span>
       )}
     </div>
   )

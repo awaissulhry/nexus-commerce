@@ -741,7 +741,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
   // reason='unsupported_channel' for now — eBay lands in Phase 2A.
   fastify.get<{
     Params: { id: string }
-    Querystring: { all?: string }
+    Querystring: { all?: string; refresh?: string }
   }>(
     '/listing-wizard/:id/required-fields',
     async (request, reply) => {
@@ -754,6 +754,8 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
 
       const includeAllOptional =
         request.query?.all === '1' || request.query?.all === 'true'
+      const forceRefresh =
+        request.query?.refresh === '1' || request.query?.refresh === 'true'
 
       const channels = normalizeChannels(wizard.channels)
       if (channels.length === 0) {
@@ -841,6 +843,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
             overridesByChannel,
             productId: wizard.productId,
             includeAllOptional,
+            forceRefresh,
           },
         )
         return manifest
