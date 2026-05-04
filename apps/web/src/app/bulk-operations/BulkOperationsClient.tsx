@@ -94,11 +94,14 @@ import {
   type SelectionMetrics,
 } from './lib/types'
 import {
+  actionsCtxRef,
   editCtxRef,
   hierarchyCtxRef,
   selectCtxRef,
   hasMarketplaceContextRef,
 } from './lib/refs'
+import NewProductModal from './components/NewProductModal'
+import { Plus, Trash2 } from 'lucide-react'
 import { buildColumnFromField } from './lib/grid-columns'
 import {
   computeFillExtension,
@@ -125,6 +128,37 @@ import {
 // used to import it from this file still finds it here.
 export type { BulkProduct } from './lib/types'
 
+/** T.4 — per-row delete trigger. Reads the latest handler off
+ *  actionsCtxRef so dynamicColumns can stay memoised on field changes
+ *  only (handler identity changes every render but the ref doesn't). */
+function DeleteRowButton({
+  id,
+  sku,
+  isParent,
+}: {
+  id: string
+  sku: string
+  isParent: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        actionsCtxRef.current.onDelete(id, sku, isParent)
+      }}
+      title={
+        isParent
+          ? `Delete master ${sku} (cascades to its variants + listings)`
+          : `Delete variant ${sku}`
+      }
+      className="w-full h-full flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+    >
+      <Trash2 className="w-3 h-3" />
+    </button>
+  )
+}
+
 export default function BulkOperationsClient() {
   const [products, setProducts] = useState<BulkProduct[]>([])
   const [loading, setLoading] = useState(true)
@@ -138,6 +172,7 @@ export default function BulkOperationsClient() {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [bulkOpModalOpen, setBulkOpModalOpen] = useState(false)
+  const [newProductOpen, setNewProductOpen] = useState(false)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>({ kind: 'idle' })
   const [online, setOnline] = useState(true)
 
@@ -1020,6 +1055,45 @@ export default function BulkOperationsClient() {
     reloadProducts()
   }, [reloadProducts])
 
+  // T.4 — row-level actions wired through actionsCtxRef so the cells
+  // in dynamicColumns can stay memoised (the ref's identity doesn't
+  // change between renders, only its `.current` payload).
+  const handleDeleteRow = useCallback(
+    async (id: string, sku: string, isParent: boolean) => {
+      const cascadeWarning = isParent
+        ? '\n\nThis is a master product. Every variant + ChannelListing + image row underneath will also be deleted. Cannot be undone.'
+        : '\n\nIts ChannelListings + offers + image rows will also be deleted. Cannot be undone.'
+      if (
+        !window.confirm(
+          `Delete ${sku}?${cascadeWarning}`,
+        )
+      )
+        return
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/catalog/products/${id}`,
+          { method: 'DELETE' },
+        )
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          throw new Error(json?.error?.message ?? `HTTP ${res.status}`)
+        }
+        // Optimistic local update — drop the row + any of its
+        // children so the grid reflects the cascade immediately.
+        setProducts((prev) =>
+          prev.filter((p) => p.id !== id && p.parentId !== id),
+        )
+      } catch (e) {
+        setSaveStatus({
+          kind: 'error',
+          message: e instanceof Error ? e.message : String(e),
+        })
+      }
+    },
+    [],
+  )
+  actionsCtxRef.current = { onDelete: handleDeleteRow }
+
   // T.2 — productTypes seen in the loaded products. Drives the fields
   // fetch so every visible product's required + optional schema
   // attributes land as columns automatically — without the user
@@ -1093,6 +1167,22 @@ export default function BulkOperationsClient() {
       if (!field) continue
       out.push(buildColumnFromField(field))
     }
+    // T.4 — actions column always anchors the right edge. Renders the
+    // delete button per row; not part of visibleColumnIds so users
+    // can't hide it. id starts with `__` to avoid collisions with
+    // FieldDef ids.
+    out.push({
+      id: '__actions',
+      header: '',
+      size: 48,
+      cell: ({ row }) => (
+        <DeleteRowButton
+          id={row.original.id}
+          sku={row.original.sku}
+          isParent={!!row.original.isParent}
+        />
+      ),
+    } as ColumnDef<BulkProduct>)
     return out
   }, [visibleColumnIds, fieldsById])
 
@@ -1982,6 +2072,15 @@ export default function BulkOperationsClient() {
             <Button
               variant="secondary"
               size="sm"
+              onClick={() => setNewProductOpen(true)}
+              title="Create a new master product or a variant of an existing parent"
+            >
+              <Plus className="w-3.5 h-3.5 mr-1.5" />
+              New product
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setBulkOpModalOpen(true)}
               title="Apply price / stock / status / attribute changes to a scoped subset of products"
             >
@@ -2294,6 +2393,20 @@ export default function BulkOperationsClient() {
         children={cascadeModal?.children ?? []}
         onApply={handleCascadeApply}
         onCancel={handleCascadeCancel}
+      />
+
+      <NewProductModal
+        open={newProductOpen}
+        onClose={() => setNewProductOpen(false)}
+        onCreated={() => {
+          // Re-fetch so the new row appears with all the standard
+          // fields the bulk-fetch endpoint hydrates (channel listings,
+          // hierarchy, etc.) — simpler than building that shape locally.
+          void reloadProducts()
+        }}
+        parentCandidates={products
+          .filter((p) => !p.parentId)
+          .map((p) => ({ id: p.id, sku: p.sku, name: p.name }))}
       />
     </div>
   )

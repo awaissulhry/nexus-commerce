@@ -59,3 +59,13 @@ export const selectCtxRef: { current: SelectCtx } = {
 export const hasMarketplaceContextRef: { current: boolean } = {
   current: false,
 }
+
+/** T.4 — row-level actions (delete, future: duplicate, etc.) so the
+ *  actions column renderer can stay outside dynamicColumns' deps. */
+export interface ActionsCtx {
+  onDelete: (id: string, sku: string, isParent: boolean) => void
+}
+
+export const actionsCtxRef: { current: ActionsCtx } = {
+  current: { onDelete: () => {} },
+}
