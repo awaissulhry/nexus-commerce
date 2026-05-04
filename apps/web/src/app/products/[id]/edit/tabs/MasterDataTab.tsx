@@ -1,41 +1,143 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { CheckCircle2, Loader2, AlertCircle } from 'lucide-react'
+import { getBackendUrl } from '@/lib/backend-url'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
+import { cn } from '@/lib/utils'
 
 interface Props {
   product: any
   onChange: () => void
 }
 
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+
+const SAVE_DEBOUNCE_MS = 600
+
+/** Q.0 — fields the master-data form actually persists. Each
+ *  corresponds to a field allowed on the existing
+ *  /api/products/bulk PATCH endpoint, so we don't need a new route.
+ */
+const MASTER_FIELDS = [
+  'sku',
+  'name',
+  'brand',
+  'manufacturer',
+  'upc',
+  'ean',
+  'weightValue',
+  'weightUnit',
+  'dimLength',
+  'dimWidth',
+  'dimHeight',
+  'dimUnit',
+  'costPrice',
+  'minMargin',
+  'minPrice',
+  'maxPrice',
+] as const
+
+type MasterField = (typeof MASTER_FIELDS)[number]
+
+const NUMERIC_FIELDS: ReadonlySet<string> = new Set([
+  'weightValue',
+  'dimLength',
+  'dimWidth',
+  'dimHeight',
+  'costPrice',
+  'minMargin',
+  'minPrice',
+  'maxPrice',
+])
+
 export default function MasterDataTab({ product, onChange }: Props) {
-  const [data, setData] = useState({
-    sku: product.sku ?? '',
-    name: product.name ?? '',
-    brand: product.brand ?? '',
-    manufacturer: product.manufacturer ?? '',
-    upc: product.upc ?? '',
-    ean: product.ean ?? '',
-    weightValue: product.weightValue ?? '',
-    weightUnit: product.weightUnit ?? 'kg',
-    dimLength: product.dimLength ?? '',
-    dimWidth: product.dimWidth ?? '',
-    dimHeight: product.dimHeight ?? '',
-    dimUnit: product.dimUnit ?? 'cm',
-    costPrice: product.costPrice ?? '',
-    minMargin: product.minMargin ?? '',
-    minPrice: product.minPrice ?? '',
-    maxPrice: product.maxPrice ?? '',
+  const [data, setData] = useState<Record<MasterField, string>>(() => {
+    const seed = {} as Record<MasterField, string>
+    for (const f of MASTER_FIELDS) {
+      const v = product[f]
+      seed[f] = v == null ? '' : String(v)
+    }
+    if (!seed.weightUnit) seed.weightUnit = 'kg'
+    if (!seed.dimUnit) seed.dimUnit = 'cm'
+    return seed
   })
 
-  const update = (field: keyof typeof data, value: string) => {
+  const [status, setStatus] = useState<SaveStatus>('idle')
+  const [error, setError] = useState<string | null>(null)
+  // Track which fields have been touched since the last successful
+  // save — only those flush in the next PATCH so we don't write back
+  // unchanged values.
+  const dirtyRef = useRef<Set<MasterField>>(new Set())
+  const saveTimer = useRef<number | null>(null)
+
+  const update = (field: MasterField, value: string) => {
     setData((prev) => ({ ...prev, [field]: value }))
+    dirtyRef.current.add(field)
     onChange()
+    setStatus('saving')
+    setError(null)
+    if (saveTimer.current) window.clearTimeout(saveTimer.current)
+    saveTimer.current = window.setTimeout(() => {
+      void flush()
+    }, SAVE_DEBOUNCE_MS)
   }
+
+  const flush = async () => {
+    const fields = Array.from(dirtyRef.current)
+    if (fields.length === 0) {
+      setStatus('idle')
+      return
+    }
+    const changes = fields.map((field) => {
+      const raw = data[field]
+      let value: unknown = raw
+      if (NUMERIC_FIELDS.has(field)) {
+        value = raw === '' ? null : Number(raw)
+        if (typeof value === 'number' && Number.isNaN(value)) value = null
+      } else if (raw === '') {
+        value = null
+      }
+      return { id: product.id, field, value }
+    })
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/products/bulk`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ changes }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      // Only clear the dirty set on success — keep entries on error so
+      // the next save attempt retries the same fields.
+      dirtyRef.current = new Set()
+      setStatus('saved')
+      window.setTimeout(() => {
+        setStatus((s) => (s === 'saved' ? 'idle' : s))
+      }, 1500)
+    } catch (e) {
+      setStatus('error')
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  // Flush on unmount so an in-flight debounce doesn't drop the last
+  // edit when the user switches tabs.
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) window.clearTimeout(saveTimer.current)
+      if (dirtyRef.current.size > 0) void flush()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className="space-y-4">
+      <SaveStatusBar status={status} error={error} />
+
       <Card title="Identity" description="Core information shared across all channels">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
           <Input
@@ -79,7 +181,7 @@ export default function MasterDataTab({ product, onChange }: Props) {
           <Input
             label="Weight"
             type="number"
-            value={String(data.weightValue ?? '')}
+            value={data.weightValue}
             onChange={(e) => update('weightValue', e.target.value)}
           />
           <SelectField
@@ -98,19 +200,19 @@ export default function MasterDataTab({ product, onChange }: Props) {
           <Input
             label="Length"
             type="number"
-            value={String(data.dimLength ?? '')}
+            value={data.dimLength}
             onChange={(e) => update('dimLength', e.target.value)}
           />
           <Input
             label="Width"
             type="number"
-            value={String(data.dimWidth ?? '')}
+            value={data.dimWidth}
             onChange={(e) => update('dimWidth', e.target.value)}
           />
           <Input
             label="Height"
             type="number"
-            value={String(data.dimHeight ?? '')}
+            value={data.dimHeight}
             onChange={(e) => update('dimHeight', e.target.value)}
           />
           <SelectField
@@ -132,32 +234,59 @@ export default function MasterDataTab({ product, onChange }: Props) {
             label="Cost Price"
             type="number"
             prefix="€"
-            value={String(data.costPrice ?? '')}
+            value={data.costPrice}
             onChange={(e) => update('costPrice', e.target.value)}
           />
           <Input
             label="Min Margin"
             type="number"
             suffix="%"
-            value={String(data.minMargin ?? '')}
+            value={data.minMargin}
             onChange={(e) => update('minMargin', e.target.value)}
           />
           <Input
             label="Min Price"
             type="number"
             prefix="€"
-            value={String(data.minPrice ?? '')}
+            value={data.minPrice}
             onChange={(e) => update('minPrice', e.target.value)}
           />
           <Input
             label="Max Price"
             type="number"
             prefix="€"
-            value={String(data.maxPrice ?? '')}
+            value={data.maxPrice}
             onChange={(e) => update('maxPrice', e.target.value)}
           />
         </div>
       </Card>
+    </div>
+  )
+}
+
+function SaveStatusBar({
+  status,
+  error,
+}: {
+  status: SaveStatus
+  error: string | null
+}) {
+  if (status === 'idle') return null
+  return (
+    <div
+      className={cn(
+        'inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded border',
+        status === 'saving' && 'border-slate-200 text-slate-600 bg-slate-50',
+        status === 'saved' && 'border-emerald-200 text-emerald-700 bg-emerald-50',
+        status === 'error' && 'border-rose-200 text-rose-700 bg-rose-50',
+      )}
+    >
+      {status === 'saving' && <Loader2 className="w-3 h-3 animate-spin" />}
+      {status === 'saved' && <CheckCircle2 className="w-3 h-3" />}
+      {status === 'error' && <AlertCircle className="w-3 h-3" />}
+      {status === 'saving' && 'Saving…'}
+      {status === 'saved' && 'Saved'}
+      {status === 'error' && (error ?? 'Save failed')}
     </div>
   )
 }
