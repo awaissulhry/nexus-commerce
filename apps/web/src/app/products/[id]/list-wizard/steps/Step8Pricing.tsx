@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
@@ -12,8 +12,15 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
 
-interface PricingContext {
+interface ChannelContext {
+  platform: string
+  marketplace: string
+  channelKey: string
   currency: string
+  defaultFees: { referralPercent: number; fulfillmentFee: number; notes: string }
+}
+
+interface PricingContext {
   product: {
     basePrice: number
     costPrice: number | null
@@ -22,14 +29,17 @@ interface PricingContext {
     buyBoxPrice: number | null
     competitorPrice: number | null
   }
-  fees: {
-    referralPercent: number
-    fulfillmentFee: number
-    notes: string
-  }
+  channels: ChannelContext[]
 }
 
-interface PricingSlice {
+interface BasePricingSlice {
+  /** Master price applied to every channel by default. */
+  basePrice?: number
+  minPrice?: number
+  maxPrice?: number
+}
+
+interface ChannelPricingSlice {
   marketplacePrice?: number
   minPrice?: number
   maxPrice?: number
@@ -43,43 +53,69 @@ export default function Step8Pricing({
   wizardState,
   updateWizardState,
   wizardId,
+  channels,
 }: StepProps) {
-  const slice = (wizardState.pricing ?? {}) as PricingSlice
+  const baseSlice = (wizardState.pricing ?? {}) as BasePricingSlice
+  const channelStates =
+    (wizardState.channelStates ?? {}) as Record<
+      string,
+      Record<string, any>
+    >
 
   const [ctx, setCtx] = useState<PricingContext | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const [marketplacePrice, setMarketplacePrice] = useState<string>(
-    slice.marketplacePrice !== undefined
-      ? String(slice.marketplacePrice)
-      : '',
-  )
-  const [minPrice, setMinPrice] = useState<string>(
-    slice.minPrice !== undefined ? String(slice.minPrice) : '',
-  )
-  const [maxPrice, setMaxPrice] = useState<string>(
-    slice.maxPrice !== undefined ? String(slice.maxPrice) : '',
-  )
-  const [referralPercent, setReferralPercent] = useState<string>(
-    slice.referralPercent !== undefined
-      ? String(slice.referralPercent)
-      : '',
-  )
-  const [fulfillmentFee, setFulfillmentFee] = useState<string>(
-    slice.fulfillmentFee !== undefined
-      ? String(slice.fulfillmentFee)
-      : '',
-  )
+  // Base price + repricing band — applies to every channel by
+  // default. Each channel inherits these unless it has its own
+  // override.
+  const [base, setBase] = useState<{
+    basePrice: string
+    minPrice: string
+    maxPrice: string
+  }>({
+    basePrice:
+      baseSlice.basePrice !== undefined ? String(baseSlice.basePrice) : '',
+    minPrice:
+      baseSlice.minPrice !== undefined ? String(baseSlice.minPrice) : '',
+    maxPrice:
+      baseSlice.maxPrice !== undefined ? String(baseSlice.maxPrice) : '',
+  })
 
-  // Fetch the master product's pricing + channel-default fees.
+  // Per-channel overrides — only set when the user actually overrides.
+  // String values for input control; parsed to numbers on save +
+  // computation.
+  const [overrides, setOverrides] = useState<
+    Record<string, Record<keyof ChannelPricingSlice, string>>
+  >(() => {
+    const seed: Record<string, Record<keyof ChannelPricingSlice, string>> = {}
+    for (const [chKey, slice] of Object.entries(channelStates)) {
+      const p = (slice as any).pricing as ChannelPricingSlice | undefined
+      if (!p) continue
+      seed[chKey] = {
+        marketplacePrice:
+          p.marketplacePrice !== undefined ? String(p.marketplacePrice) : '',
+        minPrice: p.minPrice !== undefined ? String(p.minPrice) : '',
+        maxPrice: p.maxPrice !== undefined ? String(p.maxPrice) : '',
+        referralPercent:
+          p.referralPercent !== undefined ? String(p.referralPercent) : '',
+        fulfillmentFee:
+          p.fulfillmentFee !== undefined ? String(p.fulfillmentFee) : '',
+      }
+    }
+    return seed
+  })
+
   useEffect(() => {
+    if (channels.length === 0) {
+      setLoading(false)
+      setError('Pick channels in Step 1 first.')
+      return
+    }
     let cancelled = false
     setLoading(true)
     setError(null)
-    fetch(
-      `${getBackendUrl()}/api/listing-wizard/${wizardId}/pricing-context`,
-    )
+    fetch(`${getBackendUrl()}/api/listing-wizard/${wizardId}/pricing-context`)
       .then(async (r) => ({ ok: r.ok, status: r.status, json: await r.json() }))
       .then(({ ok, status, json }) => {
         if (cancelled) return
@@ -89,22 +125,21 @@ export default function Step8Pricing({
         }
         const c = json as PricingContext
         setCtx(c)
-        // Seed inputs with defaults only if they're not already set.
-        if (marketplacePrice === '' && c.product.basePrice > 0) {
-          setMarketplacePrice(String(c.product.basePrice))
-        }
-        if (minPrice === '' && c.product.minPrice !== null) {
-          setMinPrice(String(c.product.minPrice))
-        }
-        if (maxPrice === '' && c.product.maxPrice !== null) {
-          setMaxPrice(String(c.product.maxPrice))
-        }
-        if (referralPercent === '') {
-          setReferralPercent(String(c.fees.referralPercent))
-        }
-        if (fulfillmentFee === '') {
-          setFulfillmentFee(String(c.fees.fulfillmentFee))
-        }
+        // Seed base from master product when the user hasn't set
+        // anything yet.
+        setBase((prev) => {
+          const next = { ...prev }
+          if (next.basePrice === '' && c.product.basePrice > 0) {
+            next.basePrice = String(c.product.basePrice)
+          }
+          if (next.minPrice === '' && c.product.minPrice !== null) {
+            next.minPrice = String(c.product.minPrice)
+          }
+          if (next.maxPrice === '' && c.product.maxPrice !== null) {
+            next.maxPrice = String(c.product.maxPrice)
+          }
+          return next
+        })
       })
       .catch((err) => {
         if (cancelled) return
@@ -116,145 +151,187 @@ export default function Step8Pricing({
     return () => {
       cancelled = true
     }
-    // Only seed once at mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wizardId])
+  }, [channels.length, wizardId])
 
-  // Debounced persist.
+  // Debounced persist of base.
+  const baseSaveTimer = useRef<number | null>(null)
   useEffect(() => {
     if (loading) return
-    const t = window.setTimeout(() => {
-      const next: PricingSlice = {
-        marketplacePrice: parseNum(marketplacePrice),
-        minPrice: parseNum(minPrice),
-        maxPrice: parseNum(maxPrice),
-        referralPercent: parseNum(referralPercent),
-        fulfillmentFee: parseNum(fulfillmentFee),
-      }
-      void updateWizardState({ pricing: next })
+    if (baseSaveTimer.current) window.clearTimeout(baseSaveTimer.current)
+    baseSaveTimer.current = window.setTimeout(() => {
+      void updateWizardState({
+        pricing: {
+          basePrice: parseNum(base.basePrice),
+          minPrice: parseNum(base.minPrice),
+          maxPrice: parseNum(base.maxPrice),
+        },
+      })
     }, SAVE_DEBOUNCE_MS)
-    return () => window.clearTimeout(t)
-    // updateWizardState is stable from the wizard shell.
+    return () => {
+      if (baseSaveTimer.current) window.clearTimeout(baseSaveTimer.current)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    loading,
-    marketplacePrice,
-    minPrice,
-    maxPrice,
-    referralPercent,
-    fulfillmentFee,
-  ])
+  }, [base, loading])
 
-  const computed = useMemo(() => {
-    const price = parseNum(marketplacePrice) ?? 0
-    const cost = ctx?.product.costPrice ?? 0
-    const refPct = parseNum(referralPercent) ?? 0
-    const ffee = parseNum(fulfillmentFee) ?? 0
-    const referralFee = price * (refPct / 100)
-    const totalFees = referralFee + ffee
-    const netRevenue = price - totalFees
-    const grossMargin = price - cost
-    const grossMarginPct = price > 0 ? (grossMargin / price) * 100 : 0
-    const netMargin = netRevenue - cost
-    const netMarginPct = price > 0 ? (netMargin / price) * 100 : 0
-    return {
-      price,
-      cost,
-      referralFee,
-      totalFees,
-      netRevenue,
-      grossMargin,
-      grossMarginPct,
-      netMargin,
-      netMarginPct,
+  // Debounced persist of overrides via channelStates 2-level merge.
+  const overrideSaveTimer = useRef<number | null>(null)
+  useEffect(() => {
+    if (loading) return
+    if (overrideSaveTimer.current)
+      window.clearTimeout(overrideSaveTimer.current)
+    overrideSaveTimer.current = window.setTimeout(() => {
+      const channelStatesPatch: Record<string, Record<string, unknown>> = {}
+      for (const [chKey, slice] of Object.entries(overrides)) {
+        const pricing: ChannelPricingSlice = {}
+        if (slice.marketplacePrice !== '')
+          pricing.marketplacePrice = parseNum(slice.marketplacePrice)
+        if (slice.minPrice !== '') pricing.minPrice = parseNum(slice.minPrice)
+        if (slice.maxPrice !== '') pricing.maxPrice = parseNum(slice.maxPrice)
+        if (slice.referralPercent !== '')
+          pricing.referralPercent = parseNum(slice.referralPercent)
+        if (slice.fulfillmentFee !== '')
+          pricing.fulfillmentFee = parseNum(slice.fulfillmentFee)
+        channelStatesPatch[chKey] = { pricing }
+      }
+      if (Object.keys(channelStatesPatch).length > 0) {
+        void fetch(
+          `${getBackendUrl()}/api/listing-wizard/${wizardId}`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channelStates: channelStatesPatch }),
+          },
+        ).catch(() => {})
+      }
+    }, SAVE_DEBOUNCE_MS)
+    return () => {
+      if (overrideSaveTimer.current)
+        window.clearTimeout(overrideSaveTimer.current)
     }
-  }, [
-    ctx?.product.costPrice,
-    marketplacePrice,
-    referralPercent,
-    fulfillmentFee,
-  ])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overrides, loading])
 
-  const issues = useMemo(() => {
-    const blocking: string[] = []
-    const warnings: string[] = []
-    const price = parseNum(marketplacePrice)
-    const min = parseNum(minPrice)
-    const max = parseNum(maxPrice)
+  const setOverride = useCallback(
+    (chKey: string, key: keyof ChannelPricingSlice, value: string) => {
+      setOverrides((prev) => {
+        const slice = {
+          ...(prev[chKey] ?? {
+            marketplacePrice: '',
+            minPrice: '',
+            maxPrice: '',
+            referralPercent: '',
+            fulfillmentFee: '',
+          }),
+        }
+        slice[key] = value
+        return { ...prev, [chKey]: slice }
+      })
+    },
+    [],
+  )
 
-    if (price === undefined || price <= 0) {
-      blocking.push('Marketplace price is required and must be greater than 0.')
+  const computeForChannel = useCallback(
+    (chKey: string, c: ChannelContext) => {
+      const ovr = overrides[chKey]
+      const price =
+        parseNum(ovr?.marketplacePrice ?? '') ?? parseNum(base.basePrice) ?? 0
+      const referralPct =
+        parseNum(ovr?.referralPercent ?? '') ?? c.defaultFees.referralPercent
+      const ffee =
+        parseNum(ovr?.fulfillmentFee ?? '') ?? c.defaultFees.fulfillmentFee
+      const cost = ctx?.product.costPrice ?? 0
+      const referralFee = price * (referralPct / 100)
+      const totalFees = referralFee + ffee
+      const netRevenue = price - totalFees
+      const netMargin = netRevenue - cost
+      const netMarginPct = price > 0 ? (netMargin / price) * 100 : 0
+      const minP =
+        parseNum(ovr?.minPrice ?? '') ?? parseNum(base.minPrice) ?? null
+      const maxP =
+        parseNum(ovr?.maxPrice ?? '') ?? parseNum(base.maxPrice) ?? null
+      const inheritsBase = !ovr || isEmptyOverride(ovr)
+      return {
+        price,
+        cost,
+        referralPct,
+        referralFee,
+        ffee,
+        totalFees,
+        netRevenue,
+        netMargin,
+        netMarginPct,
+        minP,
+        maxP,
+        inheritsBase,
+      }
+    },
+    [base, ctx, overrides],
+  )
+
+  const issuesByChannel = useMemo(() => {
+    const out: Record<string, { blocking: string[]; warnings: string[] }> = {}
+    if (!ctx) return out
+    for (const c of ctx.channels) {
+      const r = computeForChannel(c.channelKey, c)
+      const blocking: string[] = []
+      const warnings: string[] = []
+      if (r.price <= 0) blocking.push('Price must be greater than 0.')
+      if (
+        r.minP !== null &&
+        r.maxP !== null &&
+        r.minP > r.maxP
+      ) {
+        blocking.push('Min price must be ≤ max price.')
+      }
+      if (r.minP !== null && r.price < r.minP) {
+        warnings.push('Listing price is below the repricing floor.')
+      }
+      if (r.maxP !== null && r.price > r.maxP) {
+        warnings.push('Listing price is above the repricing ceiling.')
+      }
+      if (r.cost > 0 && r.netMargin < 0) {
+        warnings.push(
+          `Net margin is negative (${r.netMargin.toFixed(2)} ${c.currency}).`,
+        )
+      }
+      if (r.cost === 0 && r.price > 0) {
+        warnings.push('No costPrice on the master product — margin assumes 0.')
+      }
+      out[c.channelKey] = { blocking, warnings }
     }
-    if (min !== undefined && max !== undefined && min > max) {
-      blocking.push('Min price must be ≤ max price.')
-    }
-    if (price !== undefined && min !== undefined && price < min) {
-      warnings.push(
-        'Listing price is below your repricing floor — saved as-is, but the repricer would push it back up.',
-      )
-    }
-    if (price !== undefined && max !== undefined && price > max) {
-      warnings.push(
-        'Listing price is above your repricing ceiling — repricer will pull it down.',
-      )
-    }
-    if (computed.netMargin < 0 && computed.cost > 0) {
-      warnings.push(
-        `Net margin is negative (${computed.netMargin.toFixed(2)} ${ctx?.currency ?? ''}) — you'd lose money on every sale at this price.`,
-      )
-    }
-    if (
-      computed.cost === 0 &&
-      ctx?.product.costPrice === null &&
-      price !== undefined &&
-      price > 0
-    ) {
-      warnings.push(
-        "No costPrice on the master product — margin shown assumes cost = 0. Set costPrice on the product to see the real margin.",
-      )
-    }
-    return { blocking, warnings }
-  }, [
-    computed.cost,
-    computed.netMargin,
-    ctx?.currency,
-    ctx?.product.costPrice,
-    marketplacePrice,
-    maxPrice,
-    minPrice,
-  ])
+    return out
+  }, [computeForChannel, ctx])
+
+  const totalBlocking = useMemo(() => {
+    return Object.values(issuesByChannel).reduce(
+      (acc, v) => acc + v.blocking.length,
+      0,
+    )
+  }, [issuesByChannel])
 
   const onContinue = useCallback(async () => {
-    if (issues.blocking.length > 0) return
-    await updateWizardState(
-      {
-        pricing: {
-          marketplacePrice: parseNum(marketplacePrice),
-          minPrice: parseNum(minPrice),
-          maxPrice: parseNum(maxPrice),
-          referralPercent: parseNum(referralPercent),
-          fulfillmentFee: parseNum(fulfillmentFee),
-        } as PricingSlice,
-      },
-      { advance: true },
+    if (totalBlocking > 0) return
+    await updateWizardState({}, { advance: true })
+  }, [totalBlocking, updateWizardState])
+
+  if (channels.length === 0) {
+    return (
+      <div className="max-w-2xl mx-auto py-12 px-6 text-center">
+        <p className="text-[13px] text-slate-600">
+          Pick channels in Step 1 first.
+        </p>
+      </div>
     )
-  }, [
-    fulfillmentFee,
-    issues.blocking.length,
-    marketplacePrice,
-    maxPrice,
-    minPrice,
-    referralPercent,
-    updateWizardState,
-  ])
+  }
 
   return (
     <div className="max-w-3xl mx-auto py-10 px-6">
       <div className="mb-6">
         <h2 className="text-[20px] font-semibold text-slate-900">Pricing</h2>
         <p className="text-[13px] text-slate-600 mt-1">
-          Set the marketplace price and (optional) repricing bounds. Margins
-          update live based on cost + channel fee assumptions.
+          Set a base price; every channel inherits it. Override per
+          marketplace when local fees, currency, or competitive pressure
+          calls for a different number.
         </p>
       </div>
 
@@ -273,156 +350,251 @@ export default function Step8Pricing({
       )}
 
       {ctx && !loading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* ── Inputs ────────────────────────────────────────────── */}
-          <div className="space-y-4">
-            <Field
-              label="Marketplace price"
-              required
-              suffix={ctx.currency}
-              value={marketplacePrice}
-              onChange={setMarketplacePrice}
-              hint={`Master price: ${formatMoney(ctx.product.basePrice, ctx.currency)}`}
-            />
-            <div className="grid grid-cols-2 gap-3">
-              <Field
+        <>
+          {/* Base pricing */}
+          <div className="border border-slate-200 rounded-lg bg-white px-4 py-3 mb-4">
+            <div className="text-[12px] font-medium text-slate-700 mb-2">
+              Base pricing (applies to every channel by default)
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <BaseField
+                label="Base price"
+                value={base.basePrice}
+                onChange={(v) => setBase((p) => ({ ...p, basePrice: v }))}
+                placeholder={String(ctx.product.basePrice)}
+              />
+              <BaseField
                 label="Min price"
-                suffix={ctx.currency}
-                value={minPrice}
-                onChange={setMinPrice}
-                hint="Repricing floor"
+                value={base.minPrice}
+                onChange={(v) => setBase((p) => ({ ...p, minPrice: v }))}
               />
-              <Field
+              <BaseField
                 label="Max price"
-                suffix={ctx.currency}
-                value={maxPrice}
-                onChange={setMaxPrice}
-                hint="Repricing ceiling"
+                value={base.maxPrice}
+                onChange={(v) => setBase((p) => ({ ...p, maxPrice: v }))}
               />
             </div>
-            <Field
-              label="Referral fee"
-              suffix="%"
-              value={referralPercent}
-              onChange={setReferralPercent}
-            />
-            <Field
-              label="Fulfillment fee"
-              suffix={ctx.currency}
-              value={fulfillmentFee}
-              onChange={setFulfillmentFee}
-            />
-            <p className="text-[11px] text-slate-500">{ctx.fees.notes}</p>
-          </div>
-
-          {/* ── Margin readout ────────────────────────────────────── */}
-          <div className="border border-slate-200 rounded-lg bg-white px-4 py-3">
-            <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-2">
-              Margin breakdown
-            </div>
-            <Row
-              label="Listing price"
-              value={formatMoney(computed.price, ctx.currency)}
-            />
-            <Row
-              label="Less: referral fee"
-              value={`− ${formatMoney(computed.referralFee, ctx.currency)}`}
-              muted
-            />
-            <Row
-              label="Less: fulfillment fee"
-              value={`− ${formatMoney(parseNum(fulfillmentFee) ?? 0, ctx.currency)}`}
-              muted
-            />
-            <Row
-              label="Net revenue"
-              value={formatMoney(computed.netRevenue, ctx.currency)}
-              divider
-            />
-            <Row
-              label="Less: cost"
-              value={`− ${formatMoney(computed.cost, ctx.currency)}`}
-              muted
-            />
-            <Row
-              label="Net margin"
-              value={formatMoney(computed.netMargin, ctx.currency)}
-              strong
-              divider
-              tone={
-                computed.netMargin > 0
-                  ? 'positive'
-                  : computed.netMargin < 0
-                  ? 'negative'
-                  : 'neutral'
-              }
-              icon={
-                computed.netMargin > 0 ? (
-                  <TrendingUp className="w-3.5 h-3.5" />
-                ) : computed.netMargin < 0 ? (
-                  <TrendingDown className="w-3.5 h-3.5" />
-                ) : null
-              }
-            />
-            <Row
-              label="Net margin %"
-              value={`${computed.netMarginPct.toFixed(1)}%`}
-              tone={
-                computed.netMarginPct > 0
-                  ? 'positive'
-                  : computed.netMarginPct < 0
-                  ? 'negative'
-                  : 'neutral'
-              }
-            />
-
-            {(ctx.product.buyBoxPrice !== null ||
-              ctx.product.competitorPrice !== null) && (
-              <div className="mt-3 pt-3 border-t border-slate-200 space-y-1">
-                <div className="text-[11px] uppercase tracking-wide text-slate-500">
-                  Marketplace context
-                </div>
-                {ctx.product.buyBoxPrice !== null && (
-                  <Row
-                    label="Buy Box"
-                    value={formatMoney(
-                      ctx.product.buyBoxPrice,
-                      ctx.currency,
-                    )}
-                    muted
-                  />
-                )}
-                {ctx.product.competitorPrice !== null && (
-                  <Row
-                    label="Lowest competitor"
-                    value={formatMoney(
-                      ctx.product.competitorPrice,
-                      ctx.currency,
-                    )}
-                    muted
-                  />
-                )}
-              </div>
+            {ctx.product.costPrice !== null && (
+              <p className="mt-2 text-[11px] text-slate-500">
+                Master cost: {formatMoney(ctx.product.costPrice, 'EUR')}
+                {ctx.product.buyBoxPrice !== null &&
+                  ` · Buy Box: ${formatMoney(ctx.product.buyBoxPrice, 'EUR')}`}
+                {ctx.product.competitorPrice !== null &&
+                  ` · Lowest competitor: ${formatMoney(
+                    ctx.product.competitorPrice,
+                    'EUR',
+                  )}`}
+              </p>
             )}
           </div>
-        </div>
-      )}
 
-      {/* Validation + Continue */}
-      {ctx && !loading && (
-        <div className="mt-6">
-          <ValidationPanel
-            blocking={issues.blocking}
-            warnings={issues.warnings}
-          />
-          <div className="mt-3 flex items-center justify-end">
+          {/* Per-channel override grid */}
+          <div className="border border-slate-200 rounded-lg bg-white overflow-hidden">
+            <div className="px-3 py-2 border-b border-slate-200 text-[12px] font-medium text-slate-700">
+              Per-channel overrides &amp; margins
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12px]">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-wide">
+                    <th className="text-left px-3 py-1.5">Channel</th>
+                    <th className="text-left px-2 py-1.5">Price</th>
+                    <th className="text-left px-2 py-1.5">Min</th>
+                    <th className="text-left px-2 py-1.5">Max</th>
+                    <th className="text-left px-2 py-1.5">Ref %</th>
+                    <th className="text-left px-2 py-1.5">FFee</th>
+                    <th className="text-right px-3 py-1.5">Net margin</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ctx.channels.map((c) => {
+                    const r = computeForChannel(c.channelKey, c)
+                    const ovr = overrides[c.channelKey] ?? {
+                      marketplacePrice: '',
+                      minPrice: '',
+                      maxPrice: '',
+                      referralPercent: '',
+                      fulfillmentFee: '',
+                    }
+                    const issues = issuesByChannel[c.channelKey] ?? {
+                      blocking: [],
+                      warnings: [],
+                    }
+                    const tone =
+                      issues.blocking.length > 0
+                        ? 'bg-rose-50/40'
+                        : issues.warnings.length > 0
+                        ? 'bg-amber-50/40'
+                        : ''
+                    const marginTone =
+                      r.netMargin < 0
+                        ? 'text-rose-700'
+                        : r.netMargin > 0
+                        ? 'text-emerald-700'
+                        : 'text-slate-600'
+                    const MarginIcon =
+                      r.netMargin < 0
+                        ? TrendingDown
+                        : r.netMargin > 0
+                        ? TrendingUp
+                        : null
+                    return (
+                      <tr
+                        key={c.channelKey}
+                        className={cn(
+                          'border-t border-slate-100',
+                          tone,
+                        )}
+                      >
+                        <td className="px-3 py-2">
+                          <div className="font-mono text-[11px] text-slate-700 font-medium">
+                            {c.channelKey}
+                          </div>
+                          <div className="text-[10px] text-slate-500">
+                            {c.currency}{' '}
+                            {r.inheritsBase && (
+                              <span className="ml-1 text-slate-400 italic">
+                                · inherits base
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-2 py-2">
+                          <CompactInput
+                            value={ovr.marketplacePrice}
+                            placeholder={
+                              parseNum(base.basePrice)?.toFixed(2) ?? '—'
+                            }
+                            onChange={(v) =>
+                              setOverride(c.channelKey, 'marketplacePrice', v)
+                            }
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <CompactInput
+                            value={ovr.minPrice}
+                            placeholder={
+                              parseNum(base.minPrice)?.toFixed(2) ?? '—'
+                            }
+                            onChange={(v) =>
+                              setOverride(c.channelKey, 'minPrice', v)
+                            }
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <CompactInput
+                            value={ovr.maxPrice}
+                            placeholder={
+                              parseNum(base.maxPrice)?.toFixed(2) ?? '—'
+                            }
+                            onChange={(v) =>
+                              setOverride(c.channelKey, 'maxPrice', v)
+                            }
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <CompactInput
+                            value={ovr.referralPercent}
+                            placeholder={String(c.defaultFees.referralPercent)}
+                            onChange={(v) =>
+                              setOverride(c.channelKey, 'referralPercent', v)
+                            }
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <CompactInput
+                            value={ovr.fulfillmentFee}
+                            placeholder={String(c.defaultFees.fulfillmentFee)}
+                            onChange={(v) =>
+                              setOverride(c.channelKey, 'fulfillmentFee', v)
+                            }
+                          />
+                        </td>
+                        <td
+                          className={cn(
+                            'px-3 py-2 tabular-nums text-right',
+                            marginTone,
+                          )}
+                        >
+                          <span className="inline-flex items-center gap-1">
+                            {MarginIcon && (
+                              <MarginIcon className="w-3 h-3" />
+                            )}
+                            {formatMoney(r.netMargin, c.currency)}
+                          </span>
+                          <div className="text-[10px] text-slate-500">
+                            {r.netMarginPct.toFixed(1)}%
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Per-channel issues */}
+          {Object.entries(issuesByChannel).some(
+            ([, v]) => v.blocking.length > 0 || v.warnings.length > 0,
+          ) && (
+            <div className="mt-4 space-y-1.5">
+              {Object.entries(issuesByChannel).map(([chKey, v]) => {
+                if (v.blocking.length === 0 && v.warnings.length === 0) {
+                  return null
+                }
+                return (
+                  <div key={chKey} className="text-[11px]">
+                    {v.blocking.map((m, i) => (
+                      <div
+                        key={`b-${i}`}
+                        className="text-rose-700 inline-flex items-start gap-1.5"
+                      >
+                        <AlertCircle className="w-3 h-3 mt-0.5" />
+                        <span>
+                          <span className="font-mono">{chKey}</span>: {m}
+                        </span>
+                      </div>
+                    ))}
+                    {v.warnings.map((m, i) => (
+                      <div
+                        key={`w-${i}`}
+                        className="text-amber-700 inline-flex items-start gap-1.5"
+                      >
+                        <AlertCircle className="w-3 h-3 mt-0.5" />
+                        <span>
+                          <span className="font-mono">{chKey}</span>: {m}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Continue */}
+          <div className="mt-6 flex items-center justify-between gap-3">
+            <div className="text-[12px]">
+              {totalBlocking === 0 ? (
+                <span className="inline-flex items-center gap-1.5 text-emerald-700">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Pricing satisfied across every channel.
+                </span>
+              ) : (
+                <span className="text-rose-700">
+                  {totalBlocking} blocking pricing issue
+                  {totalBlocking === 1 ? '' : 's'}
+                </span>
+              )}
+            </div>
             <button
               type="button"
               onClick={onContinue}
-              disabled={issues.blocking.length > 0}
+              disabled={totalBlocking > 0}
               className={cn(
                 'h-8 px-4 rounded-md text-[13px] font-medium',
-                issues.blocking.length > 0
+                totalBlocking > 0
                   ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                   : 'bg-blue-600 text-white hover:bg-blue-700',
               )}
@@ -430,135 +602,68 @@ export default function Step8Pricing({
               Continue
             </button>
           </div>
-        </div>
+        </>
       )}
     </div>
   )
 }
 
-function Field({
+function BaseField({
   label,
-  required,
-  suffix,
   value,
   onChange,
-  hint,
+  placeholder,
 }: {
   label: string
-  required?: boolean
-  suffix?: string
   value: string
   onChange: (v: string) => void
-  hint?: string
+  placeholder?: string
 }) {
   return (
     <div>
-      <label className="block text-[12px] font-medium text-slate-700 mb-0.5">
+      <label className="block text-[11px] font-medium text-slate-600 mb-0.5">
         {label}
-        {required && <span className="text-rose-600 ml-0.5">*</span>}
       </label>
-      <div className="relative flex items-center">
-        <input
-          type="number"
-          step="0.01"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full h-8 px-2 pr-12 text-[13px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-        />
-        {suffix && (
-          <span className="absolute right-2 text-[11px] text-slate-400 pointer-events-none">
-            {suffix}
-          </span>
-        )}
-      </div>
-      {hint && <p className="mt-0.5 text-[11px] text-slate-400">{hint}</p>}
+      <input
+        type="number"
+        step="0.01"
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full h-8 px-2 text-[13px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+      />
     </div>
   )
 }
 
-function Row({
-  label,
+function CompactInput({
   value,
-  muted,
-  strong,
-  divider,
-  tone = 'neutral',
-  icon,
+  onChange,
+  placeholder,
 }: {
-  label: string
   value: string
-  muted?: boolean
-  strong?: boolean
-  divider?: boolean
-  tone?: 'positive' | 'negative' | 'neutral'
-  icon?: React.ReactNode
+  onChange: (v: string) => void
+  placeholder?: string
 }) {
   return (
-    <div
-      className={cn(
-        'flex items-center justify-between text-[12px] py-1',
-        divider && 'mt-1 pt-2 border-t border-slate-100',
-      )}
-    >
-      <span className={cn(muted ? 'text-slate-500' : 'text-slate-700')}>
-        {label}
-      </span>
-      <span
-        className={cn(
-          'tabular-nums inline-flex items-center gap-1',
-          muted && 'text-slate-500',
-          strong && 'font-semibold',
-          tone === 'positive' && 'text-emerald-700',
-          tone === 'negative' && 'text-rose-700',
-        )}
-      >
-        {icon}
-        {value}
-      </span>
-    </div>
+    <input
+      type="number"
+      step="0.01"
+      value={value}
+      placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-20 h-7 px-1.5 text-[12px] border border-slate-200 rounded text-right tabular-nums focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-300"
+    />
   )
 }
 
-function ValidationPanel({
-  blocking,
-  warnings,
-}: {
-  blocking: string[]
-  warnings: string[]
-}) {
-  if (blocking.length === 0 && warnings.length === 0) {
-    return (
-      <p className="text-[12px] text-emerald-700 inline-flex items-center gap-1.5">
-        <CheckCircle2 className="w-3.5 h-3.5" />
-        Pricing looks good.
-      </p>
-    )
-  }
-  return (
-    <div className="space-y-1.5">
-      {blocking.map((msg, i) => (
-        <div
-          key={`b-${i}`}
-          className="text-[12px] text-rose-700 inline-flex items-start gap-1.5"
-        >
-          <AlertCircle className="w-3.5 h-3.5 mt-0.5" />
-          <span>{msg}</span>
-        </div>
-      ))}
-      {warnings.map((msg, i) => (
-        <div
-          key={`w-${i}`}
-          className="text-[12px] text-amber-700 inline-flex items-start gap-1.5"
-        >
-          <AlertCircle className="w-3.5 h-3.5 mt-0.5" />
-          <span>{msg}</span>
-        </div>
-      ))}
-    </div>
-  )
+function isEmptyOverride(
+  ovr: Record<keyof ChannelPricingSlice, string>,
+): boolean {
+  return Object.values(ovr).every((v) => v === '' || v === undefined)
 }
 
-function parseNum(s: string): number | undefined {
+function parseNum(s: string | undefined): number | undefined {
   if (s === '' || s === undefined) return undefined
   const n = Number(s)
   if (Number.isNaN(n)) return undefined

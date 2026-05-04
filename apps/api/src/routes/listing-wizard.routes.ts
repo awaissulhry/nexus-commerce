@@ -918,13 +918,13 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
-  // ── Step 8 — Pricing ─────────────────────────────────────────
+  // ── Step 9 — Pricing (Phase H multi-channel) ─────────────────
   // GET /api/listing-wizard/:id/pricing-context
   //
-  // Returns the product's basePrice + costPrice, plus default
-  // marketplace fee assumptions for the wizard's channel. The
-  // frontend uses these to seed the calculator without re-fetching
-  // the master product.
+  // Returns the master product's pricing intelligence plus per-channel
+  // currency + default fee assumptions for every selected channel.
+  // The frontend uses these to seed the base price + per-marketplace
+  // override grid without re-fetching the master product.
   fastify.get<{ Params: { id: string } }>(
     '/listing-wizard/:id/pricing-context',
     async (request, reply) => {
@@ -948,11 +948,17 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       if (!product) {
         return reply.code(404).send({ error: 'Product not found' })
       }
-      const first = legacyFirstChannel(wizard)
-      const currency = currencyForMarketplace(first.marketplace)
-      const fees = defaultFeesForChannel(first.channel)
+
+      const channels = normalizeChannels(wizard.channels)
+      const channelContexts = channels.map((c) => ({
+        platform: c.platform,
+        marketplace: c.marketplace,
+        channelKey: `${c.platform}:${c.marketplace}`,
+        currency: currencyForMarketplace(c.marketplace),
+        defaultFees: defaultFeesForChannel(c.platform),
+      }))
+
       return {
-        currency,
         product: {
           basePrice: Number(product.basePrice),
           costPrice: product.costPrice ? Number(product.costPrice) : null,
@@ -965,7 +971,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
             ? Number(product.competitorPrice)
             : null,
         },
-        fees,
+        channels: channelContexts,
       }
     },
   )
