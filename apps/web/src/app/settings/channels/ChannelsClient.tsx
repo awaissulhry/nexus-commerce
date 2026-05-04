@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ShoppingBag, Plug, AlertCircle } from 'lucide-react'
+import { ShoppingBag, Plug, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -98,6 +98,16 @@ export function ChannelsClient() {
   const [statusMsg, setStatusMsg] = useState<{ kind: 'error' | 'success' | 'info'; text: string } | null>(null)
   const [connectingChannel, setConnectingChannel] = useState<string | null>(null)
   const [testingId, setTestingId] = useState<string | null>(null)
+  // HH — diagnostics state for the eBay card. We keep it local rather
+  // than threading through to status banner so the result sits next
+  // to the Connection it describes (some workspaces have multiple
+  // channels and the global statusMsg would be ambiguous).
+  const [diagnosing, setDiagnosing] = useState(false)
+  const [diagnostics, setDiagnostics] = useState<{
+    ok: boolean
+    recommendation: string
+    details: string
+  } | null>(null)
 
   useEffect(() => {
     loadConnections()
@@ -201,6 +211,56 @@ export function ChannelsClient() {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Revocation failed'
       setStatusMsg({ kind: 'error', text: message })
+    }
+  }
+
+  async function handleDiagnoseEbay() {
+    setDiagnosing(true)
+    setDiagnostics(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/ebay/diagnostics?marketplaceId=EBAY_IT`,
+        { cache: 'no-store' },
+      )
+      const json = (await res.json()) as {
+        success?: boolean
+        recommendation?: string
+        connection?: { tokenOk?: boolean; tokenError?: string }
+        envCredentials?: { looksLikePlaceholder?: boolean }
+        sampleSearch?: { ok?: boolean; itemCount?: number; error?: string }
+      }
+      const ok = !!json?.sampleSearch?.ok
+      const detailParts: string[] = []
+      detailParts.push(
+        `Connection token: ${json?.connection?.tokenOk ? 'OK' : json?.connection?.tokenError ?? 'unavailable'}`,
+      )
+      detailParts.push(
+        `Env credentials: ${
+          json?.envCredentials?.looksLikePlaceholder
+            ? 'placeholder/missing'
+            : 'set'
+        }`,
+      )
+      detailParts.push(
+        `Sample category search: ${
+          ok
+            ? `OK (${json?.sampleSearch?.itemCount ?? 0} matches)`
+            : json?.sampleSearch?.error ?? 'failed'
+        }`,
+      )
+      setDiagnostics({
+        ok,
+        recommendation: json?.recommendation ?? 'No recommendation returned.',
+        details: detailParts.join('\n'),
+      })
+    } catch (err) {
+      setDiagnostics({
+        ok: false,
+        recommendation: 'Diagnostics endpoint unreachable.',
+        details: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      setDiagnosing(false)
     }
   }
 
@@ -337,7 +397,33 @@ export function ChannelsClient() {
                 </div>
               )}
 
-              <div className="flex gap-2">
+              {/* HH — diagnostics result panel on the eBay card. Surfaces
+                  the auth-vs-network-vs-API breakdown next to the
+                  connection it describes. */}
+              {channel.type === 'EBAY' && diagnostics && (
+                <div
+                  className={cn(
+                    'mt-2 mb-3 border rounded-md px-3 py-2 text-[11px]',
+                    diagnostics.ok
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                      : 'border-amber-200 bg-amber-50 text-amber-800',
+                  )}
+                >
+                  <div className="font-semibold mb-1 flex items-center gap-1">
+                    {diagnostics.ok ? (
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    ) : (
+                      <AlertCircle className="w-3.5 h-3.5" />
+                    )}
+                    {diagnostics.recommendation}
+                  </div>
+                  <pre className="whitespace-pre-wrap font-mono text-[10px] text-slate-600 leading-relaxed">
+                    {diagnostics.details}
+                  </pre>
+                </div>
+              )}
+
+              <div className="flex gap-2 flex-wrap">
                 {isConnected && connection ? (
                   <>
                     <Button
@@ -349,6 +435,17 @@ export function ChannelsClient() {
                     >
                       Test
                     </Button>
+                    {channel.type === 'EBAY' && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        loading={diagnosing}
+                        onClick={() => handleDiagnoseEbay()}
+                        className="flex-1"
+                      >
+                        Diagnose
+                      </Button>
+                    )}
                     <Button
                       variant="danger"
                       size="sm"
