@@ -539,6 +539,7 @@ gated on the wizard UI, which is what this round delivered.
 - **33** Rewrite `ebay-orders.service.ts` against Phase 26 unified Order schema (orders sync flow currently broken)
 - **34** Bulk operations Path A-Lite deferrals — rollback, `LISTING_SYNC` handler, queue infra for big jobs, `DELETE` action, "selected items" scope
 - **35** Listing wizard — channel publish not yet wired (Amazon `putListingsItem`, Shopify adapter, WooCommerce create, eBay blocked, status polling, variation expansion)
+- **36** Dedicated image-manager page at `/products/:id/images` — Phase F shipped the wizard step as a quick-reorder + per-channel validation summary only, with the full multi-scope (GLOBAL/PLATFORM/MARKETPLACE) + variation-aware ListingImage editing deferred to a standalone page. The schema, resolution cascade, and validation service are already in place; the page itself + upload service + dnd-kit drag-to-reorder are the remaining work.
 
 **🟢 P2 — when in the area:**
 - **4** CategorySchema "unknown" rows

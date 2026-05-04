@@ -26,6 +26,8 @@ import {
 import { SchemaParserService } from '../services/listing-wizard/schema-parser.service.js'
 import { VariationsService } from '../services/listing-wizard/variations.service.js'
 import { SubmissionService } from '../services/listing-wizard/submission.service.js'
+import { ImageResolutionService } from '../services/listing-images/image-resolution.service.js'
+import { validateForPlatform } from '../services/listing-images/validation.service.js'
 import {
   channelsHash,
   legacyFirstChannel,
@@ -48,6 +50,7 @@ const schemaParserService = new SchemaParserService(
 )
 const variationsService = new VariationsService(prisma as any)
 const submissionService = new SubmissionService(prisma as any)
+const imageResolutionService = new ImageResolutionService(prisma as any)
 
 interface StartBody {
   productId?: string
@@ -804,12 +807,17 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
-  // ── Step 7 — Images ──────────────────────────────────────────
+  // ── Step 7 — Images (Phase F multi-channel) ──────────────────
   // GET /api/listing-wizard/:id/images
   //
-  // Returns the master product's image rows in display order (MAIN
-  // first). The frontend reorders + filters in-place; the saved
-  // ordering lives in wizardState.images.orderedUrls.
+  // Returns:
+  //   - master images: ProductImage rows for inline reorder (the
+  //     wizard step keeps its lightweight controls — full multi-
+  //     scope editing happens on the dedicated image-manager page).
+  //   - resolvedByChannel: per-channel image set after the resolution
+  //     cascade (variant → marketplace → platform → global → master).
+  //   - validationByChannel: per-platform pass/warn/block status so
+  //     the wizard can surface what each channel would see at submit.
   fastify.get<{ Params: { id: string } }>(
     '/listing-wizard/:id/images',
     async (request, reply) => {
@@ -819,16 +827,60 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       if (!wizard) {
         return reply.code(404).send({ error: 'Wizard not found' })
       }
+
+      // Master gallery first — sorted MAIN-first for the inline UI.
       const rows = await prisma.productImage.findMany({
         where: { productId: wizard.productId },
         orderBy: [{ type: 'asc' }, { createdAt: 'asc' }],
         select: { id: true, url: true, alt: true, type: true },
       })
-      // Sort MAIN to the front; alphabetical orderBy gets us close
-      // (ALT < LIFESTYLE < MAIN < SWATCH) but we want MAIN first.
       const main = rows.filter((r) => r.type === 'MAIN')
       const rest = rows.filter((r) => r.type !== 'MAIN')
-      return { images: [...main, ...rest] }
+      const masterImages = [...main, ...rest]
+
+      const channels = normalizeChannels(wizard.channels)
+      const resolvedByChannel: Record<
+        string,
+        Awaited<ReturnType<ImageResolutionService['resolveForChannel']>>
+      > = {}
+      const validationByChannel: Record<
+        string,
+        ReturnType<typeof validateForPlatform>
+      > = {}
+
+      for (const c of channels) {
+        const channelKey = `${c.platform}:${c.marketplace}`
+        try {
+          const resolved = await imageResolutionService.resolveForChannel({
+            productId: wizard.productId,
+            platform: c.platform,
+            marketplace: c.marketplace,
+          })
+          resolvedByChannel[channelKey] = resolved
+          validationByChannel[channelKey] = validateForPlatform(
+            resolved,
+            c.platform,
+            c.marketplace,
+          )
+        } catch (err) {
+          fastify.log.error(
+            { err, channelKey },
+            '[listing-wizard] image resolution failed',
+          )
+          resolvedByChannel[channelKey] = []
+          validationByChannel[channelKey] = validateForPlatform(
+            [],
+            c.platform,
+            c.marketplace,
+          )
+        }
+      }
+
+      return {
+        images: masterImages,
+        resolvedByChannel,
+        validationByChannel,
+      }
     },
   )
 
