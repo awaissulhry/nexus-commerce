@@ -13,8 +13,10 @@ import {
   AI_SUPPORTED_FIELDS,
   AttributesTabStrip,
   FieldCard,
+  FieldGroupSection,
   SchemaAgeIndicator,
   computeVariantSpan,
+  groupFields,
   isEmpty,
   type Primitive,
   type UnionManifest,
@@ -590,77 +592,117 @@ export default function Step4Attributes({
 
       {manifest && manifest.fields.length > 0 && (
         <div className="space-y-3 mt-3">
-          {manifest.fields
-            .filter((field) =>
+          {groupFields(
+            manifest.fields.filter((field) =>
               activeTab === 'base'
                 ? true
                 : field.requiredFor.includes(activeTab) ||
                   field.optionalFor.includes(activeTab),
-            )
-            .map((field) => {
-              const fieldUnsatisfied = unsatisfied
-                .filter((u) => u.id === field.id)
-                .map((u) => u.channelKey)
+            ),
+          ).map((group) => {
+            const groupIds = new Set(group.fields.map((f) => f.id))
+            // Required-here count: in 'base' view, any field with at
+            // least one required channel; in channel-tab view, fields
+            // required for the active channel.
+            const requiredCount = group.fields.filter((f) =>
+              activeTab === 'base'
+                ? f.requiredFor.length > 0
+                : f.requiredFor.includes(activeTab),
+            ).length
+            const unsatCount = unsatisfied.filter((u) =>
+              groupIds.has(u.id) &&
+              (activeTab === 'base' ? true : u.channelKey === activeTab),
+            ).length
+            const filledCount = group.fields.filter((f) => {
+              if (activeTab === 'base') return !isEmpty(values[f.id])
               return (
-                <FieldCard
-                  key={field.id}
-                  field={field}
-                  viewMode={activeTab === 'base' ? 'base' : { channelKey: activeTab }}
-                  baseValue={values[field.id]}
-                  onBaseChange={(v) => setBase(field.id, v)}
-                  onAIGenerate={
-                    AI_SUPPORTED_FIELDS.has(field.id)
-                      ? () => aiGenerate(field.id)
-                      : undefined
-                  }
-                  aiBusy={aiBusyFields.has(field.id)}
-                  onTranslate={onTranslate}
-                  translateBusy={translateBusy}
-                  channelGroups={channelGroups}
-                  allChannelKeys={allChannelKeys}
-                  onApplyToChannels={onApplyToChannels}
-                  overrides={Object.fromEntries(
-                    Object.entries(overrides).map(([k, slice]) => [
-                      k,
-                      slice[field.id],
-                    ]),
-                  )}
-                  onOverrideChange={(channelKey, v) =>
-                    setOverride(channelKey, field.id, v)
-                  }
-                  variations={manifest.variations}
-                  variantValues={Object.fromEntries(
-                    manifest.variations.map((v) => [
-                      v.id,
-                      variantAttrs[v.id]?.[field.id],
-                    ]),
-                  )}
-                  onVariantChange={(variationId, v) => {
-                    setVariantAttrs((prev) => {
-                      const slice = { ...(prev[variationId] ?? {}) }
-                      if (v === undefined || v === '' || v === null) {
-                        delete slice[field.id]
-                      } else {
-                        slice[field.id] = v
-                      }
-                      return { ...prev, [variationId]: slice }
-                    })
-                  }}
-                  variantsExpanded={expandedVariants.has(field.id)}
-                  onToggleVariants={() =>
-                    setExpandedVariants((prev) => {
-                      const next = new Set(prev)
-                      if (next.has(field.id)) next.delete(field.id)
-                      else next.add(field.id)
-                      return next
-                    })
-                  }
-                  expanded={expandedFields.has(field.id)}
-                  onToggleExpanded={() => toggleExpanded(field.id)}
-                  unsatisfiedChannels={fieldUnsatisfied}
-                />
+                !isEmpty(overrides[activeTab]?.[f.id]) ||
+                !isEmpty(values[f.id])
               )
-            })}
+            }).length
+            return (
+              <FieldGroupSection
+                key={group.name}
+                name={group.name}
+                count={group.fields.length}
+                requiredCount={requiredCount}
+                unsatisfiedCount={unsatCount}
+                filledCount={filledCount}
+                defaultExpanded={
+                  requiredCount > 0 || unsatCount > 0 || filledCount > 0
+                }
+              >
+                {group.fields.map((field) => {
+                  const fieldUnsatisfied = unsatisfied
+                    .filter((u) => u.id === field.id)
+                    .map((u) => u.channelKey)
+                  return (
+                    <FieldCard
+                      key={field.id}
+                      field={field}
+                      viewMode={
+                        activeTab === 'base'
+                          ? 'base'
+                          : { channelKey: activeTab }
+                      }
+                      baseValue={values[field.id]}
+                      onBaseChange={(v) => setBase(field.id, v)}
+                      onAIGenerate={
+                        AI_SUPPORTED_FIELDS.has(field.id)
+                          ? () => aiGenerate(field.id)
+                          : undefined
+                      }
+                      aiBusy={aiBusyFields.has(field.id)}
+                      onTranslate={onTranslate}
+                      translateBusy={translateBusy}
+                      channelGroups={channelGroups}
+                      allChannelKeys={allChannelKeys}
+                      onApplyToChannels={onApplyToChannels}
+                      overrides={Object.fromEntries(
+                        Object.entries(overrides).map(([k, slice]) => [
+                          k,
+                          slice[field.id],
+                        ]),
+                      )}
+                      onOverrideChange={(channelKey, v) =>
+                        setOverride(channelKey, field.id, v)
+                      }
+                      variations={manifest.variations}
+                      variantValues={Object.fromEntries(
+                        manifest.variations.map((v) => [
+                          v.id,
+                          variantAttrs[v.id]?.[field.id],
+                        ]),
+                      )}
+                      onVariantChange={(variationId, v) => {
+                        setVariantAttrs((prev) => {
+                          const slice = { ...(prev[variationId] ?? {}) }
+                          if (v === undefined || v === '' || v === null) {
+                            delete slice[field.id]
+                          } else {
+                            slice[field.id] = v
+                          }
+                          return { ...prev, [variationId]: slice }
+                        })
+                      }}
+                      variantsExpanded={expandedVariants.has(field.id)}
+                      onToggleVariants={() =>
+                        setExpandedVariants((prev) => {
+                          const next = new Set(prev)
+                          if (next.has(field.id)) next.delete(field.id)
+                          else next.add(field.id)
+                          return next
+                        })
+                      }
+                      expanded={expandedFields.has(field.id)}
+                      onToggleExpanded={() => toggleExpanded(field.id)}
+                      unsatisfiedChannels={fieldUnsatisfied}
+                    />
+                  )
+                })}
+              </FieldGroupSection>
+            )
+          })}
         </div>
       )}
 

@@ -163,6 +163,233 @@ export function computeVariantSpan(
   return { suspicious: false, uniqueKeyCount }
 }
 
+// ── field grouping ──────────────────────────────────────────────
+//
+// Amazon productType schemas can surface 200-400 optional fields once
+// `Show all optional` is on. A flat list is unscannable, so we bucket
+// fields into a fixed taxonomy via prefix / substring rules. The order
+// here also drives the on-screen render order — Identity first because
+// it's where every listing starts; Other last as the catch-all.
+//
+// We don't try to lift Amazon's `propertyGroups` out of the schema
+// (it's not consistently populated across productTypes); a curated
+// heuristic is more reliable in practice.
+
+interface FieldGroupDef {
+  name: string
+  match: (id: string) => boolean
+}
+
+const IDENTITY_IDS = new Set([
+  'item_name',
+  'brand',
+  'manufacturer',
+  'model_number',
+  'manufacturer_part_number',
+  'part_number',
+  'gtin',
+  'externally_assigned_product_identifier',
+  'product_identifier',
+  'asin',
+  'merchant_suggested_asin',
+  'supplier_declared_dg_hz_regulation',
+])
+
+const MARKETING_IDS = new Set([
+  'bullet_point',
+  'product_description',
+  'generic_keyword',
+  'search_terms',
+  'special_feature',
+  'product_site_launch_date',
+  'subject_character',
+])
+
+const VARIATION_IDS = new Set([
+  'color',
+  'color_name',
+  'pattern_name',
+  'style',
+  'style_name',
+  'material_type',
+  'material',
+  'fabric_type',
+  'item_form',
+  'shape',
+  'finish_type',
+  'closure_type',
+])
+
+const AUDIENCE_IDS = new Set([
+  'target_audience_keyword',
+  'target_gender',
+  'age_range_description',
+  'recommended_uses_for_product',
+  'sport_type',
+  'occasion_type',
+  'department_name',
+])
+
+const CATEGORISATION_IDS = new Set([
+  'recommended_browse_nodes',
+  'item_type_keyword',
+  'item_type_name',
+  'department',
+  'category',
+  'website_shipping_weight',
+])
+
+const FULFILLMENT_IDS = new Set([
+  'list_price',
+  'msrp',
+  'business_price',
+  'condition_type',
+  'condition_note',
+  'fulfillment_availability',
+  'merchant_shipping_group',
+  'manufacturer_minimum_age_recommended',
+  'package_level',
+])
+
+const FIELD_GROUPS: FieldGroupDef[] = [
+  { name: 'Identity', match: (id) => IDENTITY_IDS.has(id) },
+  { name: 'Marketing copy', match: (id) => MARKETING_IDS.has(id) },
+  {
+    name: 'Variation attributes',
+    match: (id) =>
+      VARIATION_IDS.has(id) ||
+      /^(size|apparel_size|shoe_size|footwear_size)/.test(id),
+  },
+  { name: 'Audience', match: (id) => AUDIENCE_IDS.has(id) },
+  { name: 'Categorisation', match: (id) => CATEGORISATION_IDS.has(id) },
+  {
+    name: 'Pricing & fulfillment',
+    match: (id) =>
+      FULFILLMENT_IDS.has(id) ||
+      /^(list_price|msrp|business_price|condition|fulfillment|shipping|package_quantity)/.test(
+        id,
+      ),
+  },
+  {
+    name: 'Physical attributes',
+    match: (id) =>
+      /(weight|dimension|length|width|height|depth|girth|capacity|volume)/.test(
+        id,
+      ) && !/expir/.test(id),
+  },
+  {
+    name: 'Compliance & safety',
+    match: (id) =>
+      /(cpsia|country_of_origin|ce_marked|fcc|hazardous|ghs|battery|cosmetic|warning|safety|recall|warranty|import|export|tariff|customs|regulation|certification|expiration|expir)/.test(
+        id,
+      ),
+  },
+]
+
+const OTHER_GROUP = 'Other attributes'
+
+/** Picks the bucket name for a given field id. Returns 'Other
+ *  attributes' when no rule matches — every field always lands in
+ *  some group so the UI never drops fields. */
+export function groupForFieldId(id: string): string {
+  for (const g of FIELD_GROUPS) {
+    if (g.match(id)) return g.name
+  }
+  return OTHER_GROUP
+}
+
+/** Groups a flat field list into the FIELD_GROUPS order. Empty
+ *  buckets are dropped so the UI doesn't render headers without
+ *  rows. Within a group, original field order is preserved. */
+export function groupFields(
+  fields: UnionField[],
+): Array<{ name: string; fields: UnionField[] }> {
+  const map = new Map<string, UnionField[]>()
+  for (const f of fields) {
+    const g = groupForFieldId(f.id)
+    const arr = map.get(g) ?? []
+    arr.push(f)
+    map.set(g, arr)
+  }
+  const order = [...FIELD_GROUPS.map((g) => g.name), OTHER_GROUP]
+  return order
+    .filter((name) => (map.get(name)?.length ?? 0) > 0)
+    .map((name) => ({ name, fields: map.get(name)! }))
+}
+
+/** Collapsible section that wraps a slice of FieldCards. Auto-
+ *  expanded when the caller signals there's something inside that
+ *  needs attention (required-here field, value already saved, etc).
+ *  Header surfaces field count + required / unfilled chips so the
+ *  user can scan without expanding. */
+export function FieldGroupSection({
+  name,
+  count,
+  requiredCount,
+  unsatisfiedCount,
+  filledCount,
+  defaultExpanded,
+  children,
+}: {
+  name: string
+  count: number
+  requiredCount?: number
+  unsatisfiedCount?: number
+  filledCount?: number
+  defaultExpanded: boolean
+  children: React.ReactNode
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded)
+  return (
+    <div
+      className={cn(
+        'border rounded-lg bg-white overflow-hidden',
+        (unsatisfiedCount ?? 0) > 0 ? 'border-amber-200' : 'border-slate-200',
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => setExpanded((s) => !s)}
+        className="w-full flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-slate-50 text-left"
+      >
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          {expanded ? (
+            <ChevronDown className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+          ) : (
+            <ChevronRight className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+          )}
+          <span className="text-[13px] font-semibold text-slate-900">
+            {name}
+          </span>
+          <span className="text-[11px] text-slate-500 tabular-nums">
+            {count} field{count === 1 ? '' : 's'}
+          </span>
+          {(requiredCount ?? 0) > 0 && (
+            <span className="text-[10px] font-medium text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+              {requiredCount} required
+            </span>
+          )}
+          {(unsatisfiedCount ?? 0) > 0 && (
+            <span className="text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+              {unsatisfiedCount} unfilled
+            </span>
+          )}
+          {(filledCount ?? 0) > 0 && (
+            <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+              {filledCount} filled
+            </span>
+          )}
+        </div>
+      </button>
+      {expanded && (
+        <div className="border-t border-slate-100 p-3 space-y-3 bg-slate-50/30">
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── leaf components ─────────────────────────────────────────────
 
 export function FieldCard({

@@ -11,7 +11,9 @@ import {
   AI_FIELD_MAP,
   AI_SUPPORTED_FIELDS,
   FieldCard,
+  FieldGroupSection,
   SchemaAgeIndicator,
+  groupFields,
   isEmpty,
   type Primitive,
   type UnionManifest,
@@ -898,75 +900,93 @@ export default function ChannelFieldEditor({
 
       {manifest && manifest.fields.length > 0 && (
         <div className="space-y-3">
-          {manifest.fields.map((field) => {
-            const fieldUnsatisfied = unsatisfied
-              .filter((u) => u.id === field.id)
-              .map((u) => u.channelKey)
-            const masterValue = getMasterValue(product, field.id)
-            // Q.3 — overrides map: this listing's current value plus
-            // every sibling listing's value for the same field, so
-            // OverrideMenu can show "Copy from AMAZON:DE" entries and
-            // "Apply to" can target sibling channels.
-            const overrides: Record<string, Primitive | undefined> = {
-              [channelKey]: values[field.id],
-            }
-            for (const s of siblings) {
-              const k = `${s.channel}:${s.marketplace}`.toUpperCase()
-              if (k === channelKey) continue
-              const v = getListingFieldValue(s, field.id)
-              if (!isEmpty(v)) overrides[k] = v
-            }
+          {groupFields(manifest.fields).map((group) => {
+            const groupIds = new Set(group.fields.map((f) => f.id))
+            const requiredCount = group.fields.filter((f) =>
+              f.requiredFor.includes(channelKey),
+            ).length
+            const unsatCount = unsatisfied.filter((u) =>
+              groupIds.has(u.id),
+            ).length
+            const filledCount = group.fields.filter(
+              (f) => !isEmpty(values[f.id]),
+            ).length
             return (
-              <FieldCard
-                key={field.id}
-                field={field}
-                viewMode={{ channelKey }}
-                baseValue={masterValue}
-                onBaseChange={(v) => setBase(field.id, v)}
-                onAIGenerate={
-                  AI_SUPPORTED_FIELDS.has(field.id)
-                    ? () => aiGenerate(field.id)
-                    : undefined
+              <FieldGroupSection
+                key={group.name}
+                name={group.name}
+                count={group.fields.length}
+                requiredCount={requiredCount}
+                unsatisfiedCount={unsatCount}
+                filledCount={filledCount}
+                defaultExpanded={
+                  requiredCount > 0 || unsatCount > 0 || filledCount > 0
                 }
-                aiBusy={aiBusyFields.has(field.id)}
-                onTranslate={onTranslate}
-                translateBusy={translateBusy}
-                onApplyToChannels={broadcastToChannels}
-                channelGroups={channelGroups}
-                allChannelKeys={allChannelKeys}
-                overrides={overrides}
-                onOverrideChange={(ck, v) => {
-                  if (ck === channelKey) {
-                    setBase(field.id, v as Primitive)
+              >
+                {group.fields.map((field) => {
+                  const fieldUnsatisfied = unsatisfied
+                    .filter((u) => u.id === field.id)
+                    .map((u) => u.channelKey)
+                  const masterValue = getMasterValue(product, field.id)
+                  const overrides: Record<string, Primitive | undefined> = {
+                    [channelKey]: values[field.id],
                   }
-                  // Cross-channel writes only happen via
-                  // broadcastToChannels; the menu's "Copy from X" path
-                  // routes through onCopyFrom inside FieldCard which
-                  // calls onOverrideChange for the active channel only.
-                }}
-                variations={manifest.variations}
-                variantValues={Object.fromEntries(
-                  manifest.variations.map((v) => [
-                    v.id,
-                    variantAttrs[v.id]?.[field.id],
-                  ]),
-                )}
-                onVariantChange={(variationId, v) =>
-                  setVariant(variationId, field.id, v)
-                }
-                variantsExpanded={expandedVariants.has(field.id)}
-                onToggleVariants={() =>
-                  setExpandedVariants((prev) => {
-                    const next = new Set(prev)
-                    if (next.has(field.id)) next.delete(field.id)
-                    else next.add(field.id)
-                    return next
-                  })
-                }
-                expanded={expandedFields.has(field.id)}
-                onToggleExpanded={() => toggleExpanded(field.id)}
-                unsatisfiedChannels={fieldUnsatisfied}
-              />
+                  for (const s of siblings) {
+                    const k = `${s.channel}:${s.marketplace}`.toUpperCase()
+                    if (k === channelKey) continue
+                    const v = getListingFieldValue(s, field.id)
+                    if (!isEmpty(v)) overrides[k] = v
+                  }
+                  return (
+                    <FieldCard
+                      key={field.id}
+                      field={field}
+                      viewMode={{ channelKey }}
+                      baseValue={masterValue}
+                      onBaseChange={(v) => setBase(field.id, v)}
+                      onAIGenerate={
+                        AI_SUPPORTED_FIELDS.has(field.id)
+                          ? () => aiGenerate(field.id)
+                          : undefined
+                      }
+                      aiBusy={aiBusyFields.has(field.id)}
+                      onTranslate={onTranslate}
+                      translateBusy={translateBusy}
+                      onApplyToChannels={broadcastToChannels}
+                      channelGroups={channelGroups}
+                      allChannelKeys={allChannelKeys}
+                      overrides={overrides}
+                      onOverrideChange={(ck, v) => {
+                        if (ck === channelKey) {
+                          setBase(field.id, v as Primitive)
+                        }
+                      }}
+                      variations={manifest.variations}
+                      variantValues={Object.fromEntries(
+                        manifest.variations.map((v) => [
+                          v.id,
+                          variantAttrs[v.id]?.[field.id],
+                        ]),
+                      )}
+                      onVariantChange={(variationId, v) =>
+                        setVariant(variationId, field.id, v)
+                      }
+                      variantsExpanded={expandedVariants.has(field.id)}
+                      onToggleVariants={() =>
+                        setExpandedVariants((prev) => {
+                          const next = new Set(prev)
+                          if (next.has(field.id)) next.delete(field.id)
+                          else next.add(field.id)
+                          return next
+                        })
+                      }
+                      expanded={expandedFields.has(field.id)}
+                      onToggleExpanded={() => toggleExpanded(field.id)}
+                      unsatisfiedChannels={fieldUnsatisfied}
+                    />
+                  )
+                })}
+              </FieldGroupSection>
             )
           })}
         </div>
