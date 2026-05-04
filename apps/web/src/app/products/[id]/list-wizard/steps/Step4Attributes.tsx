@@ -530,6 +530,45 @@ export default function Step4Attributes({
         </div>
       )}
 
+      {/* M.3 — variant span warning. When the master's children have
+          attribute keys that span very different shapes (e.g. one
+          variant has size+color, another has material+gender), it
+          usually means the seller has two distinct products that
+          should be split into separate listings rather than variants
+          of one. Amazon would reject the submission. */}
+      {manifest && (() => {
+        const span = computeVariantSpan(manifest.variations)
+        if (!span.suspicious) return null
+        return (
+          <div className="mb-4 border border-amber-200 bg-amber-50 rounded-md px-3 py-2 text-[12px] text-amber-800">
+            <div className="font-medium mb-1">
+              Variants span very different attribute shapes
+            </div>
+            <p className="text-[11px] text-amber-700 mb-1.5">
+              The master product has {manifest.variations.length} variants
+              with {span.uniqueKeyCount} distinct attribute keys across
+              them. Amazon's listing model expects every variant under a
+              parent to share the same attribute axes (e.g. all
+              size+color, or all size+material). Mixing shapes usually
+              means these are separate products that should be split into
+              their own listings — submission may be rejected otherwise.
+            </p>
+            <details className="text-[11px] text-amber-700">
+              <summary className="cursor-pointer font-medium">
+                Show per-variant attribute keys
+              </summary>
+              <ul className="mt-1 space-y-0.5 ml-3">
+                {manifest.variations.map((v) => (
+                  <li key={v.id} className="font-mono">
+                    {v.sku}: {Object.keys(v.attributes).join(', ') || '—'}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </div>
+        )
+      })()}
+
       {manifest && manifest.fields.length === 0 && !loading && (
         <div className="border border-slate-200 rounded-lg bg-white px-4 py-6 text-center text-[12px] text-slate-500">
           No required fields across the selected channels.
@@ -1584,6 +1623,54 @@ function OverrideMenu({
       )}
     </div>
   )
+}
+
+/** M.3 — flag a master product whose variants don't share the same
+ *  attribute axes. Triggers when EITHER:
+ *    (a) the union of attribute keys across all variants > 4
+ *    (Amazon's variation themes max out around 3-4 axes), OR
+ *    (b) at least two variants have non-overlapping key sets, i.e.
+ *    a variant carries keys that another variant doesn't and vice
+ *    versa.
+ *  Empty / single-variant masters are always considered consistent. */
+function computeVariantSpan(
+  variations: UnionVariation[],
+): { suspicious: boolean; uniqueKeyCount: number } {
+  if (variations.length < 2) {
+    return { suspicious: false, uniqueKeyCount: 0 }
+  }
+  const allKeys = new Set<string>()
+  const keysPerVariant: string[][] = []
+  for (const v of variations) {
+    const keys = Object.keys(v.attributes).filter(
+      (k) => v.attributes[k]!.length > 0,
+    )
+    keysPerVariant.push(keys)
+    for (const k of keys) allKeys.add(k)
+  }
+  const uniqueKeyCount = allKeys.size
+
+  // (a) — too many axes overall.
+  if (uniqueKeyCount > 4) {
+    return { suspicious: true, uniqueKeyCount }
+  }
+
+  // (b) — non-overlapping pairs. For every pair (i, j), check if
+  // there's a key that's present in i but not j AND a key present
+  // in j but not i. Asymmetric mismatch (i ⊂ j) is fine — that's
+  // just a partial spec, not a structural break.
+  for (let i = 0; i < keysPerVariant.length; i++) {
+    const ki = new Set(keysPerVariant[i])
+    for (let j = i + 1; j < keysPerVariant.length; j++) {
+      const kj = new Set(keysPerVariant[j])
+      const inIonly = [...ki].some((k) => !kj.has(k))
+      const inJonly = [...kj].some((k) => !ki.has(k))
+      if (inIonly && inJonly) {
+        return { suspicious: true, uniqueKeyCount }
+      }
+    }
+  }
+  return { suspicious: false, uniqueKeyCount }
 }
 
 function parseStringArray(value: string | undefined): string[] {
