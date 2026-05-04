@@ -2839,28 +2839,45 @@ export default function BulkOperationsClient() {
           <div className="flex items-center gap-2 flex-shrink-0">
             {/* T.2 — surface every dynamic schema attribute (attr_*)
              *  for the productTypes seen in the loaded data. One-shot
-             *  append; user can hide individual ones via Cols. */}
+             *  append; user can hide individual ones via Cols.
+             *  CC.3 — when a marketplace tab is active, the same button
+             *  also pulls in channel-specific columns (channel-prefixed
+             *  fields whose channel matches the active tab). Label and
+             *  tooltip reflect current scope so the click is explicit. */}
             {(() => {
-              const attrInData = allFields.filter(
-                (f) =>
-                  f.id.startsWith('attr_') &&
-                  !visibleColumnIds.includes(f.id),
-              )
-              if (attrInData.length === 0) return null
+              const onMarketplaceTab = !!primaryContext
+              const missingFields = allFields.filter((f) => {
+                if (visibleColumnIds.includes(f.id)) return false
+                if (f.id.startsWith('attr_')) return true
+                if (onMarketplaceTab && f.channel === primaryContext!.channel) {
+                  return true
+                }
+                return false
+              })
+              if (missingFields.length === 0) return null
+              const scopeLabel = onMarketplaceTab
+                ? `${primaryContext!.channel}:${primaryContext!.marketplace}`
+                : null
               return (
                 <button
                   type="button"
                   onClick={() =>
                     setVisibleColumnIds((prev) => [
                       ...prev,
-                      ...attrInData.map((f) => f.id),
+                      ...missingFields.map((f) => f.id),
                     ])
                   }
-                  title="Add every schema-driven category attribute (attr_*) for the loaded productTypes as columns"
+                  title={
+                    scopeLabel
+                      ? `Add every schema-driven category attribute plus channel-specific fields for ${scopeLabel} as columns`
+                      : 'Add every schema-driven category attribute (attr_*) for the loaded productTypes as columns'
+                  }
                   className="inline-flex items-center gap-1 h-7 px-2 text-[11px] font-medium text-blue-700 border border-blue-200 rounded-md hover:bg-blue-50"
                 >
-                  + {attrInData.length} schema field
-                  {attrInData.length === 1 ? '' : 's'}
+                  + {missingFields.length}
+                  {scopeLabel
+                    ? ` for ${scopeLabel}`
+                    : ` schema field${missingFields.length === 1 ? '' : 's'}`}
                 </button>
               )
             })()}
