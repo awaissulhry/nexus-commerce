@@ -37,6 +37,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       channels?: string
       productTypes?: string
       marketplace?: string
+      ebayCategoryIds?: string
     }
     const fields = await getAvailableFields({
       channels: q.channels?.split(',').map((s) => s.trim()).filter(Boolean),
@@ -45,6 +46,13 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         .map((s) => s.trim())
         .filter(Boolean),
       marketplace: q.marketplace ?? null,
+      // AA.2 — eBay categoryIds in the active context's listings;
+      // the registry pulls cached aspects per id and merges them as
+      // attr_* fields with channel='EBAY'.
+      ebayCategoryIds: q.ebayCategoryIds
+        ?.split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
     })
     return { fields, count: fields.length }
   })
@@ -314,6 +322,10 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             price: true,
             quantity: true,
             listingStatus: true,
+            // AA.2 — surface platformAttributes so the bulk grid can
+            // derive eBay categoryIds in data and render the
+            // schema-driven aspect columns.
+            platformAttributes: true,
           },
         })
         const byProductId = new Map(
@@ -325,6 +337,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
               price: l.price == null ? null : Number(l.price),
               quantity: l.quantity,
               listingStatus: l.listingStatus,
+              platformAttributes: l.platformAttributes ?? null,
             },
           ])
         )

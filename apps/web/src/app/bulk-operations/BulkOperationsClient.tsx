@@ -1434,6 +1434,26 @@ export default function BulkOperationsClient() {
     return Array.from(set).sort()
   }, [products])
 
+  // AA.2 — eBay categoryIds present in the active context's listings.
+  // Each product's _channelListing.platformAttributes.productType is
+  // the per-listing eBay categoryId (set when the user picks one in
+  // the per-product editor's eBay tab). When the active marketplace
+  // tab is eBay, we feed these into /api/pim/fields so the registry
+  // pulls cached aspects per categoryId and surfaces them as columns.
+  const ebayCategoryIdsInData = useMemo(() => {
+    if (primaryContext?.channel !== 'EBAY') return [] as string[]
+    const set = new Set<string>()
+    for (const p of products) {
+      const cl = (p as any)._channelListing
+      const pa = cl?.platformAttributes
+      if (pa && typeof pa === 'object' && typeof pa.productType === 'string') {
+        const id = pa.productType.trim()
+        if (id) set.add(id)
+      }
+    }
+    return Array.from(set).sort()
+  }, [products, primaryContext?.channel])
+
   // U.1 — pre-warm CategorySchema for productTypes seen in the data.
   // T.2's field-registry call only reads CACHED schemas, so a
   // productType that's never been visited (per-product editor
@@ -1511,6 +1531,11 @@ export default function BulkOperationsClient() {
       'marketplace',
       primaryContext?.marketplace ?? 'IT',
     )
+    // AA.2 — eBay categoryIds from the loaded listings drive the
+    // dynamic eBay aspect columns. Only set when on an eBay tab.
+    if (ebayCategoryIdsInData.length > 0) {
+      params.set('ebayCategoryIds', ebayCategoryIdsInData.join(','))
+    }
     const qs = params.toString()
     const url = `${getBackendUrl()}/api/pim/fields${qs ? `?${qs}` : ''}`
 
@@ -1529,6 +1554,7 @@ export default function BulkOperationsClient() {
     enabledChannels,
     enabledProductTypes,
     productTypesInData,
+    ebayCategoryIdsInData,
     primaryContext?.channel,
     primaryContext?.marketplace,
     schemaWarmth,

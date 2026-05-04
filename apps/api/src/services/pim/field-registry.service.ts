@@ -56,6 +56,10 @@ export interface FieldDefinition {
 }
 
 // ── Universal: applies to every product, every channel ────────────────
+// AA.2 — module-level singleton so the in-memory richCache survives
+// across getAvailableFields invocations without re-creating Maps.
+let ebayCategoryServiceSingleton: import('../ebay-category.service.js').EbayCategoryService | null = null
+
 const UNIVERSAL_FIELDS: FieldDefinition[] = [
   { id: 'sku', label: 'SKU', type: 'text', category: 'universal', editable: false, width: 220, helpText: 'Unique product identifier; not editable in bulk' },
   { id: 'name', label: 'Name', type: 'text', category: 'universal', editable: true, width: 380, required: true },
@@ -201,6 +205,11 @@ interface AvailableFieldsParams {
    *  CategorySchema rows. When omitted, dynamic schema fields are not
    *  included — only the hardcoded fallback. */
   marketplace?: string | null
+  /** AA.2 — eBay category ids seen in the active context's listings.
+   *  When the channel set includes EBAY and these are present, the
+   *  registry pulls the cached aspects per (marketplace, categoryId)
+   *  and merges them in as attr_* fields with channel='EBAY'. */
+  ebayCategoryIds?: string[]
 }
 
 /**
@@ -263,6 +272,77 @@ export async function getAvailableFields(
 
   if (channels.includes('AMAZON')) fields.push(...AMAZON_FIELDS)
   if (channels.includes('EBAY')) fields.push(...EBAY_FIELDS)
+
+  // AA.2 — eBay aspects per categoryId. Mirrors the Amazon dynamic
+  // path: pulls from the EbayCategoryService's in-memory cache (24h
+  // TTL — populated by the per-product editor's eBay tab when it
+  // fetches schema). We don't fall back to live API here because
+  // /api/pim/fields is on the page-load critical path; cold cache
+  // means the user has to visit the per-product editor's eBay tab
+  // once (or hit Refresh in the picker) to warm it.
+  const ebayCategoryIds = (params.ebayCategoryIds ?? []).filter(Boolean)
+  if (
+    channels.includes('EBAY') &&
+    ebayCategoryIds.length > 0 &&
+    params.marketplace
+  ) {
+    try {
+      const { EbayCategoryService } = await import(
+        '../ebay-category.service.js'
+      )
+      // Lazy-init a singleton on the module so repeated calls reuse
+      // the same in-memory richCache without re-creating Maps.
+      const svc = ebayCategoryServiceSingleton ?? new EbayCategoryService()
+      ebayCategoryServiceSingleton = svc
+      for (const categoryId of ebayCategoryIds) {
+        try {
+          const aspects = await svc.getCategoryAspectsRich(
+            categoryId,
+            params.marketplace,
+          )
+          for (const a of aspects) {
+            const id = `attr_${a.name
+              .trim()
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, '_')
+              .replace(/^_+|_+$/g, '')}`
+            const fieldType =
+              a.mode === 'SELECTION_ONLY' && a.values.length > 0
+                ? 'select'
+                : a.dataType === 'NUMBER'
+                ? 'number'
+                : 'text'
+            fields.push({
+              id,
+              label: a.name,
+              type: fieldType as FieldType,
+              category: 'category',
+              channel: 'EBAY',
+              productTypes: [categoryId],
+              options: fieldType === 'select' ? a.values : undefined,
+              width: fieldType === 'select' ? 140 : 160,
+              editable: true,
+              required: a.required,
+              helpText:
+                a.cardinality === 'MULTI'
+                  ? `Multi-value eBay aspect (cardinality MULTI)`
+                  : undefined,
+            })
+          }
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            `[field-registry] eBay aspect lookup failed for ${categoryId}: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          )
+        }
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[field-registry] eBay dynamic lookup failed:', err)
+    }
+  }
 
   // De-dupe by id. Dynamic schema fields take precedence over the
   // hardcoded ones — when both exist, the live schema wins.
