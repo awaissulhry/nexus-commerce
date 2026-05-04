@@ -492,7 +492,18 @@ Shopify, eBay, WooCommerce) is the remaining piece.
 - **WooCommerce**: no `createProduct` exists; only PUT for
   existing rows. Building create is straightforward (POST to
   `/products` with the same shape as the PUT). ~1-2 hours.
-- **eBay**: blocked behind Phase 2A (see #31, #33).
+- **eBay**: adapter scaffolded in DD.4
+  (`apps/api/src/services/listing-wizard/ebay-publish.adapter.ts`).
+  Three-step Inventory-API flow wired
+  (createOrReplaceInventoryItem → createOffer → publishOffer); error
+  mapping per-step. **NOT END-TO-END TESTED.** Requires:
+  (1) eBay developer credentials configured on a ChannelConnection
+  (`channelType='EBAY'`, `isActive=true`, OAuth tokens),
+  (2) `connectionMetadata.ebayPolicies.{fulfillmentPolicyId, paymentPolicyId, returnPolicyId, merchantLocationKey}` set on that connection,
+  (3) sandbox or production seller account to test against.
+  Once those are in place the existing /submit endpoint exercises it
+  with no further wiring. Composition lives at
+  `apps/api/src/services/listing-wizard/submission.service.ts` (EBAY branch).
 - **Per-channel status polling** to surface "submitted → indexed →
   searchable" once the push lands. The `state.submission` slot is
   already wired in the schema for this.

@@ -64,33 +64,68 @@ export default function ChannelListingTab({
   const isNew = !listing
 
   async function handlePullFromChannel() {
-    if (channel !== 'AMAZON') {
-      setStatusMsg({ kind: 'info', text: `Pull from ${channel} ships in Phase 4.` })
-      return
-    }
-    if (!product.amazonAsin) {
-      setStatusMsg({ kind: 'error', text: 'No ASIN on this product — cannot pull from Amazon.' })
-      return
-    }
-    setPulling(true)
-    try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/amazon/test-catalog-api?asin=${product.amazonAsin}`,
-      )
-      const result = await res.json()
-      const summary = result?.data?.summaries?.[0] ?? result?.summaries?.[0]
-      if (summary?.itemName) {
-        setStatusMsg({ kind: 'success', text: `Pulled latest title: "${summary.itemName}"` })
-      } else if (result?.error) {
-        setStatusMsg({ kind: 'error', text: `Amazon: ${result.error}` })
-      } else {
-        setStatusMsg({ kind: 'info', text: 'Amazon returned no usable data.' })
+    if (channel === 'AMAZON') {
+      if (!product.amazonAsin) {
+        setStatusMsg({ kind: 'error', text: 'No ASIN on this product — cannot pull from Amazon.' })
+        return
       }
-    } catch (e) {
-      setStatusMsg({ kind: 'error', text: `Pull failed: ${(e as Error).message}` })
-    } finally {
-      setPulling(false)
+      setPulling(true)
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/amazon/test-catalog-api?asin=${product.amazonAsin}`,
+        )
+        const result = await res.json()
+        const summary = result?.data?.summaries?.[0] ?? result?.summaries?.[0]
+        if (summary?.itemName) {
+          setStatusMsg({ kind: 'success', text: `Pulled latest title: "${summary.itemName}"` })
+        } else if (result?.error) {
+          setStatusMsg({ kind: 'error', text: `Amazon: ${result.error}` })
+        } else {
+          setStatusMsg({ kind: 'info', text: 'Amazon returned no usable data.' })
+        }
+      } catch (e) {
+        setStatusMsg({ kind: 'error', text: `Pull failed: ${(e as Error).message}` })
+      } finally {
+        setPulling(false)
+      }
+      return
     }
+    if (channel === 'EBAY') {
+      // DD.3 — eBay Inventory API is seller-account-scoped and keyed by
+      // SKU (the same SKU we sent on createOrReplace). The product's
+      // master SKU is the natural lookup key for the canonical listing.
+      const sku = product.sku
+      if (!sku) {
+        setStatusMsg({ kind: 'error', text: 'No SKU on this product — cannot pull from eBay.' })
+        return
+      }
+      setPulling(true)
+      try {
+        const url = new URL(`${getBackendUrl()}/api/ebay/pull-listing`)
+        url.searchParams.set('sku', sku)
+        url.searchParams.set('marketplace', marketplace)
+        const res = await fetch(url.toString())
+        const result = await res.json()
+        if (!res.ok || !result?.success) {
+          setStatusMsg({ kind: 'error', text: `eBay: ${result?.error ?? `HTTP ${res.status}`}` })
+        } else if (!result.found) {
+          setStatusMsg({ kind: 'info', text: result.message ?? 'No eBay item for this SKU yet.' })
+        } else if (result.summary?.title) {
+          setStatusMsg({
+            kind: 'success',
+            text: `Pulled latest title: "${result.summary.title}"`,
+          })
+        } else {
+          setStatusMsg({ kind: 'info', text: 'eBay returned the item with no title set.' })
+        }
+      } catch (e) {
+        setStatusMsg({ kind: 'error', text: `Pull failed: ${(e as Error).message}` })
+      } finally {
+        setPulling(false)
+      }
+      return
+    }
+    setStatusMsg({ kind: 'info', text: `Pull from ${channel} ships when its adapter lands.` })
   }
 
   function handleAITranslate() {

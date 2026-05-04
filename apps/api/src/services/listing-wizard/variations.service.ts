@@ -15,6 +15,7 @@
 
 import type { PrismaClient } from '@nexus/database'
 import { bundledThemesFor } from './product-types.constants.js'
+import { EbayCategoryService } from '../ebay-category.service.js'
 
 export interface VariationChild {
   id: string
@@ -110,7 +111,10 @@ const KNOWN_THEME_LABELS: Record<string, string> = {
 }
 
 export class VariationsService {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly ebayCategoryService: EbayCategoryService = new EbayCategoryService(),
+  ) {}
 
   async getVariationsPayload(opts: {
     productId: string
@@ -235,14 +239,31 @@ export class VariationsService {
         marketplace: c.marketplace,
         productType,
       })
-      if (c.platform !== 'AMAZON') {
-        themesByChannel[channelKey] = []
-        missing.push({ channelKey, reason: 'unsupported_channel' })
-        continue
-      }
       if (!productType) {
         themesByChannel[channelKey] = []
         missing.push({ channelKey, reason: 'no_product_type' })
+        continue
+      }
+      if (c.platform === 'EBAY') {
+        // DD.1 — eBay themes derived from category aspects flagged
+        // aspectEnabledForVariations. Each variant-eligible aspect
+        // becomes a single-axis theme; if 2+ exist, also offer a
+        // combined "all axes" theme so multi-axis SKUs don't have to
+        // pick one. productType for eBay is the eBay categoryId.
+        const aspects = await this.ebayCategoryService.getCategoryAspectsRich(
+          productType,
+          c.marketplace,
+        )
+        const themes = ebayThemesFromAspects(aspects)
+        themesByChannel[channelKey] = themes
+        if (themes.length === 0) {
+          missing.push({ channelKey, reason: 'no_themes_in_schema' })
+        }
+        continue
+      }
+      if (c.platform !== 'AMAZON') {
+        themesByChannel[channelKey] = []
+        missing.push({ channelKey, reason: 'unsupported_channel' })
         continue
       }
       const schema = await this.prisma.categorySchema.findFirst({
@@ -433,4 +454,49 @@ function uniqueKeys(children: Array<{ attributes: Record<string, string> }>): st
     for (const k of Object.keys(c.attributes)) set.add(k)
   }
   return Array.from(set).sort()
+}
+
+// DD.1 — derive ThemeOption[] from eBay aspects. eBay has no
+// "variation theme" concept like Amazon; instead each aspect is
+// flagged aspectEnabledForVariations. We mirror Amazon's UI by
+// generating one single-axis theme per variant-eligible aspect, and
+// when 2+ are present, an extra combined-axes theme so multi-axis
+// listings don't have to pick a single dimension.
+function ebayThemesFromAspects(
+  aspects: Array<{ name: string; variantEligible: boolean }>,
+): ThemeOption[] {
+  const eligible = aspects.filter((a) => a.variantEligible)
+  if (eligible.length === 0) return []
+  const out: ThemeOption[] = eligible.map((a) => {
+    const key = aspectIdFromName(a.name)
+    return {
+      id: key.toUpperCase(),
+      label: a.name,
+      requiredAttributes: [key],
+    }
+  })
+  if (eligible.length > 1) {
+    const keys = eligible.map((a) => aspectIdFromName(a.name))
+    out.push({
+      id: keys.map((k) => k.toUpperCase()).join('_'),
+      label: eligible.map((a) => a.name).join(' and '),
+      requiredAttributes: keys,
+    })
+  }
+  // Same ordering rule as Amazon: SIZE/COLOR-style first when present.
+  out.sort((a, b) => {
+    const aIsCombined = a.requiredAttributes.length > 1
+    const bIsCombined = b.requiredAttributes.length > 1
+    if (aIsCombined !== bIsCombined) return aIsCombined ? -1 : 1
+    return a.label.localeCompare(b.label)
+  })
+  return out
+}
+
+function aspectIdFromName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
 }

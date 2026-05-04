@@ -92,6 +92,9 @@ export interface MultiChannelWizard {
   channels: Array<{ platform: string; marketplace: string }>
   state: Record<string, any>
   channelStates: Record<string, Record<string, any>>
+  /** DD.4 — eBay's Inventory API is keyed by SKU. Composer reads this
+   *  when building the eBay payload; Amazon's composer ignores it. */
+  product?: { sku?: string }
 }
 
 const MARKETPLACE_TO_LANGUAGE: Record<string, string> = {
@@ -115,6 +118,24 @@ function languageForMarketplace(marketplace: string): string {
 
 function contentGroupKey(platform: string, marketplace: string): string {
   return `${languageForMarketplace(marketplace)}:${platform.toUpperCase()}`
+}
+
+const MARKETPLACE_TO_CURRENCY: Record<string, string> = {
+  IT: 'EUR',
+  DE: 'EUR',
+  FR: 'EUR',
+  ES: 'EUR',
+  UK: 'GBP',
+  GB: 'GBP',
+  US: 'USD',
+  CA: 'CAD',
+  MX: 'MXN',
+  AU: 'AUD',
+  JP: 'JPY',
+}
+
+function pricingCurrencyFor(marketplace: string): string {
+  return MARKETPLACE_TO_CURRENCY[marketplace.toUpperCase()] ?? 'USD'
 }
 
 export class SubmissionService {
@@ -712,6 +733,96 @@ export class SubmissionService {
       }
       const channelKey = `${c.platform}:${c.marketplace}`
       const slice = channelStates[channelKey] ?? {}
+
+      if (c.platform === 'EBAY') {
+        // DD.4 — compose an eBay Inventory-API-shaped payload. The
+        // adapter (channel-publish.service.ts EBAY branch) maps this
+        // into PUT /sell/inventory/v1/inventory_item/{sku} +
+        // POST /offer + POST /offer/{id}/publish. NOT END-TO-END
+        // TESTED — requires eBay developer creds + sandbox seller
+        // (see TECH_DEBT #35).
+        const productType =
+          ((slice as any).productType?.productType as string | undefined) ??
+          fallbackProductType ??
+          ''
+        const channelAttrs = ((slice as any).attributes ?? {}) as Record<
+          string,
+          unknown
+        >
+        const mergedAttrs: Record<string, unknown> = {
+          ...baseAttributes,
+          ...channelAttrs,
+        }
+        const groupKey = contentGroupKey(c.platform, c.marketplace)
+        const groupContent = (contentByGroup as Record<string, any>)[groupKey] ?? {}
+        const channelPricing = (slice as any).pricing ?? {}
+        const effectivePrice =
+          typeof channelPricing.marketplacePrice === 'number'
+            ? channelPricing.marketplacePrice
+            : typeof basePricing.basePrice === 'number'
+            ? basePricing.basePrice
+            : undefined
+
+        // eBay aspects: Record<string, string[]>. Single-value attrs
+        // wrap as a 1-element array; string_array attrs expand.
+        const aspects: Record<string, string[]> = {}
+        for (const [k, v] of Object.entries(mergedAttrs)) {
+          if (v === undefined || v === null || v === '') continue
+          const expanded = tryExpandStringArray(v)
+          if (expanded !== null) {
+            aspects[k] = expanded.map(String)
+          } else {
+            aspects[k] = [String(v)]
+          }
+        }
+
+        const title =
+          (typeof groupContent?.title?.content === 'string' &&
+            groupContent.title.content.trim().length > 0
+            ? groupContent.title.content.trim()
+            : undefined) ??
+          (typeof mergedAttrs.item_name === 'string'
+            ? (mergedAttrs.item_name as string)
+            : undefined)
+
+        const description =
+          (typeof groupContent?.description?.content === 'string' &&
+            groupContent.description.content.trim().length > 0
+            ? groupContent.description.content.trim()
+            : undefined) ??
+          (typeof mergedAttrs.product_description === 'string'
+            ? (mergedAttrs.product_description as string)
+            : undefined)
+
+        const ebayPayload: Record<string, unknown> = {
+          sku: wizard.product?.sku,
+          marketplaceId: `EBAY_${c.marketplace}`,
+          categoryId: productType, // for eBay productType IS the categoryId
+          product: {
+            title,
+            description,
+            aspects,
+            imageUrls: orderedUrls.length > 0 ? orderedUrls.slice(0, 12) : [],
+          },
+          availability: {
+            shipToLocationAvailability: {
+              quantity: typeof basePricing.stock === 'number' ? basePricing.stock : 1,
+            },
+          },
+          condition: 'NEW',
+          price:
+            typeof effectivePrice === 'number'
+              ? { value: effectivePrice, currency: pricingCurrencyFor(c.marketplace) }
+              : undefined,
+        }
+
+        return {
+          channelKey,
+          platform: c.platform,
+          marketplace: c.marketplace,
+          payload: ebayPayload,
+        }
+      }
 
       if (c.platform !== 'AMAZON') {
         return {

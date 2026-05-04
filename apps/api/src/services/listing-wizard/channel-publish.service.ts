@@ -12,7 +12,14 @@
  * When the real adapters land (Amazon putListingsItem, Shopify
  * createProduct, etc. — TECH_DEBT #35), they slot in here without
  * changing the wizard surface.
+ *
+ * DD.4 — eBay branch wired to EbayPublishAdapter (Inventory API).
+ * Real call shape, real auth, real error mapping. NOT END-TO-END
+ * TESTED — needs eBay developer creds + sandbox seller account +
+ * configured policies on ChannelConnection.config.ebayPolicies.
  */
+
+import { EbayPublishAdapter } from './ebay-publish.adapter.js'
 
 export type SubmissionStatus =
   | 'PENDING'
@@ -58,6 +65,8 @@ const NOT_IMPLEMENTED_REASONS: Record<string, string> = {
 }
 
 export class ChannelPublishService {
+  private readonly ebayAdapter = new EbayPublishAdapter()
+
   /**
    * Publish a single (channel, marketplace) listing. Returns a
    * SubmissionEntry describing the attempt. Errors at the adapter
@@ -93,13 +102,50 @@ export class ChannelPublishService {
     }
 
     const platform = input.platform.toUpperCase()
+
+    // DD.4 — eBay Inventory API adapter. Real wiring, returns FAILED
+    // (not NOT_IMPLEMENTED) when the call fails so the user sees the
+    // actual eBay error message. Until creds + policies are
+    // configured, expect 401/missing-policy errors.
+    if (platform === 'EBAY') {
+      try {
+        const result = await this.ebayAdapter.publish(
+          (input.payload ?? {}) as Parameters<
+            EbayPublishAdapter['publish']
+          >[0],
+        )
+        if (!result.ok) {
+          return {
+            ...base,
+            status: 'FAILED',
+            error: result.error,
+          }
+        }
+        return {
+          ...base,
+          status: 'LIVE',
+          submissionId: result.offerId,
+          listingUrl: result.listingUrl,
+        }
+      } catch (err) {
+        return {
+          ...base,
+          status: 'FAILED',
+          error:
+            err instanceof Error
+              ? `eBay publish exception: ${err.message}`
+              : 'eBay publish exception (unknown).',
+        }
+      }
+    }
+
     const reason =
       NOT_IMPLEMENTED_REASONS[platform] ??
       `No publish adapter for ${platform}.`
 
-    // v1: every platform returns NOT_IMPLEMENTED. Keeping the dispatch
-    // structure here so when an adapter lands it just replaces this
-    // branch.
+    // v1: remaining platforms return NOT_IMPLEMENTED. Keeping the
+    // dispatch structure here so when an adapter lands it just
+    // replaces this branch.
     return {
       ...base,
       status: 'NOT_IMPLEMENTED',

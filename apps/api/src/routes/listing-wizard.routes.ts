@@ -1399,6 +1399,10 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       if (!wizard) {
         return reply.code(404).send({ error: 'Wizard not found' })
       }
+      const product = await prisma.product.findUnique({
+        where: { id: wizard.productId },
+        select: { sku: true },
+      })
       const channels = normalizeChannels(wizard.channels)
       const w = {
         id: wizard.id,
@@ -1409,6 +1413,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
             string,
             Record<string, any>
           >) ?? {},
+        product: product ? { sku: product.sku } : undefined,
       }
       const validation = submissionService.validateMultiChannel(w)
       const payloads = submissionService.composeMultiChannelPayloads(w)
@@ -1461,6 +1466,10 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
 
+      const product = await prisma.product.findUnique({
+        where: { id: wizard.productId },
+        select: { sku: true },
+      })
       const w = {
         id: wizard.id,
         channels,
@@ -1470,6 +1479,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
             string,
             Record<string, any>
           >) ?? {},
+        product: product ? { sku: product.sku } : undefined,
       }
       const validation = submissionService.validateMultiChannel(w)
       if (!validation.allReady) {
@@ -1595,6 +1605,10 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const channels = normalizeChannels(wizard.channels)
+      const product = await prisma.product.findUnique({
+        where: { id: wizard.productId },
+        select: { sku: true },
+      })
       const w = {
         id: wizard.id,
         channels,
@@ -1604,6 +1618,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
             string,
             Record<string, any>
           >) ?? {},
+        product: product ? { sku: product.sku } : undefined,
       }
       const payloadByKey = new Map<
         string,

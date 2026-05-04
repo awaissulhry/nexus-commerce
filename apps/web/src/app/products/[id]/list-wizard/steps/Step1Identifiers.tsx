@@ -90,8 +90,10 @@ export default function Step1Identifiers(props: StepProps) {
   // + marketplace combo. If approved, we suggest the user skip
   // straight past Step 2 — every Xavia jacket on Amazon IT shouldn't
   // re-apply once the brand is cleared.
+  // DD.2 — only relevant when an Amazon channel is selected; eBay/Woo
+  // don't use Amazon's brand-exemption flow.
   useEffect(() => {
-    if (!product.brand) {
+    if (!hasAmazon || !product.brand) {
       setCacheLoading(false)
       return
     }
@@ -130,8 +132,12 @@ export default function Step1Identifiers(props: StepProps) {
     return isValidGtin(gtinValue)
   }, [gtinValue])
 
+  // DD.2 — eBay accepts "Does Not Apply" as a valid GTIN per category;
+  // when no Amazon channels are selected we let the user proceed with
+  // an empty value (handled by the channel adapter at submit time).
   const continueDisabled =
-    (path === 'have-code' && !gtinValid) ||
+    (path === 'have-code' && hasAmazon && !gtinValid) ||
+    (path === 'have-code' && !hasAmazon && gtinValue.length > 0 && !gtinValid) ||
     (path === 'have-exemption' && !cache?.approved && !trademarkNumber) ||
     saving
 
@@ -155,8 +161,9 @@ export default function Step1Identifiers(props: StepProps) {
           Product Identifiers
         </h2>
         <p className="text-[13px] text-slate-600 mt-1">
-          Amazon needs a UPC / EAN / GTIN — or proof that your brand is
-          exempted. Pick the path that fits your situation.
+          {hasAmazon
+            ? 'Amazon needs a UPC / EAN / GTIN — or proof that your brand is exempted. Pick the path that fits your situation.'
+            : 'Enter a UPC / EAN / GTIN if you have one. eBay accepts "Does Not Apply" for many categories — leave blank to use it.'}
         </p>
       </div>
 
