@@ -18,27 +18,101 @@ type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
 const SAVE_DEBOUNCE_MS = 600
 
+interface SiblingListing {
+  id: string
+  channel: string
+  marketplace: string
+  title: string | null
+  description: string | null
+  bulletPointsOverride: string[] | null
+  platformAttributes: Record<string, any> | null
+}
+
 interface Props {
   productId: string
   channel: string
   marketplace: string
+  /** Master product — passed down so the OverrideMenu can offer
+   *  "Copy from master" for known field mappings (item_name ← name,
+   *  brand ← brand, etc.). */
+  product: Record<string, any>
   /** Called after a successful save so the parent can refresh other
    *  bits of state (status bar, etc.) that depend on the listing
    *  having a row. */
   onSaved?: (listing: any) => void
 }
 
+/** Maps schema field ids to the master product columns they inherit
+ *  from. Used by OverrideMenu's "Copy from master" action. Returns
+ *  undefined when the field isn't a known master mapping (most schema
+ *  fields aren't). */
+function getMasterValue(
+  product: Record<string, any>,
+  fieldId: string,
+): Primitive | undefined {
+  switch (fieldId) {
+    case 'item_name':
+      return product.name ?? undefined
+    case 'brand':
+      return product.brand ?? undefined
+    case 'manufacturer':
+      return product.manufacturer ?? undefined
+    case 'product_description':
+      return product.description ?? undefined
+    case 'bullet_point': {
+      const bp = product.bulletPoints
+      if (Array.isArray(bp) && bp.length > 0) return JSON.stringify(bp)
+      return undefined
+    }
+    case 'generic_keyword': {
+      const kw = product.keywords
+      if (Array.isArray(kw) && kw.length > 0) return JSON.stringify(kw)
+      return undefined
+    }
+    default:
+      return undefined
+  }
+}
+
+/** Reads the value a sibling listing would surface for a given field
+ *  id — column lookup for known-mapped fields, falling back to
+ *  platformAttributes.attributes for everything else. */
+function getListingFieldValue(
+  listing: SiblingListing,
+  fieldId: string,
+): Primitive | undefined {
+  if (fieldId === 'item_name' && listing.title) return listing.title
+  if (fieldId === 'product_description' && listing.description)
+    return listing.description
+  if (
+    fieldId === 'bullet_point' &&
+    Array.isArray(listing.bulletPointsOverride) &&
+    listing.bulletPointsOverride.length > 0
+  ) {
+    return JSON.stringify(listing.bulletPointsOverride)
+  }
+  const attrs =
+    listing.platformAttributes &&
+    typeof listing.platformAttributes.attributes === 'object'
+      ? (listing.platformAttributes.attributes as Record<string, unknown>)
+      : null
+  const v = attrs?.[fieldId]
+  if (v === undefined || v === null) return undefined
+  if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+    return v
+  }
+  return undefined
+}
+
 /** Q.2 — schema-driven editor for one (product, channel, marketplace).
- *  Reuses the same FieldCard tree as the wizard's Step 5 so the edit
- *  page sees every field Amazon's productType requires (or that the
- *  curated common-optional set surfaces). All field values write to
- *  ChannelListing via PUT — known fields land in their own columns
- *  (title, description, bulletPointsOverride) and the rest goes into
- *  platformAttributes.attributes.  */
+ *  Q.3 — wires OverrideMenu so the user can copy field values from the
+ *  master product or other channel listings, and broadcast a value out
+ *  to multiple listings in one click. */
 export default function ChannelFieldEditor({
   productId,
   channel,
   marketplace,
+  product,
   onSaved,
 }: Props) {
   const [manifest, setManifest] = useState<UnionManifest | null>(null)
@@ -58,10 +132,13 @@ export default function ChannelFieldEditor({
   >({})
   const [aiBusyFields, setAiBusyFields] = useState<Set<string>>(new Set())
 
+  // Q.3 — sibling listings (every channel + marketplace this product
+  // is published on). Used to render "Copy from AMAZON:DE" menus and
+  // to broadcast values to other channels.
+  const [siblings, setSiblings] = useState<SiblingListing[]>([])
+
   const [status, setStatus] = useState<SaveStatus>('idle')
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
-  // Track which field ids changed since the last successful flush so
-  // we only PUT what's different.
   const dirtyRef = useRef<Set<string>>(new Set())
   const saveTimer = useRef<number | null>(null)
 
@@ -88,9 +165,6 @@ export default function ChannelFieldEditor({
         }
         const m = json as UnionManifest
         setManifest(m)
-        // Seed values from the manifest's currentValue (which the
-        // backend populates from baseAttributes — i.e. the existing
-        // listing).
         setValues(() => {
           const next: Record<string, Primitive> = {}
           for (const f of m.fields) {
@@ -114,6 +188,28 @@ export default function ChannelFieldEditor({
       cancelled = true
     }
   }, [productId, channel, marketplace, reloadKey, showAllOptional, forceRefresh])
+
+  // ── Q.3 — fetch sibling listings once on mount ───────────────
+  useEffect(() => {
+    let cancelled = false
+    fetch(`${getBackendUrl()}/api/products/${productId}/all-listings`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((grouped) => {
+        if (cancelled || !grouped) return
+        const flat: SiblingListing[] = []
+        for (const arr of Object.values(grouped) as SiblingListing[][]) {
+          for (const l of arr) flat.push(l)
+        }
+        setSiblings(flat)
+      })
+      .catch(() => {
+        /* sibling load failure is non-fatal — menu just won't offer
+         * cross-listing copy/broadcast */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [productId])
 
   // ── Auto-save dirty fields ───────────────────────────────────
   const flush = useCallback(async () => {
@@ -154,16 +250,19 @@ export default function ChannelFieldEditor({
     }
   }, [productId, channel, marketplace, values, onSaved])
 
-  const setBase = useCallback((id: string, value: Primitive) => {
-    setValues((prev) => ({ ...prev, [id]: value }))
-    dirtyRef.current.add(id)
-    setStatus('saving')
-    setStatusMsg(null)
-    if (saveTimer.current) window.clearTimeout(saveTimer.current)
-    saveTimer.current = window.setTimeout(() => {
-      void flush()
-    }, SAVE_DEBOUNCE_MS)
-  }, [flush])
+  const setBase = useCallback(
+    (id: string, value: Primitive) => {
+      setValues((prev) => ({ ...prev, [id]: value }))
+      dirtyRef.current.add(id)
+      setStatus('saving')
+      setStatusMsg(null)
+      if (saveTimer.current) window.clearTimeout(saveTimer.current)
+      saveTimer.current = window.setTimeout(() => {
+        void flush()
+      }, SAVE_DEBOUNCE_MS)
+    },
+    [flush],
+  )
 
   // Flush on unmount so a pending debounce doesn't drop the last edit.
   useEffect(() => {
@@ -173,6 +272,70 @@ export default function ChannelFieldEditor({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // ── Q.3 — broadcast a field value to other channel listings ──
+  // Hits PUT for each target listing in parallel; updates the local
+  // `siblings` snapshot on success so subsequent OverrideMenu reads
+  // see the latest broadcast values without re-fetching.
+  const broadcastToChannels = useCallback(
+    async (fieldId: string, sourceChannelKey: string, targetKeys: string[]) => {
+      const sourceValue =
+        sourceChannelKey === channelKey
+          ? values[fieldId]
+          : (() => {
+              const sib = siblings.find(
+                (s) =>
+                  `${s.channel}:${s.marketplace}`.toUpperCase() ===
+                  sourceChannelKey,
+              )
+              return sib ? getListingFieldValue(sib, fieldId) : undefined
+            })()
+      if (isEmpty(sourceValue)) return
+
+      const updates = await Promise.all(
+        targetKeys.map(async (targetKey) => {
+          if (targetKey === channelKey) {
+            // Active listing → use setBase so the debounce + status bar
+            // path handles it.
+            setBase(fieldId, sourceValue as Primitive)
+            return null
+          }
+          const sib = siblings.find(
+            (s) =>
+              `${s.channel}:${s.marketplace}`.toUpperCase() === targetKey,
+          )
+          if (!sib) return null
+          try {
+            const res = await fetch(
+              `${getBackendUrl()}/api/products/${productId}/listings/${sib.channel}/${sib.marketplace}`,
+              {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  attributes: { [fieldId]: sourceValue },
+                }),
+              },
+            )
+            if (!res.ok) return null
+            return (await res.json()) as SiblingListing
+          } catch {
+            return null
+          }
+        }),
+      )
+      const updatedById = new Map(
+        updates
+          .filter((u): u is SiblingListing => !!u)
+          .map((u) => [u.id, u]),
+      )
+      if (updatedById.size > 0) {
+        setSiblings((prev) =>
+          prev.map((s) => updatedById.get(s.id) ?? s),
+        )
+      }
+    },
+    [channelKey, values, siblings, productId, setBase],
+  )
 
   // ── AI generate (Q.9 will round this out for translate too) ──
   const aiGenerate = useCallback(
@@ -199,7 +362,6 @@ export default function ChannelFieldEditor({
         )
         if (!res.ok) return
         const json = await res.json()
-        // Endpoint shape mirrors wizard generate-content: { groups: [{ result: { title, bullets, ... } }] }
         const first = json?.groups?.[0]?.result ?? json?.result
         if (!first) return
         let value: string | undefined
@@ -220,7 +382,7 @@ export default function ChannelFieldEditor({
           setBase(fieldId, value as Primitive)
         }
       } catch {
-        /* swallow — user can retry */
+        /* swallow */
       } finally {
         setAiBusyFields((prev) => {
           const next = new Set(prev)
@@ -233,6 +395,19 @@ export default function ChannelFieldEditor({
   )
 
   // ── Render ───────────────────────────────────────────────────
+  const allChannelKeys = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          channelKey,
+          ...siblings.map(
+            (s) => `${s.channel}:${s.marketplace}`.toUpperCase(),
+          ),
+        ]),
+      ),
+    [siblings, channelKey],
+  )
+
   const unsatisfied = useMemo(() => {
     if (!manifest) return [] as Array<{ id: string; channelKey: string }>
     const out: Array<{ id: string; channelKey: string }> = []
@@ -350,12 +525,26 @@ export default function ChannelFieldEditor({
             const fieldUnsatisfied = unsatisfied
               .filter((u) => u.id === field.id)
               .map((u) => u.channelKey)
+            const masterValue = getMasterValue(product, field.id)
+            // Q.3 — overrides map: this listing's current value plus
+            // every sibling listing's value for the same field, so
+            // OverrideMenu can show "Copy from AMAZON:DE" entries and
+            // "Apply to" can target sibling channels.
+            const overrides: Record<string, Primitive | undefined> = {
+              [channelKey]: values[field.id],
+            }
+            for (const s of siblings) {
+              const k = `${s.channel}:${s.marketplace}`.toUpperCase()
+              if (k === channelKey) continue
+              const v = getListingFieldValue(s, field.id)
+              if (!isEmpty(v)) overrides[k] = v
+            }
             return (
               <FieldCard
                 key={field.id}
                 field={field}
                 viewMode={{ channelKey }}
-                baseValue={values[field.id]}
+                baseValue={masterValue}
                 onBaseChange={(v) => setBase(field.id, v)}
                 onAIGenerate={
                   AI_SUPPORTED_FIELDS.has(field.id)
@@ -363,10 +552,19 @@ export default function ChannelFieldEditor({
                     : undefined
                 }
                 aiBusy={aiBusyFields.has(field.id)}
+                onApplyToChannels={broadcastToChannels}
                 channelGroups={[]}
-                allChannelKeys={[channelKey]}
-                overrides={{ [channelKey]: values[field.id] }}
-                onOverrideChange={(_ck, v) => setBase(field.id, v as Primitive)}
+                allChannelKeys={allChannelKeys}
+                overrides={overrides}
+                onOverrideChange={(ck, v) => {
+                  if (ck === channelKey) {
+                    setBase(field.id, v as Primitive)
+                  }
+                  // Cross-channel writes only happen via
+                  // broadcastToChannels; the menu's "Copy from X" path
+                  // routes through onCopyFrom inside FieldCard which
+                  // calls onOverrideChange for the active channel only.
+                }}
                 variations={manifest.variations}
                 variantValues={Object.fromEntries(
                   manifest.variations.map((v) => [

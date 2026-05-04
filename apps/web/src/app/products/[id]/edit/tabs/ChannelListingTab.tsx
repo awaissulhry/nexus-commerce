@@ -187,11 +187,12 @@ export default function ChannelListingTab({
         )}
       </Card>
 
-      {/* ── Schema-driven editor (Q.2) ────────────────────────── */}
+      {/* ── Schema-driven editor (Q.2 + Q.3) ──────────────────── */}
       <ChannelFieldEditor
         productId={product.id}
         channel={channel}
         marketplace={marketplace}
+        product={product}
         onSaved={(updated) => {
           onChange()
           onSave(updated as Listing)
