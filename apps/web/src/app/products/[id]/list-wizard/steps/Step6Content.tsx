@@ -11,6 +11,9 @@ import {
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
+import ChannelGroupsManager, {
+  type ChannelGroup,
+} from '../components/ChannelGroupsManager'
 
 interface TitleResult {
   content: string
@@ -115,6 +118,14 @@ export default function Step6Content({
   const [busyGroups, setBusyGroups] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const variantsRef = useRef<Record<string, Record<Field, number>>>({})
+
+  const channelGroups = (wizardState.channelGroups ?? []) as ChannelGroup[]
+  const onChannelGroupsChange = useCallback(
+    (next: ChannelGroup[]) => {
+      void updateWizardState({ channelGroups: next })
+    },
+    [updateWizardState],
+  )
 
   // Compute distinct groups for the channels picked in Step 1.
   const groups = useMemo(() => {
@@ -340,6 +351,37 @@ export default function Step6Content({
     })
   }, [activeGroup, groups, persistContent])
 
+  // K.6 — broadcast active tab's content to every auto-group that
+  // contains a member of the user-defined channel group.
+  const applyToChannelGroup = useCallback(
+    (channelGroupId: string) => {
+      if (!activeGroup) return
+      const cg = channelGroups.find((g) => g.id === channelGroupId)
+      if (!cg) return
+      // Resolve the auto group keys hit by this channel group's
+      // members. Two members in the same auto group don't double-
+      // count.
+      const targetAutoKeys = new Set<string>()
+      for (const channelKey of cg.channelKeys) {
+        const [platform, marketplace] = channelKey.split(':')
+        if (!platform || !marketplace) continue
+        targetAutoKeys.add(groupKeyFor(platform, marketplace))
+      }
+      setContent((prev) => {
+        const source = prev.byGroup[activeGroup]
+        if (!source) return prev
+        const next: ContentState = { byGroup: { ...prev.byGroup } }
+        for (const autoKey of targetAutoKeys) {
+          if (autoKey === activeGroup) continue
+          next.byGroup[autoKey] = { ...source, aiGenerated: false }
+        }
+        void persistContent(next)
+        return next
+      })
+    },
+    [activeGroup, channelGroups, persistContent],
+  )
+
   // ── Continue gating: every group must have at least a title +
   //    one non-empty bullet. ────────────────────────────────────
   const groupReady = useCallback(
@@ -453,25 +495,48 @@ export default function Step6Content({
         })}
       </div>
 
+      {/* K.6 — channel groups manager (manual, shared with Step 9) */}
+      <ChannelGroupsManager
+        groups={channelGroups}
+        availableChannels={channels}
+        onChange={onChannelGroupsChange}
+        defaultCollapsed
+      />
+
       {activeGroup && activeGroupInfo && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="text-[11px] text-slate-500">
               Applies to{' '}
               <span className="font-mono">
                 {activeGroupInfo.channelKeys.join(', ')}
               </span>
             </div>
-            {groups.length > 1 && (
-              <button
-                type="button"
-                onClick={applyToAll}
-                className="text-[11px] text-blue-600 hover:underline"
-                title="Copy this tab's content to every other tab"
-              >
-                Apply to all groups
-              </button>
-            )}
+            <div className="flex items-center gap-3 flex-wrap">
+              {channelGroups
+                .filter((g) => g.channelKeys.length > 0)
+                .map((g) => (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => applyToChannelGroup(g.id)}
+                    title={`Copy this tab's content to every channel in ${g.name}: ${g.channelKeys.join(', ')}`}
+                    className="text-[11px] text-blue-600 hover:underline"
+                  >
+                    Copy to {g.name}
+                  </button>
+                ))}
+              {groups.length > 1 && (
+                <button
+                  type="button"
+                  onClick={applyToAll}
+                  className="text-[11px] text-blue-600 hover:underline"
+                  title="Copy this tab's content to every other tab"
+                >
+                  Apply to all groups
+                </button>
+              )}
+            </div>
           </div>
 
           <FieldCard

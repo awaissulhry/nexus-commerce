@@ -11,6 +11,9 @@ import {
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
+import ChannelGroupsManager, {
+  type ChannelGroup,
+} from '../components/ChannelGroupsManager'
 
 interface ChannelContext {
   platform: string
@@ -56,6 +59,13 @@ export default function Step8Pricing({
   channels,
 }: StepProps) {
   const baseSlice = (wizardState.pricing ?? {}) as BasePricingSlice
+  const channelGroups = (wizardState.channelGroups ?? []) as ChannelGroup[]
+  const onChannelGroupsChange = useCallback(
+    (next: ChannelGroup[]) => {
+      void updateWizardState({ channelGroups: next })
+    },
+    [updateWizardState],
+  )
   const channelStates =
     (wizardState.channelStates ?? {}) as Record<
       string,
@@ -388,6 +398,46 @@ export default function Step8Pricing({
             )}
           </div>
 
+          {/* K.6 — channel groups manager (manual, shared with Step 8) */}
+          <div className="mb-3">
+            <ChannelGroupsManager
+              groups={channelGroups}
+              availableChannels={channels}
+              onChange={onChannelGroupsChange}
+              defaultCollapsed
+            />
+          </div>
+
+          {/* K.6 — per-group bulk price actions */}
+          {channelGroups.filter((g) => g.channelKeys.length > 0).length >
+            0 && (
+            <GroupBulkActions
+              channelGroups={channelGroups.filter(
+                (g) => g.channelKeys.length > 0,
+              )}
+              onApply={(groupId, value) => {
+                const cg = channelGroups.find((g) => g.id === groupId)
+                if (!cg || !Number.isFinite(value)) return
+                setOverrides((prev) => {
+                  const next = { ...prev }
+                  for (const chKey of cg.channelKeys) {
+                    next[chKey] = {
+                      ...(next[chKey] ?? {
+                        marketplacePrice: '',
+                        minPrice: '',
+                        maxPrice: '',
+                        referralPercent: '',
+                        fulfillmentFee: '',
+                      }),
+                      marketplacePrice: String(value),
+                    }
+                  }
+                  return next
+                })
+              }}
+            />
+          )}
+
           {/* Per-channel override grid */}
           <div className="border border-slate-200 rounded-lg bg-white overflow-hidden">
             <div className="px-3 py-2 border-b border-slate-200 text-[12px] font-medium text-slate-700">
@@ -681,4 +731,65 @@ function formatMoney(value: number, currency: string): string {
   } catch {
     return `${value.toFixed(2)} ${currency}`
   }
+}
+
+function GroupBulkActions({
+  channelGroups,
+  onApply,
+}: {
+  channelGroups: ChannelGroup[]
+  onApply: (groupId: string, value: number) => void
+}) {
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  return (
+    <div className="border border-slate-200 rounded-lg bg-white px-3 py-2 mb-3">
+      <div className="text-[11px] font-medium text-slate-700 mb-1.5">
+        Set price per channel group (bulk)
+      </div>
+      <div className="space-y-1.5">
+        {channelGroups.map((g) => (
+          <div
+            key={g.id}
+            className="flex items-center gap-2 text-[12px]"
+          >
+            <span className="font-medium text-slate-700 flex-shrink-0 w-32 truncate">
+              {g.name}
+            </span>
+            <span className="text-[10px] font-mono text-slate-500 truncate flex-1 min-w-0">
+              {g.channelKeys.join(', ')}
+            </span>
+            <input
+              type="number"
+              step="0.01"
+              value={drafts[g.id] ?? ''}
+              onChange={(e) =>
+                setDrafts((prev) => ({ ...prev, [g.id]: e.target.value }))
+              }
+              placeholder="price"
+              className="w-24 h-7 px-1.5 text-[12px] border border-slate-200 rounded text-right tabular-nums focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-300"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const raw = drafts[g.id]
+                if (!raw) return
+                const n = Number(raw)
+                if (!Number.isFinite(n)) return
+                onApply(g.id, n)
+                setDrafts((prev) => {
+                  const next = { ...prev }
+                  delete next[g.id]
+                  return next
+                })
+              }}
+              disabled={!drafts[g.id]}
+              className="h-7 px-2 text-[11px] font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:bg-slate-100 disabled:text-slate-400"
+            >
+              Apply
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
