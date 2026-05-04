@@ -127,9 +127,18 @@ export default function ChannelFieldEditor({
   const [expandedVariants, setExpandedVariants] = useState<Set<string>>(
     new Set(),
   )
+  // Q.4 — per-variant overrides for THIS channel listing. Stored on
+  // the parent listing's platformAttributes.variants[variationId]
+  // server-side; the editor mirrors the shape locally for optimistic
+  // updates and debounced auto-save.
   const [variantAttrs, setVariantAttrs] = useState<
     Record<string, Record<string, Primitive>>
   >({})
+  // Track which (variationId, fieldId) tuples have been touched since
+  // the last successful flush, so the auto-save only PATCHes the
+  // delta rather than the whole map.
+  const dirtyVariantsRef = useRef<Map<string, Set<string>>>(new Map())
+  const variantSaveTimer = useRef<number | null>(null)
   const [aiBusyFields, setAiBusyFields] = useState<Set<string>>(new Set())
 
   // Q.3 — sibling listings (every channel + marketplace this product
@@ -190,6 +199,8 @@ export default function ChannelFieldEditor({
   }, [productId, channel, marketplace, reloadKey, showAllOptional, forceRefresh])
 
   // ── Q.3 — fetch sibling listings once on mount ───────────────
+  // Also seeds Q.4 variant overrides for the active listing from
+  // platformAttributes.variants once the matching sibling lands.
   useEffect(() => {
     let cancelled = false
     fetch(`${getBackendUrl()}/api/products/${productId}/all-listings`)
@@ -201,6 +212,37 @@ export default function ChannelFieldEditor({
           for (const l of arr) flat.push(l)
         }
         setSiblings(flat)
+        // Seed variantAttrs from the active listing's variants slice.
+        const active = flat.find(
+          (l) =>
+            l.channel.toUpperCase() === channel.toUpperCase() &&
+            l.marketplace.toUpperCase() === marketplace.toUpperCase(),
+        )
+        const variants = active?.platformAttributes?.variants
+        if (variants && typeof variants === 'object') {
+          setVariantAttrs(() => {
+            const next: Record<string, Record<string, Primitive>> = {}
+            for (const [variationId, slice] of Object.entries(
+              variants as Record<string, Record<string, unknown>>,
+            )) {
+              if (!slice || typeof slice !== 'object') continue
+              const cleaned: Record<string, Primitive> = {}
+              for (const [k, v] of Object.entries(slice)) {
+                if (
+                  typeof v === 'string' ||
+                  typeof v === 'number' ||
+                  typeof v === 'boolean'
+                ) {
+                  cleaned[k] = v
+                }
+              }
+              if (Object.keys(cleaned).length > 0) {
+                next[variationId] = cleaned
+              }
+            }
+            return next
+          })
+        }
       })
       .catch(() => {
         /* sibling load failure is non-fatal — menu just won't offer
@@ -209,7 +251,7 @@ export default function ChannelFieldEditor({
     return () => {
       cancelled = true
     }
-  }, [productId])
+  }, [productId, channel, marketplace])
 
   // ── Auto-save dirty fields ───────────────────────────────────
   const flush = useCallback(async () => {
@@ -264,11 +306,89 @@ export default function ChannelFieldEditor({
     [flush],
   )
 
+  // Q.4 — debounced flush for variant overrides. Mirrors the base
+  // flush but PUTs only `variantAttributes` so concurrent base + variant
+  // edits don't step on each other.
+  const flushVariants = useCallback(async () => {
+    const dirty = dirtyVariantsRef.current
+    if (dirty.size === 0) {
+      return
+    }
+    const variantAttributes: Record<string, Record<string, Primitive | null>> =
+      {}
+    for (const [variationId, fieldIds] of dirty.entries()) {
+      const slice: Record<string, Primitive | null> = {}
+      const current = variantAttrs[variationId] ?? {}
+      for (const fieldId of fieldIds) {
+        const v = current[fieldId]
+        slice[fieldId] = v === undefined ? null : v
+      }
+      variantAttributes[variationId] = slice
+    }
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${productId}/listings/${channel}/${marketplace}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ variantAttributes }),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      const updated = await res.json()
+      dirtyVariantsRef.current = new Map()
+      onSaved?.(updated)
+    } catch (e) {
+      setStatus('error')
+      setStatusMsg(e instanceof Error ? e.message : String(e))
+    }
+  }, [productId, channel, marketplace, variantAttrs, onSaved])
+
+  const setVariant = useCallback(
+    (variationId: string, fieldId: string, value: Primitive | undefined) => {
+      setVariantAttrs((prev) => {
+        const slice = { ...(prev[variationId] ?? {}) }
+        if (value === undefined || value === '' || value === null) {
+          delete slice[fieldId]
+        } else {
+          slice[fieldId] = value
+        }
+        return { ...prev, [variationId]: slice }
+      })
+      // Track dirty (variationId, fieldId) for the next flush.
+      const set = dirtyVariantsRef.current.get(variationId) ?? new Set<string>()
+      set.add(fieldId)
+      dirtyVariantsRef.current.set(variationId, set)
+      setStatus('saving')
+      setStatusMsg(null)
+      if (variantSaveTimer.current) window.clearTimeout(variantSaveTimer.current)
+      variantSaveTimer.current = window.setTimeout(() => {
+        void flushVariants().then(() => {
+          if (
+            dirtyRef.current.size === 0 &&
+            dirtyVariantsRef.current.size === 0
+          ) {
+            setStatus('saved')
+            window.setTimeout(() => {
+              setStatus((s) => (s === 'saved' ? 'idle' : s))
+            }, 1500)
+          }
+        })
+      }, SAVE_DEBOUNCE_MS)
+    },
+    [flushVariants],
+  )
+
   // Flush on unmount so a pending debounce doesn't drop the last edit.
   useEffect(() => {
     return () => {
       if (saveTimer.current) window.clearTimeout(saveTimer.current)
+      if (variantSaveTimer.current) window.clearTimeout(variantSaveTimer.current)
       if (dirtyRef.current.size > 0) void flush()
+      if (dirtyVariantsRef.current.size > 0) void flushVariants()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -572,17 +692,9 @@ export default function ChannelFieldEditor({
                     variantAttrs[v.id]?.[field.id],
                   ]),
                 )}
-                onVariantChange={(variationId, v) => {
-                  setVariantAttrs((prev) => {
-                    const slice = { ...(prev[variationId] ?? {}) }
-                    if (v === undefined || v === '' || v === null) {
-                      delete slice[field.id]
-                    } else {
-                      slice[field.id] = v
-                    }
-                    return { ...prev, [variationId]: slice }
-                  })
-                }}
+                onVariantChange={(variationId, v) =>
+                  setVariant(variationId, field.id, v)
+                }
                 variantsExpanded={expandedVariants.has(field.id)}
                 onToggleVariants={() =>
                   setExpandedVariants((prev) => {

@@ -282,7 +282,11 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
         })
 
         // Q.2 — split out `attributes` into known columns + JSON merge.
-        const { attributes, ...rest } = body
+        // Q.4 — `variantAttributes` (Record<variationId, Record<fieldId,
+        //       value>>) merges into platformAttributes.variants so
+        //       per-variant channel overrides ride along on the parent
+        //       listing's row.
+        const { attributes, variantAttributes, ...rest } = body
         const data: Record<string, any> = { ...rest }
         if (attributes && typeof attributes === 'object') {
           const attrs = attributes as Record<string, unknown>
@@ -337,6 +341,47 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
           data.platformAttributes = {
             ...(existingPA ?? {}),
             attributes: merged,
+          }
+        }
+
+        // Q.4 — variant overrides. Same shallow-merge pattern: each
+        // variationId slice replaces (rather than deep-merges) so a
+        // PATCH-style edit to one (variation, field) keeps the other
+        // fields on that variation untouched.
+        if (variantAttributes && typeof variantAttributes === 'object') {
+          const existingPA =
+            (data.platformAttributes as Record<string, any> | undefined) ??
+            (existing?.platformAttributes as Record<string, any> | null) ??
+            null
+          const existingVariants =
+            existingPA && typeof existingPA.variants === 'object'
+              ? (existingPA.variants as Record<string, Record<string, unknown>>)
+              : {}
+          const mergedVariants: Record<string, Record<string, unknown>> = {
+            ...existingVariants,
+          }
+          for (const [variationId, slice] of Object.entries(
+            variantAttributes as Record<string, Record<string, unknown>>,
+          )) {
+            const prev = mergedVariants[variationId] ?? {}
+            const next: Record<string, unknown> = { ...prev }
+            for (const [fieldId, v] of Object.entries(slice ?? {})) {
+              if (v === null || v === undefined || v === '') {
+                delete next[fieldId]
+              } else {
+                next[fieldId] = v
+              }
+            }
+            if (Object.keys(next).length === 0) {
+              delete mergedVariants[variationId]
+            } else {
+              mergedVariants[variationId] = next
+            }
+          }
+          data.platformAttributes = {
+            ...(existingPA ?? {}),
+            ...(data.platformAttributes ?? {}),
+            variants: mergedVariants,
           }
         }
 
