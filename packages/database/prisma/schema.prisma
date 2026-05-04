@@ -219,6 +219,11 @@ model Product {
   orderItems           OrderItem[] // Phase 2: Orders & Financials
   outboundSyncQueue    OutboundSyncQueue[] // Phase 8: Outbound Sync Engine
 
+  // NN.1 — optimistic concurrency. Bumped on every PATCH/PUT.
+  // Clients send the version they read; server rejects with 409 if
+  // it advanced (someone else edited concurrently).
+  version Int @default(1)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -523,6 +528,9 @@ model ChannelListing {
   images            ChannelListingImage[]
   outboundSyncQueue OutboundSyncQueue[]
   overrideHistory   ChannelListingOverride[]
+
+  // NN.1 — optimistic concurrency on per-channel listing edits.
+  version Int @default(1)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1584,15 +1592,59 @@ model ListingWizard {
 
   status String @default("DRAFT") // DRAFT | SUBMITTED | LIVE | FAILED
 
+  // NN.1 — optimistic concurrency on wizard PATCHes. Two devices
+  // editing the same wizard simultaneously each PATCH the version
+  // they read; second one to land gets 409.
+  version Int @default(1)
+
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   completedAt DateTime?
+
+  // NN.14 — soft expiry. DRAFT wizards >30 days are eligible for
+  // cleanup. Set when the wizard is created so the cron job has a
+  // simple WHERE clause.
+  expiresAt DateTime?
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([productId, channelsHash, status])
   @@index([productId])
   @@index([status])
+  @@index([expiresAt])
+}
+
+// NN.4 — append-only audit log. One row per PATCH/PUT/DELETE on
+// Product, ChannelListing, or ListingWizard. Records who, when,
+// what changed (before/after JSON), source IP. Required for SOC 2
+// + GDPR audit trails.
+model AuditLog {
+  id String @id @default(cuid())
+
+  // Who. userId is nullable so system / cron writes can still log.
+  userId String?
+  ip     String?
+
+  // What.
+  entityType String // "Product" | "ChannelListing" | "ListingWizard" | ...
+  entityId   String
+  action     String // "create" | "update" | "delete" | "submit" | "replicate"
+
+  // Before / after snapshots — diff lives in the audit viewer.
+  // Cap: writers should slim these down to changed fields only,
+  // not full row dumps, or the table balloons.
+  before Json?
+  after  Json?
+
+  // Free-form metadata: which bulk-op id triggered this, which
+  // marketplace context, which idempotency key, etc.
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
 }
 
 // Phase A: per-listing image set with multi-scope and variation-aware

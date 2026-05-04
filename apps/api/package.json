@@ -16,6 +16,7 @@
     "@fastify/compress": "^8.3.1",
     "@fastify/cors": "^11.2.0",
     "@fastify/multipart": "^10.0.0",
+    "@fastify/rate-limit": "^10.3.0",
     "@google/generative-ai": "^0.24.1",
     "@nexus/database": "*",
     "@nexus/shared": "*",

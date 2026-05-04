@@ -16,6 +16,7 @@ import {
   seedRealisticXavia,
   IMPORT_SOURCE as XAVIA_REALISTIC_IMPORT_SOURCE,
 } from '../services/seed-xavia-realistic.service.js'
+import { auditLogService } from '../services/audit-log.service.js'
 
 /**
  * Routes for bulk-operations: optimized fetch + atomic patch.
@@ -450,6 +451,13 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     // changes loop). Reject early with 413 instead of letting the
     // request OOM the API process.
     bodyLimit: 5 * 1024 * 1024,
+    // NN.5 — per-route rate limit. The global limiter caps reads;
+    // bulk PATCH is the most write-heavy endpoint and gets a
+    // tighter cap so a single client can't queue 100 simultaneous
+    // 1000-row PATCHes.
+    config: {
+      rateLimit: { max: 30, timeWindow: '1 minute' },
+    },
   }, async (request, reply) => {
     const { changes, marketplaceContext, marketplaceContexts } =
       request.body ?? {}
@@ -1112,7 +1120,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       const overallStatus =
         errors.length === 0 ? 'SUCCESS' : 'PARTIAL'
 
-      await prisma.bulkOperation.create({
+      const bulkOp = await prisma.bulkOperation.create({
         data: {
           changeCount: changes.length,
           productCount: productIds.size,
@@ -1123,6 +1131,25 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           affectedChildren: Array.from(allAffectedChildIds),
         },
       })
+
+      // NN.4 — append-only audit log. One row per (productId, field)
+      // touched in this PATCH so future audits can answer "who
+      // changed price on SKU X last Tuesday." metadata pins the
+      // bulkOperation id so the two tables join cleanly.
+      const auditRows = validated.map((c: any) => ({
+        userId: null,
+        ip: request.ip ?? null,
+        entityType: 'Product',
+        entityId: c.id,
+        action: 'update',
+        after: { field: c.field, value: c.value },
+        metadata: {
+          bulkOperationId: bulkOp.id,
+          cascade: !!c.cascade,
+          source: 'bulk-patch',
+        },
+      }))
+      void auditLogService.writeMany(auditRows)
 
       return {
         success: true,

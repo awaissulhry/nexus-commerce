@@ -3,6 +3,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import compress from "@fastify/compress";
 import multipart from "@fastify/multipart";
+import rateLimit from "@fastify/rate-limit";
 import { listingsRoutes } from "./routes/listings.js";
 import { inventoryRoutes } from "./routes/inventory.js";
 import { aiRoutes } from "./routes/ai.js";
@@ -64,6 +65,27 @@ app.register(multipart, {
     fileSize: 50 * 1024 * 1024,
     files: 1,
   },
+});
+
+// NN.5 — global rate limit. Default applies to every route at a
+// generous 200 req/min per IP so normal browsing is unaffected.
+// Hot endpoints (/products/bulk, AI generation, replicate) opt
+// into stricter per-route caps via the route-level config option.
+// In-memory store is fine for single-instance deploys; swap to
+// redis when scaling to multi-instance.
+app.register(rateLimit, {
+  global: true,
+  max: 200,
+  timeWindow: '1 minute',
+  // Skip rate-limit on health checks so monitors don't trip it.
+  allowList: (req) => req.url === '/api/health',
+  errorResponseBuilder: (_req, ctx) => ({
+    statusCode: 429,
+    error: 'Too Many Requests',
+    code: 'rate_limited',
+    message: `Rate limit exceeded — try again in ${Math.ceil(ctx.ttl / 1000)}s`,
+    retryAfter: Math.ceil(ctx.ttl / 1000),
+  }),
 });
 
 // Register CORS to allow cross-origin requests from frontend (Port 3000)
