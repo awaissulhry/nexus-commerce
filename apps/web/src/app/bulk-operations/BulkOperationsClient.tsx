@@ -297,20 +297,24 @@ const CHANNEL_DEFAULT_ORDER: Record<string, string[]> = {
 function applyChannelDefaultOrder(
   ids: string[],
   channel: string,
-  allFields: Array<{ id: string; channel?: string }>,
+  _allFields: Array<{ id: string; channel?: string }>,
 ): string[] {
+  // KK.2 — DO NOT drop unknown ids. allFields can hydrate after this
+  // function runs (multiple async fetches feed the registry); dropping
+  // unrecognised ids here silently lost columns when a tab switch
+  // raced the schema fetch. Now we just dedupe and reorder; ids that
+  // never resolve to a registry entry will simply not render rows
+  // (the cell renderer handles missing meta gracefully).
   const order = CHANNEL_DEFAULT_ORDER[channel] ?? []
   const orderRank = new Map(order.map((id, idx) => [id, idx]))
-  const fieldsById = new Map(allFields.map((f) => [f.id, f]))
   const dedup: string[] = []
   const seen = new Set<string>()
   for (const id of ids) {
     if (seen.has(id)) continue
-    if (!fieldsById.has(id)) continue
     seen.add(id)
     dedup.push(id)
   }
-  return dedup.sort((a, b) => {
+  return dedup.slice().sort((a, b) => {
     const ra = orderRank.get(a)
     const rb = orderRank.get(b)
     if (ra !== undefined && rb !== undefined) return ra - rb
@@ -444,6 +448,12 @@ export default function BulkOperationsClient() {
   const reorderColumns = useCallback(
     (sourceId: string, targetId: string) => {
       if (sourceId === targetId) return
+      // KK.2 — reordering columns invalidates the rectangle's column
+      // indices (rangeBounds is { minCol, maxCol } against the
+      // visible column array — those indices now point at different
+      // columns). Clear the selection rather than draw it on the
+      // wrong cells.
+      setSelection({ anchor: null, active: null })
       setVisibleColumnIds((prev) => {
         const fromIdx = prev.indexOf(sourceId)
         const toIdx = prev.indexOf(targetId)
@@ -502,6 +512,9 @@ export default function BulkOperationsClient() {
       const source = groups.find((g) => g.key === sourceKey)
       const target = groups.find((g) => g.key === targetKey)
       if (!source || !target) return
+      // KK.2 — same as reorderColumns: invalidate the selection
+      // rectangle since column indices shift.
+      setSelection({ anchor: null, active: null })
       const sourceIds = new Set(source.fields.map((f) => f.id))
       setVisibleColumnIds((prev) => {
         const without = prev.filter((id) => !sourceIds.has(id))
@@ -1748,6 +1761,10 @@ export default function BulkOperationsClient() {
   useEffect(() => {
     if (!primaryContext) return
     if (allFields.length === 0) return
+    // KK.2 — bail when an explicit view was loaded; the view's column
+    // order is the user's deliberate choice and we don't get to
+    // override it on subsequent tab switches.
+    if (autoLoadedRef.current.has('__view_loaded__')) return
     const tabKey = `${primaryContext.channel}:${primaryContext.marketplace}`
     if (autoLoadedRef.current.has(tabKey)) return
     const missing = allFields.filter((f) => {
@@ -1767,6 +1784,7 @@ export default function BulkOperationsClient() {
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allFields, primaryContext?.channel, primaryContext?.marketplace])
+
 
   // ── Build columns dynamically from registry + visibility ──────────
   const fieldsById = useMemo(() => {
@@ -1810,6 +1828,26 @@ export default function BulkOperationsClient() {
     }
     return result
   }, [visibleColumnIds, fieldsById, columnSizing])
+
+  // KK.2 — prune collapsedGroups when the registry changes. Without
+  // this, group keys from a previous catalog (e.g. 'old_category')
+  // sit in the Set forever, leaking into localStorage and never
+  // matching a real group. We diff against current groupedFields and
+  // drop anything that no longer corresponds to a visible bucket.
+  useEffect(() => {
+    if (collapsedGroups.size === 0) return
+    const validKeys = new Set(groupedFields.map((g) => g.key))
+    let pruned = false
+    const next = new Set<string>()
+    for (const k of collapsedGroups) {
+      if (validKeys.has(k)) {
+        next.add(k)
+      } else {
+        pruned = true
+      }
+    }
+    if (pruned) setCollapsedGroups(next)
+  }, [groupedFields, collapsedGroups])
 
   // JJ — per-column tone lookup so header + body cell + group-edge
   // border can all read from one source. Last-field-in-group flag
@@ -2694,6 +2732,11 @@ export default function BulkOperationsClient() {
       if (view.collapsedGroups) {
         setCollapsedGroups(new Set(view.collapsedGroups))
       }
+      // KK.2 — explicit-view-load wins over channel auto-load.
+      // Mark every (channel, marketplace) pair as already auto-loaded
+      // so the EE.1 effect won't reorder the view-supplied columns
+      // when the user later clicks a marketplace tab.
+      autoLoadedRef.current.add('__view_loaded__')
     },
     [savedViews],
   )
