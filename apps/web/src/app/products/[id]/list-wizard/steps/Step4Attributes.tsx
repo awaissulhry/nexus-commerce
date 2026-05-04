@@ -814,8 +814,11 @@ function FieldCard({
   const variantOverrideCount = Object.values(variantValues).filter(
     (v) => !isEmpty(v),
   ).length
-  const showVariantSection =
-    field.variantEligible && variations.length > 0
+  // N.3 — per-variant override available on EVERY field when there
+  // are variants, not just the curated variant-eligible set. We keep
+  // the eligibility flag as a label so the UI can warn when the
+  // user is overriding something Amazon wouldn't accept per variant.
+  const showVariantSection = variations.length > 0
 
   return (
     <div
@@ -1103,9 +1106,23 @@ function FieldCard({
                   {variantOverrideCount} of {variations.length}
                 </span>
               )}
-              <span className="text-[10px] text-slate-400 italic">
-                (variant-eligible field)
-              </span>
+              {/* N.3 — flag fields where Amazon won't accept per-
+                  variant values. The user can still override (we'll
+                  store + send the data), but submission will be
+                  rejected for that field. The label is honest about
+                  the risk. */}
+              {!field.variantEligible ? (
+                <span
+                  className="text-[10px] uppercase tracking-wide font-medium text-amber-700 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded"
+                  title="Amazon rejects per-variant values on this field. Override at your own risk — Shopify and other channels may accept it."
+                >
+                  not Amazon-eligible
+                </span>
+              ) : (
+                <span className="text-[10px] text-slate-400 italic">
+                  (variant-eligible)
+                </span>
+              )}
             </button>
             {variantsExpanded && (
               <div className="flex items-center gap-2">
@@ -1153,9 +1170,23 @@ function FieldCard({
           </div>
           {variantsExpanded && (
             <div className="mt-2 space-y-1.5">
+              {!field.variantEligible && (
+                <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-1">
+                  Amazon's listing model treats this field as product-
+                  level, so per-variant values are rejected at submit
+                  time. Shopify accepts more variant-level shapes; the
+                  override stays in wizard state regardless.
+                </div>
+              )}
               {variations.map((v) => {
                 const seedFromMaster = v.attributes[field.id.toLowerCase()]
                 const value = variantValues[v.id]
+                const otherFilled = variations
+                  .filter(
+                    (other) =>
+                      other.id !== v.id && !isEmpty(variantValues[other.id]),
+                  )
+                  .map((other) => other.id)
                 return (
                   <div key={v.id} className="flex items-center gap-2">
                     <div className="w-32 flex-shrink-0 min-w-0">
@@ -1168,19 +1199,39 @@ function FieldCard({
                           .join(' · ') || '—'}
                       </div>
                     </div>
-                    <FieldInput
-                      field={field}
-                      value={value}
-                      onChange={(val) => onVariantChange(v.id, val)}
-                      placeholder={
-                        seedFromMaster
-                          ? `Master: ${seedFromMaster}`
-                          : isEmpty(baseValue)
-                          ? '— (leave empty to use base)'
-                          : `Inherits: ${formatValue(baseValue)}`
-                      }
-                      compact
-                    />
+                    <div className="flex-1 flex items-center gap-1">
+                      <div className="flex-1">
+                        <FieldInput
+                          field={field}
+                          value={value}
+                          onChange={(val) => onVariantChange(v.id, val)}
+                          placeholder={
+                            seedFromMaster
+                              ? `Master: ${seedFromMaster}`
+                              : isEmpty(baseValue)
+                              ? '— (leave empty to use base)'
+                              : `Inherits: ${formatValue(baseValue)}`
+                          }
+                          compact
+                        />
+                      </div>
+                      {/* N.3 — per-row "apply this value to" menu.
+                          Only shown when this variant has a non-
+                          empty value worth broadcasting. */}
+                      {!isEmpty(value) && (
+                        <VariantBroadcastMenu
+                          variantId={v.id}
+                          variations={variations}
+                          otherFilledIds={otherFilled}
+                          variantValues={variantValues}
+                          onBroadcast={(targetIds) => {
+                            for (const t of targetIds) {
+                              onVariantChange(t, value as Primitive)
+                            }
+                          }}
+                        />
+                      )}
+                    </div>
                   </div>
                 )
               })}
@@ -1778,6 +1829,99 @@ function OverrideMenu({
                 className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-rose-700 border-t border-slate-100 mt-1"
               >
                 Clear override
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// N.3 — broadcast a per-variant value to other variants in one click.
+function VariantBroadcastMenu({
+  variantId,
+  variations,
+  otherFilledIds,
+  variantValues,
+  onBroadcast,
+}: {
+  variantId: string
+  variations: UnionVariation[]
+  otherFilledIds: string[]
+  variantValues: Record<string, Primitive | undefined>
+  onBroadcast: (targetIds: string[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const otherIds = variations
+    .filter((v) => v.id !== variantId)
+    .map((v) => v.id)
+  const emptyOtherIds = otherIds.filter((id) =>
+    isEmpty(variantValues[id]),
+  )
+  return (
+    <div className="relative flex-shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((s) => !s)}
+        title="Apply this value to other variants"
+        className="h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded"
+      >
+        <span className="text-[14px] leading-none">⋯</span>
+      </button>
+      {open && (
+        <>
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded shadow-md py-1 min-w-[200px] text-[12px]">
+            <div className="px-3 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+              Apply this value to
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                onBroadcast(otherIds)
+                setOpen(false)
+              }}
+              className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700"
+            >
+              All other variants{' '}
+              <span className="text-[10px] text-slate-500">
+                ({otherIds.length})
+              </span>
+            </button>
+            {emptyOtherIds.length > 0 &&
+              emptyOtherIds.length !== otherIds.length && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onBroadcast(emptyOtherIds)
+                    setOpen(false)
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700"
+                >
+                  Empty variants only{' '}
+                  <span className="text-[10px] text-slate-500">
+                    ({emptyOtherIds.length})
+                  </span>
+                </button>
+              )}
+            {otherFilledIds.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  onBroadcast(otherFilledIds)
+                  setOpen(false)
+                }}
+                className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700"
+              >
+                Other variants with values{' '}
+                <span className="text-[10px] text-slate-500">
+                  ({otherFilledIds.length})
+                </span>
               </button>
             )}
           </div>
