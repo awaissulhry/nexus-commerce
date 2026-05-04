@@ -46,6 +46,53 @@ export interface VariationsPayload {
   presentAttributes: string[]
 }
 
+/**
+ * Phase E — multi-channel variations payload.
+ *
+ * Per-channel theme lists (with intersection convenience), per-child
+ * attribute-completeness annotations keyed by channel, and a list of
+ * channels we couldn't fetch themes for (no productType selected, or
+ * a non-Amazon channel without a wired schema source).
+ */
+export interface MultiChannelVariationsPayload {
+  isParent: boolean
+  parentSku: string
+  parentName: string
+  channels: Array<{
+    platform: string
+    marketplace: string
+    productType: string
+  }>
+  /** ChannelKey ("PLATFORM:MARKET") → themes available for that
+   *  channel. Channels with no themes are listed with an empty array. */
+  themesByChannel: Record<string, ThemeOption[]>
+  /** Themes supported by EVERY successfully-fetched channel — the
+   *  recommended "applies everywhere" picks. Computed by intersection
+   *  on theme.id. */
+  commonThemes: ThemeOption[]
+  /** Per-channel selected theme (from wizardState.channelStates[key].
+   *  variations.theme). Used to annotate `children[].missingByChannel`. */
+  selectedThemeByChannel: Record<string, string | null>
+  children: MultiChannelVariationChild[]
+  presentAttributes: string[]
+  channelsMissingThemes: Array<{
+    channelKey: string
+    reason: 'no_product_type' | 'unsupported_channel' | 'no_themes_in_schema'
+  }>
+}
+
+export interface MultiChannelVariationChild {
+  id: string
+  sku: string
+  attributes: Record<string, string>
+  price: number
+  stock: number
+  /** ChannelKey → list of attributes this child is missing for the
+   *  theme selected on that channel. Empty array when no theme picked
+   *  yet OR when the child satisfies the theme. */
+  missingByChannel: Record<string, string[]>
+}
+
 const KNOWN_THEME_LABELS: Record<string, string> = {
   SIZE_COLOR: 'Size and Color',
   COLOR_SIZE: 'Color and Size',
@@ -124,6 +171,194 @@ export class VariationsService {
       presentAttributes,
     }
   }
+
+  /**
+   * Phase E — per-channel variation themes + per-child attribute
+   * completeness across every selected channel.
+   *
+   * For Amazon channels we read the cached `variation_theme` enum
+   * from CategorySchema.variationThemes (already populated by
+   * D.3f's schema-sync service). Non-Amazon channels are listed in
+   * `channelsMissingThemes` with reason='unsupported_channel' until
+   * Phase 2A wires eBay's category aspects.
+   */
+  async getMultiChannelVariationsPayload(opts: {
+    productId: string
+    channels: Array<{ platform: string; marketplace: string }>
+    /** ChannelKey → productType (from wizardState). */
+    productTypeByChannel: Record<string, string | undefined>
+    fallbackProductType?: string
+    /** ChannelKey → currently-selected theme id (from
+     *  wizardState.channelStates[key].variations.theme). */
+    selectedThemeByChannel: Record<string, string | null>
+  }): Promise<MultiChannelVariationsPayload> {
+    const product = await this.prisma.product.findUnique({
+      where: { id: opts.productId },
+      select: {
+        id: true,
+        sku: true,
+        name: true,
+        isParent: true,
+        variations: {
+          select: {
+            id: true,
+            sku: true,
+            variationAttributes: true,
+            price: true,
+            stock: true,
+          },
+        },
+      },
+    })
+    if (!product) {
+      throw new Error('Product not found')
+    }
+
+    const channels = opts.channels.map((c) => ({
+      ...c,
+      platform: c.platform.toUpperCase(),
+      marketplace: c.marketplace.toUpperCase(),
+    }))
+
+    // Collect theme lists per channel + missing-themes reasons.
+    const themesByChannel: Record<string, ThemeOption[]> = {}
+    const missing: MultiChannelVariationsPayload['channelsMissingThemes'] = []
+    const channelOut: MultiChannelVariationsPayload['channels'] = []
+
+    for (const c of channels) {
+      const channelKey = `${c.platform}:${c.marketplace}`
+      const productType =
+        opts.productTypeByChannel[channelKey] ?? opts.fallbackProductType ?? ''
+      channelOut.push({
+        platform: c.platform,
+        marketplace: c.marketplace,
+        productType,
+      })
+      if (c.platform !== 'AMAZON') {
+        themesByChannel[channelKey] = []
+        missing.push({ channelKey, reason: 'unsupported_channel' })
+        continue
+      }
+      if (!productType) {
+        themesByChannel[channelKey] = []
+        missing.push({ channelKey, reason: 'no_product_type' })
+        continue
+      }
+      const schema = await this.prisma.categorySchema.findFirst({
+        where: {
+          channel: 'AMAZON',
+          marketplace: c.marketplace,
+          productType,
+          isActive: true,
+        },
+        orderBy: { fetchedAt: 'desc' },
+        select: { variationThemes: true },
+      })
+      const themes = parseThemes(schema?.variationThemes ?? null)
+      themesByChannel[channelKey] = themes
+      if (themes.length === 0) {
+        missing.push({ channelKey, reason: 'no_themes_in_schema' })
+      }
+    }
+
+    // Common themes = intersection across every channel that
+    // successfully returned themes. Channels in `missing` are
+    // excluded from the intersection (they couldn't contribute).
+    const fetchedKeys = Object.keys(themesByChannel).filter(
+      (k) => themesByChannel[k]!.length > 0,
+    )
+    let commonIds: Set<string> | null = null
+    for (const key of fetchedKeys) {
+      const ids = new Set((themesByChannel[key] ?? []).map((t) => t.id))
+      if (commonIds === null) {
+        commonIds = ids
+      } else {
+        for (const id of Array.from(commonIds)) {
+          if (!ids.has(id)) commonIds.delete(id)
+        }
+      }
+    }
+    const commonThemeIds = commonIds ?? new Set<string>()
+    // Pick metadata from the first channel that has the theme — same
+    // shape as Phase D's union: first occurrence wins for consistency.
+    const commonThemes: ThemeOption[] = []
+    for (const id of Array.from(commonThemeIds)) {
+      let theme: ThemeOption | undefined
+      for (const key of fetchedKeys) {
+        theme = (themesByChannel[key] ?? []).find((t) => t.id === id)
+        if (theme) break
+      }
+      if (theme) commonThemes.push(theme)
+    }
+    commonThemes.sort((a, b) => {
+      if (a.id === 'SIZE_COLOR') return -1
+      if (b.id === 'SIZE_COLOR') return 1
+      return a.id.localeCompare(b.id)
+    })
+
+    // Per-child attribute annotations: for each channel with a
+    // selected theme, compute which required attributes the child is
+    // missing.
+    const children: MultiChannelVariationChild[] = (
+      product.variations ?? []
+    ).map((v) => {
+      const rawAttrs =
+        (v.variationAttributes as Record<string, unknown> | null) ?? {}
+      const attrs = lowerKeyMap(rawAttrs)
+      const missingByChannel: Record<string, string[]> = {}
+      for (const [channelKey, selectedThemeId] of Object.entries(
+        opts.selectedThemeByChannel,
+      )) {
+        if (!selectedThemeId) {
+          missingByChannel[channelKey] = []
+          continue
+        }
+        const theme = (themesByChannel[channelKey] ?? []).find(
+          (t) => t.id === selectedThemeId,
+        )
+        if (!theme) {
+          missingByChannel[channelKey] = []
+          continue
+        }
+        missingByChannel[channelKey] = theme.requiredAttributes.filter((k) =>
+          isEmptyValue(attrs[k]),
+        )
+      }
+      return {
+        id: v.id,
+        sku: v.sku,
+        attributes: attrs,
+        price: Number(v.price ?? 0),
+        stock: v.stock ?? 0,
+        missingByChannel,
+      }
+    })
+
+    const presentAttributes = uniqueKeysMc(children)
+
+    return {
+      isParent: !!product.isParent || children.length > 0,
+      parentSku: product.sku,
+      parentName: product.name,
+      channels: channelOut,
+      themesByChannel,
+      commonThemes,
+      selectedThemeByChannel: opts.selectedThemeByChannel,
+      children,
+      presentAttributes,
+      channelsMissingThemes: missing,
+    }
+  }
+}
+
+function uniqueKeysMc(
+  children: Array<{ attributes: Record<string, string> }>,
+): string[] {
+  const set = new Set<string>()
+  for (const c of children) {
+    for (const k of Object.keys(c.attributes)) set.add(k)
+  }
+  return Array.from(set).sort()
 }
 
 // ── helpers ─────────────────────────────────────────────────────

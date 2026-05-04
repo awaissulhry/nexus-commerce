@@ -728,14 +728,16 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
-  // ── Step 5 — Variations ───────────────────────────────────────
-  // GET /api/listing-wizard/:id/variations?theme=SIZE_COLOR
+  // ── Step 6 — Variations (Phase E multi-channel) ──────────────
+  // GET /api/listing-wizard/:id/variations
   //
-  // Returns the children of the master product plus the available
-  // variation themes pulled from the cached CategorySchema. When a
-  // theme is passed, each child is annotated with which required
-  // attributes it's missing so the UI can flag incomplete rows.
-  fastify.get<{ Params: { id: string }; Querystring: { theme?: string } }>(
+  // Returns per-channel variation themes + per-child attribute
+  // completeness across every selected (channel, marketplace).
+  // Common themes (intersection across channels) are surfaced
+  // separately so the UI can recommend an "applies everywhere" pick.
+  // Selected theme per channel is read from
+  // wizardState.channelStates[channelKey].variations.theme.
+  fastify.get<{ Params: { id: string } }>(
     '/listing-wizard/:id/variations',
     async (request, reply) => {
       const wizard = await prisma.listingWizard.findUnique({
@@ -744,34 +746,56 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       if (!wizard) {
         return reply.code(404).send({ error: 'Wizard not found' })
       }
-      const state = (wizard.state ?? {}) as Record<string, any>
-      const productType = state?.productType?.productType
-      let cachedThemes: unknown = null
-      if (typeof productType === 'string' && productType.length > 0) {
-        const first = legacyFirstChannel(wizard)
-        const schema = await prisma.categorySchema.findFirst({
-          where: {
-            channel: first.channel,
-            marketplace: first.marketplace,
-            productType,
-            isActive: true,
-          },
-          orderBy: { fetchedAt: 'desc' },
-          select: { variationThemes: true },
+
+      const channels = normalizeChannels(wizard.channels)
+      if (channels.length === 0) {
+        return reply.code(409).send({
+          error:
+            'No channels selected — pick at least one (platform, marketplace) in Step 1 first.',
         })
-        cachedThemes = schema?.variationThemes ?? null
       }
+
+      const state = (wizard.state ?? {}) as Record<string, any>
+      const channelStates =
+        ((wizard.channelStates ?? {}) as Record<
+          string,
+          Record<string, any>
+        >) ?? {}
+
+      const productTypeByChannel: Record<string, string | undefined> = {}
+      const selectedThemeByChannel: Record<string, string | null> = {}
+      for (const c of channels) {
+        const channelKey = `${c.platform}:${c.marketplace}`
+        const slice = channelStates[channelKey] ?? {}
+        const ptSlice = (slice as any).productType
+        if (ptSlice && typeof ptSlice.productType === 'string') {
+          productTypeByChannel[channelKey] = ptSlice.productType
+        }
+        const varSlice = (slice as any).variations
+        selectedThemeByChannel[channelKey] =
+          varSlice && typeof varSlice.theme === 'string'
+            ? varSlice.theme
+            : null
+      }
+      const fallbackProductType =
+        typeof state?.productType?.productType === 'string'
+          ? (state.productType.productType as string)
+          : undefined
+
       try {
-        const payload = await variationsService.getVariationsPayload({
-          productId: wizard.productId,
-          selectedTheme: request.query?.theme ?? null,
-          cachedThemes,
-        })
+        const payload =
+          await variationsService.getMultiChannelVariationsPayload({
+            productId: wizard.productId,
+            channels,
+            productTypeByChannel,
+            fallbackProductType,
+            selectedThemeByChannel,
+          })
         return payload
       } catch (err) {
         fastify.log.error(
           { err },
-          '[listing-wizard] variations failed',
+          '[listing-wizard] variations multi-channel failed',
         )
         return reply.code(500).send({
           error: err instanceof Error ? err.message : String(err),
