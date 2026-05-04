@@ -398,7 +398,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         data: {
           currentStep:
             typeof body.currentStep === 'number'
-              ? Math.min(Math.max(body.currentStep, 1), 11)
+              ? Math.min(Math.max(body.currentStep, 1), 10)
               : wizard.currentStep,
           state: merged as any,
           channelStates: mergedChannelStates as any,

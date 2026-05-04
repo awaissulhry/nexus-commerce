@@ -5,6 +5,7 @@ import { CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
+import Step2GtinExemption from './Step2GtinExemption'
 
 type Path = 'have-code' | 'have-exemption' | 'apply-now'
 
@@ -43,12 +44,8 @@ function isValidGtin(raw: string): boolean {
   return digits.length >= 8 && digits.length <= 14
 }
 
-export default function Step1Identifiers({
-  wizardState,
-  updateWizardState,
-  product,
-  marketplace,
-}: StepProps) {
+export default function Step1Identifiers(props: StepProps) {
+  const { wizardState, updateWizardState, product, marketplace } = props
   const existingGtin = detectGtin(product)
   const stateSlice = (wizardState.identifiers ?? {}) as Identifiers
 
@@ -262,13 +259,22 @@ export default function Step1Identifiers({
           label="I need to apply for a GTIN exemption"
         >
           <p className="text-[12px] text-slate-600">
-            Continue to Step 2. We generate the brand letter PDF and a
-            submission package you upload to Amazon Seller Central — most
-            sellers spend 2–3 days on the prep; ours takes about 5
-            minutes.
+            We generate the brand letter PDF and a submission package
+            you upload to Amazon Seller Central — most sellers spend
+            2–3 days on the prep; ours takes about 5 minutes. The form
+            appears below once you select this path.
           </p>
         </Option>
       </div>
+
+      {/* Phase L.1 — GTIN exemption form embedded inline when the user
+          picks "apply now." No separate Step 4 anymore; the Continue
+          button below advances past both Identifiers and Exemption. */}
+      {path === 'apply-now' && (
+        <div className="mt-6 border border-slate-200 rounded-lg bg-white px-4 py-4">
+          <Step2GtinExemption {...props} embedded />
+        </div>
+      )}
 
       <div className="mt-8 flex items-center justify-end gap-3">
         <button

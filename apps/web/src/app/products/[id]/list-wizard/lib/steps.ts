@@ -55,22 +55,13 @@ export const STEPS: StepConfig[] = [
     id: 3,
     title: 'Identifiers',
     shortLabel: 'Identifiers',
-    description: 'UPC, EAN, GTIN — or apply for an exemption',
+    description: 'UPC / EAN / GTIN — or exemption (inline if needed)',
     filledIn: '5.4',
     preview:
-      'Smart UPC/GTIN detection with three exemption paths: have a code, brand-registered already, or apply now.',
+      'Smart UPC/GTIN detection with three exemption paths. The exemption form is inlined below when "apply now" is picked — no separate step.',
   },
   {
     id: 4,
-    title: 'GTIN Exemption',
-    shortLabel: 'Exemption',
-    description: 'One-click brand exemption — auto-skipped when valid',
-    filledIn: 'Phase C',
-    preview:
-      'Auto-fills brand info, generates the brand letter PDF, uploads the trademark certificate, submits to Amazon SP-API. Step is auto-skipped when the product already has a GTIN or the brand has an approved exemption.',
-  },
-  {
-    id: 5,
     title: 'Variations',
     shortLabel: 'Variations',
     description: 'Per-platform variation themes',
@@ -79,7 +70,7 @@ export const STEPS: StepConfig[] = [
       'Common themes (intersection across selected platforms) shown prominently; platform-specific themes as alternatives. Mirror from another channel or define custom themes when the schema is unavailable.',
   },
   {
-    id: 6,
+    id: 5,
     title: 'Required Attributes',
     shortLabel: 'Attributes',
     description: 'Multi-channel union with per-variant + per-channel overrides',
@@ -88,7 +79,7 @@ export const STEPS: StepConfig[] = [
       'Union of required (and curated optional) attributes across every selected channel, with per-field tags showing which channels need it. Smart defaults from the master product; per-channel and per-variant overrides for fields that vary.',
   },
   {
-    id: 7,
+    id: 6,
     title: 'Images',
     shortLabel: 'Images',
     description: 'Multi-scope, variation-aware, drag-to-reorder',
@@ -97,7 +88,7 @@ export const STEPS: StepConfig[] = [
       'Image set scoped GLOBAL → PLATFORM → MARKETPLACE with optional variation specificity. Drag-to-reorder, primary picker, per-channel validation overlay (Amazon white-bg + 1000px, eBay relaxed, Shopify any).',
   },
   {
-    id: 8,
+    id: 7,
     title: 'Content',
     shortLabel: 'Content',
     description: 'Title, bullets, description — per-channel tabs',
@@ -106,7 +97,7 @@ export const STEPS: StepConfig[] = [
       'Per-channel tabs with AI dedup: same (language, format-rules) → one Gemini call, broadcast to matching channels. Apply-to-all for shared content; per-channel edit for overrides.',
   },
   {
-    id: 9,
+    id: 8,
     title: 'Pricing',
     shortLabel: 'Pricing',
     description: 'Base price + per-marketplace overrides',
@@ -115,7 +106,7 @@ export const STEPS: StepConfig[] = [
       'Base price with override grid per (platform, marketplace). Per-channel fee + currency display, margin calculator, repricing-band warnings.',
   },
   {
-    id: 10,
+    id: 9,
     title: 'Review',
     shortLabel: 'Review',
     description: 'Multi-channel summary before submit',
@@ -124,7 +115,7 @@ export const STEPS: StepConfig[] = [
       'Per-channel cards with prepared payload, validation status, and conflict detection across channels. Hard validation per channel before Submit unlocks.',
   },
   {
-    id: 11,
+    id: 10,
     title: 'Submit',
     shortLabel: 'Submit',
     description: 'Parallel publish with retry-failed-only',

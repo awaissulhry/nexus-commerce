@@ -17,7 +17,6 @@ import Step8Pricing from './steps/Step8Pricing'
 import Step9Review from './steps/Step9Review'
 import Step10Submit from './steps/Step10Submit'
 import Step1Channels from './steps/Step1Channels'
-import Step4GtinGate from './steps/Step4GtinGate'
 import { STEPS, findStep } from './lib/steps'
 
 export interface ChannelTuple {
@@ -101,10 +100,11 @@ export default function ListWizardClient({
   const [channels, setChannels] = useState<ChannelTuple[]>(
     initialWizard.channels ?? [],
   )
-  // Phase C: steps the wizard determined not to need (e.g. GTIN
-  // exemption for a product that already has a UPC). Greys the node
-  // in the stepper and short-circuits Continue.
-  const [skippedSteps, setSkippedSteps] = useState<Set<number>>(new Set())
+  // L.1: GTIN exemption is no longer a separate step (merged into
+  // Identifiers), so nothing currently writes to skippedSteps. Kept
+  // around — and threaded into WizardStepper — so future conditional
+  // steps can render greyed without re-plumbing.
+  const [skippedSteps] = useState<Set<number>>(new Set())
   const [saveState, setSaveState] = useState<SaveState>('idle')
 
   // Keep the latest values on a ref so the save fn closure doesn't
@@ -335,51 +335,25 @@ export default function ListWizardClient({
             }
             return <PlaceholderStep step={step} />
           }
-          // Step 3: Identifiers (was Step 1).
+          // Step 3: Identifiers — L.1 inlines the GTIN exemption form
+          // when path === 'apply-now', so there's no separate Step 4
+          // for GTIN anymore. /gtin-status auto-skip logic moved into
+          // Step1Identifiers via the embedded Step2GtinExemption.
           if (currentStep === 3) return <Step1Identifiers {...stepProps} />
-          // Step 4: GTIN Exemption — Phase C wraps it in a gate that
-          // checks /gtin-status. When the product already has a UPC/
-          // EAN/GTIN or the brand has an approved exemption, the gate
-          // shows a banner and auto-advances; otherwise the existing
-          // form renders.
-          if (currentStep === 4) {
-            return (
-              <Step4GtinGate
-                {...stepProps}
-                onMarkSkipped={() =>
-                  setSkippedSteps((prev) => {
-                    if (prev.has(4)) return prev
-                    const next = new Set(prev)
-                    next.add(4)
-                    return next
-                  })
-                }
-                onMarkUnskipped={() =>
-                  setSkippedSteps((prev) => {
-                    if (!prev.has(4)) return prev
-                    const next = new Set(prev)
-                    next.delete(4)
-                    return next
-                  })
-                }
-              />
-            )
-          }
-          // K.3: Variations now precedes Attributes — variant theme
-          // determines which fields are variant-eligible in the next
-          // step.
-          if (currentStep === 5) return <Step5Variations {...stepProps} />
-          if (currentStep === 6) return <Step4Attributes {...stepProps} />
-          // Step 7: Images (was Step 7 — same number).
-          if (currentStep === 7) return <Step7Images {...stepProps} />
-          // Step 8: Content (was Step 6).
-          if (currentStep === 8) return <Step6Content {...stepProps} />
-          // Step 9: Pricing (was Step 8).
-          if (currentStep === 9) return <Step8Pricing {...stepProps} />
-          // Step 10: Review (was Step 9).
-          if (currentStep === 10) return <Step9Review {...stepProps} />
-          // Step 11: Submit (was Step 10).
-          if (currentStep === 11) return <Step10Submit {...stepProps} />
+          // Step 4: Variations (was Step 5).
+          if (currentStep === 4) return <Step5Variations {...stepProps} />
+          // Step 5: Attributes (was Step 6).
+          if (currentStep === 5) return <Step4Attributes {...stepProps} />
+          // Step 6: Images (was Step 7).
+          if (currentStep === 6) return <Step7Images {...stepProps} />
+          // Step 7: Content (was Step 8).
+          if (currentStep === 7) return <Step6Content {...stepProps} />
+          // Step 8: Pricing (was Step 9).
+          if (currentStep === 8) return <Step8Pricing {...stepProps} />
+          // Step 9: Review (was Step 10).
+          if (currentStep === 9) return <Step9Review {...stepProps} />
+          // Step 10: Submit (was Step 11).
+          if (currentStep === 10) return <Step10Submit {...stepProps} />
           return <PlaceholderStep step={step} />
         })()}
       </div>

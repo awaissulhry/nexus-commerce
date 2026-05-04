@@ -85,12 +85,14 @@ export default function Step2GtinExemption({
   updateWizardState,
   product,
   marketplace,
-}: StepProps) {
+  embedded = false,
+}: StepProps & { embedded?: boolean }) {
   const step1 = (wizardState.identifiers ?? {}) as Step1Slice
   const path = step1.path ?? 'apply-now'
 
   // ── Path 1 / 2 — Step 2 is informational only, just nudge Continue.
   if (path !== 'apply-now') {
+    if (embedded) return null
     return <NotApplicable path={path} />
   }
 
@@ -100,6 +102,7 @@ export default function Step2GtinExemption({
       updateWizardState={updateWizardState}
       product={product}
       marketplace={marketplace}
+      embedded={embedded}
     />
   )
 }
@@ -130,10 +133,11 @@ function ApplyFlow({
   updateWizardState,
   product,
   marketplace,
+  embedded = false,
 }: Pick<
   StepProps,
   'wizardState' | 'updateWizardState' | 'product' | 'marketplace'
->) {
+> & { embedded?: boolean }) {
   const [app, setApp] = useState<Application | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -335,12 +339,22 @@ function ApplyFlow({
   const isTerminal = status === 'APPROVED' || status === 'REJECTED'
 
   return (
-    <div className="max-w-3xl mx-auto py-8 px-6 space-y-6">
+    <div
+      className={cn(
+        embedded ? 'space-y-4' : 'max-w-3xl mx-auto py-8 px-6 space-y-6',
+      )}
+    >
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-[20px] font-semibold text-slate-900">
-            GTIN Exemption — {app.brandName} on Amazon {marketplace}
-          </h2>
+          {embedded ? (
+            <h3 className="text-[14px] font-semibold text-slate-900">
+              GTIN Exemption — {app.brandName} on Amazon {marketplace}
+            </h3>
+          ) : (
+            <h2 className="text-[20px] font-semibold text-slate-900">
+              GTIN Exemption — {app.brandName} on Amazon {marketplace}
+            </h2>
+          )}
           <p className="text-[13px] text-slate-600 mt-1 max-w-2xl">
             We generate the submission package; you upload it to Seller
             Central. Once Amazon approves, every future {app.brandName}{' '}
