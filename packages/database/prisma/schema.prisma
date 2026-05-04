@@ -1459,6 +1459,12 @@ model GtinExemptionApplication {
   brandName   String
   productIds  String[] // products this exemption covers
   marketplace String // IT | DE | FR | …
+  // Phase K.7 — Amazon's exemption-grant page asks per (brand,
+  // productType) so different categories can have independent
+  // approval status. Nullable for backwards compat with rows
+  // created before this column existed; null = "covers any
+  // category for this brand+marketplace".
+  productType String?
 
   // Brand verification path
   brandRegistrationType String // TRADEMARK | BRAND_STAND_IN | WEBSITE_ONLY

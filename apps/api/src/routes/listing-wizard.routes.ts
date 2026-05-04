@@ -471,11 +471,32 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         return { needed: true, reason: 'needed' }
       }
 
-      // Amazon exemptions are granted per (brand, marketplace). When
-      // the wizard targets multiple Amazon marketplaces, we check
-      // each — if every selected Amazon market has an APPROVED app,
-      // we skip; if any one is missing, the user has to walk Step 4
-      // to cover the gap.
+      // K.7 — Amazon exemptions are granted per (brand, productType,
+      // marketplace). Collect per-channel productType from
+      // channelStates; any channel with no productType yet falls back
+      // to the legacy shared state.productType slot for backwards
+      // compat.
+      const wizardState = (wizard.state ?? {}) as Record<string, any>
+      const channelStatesObj =
+        ((wizard.channelStates ?? {}) as Record<
+          string,
+          Record<string, any>
+        >) ?? {}
+      const fallbackProductType =
+        typeof wizardState?.productType?.productType === 'string'
+          ? (wizardState.productType.productType as string)
+          : null
+      const productTypeByMarketplace = new Map<string, string | null>()
+      for (const c of amazonChannels) {
+        const channelKey = `${c.platform}:${c.marketplace}`
+        const ptSlice = channelStatesObj[channelKey]?.productType
+        const productType =
+          (ptSlice && typeof ptSlice.productType === 'string'
+            ? ptSlice.productType
+            : null) ?? fallbackProductType
+        productTypeByMarketplace.set(c.marketplace, productType)
+      }
+
       const exemptions = await prisma.gtinExemptionApplication.findMany({
         where: {
           brandName: product.brand,
@@ -484,14 +505,20 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         orderBy: { updatedAt: 'desc' },
       })
 
-      const approvedMarkets = new Set(
-        exemptions
-          .filter((e) => e.status === 'APPROVED')
-          .map((e) => e.marketplace),
-      )
-      const allCovered = amazonChannels.every((c) =>
-        approvedMarkets.has(c.marketplace),
-      )
+      // Coverage check: each selected (marketplace, productType)
+      // counts as covered when there's an APPROVED exemption with
+      // the same productType OR with productType = NULL (legacy
+      // any-category match) for that marketplace.
+      const allCovered = amazonChannels.every((c) => {
+        const wantProductType = productTypeByMarketplace.get(c.marketplace) ?? null
+        return exemptions.some(
+          (e) =>
+            e.marketplace === c.marketplace &&
+            e.status === 'APPROVED' &&
+            (e.productType === null ||
+              (wantProductType !== null && e.productType === wantProductType)),
+        )
+      })
 
       if (allCovered) {
         // Pick the most recent approval for the UI banner.
