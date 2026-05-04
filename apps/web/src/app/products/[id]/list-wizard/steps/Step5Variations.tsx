@@ -4,8 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
-  ChevronDown,
-  ChevronRight,
   Loader2,
   PackageOpen,
 } from 'lucide-react'
@@ -88,7 +86,9 @@ export default function Step5Variations({
   const [includedSkus, setIncludedSkus] = useState<Set<string>>(
     new Set(slice.includedSkus ?? []),
   )
-  const [overridesExpanded, setOverridesExpanded] = useState(false)
+  // N.1 — per-marketplace themes always visible. The expandable
+  // collapse is gone; the grid below renders inline so the seller
+  // can see what each channel will publish under at a glance.
   const [customDraft, setCustomDraft] = useState<Record<string, string>>({})
 
   // Fetch payload. Re-fetch when channels or selection changes so the
@@ -383,36 +383,25 @@ export default function Step5Variations({
             )}
           </div>
 
-          {/* Per-channel overrides */}
-          {channelKeys.length > 1 && (
+          {/* N.1 — per-channel theme grid, always visible. Each row
+              shows the channel's resolved theme (override or inherits
+              common) plus a "Same as" / custom path. */}
+          {channelKeys.length > 0 && (
             <div className="mb-4 border border-slate-200 rounded-lg bg-white">
-              <button
-                type="button"
-                onClick={() => setOverridesExpanded((s) => !s)}
-                className="w-full flex items-center justify-between gap-2 px-4 py-2 text-[12px] text-slate-700 hover:bg-slate-50"
-              >
-                <span className="inline-flex items-center gap-1.5">
-                  {overridesExpanded ? (
-                    <ChevronDown className="w-3.5 h-3.5" />
-                  ) : (
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  )}
-                  <span className="font-medium">
-                    Override theme per channel
-                  </span>
-                  {Object.keys(themeByChannel).length > 0 && (
-                    <span className="text-[10px] font-medium text-blue-700 bg-blue-50 px-1 py-0.5 rounded">
-                      {Object.keys(themeByChannel).length}
-                    </span>
-                  )}
+              <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between text-[12px]">
+                <span className="font-medium text-slate-700">
+                  Per-marketplace themes
                 </span>
-                <span className="text-[11px] text-slate-400">
-                  {channelKeys.length} channels
+                <span className="text-[11px] text-slate-500">
+                  {Object.keys(themeByChannel).length > 0
+                    ? `${Object.keys(themeByChannel).length} override${
+                        Object.keys(themeByChannel).length === 1 ? '' : 's'
+                      }`
+                    : 'all inherit common'}
                 </span>
-              </button>
-              {overridesExpanded && (
-                <div className="border-t border-slate-100 px-4 py-3 space-y-2">
-                  {channelKeys.map((channelKey) => {
+              </div>
+              <div className="border-t border-slate-100 px-4 py-3 space-y-2">
+                {channelKeys.map((channelKey) => {
                     const themes = payload.themesByChannel[channelKey] ?? []
                     const overrideValue = themeByChannel[channelKey] ?? ''
                     const inherits = !overrideValue
@@ -594,8 +583,7 @@ export default function Step5Variations({
                       </div>
                     )
                   })}
-                </div>
-              )}
+              </div>
             </div>
           )}
 
