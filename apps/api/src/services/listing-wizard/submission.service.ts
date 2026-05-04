@@ -728,6 +728,15 @@ export class SubmissionService {
         ((slice as any).productType?.productType as string | undefined) ??
         fallbackProductType ??
         ''
+      // P.3 — browse-node IDs from the productType slice. When the
+      // user edited recommended_browse_nodes via Step 5 Attributes
+      // overrides, that wins (mergedAttrs path). Otherwise we lift
+      // them from the productType slice as a JSON-encoded string[]
+      // so the existing string_array expansion sends them as N
+      // wrapped entries.
+      const browseNodes =
+        ((slice as any).productType?.browseNodes as string[] | undefined) ??
+        []
       const channelAttrs = ((slice as any).attributes ?? {}) as Record<
         string,
         unknown
@@ -735,6 +744,12 @@ export class SubmissionService {
       const mergedAttrs: Record<string, unknown> = {
         ...baseAttributes,
         ...channelAttrs,
+      }
+      if (
+        browseNodes.length > 0 &&
+        !('recommended_browse_nodes' in mergedAttrs)
+      ) {
+        mergedAttrs.recommended_browse_nodes = JSON.stringify(browseNodes)
       }
       const theme =
         ((slice as any).variations?.theme as string | undefined) ??

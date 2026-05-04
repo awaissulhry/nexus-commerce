@@ -225,6 +225,10 @@ export class SchemaParserService {
       'item_dimensions',
       'package_dimensions',
       'package_weight',
+      // P.3 — browse nodes surface as a regular Amazon attribute
+      // (`recommended_browse_nodes`). Surfacing it as common-optional
+      // means sellers don't need to toggle "Show all" to find it.
+      'recommended_browse_nodes',
     ]
     for (const fieldId of COMMON_OPTIONAL) {
       if (requiredSet.has(fieldId)) continue

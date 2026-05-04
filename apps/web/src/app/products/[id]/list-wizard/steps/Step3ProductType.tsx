@@ -43,6 +43,13 @@ interface ProductTypeSlice {
   mirrorOf?: string
   selectedAt?: string
   aiSuggestions?: RankedSuggestion[]
+  /** P.3 — Amazon browse-node IDs for this channel. Per-marketplace
+   *  IDs differ even within the same physical category (Amazon DE
+   *  uses different node IDs than Amazon IT for the same shelf).
+   *  Stored here so the "Same as" mirror copies them along with the
+   *  productType, and the Step 5 Attributes step sees them via the
+   *  curated common-optional `recommended_browse_nodes` field. */
+  browseNodes?: string[]
 }
 
 const LIST_DEBOUNCE_MS = 200
@@ -778,6 +785,72 @@ function Picker({
           })}
         </div>
       </div>
+
+      {/* P.3 — Browse-node input. Only meaningful once a productType
+          is picked. Comma-separated list of Amazon browse-node IDs;
+          per-marketplace IDs differ even for the same physical
+          category. The "Same as" mirror on the channel row already
+          copies these along with the productType. */}
+      {currentPick?.productType && (
+        <BrowseNodeInput
+          value={currentPick?.browseNodes ?? []}
+          onChange={(next) => {
+            // Update slice in place — keep all current fields,
+            // overwrite browseNodes only.
+            onPick({
+              ...(currentPick ?? {}),
+              productType: currentPick!.productType,
+              displayName: currentPick!.displayName,
+              browseNodes: next,
+              selectedAt: currentPick!.selectedAt ?? new Date().toISOString(),
+            })
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function BrowseNodeInput({
+  value,
+  onChange,
+}: {
+  value: string[]
+  onChange: (next: string[]) => void
+}) {
+  const [draft, setDraft] = useState(value.join(', '))
+  // Keep the draft in sync when an external mirror writes new
+  // browseNodes to the slice.
+  useEffect(() => {
+    setDraft(value.join(', '))
+  }, [value])
+  return (
+    <div className="border border-slate-200 rounded-lg bg-white px-3 py-2">
+      <label className="block text-[11px] font-medium text-slate-700 mb-1">
+        Browse-node IDs
+        <span className="ml-2 text-[10px] font-normal text-slate-500">
+          comma-separated, marketplace-specific
+        </span>
+      </label>
+      <input
+        type="text"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          const parts = draft
+            .split(/[,\s]+/)
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0)
+          onChange(parts)
+        }}
+        placeholder="e.g. 1571265031, 1400717031"
+        className="w-full h-7 px-2 text-[12px] font-mono border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+      />
+      <p className="mt-1 text-[10px] text-slate-400">
+        Look these up in Amazon Seller Central → Inventory → Add a Product →
+        the category page footer shows the node ID. The wizard publishes
+        them as <span className="font-mono">recommended_browse_nodes</span>.
+      </p>
     </div>
   )
 }
