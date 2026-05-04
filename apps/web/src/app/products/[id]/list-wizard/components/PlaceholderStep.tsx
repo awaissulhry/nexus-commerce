@@ -31,7 +31,10 @@ export default function PlaceholderStep({ step }: Props) {
         <p className="text-[13px] text-slate-700 mb-2">
           This step ships in{' '}
           <span className="font-semibold text-blue-700">
-            Phase {step.filledIn}
+            {/* Some filledIn values already include the word "Phase". */}
+            {step.filledIn.startsWith('Phase')
+              ? step.filledIn
+              : `Phase ${step.filledIn}`}
           </span>
         </p>
         <p className="text-[12px] text-slate-500 max-w-md mx-auto">

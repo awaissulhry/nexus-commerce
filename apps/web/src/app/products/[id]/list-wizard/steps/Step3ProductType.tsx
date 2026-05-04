@@ -72,6 +72,12 @@ export default function Step3ProductType({
   // Build initial picks from channelStates → fall back to the legacy
   // shared slot for backwards compat with Phase B-D wizards that wrote
   // a single shared productType.
+  // FF — pickable platforms have a real taxonomy backend. Amazon uses
+  // list-once-filter-client; eBay uses search-as-you-type via the
+  // Taxonomy API. Other platforms (Shopify, Woo) are still skipped.
+  const isPickable = (platform: string) =>
+    platform === 'AMAZON' || platform === 'EBAY'
+
   const initialPicks = useMemo(() => {
     const m: Record<string, ProductTypeSlice> = {}
     for (const c of channels) {
@@ -96,17 +102,19 @@ export default function Step3ProductType({
     initialPicks,
   )
   const [expanded, setExpanded] = useState<Set<string>>(() => {
-    // Auto-expand any channel that doesn't have a pick yet.
+    // Auto-expand any pickable channel that doesn't have a pick yet.
     const set = new Set<string>()
     for (const c of channels) {
       const key = `${c.platform}:${c.marketplace}`
-      if (c.platform !== 'AMAZON') continue
+      if (!isPickable(c.platform)) continue
       if (!initialPicks[key]?.productType) set.add(key)
     }
-    // If everyone already has a pick, expand the first one as a default.
-    if (set.size === 0 && channels[0]) {
-      const k = `${channels[0].platform}:${channels[0].marketplace}`
-      if (channels[0].platform === 'AMAZON') set.add(k)
+    // If everyone already has a pick, expand the first pickable one.
+    if (set.size === 0) {
+      const firstPickable = channels.find((c) => isPickable(c.platform))
+      if (firstPickable) {
+        set.add(`${firstPickable.platform}:${firstPickable.marketplace}`)
+      }
     }
     return set
   })
@@ -194,19 +202,34 @@ export default function Step3ProductType({
     })
   }, [])
 
-  // ── Continue gating: every Amazon channel needs a pick ──────
-  const amazonChannelKeys = useMemo(
+  // ── Continue gating: every pickable channel needs a pick ──────
+  const pickableChannelKeys = useMemo(
     () =>
       channels
-        .filter((c) => c.platform === 'AMAZON')
+        .filter((c) => isPickable(c.platform))
         .map((c) => `${c.platform}:${c.marketplace}`),
     [channels],
   )
+  // Mirror still only makes sense within the same channel — copying
+  // an Amazon productType id into an eBay categoryId field would be
+  // garbage. Keep mirror candidates per-channel.
+  const mirrorCandidatesByKey = useMemo(() => {
+    const m: Record<string, string[]> = {}
+    for (const k of pickableChannelKeys) {
+      const [platform] = k.split(':')
+      m[k] = pickableChannelKeys.filter((other) => {
+        if (other === k) return false
+        if (!other.startsWith(`${platform}:`)) return false
+        return picks[other]?.productType && picks[other]!.productType!.length > 0
+      })
+    }
+    return m
+  }, [pickableChannelKeys, picks])
   const unsatisfied = useMemo(() => {
-    return amazonChannelKeys.filter(
+    return pickableChannelKeys.filter(
       (k) => !picks[k]?.productType || picks[k]!.productType!.length === 0,
     )
-  }, [amazonChannelKeys, picks])
+  }, [pickableChannelKeys, picks])
 
   const onContinue = useCallback(async () => {
     if (unsatisfied.length > 0) return
@@ -230,9 +253,10 @@ export default function Step3ProductType({
           Product Type
         </h2>
         <p className="text-[13px] text-slate-600 mt-1">
-          Pick a category per channel. Most sellers use the same Amazon
-          productType across markets — use the "Same as" dropdown to
-          mirror a sibling channel's pick instead of re-searching.
+          Pick a category per channel. Amazon uses its productType
+          taxonomy; eBay uses its category tree (search by name).
+          The "Same as" dropdown mirrors a sibling channel's pick
+          within the same platform.
         </p>
       </div>
 
@@ -240,9 +264,13 @@ export default function Step3ProductType({
         {channels.map((c) => {
           const channelKey = `${c.platform}:${c.marketplace}`
           const pick = picks[channelKey]
-          if (c.platform !== 'AMAZON') {
+          if (!isPickable(c.platform)) {
             return (
-              <NonAmazonRow key={channelKey} channelKey={channelKey} />
+              <NonPickableRow
+                key={channelKey}
+                channelKey={channelKey}
+                platform={c.platform}
+              />
             )
           }
           return (
@@ -268,12 +296,7 @@ export default function Step3ProductType({
                 })
               }}
               wizardId={wizardId}
-              mirrorCandidates={amazonChannelKeys.filter(
-                (k) =>
-                  k !== channelKey &&
-                  picks[k]?.productType &&
-                  picks[k]!.productType!.length > 0,
-              )}
+              mirrorCandidates={mirrorCandidatesByKey[channelKey] ?? []}
               mirrorPicks={picks}
             />
           )
@@ -365,9 +388,16 @@ function GtinStatusBanner({
   )
 }
 
-// ── Non-Amazon row: skipped today ───────────────────────────────
+// ── Non-pickable row: Shopify / WooCommerce don't use a category id
+// the same way Amazon / eBay do. We surface them as skipped.
 
-function NonAmazonRow({ channelKey }: { channelKey: string }) {
+function NonPickableRow({
+  channelKey,
+  platform,
+}: {
+  channelKey: string
+  platform: string
+}) {
   return (
     <div className="border border-slate-200 rounded-lg bg-slate-50/50 px-4 py-3 flex items-center justify-between">
       <div className="flex items-center gap-2 min-w-0">
@@ -379,7 +409,7 @@ function NonAmazonRow({ channelKey }: { channelKey: string }) {
         </span>
       </div>
       <span className="text-[11px] text-slate-500">
-        No productType taxonomy yet — TECH_DEBT #35
+        {platform} doesn't use a productType — handled by tags/collections at submit.
       </span>
     </div>
   )
@@ -786,12 +816,9 @@ function Picker({
         </div>
       </div>
 
-      {/* P.3 — Browse-node input. Only meaningful once a productType
-          is picked. Comma-separated list of Amazon browse-node IDs;
-          per-marketplace IDs differ even for the same physical
-          category. The "Same as" mirror on the channel row already
-          copies these along with the productType. */}
-      {currentPick?.productType && (
+      {/* P.3 — Browse-node input. Amazon-only; eBay's category-id IS
+          the leaf node, no separate browse-node taxonomy. */}
+      {currentPick?.productType && channel === 'AMAZON' && (
         <BrowseNodeInput
           value={currentPick?.browseNodes ?? []}
           onChange={(next) => {

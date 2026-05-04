@@ -328,12 +328,12 @@ export default function ListWizardClient({
           }
 
           // Step 2: Product Type (was Step 3 in the old flow).
-          if (currentStep === 2) {
-            if (firstChannel.platform === 'AMAZON') {
-              return <Step3ProductType {...stepProps} />
-            }
-            return <PlaceholderStep step={step} />
-          }
+          // Step3ProductType itself walks every channel and dispatches
+          // per-platform (Amazon list mode, eBay search mode, others
+          // marked skipped) — so we always render it, regardless of
+          // which channel happens to be first.
+          if (currentStep === 2) return <Step3ProductType {...stepProps} />
+
           // Step 3: Identifiers — L.1 inlines the GTIN exemption form
           // when path === 'apply-now', so there's no separate Step 4
           // for GTIN anymore. /gtin-status auto-skip logic moved into
