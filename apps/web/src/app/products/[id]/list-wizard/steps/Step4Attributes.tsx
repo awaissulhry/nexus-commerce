@@ -590,6 +590,19 @@ export default function Step4Attributes({
         />
       )}
 
+      {/* EE.4 — channel-aware section heading. Tells the user what
+          they're editing in the active tab so eBay aspects don't read
+          as generic attributes alongside Amazon's. */}
+      {manifest && manifest.fields.length > 0 && activeTab !== 'base' && (
+        <div className="mt-3 mb-1 text-[12px] font-semibold text-slate-700">
+          {activeTab.startsWith('EBAY:')
+            ? `Item Specifics for eBay ${activeTab.split(':')[1] ?? ''}`
+            : activeTab.startsWith('AMAZON:')
+            ? `Listing attributes for Amazon ${activeTab.split(':')[1] ?? ''}`
+            : `${activeTab} attributes`}
+        </div>
+      )}
+
       {manifest && manifest.fields.length > 0 && (
         <div className="space-y-3 mt-3">
           {groupFields(

@@ -4,12 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
+  ExternalLink,
   Globe,
   Loader2,
   ShoppingBag,
   Store,
   XCircle,
 } from 'lucide-react'
+import Link from 'next/link'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
@@ -264,7 +266,21 @@ function PlatformCard({
             )}
           </div>
         </div>
-        <ConnectionBadge connected={status.connected} />
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {/* EE.3 — Connect CTA when not connected. /settings/channels
+              is the canonical location for OAuth + credential setup. */}
+          {!status.connected && (
+            <Link
+              href="/settings/channels"
+              target="_blank"
+              className="inline-flex items-center gap-1 h-6 px-2 text-[11px] font-medium text-blue-700 border border-blue-200 rounded-md hover:bg-blue-50"
+            >
+              Connect {label}
+              <ExternalLink className="w-3 h-3" />
+            </Link>
+          )}
+          <ConnectionBadge connected={status.connected} />
+        </div>
       </div>
       <div className="px-4 py-3 flex flex-wrap gap-1.5">
         {status.marketplaces.map((m) => {

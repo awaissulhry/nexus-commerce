@@ -20,6 +20,7 @@ import {
   hasMarketplaceContextRef,
   hierarchyCtxRef,
 } from './refs'
+import { ProductTypeCell } from './ProductTypeCell'
 import type { BulkProduct } from './types'
 
 // ── Constants ─────────────────────────────────────────────────────
@@ -315,6 +316,20 @@ export function buildColumnFromField(field: FieldDef): ColumnDef<BulkProduct> {
       meta,
       cell: (ctx) => <SkuCell ctx={ctx} field={field} />,
     }
+  }
+
+  // EE.2 — productType uses a channel-aware picker (list for AMAZON,
+  // search for EBAY) instead of plain text input. Picks
+  // ProductTypePicker mode off the active marketplace tab.
+  if (field.id === 'productType') {
+    return {
+      id: field.id,
+      accessorKey: field.id as string,
+      header: field.label,
+      size,
+      meta,
+      cell: (ctx) => <ProductTypeCell ctx={ctx} />,
+    } as ColumnDef<BulkProduct>
   }
 
   const accessor = isChannelField

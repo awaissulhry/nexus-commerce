@@ -103,6 +103,7 @@ import {
   hierarchyCtxRef,
   selectCtxRef,
   hasMarketplaceContextRef,
+  primaryContextRef,
 } from './lib/refs'
 import NewProductModal from './components/NewProductModal'
 import ReplicateModal from './components/ReplicateModal'
@@ -679,6 +680,19 @@ export default function BulkOperationsClient() {
   // cell renderers can show "Select marketplace" placeholder when
   // context is missing.
   hasMarketplaceContextRef.current = marketplaceTargets.length > 0
+  // EE.2 — productType cell uses this to dispatch to the right
+  // ProductTypePicker mode (search for EBAY, list for AMAZON).
+  primaryContextRef.current = primaryContext
+    ? {
+        channel: primaryContext.channel as
+          | 'AMAZON'
+          | 'EBAY'
+          | 'SHOPIFY'
+          | 'WOOCOMMERCE'
+          | 'ETSY',
+        marketplace: primaryContext.marketplace,
+      }
+    : null
 
   // Refs for stable callbacks
   const productsRef = useRef(products)
@@ -1604,6 +1618,33 @@ export default function BulkOperationsClient() {
     primaryContext?.marketplace,
     schemaWarmth,
   ])
+
+  // EE.1 — auto-include channel-specific + schema attr_* columns the
+  // first time the user lands on a given (channel, marketplace). This
+  // promotes the manual "+ N for EBAY:IT" CC.3 button to automatic so
+  // the grid feels populated when an eBay tab is clicked instead of
+  // showing only universal fields. Each (channel, marketplace) is
+  // auto-loaded at most once per session (autoLoadedRef tracks). If
+  // the user removes columns afterwards, we don't re-add them. The
+  // ColumnSelector + the explicit "+ N" button still let them pull
+  // anything back in.
+  const autoLoadedRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (!primaryContext) return
+    if (allFields.length === 0) return
+    const tabKey = `${primaryContext.channel}:${primaryContext.marketplace}`
+    if (autoLoadedRef.current.has(tabKey)) return
+    const missing = allFields.filter((f) => {
+      if (visibleColumnIds.includes(f.id)) return false
+      if (f.id.startsWith('attr_')) return true
+      if (f.channel === primaryContext.channel) return true
+      return false
+    })
+    autoLoadedRef.current.add(tabKey)
+    if (missing.length === 0) return
+    setVisibleColumnIds((prev) => [...prev, ...missing.map((f) => f.id)])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allFields, primaryContext?.channel, primaryContext?.marketplace])
 
   // ── Build columns dynamically from registry + visibility ──────────
   const fieldsById = useMemo(() => {

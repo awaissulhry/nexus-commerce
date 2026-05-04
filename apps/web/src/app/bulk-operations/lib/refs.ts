@@ -60,6 +60,16 @@ export const hasMarketplaceContextRef: { current: boolean } = {
   current: false,
 }
 
+/** EE.2 — active marketplace context (primary tab) for cells that
+ *  need to dispatch into channel-specific pickers (productType). */
+export const primaryContextRef: {
+  current:
+    | { channel: 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'WOOCOMMERCE' | 'ETSY'; marketplace: string }
+    | null
+} = {
+  current: null,
+}
+
 /** T.4 — row-level actions (delete, future: duplicate, etc.) so the
  *  actions column renderer can stay outside dynamicColumns' deps. */
 export interface ActionsCtx {

@@ -319,10 +319,11 @@ export default function ReplicateModal({
               <span>
                 <span className="font-medium">Columns only</span> — copy
                 title / description / bullet points / price / stock,
-                skip channel-specific attributes (Amazon attr_* /
-                eBay aspects). Recommended for cross-channel copies
-                (Amazon ↔ eBay) since their attribute namespaces don't
-                overlap.
+                skip attributes entirely. EE.5 — cross-channel copies
+                (Amazon ↔ eBay) automatically map well-known concepts
+                (brand, color, size, material, mpn, style, pattern,
+                manufacturer) when this is off; non-overlapping
+                attributes are dropped silently.
               </span>
             </label>
           </Section>

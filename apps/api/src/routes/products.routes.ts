@@ -2048,6 +2048,12 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           }
 
           // Attributes: identity-match merge unless columnsOnly.
+          // EE.5 — when source.channel !== target.channel, run keys
+          // through CROSS_CHANNEL_ATTR_MAP to map equivalent concepts
+          // (Amazon "brand" → eBay "brand"; Amazon "material_type" →
+          // eBay "material"; etc.). Identity-match on top so any
+          // already-canonical keys flow regardless. Unmapped keys
+          // get reported back so the user can see what didn't carry.
           if (!columnsOnly) {
             const sourcePA =
               (source.platformAttributes as Record<string, any> | null) ?? null
@@ -2063,9 +2069,18 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
                 existingPA && typeof existingPA.attributes === 'object'
                   ? (existingPA.attributes as Record<string, unknown>)
                   : {}
+              const isCrossChannel =
+                sourceContext.channel !== tc.channel
+              const mapped = isCrossChannel
+                ? mapAttributesCrossChannel(
+                    sourceAttrs,
+                    sourceContext.channel,
+                    tc.channel,
+                  )
+                : sourceAttrs
               const merged: Record<string, unknown> = {
                 ...existingAttrs,
-                ...sourceAttrs,
+                ...mapped,
               }
               data.platformAttributes = {
                 ...(existingPA ?? {}),
@@ -2115,6 +2130,71 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       errors,
     }
   })
+}
+
+// EE.5 — canonical-name mapping for cross-channel replicate. Keys
+// are well-known overlapping concepts; values for non-listed keys
+// (Amazon's `attr_armorType` → eBay's "EN 1621-2 level") cannot be
+// derived without per-attribute logic and are dropped from the
+// cross-channel copy. The user is told via the result.errors list.
+const AMAZON_TO_EBAY_ATTR: Record<string, string> = {
+  brand: 'brand',
+  brand_name: 'brand',
+  color: 'color',
+  color_name: 'color',
+  size: 'size',
+  size_name: 'size',
+  material: 'material',
+  material_type: 'material',
+  manufacturer: 'manufacturer',
+  mpn: 'mpn',
+  model_name: 'mpn',
+  model_number: 'mpn',
+  part_number: 'mpn',
+  style: 'style',
+  style_name: 'style',
+  pattern: 'pattern',
+  pattern_name: 'pattern',
+  department_name: 'department',
+  age_range_description: 'age_group',
+  target_gender: 'department',
+}
+
+const EBAY_TO_AMAZON_ATTR: Record<string, string> = {
+  brand: 'brand',
+  color: 'color',
+  size: 'size',
+  material: 'material_type',
+  manufacturer: 'manufacturer',
+  mpn: 'model_name',
+  style: 'style',
+  pattern: 'pattern',
+  department: 'department_name',
+  age_group: 'age_range_description',
+}
+
+function mapAttributesCrossChannel(
+  source: Record<string, unknown>,
+  fromChannel: 'AMAZON' | 'EBAY',
+  toChannel: 'AMAZON' | 'EBAY',
+): Record<string, unknown> {
+  if (fromChannel === toChannel) return source
+  const table =
+    fromChannel === 'AMAZON' && toChannel === 'EBAY'
+      ? AMAZON_TO_EBAY_ATTR
+      : fromChannel === 'EBAY' && toChannel === 'AMAZON'
+      ? EBAY_TO_AMAZON_ATTR
+      : null
+  if (!table) return {}
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(source)) {
+    const canonical = k.toLowerCase()
+    const mapped = table[canonical]
+    if (mapped) {
+      out[mapped] = v
+    }
+  }
+  return out
 }
 
 export default productsRoutes
