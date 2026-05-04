@@ -89,15 +89,6 @@ export const STEPS: StepConfig[] = [
   },
   {
     id: 7,
-    title: 'Content',
-    shortLabel: 'Content',
-    description: 'Title, bullets, description — per-channel tabs',
-    filledIn: 'Phase G',
-    preview:
-      'Per-channel tabs with AI dedup: same (language, format-rules) → one Gemini call, broadcast to matching channels. Apply-to-all for shared content; per-channel edit for overrides.',
-  },
-  {
-    id: 8,
     title: 'Pricing',
     shortLabel: 'Pricing',
     description: 'Base price + per-marketplace overrides',
@@ -106,7 +97,7 @@ export const STEPS: StepConfig[] = [
       'Base price with override grid per (platform, marketplace). Per-channel fee + currency display, margin calculator, repricing-band warnings.',
   },
   {
-    id: 9,
+    id: 8,
     title: 'Review',
     shortLabel: 'Review',
     description: 'Multi-channel summary before submit',
@@ -115,7 +106,7 @@ export const STEPS: StepConfig[] = [
       'Per-channel cards with prepared payload, validation status, and conflict detection across channels. Hard validation per channel before Submit unlocks.',
   },
   {
-    id: 10,
+    id: 9,
     title: 'Submit',
     shortLabel: 'Submit',
     description: 'Parallel publish with retry-failed-only',

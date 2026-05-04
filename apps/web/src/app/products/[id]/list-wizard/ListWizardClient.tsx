@@ -11,7 +11,6 @@ import Step1Identifiers from './steps/Step1Identifiers'
 import Step3ProductType from './steps/Step3ProductType'
 import Step4Attributes from './steps/Step4Attributes'
 import Step5Variations from './steps/Step5Variations'
-import Step6Content from './steps/Step6Content'
 import Step7Images from './steps/Step7Images'
 import Step8Pricing from './steps/Step8Pricing'
 import Step9Review from './steps/Step9Review'
@@ -344,16 +343,15 @@ export default function ListWizardClient({
           if (currentStep === 4) return <Step5Variations {...stepProps} />
           // Step 5: Attributes (was Step 6).
           if (currentStep === 5) return <Step4Attributes {...stepProps} />
-          // Step 6: Images (was Step 7).
+          // L.3 — Content step removed; the 4 content fields
+          // (item_name, bullet_point, product_description,
+          // generic_keyword) are surfaced inside Step 5 (Attributes)
+          // via the curated common-optional set + per-field AI
+          // generate (L.2). Pricing now sits at currentStep 7.
           if (currentStep === 6) return <Step7Images {...stepProps} />
-          // Step 7: Content (was Step 8).
-          if (currentStep === 7) return <Step6Content {...stepProps} />
-          // Step 8: Pricing (was Step 9).
-          if (currentStep === 8) return <Step8Pricing {...stepProps} />
-          // Step 9: Review (was Step 10).
-          if (currentStep === 9) return <Step9Review {...stepProps} />
-          // Step 10: Submit (was Step 11).
-          if (currentStep === 10) return <Step10Submit {...stepProps} />
+          if (currentStep === 7) return <Step8Pricing {...stepProps} />
+          if (currentStep === 8) return <Step9Review {...stepProps} />
+          if (currentStep === 9) return <Step10Submit {...stepProps} />
           return <PlaceholderStep step={step} />
         })()}
       </div>

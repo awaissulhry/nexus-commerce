@@ -625,35 +625,12 @@ export class SubmissionService {
         items.push({ step: 7, title: 'Images', status: 'skipped' })
       }
 
-      // Step 8 — Content (per group). Channel's group key = its
-      // (lang, platform). Need title + ≥1 bullet for that group.
-      const groupKey = contentGroupKey(c.platform, c.marketplace)
-      const groupContent = (contentByGroup as Record<string, any>)[groupKey]
-      const hasTitle =
-        typeof groupContent?.title?.content === 'string' &&
-        groupContent.title.content.trim().length > 0
-      const hasBullets =
-        Array.isArray(groupContent?.bullets?.content) &&
-        groupContent.bullets.content.some(
-          (b: unknown) => typeof b === 'string' && b.trim().length > 0,
-        )
-      if (hasTitle && hasBullets) {
-        items.push({
-          step: 8,
-          title: 'Content',
-          status: 'complete',
-          message: groupKey,
-        })
-      } else {
-        items.push({
-          step: 8,
-          title: 'Content',
-          status: 'incomplete',
-          message: `Title + ≥1 bullet missing for group ${groupKey}.`,
-        })
-      }
+      // L.3 — Content step removed; content fields (item_name,
+      // bullet_point, product_description, generic_keyword) are now
+      // checked as part of the Attributes step above. Skip the
+      // separate Content validation entry.
 
-      // Step 9 — Pricing. Per-channel override → base fallback.
+      // Step 7 — Pricing. Per-channel override → base fallback.
       const basePricing = state.pricing ?? {}
       const channelPricing = (slice as any).pricing ?? {}
       const effectivePrice =
@@ -665,14 +642,14 @@ export class SubmissionService {
           : undefined)
       if (typeof effectivePrice === 'number' && effectivePrice > 0) {
         items.push({
-          step: 9,
+          step: 7,
           title: 'Pricing',
           status: 'complete',
           message: String(effectivePrice),
         })
       } else {
         items.push({
-          step: 9,
+          step: 7,
           title: 'Pricing',
           status: 'incomplete',
           message: 'Set a marketplace price.',
@@ -792,7 +769,19 @@ export class SubmissionService {
         }
       }
 
-      if (typeof groupContent?.title?.content === 'string' && groupContent.title.content.trim().length > 0) {
+      // L.3 — content fields (item_name, bullet_point,
+      // product_description, generic_keyword) are now part of
+      // state.attributes / channelStates[key].attributes — already
+      // wrapped above in the mergedAttrs loop. Backwards-compat:
+      // pre-L.3 wizards may still have content in state.content.
+      // byGroup; lift those values into amazonAttributes only when
+      // the corresponding attribute slot is empty so existing
+      // wizards still publish.
+      if (
+        !amazonAttributes.item_name &&
+        typeof groupContent?.title?.content === 'string' &&
+        groupContent.title.content.trim().length > 0
+      ) {
         amazonAttributes.item_name = [
           {
             marketplace_id: marketplaceId,
@@ -800,7 +789,10 @@ export class SubmissionService {
           },
         ]
       }
-      if (Array.isArray(groupContent?.bullets?.content)) {
+      if (
+        !amazonAttributes.bullet_point &&
+        Array.isArray(groupContent?.bullets?.content)
+      ) {
         amazonAttributes.bullet_point = groupContent.bullets.content
           .filter(
             (b: unknown) => typeof b === 'string' && b.trim().length > 0,
@@ -811,6 +803,7 @@ export class SubmissionService {
           }))
       }
       if (
+        !amazonAttributes.product_description &&
         typeof groupContent?.description?.content === 'string' &&
         groupContent.description.content.trim().length > 0
       ) {
@@ -822,6 +815,7 @@ export class SubmissionService {
         ]
       }
       if (
+        !amazonAttributes.generic_keyword &&
         typeof groupContent?.keywords?.content === 'string' &&
         groupContent.keywords.content.trim().length > 0
       ) {
