@@ -70,6 +70,24 @@ export const primaryContextRef: {
   current: null,
 }
 
+/** JJ — column-id → group tone + group-edge flag, synced each render
+ *  from BulkOperationsClient. GridRow looks tones up here so the body
+ *  cells share the per-product editor's tinted look without
+ *  threading tone props through the memoised TableRow. */
+export interface ColumnTone {
+  band: string
+  text: string
+  cell: string
+  /** Whether this column is the LAST visible column in its group.
+   *  Body cells use this to render a thicker `border-r-2` so groups
+   *  read as visual blocks. */
+  isGroupEdge: boolean
+}
+
+export const columnTonesRef: { current: Map<string, ColumnTone> } = {
+  current: new Map(),
+}
+
 /** T.4 — row-level actions (delete, future: duplicate, etc.) so the
  *  actions column renderer can stay outside dynamicColumns' deps. */
 export interface ActionsCtx {

@@ -104,6 +104,8 @@ import {
   selectCtxRef,
   hasMarketplaceContextRef,
   primaryContextRef,
+  columnTonesRef,
+  type ColumnTone,
 } from './lib/refs'
 import NewProductModal from './components/NewProductModal'
 import ReplicateModal from './components/ReplicateModal'
@@ -147,32 +149,38 @@ interface GroupTone {
   band: string
   text: string
   ring: string
+  /** JJ — soft body-cell tint, mirroring the per-product editor's
+   *  TONE_BY_GROUP shape so the two grids share a visual identity. */
+  cell: string
 }
 
-// W.1 — schema-style keys only. Master (registry) categories map to
-// the same keys so master columns and their attr_* schema equivalents
-// bucket together in one chip (e.g. `brand` (universal) + `attr_brand`
-// (Identity) → both 'Identity').
+// W.1 / JJ — schema-style keys only. Master (registry) categories map
+// to the same keys so master columns and their attr_* schema
+// equivalents bucket together in one chip (e.g. `brand` (universal) +
+// `attr_brand` (Identity) → both 'Identity'). Palette mirrors the
+// per-product BulkEditClient.tsx TONE_BY_GROUP so users get the same
+// colour-per-group identity in either tool.
 const GROUP_TONE: Record<string, GroupTone> = {
-  Identity: { band: 'bg-slate-100 border-slate-300', text: 'text-slate-900', ring: 'border-slate-300' },
-  Identifiers: { band: 'bg-indigo-50 border-indigo-200', text: 'text-indigo-900', ring: 'border-indigo-200' },
-  'Marketing copy': { band: 'bg-violet-50 border-violet-200', text: 'text-violet-900', ring: 'border-violet-200' },
-  'Variation attributes': { band: 'bg-fuchsia-50 border-fuchsia-200', text: 'text-fuchsia-900', ring: 'border-fuchsia-200' },
-  Audience: { band: 'bg-cyan-50 border-cyan-200', text: 'text-cyan-900', ring: 'border-cyan-200' },
-  Categorisation: { band: 'bg-rose-50 border-rose-200', text: 'text-rose-900', ring: 'border-rose-200' },
-  Pricing: { band: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-900', ring: 'border-emerald-200' },
-  Inventory: { band: 'bg-amber-50 border-amber-200', text: 'text-amber-900', ring: 'border-amber-200' },
-  'Pricing & fulfillment': { band: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-900', ring: 'border-emerald-200' },
-  Physical: { band: 'bg-sky-50 border-sky-200', text: 'text-sky-900', ring: 'border-sky-200' },
-  'Physical attributes': { band: 'bg-sky-50 border-sky-200', text: 'text-sky-900', ring: 'border-sky-200' },
-  'Compliance & safety': { band: 'bg-amber-50 border-amber-200', text: 'text-amber-900', ring: 'border-amber-200' },
-  'Other attributes': { band: 'bg-slate-50 border-slate-200', text: 'text-slate-700', ring: 'border-slate-200' },
+  Identity: { band: 'bg-slate-100 border-slate-300', text: 'text-slate-900', ring: 'border-slate-300', cell: 'bg-white' },
+  Identifiers: { band: 'bg-indigo-50 border-indigo-200', text: 'text-indigo-900', ring: 'border-indigo-200', cell: 'bg-indigo-50/30' },
+  'Marketing copy': { band: 'bg-violet-50 border-violet-200', text: 'text-violet-900', ring: 'border-violet-200', cell: 'bg-violet-50/30' },
+  'Variation attributes': { band: 'bg-fuchsia-50 border-fuchsia-200', text: 'text-fuchsia-900', ring: 'border-fuchsia-200', cell: 'bg-fuchsia-50/30' },
+  Audience: { band: 'bg-cyan-50 border-cyan-200', text: 'text-cyan-900', ring: 'border-cyan-200', cell: 'bg-cyan-50/30' },
+  Categorisation: { band: 'bg-rose-50 border-rose-200', text: 'text-rose-900', ring: 'border-rose-200', cell: 'bg-rose-50/30' },
+  Pricing: { band: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-900', ring: 'border-emerald-200', cell: 'bg-emerald-50/30' },
+  Inventory: { band: 'bg-amber-50 border-amber-200', text: 'text-amber-900', ring: 'border-amber-200', cell: 'bg-amber-50/30' },
+  'Pricing & fulfillment': { band: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-900', ring: 'border-emerald-200', cell: 'bg-emerald-50/30' },
+  Physical: { band: 'bg-sky-50 border-sky-200', text: 'text-sky-900', ring: 'border-sky-200', cell: 'bg-sky-50/30' },
+  'Physical attributes': { band: 'bg-sky-50 border-sky-200', text: 'text-sky-900', ring: 'border-sky-200', cell: 'bg-sky-50/30' },
+  'Compliance & safety': { band: 'bg-amber-50 border-amber-200', text: 'text-amber-900', ring: 'border-amber-200', cell: 'bg-amber-50/30' },
+  'Other attributes': { band: 'bg-slate-50 border-slate-200', text: 'text-slate-700', ring: 'border-slate-200', cell: 'bg-slate-50/30' },
 }
 
 const NEUTRAL_TONE: GroupTone = {
   band: 'bg-slate-100 border-slate-200',
   text: 'text-slate-900',
   ring: 'border-slate-200',
+  cell: 'bg-white',
 }
 
 // W.1 — keys are now schema-style display names; the label map only
@@ -1688,6 +1696,29 @@ export default function BulkOperationsClient() {
     }
     return result
   }, [visibleColumnIds, fieldsById, columnSizing])
+
+  // JJ — per-column tone lookup so header + body cell + group-edge
+  // border can all read from one source. Last-field-in-group flag
+  // drives `border-r-2` so groups read as visual blocks. Only
+  // non-collapsed groups contribute (collapsed groups have no
+  // visible columns).
+  const columnTones = useMemo(() => {
+    const m = new Map<string, ColumnTone>()
+    for (const g of groupedFields) {
+      if (collapsedGroups.has(g.key)) continue
+      const tone = GROUP_TONE[g.key] ?? NEUTRAL_TONE
+      g.fields.forEach((f, i) => {
+        m.set(f.id, {
+          band: tone.band,
+          text: tone.text,
+          cell: tone.cell,
+          isGroupEdge: i === g.fields.length - 1,
+        })
+      })
+    }
+    return m
+  }, [groupedFields, collapsedGroups])
+  columnTonesRef.current = columnTones
 
   const dynamicColumns = useMemo<ColumnDef<BulkProduct>[]>(() => {
     const out: ColumnDef<BulkProduct>[] = []
@@ -3233,7 +3264,28 @@ export default function BulkOperationsClient() {
                   setDragOverColumnSide(null)
                 }}
                 className={cn(
-                  'relative flex items-center gap-1 px-3 border-r border-slate-200/70 last:border-r-0 text-[11px] font-semibold text-slate-700 uppercase tracking-wider transition-colors',
+                  'relative flex items-center gap-1 px-3 text-[11px] font-semibold uppercase tracking-wider transition-colors',
+                  // JJ — per-group tone classes mirror the per-product
+                  // bulk editor so users get a consistent colour
+                  // identity across both grids. System columns (sku,
+                  // __actions) keep the neutral slate header.
+                  (() => {
+                    const tone = columnTones.get(header.column.id)
+                    if (
+                      !tone ||
+                      header.column.id === 'sku' ||
+                      header.column.id === '__actions'
+                    ) {
+                      return 'border-r border-slate-200/70 last:border-r-0 text-slate-700'
+                    }
+                    return cn(
+                      tone.band,
+                      tone.text,
+                      tone.isGroupEdge
+                        ? 'border-r-2'
+                        : 'border-r border-slate-200/70',
+                    )
+                  })(),
                   isDraggable && 'cursor-grab active:cursor-grabbing',
                   draggedColumnId === header.column.id && 'opacity-40',
                   // W.6 — pin SKU column to the left + actions to the

@@ -6,7 +6,11 @@ import { flexRender } from '@tanstack/react-table'
 import type { Row } from '@tanstack/react-table'
 import { cn } from '@/lib/utils'
 import { isAggregatableField, type HierarchyRow } from '../lib/hierarchy'
-import { hierarchyCtxRef, selectCtxRef } from '../lib/refs'
+import {
+  columnTonesRef,
+  hierarchyCtxRef,
+  selectCtxRef,
+} from '../lib/refs'
 import {
   ROW_HEIGHT,
   type BulkProduct,
@@ -62,6 +66,14 @@ export const TableRow = memo(
             | { fieldDef?: { editable: boolean } }
             | undefined)?.fieldDef
           const isReadOnlyCell = fieldDef ? !fieldDef.editable : false
+          // JJ — per-group cell tint + thicker border at group edges,
+          // mirroring the per-product editor's TONE_BY_GROUP look.
+          // System columns (sku / __actions) opt out of the tint so
+          // their sticky white background stays opaque against the
+          // tinted scrolling cells underneath.
+          const tone = columnTonesRef.current.get(cell.column.id)
+          const isSystemCol =
+            cell.column.id === 'sku' || cell.column.id === '__actions'
           return (
             <div
               key={cell.id}
@@ -88,7 +100,15 @@ export const TableRow = memo(
                   : undefined
               }
               className={cn(
-                'overflow-hidden border-r border-slate-100/60 last:border-r-0 relative select-none',
+                'overflow-hidden relative select-none',
+                tone && !isSystemCol
+                  ? cn(
+                      tone.cell,
+                      tone.isGroupEdge
+                        ? 'border-r-2 border-slate-200'
+                        : 'border-r border-slate-100/60',
+                    )
+                  : 'border-r border-slate-100/60 last:border-r-0',
                 isReadOnlyCell && 'bg-slate-50/40',
                 selectable && 'hover:bg-slate-50',
                 // W.6 — frozen left/right columns. Opaque bg so cells
