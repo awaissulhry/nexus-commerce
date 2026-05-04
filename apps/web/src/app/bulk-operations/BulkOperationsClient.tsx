@@ -47,6 +47,7 @@ import MarketplaceSelector, {
   type MarketplaceContext,
   type MarketplaceOption,
 } from './components/MarketplaceSelector'
+import MarketplaceTabs from './components/MarketplaceTabs'
 import {
   loadAllViews,
   saveUserView,
@@ -2209,6 +2210,28 @@ export default function BulkOperationsClient() {
       <MarketplaceContextBanner
         visible={showContextBanner}
         pendingChannelChanges={pendingChannelChanges}
+      />
+
+      {/* T.7 — marketplace tab strip. Master tab clears the primary
+          context; each marketplace tab sets it to that single (channel,
+          marketplace) so _channelListing hydration + channel-prefixed
+          column rendering switches in one click. The multi-select
+          selector in the toolbar below still drives fan-out edit
+          scope (Cmd+S broadcasts to every selected target). */}
+      <MarketplaceTabs
+        options={marketplaceOptions}
+        primaryKey={
+          primaryContext
+            ? `${primaryContext.channel}:${primaryContext.marketplace}`
+            : null
+        }
+        onSelect={(channel, marketplace) => {
+          if (channel === null) {
+            setMarketplaceTargets([])
+          } else {
+            setMarketplaceTargets([{ channel, marketplace }])
+          }
+        }}
       />
 
       {/* Two-row toolbar.
