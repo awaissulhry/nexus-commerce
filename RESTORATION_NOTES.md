@@ -1046,3 +1046,89 @@ See TECH_DEBT.md #34 for the full list. Headline items:
   "operate on these two products" or "operate on every variation
   underneath"?). Defer until the user picks one.
 
+---
+
+# Listing Wizard — Multi-channel rebuild (Phase A → J, 2026-05-04)
+
+The original 10-step single-channel wizard rebuilt as a 11-step
+multi-channel/multi-marketplace flow. Schema migrated, every step
+widened to operate against `channels[]` (an array of
+`{platform, marketplace}` tuples), per-channel state isolated, AI
+content deduped by `(language, platform)` group, parallel publish
+orchestrator with per-channel retry. Channel-publish adapters
+themselves are still NOT_IMPLEMENTED stubs (TECH_DEBT #35) — the
+orchestration plumbing is real, the platform clients are pending.
+
+## Phase summary
+
+| # | Phase | Commit | What landed |
+|---|---|---|---|
+| A | Schema migration | `9afca36` | `ListingWizard` rebuilt: `channels` JSON + `channelsHash` (md5 of canonical sorted set) replace `channel`/`marketplace`; `channelStates` (per-channel overrides) + `submissions` (per-channel publish tracking) added. New `ListingImage` table for per-listing image set with `ImageScope` (GLOBAL/PLATFORM/MARKETPLACE) + `ImageRole` enums and optional variation specificity. Idempotent staged backfill (ADD nullable → UPDATE → ALTER NOT NULL → DROP old → ADD unique). |
+| B | Step 1 (Channels) + reorder | `dacdd31` | New `Step1Channels.tsx` with platform cards + marketplace chips + connection status badges; `connection-status` endpoint (Amazon env-var check, eBay `ChannelConnection.isActive`, Shopify/Woo `not_implemented`). 11-step config in new order. `WizardHeader` summarises multi-channel sets. PATCH widened to accept `channels[]`. |
+| C | Conditional GTIN | `5909bff` | `gtin-status` endpoint resolves: `has_gtin` / `existing_exemption` (covers every selected Amazon market) / `non_amazon_wizard` / `in_progress` / `needed`. `Step4GtinGate` wraps the form: not-needed → 1.5s auto-advance with a SkippedPanel; needed → existing form. Stepper renders skipped nodes greyed with `–` glyph. |
+| D | Multi-channel attribute union | `7a96511` | `SchemaParserService.getMultiChannelRequiredFields()` walks every Amazon channel, unions required fields, tracks `requiredFor[]` / `notUsedIn[]` / `overrides{}` per field, marks `divergent: true` when metadata differs. `Step4Attributes` rewrites with per-field channel chips + override editor. PATCH `channelStates` merge bumped to 2-level shallow so partial slot updates preserve siblings. |
+| E | Variations per-platform | `e1e0518` | `VariationsService.getMultiChannelVariationsPayload()` returns per-channel theme list + intersection (`commonThemes`) + per-child `missingByChannel` annotations. `Step5Variations` shows common-theme picker + per-channel override section + live missing-attribute badges per channel. Stores resolved theme per channel in `channelStates[key].variations.theme`. |
+| F | Slim images + multi-scope services | `37cc50f` | `ImageResolutionService` cascades variant→marketplace→platform→global→ProductImage master. `validateForPlatform()` returns blocking + warnings per platform. Wizard step keeps a lightweight quick-reorder + per-channel validation summary; full multi-scope editor deferred to dedicated page (TECH_DEBT #36). |
+| G | Multi-channel content with AI dedup | `289bb5d` | `/generate-content` groups channels by `${language}:${platform}` and fires one Gemini call per unique group, broadcast to every channel in the group. Per-group failures isolated (one channel's failure doesn't sink siblings). `Step6Content` redesigned with tabs per group, "Apply to all groups" copy button, per-field per-group regenerate. Content stored as `state.content.byGroup`. |
+| H | Per-marketplace pricing | `b25115d` | `/pricing-context` returns per-channel `currency` + `defaultFees` (Amazon 15%/€3.50, eBay 12.9%/€0.30, Shopify 0%, Woo 10%). `Step8Pricing` has a base-pricing block + per-channel override grid with live net-margin column. `state.pricing` for shared base, `channelStates[key].pricing` for overrides. |
+| I | Multi-channel review | `73bc664` | `validateMultiChannel()` walks every channel against per-channel resolved data; returns per-channel reports + overall `allReady` + `blockingChannels[]`. `composeMultiChannelPayloads()` yields one entry per channel (Amazon: full SP-API envelope; non-Amazon: `unsupported: true`). `Step9Review` renders per-channel cards with collapsible checklist + payload viewer. |
+| J | Parallel submit + retry + poll | `73bc664+1` | New `ChannelPublishService` dispatches per-platform adapters (all v1 NOT_IMPLEMENTED). `/submit` runs every channel in parallel via `Promise.all`, persists `submissions[]` on the wizard row. `/poll` for status updates, `/retry` for selective re-runs of failed channels. `Step10Submit` shows pre-submit confirm → per-channel progress rows with status icons + retry buttons + 3s polling while any entry is in flight. |
+
+## State shape (post-Phase J)
+
+```
+ListingWizard {
+  id, productId, channels: ChannelTuple[],
+  channelsHash, currentStep, status,
+  state: {
+    identifiers,                              // shared (Step 3)
+    gtinStatus,                               // shared (Step 4 auto-skip)
+    productType,                              // legacy shared fallback
+    attributes,                               // base attribute values (Step 5)
+    variations: { commonTheme, themeByChannel, includedSkus },  // Step 6
+    images: { orderedUrls },                  // shared quick-reorder (Step 7)
+    content: { byGroup: { [language:platform]: ContentSlice } },  // Step 8
+    pricing: { basePrice, minPrice, maxPrice }, // shared base (Step 9)
+  },
+  channelStates: {
+    [channelKey]: {
+      productType: { productType, displayName, ... },  // per-channel (Step 2)
+      attributes: { fieldId: value },                  // per-channel overrides (Step 5)
+      variations: { theme },                           // per-channel resolved theme (Step 6)
+      pricing: { marketplacePrice, minPrice, maxPrice, referralPercent, fulfillmentFee },  // per-channel (Step 9)
+    }
+  },
+  submissions: SubmissionEntry[],             // per-channel publish results (Step 11)
+}
+```
+
+## Dedup in practice
+
+- **Amazon IT + Amazon DE**: 2 attribute manifests fetched (different
+  marketplaces), 2 Gemini calls (different languages), 2 publish
+  attempts.
+- **Amazon IT + eBay IT**: 2 attribute manifests (only Amazon
+  contributes today; eBay listed in `channelsMissingSchema`), 2
+  Gemini calls (same language but different platform char limits),
+  2 publish attempts.
+- **Amazon IT + Amazon IT (re-add)**: deduped before reaching the
+  service — `normalizeChannels()` removes duplicates.
+
+## What's NOT_IMPLEMENTED (TECH_DEBT #35)
+
+The four channel-publish adapters. Wiring them is the remaining work
+to take `/submit` from "honest stub showing prepared payload" to
+"actual marketplace publish":
+
+- **Amazon SP-API** — `putListingsItem` against the composed payload;
+  `getListingsItem` for status polling. The `composeMultiChannelPayloads()`
+  output already matches Amazon's expected shape.
+- **eBay** — blocked behind Phase 2A.
+- **Shopify** — `ShopifyService.createProduct` exists but isn't yet
+  called from the wizard publish path.
+- **WooCommerce** — `createProduct` not yet implemented.
+
+Per-channel adapter slots exist in `ChannelPublishService.publishToChannel()`
+— each is currently a `NOT_IMPLEMENTED` branch. Real adapters drop
+in there without changing the wizard surface.
+

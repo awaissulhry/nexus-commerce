@@ -26,6 +26,10 @@ import {
 import { SchemaParserService } from '../services/listing-wizard/schema-parser.service.js'
 import { VariationsService } from '../services/listing-wizard/variations.service.js'
 import { SubmissionService } from '../services/listing-wizard/submission.service.js'
+import {
+  ChannelPublishService,
+  type SubmissionEntry,
+} from '../services/listing-wizard/channel-publish.service.js'
 import { ImageResolutionService } from '../services/listing-images/image-resolution.service.js'
 import { validateForPlatform } from '../services/listing-images/validation.service.js'
 import { GeminiService } from '../services/ai/gemini.service.js'
@@ -57,6 +61,7 @@ const variationsService = new VariationsService(prisma as any)
 const submissionService = new SubmissionService(prisma as any)
 const imageResolutionService = new ImageResolutionService(prisma as any)
 const listingContentService = new ListingContentService(new GeminiService())
+const channelPublishService = new ChannelPublishService()
 
 // ── Phase G — language + format derivation for content dedup ────
 const MARKETPLACE_TO_LANGUAGE: Record<string, string> = {
@@ -1232,22 +1237,20 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
-  // ── Step 10 — Submit ──────────────────────────────────────────
+  // ── Step 11 — Submit (Phase J multi-channel orchestration) ───
   // POST /api/listing-wizard/:id/submit
   //
-  // Validates the wizard state and, if ready, transitions to
-  // SUBMITTED. The actual channel push (Amazon putListingsItem,
-  // Shopify createProduct, etc.) is the missing integration —
-  // tracked in TECH_DEBT. For now this endpoint:
+  // Validates per-channel state, composes per-channel payloads, and
+  // dispatches each (channel, marketplace) tuple in parallel via the
+  // channel-publish service. Per-channel results are stored on
+  // wizard.submissions so /poll and /retry can resume work later
+  // without re-doing successful channels.
   //
-  //   1. validates state with SubmissionService.validate()
-  //   2. composes the channel payload (so the user can see what
-  //      would be sent)
-  //   3. transitions wizard.status to SUBMITTED so the UI moves
-  //      forward and the user can see the prepared payload
-  //
-  // When the channel client lands, this same handler picks up the
-  // payload, dispatches it, and updates status based on the result.
+  // v1: every adapter returns NOT_IMPLEMENTED (TECH_DEBT #35); the
+  // orchestrator is real, the publishes are stubs. The wizard
+  // transitions to SUBMITTED once the orchestrator runs — the UI
+  // shows per-channel "Adapter not wired" status until the real
+  // adapters land.
   fastify.post<{ Params: { id: string } }>(
     '/listing-wizard/:id/submit',
     async (request, reply) => {
@@ -1257,43 +1260,110 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       if (!wizard) {
         return reply.code(404).send({ error: 'Wizard not found' })
       }
-      if (wizard.status !== 'DRAFT') {
+      if (wizard.status !== 'DRAFT' && wizard.status !== 'FAILED') {
         return reply.code(409).send({
           error: `Wizard is already ${wizard.status.toLowerCase()}.`,
         })
       }
-      const first = legacyFirstChannel(wizard)
-      const w = {
-        id: wizard.id,
-        channel: first.channel,
-        marketplace: first.marketplace,
-        state: (wizard.state ?? {}) as Record<string, any>,
-      }
-      const report = submissionService.validate(w)
-      if (!report.ready) {
-        return reply.code(400).send({
-          error: 'Wizard state has incomplete steps.',
-          report,
+
+      const channels = normalizeChannels(wizard.channels)
+      if (channels.length === 0) {
+        return reply.code(409).send({
+          error: 'No channels selected — pick at least one in Step 1.',
         })
       }
-      const amazonPayload =
-        first.channel.toUpperCase() === 'AMAZON'
-          ? submissionService.composeAmazonPayload(w)
-          : null
+
+      const w = {
+        id: wizard.id,
+        channels,
+        state: (wizard.state ?? {}) as Record<string, any>,
+        channelStates:
+          ((wizard.channelStates ?? {}) as Record<
+            string,
+            Record<string, any>
+          >) ?? {},
+      }
+      const validation = submissionService.validateMultiChannel(w)
+      if (!validation.allReady) {
+        return reply.code(400).send({
+          error: 'Wizard state has incomplete steps for some channels.',
+          validation,
+        })
+      }
+
+      const payloads = submissionService.composeMultiChannelPayloads(w)
+      // Dispatch all channels in parallel. Each adapter handles its
+      // own errors and returns a SubmissionEntry — never throws.
+      const submissions = await Promise.all(
+        payloads.map((p) =>
+          channelPublishService.publishToChannel({
+            channelKey: p.channelKey,
+            platform: p.platform,
+            marketplace: p.marketplace,
+            payload: p.payload as Record<string, unknown> | undefined,
+            unsupported: p.unsupported,
+            reason: p.reason,
+          }),
+        ),
+      )
+
+      // Wizard status: LIVE if every entry succeeded; FAILED if any
+      // are FAILED; SUBMITTED otherwise (in-flight or NOT_IMPLEMENTED).
+      const overallStatus = computeOverallStatus(submissions)
       const updated = await prisma.listingWizard.update({
         where: { id: wizard.id },
         data: {
-          status: 'SUBMITTED',
-          completedAt: new Date(),
-          state: {
-            ...(w.state as Record<string, any>),
-            submission: {
-              submittedAt: new Date().toISOString(),
-              channelPayloadPending: true,
-              integrationStatus:
-                'channel-publish-pending — actual push not yet wired',
-            },
-          } as any,
+          status: overallStatus,
+          completedAt:
+            overallStatus === 'LIVE' ? new Date() : wizard.completedAt,
+          submissions: submissions as any,
+        },
+      })
+
+      return {
+        wizard: {
+          id: updated.id,
+          status: updated.status,
+          completedAt: updated.completedAt,
+        },
+        submissions,
+        validation,
+        payloads,
+      }
+    },
+  )
+
+  // POST /api/listing-wizard/:id/poll
+  //
+  // Walks each submission entry through pollStatus (no-op until an
+  // adapter is wired). Persists the updated array on the wizard row
+  // so the next /poll can pick up where this one left off.
+  fastify.post<{ Params: { id: string } }>(
+    '/listing-wizard/:id/poll',
+    async (request, reply) => {
+      const wizard = await prisma.listingWizard.findUnique({
+        where: { id: request.params.id },
+      })
+      if (!wizard) {
+        return reply.code(404).send({ error: 'Wizard not found' })
+      }
+      const current = (wizard.submissions ?? []) as unknown as SubmissionEntry[]
+      if (!Array.isArray(current) || current.length === 0) {
+        return { submissions: [] }
+      }
+      const polled = await Promise.all(
+        current.map((entry) => channelPublishService.pollStatus(entry)),
+      )
+      const overallStatus = computeOverallStatus(polled)
+      const updated = await prisma.listingWizard.update({
+        where: { id: wizard.id },
+        data: {
+          submissions: polled as any,
+          status: overallStatus,
+          completedAt:
+            overallStatus === 'LIVE' && !wizard.completedAt
+              ? new Date()
+              : wizard.completedAt,
         },
       })
       return {
@@ -1302,17 +1372,123 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           status: updated.status,
           completedAt: updated.completedAt,
         },
-        report,
-        amazonPayload,
-        // Honest about what's wired vs not. UI surfaces this so the
-        // user knows the row was saved but hasn't actually been
-        // pushed to Amazon yet.
-        channelPushed: false,
-        channelPushReason:
-          'The Amazon SP-API putListingsItem integration is not yet wired. The wizard state is saved as SUBMITTED so the prepared payload is reviewable; the actual channel push lands in a future phase. See TECH_DEBT entry on listing-wizard publish.',
+        submissions: polled,
       }
     },
   )
+
+  // POST /api/listing-wizard/:id/retry
+  // Body: { channelKeys: string[] }
+  //
+  // Re-runs publishToChannel for the specified failed/not-implemented
+  // entries only. Successful channels are untouched, so retrying one
+  // bad channel doesn't risk re-pushing the others.
+  fastify.post<{
+    Params: { id: string }
+    Body: { channelKeys?: string[] }
+  }>(
+    '/listing-wizard/:id/retry',
+    async (request, reply) => {
+      const wizard = await prisma.listingWizard.findUnique({
+        where: { id: request.params.id },
+      })
+      if (!wizard) {
+        return reply.code(404).send({ error: 'Wizard not found' })
+      }
+      const wantedKeys = new Set(
+        (request.body?.channelKeys ?? []).filter(
+          (k): k is string => typeof k === 'string' && k.length > 0,
+        ),
+      )
+      if (wantedKeys.size === 0) {
+        return reply.code(400).send({
+          error: 'channelKeys[] is required and must not be empty.',
+        })
+      }
+
+      const channels = normalizeChannels(wizard.channels)
+      const w = {
+        id: wizard.id,
+        channels,
+        state: (wizard.state ?? {}) as Record<string, any>,
+        channelStates:
+          ((wizard.channelStates ?? {}) as Record<
+            string,
+            Record<string, any>
+          >) ?? {},
+      }
+      const payloadByKey = new Map<
+        string,
+        ReturnType<typeof submissionService.composeMultiChannelPayloads>[number]
+      >()
+      for (const p of submissionService.composeMultiChannelPayloads(w)) {
+        payloadByKey.set(p.channelKey, p)
+      }
+
+      const current = (wizard.submissions ?? []) as unknown as SubmissionEntry[]
+      const updatedSubmissions: SubmissionEntry[] = []
+      for (const entry of current) {
+        if (!wantedKeys.has(entry.channelKey)) {
+          updatedSubmissions.push(entry)
+          continue
+        }
+        const p = payloadByKey.get(entry.channelKey)
+        if (!p) {
+          // Shouldn't happen unless channels were edited mid-flight —
+          // mark as FAILED with a clear reason.
+          updatedSubmissions.push({
+            ...entry,
+            status: 'FAILED',
+            error: 'Channel no longer in wizard.channels — cannot retry.',
+            updatedAt: new Date().toISOString(),
+          })
+          continue
+        }
+        const next = await channelPublishService.publishToChannel({
+          channelKey: p.channelKey,
+          platform: p.platform,
+          marketplace: p.marketplace,
+          payload: p.payload as Record<string, unknown> | undefined,
+          unsupported: p.unsupported,
+          reason: p.reason,
+        })
+        updatedSubmissions.push(next)
+      }
+
+      const overallStatus = computeOverallStatus(updatedSubmissions)
+      const updated = await prisma.listingWizard.update({
+        where: { id: wizard.id },
+        data: {
+          submissions: updatedSubmissions as any,
+          status: overallStatus,
+          completedAt:
+            overallStatus === 'LIVE' && !wizard.completedAt
+              ? new Date()
+              : wizard.completedAt,
+        },
+      })
+      return {
+        wizard: {
+          id: updated.id,
+          status: updated.status,
+          completedAt: updated.completedAt,
+        },
+        submissions: updatedSubmissions,
+        retried: Array.from(wantedKeys),
+      }
+    },
+  )
+}
+
+function computeOverallStatus(
+  submissions: SubmissionEntry[],
+): 'DRAFT' | 'SUBMITTED' | 'LIVE' | 'FAILED' {
+  if (submissions.length === 0) return 'DRAFT'
+  const allLive = submissions.every((s) => s.status === 'LIVE')
+  if (allLive) return 'LIVE'
+  const anyFailed = submissions.some((s) => s.status === 'FAILED')
+  if (anyFailed) return 'FAILED'
+  return 'SUBMITTED'
 }
 
 // ── pricing helpers ────────────────────────────────────────────
