@@ -775,7 +775,19 @@ export class SubmissionService {
       const marketplaceId = c.marketplace
       const amazonAttributes: Record<string, unknown> = {}
       for (const [k, v] of Object.entries(mergedAttrs)) {
-        if (v !== undefined && v !== null && v !== '') {
+        if (v === undefined || v === null || v === '') continue
+        // L.2 — string_array attributes (bullet_point, generic_keyword,
+        // search_terms, special_feature) are stored as JSON-encoded
+        // string[]. Expand into N wrapped entries for the Amazon
+        // payload. Detect by parsing — if it's not a valid JSON array,
+        // fall through to the normal single-value path.
+        const expanded = tryExpandStringArray(v)
+        if (expanded !== null) {
+          amazonAttributes[k] = expanded.map((value) => ({
+            marketplace_id: marketplaceId,
+            value,
+          }))
+        } else {
           amazonAttributes[k] = [{ marketplace_id: marketplaceId, value: v }]
         }
       }
@@ -886,4 +898,26 @@ function isEmpty(v: unknown): boolean {
   if (v === undefined || v === null) return true
   if (typeof v === 'string') return v.trim() === ''
   return false
+}
+
+/** L.2 — accepts a JSON-encoded string[] (the storage format the
+ *  frontend uses for bullet_point and similar list fields), returns
+ *  the trimmed non-empty entries. Returns null when the value isn't
+ *  a JSON-array shape so the caller falls back to the single-value
+ *  payload path. */
+function tryExpandStringArray(v: unknown): string[] | null {
+  if (typeof v !== 'string') return null
+  const trimmed = v.trim()
+  if (!trimmed.startsWith('[')) return null
+  try {
+    const parsed = JSON.parse(trimmed)
+    if (!Array.isArray(parsed)) return null
+    const out = parsed
+      .filter((s) => typeof s === 'string')
+      .map((s: string) => s.trim())
+      .filter((s) => s.length > 0)
+    return out.length > 0 ? out : null
+  } catch {
+    return null
+  }
 }

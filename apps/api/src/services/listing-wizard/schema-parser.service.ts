@@ -43,6 +43,7 @@ export type FieldKind =
   | 'enum'
   | 'number'
   | 'boolean'
+  | 'string_array'
   | 'unsupported'
 
 export interface RenderableField {
@@ -68,6 +69,9 @@ export interface RenderableField {
   /** Length constraints for string fields. */
   maxLength?: number
   minLength?: number
+  /** L.2 — for kind='string_array', the maximum number of entries
+   *  the field accepts. bullet_point on Amazon is up to 5. */
+  maxItems?: number
   /** Human reason this field couldn't be rendered. Populated when
    *  kind === 'unsupported'. */
   unsupportedReason?: string
@@ -495,6 +499,19 @@ export class SchemaParserService {
 // ── parser ──────────────────────────────────────────────────────
 
 /**
+ * L.2 — Amazon fields that accept multiple values at the same level
+ * (rendered as a string_array of N labelled inputs in the UI). Most
+ * such fields don't carry an explicit `maxItems` in the schema; the
+ * convention is 5 for bullets, ~5 for keyword sets.
+ */
+const LIST_FIELDS = new Set([
+  'bullet_point',
+  'generic_keyword',
+  'search_terms',
+  'special_feature',
+])
+
+/**
  * K.4 — fields that Amazon accepts at the variant level. The list
  * is curated rather than schema-derived because the schema doesn't
  * encode "varies by variant" cleanly across productTypes; this map
@@ -560,17 +577,30 @@ function parseProperty(fieldId: string, prop: any): RenderableField {
   ) {
     const valueProp = prop.items.properties.value
     const inner = parseLeaf(valueProp)
+    // L.2 — bullet_point and similar list fields accept up to N
+    // entries. When maxItems > 1 (or the field id is one of the
+    // known list types) and the inner kind is text/longtext, render
+    // as a string_array so the UI gets N labelled inputs.
+    const maxItems =
+      typeof prop.maxItems === 'number' && prop.maxItems > 1
+        ? prop.maxItems
+        : LIST_FIELDS.has(fieldId.toLowerCase())
+        ? 5
+        : 1
+    const isList =
+      maxItems > 1 && (inner.kind === 'text' || inner.kind === 'longtext')
     return {
       id: fieldId,
       label,
       description,
-      kind: inner.kind,
+      kind: isList ? 'string_array' : inner.kind,
       required: true,
       wrapped: true,
       options: inner.options,
       examples,
       maxLength: inner.maxLength,
       minLength: inner.minLength,
+      ...(isList ? { maxItems } : {}),
       ...(inner.unsupportedReason
         ? { unsupportedReason: inner.unsupportedReason }
         : {}),

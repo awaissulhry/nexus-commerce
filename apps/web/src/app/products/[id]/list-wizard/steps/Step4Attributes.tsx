@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Loader2,
   RefreshCw,
+  Sparkles,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -28,7 +29,13 @@ type FieldKind =
   | 'enum'
   | 'number'
   | 'boolean'
+  | 'string_array'
   | 'unsupported'
+
+/** L.2 — string_array values are stored as JSON-encoded string[]
+ *  in the same `Record<string, Primitive>` shape so existing storage
+ *  paths don't fork. The UI parses on read, stringifies on write. */
+type Primitive = string | number | boolean
 
 interface UnionField {
   id: string
@@ -43,6 +50,7 @@ interface UnionField {
   maxLength?: number
   minLength?: number
   unsupportedReason?: string
+  maxItems?: number
   requiredFor: string[]
   optionalFor: string[]
   notUsedIn: string[]
@@ -73,9 +81,19 @@ interface UnionManifest {
   includesAllOptional: boolean
 }
 
-type Primitive = string | number | boolean
-
 const SAVE_DEBOUNCE_MS = 600
+
+/** L.2 — fields that the existing /generate-content endpoint can
+ *  populate. Maps the Amazon field id to the ContentField name the
+ *  endpoint expects. */
+const AI_FIELD_MAP: Record<string, 'title' | 'bullets' | 'description' | 'keywords'> =
+  {
+    item_name: 'title',
+    bullet_point: 'bullets',
+    product_description: 'description',
+    generic_keyword: 'keywords',
+  }
+const AI_SUPPORTED_FIELDS = new Set(Object.keys(AI_FIELD_MAP))
 
 export default function Step4Attributes({
   wizardState,
@@ -122,6 +140,71 @@ export default function Step4Attributes({
     new Set(),
   )
   const [showAllOptional, setShowAllOptional] = useState(false)
+  const [aiBusyFields, setAiBusyFields] = useState<Set<string>>(new Set())
+
+  // L.2 — fire /generate-content for a single field, take the first
+  // selected channel's group, and write the value into state.attributes
+  // (base) so the user can then per-channel override if they need to.
+  const aiGenerate = useCallback(
+    async (fieldId: string) => {
+      const aiKind = AI_FIELD_MAP[fieldId]
+      if (!aiKind) return
+      setAiBusyFields((prev) => {
+        const next = new Set(prev)
+        next.add(fieldId)
+        return next
+      })
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/listing-wizard/${wizardId}/generate-content`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fields: [aiKind], variant: 0 }),
+          },
+        )
+        const json = await res.json()
+        if (!res.ok) {
+          throw new Error(json?.error ?? `HTTP ${res.status}`)
+        }
+        // Pick the first group's result — any group is fine, the AI
+        // call gave us one suggestion per (lang, platform). The user
+        // can per-channel override afterward.
+        const firstGroup = json?.groups?.[0]?.result
+        if (!firstGroup) return
+        let value: string | undefined
+        if (aiKind === 'title') {
+          value = firstGroup.title?.content
+        } else if (aiKind === 'description') {
+          value = firstGroup.description?.content
+        } else if (aiKind === 'keywords') {
+          value = firstGroup.keywords?.content
+        } else if (aiKind === 'bullets') {
+          // string_array storage: JSON-encoded string[].
+          const bullets = firstGroup.bullets?.content
+          if (Array.isArray(bullets)) {
+            value = JSON.stringify(
+              bullets.filter(
+                (b: unknown) => typeof b === 'string' && b.trim().length > 0,
+              ),
+            )
+          }
+        }
+        if (typeof value === 'string' && value.length > 0) {
+          setValues((prev) => ({ ...prev, [fieldId]: value as Primitive }))
+        }
+      } catch {
+        /* swallow — UI shows no error toast for now; user can retry */
+      } finally {
+        setAiBusyFields((prev) => {
+          const next = new Set(prev)
+          next.delete(fieldId)
+          return next
+        })
+      }
+    },
+    [wizardId],
+  )
 
   // Debounced persist of `values` (base) + variantAttrs →
   // wizardState.{attributes,variantAttributes}.
@@ -395,6 +478,12 @@ export default function Step4Attributes({
                 field={field}
                 baseValue={values[field.id]}
                 onBaseChange={(v) => setBase(field.id, v)}
+                onAIGenerate={
+                  AI_SUPPORTED_FIELDS.has(field.id)
+                    ? () => aiGenerate(field.id)
+                    : undefined
+                }
+                aiBusy={aiBusyFields.has(field.id)}
                 overrides={Object.fromEntries(
                   Object.entries(overrides).map(([k, slice]) => [
                     k,
@@ -488,6 +577,8 @@ function FieldCard({
   expanded,
   onToggleExpanded,
   unsatisfiedChannels,
+  onAIGenerate,
+  aiBusy,
 }: {
   field: UnionField
   baseValue: Primitive | undefined
@@ -502,7 +593,10 @@ function FieldCard({
   expanded: boolean
   onToggleExpanded: () => void
   unsatisfiedChannels: string[]
+  onAIGenerate?: () => void
+  aiBusy?: boolean
 }) {
+  const supportsAI = AI_SUPPORTED_FIELDS.has(field.id)
   const hasUnsatisfied = unsatisfiedChannels.length > 0
   const overrideCount = Object.values(overrides).filter(
     (v) => !isEmpty(v),
@@ -552,6 +646,25 @@ function FieldCard({
           enum values or length limits). Use overrides per channel if the
           merged shape doesn't fit one of them.
         </p>
+      )}
+
+      {supportsAI && onAIGenerate && (
+        <div className="mb-2 flex items-center justify-end">
+          <button
+            type="button"
+            onClick={onAIGenerate}
+            disabled={aiBusy}
+            className="inline-flex items-center gap-1 h-6 px-2 text-[11px] font-medium text-blue-700 border border-blue-200 rounded hover:bg-blue-50 disabled:opacity-40"
+            title={`Generate ${field.label} with AI for the first selected channel`}
+          >
+            {aiBusy ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <Sparkles className="w-3 h-3" />
+            )}
+            AI generate
+          </button>
+        </div>
       )}
 
       <FieldInput field={field} value={baseValue} onChange={onBaseChange} />
@@ -744,6 +857,50 @@ function FieldInput({
     )
   }
 
+  // L.2 — string_array: N labelled inputs (bullet_point uses 5).
+  if (field.kind === 'string_array') {
+    const arr = parseStringArray(value as string | undefined)
+    const max = Math.max(field.maxItems ?? 5, 1)
+    const slots: string[] = []
+    for (let i = 0; i < max; i++) slots.push(arr[i] ?? '')
+    return (
+      <div className="space-y-1.5">
+        {slots.map((slot, idx) => (
+          <div key={idx} className="flex items-start gap-2">
+            <span className="text-[10px] font-mono text-slate-400 mt-2 flex-shrink-0">
+              {idx + 1}.
+            </span>
+            <textarea
+              value={slot}
+              maxLength={field.maxLength}
+              rows={compact ? 1 : 2}
+              placeholder={
+                idx === 0 && placeholder ? placeholder : `Entry ${idx + 1}`
+              }
+              onChange={(e) => {
+                const next = slots.slice()
+                next[idx] = e.target.value
+                // Trim trailing empty entries before serialising — keeps
+                // the persisted JSON tidy without losing intermediate
+                // gaps the user might still be filling.
+                while (next.length > 0 && next[next.length - 1] === '') {
+                  next.pop()
+                }
+                onChange(next.length === 0 ? '' : JSON.stringify(next))
+              }}
+              className="flex-1 px-2 py-1 text-[13px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            />
+            {field.maxLength && (
+              <span className="text-[10px] font-mono text-slate-400 mt-2 tabular-nums w-12 text-right flex-shrink-0">
+                {slot.length}/{field.maxLength}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   if (field.kind === 'number') {
     const v = value === undefined ? '' : String(value)
     return (
@@ -863,4 +1020,20 @@ async function fetchPatch(
   } catch {
     /* swallow — caller's debounce will retry on next change */
   }
+}
+
+function parseStringArray(value: string | undefined): string[] {
+  if (typeof value !== 'string' || value.length === 0) return []
+  // L.2 storage convention: JSON-encoded string[]. Tolerant of older
+  // single-string values (treat as a one-entry array) so wizards
+  // saved before this commit still render.
+  try {
+    const parsed = JSON.parse(value)
+    if (Array.isArray(parsed)) {
+      return parsed.filter((s) => typeof s === 'string') as string[]
+    }
+  } catch {
+    /* fall through */
+  }
+  return [value]
 }
