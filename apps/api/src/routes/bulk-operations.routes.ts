@@ -254,6 +254,122 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
       }
     },
   )
+
+  // ── T.6 — Server-side bulk-ops templates ─────────────────────────
+  // CRUD for the BulkOpsTemplate table. Templates store the full grid
+  // configuration (columns, filters, channel/productType filters) so
+  // sellers can save / share / restore views across browsers.
+
+  /** GET /api/bulk-ops/templates — list, newest first. */
+  fastify.get('/bulk-ops/templates', async (_request, reply) => {
+    try {
+      const rows = await prisma.bulkOpsTemplate.findMany({
+        orderBy: { updatedAt: 'desc' },
+      })
+      return { templates: rows }
+    } catch (e) {
+      return reply
+        .code(500)
+        .send({ error: e instanceof Error ? e.message : String(e) })
+    }
+  })
+
+  /** POST /api/bulk-ops/templates — create. */
+  fastify.post<{
+    Body: {
+      name?: string
+      description?: string | null
+      columnIds?: string[]
+      filterState?: Record<string, unknown> | null
+      enabledChannels?: string[]
+      enabledProductTypes?: string[]
+    }
+  }>('/bulk-ops/templates', async (request, reply) => {
+    const body = request.body ?? {}
+    const name = (body.name ?? '').trim()
+    if (!name) {
+      return reply.code(400).send({ error: 'name is required' })
+    }
+    if (!Array.isArray(body.columnIds) || body.columnIds.length === 0) {
+      return reply
+        .code(400)
+        .send({ error: 'columnIds must be a non-empty array' })
+    }
+    try {
+      const created = await prisma.bulkOpsTemplate.create({
+        data: {
+          name,
+          description: body.description ?? null,
+          columnIds: body.columnIds,
+          filterState: (body.filterState ?? null) as any,
+          enabledChannels: body.enabledChannels ?? [],
+          enabledProductTypes: body.enabledProductTypes ?? [],
+        },
+      })
+      return { template: created }
+    } catch (e) {
+      return reply
+        .code(500)
+        .send({ error: e instanceof Error ? e.message : String(e) })
+    }
+  })
+
+  /** PATCH /api/bulk-ops/templates/:id — partial update. Pass any
+   *  subset of fields. updatedAt is auto-bumped by Prisma. */
+  fastify.patch<{
+    Params: { id: string }
+    Body: {
+      name?: string
+      description?: string | null
+      columnIds?: string[]
+      filterState?: Record<string, unknown> | null
+      enabledChannels?: string[]
+      enabledProductTypes?: string[]
+    }
+  }>('/bulk-ops/templates/:id', async (request, reply) => {
+    const { id } = request.params
+    const body = request.body ?? {}
+    const data: Record<string, unknown> = {}
+    if (typeof body.name === 'string') data.name = body.name.trim()
+    if ('description' in body) data.description = body.description ?? null
+    if (Array.isArray(body.columnIds)) data.columnIds = body.columnIds
+    if ('filterState' in body) data.filterState = body.filterState ?? null
+    if (Array.isArray(body.enabledChannels))
+      data.enabledChannels = body.enabledChannels
+    if (Array.isArray(body.enabledProductTypes))
+      data.enabledProductTypes = body.enabledProductTypes
+    try {
+      const updated = await prisma.bulkOpsTemplate.update({
+        where: { id },
+        data: data as any,
+      })
+      return { template: updated }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      if (msg.includes('Record to update not found')) {
+        return reply.code(404).send({ error: 'Template not found' })
+      }
+      return reply.code(500).send({ error: msg })
+    }
+  })
+
+  /** DELETE /api/bulk-ops/templates/:id */
+  fastify.delete<{ Params: { id: string } }>(
+    '/bulk-ops/templates/:id',
+    async (request, reply) => {
+      const { id } = request.params
+      try {
+        await prisma.bulkOpsTemplate.delete({ where: { id } })
+        return { success: true }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        if (msg.includes('Record to delete does not exist')) {
+          return reply.code(404).send({ error: 'Template not found' })
+        }
+        return reply.code(500).send({ error: msg })
+      }
+    },
+  )
 }
 
 export default bulkOperationsRoutes

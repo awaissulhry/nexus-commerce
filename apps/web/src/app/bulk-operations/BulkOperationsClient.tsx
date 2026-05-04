@@ -51,6 +51,7 @@ import {
   loadAllViews,
   saveUserView,
   deleteUserView,
+  hydrateViewsFromServer,
   isDefaultView,
   setActiveViewId,
   getActiveViewId,
@@ -491,7 +492,10 @@ export default function BulkOperationsClient() {
     )
   }, [rangeBounds])
 
-  // Hydrate localStorage state on mount
+  // Hydrate state on mount. Saved views ship with a hardcoded default
+  // set (DEFAULT_VIEWS); user templates come in async from
+  // /api/bulk-ops/templates and the nexus:views-changed listener
+  // re-renders once the server payload lands.
   useEffect(() => {
     setSavedViews(loadAllViews())
     const id = getActiveViewId()
@@ -501,10 +505,14 @@ export default function BulkOperationsClient() {
     setVisibleColumnIds(view.columnIds)
     if (view.channels) setEnabledChannels(view.channels)
     if (view.productTypes) setEnabledProductTypes(view.productTypes)
+    if (view.filterState) setFilterState(view.filterState)
     setDisplayMode(loadDisplayMode())
     setExpandedParents(loadExpandedParents())
     const onChange = () => setSavedViews(loadAllViews())
     window.addEventListener('nexus:views-changed', onChange)
+    // T.6 — pull server-side templates so they show up in the saved-
+    // views dropdown without a manual refresh.
+    void hydrateViewsFromServer()
     return () => window.removeEventListener('nexus:views-changed', onChange)
   }, [])
 
@@ -2146,17 +2154,27 @@ export default function BulkOperationsClient() {
       setVisibleColumnIds(view.columnIds)
       setEnabledChannels(view.channels ?? [])
       setEnabledProductTypes(view.productTypes ?? [])
+      // T.6 — server-backed templates persist filterState too. Restore
+      // when present; otherwise leave the user's current filters
+      // alone so default views don't blank out a deliberate filter.
+      if (view.filterState) setFilterState(view.filterState)
     },
-    [savedViews]
+    [savedViews],
   )
 
   const handleSaveAsView = useCallback(
-    (name: string) => {
-      const id = `user_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
-      const view = saveUserView({
-        id,
+    async (name: string) => {
+      // Server assigns the id today; we still pass a draft id for the
+      // local fallback path (network failure). The persisted SavedView
+      // returned from saveUserView carries the canonical id.
+      const draftId = `user_${Date.now()}_${Math.random()
+        .toString(36)
+        .slice(2, 7)}`
+      const view = await saveUserView({
+        id: draftId,
         name,
         columnIds: visibleColumnIds,
+        filterState,
         channels: enabledChannels,
         productTypes: enabledProductTypes,
       })
@@ -2164,19 +2182,19 @@ export default function BulkOperationsClient() {
       setActiveViewIdState(view.id)
       setActiveViewId(view.id)
     },
-    [visibleColumnIds, enabledChannels, enabledProductTypes]
+    [visibleColumnIds, enabledChannels, enabledProductTypes, filterState],
   )
 
   const handleDeleteView = useCallback(
-    (id: string) => {
+    async (id: string) => {
       if (isDefaultView(id)) return
-      deleteUserView(id)
+      await deleteUserView(id)
       setSavedViews(loadAllViews())
       if (activeViewIdState === id) {
         handleSelectView(DEFAULT_VIEWS[0].id)
       }
     },
-    [activeViewIdState, handleSelectView]
+    [activeViewIdState, handleSelectView],
   )
 
   return (

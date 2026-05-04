@@ -1405,6 +1405,45 @@ model BulkOperation {
   @@index([status, expiresAt])
 }
 
+// ── T.6: Bulk-ops templates ──────────────────────────────────────────
+// Server-side replacement for the localStorage saved-views the bulk-
+// ops grid used to ship with. Stores the full state needed to rebuild
+// the grid: visible columns, filter dimensions, enabled channels, and
+// enabled productTypes. Shared across the workspace today (no userId
+// scoping yet) so teammates can share grid configurations; userId
+// reserved for a future per-user / per-workspace scope.
+model BulkOpsTemplate {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  /** Reserved — null today (workspace-shared). When set, scopes the
+   *  template to a specific user. Indexed so per-user lookups stay
+   *  cheap when scoping lands. */
+  userId      String?
+
+  /** Column ids to render, in display order. Mirrors the existing
+   *  saved-views shape. */
+  columnIds   String[]
+
+  /** FilterState shape from apps/web/.../bulk-operations/lib/types.ts:
+   *  status[], channels[], stockLevel, productTypes[], parentage,
+   *  hasAsin, hasGtin, missingRequired. Stored as JSONB so the shape
+   *  can evolve without migrations. */
+  filterState Json?
+
+  /** Channel + productType filters that drive the column registry —
+   *  separate from filterState because they affect WHICH fields are
+   *  fetched, not WHICH rows are visible. */
+  enabledChannels     String[] @default([])
+  enabledProductTypes String[] @default([])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([updatedAt])
+}
+
 // ── Phase D.3f: Live category schema sync ────────────────────────────
 // Cached snapshots of Amazon `getDefinitionsProductType` (and eventually
 // eBay equivalents). One row per (channel, marketplace, productType,

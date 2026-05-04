@@ -1,15 +1,33 @@
 'use client'
 
-const STORAGE_KEY = 'nexus_bulkops_views_v1'
+// T.6 — saved views were localStorage-only; now they're server-backed
+// via /api/bulk-ops/templates so configurations survive across
+// browsers and can be shared. The sync API surface here is preserved
+// so call sites don't have to restructure into async/await — a
+// module-level in-memory cache feeds the synchronous reads, and an
+// async hydrate() call refreshes the cache from the server. Mutations
+// (save/delete) hit the API, then refresh the cache, then dispatch
+// `nexus:views-changed` so the React component re-reads via its
+// existing event listener.
+
+import { getBackendUrl } from '@/lib/backend-url'
+import type { FilterState } from './types'
+
+const ACTIVE_VIEW_KEY = 'nexus_bulkops_active_view'
 
 export interface SavedView {
   id: string
   name: string
   columnIds: string[]
+  /** T.6 — full filter state. Optional for backward compat with the
+   *  pre-T.6 hardcoded default views which don't carry filters. */
+  filterState?: FilterState
   channels?: string[]
   productTypes?: string[]
   isDefault?: boolean
   createdAt: number
+  /** Set once the view is server-backed; absent on hardcoded defaults. */
+  serverBacked?: boolean
 }
 
 export const DEFAULT_VIEWS: ReadonlyArray<SavedView> = [
@@ -60,43 +78,152 @@ export const DEFAULT_VIEWS: ReadonlyArray<SavedView> = [
   },
 ]
 
-function readUserViews(): SavedView[] {
-  if (typeof window === 'undefined') return []
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
+// ── Server cache ────────────────────────────────────────────────
+// Synchronous reads come from this; async hydrate fills it.
+
+let serverViews: SavedView[] = []
+let hydrating = false
+
+interface ServerTemplate {
+  id: string
+  name: string
+  description: string | null
+  columnIds: string[]
+  filterState: FilterState | null
+  enabledChannels: string[]
+  enabledProductTypes: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+function fromServer(t: ServerTemplate): SavedView {
+  return {
+    id: t.id,
+    name: t.name,
+    columnIds: t.columnIds,
+    filterState: t.filterState ?? undefined,
+    channels: t.enabledChannels,
+    productTypes: t.enabledProductTypes,
+    createdAt: new Date(t.createdAt).getTime(),
+    serverBacked: true,
   }
 }
 
-function writeUserViews(views: SavedView[]) {
+function emitChange() {
   if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent('nexus:views-changed'))
+}
+
+/** Fire-and-forget async pull. Call once on mount; the parent's
+ *  existing nexus:views-changed listener picks up the cache update
+ *  and re-renders the saved-views dropdown. */
+export async function hydrateViewsFromServer(): Promise<void> {
+  if (hydrating) return
+  hydrating = true
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(views))
-    window.dispatchEvent(new CustomEvent('nexus:views-changed'))
+    const res = await fetch(`${getBackendUrl()}/api/bulk-ops/templates`, {
+      cache: 'no-store',
+    })
+    if (!res.ok) return
+    const json = await res.json()
+    const list = Array.isArray(json.templates)
+      ? (json.templates as ServerTemplate[])
+      : []
+    serverViews = list.map(fromServer)
+    emitChange()
   } catch {
-    /* swallow quota errors */
+    /* network failure is non-fatal — saved-views just stays at the
+     *  hardcoded defaults until the next mount or manual retry */
+  } finally {
+    hydrating = false
   }
 }
 
 export function loadAllViews(): SavedView[] {
-  return [...DEFAULT_VIEWS, ...readUserViews()]
+  return [...DEFAULT_VIEWS, ...serverViews]
 }
 
-export function saveUserView(view: Omit<SavedView, 'createdAt'>): SavedView {
-  const stored = readUserViews().filter((v) => v.id !== view.id)
-  const full: SavedView = { ...view, createdAt: Date.now() }
-  stored.push(full)
-  writeUserViews(stored)
-  return full
+/** Save (create or update) a server-side template. Returns the
+ *  persisted SavedView. */
+export async function saveUserView(
+  view: Omit<SavedView, 'createdAt' | 'serverBacked'>,
+): Promise<SavedView> {
+  const body: Record<string, unknown> = {
+    name: view.name,
+    columnIds: view.columnIds,
+    filterState: view.filterState ?? null,
+    enabledChannels: view.channels ?? [],
+    enabledProductTypes: view.productTypes ?? [],
+  }
+  // If the id already exists in the server cache, PATCH; otherwise POST.
+  const existing = serverViews.find((v) => v.id === view.id)
+  let template: ServerTemplate | null = null
+  try {
+    if (existing) {
+      const res = await fetch(
+        `${getBackendUrl()}/api/bulk-ops/templates/${view.id}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+      )
+      if (res.ok) {
+        const json = await res.json()
+        template = json.template as ServerTemplate
+      }
+    } else {
+      const res = await fetch(`${getBackendUrl()}/api/bulk-ops/templates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) {
+        const json = await res.json()
+        template = json.template as ServerTemplate
+      }
+    }
+  } catch {
+    /* fall through to local fallback below */
+  }
+  if (!template) {
+    // Network failure — keep an in-memory copy so the user's work
+    // isn't lost. Will sync on next successful hydrate.
+    const fallback: SavedView = {
+      ...view,
+      createdAt: Date.now(),
+      serverBacked: false,
+    }
+    serverViews = [
+      ...serverViews.filter((v) => v.id !== view.id),
+      fallback,
+    ]
+    emitChange()
+    return fallback
+  }
+  const next = fromServer(template)
+  serverViews = [
+    ...serverViews.filter((v) => v.id !== next.id),
+    next,
+  ]
+  emitChange()
+  return next
 }
 
-export function deleteUserView(id: string) {
-  const stored = readUserViews().filter((v) => v.id !== id)
-  writeUserViews(stored)
+export async function deleteUserView(id: string): Promise<void> {
+  if (DEFAULT_VIEWS.some((v) => v.id === id)) return
+  const existing = serverViews.find((v) => v.id === id)
+  serverViews = serverViews.filter((v) => v.id !== id)
+  emitChange()
+  if (!existing?.serverBacked) return
+  try {
+    await fetch(`${getBackendUrl()}/api/bulk-ops/templates/${id}`, {
+      method: 'DELETE',
+    })
+  } catch {
+    /* swallow — local state already updated; next hydrate will
+     *  reconcile if the server still has the row */
+  }
 }
 
 export function isDefaultView(id: string): boolean {
@@ -105,10 +232,12 @@ export function isDefaultView(id: string): boolean {
 
 export function getActiveViewId(): string {
   if (typeof window === 'undefined') return DEFAULT_VIEWS[0].id
-  return window.localStorage.getItem('nexus_bulkops_active_view') ?? DEFAULT_VIEWS[0].id
+  return (
+    window.localStorage.getItem(ACTIVE_VIEW_KEY) ?? DEFAULT_VIEWS[0].id
+  )
 }
 
 export function setActiveViewId(id: string) {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem('nexus_bulkops_active_view', id)
+  window.localStorage.setItem(ACTIVE_VIEW_KEY, id)
 }
