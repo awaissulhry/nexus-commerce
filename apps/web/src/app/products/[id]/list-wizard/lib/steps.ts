@@ -71,21 +71,21 @@ export const STEPS: StepConfig[] = [
   },
   {
     id: 5,
-    title: 'Required Attributes',
-    shortLabel: 'Attributes',
-    description: 'Multi-channel union of required + optional fields',
-    filledIn: 'Phase D',
-    preview:
-      'Union of required + recommended attributes across every selected channel, with per-field tags showing which channels need it. Smart defaults from the master product; per-channel overrides for fields that vary.',
-  },
-  {
-    id: 6,
     title: 'Variations',
     shortLabel: 'Variations',
     description: 'Per-platform variation themes',
     filledIn: 'Phase E',
     preview:
-      'Common themes (intersection across selected platforms) shown prominently; platform-specific themes as alternatives. Per-variation include/exclude toggles.',
+      'Common themes (intersection across selected platforms) shown prominently; platform-specific themes as alternatives. Mirror from another channel or define custom themes when the schema is unavailable.',
+  },
+  {
+    id: 6,
+    title: 'Required Attributes',
+    shortLabel: 'Attributes',
+    description: 'Multi-channel union with per-variant + per-channel overrides',
+    filledIn: 'Phase D',
+    preview:
+      'Union of required (and curated optional) attributes across every selected channel, with per-field tags showing which channels need it. Smart defaults from the master product; per-channel and per-variant overrides for fields that vary.',
   },
   {
     id: 7,

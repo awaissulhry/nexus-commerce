@@ -365,10 +365,11 @@ export default function ListWizardClient({
               />
             )
           }
-          // Step 5: Required Attributes (was Step 4).
-          if (currentStep === 5) return <Step4Attributes {...stepProps} />
-          // Step 6: Variations (was Step 5).
-          if (currentStep === 6) return <Step5Variations {...stepProps} />
+          // K.3: Variations now precedes Attributes — variant theme
+          // determines which fields are variant-eligible in the next
+          // step.
+          if (currentStep === 5) return <Step5Variations {...stepProps} />
+          if (currentStep === 6) return <Step4Attributes {...stepProps} />
           // Step 7: Images (was Step 7 — same number).
           if (currentStep === 7) return <Step7Images {...stepProps} />
           // Step 8: Content (was Step 6).
