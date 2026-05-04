@@ -343,6 +343,15 @@ function groupKeyForField(field: FieldDef): string {
   return REGISTRY_TO_UNIFIED_KEY[field.category] ?? field.category
 }
 
+// LL — placeholder-column helpers for collapsed groups. The id is
+// __group_<key> so it's distinct from any real field id (real fields
+// come from the registry which never produces underscored prefixes).
+// Width matches the existing band-chip collapsed width so the column
+// header + band stay aligned visually.
+const COLLAPSED_COL_WIDTH = 80
+function collapsedColumnId(groupKey: string): string {
+  return `__group_${groupKey}`
+}
 const COLLAPSED_GROUPS_KEY = 'nexus_bulkops_collapsed_groups'
 
 function loadCollapsedGroups(): Set<string> {
@@ -1849,16 +1858,24 @@ export default function BulkOperationsClient() {
     if (pruned) setCollapsedGroups(next)
   }, [groupedFields, collapsedGroups])
 
-  // JJ — per-column tone lookup so header + body cell + group-edge
-  // border can all read from one source. Last-field-in-group flag
-  // drives `border-r-2` so groups read as visual blocks. Only
-  // non-collapsed groups contribute (collapsed groups have no
-  // visible columns).
+  // JJ / LL — per-column tone lookup. Includes one entry per real
+  // visible column AND one synthetic entry per placeholder column
+  // (LL — collapsed groups now keep a single placeholder column so
+  // the layout, selection rectangle, drag/drop, and band alignment
+  // never have to handle a "this group has zero columns" branch).
   const columnTones = useMemo(() => {
     const m = new Map<string, ColumnTone>()
     for (const g of groupedFields) {
-      if (collapsedGroups.has(g.key)) continue
       const tone = GROUP_TONE[g.key] ?? NEUTRAL_TONE
+      if (collapsedGroups.has(g.key)) {
+        m.set(collapsedColumnId(g.key), {
+          band: tone.band,
+          text: tone.text,
+          cell: tone.cell,
+          isGroupEdge: true,
+        })
+        continue
+      }
       g.fields.forEach((f, i) => {
         m.set(f.id, {
           band: tone.band,
@@ -1875,11 +1892,55 @@ export default function BulkOperationsClient() {
   const dynamicColumns = useMemo<ColumnDef<BulkProduct>[]>(() => {
     const out: ColumnDef<BulkProduct>[] = []
     for (const g of groupedFields) {
-      // CC.2 — collapsed groups vanish from the column header + body
-      // entirely. The chip stays in the band (rendered separately
-      // below) as a discoverable affordance. No more placeholder
-      // column / "{N} hidden" filler.
-      if (collapsedGroups.has(g.key)) continue
+      // LL — collapsed groups render as ONE placeholder column with
+      // the group's tone + a count badge. Keeping a single column
+      // (instead of vanishing N columns) means: column count stays
+      // stable across collapse/expand, selection-rect indices don't
+      // shift, drag/drop hit zones stay aligned, and band-chip
+      // widths track 1:1 with the dynamic columns underneath.
+      // Click the placeholder header to expand the group again.
+      if (collapsedGroups.has(g.key)) {
+        const tone = GROUP_TONE[g.key] ?? NEUTRAL_TONE
+        const groupKey = g.key
+        const groupLabel = g.label
+        const fieldCount = g.fields.length
+        out.push({
+          id: collapsedColumnId(groupKey),
+          size: COLLAPSED_COL_WIDTH,
+          enableResizing: false,
+          header: () => (
+            <button
+              type="button"
+              onClick={() => toggleGroupCollapse(groupKey)}
+              title={`Expand ${groupLabel} (${fieldCount} field${
+                fieldCount === 1 ? '' : 's'
+              })`}
+              className="flex items-center gap-1 px-1 w-full text-left"
+            >
+              <ChevronRight className="w-3 h-3 flex-shrink-0" />
+              <span className="truncate normal-case font-semibold text-[10px]">
+                {groupLabel}
+              </span>
+              <span className="ml-auto text-[10px] tabular-nums opacity-60">
+                {fieldCount}
+              </span>
+            </button>
+          ),
+          cell: () => (
+            <div
+              className={cn(
+                'h-full flex items-center justify-center text-[11px] italic select-none',
+                tone.text,
+              )}
+              aria-hidden="true"
+            >
+              ⋯
+            </div>
+          ),
+          meta: { collapsedGroupKey: groupKey },
+        } as ColumnDef<BulkProduct>)
+        continue
+      }
       for (const field of g.fields) {
         out.push(buildColumnFromField(field))
       }
