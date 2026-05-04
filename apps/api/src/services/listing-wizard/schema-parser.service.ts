@@ -139,6 +139,13 @@ export interface UnionManifest {
     sku: string
     attributes: Record<string, string>
   }>
+  /** K.5: total count of optional fields available across the
+   *  selected channels. Lets the UI surface a "Show all (N more)"
+   *  badge without having to fetch the full set. */
+  optionalFieldCount: number
+  /** K.5: TRUE when the manifest already contains the full optional
+   *  surface — the UI hides the toggle in that case. */
+  includesAllOptional: boolean
 }
 
 interface MasterProduct {
@@ -161,7 +168,13 @@ export class SchemaParserService {
     marketplace: string
     productType: string
     product: MasterProduct
-  }): Promise<FieldManifest> {
+    /** K.5: when true, walks every field in `properties` (required +
+     *  optional). Default false → only required fields. The
+     *  optional-by-default surface still includes a curated common-
+     *  optional set (item_name, manufacturer, etc.) regardless of
+     *  this flag, so the wizard's defaults stay useful. */
+    includeAllOptional?: boolean
+  }): Promise<FieldManifest & { optionalFieldIds: string[] }> {
     const channel = opts.channel.toUpperCase()
     if (channel !== 'AMAZON') {
       throw new Error(
@@ -179,7 +192,9 @@ export class SchemaParserService {
     const properties = (def.properties ?? {}) as Record<string, any>
     const required = Array.isArray(def.required) ? (def.required as string[]) : []
 
+    const requiredSet = new Set(required)
     const fields: RenderableField[] = []
+
     for (const fieldId of required) {
       const prop = properties[fieldId]
       if (!prop) continue
@@ -188,6 +203,57 @@ export class SchemaParserService {
       fields.push(f)
     }
 
+    // Curated common-optional set — always surfaced because most
+    // sellers want these even when Amazon doesn't enforce them.
+    const COMMON_OPTIONAL = [
+      'item_name',
+      'brand',
+      'manufacturer',
+      'product_description',
+      'bullet_point',
+      'generic_keyword',
+      'item_type_keyword',
+      'target_audience_keyword',
+      'country_of_origin',
+      'manufacturer_part_number',
+      'model_number',
+      'item_weight',
+      'item_dimensions',
+      'package_dimensions',
+      'package_weight',
+    ]
+    for (const fieldId of COMMON_OPTIONAL) {
+      if (requiredSet.has(fieldId)) continue
+      const prop = properties[fieldId]
+      if (!prop) continue
+      const f = parseProperty(fieldId, prop)
+      f.required = false
+      f.defaultValue = smartDefault(fieldId, opts.product) ?? f.defaultValue
+      fields.push(f)
+    }
+
+    // The full optional list — only walked when includeAllOptional is
+    // true, since productType schemas can have 200-400 fields and
+    // shipping all of them in the default response is wasteful.
+    if (opts.includeAllOptional) {
+      const seen = new Set(fields.map((f) => f.id))
+      for (const fieldId of Object.keys(properties)) {
+        if (seen.has(fieldId)) continue
+        const prop = properties[fieldId]
+        const f = parseProperty(fieldId, prop)
+        f.required = false
+        fields.push(f)
+      }
+    }
+
+    // optionalFieldIds — every field in `properties` minus the
+    // required ones. The frontend uses this to surface a count for
+    // the "Show all fields" toggle even when includeAllOptional is
+    // false.
+    const optionalFieldIds = Object.keys(properties).filter(
+      (id) => !requiredSet.has(id),
+    )
+
     return {
       channel: 'AMAZON',
       marketplace: opts.marketplace,
@@ -195,6 +261,7 @@ export class SchemaParserService {
       schemaVersion: cached.schemaVersion,
       fetchedAt: cached.fetchedAt.toISOString(),
       fields,
+      optionalFieldIds,
     }
   }
 
@@ -219,6 +286,9 @@ export class SchemaParserService {
     overridesByChannel: Record<string, Record<string, unknown>>
     /** K.4 — productId for loading variation children. */
     productId: string
+    /** K.5 — when true, walks every property in each channel's schema
+     *  rather than just required + curated common-optional. */
+    includeAllOptional?: boolean
   }): Promise<UnionManifest> {
     const channels = opts.channels.map((c) => ({
       ...c,
@@ -235,6 +305,7 @@ export class SchemaParserService {
       fields: RenderableField[]
       schemaVersion: string
       fetchedAt: string
+      optionalFieldIds: string[]
     }> = []
     const missing: UnionManifest['channelsMissingSchema'] = []
 
@@ -262,6 +333,7 @@ export class SchemaParserService {
           marketplace: c.marketplace,
           productType,
           product: opts.product,
+          includeAllOptional: opts.includeAllOptional,
         })
         perChannel.push({
           channelKey,
@@ -269,6 +341,7 @@ export class SchemaParserService {
           fields: manifest.fields,
           schemaVersion: manifest.schemaVersion,
           fetchedAt: manifest.fetchedAt,
+          optionalFieldIds: manifest.optionalFieldIds,
         })
       } catch (err) {
         missing.push({
@@ -291,6 +364,9 @@ export class SchemaParserService {
     for (const pc of perChannel) {
       for (const f of pc.fields) {
         const existing = byId.get(f.id)
+        // RenderableField.required tells us whether THIS channel
+        // required this field. The union categorises per-channel.
+        const isRequiredHere = !!f.required
         if (!existing) {
           const baseRaw = opts.baseAttributes[f.id]
           const overrides: Record<string, string | number | boolean> = {}
@@ -304,8 +380,9 @@ export class SchemaParserService {
           }
           byId.set(f.id, {
             ...f,
-            requiredFor: [pc.channelKey],
-            optionalFor: [],
+            required: isRequiredHere,
+            requiredFor: isRequiredHere ? [pc.channelKey] : [],
+            optionalFor: isRequiredHere ? [] : [pc.channelKey],
             notUsedIn: [],
             currentValue:
               baseRaw === undefined || baseRaw === null
@@ -315,7 +392,21 @@ export class SchemaParserService {
             variantEligible: isVariantEligible(f.id),
           })
         } else {
-          existing.requiredFor.push(pc.channelKey)
+          if (isRequiredHere) {
+            if (!existing.requiredFor.includes(pc.channelKey)) {
+              existing.requiredFor.push(pc.channelKey)
+            }
+            // If this channel is required and the field was previously
+            // listed as optional in the same channel's pass, drop the
+            // optional entry.
+            existing.optionalFor = existing.optionalFor.filter(
+              (k) => k !== pc.channelKey,
+            )
+          } else if (!existing.requiredFor.includes(pc.channelKey)) {
+            if (!existing.optionalFor.includes(pc.channelKey)) {
+              existing.optionalFor.push(pc.channelKey)
+            }
+          }
           // Detect divergent metadata: enum sets, maxLength.
           if (!existing.divergent) {
             if (
@@ -388,6 +479,14 @@ export class SchemaParserService {
       ),
       fields: fieldsArr,
       variations,
+      optionalFieldCount: (() => {
+        const seen = new Set<string>()
+        for (const pc of perChannel) {
+          for (const id of pc.optionalFieldIds) seen.add(id)
+        }
+        return seen.size
+      })(),
+      includesAllOptional: !!opts.includeAllOptional,
       channelsMissingSchema: missing,
     }
   }

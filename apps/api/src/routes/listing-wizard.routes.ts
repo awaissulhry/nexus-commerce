@@ -661,7 +661,10 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
   //
   // Non-Amazon channels are listed in `channelsMissingSchema` with
   // reason='unsupported_channel' for now — eBay lands in Phase 2A.
-  fastify.get<{ Params: { id: string } }>(
+  fastify.get<{
+    Params: { id: string }
+    Querystring: { all?: string }
+  }>(
     '/listing-wizard/:id/required-fields',
     async (request, reply) => {
       const wizard = await prisma.listingWizard.findUnique({
@@ -670,6 +673,9 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       if (!wizard) {
         return reply.code(404).send({ error: 'Wizard not found' })
       }
+
+      const includeAllOptional =
+        request.query?.all === '1' || request.query?.all === 'true'
 
       const channels = normalizeChannels(wizard.channels)
       if (channels.length === 0) {
@@ -756,6 +762,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
             baseAttributes,
             overridesByChannel,
             productId: wizard.productId,
+            includeAllOptional,
           },
         )
         return manifest

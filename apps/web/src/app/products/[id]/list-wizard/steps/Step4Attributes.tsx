@@ -69,6 +69,8 @@ interface UnionManifest {
     detail?: string
   }>
   variations: UnionVariation[]
+  optionalFieldCount: number
+  includesAllOptional: boolean
 }
 
 type Primitive = string | number | boolean
@@ -119,6 +121,7 @@ export default function Step4Attributes({
   const [expandedVariants, setExpandedVariants] = useState<Set<string>>(
     new Set(),
   )
+  const [showAllOptional, setShowAllOptional] = useState(false)
 
   // Debounced persist of `values` (base) + variantAttrs →
   // wizardState.{attributes,variantAttributes}.
@@ -171,9 +174,11 @@ export default function Step4Attributes({
     let cancelled = false
     setLoading(true)
     setError(null)
-    fetch(
+    const url = new URL(
       `${getBackendUrl()}/api/listing-wizard/${wizardId}/required-fields`,
     )
+    if (showAllOptional) url.searchParams.set('all', '1')
+    fetch(url.toString())
       .then(async (r) => ({ ok: r.ok, status: r.status, json: await r.json() }))
       .then(({ ok, status, json }) => {
         if (cancelled) return
@@ -217,7 +222,7 @@ export default function Step4Attributes({
     return () => {
       cancelled = true
     }
-  }, [channels, wizardId, reloadKey])
+  }, [channels, wizardId, reloadKey, showAllOptional])
 
   const setBase = useCallback((id: string, value: Primitive) => {
     setValues((prev) => ({ ...prev, [id]: value }))
@@ -292,20 +297,44 @@ export default function Step4Attributes({
             per channel" on any field that should differ between markets.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setReloadKey((k) => k + 1)}
-          disabled={loading}
-          className="inline-flex items-center gap-1 h-7 px-2 text-[11px] text-slate-600 border border-slate-200 rounded hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40 flex-shrink-0"
-          title="Re-fetch the required-fields manifest"
-        >
-          {loading ? (
-            <Loader2 className="w-3 h-3 animate-spin" />
-          ) : (
-            <RefreshCw className="w-3 h-3" />
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {manifest && manifest.optionalFieldCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowAllOptional((s) => !s)}
+              disabled={loading}
+              className={cn(
+                'inline-flex items-center gap-1 h-7 px-2 text-[11px] border rounded disabled:opacity-40',
+                showAllOptional
+                  ? 'border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100'
+                  : 'border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+              )}
+              title={
+                showAllOptional
+                  ? 'Hide the long-tail optional fields'
+                  : 'Show every optional field for the selected categories'
+              }
+            >
+              {showAllOptional
+                ? 'Hide optional'
+                : `Show all (${manifest.optionalFieldCount} more)`}
+            </button>
           )}
-          Refresh
-        </button>
+          <button
+            type="button"
+            onClick={() => setReloadKey((k) => k + 1)}
+            disabled={loading}
+            className="inline-flex items-center gap-1 h-7 px-2 text-[11px] text-slate-600 border border-slate-200 rounded hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40"
+            title="Re-fetch the required-fields manifest"
+          >
+            {loading ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <RefreshCw className="w-3 h-3" />
+            )}
+            Refresh
+          </button>
+        </div>
       </div>
 
       {loading && !manifest && (
