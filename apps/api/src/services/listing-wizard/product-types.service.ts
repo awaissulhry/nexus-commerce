@@ -23,6 +23,7 @@ import type { PrismaClient } from '@nexus/database'
 import { AmazonService } from '../marketplaces/amazon.service.js'
 import { CategorySchemaService } from '../categories/schema-sync.service.js'
 import { amazonMarketplaceId } from '../categories/marketplace-ids.js'
+import { EbayCategoryService } from '../ebay-category.service.js'
 import {
   BUNDLED_AMAZON_PRODUCT_TYPES,
   findHintFromNexusProductType,
@@ -63,11 +64,23 @@ export interface SuggestResult {
 }
 
 export class ProductTypesService {
+  /** Y.1 — eBay category lookup, lazily instantiated. The service has
+   *  no constructor args (auth via env), so a singleton inside the
+   *  parent service is safe; created on first eBay request. */
+  private ebayCategoryService: EbayCategoryService | null = null
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly amazon: AmazonService,
     private readonly schemas: CategorySchemaService,
   ) {}
+
+  private getEbayCategoryService(): EbayCategoryService {
+    if (!this.ebayCategoryService) {
+      this.ebayCategoryService = new EbayCategoryService()
+    }
+    return this.ebayCategoryService
+  }
 
   /** X.2 — in-memory cache of the FULL Amazon productType list per
    *  marketplace. The SP-API call is identical regardless of search
@@ -95,6 +108,27 @@ export class ProductTypesService {
     forceRefresh?: boolean
   }): Promise<ProductTypeListItem[]> {
     const channel = opts.channel.toUpperCase()
+
+    // Y.1 — eBay branch. eBay's taxonomy is huge (tens of thousands
+    // of categories), so the API is search-as-you-type rather than
+    // fetch-the-whole-list. Returns up to 10 ranked candidates per
+    // query; empty queries return [] (the picker shows a "type to
+    // search" empty state).
+    if (channel === 'EBAY') {
+      const search = opts.search?.trim() ?? ''
+      const items = await this.getEbayCategoryService()
+        .searchCategories(opts.marketplace, search, {
+          forceRefresh: opts.forceRefresh,
+          limit: 20,
+        })
+        .catch(() => [])
+      return items.map((i) => ({
+        productType: i.productType,
+        displayName: i.displayName,
+        bundled: i.bundled,
+      }))
+    }
+
     if (channel !== 'AMAZON') {
       return []
     }

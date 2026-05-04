@@ -36,16 +36,28 @@ interface Props {
   placeholder?: string
 }
 
-// ── Session cache (per-(channel, marketplace)) ─────────────────
+// ── Session cache (per-(channel, marketplace[, search])) ─────────
 //
 // Module-level so multiple pickers in the same session share fetched
-// payloads. The server already caches with a 24-hour TTL (X.2); this
-// just avoids re-issuing the same GET inside one page load.
+// payloads. The server caches with a 24-hour TTL (X.2 / Y.1); this
+// avoids re-issuing the same GET inside one page load.
+//
+// AMAZON uses the (channel, marketplace) key — full list cached once.
+// EBAY uses the (channel, marketplace, search) key — different query
+// = different result; the eBay API is search-as-you-type so each
+// keystroke that lands a network call gets its own cache entry.
 
 const sessionCache = new Map<string, ProductTypeListItem[]>()
 const inflight = new Map<string, Promise<ProductTypeListItem[]>>()
 
-function cacheKey(channel: string, marketplace: string | null): string {
+function cacheKey(
+  channel: string,
+  marketplace: string | null,
+  search?: string,
+): string {
+  if (search && search.length > 0) {
+    return `${channel}:${marketplace ?? '*'}:${search.toLowerCase()}`
+  }
   return `${channel}:${marketplace ?? '*'}`
 }
 
@@ -53,8 +65,9 @@ async function fetchList(
   channel: string,
   marketplace: string | null,
   forceRefresh: boolean,
+  search?: string,
 ): Promise<ProductTypeListItem[]> {
-  const key = cacheKey(channel, marketplace)
+  const key = cacheKey(channel, marketplace, search)
   if (!forceRefresh) {
     const cached = sessionCache.get(key)
     if (cached) return cached
@@ -66,6 +79,7 @@ async function fetchList(
   )
   url.searchParams.set('channel', channel)
   if (marketplace) url.searchParams.set('marketplace', marketplace)
+  if (search) url.searchParams.set('search', search)
   if (forceRefresh) url.searchParams.set('refresh', '1')
   const promise = fetch(url.toString(), { cache: 'no-store' })
     .then(async (r) => {
@@ -98,7 +112,12 @@ export function clearProductTypeCache(
     sessionCache.clear()
     return
   }
-  sessionCache.delete(cacheKey(channel, marketplace ?? null))
+  // For eBay we don't know which (search) keys are cached, so wipe
+  // anything that prefix-matches.
+  const prefix = `${channel}:${marketplace ?? '*'}`
+  for (const k of Array.from(sessionCache.keys())) {
+    if (k.startsWith(prefix)) sessionCache.delete(k)
+  }
 }
 
 // ── Component ──────────────────────────────────────────────────
@@ -121,22 +140,55 @@ export default function ProductTypePicker({
   const [search, setSearch] = useState('')
   const [refreshing, setRefreshing] = useState(false)
 
-  // Channels other than AMAZON return empty lists today — fall back to
-  // a free-text input so the user isn't blocked.
-  const channelHasTaxonomy = channel === 'AMAZON'
+  // Y.2 — three modes:
+  //   'list':      AMAZON. Load full list once, filter client-side as
+  //                user types. Fast for ~1k entries; one round-trip
+  //                per (marketplace, session).
+  //   'search':    EBAY. eBay's taxonomy has tens of thousands of
+  //                categories; the API is search-as-you-type. Empty
+  //                input = empty results; debounced server fetch on
+  //                each keystroke.
+  //   'free-text': SHOPIFY/WOOCOMMERCE/ETSY. No taxonomy service yet
+  //                (TECH_DEBT); the picker collapses to a plain input.
+  const mode: 'list' | 'search' | 'free-text' =
+    channel === 'AMAZON'
+      ? 'list'
+      : channel === 'EBAY'
+      ? 'search'
+      : 'free-text'
 
-  // Load + reload when (channel, marketplace) changes. Loads from cache
-  // when the same (channel, marketplace) was already fetched this
-  // session.
+  const channelHasTaxonomy = mode !== 'free-text'
+
+  // Debounced search query for 'search' mode.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   useEffect(() => {
-    if (!channelHasTaxonomy) {
+    if (mode !== 'search') return
+    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300)
+    return () => window.clearTimeout(t)
+  }, [search, mode])
+
+  // Load on mount (list mode) OR re-fetch when debouncedSearch
+  // changes (search mode).
+  useEffect(() => {
+    if (mode === 'free-text') {
       setItems([])
+      return
+    }
+    if (mode === 'search' && debouncedSearch.length < 2) {
+      setItems([])
+      setLoading(false)
+      setError(null)
       return
     }
     let cancelled = false
     setError(null)
     setLoading(true)
-    fetchList(channel, marketplace, false)
+    fetchList(
+      channel,
+      marketplace,
+      false,
+      mode === 'search' ? debouncedSearch : undefined,
+    )
       .then((list) => {
         if (cancelled) return
         setItems(list)
@@ -151,7 +203,7 @@ export default function ProductTypePicker({
     return () => {
       cancelled = true
     }
-  }, [channel, marketplace, channelHasTaxonomy])
+  }, [channel, marketplace, mode, debouncedSearch])
 
   // Outside click / Esc to close.
   useEffect(() => {
@@ -184,7 +236,10 @@ export default function ProductTypePicker({
     }
   }, [open])
 
+  // 'list' mode filters client-side; 'search' mode trusts the server's
+  // already-ranked results.
   const filtered = useMemo(() => {
+    if (mode === 'search') return items
     if (!search.trim()) return items
     const q = search.trim().toLowerCase()
     return items.filter(
@@ -192,14 +247,19 @@ export default function ProductTypePicker({
         i.productType.toLowerCase().includes(q) ||
         i.displayName.toLowerCase().includes(q),
     )
-  }, [items, search])
+  }, [items, search, mode])
 
   const handleRefresh = async () => {
     if (!channelHasTaxonomy) return
     setRefreshing(true)
     setError(null)
     try {
-      const fresh = await fetchList(channel, marketplace, true)
+      const fresh = await fetchList(
+        channel,
+        marketplace,
+        true,
+        mode === 'search' ? debouncedSearch : undefined,
+      )
       setItems(fresh)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -282,7 +342,11 @@ export default function ProductTypePicker({
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search product types"
+              placeholder={
+                mode === 'search'
+                  ? `Type to search ${channel} categories…`
+                  : 'Search product types'
+              }
               className="flex-1 h-6 text-[12px] outline-none placeholder:text-slate-400"
             />
             {search && (
@@ -336,7 +400,9 @@ export default function ProductTypePicker({
             )}
             {!loading && !error && filtered.length === 0 && (
               <div className="px-3 py-4 text-[12px] text-slate-500">
-                No matches for "{search}"
+                {mode === 'search' && debouncedSearch.length < 2
+                  ? `Type at least 2 characters to search ${channel} categories.`
+                  : `No matches${search ? ` for "${search}"` : ''}.`}
               </div>
             )}
             {filtered.map((i) => {
@@ -384,8 +450,11 @@ export default function ProductTypePicker({
           {/* Footer */}
           <div className="border-t border-slate-100 px-3 py-1.5 text-[10px] text-slate-500 flex items-center justify-between">
             <span>
-              {filtered.length}/{items.length} types · cached for the
-              session
+              {mode === 'search'
+                ? `${filtered.length} match${
+                    filtered.length === 1 ? '' : 'es'
+                  } · search-as-you-type`
+                : `${filtered.length}/${items.length} types · cached for the session`}
             </span>
             <span className="font-mono">
               {channel}:{marketplace ?? '*'}

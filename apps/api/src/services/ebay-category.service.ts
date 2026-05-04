@@ -23,14 +23,170 @@ const MARKETPLACE_TREE_IDS: Record<string, number> = {
   EBAY_DE: 77,
   EBAY_FR: 71,
   EBAY_UK: 3,
+  EBAY_ES: 186,
 };
+
+/** Y.1 — short marketplace codes the rest of the system uses
+ *  ('IT', 'DE', etc.) → the EBAY_<CODE> form this service speaks.
+ *  Lets the productType picker pass `marketplace='IT'` without
+ *  every caller needing to know eBay's prefix convention. */
+function normaliseMarketplace(marketplace: string | null): string {
+  if (!marketplace) return 'EBAY_US'
+  const upper = marketplace.toUpperCase()
+  if (upper.startsWith('EBAY_')) return upper
+  return `EBAY_${upper}`
+}
+
+/** Y.1 — public type matching ProductTypesService.ProductTypeListItem
+ *  so listProductTypes can spread eBay results into the same shape
+ *  the Amazon path returns. */
+export interface EbayCategoryListItem {
+  productType: string
+  displayName: string
+  bundled: boolean
+  matchPercentage?: number
+}
+
+/** Y.1 — multi-suggestion cache. eBay's suggest_category endpoint
+ *  returns up to 10 ranked categories per query; we cache the full
+ *  array per (marketplace, query) so retyping the same search hits
+ *  cache. Search-result caching also doubles as our "manual refresh"
+ *  store via forceRefresh. */
+interface CachedSearch {
+  items: EbayCategoryListItem[]
+  expiresAt: number
+}
 
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
 export class EbayCategoryService {
   private cache: Map<string, CachedCategory> = new Map();
+  private searchCache: Map<string, CachedSearch> = new Map();
   private accessToken: string | null = null;
   private tokenExpiresAt = 0;
+
+  /** Y.1 — return multiple ranked category candidates for a search
+   *  query. Used by the productType picker so users see a real
+   *  dropdown of eBay categories, not just one auto-pick.
+   *
+   *  eBay's suggest_category endpoint requires a query (q) and
+   *  returns up to 10 ranked candidates. Empty queries return [].
+   *  Cached per (marketplace, query.toLowerCase()) for 24h to avoid
+   *  re-hitting eBay on retypes; forceRefresh skips the cache.
+   *
+   *  Falls back to [] (not throw) when SP-API equivalent isn't
+   *  configured — the picker treats an empty list as "no matches"
+   *  and the user can still type a raw category id manually
+   *  through the modal's free-text fallback for unsupported channels.
+   */
+  async searchCategories(
+    marketplace: string | null,
+    query: string,
+    options?: { forceRefresh?: boolean; limit?: number },
+  ): Promise<EbayCategoryListItem[]> {
+    const trimmed = query.trim()
+    if (trimmed.length < 2) return []
+    const marketplaceId = normaliseMarketplace(marketplace)
+    const treeId = MARKETPLACE_TREE_IDS[marketplaceId]
+    if (treeId === undefined) {
+      console.warn(
+        `[EbayCategoryService] Unknown marketplace: ${marketplaceId}`,
+      )
+      return []
+    }
+    const cacheKey = `${marketplaceId}:${trimmed.toLowerCase()}`
+    if (!options?.forceRefresh) {
+      const cached = this.searchCache.get(cacheKey)
+      if (cached && cached.expiresAt > Date.now()) {
+        return options?.limit ? cached.items.slice(0, options.limit) : cached.items
+      }
+    }
+    let token: string
+    try {
+      token = await this.getAccessToken()
+    } catch (err) {
+      // No credentials → empty list. Picker shows the standard "no
+      // matches" state and the user can type a raw id via the
+      // existing modal text-input fallback.
+      console.warn(
+        `[EbayCategoryService] No token available for searchCategories: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      )
+      return []
+    }
+    const apiBase = process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
+    const url = `${apiBase}/commerce/taxonomy/v1/category_tree/${treeId}/get_category_suggestions?q=${encodeURIComponent(
+      trimmed,
+    )}`
+    let res: Response
+    try {
+      res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      })
+    } catch (err) {
+      console.warn(
+        `[EbayCategoryService] searchCategories network error: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      )
+      return []
+    }
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      console.warn(
+        `[EbayCategoryService] searchCategories ${res.status}: ${body}`,
+      )
+      return []
+    }
+    const json = (await res.json().catch(() => null)) as {
+      categorySuggestions?: Array<{
+        category?: { categoryId?: string; categoryName?: string }
+        categoryTreeNodeAncestors?: Array<{ categoryName?: string }>
+        matchPercentage?: number | string
+      }>
+    } | null
+    const suggestions = json?.categorySuggestions ?? []
+    const items: EbayCategoryListItem[] = []
+    for (const s of suggestions) {
+      const id = s?.category?.categoryId
+      const name = s?.category?.categoryName
+      if (!id || !name) continue
+      // Build a path-style display name: "Clothing › Men > Coats &
+      // Jackets" so users can disambiguate sibling category names
+      // (eBay's "Helmets" exists under several parents).
+      const ancestors = (s.categoryTreeNodeAncestors ?? [])
+        .map((a) => a.categoryName)
+        .filter((n): n is string => typeof n === 'string' && n.length > 0)
+        .reverse() // ancestors come root-last from eBay; reverse so the path reads top-down
+      const path = [...ancestors, name].join(' › ')
+      const matchRaw = s.matchPercentage
+      const matchPct =
+        typeof matchRaw === 'number'
+          ? matchRaw
+          : typeof matchRaw === 'string'
+          ? Number(matchRaw)
+          : undefined
+      items.push({
+        productType: id,
+        displayName: path,
+        bundled: false,
+        matchPercentage:
+          typeof matchPct === 'number' && !Number.isNaN(matchPct)
+            ? matchPct
+            : undefined,
+      })
+    }
+    this.searchCache.set(cacheKey, {
+      items,
+      expiresAt: Date.now() + CACHE_TTL,
+    })
+    return options?.limit ? items.slice(0, options.limit) : items
+  }
 
   /**
    * Get a valid access token for Taxonomy API calls
