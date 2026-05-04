@@ -971,26 +971,71 @@ function FieldCard({
       {/* K.4: per-variant override grid for variant-eligible fields */}
       {showVariantSection && (
         <div className="mt-3 border-t border-slate-100 pt-2">
-          <button
-            type="button"
-            onClick={onToggleVariants}
-            className="text-[12px] text-slate-600 hover:text-slate-900 inline-flex items-center gap-1"
-          >
-            {variantsExpanded ? (
-              <ChevronDown className="w-3 h-3" />
-            ) : (
-              <ChevronRight className="w-3 h-3" />
-            )}
-            Override per variation
-            {variantOverrideCount > 0 && (
-              <span className="text-[10px] font-medium text-purple-700 bg-purple-50 px-1 py-0.5 rounded">
-                {variantOverrideCount}
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={onToggleVariants}
+              className="text-[12px] text-slate-600 hover:text-slate-900 inline-flex items-center gap-1"
+            >
+              {variantsExpanded ? (
+                <ChevronDown className="w-3 h-3" />
+              ) : (
+                <ChevronRight className="w-3 h-3" />
+              )}
+              Override per variation
+              {variantOverrideCount > 0 && (
+                <span className="text-[10px] font-medium text-purple-700 bg-purple-50 px-1 py-0.5 rounded">
+                  {variantOverrideCount} of {variations.length}
+                </span>
+              )}
+              <span className="text-[10px] text-slate-400 italic">
+                (variant-eligible field)
               </span>
+            </button>
+            {variantsExpanded && (
+              <div className="flex items-center gap-2">
+                {/* M.2 — pull each variant's master attribute value
+                    into its override slot. Skips slots that already
+                    have an explicit override and skips variants with
+                    no master value. One-click bulk fill. */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    for (const v of variations) {
+                      const master = v.attributes[field.id.toLowerCase()]
+                      if (
+                        master &&
+                        master.length > 0 &&
+                        isEmpty(variantValues[v.id])
+                      ) {
+                        onVariantChange(v.id, master as Primitive)
+                      }
+                    }
+                  }}
+                  title="Fill empty variant slots with each variant's master attribute value"
+                  className="text-[11px] text-blue-600 hover:underline"
+                >
+                  Pull master values
+                </button>
+                {variantOverrideCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      for (const v of variations) {
+                        if (!isEmpty(variantValues[v.id])) {
+                          onVariantChange(v.id, undefined)
+                        }
+                      }
+                    }}
+                    title="Clear every per-variant override for this field"
+                    className="text-[11px] text-slate-500 hover:text-slate-900 hover:underline"
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
             )}
-            <span className="text-[10px] text-slate-400 italic">
-              (variant-eligible field)
-            </span>
-          </button>
+          </div>
           {variantsExpanded && (
             <div className="mt-2 space-y-1.5">
               {variations.map((v) => {

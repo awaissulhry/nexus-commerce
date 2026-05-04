@@ -524,9 +524,12 @@ const LIST_FIELDS = new Set([
  * rejected.
  */
 const VARIANT_ELIGIBLE_FIELDS = new Set([
+  // Size / fit
   'size',
   'size_name',
   'apparel_size',
+  'shoe_size',
+  // Colour / pattern / style / material
   'color',
   'color_name',
   'pattern_name',
@@ -535,17 +538,37 @@ const VARIANT_ELIGIBLE_FIELDS = new Set([
   'material_type',
   'material',
   'fabric_type',
+  'finish_type',
+  // Physical dimensions / weight
   'item_dimensions',
   'package_dimensions',
   'item_weight',
   'package_weight',
+  'item_length',
+  'item_width',
+  'item_height',
+  'volume_capacity_name',
+  // Per-variant identifiers
   'externally_assigned_product_identifier',
   'gtin',
   'upc',
   'ean',
   'merchant_suggested_asin',
+  'manufacturer_part_number',
+  'model_number',
+  'model_name',
+  // Pricing (per-variant by Amazon convention)
   'list_price',
   'purchasable_offer',
+  // Power / battery / device specifics
+  'power_source_type',
+  'battery',
+  'battery_cell_composition',
+  'compatible_devices',
+  // Per-variant capacity / quantity
+  'unit_count',
+  'item_package_quantity',
+  'number_of_items',
 ])
 
 function isVariantEligible(fieldId: string): boolean {
