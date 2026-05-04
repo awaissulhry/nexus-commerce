@@ -144,6 +144,9 @@ export default function ChannelFieldEditor({
   const dirtyVariantsRef = useRef<Map<string, Set<string>>>(new Map())
   const variantSaveTimer = useRef<number | null>(null)
   const [aiBusyFields, setAiBusyFields] = useState<Set<string>>(new Set())
+  // Q.9 — translate-busy keys are "<fieldId>:<channelKey>" so per-
+  // channel translate buttons spin independently of base AI generation.
+  const [translateBusy, setTranslateBusy] = useState<Set<string>>(new Set())
 
   // Q.3 — sibling listings (every channel + marketplace this product
   // is published on). Used to render "Copy from AMAZON:DE" menus and
@@ -618,7 +621,74 @@ export default function ChannelFieldEditor({
     [channelKey, values, siblings, productId, setBase],
   )
 
-  // ── AI generate (Q.9 will round this out for translate too) ──
+  // ── Q.9 — translate a field for the active channel via Gemini ──
+  // The single-channel /generate-content endpoint takes the (channel,
+  // marketplace) tuple and returns one group's result. We map the
+  // result back to the schema field id and write it via setBase so
+  // it lands in the listing's saved value.
+  const onTranslate = useCallback(
+    async (fieldId: string, targetChannelKey: string) => {
+      const aiKind = AI_FIELD_MAP[fieldId]
+      if (!aiKind) return
+      // Edit page is single-channel — only translate the active
+      // channel. (Cross-channel translate is wizard-only territory.)
+      if (targetChannelKey !== channelKey) return
+      const busyKey = `${fieldId}:${targetChannelKey}`
+      setTranslateBusy((prev) => {
+        const next = new Set(prev)
+        next.add(busyKey)
+        return next
+      })
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/products/${productId}/generate-content`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fields: [aiKind],
+              channel,
+              marketplace,
+              variant: 0,
+            }),
+          },
+        )
+        if (!res.ok) return
+        const json = await res.json()
+        const first = json?.groups?.[0]?.result
+        if (!first) return
+        let value: string | undefined
+        if (aiKind === 'title') value = first.title?.content
+        else if (aiKind === 'description') value = first.description?.content
+        else if (aiKind === 'keywords') value = first.keywords?.content
+        else if (aiKind === 'bullets') {
+          const bullets = first.bullets?.content
+          if (Array.isArray(bullets)) {
+            value = JSON.stringify(
+              bullets.filter(
+                (b: unknown) => typeof b === 'string' && b.trim().length > 0,
+              ),
+            )
+          }
+        }
+        if (typeof value === 'string' && value.length > 0) {
+          setBase(fieldId, value as Primitive)
+        }
+      } catch {
+        /* swallow */
+      } finally {
+        setTranslateBusy((prev) => {
+          const next = new Set(prev)
+          next.delete(busyKey)
+          return next
+        })
+      }
+    },
+    [productId, channel, marketplace, channelKey, setBase],
+  )
+
+  // ── AI generate (master-level fill, used by the per-field
+  //     "AI generate" button on the FieldCard) ───────────────────
   const aiGenerate = useCallback(
     async (fieldId: string) => {
       const aiKind = AI_FIELD_MAP[fieldId]
@@ -859,6 +929,8 @@ export default function ChannelFieldEditor({
                     : undefined
                 }
                 aiBusy={aiBusyFields.has(field.id)}
+                onTranslate={onTranslate}
+                translateBusy={translateBusy}
                 onApplyToChannels={broadcastToChannels}
                 channelGroups={channelGroups}
                 allChannelKeys={allChannelKeys}

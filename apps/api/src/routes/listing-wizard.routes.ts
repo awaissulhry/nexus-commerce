@@ -1676,6 +1676,140 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // Q.9 — product-scoped content generation for the edit page.
+  // Mirrors /listing-wizard/:id/generate-content but takes the
+  // (productId, channel, marketplace) tuple directly so the
+  // ChannelFieldEditor's Translate button has a place to call.
+  // Response shape matches the wizard endpoint for frontend reuse:
+  //   { groups: [{ result, channelKeys, ... }], byChannel: {...} }
+  fastify.post<{
+    Params: { id: string }
+    Body: {
+      fields?: string[]
+      channel?: string
+      marketplace?: string
+      variant?: number
+    }
+  }>(
+    '/products/:id/generate-content',
+    async (request, reply) => {
+      if (!listingContentService.isConfigured()) {
+        return reply.code(503).send({
+          error:
+            'Gemini API not configured — set GEMINI_API_KEY on the API server.',
+        })
+      }
+      const { id } = request.params
+      const channel = (request.body?.channel ?? '').toUpperCase()
+      const marketplace = (request.body?.marketplace ?? '').toUpperCase()
+      if (!channel || !marketplace) {
+        return reply.code(400).send({
+          error: 'channel and marketplace are required',
+        })
+      }
+      const ALLOWED_FIELDS = new Set<ContentField>([
+        'title',
+        'bullets',
+        'description',
+        'keywords',
+      ])
+      const requested = (request.body?.fields ?? []).filter(
+        (f): f is ContentField => ALLOWED_FIELDS.has(f as ContentField),
+      )
+      if (requested.length === 0) {
+        return reply.code(400).send({
+          error: `fields must include one or more of ${Array.from(
+            ALLOWED_FIELDS,
+          ).join(', ')}`,
+        })
+      }
+      const product = await prisma.product.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          brand: true,
+          description: true,
+          bulletPoints: true,
+          keywords: true,
+          weightValue: true,
+          weightUnit: true,
+          dimLength: true,
+          dimWidth: true,
+          dimHeight: true,
+          dimUnit: true,
+          productType: true,
+          variantAttributes: true,
+          categoryAttributes: true,
+        },
+      })
+      if (!product) {
+        return reply.code(404).send({ error: `Product ${id} not found` })
+      }
+      const channelKey = `${channel}:${marketplace}`
+      const language = languageForMarketplace(marketplace)
+      const variant =
+        typeof request.body?.variant === 'number'
+          ? Math.max(0, Math.min(4, request.body.variant))
+          : 0
+      try {
+        const terminology = await prisma.terminologyPreference.findMany({
+          where: {
+            marketplace,
+            OR: [{ brand: product.brand }, { brand: null }],
+          },
+          select: { preferred: true, avoid: true, context: true },
+          orderBy: [{ brand: 'desc' }, { preferred: 'asc' }],
+        })
+        const result = await listingContentService.generate({
+          product: {
+            id: product.id,
+            sku: product.sku,
+            name: product.name,
+            brand: product.brand,
+            description: product.description,
+            bulletPoints: product.bulletPoints,
+            keywords: product.keywords,
+            weightValue: product.weightValue ? Number(product.weightValue) : null,
+            weightUnit: product.weightUnit,
+            dimLength: product.dimLength ? Number(product.dimLength) : null,
+            dimWidth: product.dimWidth ? Number(product.dimWidth) : null,
+            dimHeight: product.dimHeight ? Number(product.dimHeight) : null,
+            dimUnit: product.dimUnit,
+            productType: product.productType,
+            variantAttributes: product.variantAttributes,
+            categoryAttributes: product.categoryAttributes,
+          },
+          marketplace,
+          fields: requested,
+          variant,
+          terminology,
+        })
+        const group = {
+          groupKey: `${language}:${channel}`,
+          platform: channel,
+          language,
+          marketplaces: [marketplace],
+          channelKeys: [channelKey],
+          result,
+        }
+        return {
+          groups: [group],
+          byChannel: { [channelKey]: result },
+        }
+      } catch (err) {
+        fastify.log.error(
+          { err },
+          '[products/generate-content] failed',
+        )
+        return reply.code(500).send({
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    },
+  )
+
   // Q.7 — single-channel GTIN status for the product-edit page. Same
   // resolution rules as /listing-wizard/:id/gtin-status but scoped to
   // one (productId, channel, marketplace) — non-Amazon channels return
