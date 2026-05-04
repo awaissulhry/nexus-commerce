@@ -1215,6 +1215,16 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     Body: { fields?: string[]; variant?: number }
   }>(
     '/listing-wizard/:id/generate-content',
+    {
+      // NN.11 — AI calls cost real money + count against the
+      // shared Gemini quota. Stricter per-route cap so a runaway
+      // client (or power user spamming Generate on every channel)
+      // can't burn the budget. 30 calls/min/IP — generous for
+      // normal use, blocks the abuse case.
+      config: {
+        rateLimit: { max: 30, timeWindow: '1 minute' },
+      },
+    },
     async (request, reply) => {
       if (!listingContentService.isConfigured()) {
         return reply.code(503).send({
@@ -1983,6 +1993,14 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     }
   }>(
     '/products/:id/generate-content',
+    {
+      // NN.11 — same per-route cap as the wizard's generate-content
+      // endpoint. AI calls cost real money; 30/min/IP is generous
+      // for legit use and blocks runaway clients.
+      config: {
+        rateLimit: { max: 30, timeWindow: '1 minute' },
+      },
+    },
     async (request, reply) => {
       if (!listingContentService.isConfigured()) {
         return reply.code(503).send({

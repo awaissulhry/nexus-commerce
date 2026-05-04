@@ -29,9 +29,21 @@ export default function WizardStepper({
   skippedSteps,
   onStepClick,
 }: Props) {
+  // NN.15 — accessibility. Stepper is a single-select tablist by
+  // semantics. aria-current marks the active step so screen readers
+  // announce 'current page' / 'current step' on focus. Step labels
+  // are exposed via aria-label so the visual number is paired with
+  // the human title.
   return (
-    <div className="flex items-center justify-center px-6 py-3 border-b border-slate-200 bg-white overflow-x-auto">
-      <div className="flex items-center gap-1 min-w-max">
+    <nav
+      aria-label="Listing wizard steps"
+      className="flex items-center justify-center px-6 py-3 border-b border-slate-200 bg-white overflow-x-auto"
+    >
+      <ol
+        role="tablist"
+        aria-orientation="horizontal"
+        className="flex items-center gap-1 min-w-max"
+      >
         {STEPS.map((step, idx) => {
           const isCurrent = step.id === currentStep
           const isCompleted = completedSteps.has(step.id)
@@ -41,8 +53,16 @@ export default function WizardStepper({
           const lineActive = step.id < currentStep || isCompleted
           return (
             <Fragment key={step.id}>
+              <li role="presentation">
               <button
                 type="button"
+                role="tab"
+                aria-selected={isCurrent}
+                aria-current={isCurrent ? 'step' : undefined}
+                aria-label={`Step ${step.id} of ${STEPS.length}: ${step.title}${
+                  isCompleted ? ' (completed)' : isSkipped ? ' (skipped)' : ''
+                }`}
+                tabIndex={isCurrent ? 0 : -1}
                 onClick={() => {
                   if (isClickable && !isCurrent) onStepClick(step.id)
                 }}
@@ -80,8 +100,11 @@ export default function WizardStepper({
                 )}
               </button>
 
+              </li>
               {idx < STEPS.length - 1 && (
-                <div
+                <li
+                  role="presentation"
+                  aria-hidden="true"
                   className={cn(
                     'h-0.5 w-8 flex-shrink-0',
                     lineActive ? 'bg-blue-600' : 'bg-slate-200',
@@ -91,7 +114,7 @@ export default function WizardStepper({
             </Fragment>
           )
         })}
-      </div>
-    </div>
+      </ol>
+    </nav>
   )
 }

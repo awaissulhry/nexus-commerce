@@ -174,7 +174,11 @@ export default function ProductEditClient({
 
         {/* ── Top tab row ────────────────────────────────────── */}
         <div className="max-w-7xl mx-auto px-6">
-          <div className="flex items-center -mb-px overflow-x-auto">
+          <div
+            role="tablist"
+            aria-label="Product sections"
+            className="flex items-center -mb-px overflow-x-auto"
+          >
             <TopTabButton
               active={topTab === 'master'}
               onClick={() => setTopTab('master')}
@@ -290,8 +294,15 @@ function TopTabButton({
   children: React.ReactNode
   count?: number
 }) {
+  // NN.15 — accessibility. role=tab + aria-selected pairs with the
+  // wrapping nav's role=tablist (added on the parent container) so
+  // screen readers announce 'tab N of M, selected'.
   return (
     <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      tabIndex={active ? 0 : -1}
       onClick={onClick}
       className={cn(
         'flex items-center gap-1.5 h-10 px-4 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap',
