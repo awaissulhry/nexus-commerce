@@ -474,7 +474,7 @@ export class EbayCategoryService {
   async getCategoryAspectsRich(
     categoryId: string,
     marketplace: string | null,
-    options?: { forceRefresh?: boolean },
+    options?: { forceRefresh?: boolean; cacheOnly?: boolean },
   ): Promise<EbayAspectRich[]> {
     const marketplaceId = normaliseMarketplace(marketplace);
     const treeId = MARKETPLACE_TREE_IDS[marketplaceId];
@@ -490,6 +490,15 @@ export class EbayCategoryService {
       if (cached && cached.expiresAt > Date.now()) {
         return cached.aspects;
       }
+    }
+    // BB.1 — cache-only mode skips the live eBay API call when the
+    // cache misses. Used by the field-registry's bulk-grid path so a
+    // cold categoryId returns [] quickly instead of blocking the page
+    // load on a slow API call. The dedicated prewarm endpoint warms
+    // the cache asynchronously; the next /api/pim/fields tick picks
+    // up the populated entries.
+    if (options?.cacheOnly) {
+      return [];
     }
     let token: string;
     try {

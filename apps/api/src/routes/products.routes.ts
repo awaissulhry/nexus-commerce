@@ -57,6 +57,50 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     return { fields, count: fields.length }
   })
 
+  // BB.1 — prewarm the eBay aspect cache for a list of categoryIds.
+  // /api/pim/fields is cache-only on its eBay branch so cold ids
+  // return [] fast; this endpoint runs the (slow) live fetches in
+  // parallel out-of-band so the next /api/pim/fields tick sees the
+  // populated cache. Mirrors U.1's Amazon prewarm pattern.
+  fastify.post<{
+    Body: { marketplace?: string; categoryIds?: string[] }
+  }>('/pim/ebay-prewarm', async (request, reply) => {
+    const body = request.body ?? {}
+    const marketplace = (body.marketplace ?? '').trim() || null
+    const ids = Array.isArray(body.categoryIds)
+      ? body.categoryIds.filter(
+          (s): s is string => typeof s === 'string' && s.length > 0,
+        )
+      : []
+    if (ids.length === 0) {
+      return { warmed: 0, skipped: 0 }
+    }
+    try {
+      const { EbayCategoryService } = await import(
+        '../services/ebay-category.service.js'
+      )
+      const svc = new EbayCategoryService()
+      const results = await Promise.allSettled(
+        ids.map((id) =>
+          svc.getCategoryAspectsRich(id, marketplace).then(
+            (aspects) => ({ id, ok: aspects.length > 0 }),
+          ),
+        ),
+      )
+      let warmed = 0
+      let skipped = 0
+      for (const r of results) {
+        if (r.status === 'fulfilled' && r.value.ok) warmed++
+        else skipped++
+      }
+      return { warmed, skipped }
+    } catch (e) {
+      return reply.code(500).send({
+        error: e instanceof Error ? e.message : String(e),
+      })
+    }
+  })
+
   // GET /api/products — paginated catalog list for the /products page.
   //
   // Distinct from /products/bulk-fetch (bulk-ops, returns everything)

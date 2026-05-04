@@ -296,9 +296,14 @@ export async function getAvailableFields(
       ebayCategoryServiceSingleton = svc
       for (const categoryId of ebayCategoryIds) {
         try {
+          // BB.1 — cache-only on the page-load path; cold ids return
+          // [] fast. The frontend's prewarm pass populates the cache
+          // out-of-band so subsequent /api/pim/fields calls see the
+          // aspects.
           const aspects = await svc.getCategoryAspectsRich(
             categoryId,
             params.marketplace,
+            { cacheOnly: true },
           )
           for (const a of aspects) {
             const id = `attr_${a.name

@@ -1500,6 +1500,51 @@ export default function BulkOperationsClient() {
     }
   }, [productTypesInData, products, primaryContext?.marketplace, primaryContext?.channel])
 
+  // BB.1 — pre-warm eBay aspect cache for visible categoryIds.
+  // /api/pim/fields is cache-only on its eBay branch (so cold ids
+  // don't block page load); we hit /api/pim/ebay-prewarm out-of-
+  // band to populate the cache, then bump schemaWarmth so the
+  // existing /api/pim/fields effect re-fetches and sees the warmed
+  // entries. Tracked via prewarmedEbayRef to avoid duplicate fetches
+  // across re-renders.
+  const prewarmedEbayRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (
+      primaryContext?.channel !== 'EBAY' ||
+      ebayCategoryIdsInData.length === 0 ||
+      !primaryContext.marketplace
+    ) {
+      return
+    }
+    const marketplace = primaryContext.marketplace
+    const todo: string[] = []
+    for (const id of ebayCategoryIdsInData) {
+      const key = `${marketplace}:${id}`
+      if (prewarmedEbayRef.current.has(key)) continue
+      todo.push(id)
+      prewarmedEbayRef.current.add(key)
+    }
+    if (todo.length === 0) return
+    let cancelled = false
+    fetch(`${getBackendUrl()}/api/pim/ebay-prewarm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ marketplace, categoryIds: todo }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then(() => {
+        if (cancelled) return
+        setSchemaWarmth((v) => v + 1)
+      })
+      .catch(() => {
+        /* swallow — cache stays cold; user can hit Refresh in the
+         * picker / per-product editor to manually warm */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [ebayCategoryIdsInData, primaryContext?.channel, primaryContext?.marketplace])
+
   // Refetch fields when channels/productTypes/marketplace change.
   // D.3g: passing `marketplace` lets the backend pull live category
   // attributes from cached Amazon schemas (CategorySchema). Without
