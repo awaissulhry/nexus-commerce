@@ -4,6 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import ChannelGroupsManager, {
+  type ChannelGroup,
+} from '../[id]/list-wizard/components/ChannelGroupsManager'
 import {
   AI_FIELD_MAP,
   AI_SUPPORTED_FIELDS,
@@ -159,6 +162,15 @@ export default function ChannelFieldEditor({
   const setupSaveTimer = useRef<number | null>(null)
   const setupDirtyRef = useRef<Set<'productType' | 'variationTheme'>>(new Set())
 
+  // Q.8 — user-defined channel groups, persisted to localStorage keyed
+  // by productId. The wizard stores them per-wizard-row; here on the
+  // edit page there's no wizard to hang state off, and a Product-level
+  // column would be a migration we don't need yet. localStorage is a
+  // pragmatic single-browser persistence that the user can recreate
+  // anywhere if needed.
+  const [channelGroups, setChannelGroups] = useState<ChannelGroup[]>([])
+  const channelGroupsKey = `nexus.channelGroups.${productId}`
+
   // Q.7 — GTIN exemption status for this listing. Refetched whenever
   // productType changes (which we trigger via reloadKey in
   // flushSetup) so the banner reflects the latest pick.
@@ -221,6 +233,34 @@ export default function ChannelFieldEditor({
       cancelled = true
     }
   }, [productId, channel, marketplace, reloadKey, showAllOptional, forceRefresh])
+
+  // ── Q.8 — load/save channel groups from localStorage ────────
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(channelGroupsKey)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) {
+          setChannelGroups(parsed as ChannelGroup[])
+        }
+      }
+    } catch {
+      /* corrupted local storage — ignore and start fresh */
+    }
+  }, [channelGroupsKey])
+
+  const updateChannelGroups = useCallback(
+    (next: ChannelGroup[]) => {
+      setChannelGroups(next)
+      try {
+        window.localStorage.setItem(channelGroupsKey, JSON.stringify(next))
+      } catch {
+        /* localStorage full or disabled — UI still works for the
+         * session */
+      }
+    },
+    [channelGroupsKey],
+  )
 
   // ── Q.7 — fetch GTIN exemption status. Refetches when reloadKey
   // bumps (which happens after a productType change), so the banner
@@ -757,6 +797,21 @@ export default function ChannelFieldEditor({
         onChange={setSetup}
       />
 
+      {/* Q.8 — channel groups for bulk broadcast in OverrideMenu */}
+      {siblings.length > 0 && (
+        <ChannelGroupsManager
+          groups={channelGroups}
+          availableChannels={Array.from(
+            new Set(allChannelKeys.map((k) => k)),
+          ).map((k) => {
+            const [platform, marketplace] = k.split(':')
+            return { platform, marketplace }
+          })}
+          onChange={updateChannelGroups}
+          defaultCollapsed
+        />
+      )}
+
       {manifest && (
         <SchemaAgeIndicator
           fetchedAt={manifest.fetchedAtByChannel[channelKey]}
@@ -805,7 +860,7 @@ export default function ChannelFieldEditor({
                 }
                 aiBusy={aiBusyFields.has(field.id)}
                 onApplyToChannels={broadcastToChannels}
-                channelGroups={[]}
+                channelGroups={channelGroups}
                 allChannelKeys={allChannelKeys}
                 overrides={overrides}
                 onOverrideChange={(ck, v) => {
