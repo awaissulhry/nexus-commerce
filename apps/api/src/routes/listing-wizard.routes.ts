@@ -28,6 +28,11 @@ import { VariationsService } from '../services/listing-wizard/variations.service
 import { SubmissionService } from '../services/listing-wizard/submission.service.js'
 import { ImageResolutionService } from '../services/listing-images/image-resolution.service.js'
 import { validateForPlatform } from '../services/listing-images/validation.service.js'
+import { GeminiService } from '../services/ai/gemini.service.js'
+import {
+  ListingContentService,
+  type ContentField,
+} from '../services/ai/listing-content.service.js'
 import {
   channelsHash,
   legacyFirstChannel,
@@ -51,6 +56,35 @@ const schemaParserService = new SchemaParserService(
 const variationsService = new VariationsService(prisma as any)
 const submissionService = new SubmissionService(prisma as any)
 const imageResolutionService = new ImageResolutionService(prisma as any)
+const listingContentService = new ListingContentService(new GeminiService())
+
+// ── Phase G — language + format derivation for content dedup ────
+const MARKETPLACE_TO_LANGUAGE: Record<string, string> = {
+  IT: 'it',
+  DE: 'de',
+  FR: 'fr',
+  ES: 'es',
+  UK: 'en',
+  GB: 'en',
+  US: 'en',
+  CA: 'en',
+  MX: 'es',
+  AU: 'en',
+  JP: 'ja',
+  GLOBAL: 'en',
+}
+
+function languageForMarketplace(marketplace: string): string {
+  return MARKETPLACE_TO_LANGUAGE[marketplace.toUpperCase()] ?? 'en'
+}
+
+/** Same content can be reused across channels iff (language, platform)
+ *  match — the platform decides the format rules (Amazon: 200-char
+ *  title, 5×500-char bullets; eBay: 80-char title; Shopify: long
+ *  HTML; Woo: long HTML). */
+function contentGroupKey(platform: string, marketplace: string): string {
+  return `${languageForMarketplace(marketplace)}:${platform.toUpperCase()}`
+}
 
 interface StartBody {
   productId?: string
@@ -932,6 +966,222 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
             : null,
         },
         fees,
+      }
+    },
+  )
+
+  // ── Step 8 — Content (Phase G dedup) ─────────────────────────
+  // POST /api/listing-wizard/:id/generate-content
+  // Body: { fields: ContentField[], variant?: number }
+  //
+  // Computes per-channel group keys (language:platform), groups the
+  // wizard's channels, and fires ONE Gemini call per unique group.
+  // Same language + same platform format = same call, broadcast to
+  // every channel in the group. Returns per-channel results so the
+  // frontend can render tabs by group with the channel chips that
+  // share each tab's content.
+  fastify.post<{
+    Params: { id: string }
+    Body: { fields?: string[]; variant?: number }
+  }>(
+    '/listing-wizard/:id/generate-content',
+    async (request, reply) => {
+      if (!listingContentService.isConfigured()) {
+        return reply.code(503).send({
+          error:
+            'Gemini API not configured — set GEMINI_API_KEY on the API server.',
+        })
+      }
+      const wizard = await prisma.listingWizard.findUnique({
+        where: { id: request.params.id },
+      })
+      if (!wizard) {
+        return reply.code(404).send({ error: 'Wizard not found' })
+      }
+      const channels = normalizeChannels(wizard.channels)
+      if (channels.length === 0) {
+        return reply.code(409).send({
+          error:
+            'No channels selected — pick at least one (platform, marketplace) in Step 1 first.',
+        })
+      }
+
+      const ALLOWED_FIELDS = new Set<ContentField>([
+        'title',
+        'bullets',
+        'description',
+        'keywords',
+      ])
+      const requested = (request.body?.fields ?? []).filter(
+        (f): f is ContentField => ALLOWED_FIELDS.has(f as ContentField),
+      )
+      if (requested.length === 0) {
+        return reply.code(400).send({
+          error: `fields must include one or more of ${Array.from(
+            ALLOWED_FIELDS,
+          ).join(', ')}`,
+        })
+      }
+
+      const product = await prisma.product.findUnique({
+        where: { id: wizard.productId },
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          brand: true,
+          description: true,
+          bulletPoints: true,
+          keywords: true,
+          weightValue: true,
+          weightUnit: true,
+          dimLength: true,
+          dimWidth: true,
+          dimHeight: true,
+          dimUnit: true,
+          productType: true,
+          variantAttributes: true,
+          categoryAttributes: true,
+        },
+      })
+      if (!product) {
+        return reply.code(404).send({ error: 'Product not found' })
+      }
+
+      // Group channels by (language, platform). Pick a representative
+      // marketplace per group for the Gemini call's terminology
+      // lookup — terminology is per (brand, marketplace), so any
+      // marketplace in the group will do (we sort lexicographically
+      // so the choice is deterministic).
+      const groups = new Map<
+        string,
+        { language: string; platform: string; marketplaces: string[]; channelKeys: string[] }
+      >()
+      for (const c of channels) {
+        const key = contentGroupKey(c.platform, c.marketplace)
+        const channelKey = `${c.platform}:${c.marketplace}`
+        if (!groups.has(key)) {
+          groups.set(key, {
+            language: languageForMarketplace(c.marketplace),
+            platform: c.platform,
+            marketplaces: [c.marketplace],
+            channelKeys: [channelKey],
+          })
+        } else {
+          const g = groups.get(key)!
+          if (!g.marketplaces.includes(c.marketplace)) {
+            g.marketplaces.push(c.marketplace)
+          }
+          g.channelKeys.push(channelKey)
+        }
+      }
+      // Deterministic order — sort each group's lists.
+      for (const g of groups.values()) {
+        g.marketplaces.sort()
+        g.channelKeys.sort()
+      }
+
+      const variant =
+        typeof request.body?.variant === 'number'
+          ? Math.max(0, Math.min(4, request.body.variant))
+          : 0
+
+      // Fire one Gemini call per group. Terminology is fetched per
+      // group from the chosen marketplace. Errors per group don't
+      // sink the others — the response includes both successes and
+      // failures so the UI can retry-failed individually.
+      const groupResults: Array<{
+        groupKey: string
+        platform: string
+        language: string
+        marketplaces: string[]
+        channelKeys: string[]
+        result?: any
+        error?: string
+      }> = []
+
+      for (const [groupKey, g] of groups) {
+        const representativeMarketplace = g.marketplaces[0]!
+        try {
+          const terminology = await prisma.terminologyPreference.findMany({
+            where: {
+              marketplace: representativeMarketplace.toUpperCase(),
+              OR: [{ brand: product.brand }, { brand: null }],
+            },
+            select: { preferred: true, avoid: true, context: true },
+            orderBy: [{ brand: 'desc' }, { preferred: 'asc' }],
+          })
+          const result = await listingContentService.generate({
+            product: {
+              id: product.id,
+              sku: product.sku,
+              name: product.name,
+              brand: product.brand,
+              description: product.description,
+              bulletPoints: product.bulletPoints,
+              keywords: product.keywords,
+              weightValue: product.weightValue
+                ? Number(product.weightValue)
+                : null,
+              weightUnit: product.weightUnit,
+              dimLength: product.dimLength
+                ? Number(product.dimLength)
+                : null,
+              dimWidth: product.dimWidth ? Number(product.dimWidth) : null,
+              dimHeight: product.dimHeight
+                ? Number(product.dimHeight)
+                : null,
+              dimUnit: product.dimUnit,
+              productType: product.productType,
+              variantAttributes: product.variantAttributes,
+              categoryAttributes: product.categoryAttributes,
+            },
+            marketplace: representativeMarketplace,
+            fields: requested,
+            variant,
+            terminology,
+          })
+          groupResults.push({
+            groupKey,
+            platform: g.platform,
+            language: g.language,
+            marketplaces: g.marketplaces,
+            channelKeys: g.channelKeys,
+            result,
+          })
+        } catch (err) {
+          fastify.log.error(
+            { err, groupKey },
+            '[listing-wizard] generate-content group failed',
+          )
+          groupResults.push({
+            groupKey,
+            platform: g.platform,
+            language: g.language,
+            marketplaces: g.marketplaces,
+            channelKeys: g.channelKeys,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      }
+
+      // Per-channel projection: map each channelKey to its group's
+      // result. Frontend can read either shape — groups for the tab
+      // structure, byChannel for downstream submission.
+      const byChannel: Record<string, any> = {}
+      for (const g of groupResults) {
+        for (const channelKey of g.channelKeys) {
+          byChannel[channelKey] = g.result ?? { error: g.error }
+        }
+      }
+
+      return {
+        groups: groupResults,
+        byChannel,
+        dedupSavings: {
+          channelCount: channels.length,
+          groupCount: groups.size,
+        },
       }
     },
   )
