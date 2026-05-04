@@ -375,9 +375,44 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         channel: 'AMAZON' | 'EBAY'
         marketplace: string
       }
+      /** R.1 — multi-target fan-out. When set (and non-empty), every
+       *  channel-field upsert runs once per matching context, so a
+       *  single edit lands on AMAZON:IT + AMAZON:DE + AMAZON:FR in
+       *  one PATCH. Falls back to `marketplaceContext` (singular) for
+       *  backwards compat. */
+      marketplaceContexts?: Array<{
+        channel: 'AMAZON' | 'EBAY'
+        marketplace: string
+      }>
     }
   }>('/products/bulk', async (request, reply) => {
-    const { changes, marketplaceContext } = request.body ?? {}
+    const { changes, marketplaceContext, marketplaceContexts } =
+      request.body ?? {}
+    // Effective context list: prefer the new array, fall back to the
+    // singular form, dedupe.
+    const rawContexts: Array<{ channel: 'AMAZON' | 'EBAY'; marketplace: string }> =
+      Array.isArray(marketplaceContexts) && marketplaceContexts.length > 0
+        ? marketplaceContexts
+        : marketplaceContext
+        ? [marketplaceContext]
+        : []
+    const effectiveContexts = (() => {
+      const seen = new Set<string>()
+      const out: typeof rawContexts = []
+      for (const c of rawContexts) {
+        if (!c?.channel || !c?.marketplace) continue
+        const k = `${c.channel}:${c.marketplace}`
+        if (seen.has(k)) continue
+        seen.add(k)
+        out.push(c)
+      }
+      return out
+    })()
+    // First context drives schema lookups (registry validation needs ONE
+    // marketplace; rule of thumb is the schema is consistent across the
+    // selected fan-out targets — selectors that mix incompatible
+    // schemas get rejected per change anyway).
+    const primaryContext = effectiveContexts[0] ?? null
     if (!Array.isArray(changes) || changes.length === 0) {
       return reply.code(400).send({ error: 'No changes provided' })
     }
@@ -493,7 +528,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       // a marketplace context is also acceptable here.
       if (isAttr) {
         const def = await getFieldDefinition(c.field, {
-          marketplace: marketplaceContext?.marketplace ?? null,
+          marketplace: primaryContext?.marketplace ?? null,
         })
         if (!def || !def.editable) {
           errors.push({
@@ -515,23 +550,29 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
       }
-      // Channel fields require marketplaceContext to know which
-      // ChannelListing to upsert.
+      // Channel fields require at least one marketplace context whose
+      // channel matches the field's prefix (amazon_* → AMAZON, ebay_*
+      // → EBAY). With R.1 multi-targets, a request that selects e.g.
+      // AMAZON:IT + EBAY:UK can carry both `amazon_title` and
+      // `ebay_title` changes — each routes to its matching contexts.
       if (isCh) {
-        if (!marketplaceContext?.channel || !marketplaceContext?.marketplace) {
+        if (effectiveContexts.length === 0) {
           errors.push({
             id: c.id,
             field: c.field,
-            error: 'marketplaceContext required for channel fields',
+            error: 'marketplaceContexts required for channel fields',
           })
           continue
         }
         const expectedChannel = channelOf(c.field)
-        if (expectedChannel && expectedChannel !== marketplaceContext.channel) {
+        const matching = expectedChannel
+          ? effectiveContexts.filter((ctx) => ctx.channel === expectedChannel)
+          : effectiveContexts
+        if (matching.length === 0) {
           errors.push({
             id: c.id,
             field: c.field,
-            error: `Field belongs to ${expectedChannel} but context is ${marketplaceContext.channel}`,
+            error: `Field belongs to ${expectedChannel} but no ${expectedChannel} target was selected`,
           })
           continue
         }
@@ -784,34 +825,44 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       // statement; runs serially in array-form $transaction.
       const updates: any[] = []
 
-      // Helper for ChannelListing upsert by (productId, channel, marketplace)
-      const upsertChannelListing = (
+      // Helper for ChannelListing upsert by (productId, channel,
+      // marketplace). R.1 — fans out to every effectiveContext whose
+      // channel matches the field's prefix, so one change targets all
+      // selected markets in a single transaction. Returns an array of
+      // Prisma promises (possibly empty) rather than a single one.
+      const upsertChannelListings = (
         productId: string,
         field: string,
-        value: any
+        value: any,
       ) => {
-        if (!marketplaceContext) return null
+        if (effectiveContexts.length === 0) return []
         const stripped = CHANNEL_FIELD_MAP[field]
-        if (!stripped) return null
-        const channelMarket = `${marketplaceContext.channel}_${marketplaceContext.marketplace}`
-        return prisma.channelListing.upsert({
-          where: {
-            productId_channel_marketplace: {
-              productId,
-              channel: marketplaceContext.channel,
-              marketplace: marketplaceContext.marketplace,
+        if (!stripped) return []
+        const expected = channelOf(field)
+        const targets = expected
+          ? effectiveContexts.filter((ctx) => ctx.channel === expected)
+          : effectiveContexts
+        return targets.map((ctx) => {
+          const channelMarket = `${ctx.channel}_${ctx.marketplace}`
+          return prisma.channelListing.upsert({
+            where: {
+              productId_channel_marketplace: {
+                productId,
+                channel: ctx.channel,
+                marketplace: ctx.marketplace,
+              },
             },
-          },
-          create: {
-            productId,
-            channel: marketplaceContext.channel,
-            channelMarket,
-            region: marketplaceContext.marketplace,
-            marketplace: marketplaceContext.marketplace,
-            listingStatus: 'DRAFT',
-            [stripped]: value,
-          } as any,
-          update: { [stripped]: value } as any,
+            create: {
+              productId,
+              channel: ctx.channel,
+              channelMarket,
+              region: ctx.marketplace,
+              marketplace: ctx.marketplace,
+              listingStatus: 'DRAFT',
+              [stripped]: value,
+            } as any,
+            update: { [stripped]: value } as any,
+          })
         })
       }
 
@@ -869,12 +920,12 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           // tracking still goes on the Product row so children can be
           // visually distinguished as inheriting.
           if (isCh) {
-            const parentUpsert = upsertChannelListing(v.id, v.field, v.value)
-            if (parentUpsert) updates.push(parentUpsert)
+            updates.push(...upsertChannelListings(v.id, v.field, v.value))
             const kids = childrenByParent.get(v.id) ?? []
             for (const childId of kids) {
-              const kidUpsert = upsertChannelListing(childId, v.field, v.value)
-              if (kidUpsert) updates.push(kidUpsert)
+              updates.push(
+                ...upsertChannelListings(childId, v.field, v.value),
+              )
               // Track on Product.cascadedFields with the prefixed name
               updates.push(
                 prisma.product.update({
@@ -904,12 +955,11 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             }
           }
         } else if (isCh) {
-          // Direct channel-field edit (works for parents, children, and
-          // standalone — they all map to a single ChannelListing row).
-          // For children, also remove the prefixed field from
+          // Direct channel-field edit. With R.1 multi-targets this
+          // upserts one ChannelListing row per matching context. For
+          // children, also remove the prefixed field from
           // cascadedFields so future renders don't show "inherited."
-          const upsert = upsertChannelListing(v.id, v.field, v.value)
-          if (upsert) updates.push(upsert)
+          updates.push(...upsertChannelListings(v.id, v.field, v.value))
           if (childIdSet.has(v.id)) {
             updates.push(
               prisma.$executeRaw`

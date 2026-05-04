@@ -1032,9 +1032,17 @@ export default function BulkOperationsClient() {
   const [filterOpen, setFilterOpen] = useState(false)
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set())
 
-  // ── D.3d: marketplace context state ─────────────────────────────
-  const [marketplaceContext, setMarketplaceContext] =
-    useState<MarketplaceContext | null>(null)
+  // ── D.3d / R.1: marketplace targets (multi-select) ──────────────
+  // R.1 — promoted from a singular MarketplaceContext to an array so
+  // channel-field edits can fan out to N marketplaces in one save.
+  // The first entry acts as the "primary" — drives the table-view
+  // hydration query (?channel=&marketplace=) since the grid still
+  // renders one listing's worth of data per row. Edits broadcast to
+  // every entry in `marketplaceTargets`.
+  const [marketplaceTargets, setMarketplaceTargets] = useState<
+    MarketplaceContext[]
+  >([])
+  const primaryContext: MarketplaceContext | null = marketplaceTargets[0] ?? null
   const [marketplaceOptions, setMarketplaceOptions] = useState<MarketplaceOption[]>([])
 
   // ── Column resize state (Step 1.5) ─────────────────────────────
@@ -1237,7 +1245,7 @@ export default function BulkOperationsClient() {
   // Push marketplace presence into the module ref so channel-field
   // cell renderers can show "Select marketplace" placeholder when
   // context is missing.
-  hasMarketplaceContextRef.current = marketplaceContext !== null
+  hasMarketplaceContextRef.current = marketplaceTargets.length > 0
 
   // Refs for stable callbacks
   const productsRef = useRef(products)
@@ -1609,11 +1617,15 @@ export default function BulkOperationsClient() {
       cascade: c.cascade,
     }))
 
-    // Body includes marketplaceContext when we have one — needed by
-    // backend to upsert ChannelListing rows for channel-prefixed
-    // fields.
+    // R.1 — body carries `marketplaceContexts` (plural) so the backend
+    // can fan out channel-field upserts to every selected target.
+    // `marketplaceContext` (singular) is kept as the first entry for
+    // backwards compatibility with any older API code paths.
     const body: any = { changes: changesArray }
-    if (marketplaceContext) body.marketplaceContext = marketplaceContext
+    if (marketplaceTargets.length > 0) {
+      body.marketplaceContexts = marketplaceTargets
+      body.marketplaceContext = marketplaceTargets[0]
+    }
 
     try {
       const res = await fetch(`${getBackendUrl()}/api/products/bulk`, {
@@ -1754,7 +1766,7 @@ export default function BulkOperationsClient() {
     } catch (err: any) {
       setSaveStatus({ kind: 'error', message: err?.message ?? String(err) })
     }
-  }, [saveStatus.kind, marketplaceContext])
+  }, [saveStatus.kind, marketplaceTargets])
 
   // Cmd/Ctrl+S
   useEffect(() => {
@@ -1835,14 +1847,15 @@ export default function BulkOperationsClient() {
     }
   }, [])
 
-  // Refetch products when marketplace context changes — bulk-fetch
-  // includes _channelListing per row when channel + marketplace params
-  // are set, so amazon_*/ebay_* cells render real values.
+  // Refetch products when the primary target changes — bulk-fetch
+  // hydrates _channelListing for ONE (channel, marketplace) per row,
+  // so the table view always reflects the first selected target.
+  // Edits still fan out to every target via marketplaceContexts.
   const reloadProducts = useCallback(() => {
     const params = new URLSearchParams()
-    if (marketplaceContext) {
-      params.set('channel', marketplaceContext.channel)
-      params.set('marketplace', marketplaceContext.marketplace)
+    if (primaryContext) {
+      params.set('channel', primaryContext.channel)
+      params.set('marketplace', primaryContext.marketplace)
     }
     const qs = params.toString()
     return fetch(
@@ -1854,7 +1867,7 @@ export default function BulkOperationsClient() {
         setProducts(Array.isArray(data.products) ? data.products : [])
       })
       .catch(() => {})
-  }, [marketplaceContext?.channel, marketplaceContext?.marketplace])
+  }, [primaryContext?.channel, primaryContext?.marketplace])
   useEffect(() => {
     reloadProducts()
   }, [reloadProducts])
@@ -1868,8 +1881,8 @@ export default function BulkOperationsClient() {
     if (enabledChannels.length) params.set('channels', enabledChannels.join(','))
     if (enabledProductTypes.length)
       params.set('productTypes', enabledProductTypes.join(','))
-    if (marketplaceContext?.marketplace) {
-      params.set('marketplace', marketplaceContext.marketplace)
+    if (primaryContext?.marketplace) {
+      params.set('marketplace', primaryContext.marketplace)
     }
     const qs = params.toString()
     const url = `${getBackendUrl()}/api/pim/fields${qs ? `?${qs}` : ''}`
@@ -1885,7 +1898,7 @@ export default function BulkOperationsClient() {
     return () => {
       cancelled = true
     }
-  }, [enabledChannels, enabledProductTypes, marketplaceContext?.marketplace])
+  }, [enabledChannels, enabledProductTypes, primaryContext?.marketplace])
 
   // ── Build columns dynamically from registry + visibility ──────────
   const fieldsById = useMemo(() => {
@@ -2646,10 +2659,10 @@ export default function BulkOperationsClient() {
   }, [changes])
 
   const showContextBanner =
-    channelFieldsVisible && marketplaceContext === null
+    channelFieldsVisible && marketplaceTargets.length === 0
 
   const hasUnsavablePendingChanges =
-    marketplaceContext === null && pendingChannelChanges > 0
+    marketplaceTargets.length === 0 && pendingChannelChanges > 0
 
   const saveLabel =
     saveStatus.kind === 'saving'
@@ -2779,8 +2792,8 @@ export default function BulkOperationsClient() {
           {/* Right: marketplace + write actions */}
           <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
             <MarketplaceSelector
-              value={marketplaceContext}
-              onChange={setMarketplaceContext}
+              value={marketplaceTargets}
+              onChange={setMarketplaceTargets}
               options={marketplaceOptions}
               pulse={showContextBanner}
             />
