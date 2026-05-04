@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, AlertCircle } from 'lucide-react'
+import { ChevronLeft, AlertCircle, TableProperties } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import ListOnChannelDropdown from './ListOnChannelDropdown'
@@ -137,6 +137,15 @@ export default function ProductEditClient({
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push(`/products/${product.id}/edit/bulk`)}
+              title="Open the spreadsheet view to edit master fields across this product and its variants"
+            >
+              <TableProperties className="w-3.5 h-3.5 mr-1.5" />
+              Bulk edit
+            </Button>
             <ListOnChannelDropdown productId={product.id} />
             <Button variant="ghost" size="sm" onClick={() => router.refresh()}>
               Discard
