@@ -1,13 +1,16 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  CheckCircle2,
-  Sparkles,
-  Loader2,
   AlertCircle,
-  Search,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  Loader2,
   RefreshCw,
+  Search,
+  Sparkles,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -35,11 +38,11 @@ interface SuggestResult {
 interface ProductTypeSlice {
   productType?: string
   displayName?: string
-  source?: 'ai' | 'manual'
+  source?: 'ai' | 'manual' | 'mirror'
+  /** When source==='mirror', the channel key we're copying from. */
+  mirrorOf?: string
   selectedAt?: string
   aiSuggestions?: RankedSuggestion[]
-  aiSource?: 'gemini' | 'rule-based'
-  aiRuleBasedFallback?: boolean
 }
 
 const LIST_DEBOUNCE_MS = 200
@@ -48,52 +51,417 @@ export default function Step3ProductType({
   wizardId,
   wizardState,
   updateWizardState,
-  product,
+  channels,
+}: StepProps) {
+  // Phase K.1: every Amazon channel gets its own picker. Non-Amazon
+  // channels don't have a productType taxonomy (yet), so they're
+  // surfaced as "skipped" rows.
+  const channelStates = (wizardState.channelStates ?? {}) as Record<
+    string,
+    Record<string, any>
+  >
+  const legacyShared = (wizardState.productType ?? {}) as ProductTypeSlice
+
+  // Build initial picks from channelStates → fall back to the legacy
+  // shared slot for backwards compat with Phase B-D wizards that wrote
+  // a single shared productType.
+  const initialPicks = useMemo(() => {
+    const m: Record<string, ProductTypeSlice> = {}
+    for (const c of channels) {
+      const key = `${c.platform}:${c.marketplace}`
+      const slice = channelStates[key]?.productType as
+        | ProductTypeSlice
+        | undefined
+      if (slice && slice.productType) {
+        m[key] = slice
+      } else if (
+        c.platform === 'AMAZON' &&
+        legacyShared.productType
+      ) {
+        m[key] = { ...legacyShared, source: 'manual' }
+      }
+    }
+    return m
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const [picks, setPicks] = useState<Record<string, ProductTypeSlice>>(
+    initialPicks,
+  )
+  const [expanded, setExpanded] = useState<Set<string>>(() => {
+    // Auto-expand any channel that doesn't have a pick yet.
+    const set = new Set<string>()
+    for (const c of channels) {
+      const key = `${c.platform}:${c.marketplace}`
+      if (c.platform !== 'AMAZON') continue
+      if (!initialPicks[key]?.productType) set.add(key)
+    }
+    // If everyone already has a pick, expand the first one as a default.
+    if (set.size === 0 && channels[0]) {
+      const k = `${channels[0].platform}:${channels[0].marketplace}`
+      if (channels[0].platform === 'AMAZON') set.add(k)
+    }
+    return set
+  })
+
+  // ── Persist per-channel pick to channelStates[key].productType ──
+  const persistPick = useCallback(
+    async (channelKey: string, slice: ProductTypeSlice) => {
+      const channelStatesPatch: Record<string, Record<string, unknown>> = {
+        [channelKey]: { productType: slice },
+      }
+      await fetch(`${getBackendUrl()}/api/listing-wizard/${wizardId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channelStates: channelStatesPatch }),
+      }).catch(() => {})
+    },
+    [wizardId],
+  )
+
+  const setPick = useCallback(
+    (channelKey: string, slice: ProductTypeSlice) => {
+      setPicks((prev) => ({ ...prev, [channelKey]: slice }))
+      void persistPick(channelKey, slice)
+    },
+    [persistPick],
+  )
+
+  const toggleExpanded = useCallback((channelKey: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(channelKey)) next.delete(channelKey)
+      else next.add(channelKey)
+      return next
+    })
+  }, [])
+
+  // ── Continue gating: every Amazon channel needs a pick ──────
+  const amazonChannelKeys = useMemo(
+    () =>
+      channels
+        .filter((c) => c.platform === 'AMAZON')
+        .map((c) => `${c.platform}:${c.marketplace}`),
+    [channels],
+  )
+  const unsatisfied = useMemo(() => {
+    return amazonChannelKeys.filter(
+      (k) => !picks[k]?.productType || picks[k]!.productType!.length === 0,
+    )
+  }, [amazonChannelKeys, picks])
+
+  const onContinue = useCallback(async () => {
+    if (unsatisfied.length > 0) return
+    await updateWizardState({}, { advance: true })
+  }, [unsatisfied.length, updateWizardState])
+
+  if (channels.length === 0) {
+    return (
+      <div className="max-w-2xl mx-auto py-12 px-6 text-center">
+        <p className="text-[13px] text-slate-600">
+          Pick channels in Step 1 first.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-3xl mx-auto py-10 px-6">
+      <div className="mb-6">
+        <h2 className="text-[20px] font-semibold text-slate-900">
+          Product Type
+        </h2>
+        <p className="text-[13px] text-slate-600 mt-1">
+          Pick a category per channel. Most sellers use the same Amazon
+          productType across markets — use the "Same as" dropdown to
+          mirror a sibling channel's pick instead of re-searching.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        {channels.map((c) => {
+          const channelKey = `${c.platform}:${c.marketplace}`
+          const pick = picks[channelKey]
+          if (c.platform !== 'AMAZON') {
+            return (
+              <NonAmazonRow key={channelKey} channelKey={channelKey} />
+            )
+          }
+          return (
+            <ChannelRow
+              key={channelKey}
+              channelKey={channelKey}
+              platform={c.platform}
+              marketplace={c.marketplace}
+              pick={pick}
+              expanded={expanded.has(channelKey)}
+              onToggle={() => toggleExpanded(channelKey)}
+              onPick={(slice) => setPick(channelKey, slice)}
+              onMirror={(sourceKey) => {
+                const src = picks[sourceKey]
+                if (!src?.productType) return
+                setPick(channelKey, {
+                  productType: src.productType,
+                  displayName: src.displayName ?? src.productType,
+                  source: 'mirror',
+                  mirrorOf: sourceKey,
+                  selectedAt: new Date().toISOString(),
+                })
+              }}
+              wizardId={wizardId}
+              mirrorCandidates={amazonChannelKeys.filter(
+                (k) =>
+                  k !== channelKey &&
+                  picks[k]?.productType &&
+                  picks[k]!.productType!.length > 0,
+              )}
+              mirrorPicks={picks}
+            />
+          )
+        })}
+      </div>
+
+      <div className="mt-6 flex items-center justify-between gap-3">
+        <span className="text-[12px]">
+          {unsatisfied.length === 0 ? (
+            <span className="inline-flex items-center gap-1.5 text-emerald-700">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Every channel has a product type.
+            </span>
+          ) : (
+            <span className="text-amber-700">
+              {unsatisfied.length} channel
+              {unsatisfied.length === 1 ? '' : 's'} still need a category
+            </span>
+          )}
+        </span>
+        <button
+          type="button"
+          onClick={onContinue}
+          disabled={unsatisfied.length > 0}
+          className={cn(
+            'h-8 px-4 rounded-md text-[13px] font-medium',
+            unsatisfied.length > 0
+              ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+              : 'bg-blue-600 text-white hover:bg-blue-700',
+          )}
+        >
+          Continue
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Non-Amazon row: skipped today ───────────────────────────────
+
+function NonAmazonRow({ channelKey }: { channelKey: string }) {
+  return (
+    <div className="border border-slate-200 rounded-lg bg-slate-50/50 px-4 py-3 flex items-center justify-between">
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="text-[10px] uppercase tracking-wide text-slate-400 font-medium">
+          Skipped
+        </span>
+        <span className="font-mono text-[12px] text-slate-600 truncate">
+          {channelKey}
+        </span>
+      </div>
+      <span className="text-[11px] text-slate-500">
+        No productType taxonomy yet — TECH_DEBT #35
+      </span>
+    </div>
+  )
+}
+
+// ── Per-channel picker ──────────────────────────────────────────
+
+function ChannelRow({
+  channelKey,
+  platform,
+  marketplace,
+  pick,
+  expanded,
+  onToggle,
+  onPick,
+  onMirror,
+  wizardId,
+  mirrorCandidates,
+  mirrorPicks,
+}: {
+  channelKey: string
+  platform: string
+  marketplace: string
+  pick?: ProductTypeSlice
+  expanded: boolean
+  onToggle: () => void
+  onPick: (slice: ProductTypeSlice) => void
+  onMirror: (sourceChannelKey: string) => void
+  wizardId: string
+  mirrorCandidates: string[]
+  mirrorPicks: Record<string, ProductTypeSlice>
+}) {
+  const hasPick = !!pick?.productType
+
+  return (
+    <div
+      className={cn(
+        'border rounded-lg bg-white',
+        hasPick ? 'border-slate-200' : 'border-amber-200 bg-amber-50/30',
+      )}
+    >
+      <div className="flex items-center justify-between gap-3 px-4 py-3">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex items-center gap-2 min-w-0 text-left"
+        >
+          {expanded ? (
+            <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+          ) : (
+            <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
+          )}
+          {hasPick ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+          ) : (
+            <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+          )}
+          <div className="min-w-0">
+            <div className="font-mono text-[13px] text-slate-900 font-medium truncate">
+              {channelKey}
+            </div>
+            {hasPick ? (
+              <div className="text-[11px] text-slate-500 truncate">
+                {pick.displayName ?? pick.productType}{' '}
+                <span className="text-slate-400">
+                  · {pick.productType}
+                </span>
+                {pick.source === 'mirror' && pick.mirrorOf && (
+                  <span className="ml-1 text-[10px] uppercase tracking-wide text-blue-700">
+                    · mirrors {pick.mirrorOf}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div className="text-[11px] text-amber-700">
+                No product type picked
+              </div>
+            )}
+          </div>
+        </button>
+        {mirrorCandidates.length > 0 && (
+          <MirrorMenu
+            candidates={mirrorCandidates}
+            picks={mirrorPicks}
+            onMirror={onMirror}
+          />
+        )}
+      </div>
+
+      {expanded && (
+        <div className="border-t border-slate-100">
+          <Picker
+            wizardId={wizardId}
+            channel={platform}
+            marketplace={marketplace}
+            currentPick={pick}
+            onPick={onPick}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MirrorMenu({
+  candidates,
+  picks,
+  onMirror,
+}: {
+  candidates: string[]
+  picks: Record<string, ProductTypeSlice>
+  onMirror: (sourceKey: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="relative flex-shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((s) => !s)}
+        className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:underline"
+      >
+        <Copy className="w-3 h-3" />
+        Same as ▾
+      </button>
+      {open && (
+        <>
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded shadow-md py-1 min-w-[200px]">
+            {candidates.map((c) => {
+              const p = picks[c]
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => {
+                    onMirror(c)
+                    setOpen(false)
+                  }}
+                  className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-slate-50"
+                >
+                  <div className="font-mono text-slate-700">{c}</div>
+                  <div className="text-[10px] text-slate-500 truncate">
+                    {p?.productType}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ── The actual search + AI picker (per channel) ────────────────
+
+function Picker({
+  wizardId,
   channel,
   marketplace,
-}: StepProps) {
-  const slice = (wizardState.productType ?? {}) as ProductTypeSlice
-
+  currentPick,
+  onPick,
+}: {
+  wizardId: string
+  channel: string
+  marketplace: string
+  currentPick?: ProductTypeSlice
+  onPick: (slice: ProductTypeSlice) => void
+}) {
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [items, setItems] = useState<ProductTypeListItem[]>([])
   const [listLoading, setListLoading] = useState(true)
   const [listError, setListError] = useState<string | null>(null)
-
-  const [selected, setSelected] = useState<{
-    productType: string
-    displayName: string
-  } | null>(
-    slice.productType
-      ? {
-          productType: slice.productType,
-          displayName: slice.displayName ?? slice.productType,
-        }
-      : null,
-  )
-
   const [suggestions, setSuggestions] = useState<RankedSuggestion[]>(
-    slice.aiSuggestions ?? [],
+    currentPick?.aiSuggestions ?? [],
   )
   const [suggestSource, setSuggestSource] = useState<
     'gemini' | 'rule-based' | null
-  >(slice.aiSource ?? null)
-  const [suggestFallback, setSuggestFallback] = useState<boolean>(
-    slice.aiRuleBasedFallback ?? false,
-  )
+  >(null)
+  const [suggestFallback, setSuggestFallback] = useState(false)
   const [suggestLoading, setSuggestLoading] = useState(false)
   const [suggestError, setSuggestError] = useState<string | null>(null)
-
   const [activeIdx, setActiveIdx] = useState<number>(-1)
-  const listRef = useRef<HTMLDivElement>(null)
 
-  // Debounce the search box.
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), LIST_DEBOUNCE_MS)
     return () => clearTimeout(t)
   }, [search])
 
-  // Fetch the candidate list whenever the search changes.
   useEffect(() => {
     let cancelled = false
     setListLoading(true)
@@ -148,40 +516,26 @@ export default function Step3ProductType({
       setSuggestions(data.suggestions)
       setSuggestSource(data.source)
       setSuggestFallback(data.ruleBasedFallback)
-      // Cache into wizard state so revisits skip the round-trip.
-      void updateWizardState({
-        productType: {
-          ...slice,
-          aiSuggestions: data.suggestions,
-          aiSource: data.source,
-          aiRuleBasedFallback: data.ruleBasedFallback,
-        },
-      })
     } catch (err) {
       setSuggestError(err instanceof Error ? err.message : String(err))
     } finally {
       setSuggestLoading(false)
     }
-    // updateWizardState + slice are deliberately stable refs from the
-    // wizard shell; depending on them would re-trigger after every save.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, wizardId])
 
   const handleSelect = useCallback(
-    async (
+    (
       item: { productType: string; displayName: string },
       source: 'ai' | 'manual',
     ) => {
-      setSelected(item)
-      const nextSlice: ProductTypeSlice = {
-        ...slice,
+      onPick({
         productType: item.productType,
         displayName: item.displayName,
         source,
         selectedAt: new Date().toISOString(),
-      }
-      await updateWizardState({ productType: nextSlice })
-      // Fire-and-forget — warm Step 4's schema cache.
+        aiSuggestions: suggestions.length > 0 ? suggestions : undefined,
+      })
+      // Fire-and-forget prefetch so attribute step lands fast.
       void fetch(
         `${getBackendUrl()}/api/listing-wizard/${wizardId}/prefetch-schema`,
         {
@@ -191,27 +545,9 @@ export default function Step3ProductType({
         },
       ).catch(() => {})
     },
-    [slice, updateWizardState, wizardId],
+    [onPick, suggestions, wizardId],
   )
 
-  const onContinue = useCallback(async () => {
-    if (!selected) return
-    await updateWizardState(
-      {
-        productType: {
-          ...slice,
-          productType: selected.productType,
-          displayName: selected.displayName,
-          source: slice.source ?? 'manual',
-          selectedAt: slice.selectedAt ?? new Date().toISOString(),
-        },
-      },
-      { advance: true },
-    )
-  }, [selected, slice, updateWizardState])
-
-  // Keyboard nav over the list. Only active when search is focused or
-  // when the user has just clicked into the list area.
   const onListKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (items.length === 0) return
     if (e.key === 'ArrowDown') {
@@ -223,26 +559,12 @@ export default function Step3ProductType({
     } else if (e.key === 'Enter' && activeIdx >= 0) {
       e.preventDefault()
       const it = items[activeIdx]
-      if (it) void handleSelect(it, 'manual')
+      if (it) handleSelect(it, 'manual')
     }
   }
 
-  const continueDisabled = !selected
-
   return (
-    <div className="max-w-3xl mx-auto py-10 px-6">
-      <div className="mb-6">
-        <h2 className="text-[20px] font-semibold text-slate-900">
-          Product Type
-        </h2>
-        <p className="text-[13px] text-slate-600 mt-1">
-          Pick the Amazon category for{' '}
-          <span className="font-medium text-slate-800">{product.name}</span>.
-          This drives the required-fields form on the next step.
-        </p>
-      </div>
-
-      {/* ── AI / rule-based suggestions ───────────────────────────── */}
+    <div className="px-4 py-3 space-y-3">
       <SuggestionsPanel
         suggestions={suggestions}
         source={suggestSource}
@@ -256,10 +578,9 @@ export default function Step3ProductType({
             'ai',
           )
         }
-        selectedProductType={selected?.productType ?? null}
+        selectedProductType={currentPick?.productType ?? null}
       />
 
-      {/* ── Manual search ─────────────────────────────────────────── */}
       <div className="border border-slate-200 rounded-lg bg-white">
         <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-200">
           <Search className="w-4 h-4 text-slate-400" />
@@ -278,8 +599,7 @@ export default function Step3ProductType({
           )}
         </div>
         <div
-          ref={listRef}
-          className="max-h-[320px] overflow-y-auto"
+          className="max-h-[280px] overflow-y-auto"
           tabIndex={0}
           onKeyDown={onListKeyDown}
         >
@@ -291,18 +611,12 @@ export default function Step3ProductType({
           )}
           {!listError && !listLoading && items.length === 0 && (
             <div className="px-3 py-6 text-[12px] text-slate-500 text-center">
-              No matches.{' '}
-              <button
-                type="button"
-                onClick={() => setSearch('')}
-                className="text-blue-600 hover:underline"
-              >
-                Clear search
-              </button>
+              No matches.
             </div>
           )}
           {items.map((item, idx) => {
-            const isSelected = selected?.productType === item.productType
+            const isSelected =
+              currentPick?.productType === item.productType
             const isActive = activeIdx === idx
             return (
               <button
@@ -327,7 +641,7 @@ export default function Step3ProductType({
                 {item.bundled && (
                   <span
                     className="text-[10px] text-slate-400"
-                    title="From the bundled fallback list — connect Amazon SP-API for live results"
+                    title="From bundled fallback list — connect Amazon SP-API for live results"
                   >
                     bundled
                   </span>
@@ -339,36 +653,6 @@ export default function Step3ProductType({
             )
           })}
         </div>
-      </div>
-
-      {/* ── Selection + continue ─────────────────────────────────── */}
-      <div className="mt-6 flex items-center justify-between gap-3">
-        <div className="text-[12px] text-slate-600 truncate min-w-0">
-          {selected ? (
-            <span>
-              Selected:{' '}
-              <span className="font-mono text-slate-900">
-                {selected.productType}
-              </span>{' '}
-              <span className="text-slate-500">— {selected.displayName}</span>
-            </span>
-          ) : (
-            <span className="text-slate-400">Pick a category to continue</span>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={onContinue}
-          disabled={continueDisabled}
-          className={cn(
-            'h-8 px-4 rounded-md text-[13px] font-medium',
-            continueDisabled
-              ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-              : 'bg-blue-600 text-white hover:bg-blue-700',
-          )}
-        >
-          Continue
-        </button>
       </div>
     </div>
   )
@@ -394,17 +678,16 @@ function SuggestionsPanel({
   selectedProductType: string | null
 }) {
   const hasResults = suggestions.length > 0
-  const sourceLabel = useMemo(() => {
+  const sourceLabel = (() => {
     if (source === 'gemini') return 'AI suggestions'
     if (source === 'rule-based')
       return ruleBasedFallback
         ? 'Suggestions (rule-based — set GEMINI_API_KEY for AI ranking)'
         : 'Suggestions'
     return 'Suggestions'
-  }, [source, ruleBasedFallback])
-
+  })()
   return (
-    <div className="mb-5 border border-slate-200 rounded-lg bg-white">
+    <div className="border border-slate-200 rounded-lg bg-white">
       <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-slate-200">
         <div className="flex items-center gap-2 text-[12px] font-medium text-slate-700">
           <Sparkles className="w-3.5 h-3.5 text-blue-500" />
@@ -433,9 +716,8 @@ function SuggestionsPanel({
         )}
         {!error && !hasResults && !loading && (
           <p className="text-[12px] text-slate-500 py-2">
-            Click <span className="font-medium">Get suggestions</span> for a
-            ranked shortlist based on this product. Or skip and search
-            manually below.
+            Click <span className="font-medium">Get suggestions</span> for an
+            AI-ranked shortlist.
           </p>
         )}
         {hasResults && (
