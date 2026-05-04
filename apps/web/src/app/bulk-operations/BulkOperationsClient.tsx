@@ -220,6 +220,113 @@ const REGISTRY_TO_UNIFIED_KEY: Record<string, string> = {
   ebay: 'Other attributes',
 }
 
+// KK — channel-aware default column order. Mirrors the natural
+// shelf order of Amazon Seller Central / eBay Seller Hub so users
+// see the same column flow they'd see in the source platform's UI.
+// Fields not in this list keep their relative insertion order
+// (which preserves manual drag-reorders within the unlisted tail).
+const CHANNEL_DEFAULT_ORDER: Record<string, string[]> = {
+  AMAZON: [
+    'sku',
+    'amazon_title',
+    'amazonAsin',
+    'parentAsin',
+    'productType',
+    'amazon_variationTheme',
+    'status',
+    'basePrice',
+    'buyBoxPrice',
+    'competitorPrice',
+    'totalStock',
+    'fulfillmentChannel',
+    'lowStockThreshold',
+    'upc',
+    'ean',
+    'gtin',
+    'brand',
+    'manufacturer',
+    'amazon_description',
+    'amazon_bullets',
+    'amazon_searchKeywords',
+    'amazon_browseNode',
+    'weightValue',
+    'weightUnit',
+    'dimLength',
+    'dimWidth',
+    'dimHeight',
+    'dimUnit',
+  ],
+  EBAY: [
+    'sku',
+    'ebay_title',
+    'ebayItemId',
+    'productType',
+    'ebay_variationTheme',
+    'ebay_format',
+    'ebay_duration',
+    'status',
+    'basePrice',
+    'totalStock',
+    'lowStockThreshold',
+    'upc',
+    'ean',
+    'gtin',
+    'brand',
+    'manufacturer',
+    'ebay_description',
+    'weightValue',
+    'weightUnit',
+    'dimLength',
+    'dimWidth',
+    'dimHeight',
+    'dimUnit',
+  ],
+}
+
+/** KK — reorder a list of column ids into the channel's natural
+ *  shelf order, with sensible secondary rules:
+ *    1. Explicitly-ordered ids (CHANNEL_DEFAULT_ORDER) come first.
+ *    2. Schema attr_* fields next, alphabetised so categories that
+ *       share their root (attr_armorType, attr_ceCertification) sit
+ *       together regardless of registry insertion order.
+ *    3. Other channel-prefixed fields next.
+ *    4. Anything left preserves its original index (so user drags
+ *       in the unlisted tail aren't clobbered).
+ *  Fields no longer in `allFields` are dropped so the reorder also
+ *  cleans up stale ids. */
+function applyChannelDefaultOrder(
+  ids: string[],
+  channel: string,
+  allFields: Array<{ id: string; channel?: string }>,
+): string[] {
+  const order = CHANNEL_DEFAULT_ORDER[channel] ?? []
+  const orderRank = new Map(order.map((id, idx) => [id, idx]))
+  const fieldsById = new Map(allFields.map((f) => [f.id, f]))
+  const dedup: string[] = []
+  const seen = new Set<string>()
+  for (const id of ids) {
+    if (seen.has(id)) continue
+    if (!fieldsById.has(id)) continue
+    seen.add(id)
+    dedup.push(id)
+  }
+  return dedup.sort((a, b) => {
+    const ra = orderRank.get(a)
+    const rb = orderRank.get(b)
+    if (ra !== undefined && rb !== undefined) return ra - rb
+    if (ra !== undefined) return -1
+    if (rb !== undefined) return 1
+    const aAttr = a.startsWith('attr_')
+    const bAttr = b.startsWith('attr_')
+    if (aAttr !== bAttr) return aAttr ? -1 : 1
+    if (aAttr && bAttr) return a.localeCompare(b)
+    const aChannelPrefixed = a.includes('_') && !a.startsWith('attr_')
+    const bChannelPrefixed = b.includes('_') && !b.startsWith('attr_')
+    if (aChannelPrefixed !== bChannelPrefixed) return aChannelPrefixed ? -1 : 1
+    return dedup.indexOf(a) - dedup.indexOf(b)
+  })
+}
+
 /** Decide which group a FieldDef belongs to. attr_* fields get the
  *  curated schema-editor group; master columns get a normalised key
  *  via REGISTRY_TO_UNIFIED_KEY so they share a bucket with their
@@ -1627,15 +1734,16 @@ export default function BulkOperationsClient() {
     schemaWarmth,
   ])
 
-  // EE.1 — auto-include channel-specific + schema attr_* columns the
-  // first time the user lands on a given (channel, marketplace). This
-  // promotes the manual "+ N for EBAY:IT" CC.3 button to automatic so
-  // the grid feels populated when an eBay tab is clicked instead of
-  // showing only universal fields. Each (channel, marketplace) is
-  // auto-loaded at most once per session (autoLoadedRef tracks). If
-  // the user removes columns afterwards, we don't re-add them. The
-  // ColumnSelector + the explicit "+ N" button still let them pull
-  // anything back in.
+  // EE.1 / KK — auto-include channel-specific + schema attr_* columns
+  // the first time the user lands on a given (channel, marketplace),
+  // AND reorder the visible set into the channel's natural shelf
+  // order (Amazon Seller Central / eBay Seller Hub style). Without the
+  // reorder, eBay landed with [sku, name, brand, …, ebay_title,
+  // ebayItemId] which doesn't match users' mental model. Now we
+  // produce [sku, ebay_title, ebayItemId, productType, …] for eBay
+  // and [sku, amazon_title, amazonAsin, productType, …] for Amazon.
+  // The reorder runs ONCE per (channel, marketplace) per session — if
+  // the user drags a column afterwards, we don't clobber their layout.
   const autoLoadedRef = useRef<Set<string>>(new Set())
   useEffect(() => {
     if (!primaryContext) return
@@ -1649,8 +1757,14 @@ export default function BulkOperationsClient() {
       return false
     })
     autoLoadedRef.current.add(tabKey)
-    if (missing.length === 0) return
-    setVisibleColumnIds((prev) => [...prev, ...missing.map((f) => f.id)])
+    setVisibleColumnIds((prev) => {
+      const merged = [...prev, ...missing.map((f) => f.id)]
+      return applyChannelDefaultOrder(
+        merged,
+        primaryContext.channel,
+        allFields,
+      )
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allFields, primaryContext?.channel, primaryContext?.marketplace])
 
@@ -1757,9 +1871,17 @@ export default function BulkOperationsClient() {
   // Include columnSizing in the fingerprint so a header drag also
   // re-renders TableRow (whose memo comparator otherwise sees no
   // change in props and keeps the body cells at the old widths).
+  // KK — include collapsedGroups in the fingerprint. Without this the
+  // memoised TableRow comparator returned true after a collapse
+  // toggle (visibleColumnIds + columnSizing didn't change), and rows
+  // kept rendering cells from the now-hidden columns. Now any collapse
+  // change forces a row re-render so the body matches dynamicColumns.
   const columnsKey = useMemo(
-    () => `${visibleColumnIds.join('|')}#${JSON.stringify(columnSizing)}`,
-    [visibleColumnIds, columnSizing],
+    () =>
+      `${visibleColumnIds.join('|')}#${JSON.stringify(
+        columnSizing,
+      )}#${Array.from(collapsedGroups).sort().join(',')}`,
+    [visibleColumnIds, columnSizing, collapsedGroups],
   )
 
   const tableMinWidth = useMemo(
