@@ -755,6 +755,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
             },
             baseAttributes,
             overridesByChannel,
+            productId: wizard.productId,
           },
         )
         return manifest

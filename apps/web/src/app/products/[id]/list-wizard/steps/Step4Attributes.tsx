@@ -49,6 +49,13 @@ interface UnionField {
   currentValue?: string | number | boolean
   overrides: Record<string, string | number | boolean>
   divergent?: boolean
+  variantEligible: boolean
+}
+
+interface UnionVariation {
+  id: string
+  sku: string
+  attributes: Record<string, string>
 }
 
 interface UnionManifest {
@@ -61,6 +68,7 @@ interface UnionManifest {
     reason: 'no_product_type' | 'fetch_failed' | 'unsupported_channel'
     detail?: string
   }>
+  variations: UnionVariation[]
 }
 
 type Primitive = string | number | boolean
@@ -96,19 +104,38 @@ export default function Step4Attributes({
   const [expandedFields, setExpandedFields] = useState<Set<string>>(
     new Set(),
   )
+  // K.4: per-variant attribute overrides keyed by variationId →
+  // fieldId → value. Applies to every channel by default; per-channel
+  // variant overrides are deferred to v2 (users can still override
+  // entire fields per channel via the existing per-channel section).
+  const [variantAttrs, setVariantAttrs] = useState<
+    Record<string, Record<string, Primitive>>
+  >(
+    (wizardState.variantAttributes ?? {}) as Record<
+      string,
+      Record<string, Primitive>
+    >,
+  )
+  const [expandedVariants, setExpandedVariants] = useState<Set<string>>(
+    new Set(),
+  )
 
-  // Debounced persist of `values` (base) → wizardState.attributes.
+  // Debounced persist of `values` (base) + variantAttrs →
+  // wizardState.{attributes,variantAttributes}.
   const saveTimer = useRef<number | null>(null)
   useEffect(() => {
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
     saveTimer.current = window.setTimeout(() => {
-      void updateWizardState({ attributes: values })
+      void updateWizardState({
+        attributes: values,
+        variantAttributes: variantAttrs,
+      })
     }, SAVE_DEBOUNCE_MS)
     return () => {
       if (saveTimer.current) window.clearTimeout(saveTimer.current)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [values])
+  }, [values, variantAttrs])
 
   // Per-channel override saves use a separate timer so writes to
   // overrides don't race with base writes.
@@ -348,6 +375,33 @@ export default function Step4Attributes({
                 onOverrideChange={(channelKey, v) =>
                   setOverride(channelKey, field.id, v)
                 }
+                variations={manifest.variations}
+                variantValues={Object.fromEntries(
+                  manifest.variations.map((v) => [
+                    v.id,
+                    variantAttrs[v.id]?.[field.id],
+                  ]),
+                )}
+                onVariantChange={(variationId, v) => {
+                  setVariantAttrs((prev) => {
+                    const slice = { ...(prev[variationId] ?? {}) }
+                    if (v === undefined || v === '' || v === null) {
+                      delete slice[field.id]
+                    } else {
+                      slice[field.id] = v
+                    }
+                    return { ...prev, [variationId]: slice }
+                  })
+                }}
+                variantsExpanded={expandedVariants.has(field.id)}
+                onToggleVariants={() =>
+                  setExpandedVariants((prev) => {
+                    const next = new Set(prev)
+                    if (next.has(field.id)) next.delete(field.id)
+                    else next.add(field.id)
+                    return next
+                  })
+                }
                 expanded={expandedFields.has(field.id)}
                 onToggleExpanded={() => toggleExpanded(field.id)}
                 unsatisfiedChannels={fieldUnsatisfied}
@@ -397,6 +451,11 @@ function FieldCard({
   onBaseChange,
   overrides,
   onOverrideChange,
+  variations,
+  variantValues,
+  onVariantChange,
+  variantsExpanded,
+  onToggleVariants,
   expanded,
   onToggleExpanded,
   unsatisfiedChannels,
@@ -406,6 +465,11 @@ function FieldCard({
   onBaseChange: (v: Primitive) => void
   overrides: Record<string, Primitive | undefined>
   onOverrideChange: (channelKey: string, v: Primitive | undefined) => void
+  variations: UnionVariation[]
+  variantValues: Record<string, Primitive | undefined>
+  onVariantChange: (variationId: string, v: Primitive | undefined) => void
+  variantsExpanded: boolean
+  onToggleVariants: () => void
   expanded: boolean
   onToggleExpanded: () => void
   unsatisfiedChannels: string[]
@@ -414,6 +478,11 @@ function FieldCard({
   const overrideCount = Object.values(overrides).filter(
     (v) => !isEmpty(v),
   ).length
+  const variantOverrideCount = Object.values(variantValues).filter(
+    (v) => !isEmpty(v),
+  ).length
+  const showVariantSection =
+    field.variantEligible && variations.length > 0
 
   return (
     <div
@@ -511,6 +580,67 @@ function FieldCard({
                       onChange={(v) => onOverrideChange(channelKey, v)}
                       placeholder={
                         isEmpty(baseValue)
+                          ? '— (leave empty to use base)'
+                          : `Inherits: ${formatValue(baseValue)}`
+                      }
+                      compact
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* K.4: per-variant override grid for variant-eligible fields */}
+      {showVariantSection && (
+        <div className="mt-3 border-t border-slate-100 pt-2">
+          <button
+            type="button"
+            onClick={onToggleVariants}
+            className="text-[12px] text-slate-600 hover:text-slate-900 inline-flex items-center gap-1"
+          >
+            {variantsExpanded ? (
+              <ChevronDown className="w-3 h-3" />
+            ) : (
+              <ChevronRight className="w-3 h-3" />
+            )}
+            Override per variation
+            {variantOverrideCount > 0 && (
+              <span className="text-[10px] font-medium text-purple-700 bg-purple-50 px-1 py-0.5 rounded">
+                {variantOverrideCount}
+              </span>
+            )}
+            <span className="text-[10px] text-slate-400 italic">
+              (variant-eligible field)
+            </span>
+          </button>
+          {variantsExpanded && (
+            <div className="mt-2 space-y-1.5">
+              {variations.map((v) => {
+                const seedFromMaster = v.attributes[field.id.toLowerCase()]
+                const value = variantValues[v.id]
+                return (
+                  <div key={v.id} className="flex items-center gap-2">
+                    <div className="w-32 flex-shrink-0 min-w-0">
+                      <div className="font-mono text-[11px] text-slate-700 truncate">
+                        {v.sku}
+                      </div>
+                      <div className="text-[10px] text-slate-500 truncate">
+                        {Object.entries(v.attributes)
+                          .map(([k, val]) => `${k}: ${val}`)
+                          .join(' · ') || '—'}
+                      </div>
+                    </div>
+                    <FieldInput
+                      field={field}
+                      value={value}
+                      onChange={(val) => onVariantChange(v.id, val)}
+                      placeholder={
+                        seedFromMaster
+                          ? `Master: ${seedFromMaster}`
+                          : isEmpty(baseValue)
                           ? '— (leave empty to use base)'
                           : `Inherits: ${formatValue(baseValue)}`
                       }

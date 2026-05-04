@@ -93,8 +93,8 @@ export interface UnionField extends RenderableField {
   /** Channel keys ("PLATFORM:MARKET") where this field is required. */
   requiredFor: string[]
   /** Channel keys where this field appears in the schema but is
-   *  optional. Empty in v1 — we only union required fields for now;
-   *  Phase F+ may surface a curated optional set. */
+   *  optional. K.5 ships a curated common-optional list; the full
+   *  optional set lives behind the "Show all fields" toggle. */
   optionalFor: string[]
   /** Channel keys where this field doesn't appear in the schema at
    *  all (e.g. an Amazon-required attribute on an eBay-only listing). */
@@ -110,6 +110,11 @@ export interface UnionField extends RenderableField {
    *  surfaces this so the user knows the merged shape may not fit
    *  every channel verbatim. */
   divergent?: boolean
+  /** K.4: TRUE when this field can hold per-variant values (size,
+   *  color, dimensions, weight, gtin). FALSE for product-level-only
+   *  fields like brand, manufacturer, item_name. The frontend uses
+   *  this to decide whether to show the per-variant override grid. */
+  variantEligible: boolean
 }
 
 export interface UnionManifest {
@@ -124,6 +129,15 @@ export interface UnionManifest {
     channelKey: string
     reason: 'no_product_type' | 'fetch_failed' | 'unsupported_channel'
     detail?: string
+  }>
+  /** K.4: variation children for the master product (parents only).
+   *  Lets the UI render per-variant override columns alongside the
+   *  per-channel ones without a second fetch. Empty when the master
+   *  is a single-product (no variations). */
+  variations: Array<{
+    id: string
+    sku: string
+    attributes: Record<string, string>
   }>
 }
 
@@ -203,6 +217,8 @@ export class SchemaParserService {
     baseAttributes: Record<string, unknown>
     /** Per-channel overrides: channelKey → fieldId → value. */
     overridesByChannel: Record<string, Record<string, unknown>>
+    /** K.4 — productId for loading variation children. */
+    productId: string
   }): Promise<UnionManifest> {
     const channels = opts.channels.map((c) => ({
       ...c,
@@ -296,6 +312,7 @@ export class SchemaParserService {
                 ? undefined
                 : (baseRaw as string | number | boolean),
             overrides,
+            variantEligible: isVariantEligible(f.id),
           })
         } else {
           existing.requiredFor.push(pc.channelKey)
@@ -335,6 +352,24 @@ export class SchemaParserService {
 
     const fieldsArr = Array.from(byId.values())
 
+    // K.4 — load variation children once for the per-variant override
+    // grid. Lower-cases attribute keys to match the way the variations
+    // service surfaces them so the frontend's lookups line up.
+    const variationRows = await this.prisma.productVariation.findMany({
+      where: { productId: opts.productId },
+      select: { id: true, sku: true, variationAttributes: true },
+    })
+    const variations = variationRows.map((v) => {
+      const raw = (v.variationAttributes ?? {}) as Record<string, unknown>
+      const attrs: Record<string, string> = {}
+      for (const [k, val] of Object.entries(raw)) {
+        if (typeof val === 'string') attrs[k.toLowerCase()] = val
+        else if (typeof val === 'number' || typeof val === 'boolean')
+          attrs[k.toLowerCase()] = String(val)
+      }
+      return { id: v.id, sku: v.sku, attributes: attrs }
+    })
+
     return {
       channels: channels.map((c) => {
         const key = `${c.platform}:${c.marketplace}`
@@ -352,12 +387,62 @@ export class SchemaParserService {
         perChannel.map((p) => [p.channelKey, p.fetchedAt]),
       ),
       fields: fieldsArr,
+      variations,
       channelsMissingSchema: missing,
     }
   }
 }
 
 // ── parser ──────────────────────────────────────────────────────
+
+/**
+ * K.4 — fields that Amazon accepts at the variant level. The list
+ * is curated rather than schema-derived because the schema doesn't
+ * encode "varies by variant" cleanly across productTypes; this map
+ * captures the common cases and matches what the variation themes
+ * in product-types.constants.ts can drive.
+ *
+ * Anything not in this set is product-level: setting it once at the
+ * parent fans out to every child via the variation_theme. Trying
+ * to vary `brand` per variant on Amazon, for instance, would be
+ * rejected.
+ */
+const VARIANT_ELIGIBLE_FIELDS = new Set([
+  'size',
+  'size_name',
+  'apparel_size',
+  'color',
+  'color_name',
+  'pattern_name',
+  'style',
+  'style_name',
+  'material_type',
+  'material',
+  'fabric_type',
+  'item_dimensions',
+  'package_dimensions',
+  'item_weight',
+  'package_weight',
+  'externally_assigned_product_identifier',
+  'gtin',
+  'upc',
+  'ean',
+  'merchant_suggested_asin',
+  'list_price',
+  'purchasable_offer',
+])
+
+function isVariantEligible(fieldId: string): boolean {
+  const id = fieldId.toLowerCase()
+  if (VARIANT_ELIGIBLE_FIELDS.has(id)) return true
+  // Heuristic suffixes — many Amazon attributes use _value /
+  // _unit / _type variants that vary alongside their parent (e.g.
+  // size_value, color_value).
+  for (const root of VARIANT_ELIGIBLE_FIELDS) {
+    if (id.startsWith(root + '_')) return true
+  }
+  return false
+}
 
 function parseProperty(fieldId: string, prop: any): RenderableField {
   const label =
