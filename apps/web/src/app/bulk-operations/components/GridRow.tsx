@@ -54,6 +54,14 @@ export const TableRow = memo(
             fieldId !== undefined &&
             isAggregatableField(fieldId)
           const selectable = !isParentAggregateCell
+          // W.5 — visually demote read-only cells. The Lock icon on the
+          // header already flags this; cell tinting reinforces it row-
+          // by-row so the user doesn't double-click into a column that
+          // refuses edits.
+          const fieldDef = (cell.column.columnDef.meta as
+            | { fieldDef?: { editable: boolean } }
+            | undefined)?.fieldDef
+          const isReadOnlyCell = fieldDef ? !fieldDef.editable : false
           return (
             <div
               key={cell.id}
@@ -81,6 +89,7 @@ export const TableRow = memo(
               }
               className={cn(
                 'overflow-hidden border-r border-slate-100/60 last:border-r-0 relative select-none',
+                isReadOnlyCell && 'bg-slate-50/40',
                 selectable && 'hover:bg-slate-50',
               )}
               style={{ width: cell.column.getSize(), flexShrink: 0 }}

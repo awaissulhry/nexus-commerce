@@ -301,6 +301,9 @@ export default function BulkOperationsClient() {
   // drop-target indicator.
   const [draggedColumnId, setDraggedColumnId] = useState<string | null>(null)
   const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null)
+  const [dragOverColumnSide, setDragOverColumnSide] = useState<
+    'before' | 'after' | null
+  >(null)
   // V.4 — same shape for the group band so dragging a chip moves all
   // its member fields together.
   // V.8 — `dragOverGroupSide` ('before'/'after') tracks which half of
@@ -2996,6 +2999,29 @@ export default function BulkOperationsClient() {
                     ? (e) => {
                         e.dataTransfer.effectAllowed = 'move'
                         e.dataTransfer.setData('text/plain', header.column.id)
+                        // W.4 — small custom drag image so very wide
+                        // columns (300px+) don't drag a sluggish full-
+                        // width preview across the screen.
+                        if (e.dataTransfer.setDragImage) {
+                          const ghost = document.createElement('div')
+                          ghost.textContent = String(
+                            (header.column.columnDef.meta as any)?.fieldDef
+                              ?.label ?? header.column.id,
+                          )
+                          ghost.style.position = 'absolute'
+                          ghost.style.top = '-1000px'
+                          ghost.style.left = '-1000px'
+                          ghost.style.padding = '2px 8px'
+                          ghost.style.background = '#3b82f6'
+                          ghost.style.color = 'white'
+                          ghost.style.fontSize = '11px'
+                          ghost.style.fontWeight = '600'
+                          ghost.style.borderRadius = '4px'
+                          ghost.style.fontFamily = 'system-ui, sans-serif'
+                          document.body.appendChild(ghost)
+                          e.dataTransfer.setDragImage(ghost, 10, 10)
+                          window.setTimeout(() => ghost.remove(), 0)
+                        }
                         setDraggedColumnId(header.column.id)
                       }
                     : undefined
@@ -3009,6 +3035,17 @@ export default function BulkOperationsClient() {
                           if (dragOverColumnId !== header.column.id) {
                             setDragOverColumnId(header.column.id)
                           }
+                          // W.7 — pick before/after based on cursor x
+                          // relative to the column's mid, mirroring the
+                          // group band's hit zones.
+                          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                          const side: 'before' | 'after' =
+                            e.clientX < rect.left + rect.width / 2
+                              ? 'before'
+                              : 'after'
+                          if (dragOverColumnSide !== side) {
+                            setDragOverColumnSide(side)
+                          }
                         }
                       }
                     : undefined
@@ -3019,21 +3056,37 @@ export default function BulkOperationsClient() {
                         e.preventDefault()
                         const src = draggedColumnId
                         if (src && src !== header.column.id) {
-                          reorderColumns(src, header.column.id)
+                          // W.7 — when dropped on the AFTER half, target
+                          // the next column id so the move lands AFTER
+                          // the hovered one. When BEFORE, target this
+                          // column directly.
+                          const dropTargetId =
+                            dragOverColumnSide === 'after'
+                              ? (() => {
+                                  const idx = visibleColumnIds.indexOf(
+                                    header.column.id,
+                                  )
+                                  return (
+                                    visibleColumnIds[idx + 1] ?? header.column.id
+                                  )
+                                })()
+                              : header.column.id
+                          reorderColumns(src, dropTargetId)
                         }
                         setDraggedColumnId(null)
                         setDragOverColumnId(null)
+                        setDragOverColumnSide(null)
                       }
                     : undefined
                 }
                 onDragEnd={() => {
                   setDraggedColumnId(null)
                   setDragOverColumnId(null)
+                  setDragOverColumnSide(null)
                 }}
                 className={cn(
                   'relative flex items-center gap-1 px-3 border-r border-slate-200/70 last:border-r-0 text-[11px] font-semibold text-slate-700 uppercase tracking-wider transition-colors',
                   isDraggable && 'cursor-grab active:cursor-grabbing',
-                  isDropTarget && 'bg-blue-100',
                   draggedColumnId === header.column.id && 'opacity-40',
                 )}
                 style={{ width: header.getSize(), flexShrink: 0 }}
@@ -3045,6 +3098,27 @@ export default function BulkOperationsClient() {
                     : fieldDef?.helpText
                 }
               >
+                {/* W.7 — vertical drop-line indicator on the side the
+                    cursor is on, mirroring V.8's group band. */}
+                {isDropTarget && dragOverColumnSide === 'before' && (
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 z-10 pointer-events-none" />
+                )}
+                {isDropTarget && dragOverColumnSide === 'after' && (
+                  <div className="absolute right-0 top-0 bottom-0 w-1 bg-blue-500 z-10 pointer-events-none" />
+                )}
+                {/* W.8 — drag handle on the left so click-without-drag
+                    on the rest of the header stays a click (e.g. for
+                    sorting in a future iteration). Only renders when
+                    the column is draggable. */}
+                {isDraggable && (
+                  <span
+                    className="text-slate-400 flex-shrink-0"
+                    aria-hidden="true"
+                    title="Drag to reorder"
+                  >
+                    ⋮⋮
+                  </span>
+                )}
                 <span className="truncate">
                   {flexRender(
                     header.column.columnDef.header,
