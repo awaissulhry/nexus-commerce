@@ -8,17 +8,25 @@ import { STEPS } from '../lib/steps'
 interface Props {
   currentStep: number
   completedSteps: Set<number>
+  /** Phase C: steps the wizard auto-determined unnecessary (e.g.
+   *  GTIN exemption when the product already has a UPC). Rendered
+   *  greyed-out with a strikethrough so the user understands they
+   *  weren't missed. */
+  skippedSteps?: Set<number>
   onStepClick: (stepId: number) => void
 }
 
 /**
- * Horizontal stepper with 10 numbered nodes connected by lines.
- * Completed and current steps are clickable; future steps are
- * disabled — you can revisit but not skip ahead.
+ * Horizontal stepper with one numbered node per STEP. Completed and
+ * current steps are clickable; future steps are disabled — you can
+ * revisit but not skip ahead. Skipped steps (Phase C) render in a
+ * neutral grey with the number replaced by a dash, signalling
+ * "we walked past this on your behalf."
  */
 export default function WizardStepper({
   currentStep,
   completedSteps,
+  skippedSteps,
   onStepClick,
 }: Props) {
   return (
@@ -27,6 +35,7 @@ export default function WizardStepper({
         {STEPS.map((step, idx) => {
           const isCurrent = step.id === currentStep
           const isCompleted = completedSteps.has(step.id)
+          const isSkipped = skippedSteps?.has(step.id) ?? false
           const isClickable = isCompleted || step.id < currentStep || isCurrent
 
           const lineActive = step.id < currentStep || isCompleted
@@ -38,22 +47,37 @@ export default function WizardStepper({
                   if (isClickable && !isCurrent) onStepClick(step.id)
                 }}
                 disabled={!isClickable}
-                title={`Step ${step.id}: ${step.title}`}
+                title={
+                  isSkipped
+                    ? `Step ${step.id}: ${step.title} (auto-skipped)`
+                    : `Step ${step.id}: ${step.title}`
+                }
                 className={cn(
                   'relative flex items-center justify-center w-7 h-7 rounded-full text-[11px] font-medium transition-colors flex-shrink-0',
                   isCurrent &&
                     'bg-blue-600 text-white ring-4 ring-blue-100',
+                  isSkipped &&
+                    !isCurrent &&
+                    'bg-slate-200 text-slate-400 line-through cursor-default',
                   isCompleted &&
                     !isCurrent &&
+                    !isSkipped &&
                     'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer',
                   !isCompleted &&
                     !isCurrent &&
+                    !isSkipped &&
                     'bg-slate-100 text-slate-400',
-                  isClickable && !isCurrent && 'cursor-pointer',
-                  !isClickable && 'cursor-default',
+                  isClickable && !isCurrent && !isSkipped && 'cursor-pointer',
+                  !isClickable && !isSkipped && 'cursor-default',
                 )}
               >
-                {isCompleted ? <Check className="w-3.5 h-3.5" /> : step.id}
+                {isSkipped ? (
+                  '–'
+                ) : isCompleted ? (
+                  <Check className="w-3.5 h-3.5" />
+                ) : (
+                  step.id
+                )}
               </button>
 
               {idx < STEPS.length - 1 && (

@@ -352,6 +352,122 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── Phase C — Conditional GTIN exemption ──────────────────────
+  // GET /api/listing-wizard/:id/gtin-status
+  //
+  // Surfaces whether Step 4 (GTIN exemption) needs to render or can
+  // be auto-skipped. Resolution order:
+  //   1. Product already has any GTIN identifier (gtin / upc / ean)
+  //      → not needed (`has_gtin`).
+  //   2. An APPROVED GtinExemptionApplication exists for this
+  //      (brand, marketplace) — Amazon grants exemptions at the
+  //      brand+marketplace level, so any approved app covers every
+  //      product under that brand → not needed (`existing_exemption`).
+  //   3. A pending application (DRAFT/PACKAGE_READY/SUBMITTED) is
+  //      already in flight for the same (brand, marketplace) →
+  //      needed=true with `in_progress` so the UI can resume.
+  //   4. Otherwise needed=true with `needed`.
+  //
+  // GTIN exemption is an Amazon-only concept; for non-Amazon-only
+  // wizards (no AMAZON channel selected) the step is implicitly
+  // skipped — needed=false with `non_amazon_wizard`. The wizard
+  // currently always touches Amazon if any (channel, marketplace)
+  // pair has platform=AMAZON; we check for that.
+  fastify.get<{ Params: { id: string } }>(
+    '/listing-wizard/:id/gtin-status',
+    async (request, reply) => {
+      const wizard = await prisma.listingWizard.findUnique({
+        where: { id: request.params.id },
+      })
+      if (!wizard) {
+        return reply.code(404).send({ error: 'Wizard not found' })
+      }
+      const channels = normalizeChannels(wizard.channels)
+      const amazonChannels = channels.filter((c) => c.platform === 'AMAZON')
+      if (amazonChannels.length === 0) {
+        return {
+          needed: false,
+          reason: 'non_amazon_wizard',
+        }
+      }
+
+      const product = await prisma.product.findUnique({
+        where: { id: wizard.productId },
+        select: { id: true, brand: true, gtin: true, upc: true, ean: true },
+      })
+      if (!product) {
+        return reply.code(404).send({ error: 'Product not found' })
+      }
+
+      const hasIdentifier = !!(product.gtin || product.upc || product.ean)
+      if (hasIdentifier) {
+        return {
+          needed: false,
+          reason: 'has_gtin',
+          identifier: product.gtin ?? product.upc ?? product.ean ?? null,
+        }
+      }
+
+      // Without a brand we can't look up exemptions; the user must go
+      // through the full Step 4 flow (or fix the master product).
+      if (!product.brand) {
+        return { needed: true, reason: 'needed' }
+      }
+
+      // Amazon exemptions are granted per (brand, marketplace). When
+      // the wizard targets multiple Amazon marketplaces, we check
+      // each — if every selected Amazon market has an APPROVED app,
+      // we skip; if any one is missing, the user has to walk Step 4
+      // to cover the gap.
+      const exemptions = await prisma.gtinExemptionApplication.findMany({
+        where: {
+          brandName: product.brand,
+          marketplace: { in: amazonChannels.map((c) => c.marketplace) },
+        },
+        orderBy: { updatedAt: 'desc' },
+      })
+
+      const approvedMarkets = new Set(
+        exemptions
+          .filter((e) => e.status === 'APPROVED')
+          .map((e) => e.marketplace),
+      )
+      const allCovered = amazonChannels.every((c) =>
+        approvedMarkets.has(c.marketplace),
+      )
+
+      if (allCovered) {
+        // Pick the most recent approval for the UI banner.
+        const latest = exemptions.find((e) => e.status === 'APPROVED')
+        return {
+          needed: false,
+          reason: 'existing_exemption',
+          applicationId: latest?.id ?? null,
+          brand: product.brand,
+          marketplaces: amazonChannels.map((c) => c.marketplace),
+        }
+      }
+
+      // Anything pending? (PACKAGE_READY / SUBMITTED / DRAFT)
+      const pending = exemptions.find(
+        (e) =>
+          e.status === 'SUBMITTED' ||
+          e.status === 'PACKAGE_READY' ||
+          e.status === 'DRAFT',
+      )
+      if (pending) {
+        return {
+          needed: true,
+          reason: 'in_progress',
+          applicationId: pending.id,
+          status: pending.status,
+        }
+      }
+
+      return { needed: true, reason: 'needed' }
+    },
+  )
+
   // ── Step 3 — Product Type picker ──────────────────────────────
   // GET /api/listing-wizard/product-types?channel=AMAZON&marketplace=IT&search=jacket
   //

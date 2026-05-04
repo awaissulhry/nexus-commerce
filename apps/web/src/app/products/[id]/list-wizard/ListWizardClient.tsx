@@ -8,7 +8,6 @@ import WizardHeader from './components/WizardHeader'
 import WizardNav from './components/WizardNav'
 import PlaceholderStep from './components/PlaceholderStep'
 import Step1Identifiers from './steps/Step1Identifiers'
-import Step2GtinExemption from './steps/Step2GtinExemption'
 import Step3ProductType from './steps/Step3ProductType'
 import Step4Attributes from './steps/Step4Attributes'
 import Step5Variations from './steps/Step5Variations'
@@ -18,6 +17,7 @@ import Step8Pricing from './steps/Step8Pricing'
 import Step9Review from './steps/Step9Review'
 import Step10Submit from './steps/Step10Submit'
 import Step1Channels from './steps/Step1Channels'
+import Step4GtinGate from './steps/Step4GtinGate'
 import { STEPS, findStep } from './lib/steps'
 
 export interface ChannelTuple {
@@ -101,6 +101,10 @@ export default function ListWizardClient({
   const [channels, setChannels] = useState<ChannelTuple[]>(
     initialWizard.channels ?? [],
   )
+  // Phase C: steps the wizard determined not to need (e.g. GTIN
+  // exemption for a product that already has a UPC). Greys the node
+  // in the stepper and short-circuits Continue.
+  const [skippedSteps, setSkippedSteps] = useState<Set<number>>(new Set())
   const [saveState, setSaveState] = useState<SaveState>('idle')
 
   // Keep the latest values on a ref so the save fn closure doesn't
@@ -297,6 +301,7 @@ export default function ListWizardClient({
       <WizardStepper
         currentStep={currentStep}
         completedSteps={completedSteps}
+        skippedSteps={skippedSteps}
         onStepClick={handleStepClick}
       />
       <div className="flex-1 overflow-y-auto">
@@ -332,8 +337,34 @@ export default function ListWizardClient({
           }
           // Step 3: Identifiers (was Step 1).
           if (currentStep === 3) return <Step1Identifiers {...stepProps} />
-          // Step 4: GTIN Exemption (was Step 2; conditional in Phase C).
-          if (currentStep === 4) return <Step2GtinExemption {...stepProps} />
+          // Step 4: GTIN Exemption — Phase C wraps it in a gate that
+          // checks /gtin-status. When the product already has a UPC/
+          // EAN/GTIN or the brand has an approved exemption, the gate
+          // shows a banner and auto-advances; otherwise the existing
+          // form renders.
+          if (currentStep === 4) {
+            return (
+              <Step4GtinGate
+                {...stepProps}
+                onMarkSkipped={() =>
+                  setSkippedSteps((prev) => {
+                    if (prev.has(4)) return prev
+                    const next = new Set(prev)
+                    next.add(4)
+                    return next
+                  })
+                }
+                onMarkUnskipped={() =>
+                  setSkippedSteps((prev) => {
+                    if (!prev.has(4)) return prev
+                    const next = new Set(prev)
+                    next.delete(4)
+                    return next
+                  })
+                }
+              />
+            )
+          }
           // Step 5: Required Attributes (was Step 4).
           if (currentStep === 5) return <Step4Attributes {...stepProps} />
           // Step 6: Variations (was Step 5).
