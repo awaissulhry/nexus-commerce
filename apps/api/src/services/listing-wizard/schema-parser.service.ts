@@ -36,6 +36,10 @@
 
 import type { PrismaClient } from '@nexus/database'
 import { CategorySchemaService } from '../categories/schema-sync.service.js'
+import {
+  EbayCategoryService,
+  type EbayAspectRich,
+} from '../ebay-category.service.js'
 
 export type FieldKind =
   | 'text'
@@ -162,6 +166,8 @@ interface MasterProduct {
 const MAX_OPTIONS = 200 // cap enums so the response stays small
 
 export class SchemaParserService {
+  private readonly ebayCategoryService = new EbayCategoryService()
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly schemas: CategorySchemaService,
@@ -334,6 +340,66 @@ export class SchemaParserService {
 
     for (const c of channels) {
       const channelKey = `${c.platform}:${c.marketplace}`
+      const productType =
+        opts.productTypeByChannel[channelKey] ??
+        opts.fallbackProductType ??
+        ''
+
+      if (c.platform === 'EBAY') {
+        // II — eBay branch in the multi-channel schema parser. The
+        // per-channel /schema endpoint already converts aspects
+        // correctly, but Step 4's union endpoint went through this
+        // service which had been Amazon-only. Without this, the
+        // wizard would keep showing eBay channels as "Schema for
+        // EBAY not yet wired" even though Step 2 picked a category.
+        if (!productType) {
+          missing.push({ channelKey, reason: 'no_product_type' })
+          continue
+        }
+        try {
+          const aspects =
+            await this.ebayCategoryService.getCategoryAspectsRich(
+              productType,
+              c.marketplace,
+              {
+                forceRefresh: opts.forceRefresh,
+                throwOnError: true,
+              },
+            )
+          if (aspects.length === 0) {
+            missing.push({
+              channelKey,
+              reason: 'fetch_failed',
+              detail:
+                'eBay returned no aspects for this category. Confirm the categoryId is a leaf node for this marketplace.',
+            })
+            continue
+          }
+          const fields = ebayAspectsToRenderable(aspects)
+          // Anything not flagged required by the aspectConstraint is
+          // optional. With includeAllOptional we surface them all;
+          // otherwise the union step picks the curated subset.
+          const optionalFieldIds = fields
+            .filter((f) => !f.required)
+            .map((f) => f.id)
+          perChannel.push({
+            channelKey,
+            productType,
+            fields,
+            schemaVersion: 'ebay-aspects-v1',
+            fetchedAt: new Date().toISOString(),
+            optionalFieldIds,
+          })
+        } catch (err) {
+          missing.push({
+            channelKey,
+            reason: 'fetch_failed',
+            detail: err instanceof Error ? err.message : String(err),
+          })
+        }
+        continue
+      }
+
       if (c.platform !== 'AMAZON') {
         missing.push({
           channelKey,
@@ -342,10 +408,6 @@ export class SchemaParserService {
         })
         continue
       }
-      const productType =
-        opts.productTypeByChannel[channelKey] ??
-        opts.fallbackProductType ??
-        ''
       if (!productType) {
         missing.push({ channelKey, reason: 'no_product_type' })
         continue
@@ -767,4 +829,50 @@ function humanise(fieldId: string): string {
     .split(/[_\s]+/)
     .map((part) => (part.length > 0 ? part[0]!.toUpperCase() + part.slice(1) : ''))
     .join(' ')
+}
+
+// II — adapter: eBay aspects (rich) → RenderableField[]. Kind picked
+// the same way as listing-wizard.routes.ts's ebayAspectsToUnionFields
+// so the union pass renders consistent inputs whether a field came
+// from this service or the per-channel /schema endpoint. The user-
+// facing label stays as the localised aspect name.
+function ebayAspectsToRenderable(
+  aspects: EbayAspectRich[],
+): RenderableField[] {
+  return aspects.map((a) => {
+    const id = aspectIdFromName(a.name)
+    let kind: FieldKind
+    if (a.cardinality === 'MULTI' && a.dataType === 'STRING') {
+      kind = 'string_array'
+    } else if (a.mode === 'SELECTION_ONLY' && a.values.length > 0) {
+      kind = 'enum'
+    } else if (a.dataType === 'NUMBER') {
+      kind = 'number'
+    } else if (typeof a.maxLength === 'number' && a.maxLength > 80) {
+      kind = 'longtext'
+    } else {
+      kind = 'text'
+    }
+    return {
+      id,
+      label: a.name,
+      kind,
+      required: a.required,
+      wrapped: false,
+      options:
+        a.values.length > 0
+          ? a.values.map((v) => ({ value: v, label: v }))
+          : undefined,
+      maxLength: a.maxLength,
+      maxItems: a.cardinality === 'MULTI' ? 20 : undefined,
+    }
+  })
+}
+
+function aspectIdFromName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
 }
