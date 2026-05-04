@@ -59,6 +59,7 @@ export default function Step3ProductType({
   wizardState,
   updateWizardState,
   channels,
+  product,
 }: StepProps) {
   // Phase K.1: every Amazon channel gets its own picker. Non-Amazon
   // channels don't have a productType taxonomy (yet), so they're
@@ -298,6 +299,7 @@ export default function Step3ProductType({
               wizardId={wizardId}
               mirrorCandidates={mirrorCandidatesByKey[channelKey] ?? []}
               mirrorPicks={picks}
+              productName={product.name}
             />
           )
         })}
@@ -430,6 +432,7 @@ function ChannelRow({
   wizardId,
   mirrorCandidates,
   mirrorPicks,
+  productName,
 }: {
   channelKey: string
   platform: string
@@ -453,6 +456,7 @@ function ChannelRow({
   wizardId: string
   mirrorCandidates: string[]
   mirrorPicks: Record<string, ProductTypeSlice>
+  productName: string
 }) {
   const hasPick = !!pick?.productType
 
@@ -526,6 +530,7 @@ function ChannelRow({
             marketplace={marketplace}
             currentPick={pick}
             onPick={onPick}
+            productName={productName}
           />
         </div>
       )}
@@ -595,15 +600,24 @@ function Picker({
   marketplace,
   currentPick,
   onPick,
+  productName,
 }: {
   wizardId: string
   channel: string
   marketplace: string
   currentPick?: ProductTypeSlice
   onPick: (slice: ProductTypeSlice) => void
+  productName: string
 }) {
-  const [search, setSearch] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const isEbay = channel === 'EBAY'
+  // FF — eBay's API is search-as-you-type, so an empty list on first
+  // open looks broken. Pre-seed the box with the product name (first
+  // 4 words is plenty — eBay ranks by phrase match) so the user gets
+  // an instant ranked list of candidates. Amazon has the full list
+  // cached so it gets a blank search by design.
+  const initialSearch = isEbay ? extractSearchSeed(productName) : ''
+  const [search, setSearch] = useState(initialSearch)
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch)
   const [items, setItems] = useState<ProductTypeListItem[]>([])
   const [listLoading, setListLoading] = useState(true)
   const [listError, setListError] = useState<string | null>(null)
@@ -726,21 +740,28 @@ function Picker({
 
   return (
     <div className="px-4 py-3 space-y-3">
-      <SuggestionsPanel
-        suggestions={suggestions}
-        source={suggestSource}
-        ruleBasedFallback={suggestFallback}
-        loading={suggestLoading}
-        error={suggestError}
-        onFetch={fetchSuggestions}
-        onSelect={(s) =>
-          handleSelect(
-            { productType: s.productType, displayName: s.displayName },
-            'ai',
-          )
-        }
-        selectedProductType={currentPick?.productType ?? null}
-      />
+      {/* FF — eBay's search-as-you-type IS the suggestion surface
+          (results come back ranked by matchPercentage), so the
+          generic AI Suggestions panel adds noise rather than value.
+          Amazon keeps the panel because its taxonomy is large and
+          flat — AI ranking is a real shortcut over scrolling. */}
+      {!isEbay && (
+        <SuggestionsPanel
+          suggestions={suggestions}
+          source={suggestSource}
+          ruleBasedFallback={suggestFallback}
+          loading={suggestLoading}
+          error={suggestError}
+          onFetch={fetchSuggestions}
+          onSelect={(s) =>
+            handleSelect(
+              { productType: s.productType, displayName: s.displayName },
+              'ai',
+            )
+          }
+          selectedProductType={currentPick?.productType ?? null}
+        />
+      )}
 
       <div className="border border-slate-200 rounded-lg bg-white">
         <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-200">
@@ -985,6 +1006,22 @@ function SuggestionsPanel({
       </div>
     </div>
   )
+}
+
+// FF — strip noise from a product name to a tight eBay search seed.
+// Drops parenthetical/dashed trailing variant info ("Black - L"),
+// quotes, and keeps the first ~4 meaningful tokens. eBay's API
+// matches on phrase tokens, so a shorter seed scores more cleanly
+// than the full SKU/name.
+function extractSearchSeed(name: string): string {
+  if (!name) return ''
+  const cleaned = name
+    .split(/[-–—:|()]/)[0]
+    .replace(/["'`]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const tokens = cleaned.split(' ').filter((t) => t.length > 0)
+  return tokens.slice(0, 4).join(' ')
 }
 
 function ConfidenceBadge({ value }: { value: number }) {
