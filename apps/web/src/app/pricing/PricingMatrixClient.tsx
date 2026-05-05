@@ -7,9 +7,8 @@
 // currency + source + warning chip. Click a row → drawer with full
 // breakdown / history / explain / push.
 //
-// Pivots to a true matrix (rows × channel-marketplace columns) is a
-// follow-up; for v0 we ship a flat snapshot table so the user can see
-// every cell + filter + bulk-act on it.
+// G.6 — Row checkboxes + floating bulk-override bar: select N rows,
+// apply SET_FIXED / SET_PERCENT_DISCOUNT / CLEAR, snapshots refresh.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
@@ -86,6 +85,13 @@ export default function PricingMatrixClient() {
   const [drawerKey, setDrawerKey] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
 
+  // G.6 — bulk selection
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkMode, setBulkMode] = useState<'SET_FIXED' | 'SET_PERCENT_DISCOUNT' | 'CLEAR'>('SET_FIXED')
+  const [bulkValue, setBulkValue] = useState('')
+  const [bulkApplying, setBulkApplying] = useState(false)
+  const [bulkResult, setBulkResult] = useState<string | null>(null)
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -103,6 +109,8 @@ export default function PricingMatrixClient() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = (await res.json()) as MatrixResponse
       setData(json)
+      // Clear selection on page change / filter change
+      setSelected(new Set())
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -134,6 +142,60 @@ export default function PricingMatrixClient() {
   )
 
   const totalPages = data ? Math.ceil(data.total / data.limit) : 0
+  const allPageIds = useMemo(() => data?.rows.map((r) => r.id) ?? [], [data])
+  const allPageSelected =
+    allPageIds.length > 0 && allPageIds.every((id) => selected.has(id))
+  const somePageSelected =
+    !allPageSelected && allPageIds.some((id) => selected.has(id))
+
+  const toggleAll = () => {
+    if (allPageSelected) {
+      setSelected((prev) => {
+        const next = new Set(prev)
+        allPageIds.forEach((id) => next.delete(id))
+        return next
+      })
+    } else {
+      setSelected((prev) => new Set([...prev, ...allPageIds]))
+    }
+  }
+
+  const toggleRow = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const applyBulkOverride = async () => {
+    if (selected.size === 0) return
+    setBulkApplying(true)
+    setBulkResult(null)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/pricing/bulk-override`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          snapshotIds: [...selected],
+          mode: bulkMode,
+          value: bulkMode !== 'CLEAR' ? Number(bulkValue) : undefined,
+        }),
+      })
+      const json = await res.json()
+      if (json.ok) {
+        setBulkResult(`Updated ${json.updated} listing${json.updated === 1 ? '' : 's'}, refreshed ${json.snapshotsRefreshed} snapshot${json.snapshotsRefreshed === 1 ? '' : 's'}.`)
+        setSelected(new Set())
+        await fetchData()
+      } else {
+        setBulkResult(`Error: ${json.error ?? `HTTP ${res.status}`}`)
+      }
+    } catch (e) {
+      setBulkResult(`Error: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setBulkApplying(false)
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -242,6 +304,75 @@ export default function PricingMatrixClient() {
         </div>
       </Card>
 
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div className="sticky top-2 z-20 bg-slate-900 text-white rounded-lg px-4 py-3 flex items-center gap-3 flex-wrap shadow-lg">
+          <span className="text-[12px] font-semibold tabular-nums">
+            {selected.size} row{selected.size === 1 ? '' : 's'} selected
+          </span>
+          <div className="h-4 w-px bg-slate-700" />
+          <select
+            value={bulkMode}
+            onChange={(e) =>
+              setBulkMode(e.target.value as typeof bulkMode)
+            }
+            className="h-7 px-2 rounded border border-slate-600 bg-slate-800 text-white text-[12px]"
+          >
+            <option value="SET_FIXED">Set fixed price</option>
+            <option value="SET_PERCENT_DISCOUNT">Discount %</option>
+            <option value="CLEAR">Clear override</option>
+          </select>
+          {bulkMode !== 'CLEAR' && (
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder={bulkMode === 'SET_FIXED' ? '0.00' : '0–99'}
+              value={bulkValue}
+              onChange={(e) => setBulkValue(e.target.value)}
+              className="h-7 w-24 px-2 rounded border border-slate-600 bg-slate-800 text-white text-[12px] tabular-nums"
+            />
+          )}
+          <button
+            onClick={applyBulkOverride}
+            disabled={bulkApplying || (bulkMode !== 'CLEAR' && !bulkValue)}
+            className="h-7 px-3 rounded bg-white text-slate-900 text-[12px] font-semibold hover:bg-slate-100 disabled:opacity-50 inline-flex items-center gap-1.5"
+          >
+            {bulkApplying ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : null}
+            Apply
+          </button>
+          <button
+            onClick={() => {
+              setSelected(new Set())
+              setBulkResult(null)
+            }}
+            className="h-7 px-2 rounded text-slate-400 hover:text-white text-[12px] inline-flex items-center gap-1"
+          >
+            <X size={12} /> Deselect
+          </button>
+          {bulkResult && (
+            <>
+              <div className="h-4 w-px bg-slate-700" />
+              <span
+                className={cn(
+                  'text-[12px] inline-flex items-center gap-1',
+                  bulkResult.startsWith('Error') ? 'text-rose-400' : 'text-emerald-400',
+                )}
+              >
+                {bulkResult.startsWith('Error') ? (
+                  <AlertCircle size={12} />
+                ) : (
+                  <CheckCircle2 size={12} />
+                )}
+                {bulkResult}
+              </span>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Table */}
       {loading && !data ? (
         <Card>
@@ -266,6 +397,17 @@ export default function PricingMatrixClient() {
             <table className="w-full text-[13px]">
               <thead className="border-b border-slate-200 bg-slate-50">
                 <tr>
+                  <th className="px-3 py-2 w-8">
+                    <input
+                      type="checkbox"
+                      checked={allPageSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = somePageSelected
+                      }}
+                      onChange={toggleAll}
+                      className="rounded"
+                    />
+                  </th>
                   <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">
                     SKU
                   </th>
@@ -288,66 +430,104 @@ export default function PricingMatrixClient() {
                 </tr>
               </thead>
               <tbody>
-                {data.rows.map((r) => (
-                  <tr
-                    key={r.id}
-                    onClick={() => setDrawerKey(r.id)}
-                    className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
-                  >
-                    <td className="px-3 py-2 font-mono text-[12px] text-slate-800">
-                      {r.sku}
-                    </td>
-                    <td className="px-3 py-2 text-slate-700">
-                      <span className="font-medium">{r.channel}</span>
-                      <span className="text-slate-400"> · </span>
-                      <span className="font-mono text-[11px]">{r.marketplace}</span>
-                    </td>
-                    <td className="px-3 py-2 text-[11px] text-slate-500">
-                      {r.fulfillmentMethod ?? '—'}
-                    </td>
-                    <td
+                {data.rows.map((r) => {
+                  const isSelected = selected.has(r.id)
+                  return (
+                    <tr
+                      key={r.id}
                       className={cn(
-                        'px-3 py-2 text-right tabular-nums font-semibold',
-                        r.isClamped ? 'text-amber-700' : 'text-slate-900',
+                        'border-b border-slate-100 hover:bg-slate-50',
+                        isSelected && 'bg-blue-50 hover:bg-blue-50',
                       )}
-                      title={
-                        r.isClamped
-                          ? `Clamped from ${r.clampedFrom} ${r.currency}`
-                          : undefined
-                      }
                     >
-                      {Number(r.computedPrice).toFixed(2)}{' '}
-                      <span className="text-[11px] text-slate-500 font-normal">
-                        {r.currency}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={cn(
-                          'inline-block text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded',
-                          SOURCE_TONE[r.source] ?? SOURCE_TONE.FALLBACK,
-                        )}
+                      <td
+                        className="px-3 py-2 w-8"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggleRow(r.id)
+                        }}
                       >
-                        {SOURCE_LABEL[r.source] ?? r.source}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">
-                      {r.warnings.length > 0 ? (
-                        <span
-                          className="text-[11px] text-amber-700 inline-flex items-center gap-1"
-                          title={r.warnings.join('; ')}
-                        >
-                          <AlertCircle size={11} /> {r.warnings.length}
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleRow(r.id)}
+                          className="rounded"
+                        />
+                      </td>
+                      <td
+                        className="px-3 py-2 font-mono text-[12px] text-slate-800 cursor-pointer"
+                        onClick={() => setDrawerKey(r.id)}
+                      >
+                        {r.sku}
+                      </td>
+                      <td
+                        className="px-3 py-2 text-slate-700 cursor-pointer"
+                        onClick={() => setDrawerKey(r.id)}
+                      >
+                        <span className="font-medium">{r.channel}</span>
+                        <span className="text-slate-400"> · </span>
+                        <span className="font-mono text-[11px]">{r.marketplace}</span>
+                      </td>
+                      <td
+                        className="px-3 py-2 text-[11px] text-slate-500 cursor-pointer"
+                        onClick={() => setDrawerKey(r.id)}
+                      >
+                        {r.fulfillmentMethod ?? '—'}
+                      </td>
+                      <td
+                        className={cn(
+                          'px-3 py-2 text-right tabular-nums font-semibold cursor-pointer',
+                          r.isClamped ? 'text-amber-700' : 'text-slate-900',
+                        )}
+                        title={
+                          r.isClamped
+                            ? `Clamped from ${r.clampedFrom} ${r.currency}`
+                            : undefined
+                        }
+                        onClick={() => setDrawerKey(r.id)}
+                      >
+                        {Number(r.computedPrice).toFixed(2)}{' '}
+                        <span className="text-[11px] text-slate-500 font-normal">
+                          {r.currency}
                         </span>
-                      ) : (
-                        <span className="text-[11px] text-slate-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-slate-400">
-                      <ChevronRight size={14} />
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td
+                        className="px-3 py-2 cursor-pointer"
+                        onClick={() => setDrawerKey(r.id)}
+                      >
+                        <span
+                          className={cn(
+                            'inline-block text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded',
+                            SOURCE_TONE[r.source] ?? SOURCE_TONE.FALLBACK,
+                          )}
+                        >
+                          {SOURCE_LABEL[r.source] ?? r.source}
+                        </span>
+                      </td>
+                      <td
+                        className="px-3 py-2 cursor-pointer"
+                        onClick={() => setDrawerKey(r.id)}
+                      >
+                        {r.warnings.length > 0 ? (
+                          <span
+                            className="text-[11px] text-amber-700 inline-flex items-center gap-1"
+                            title={r.warnings.join('; ')}
+                          >
+                            <AlertCircle size={11} /> {r.warnings.length}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td
+                        className="px-3 py-2 text-slate-400 cursor-pointer"
+                        onClick={() => setDrawerKey(r.id)}
+                      >
+                        <ChevronRight size={14} />
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -356,6 +536,11 @@ export default function PricingMatrixClient() {
           <div className="px-4 py-2.5 border-t border-slate-200 flex items-center justify-between text-[12px] text-slate-600">
             <span>
               {data.total} snapshot{data.total === 1 ? '' : 's'} · page {data.page + 1} / {Math.max(1, totalPages)}
+              {selected.size > 0 && (
+                <span className="ml-3 text-blue-600 font-medium">
+                  {selected.size} selected
+                </span>
+              )}
             </span>
             <div className="flex items-center gap-1">
               <button

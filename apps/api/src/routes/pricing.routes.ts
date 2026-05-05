@@ -210,6 +210,99 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // G.6 — Bulk price override: set/adjust/clear priceOverride on ChannelListings
+  // matched by PricingSnapshot ids, then refresh those SKUs' snapshots.
+  fastify.post('/pricing/bulk-override', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as {
+        snapshotIds?: string[]
+        mode?: 'SET_FIXED' | 'SET_PERCENT_DISCOUNT' | 'CLEAR'
+        value?: number
+      }
+      if (!body.snapshotIds?.length) {
+        return reply.code(400).send({ error: 'snapshotIds required' })
+      }
+      if (!body.mode || !['SET_FIXED', 'SET_PERCENT_DISCOUNT', 'CLEAR'].includes(body.mode)) {
+        return reply.code(400).send({ error: 'mode must be SET_FIXED | SET_PERCENT_DISCOUNT | CLEAR' })
+      }
+      if (body.mode !== 'CLEAR' && (body.value == null || Number.isNaN(Number(body.value)))) {
+        return reply.code(400).send({ error: 'value required for SET_FIXED and SET_PERCENT_DISCOUNT' })
+      }
+      if (body.mode === 'SET_PERCENT_DISCOUNT') {
+        const pct = Number(body.value)
+        if (pct < 0 || pct >= 100) {
+          return reply.code(400).send({ error: 'value must be 0–99.99 for SET_PERCENT_DISCOUNT' })
+        }
+      }
+
+      const snapshots = await prisma.pricingSnapshot.findMany({
+        where: { id: { in: body.snapshotIds } },
+      })
+
+      const skus = [...new Set(snapshots.map((s) => s.sku))]
+      const [variants, products] = await Promise.all([
+        prisma.productVariation.findMany({
+          where: { sku: { in: skus } },
+          select: { sku: true, productId: true },
+        }),
+        prisma.product.findMany({
+          where: { sku: { in: skus } },
+          select: { sku: true, id: true },
+        }),
+      ])
+      const productIdBySku = new Map<string, string>()
+      for (const v of variants) productIdBySku.set(v.sku, v.productId)
+      for (const p of products) productIdBySku.set(p.sku, p.id)
+
+      let updated = 0
+      const skusTouched = new Set<string>()
+
+      for (const snap of snapshots) {
+        const productId = productIdBySku.get(snap.sku)
+        if (!productId) continue
+        const listing = await prisma.channelListing.findFirst({
+          where: { productId, channel: snap.channel, marketplace: snap.marketplace },
+          select: { id: true },
+        })
+        if (!listing) continue
+
+        let newOverride: string | null
+        if (body.mode === 'CLEAR') {
+          newOverride = null
+        } else if (body.mode === 'SET_FIXED') {
+          newOverride = Number(body.value).toFixed(2)
+        } else {
+          // SET_PERCENT_DISCOUNT — apply % off the current snapshot price
+          const base = Number(snap.computedPrice)
+          if (base <= 0) continue
+          newOverride = (base * (1 - Number(body.value) / 100)).toFixed(2)
+        }
+
+        await prisma.channelListing.update({
+          where: { id: listing.id },
+          data: {
+            priceOverride: newOverride,
+            lastOverrideAt: new Date(),
+            lastOverrideBy: 'bulk-override',
+          },
+        })
+        updated++
+        skusTouched.add(snap.sku)
+      }
+
+      let snapshotsRefreshed = 0
+      if (skusTouched.size > 0) {
+        const result = await refreshSnapshotsForSkus(prisma, [...skusTouched])
+        snapshotsRefreshed = result.rowsRefreshed
+      }
+
+      return { ok: true, updated, snapshotsRefreshed }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[pricing/bulk-override] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // G.3.2 — Manual competitive-pricing refresh per marketplace.
   fastify.post('/pricing/refresh-competitive', async (request, reply) => {
     try {
