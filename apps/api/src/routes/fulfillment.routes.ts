@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { applyStockMovement, listStockMovements } from '../services/stock-movement.service.js'
 import { refreshSalesAggregates } from '../services/sales-aggregate.service.js'
+import { resolveAtp, DEFAULT_LEAD_TIME_DAYS } from '../services/atp.service.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // FULFILLMENT B.3–B.9 — full domain API surface
@@ -1229,30 +1230,51 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       })
       const rulesByProduct = new Map(rules.map((r) => [r.productId, r]))
 
+      // F.2 — Resolve per-product lead time + open inbound stock in two
+      // batched queries (see atp.service.ts). The urgency formula now
+      // uses effectiveStock = on-hand + inboundWithinLeadTime, so a SKU
+      // with a 200-unit PO arriving in 5 days no longer fires a
+      // false-positive CRITICAL when current stock is low.
+      const atpByProduct = await resolveAtp({
+        products: products.map((p) => ({ id: p.id, sku: p.sku })),
+      })
+
       const suggestions = products.map((p) => {
         const rule = rulesByProduct.get(p.id)
+        const atp = atpByProduct.get(p.id)
         const unitsSold = soldBySku.get(p.sku) ?? 0
         const velocity = unitsSold / window // units per day
         const safetyDays = rule?.safetyStockDays ?? 7
-        const leadTimeDays = 14 // TODO: derive from primary supplier
+        const leadTimeDays = atp?.leadTimeDays ?? DEFAULT_LEAD_TIME_DAYS
+        const inboundWithinLeadTime = atp?.inboundWithinLeadTime ?? 0
+        const totalOpenInbound = atp?.totalOpenInbound ?? 0
+        const effectiveStock = p.totalStock + inboundWithinLeadTime
+
         const reorderPoint = rule?.reorderPoint ?? Math.ceil(velocity * (leadTimeDays + safetyDays))
         const reorderQuantity = rule?.reorderQuantity ?? Math.max(1, Math.ceil(velocity * 30))
-        const daysOfStockLeft = velocity > 0 ? Math.floor(p.totalStock / velocity) : Infinity
+        const daysOfStockLeft =
+          velocity > 0 ? Math.floor(effectiveStock / velocity) : Infinity
 
         let urgency: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' = 'LOW'
-        if (p.totalStock === 0 && velocity > 0) urgency = 'CRITICAL'
+        if (effectiveStock === 0 && velocity > 0) urgency = 'CRITICAL'
         else if (daysOfStockLeft <= leadTimeDays / 2) urgency = 'CRITICAL'
         else if (daysOfStockLeft <= leadTimeDays) urgency = 'HIGH'
-        else if (p.totalStock <= reorderPoint) urgency = 'MEDIUM'
+        else if (effectiveStock <= reorderPoint) urgency = 'MEDIUM'
         else urgency = 'LOW'
 
-        const needsReorder = p.totalStock <= reorderPoint && velocity > 0
+        const needsReorder = effectiveStock <= reorderPoint && velocity > 0
 
         return {
           productId: p.id,
           sku: p.sku,
           name: p.name,
           currentStock: p.totalStock,
+          // F.2 — ATP composition for the UI: on-hand + inbound within lead
+          // time = effective stock the urgency math actually used.
+          inboundWithinLeadTime,
+          totalOpenInbound,
+          effectiveStock,
+          openShipments: atp?.openShipments ?? [],
           unitsSold30d: unitsSold,
           velocity: Number(velocity.toFixed(2)),
           daysOfStockLeft: daysOfStockLeft === Infinity ? null : daysOfStockLeft,
@@ -1260,6 +1282,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           reorderQuantity,
           urgency,
           needsReorder,
+          // F.2 — surface lead-time provenance so the UI can show
+          // "from supplier override" vs "from supplier default" vs "fallback".
+          leadTimeDays,
+          leadTimeSource: atp?.leadTimeSource ?? 'FALLBACK',
           isManufactured: !!rule?.isManufactured,
           preferredSupplierId: rule?.preferredSupplierId ?? null,
           fulfillmentChannel: p.fulfillmentChannel,
