@@ -3,6 +3,10 @@ import prisma from '../db.js'
 import { applyStockMovement, listStockMovements } from '../services/stock-movement.service.js'
 import { refreshSalesAggregates } from '../services/sales-aggregate.service.js'
 import { resolveAtp, DEFAULT_LEAD_TIME_DAYS } from '../services/atp.service.js'
+import {
+  ingestSalesTrafficForDay,
+  ingestAllAmazonMarketplaces,
+} from '../services/sales-report-ingest.service.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // FULFILLMENT B.3–B.9 — full domain API surface
@@ -1365,6 +1369,48 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[replenishment/refresh-aggregates] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // F.3 — Manual sales-report ingest trigger. Without a date range,
+  // ingests yesterday for every active Amazon marketplace. With
+  // marketplace + day, runs the single-marketplace path. Useful for
+  // dev/test (no cron required) and for catch-up after API outages.
+  //
+  // Without SP-API credentials this endpoint will surface the auth
+  // failure as a 500 with the SP-API error message in the body —
+  // exactly what the cron would log. NOT a runtime crash.
+  fastify.post('/fulfillment/sales-reports/ingest', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as {
+        marketplace?: string
+        day?: string
+        skipIfReportExists?: boolean
+      }
+
+      const day = body.day ? new Date(body.day) : (() => {
+        const d = new Date()
+        d.setUTCHours(0, 0, 0, 0)
+        d.setUTCDate(d.getUTCDate() - 1) // default: yesterday
+        return d
+      })()
+      if (Number.isNaN(day.getTime())) {
+        return reply.code(400).send({ error: 'Invalid day (expected YYYY-MM-DD)' })
+      }
+
+      if (body.marketplace) {
+        const result = await ingestSalesTrafficForDay({
+          marketplaceCode: body.marketplace,
+          day,
+          skipIfReportExists: !!body.skipIfReportExists,
+        })
+        return { ok: true, single: result }
+      }
+      const results = await ingestAllAmazonMarketplaces(day)
+      return { ok: true, results }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[sales-reports/ingest] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })

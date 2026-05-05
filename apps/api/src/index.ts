@@ -45,6 +45,7 @@ import { listingsSyndicationRoutes } from "./routes/listings-syndication.routes.
 import productsCatalogRoutes from "./routes/products-catalog.routes.js";
 import ordersReviewsRoutes from "./routes/orders-reviews.routes.js";
 import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
+import { startSalesReportIngestCron } from "./jobs/sales-report-ingest.job.js";
 // Queue/worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS — Phase 2 will flip it on.
 // import { startJobs } from "./jobs/sync.job.js";
 // import { initializeBullMQWorker } from "./workers/bullmq-sync.worker.js";
@@ -193,6 +194,14 @@ async function start() {
     // operator explicitly opts in we keep it dormant.
     if (process.env.NEXUS_ENABLE_WIZARD_CLEANUP === '1') {
       startWizardCleanupCron();
+    }
+
+    // F.3 — Nightly Amazon Sales & Traffic ingest. Gated behind an env
+    // flag so dev/test environments without SP-API credentials don't
+    // try to run it. POST /api/fulfillment/sales-reports/ingest is the
+    // manual trigger when the cron is off.
+    if (process.env.NEXUS_ENABLE_SALES_REPORT_CRON === '1') {
+      startSalesReportIngestCron();
     }
 
     logger.info('✅ API server initialized (workers disabled — Phase 2)', {
