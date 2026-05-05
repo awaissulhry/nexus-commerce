@@ -285,7 +285,19 @@ CREATE INDEX IF NOT EXISTS "InboundShipmentItem_inboundShipmentId_idx" ON "Inbou
 CREATE INDEX IF NOT EXISTS "InboundShipmentItem_productId_idx"         ON "InboundShipmentItem"("productId");
 
 -- ─── Return + ReturnItem ──────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS "Return" (
+-- Prior migration 20260422230155_add_phase2_models created a Return table
+-- with an incompatible 8-column shape (no `channel`, different status enum,
+-- missing rmaNumber/conditionGrade/refundStatus/etc). It has zero consumers
+-- in the current API code (only this B.7 fulfillment.routes.ts uses
+-- prisma.return.*), so we drop it and its companion ReturnItem before
+-- creating the new shape. CASCADE handles any incidental FKs.
+-- IF NOT EXISTS is intentionally OMITTED on the new CREATE TABLEs so that
+-- if the DROP somehow fails we get a loud collision error instead of
+-- another silent skip.
+DROP TABLE IF EXISTS "ReturnItem" CASCADE;
+DROP TABLE IF EXISTS "Return" CASCADE;
+
+CREATE TABLE "Return" (
   "id"                 TEXT PRIMARY KEY,
   "orderId"            TEXT,
   "channel"            TEXT NOT NULL,
@@ -315,7 +327,7 @@ CREATE INDEX IF NOT EXISTS "Return_status_idx"      ON "Return"("status");
 CREATE INDEX IF NOT EXISTS "Return_channel_idx"     ON "Return"("channel");
 CREATE INDEX IF NOT EXISTS "Return_isFbaReturn_idx" ON "Return"("isFbaReturn");
 
-CREATE TABLE IF NOT EXISTS "ReturnItem" (
+CREATE TABLE "ReturnItem" (
   "id"             TEXT PRIMARY KEY,
   "returnId"       TEXT NOT NULL,
   "orderItemId"    TEXT,
