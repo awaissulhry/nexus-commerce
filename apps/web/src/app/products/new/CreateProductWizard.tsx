@@ -1,21 +1,23 @@
-// PP — create-product wizard. Mirrors the listing wizard's shell
-// pattern (stepper + sticky header + step-by-step form) but creates
-// a new master product instead of publishing one. Channel-specific
-// listing work is the listing wizard's job; this stays focused on
-// master data + optional variations + creation.
+// PP / QQ — single-product create wizard.
 //
-// Steps:
-//   1 Basics       SKU, name, brand, productType, description
-//   2 Identifiers  UPC / EAN / GTIN / manufacturer
-//   3 Pricing      basePrice, costPrice
-//   4 Inventory    totalStock, lowStockThreshold + dimensions
-//   5 Variations   optional list of { sku, attrs, price, stock }
-//   6 Review       confirm + create
+// QQ — slimmed from a 6-step master-data form to just 2 steps:
+//   1. Basics (SKU, name, basePrice — minimum to create a row)
+//   2. Variants (optional — define parent/child structure up front)
 //
-// On success the user lands on /products/:id/edit with a banner
-// linking to /products/:id/list-wizard so they can publish to
-// channels (Amazon, eBay, Shopify, Woo) — same wizard we already
-// shipped, no new code path needed.
+// On submit we POST /api/products/create-wizard, get the new
+// productId, then redirect into the existing listing wizard at
+// /products/:id/list-wizard. Everything dynamic — channel + market
+// selection, eBay aspects, Amazon attribute schema, productType
+// pickers, AI generation, image validation, per-marketplace
+// pricing, submit orchestration — already lives in the listing
+// wizard. Re-implementing any of it here would just fork the
+// codebase.
+//
+// Result: the user gets the SAME wizard shell + same dynamism for
+// new products as for existing ones, with two extra "set up the
+// shell" steps at the front. Variants (parent/child) are captured
+// here so they exist as ProductVariation rows by the time the
+// listing wizard's Step 4 Variations sees them.
 
 'use client'
 
@@ -36,39 +38,24 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
 interface VariationDraft {
-  id: string // local-only client id for keying / removal
+  id: string // local key only; not persisted
   sku: string
   name: string
   attrs: Record<string, string>
-  price: string // string so the input stays controlled until commit
+  price: string
   stock: string
 }
 
 interface State {
-  // Step 1
+  // Step 1 — bare minimum to create a row. Brand / productType /
+  // description are optional here because the listing wizard's
+  // Step 2 (productType picker) and Step 5 (attributes) will fill
+  // them in per-channel anyway.
   sku: string
   name: string
   brand: string
-  productType: string
-  description: string
-  // Step 2
-  upc: string
-  ean: string
-  gtin: string
-  manufacturer: string
-  // Step 3
   basePrice: string
-  costPrice: string
-  // Step 4
-  totalStock: string
-  lowStockThreshold: string
-  weightValue: string
-  weightUnit: 'kg' | 'g' | 'lb' | 'oz'
-  dimLength: string
-  dimWidth: string
-  dimHeight: string
-  dimUnit: 'cm' | 'mm' | 'in'
-  // Step 5
+  // Step 2
   variations: VariationDraft[]
 }
 
@@ -76,32 +63,13 @@ const INITIAL: State = {
   sku: '',
   name: '',
   brand: '',
-  productType: '',
-  description: '',
-  upc: '',
-  ean: '',
-  gtin: '',
-  manufacturer: '',
   basePrice: '',
-  costPrice: '',
-  totalStock: '',
-  lowStockThreshold: '',
-  weightValue: '',
-  weightUnit: 'kg',
-  dimLength: '',
-  dimWidth: '',
-  dimHeight: '',
-  dimUnit: 'cm',
   variations: [],
 }
 
 const STEPS = [
   { id: 1, label: 'Basics' },
-  { id: 2, label: 'Identifiers' },
-  { id: 3, label: 'Pricing' },
-  { id: 4, label: 'Inventory' },
-  { id: 5, label: 'Variations' },
-  { id: 6, label: 'Review' },
+  { id: 2, label: 'Variants' },
 ] as const
 
 export default function CreateProductWizard() {
@@ -110,97 +78,90 @@ export default function CreateProductWizard() {
   const [step, setStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // Track which channels the user wants to push to AFTER create.
-  // We stash these into the success step so the "List on channel"
-  // CTAs jump straight into the listing wizard with the right
-  // pre-selection.
+
   const set = useCallback(<K extends keyof State>(k: K, v: State[K]) => {
     setState((s) => ({ ...s, [k]: v }))
   }, [])
 
-  // ── Per-step validation gates ───────────────────────────────────
   const stepValid = useMemo(() => {
-    switch (step) {
-      case 1:
-        return state.sku.trim().length > 0 && state.name.trim().length > 0
-      case 3: {
-        const n = Number(state.basePrice)
-        return Number.isFinite(n) && n >= 0
-      }
-      case 5:
-        return state.variations.every((v) => v.sku.trim().length > 0)
-      default:
-        return true
+    if (step === 1) {
+      const priceNum = Number(state.basePrice)
+      return (
+        state.sku.trim().length > 0 &&
+        state.name.trim().length > 0 &&
+        Number.isFinite(priceNum) &&
+        priceNum >= 0
+      )
     }
+    if (step === 2) {
+      return state.variations.every((v) => v.sku.trim().length > 0)
+    }
+    return true
   }, [step, state])
 
+  const isLast = step === STEPS.length
   const canBack = step > 1
   const canForward = step < STEPS.length && stepValid
-  const isLast = step === STEPS.length
 
-  const handleSubmit = useCallback(async () => {
-    setSubmitting(true)
-    setError(null)
-    try {
-      const numericOrUndef = (s: string) => {
-        const t = s.trim()
-        if (!t) return undefined
-        const n = Number(t)
-        return Number.isFinite(n) ? n : undefined
+  const handleSubmit = useCallback(
+    async (mode: 'list' | 'edit' | 'another') => {
+      setSubmitting(true)
+      setError(null)
+      try {
+        const numericOrUndef = (s: string) => {
+          const t = s.trim()
+          if (!t) return undefined
+          const n = Number(t)
+          return Number.isFinite(n) ? n : undefined
+        }
+        const body = {
+          sku: state.sku.trim(),
+          name: state.name.trim(),
+          brand: state.brand.trim() || null,
+          basePrice: Number(state.basePrice) || 0,
+          variations: state.variations.map((v) => ({
+            sku: v.sku.trim(),
+            name: v.name.trim() || null,
+            variationAttributes: v.attrs,
+            price: numericOrUndef(v.price),
+            stock: numericOrUndef(v.stock),
+          })),
+        }
+        const res = await fetch(`${getBackendUrl()}/api/products/create-wizard`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': `create-wizard:${body.sku}`,
+          },
+          body: JSON.stringify(body),
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok || !json?.success) {
+          setError(json?.error ?? `HTTP ${res.status}`)
+          return
+        }
+        const productId = json.product.id
+        if (mode === 'list') {
+          router.push(`/products/${productId}/list-wizard?fromCreate=1`)
+        } else if (mode === 'another') {
+          // Reset state for the next product without leaving the page,
+          // so a user adding 5 products in a row doesn't have to walk
+          // back through navigation.
+          setState(INITIAL)
+          setStep(1)
+          setSubmitting(false)
+          return
+        } else {
+          router.push(`/products/${productId}/edit?created=1`)
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setSubmitting(false)
       }
-      const body = {
-        sku: state.sku.trim(),
-        name: state.name.trim(),
-        brand: state.brand.trim() || null,
-        productType: state.productType.trim() || null,
-        description: state.description.trim() || null,
-        basePrice: Number(state.basePrice) || 0,
-        costPrice: numericOrUndef(state.costPrice),
-        totalStock: numericOrUndef(state.totalStock),
-        lowStockThreshold: numericOrUndef(state.lowStockThreshold),
-        upc: state.upc.trim() || null,
-        ean: state.ean.trim() || null,
-        gtin: state.gtin.trim() || null,
-        manufacturer: state.manufacturer.trim() || null,
-        weightValue: numericOrUndef(state.weightValue),
-        weightUnit: state.weightUnit,
-        dimLength: numericOrUndef(state.dimLength),
-        dimWidth: numericOrUndef(state.dimWidth),
-        dimHeight: numericOrUndef(state.dimHeight),
-        dimUnit: state.dimUnit,
-        variations: state.variations.map((v) => ({
-          sku: v.sku.trim(),
-          name: v.name.trim() || null,
-          variationAttributes: v.attrs,
-          price: numericOrUndef(v.price),
-          stock: numericOrUndef(v.stock),
-        })),
-      }
-      const res = await fetch(`${getBackendUrl()}/api/products/create-wizard`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // NN.2 — idempotency key derived from sku so a double-click
-          // doesn't double-create. Server's idempotency cache is
-          // 10-min TTL which is plenty for the wizard window.
-          'Idempotency-Key': `create-wizard:${body.sku}`,
-        },
-        body: JSON.stringify(body),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok || !json?.success) {
-        setError(json?.error ?? `HTTP ${res.status}`)
-        return
-      }
-      // PP — success. Hand off to the edit page; user can then click
-      // "List on Channel" to jump into the existing listing wizard.
-      router.push(`/products/${json.product.id}/edit?created=1`)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setSubmitting(false)
-    }
-  }, [state, router])
+    },
+    [state, router],
+  )
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -235,14 +196,14 @@ export default function CreateProductWizard() {
           <ol
             role="tablist"
             aria-orientation="horizontal"
-            className="flex items-center justify-center gap-1 max-w-3xl mx-auto"
+            className="flex items-center justify-center gap-2 max-w-3xl mx-auto"
           >
             {STEPS.map((s, idx) => {
               const isCurrent = s.id === step
               const isCompleted = s.id < step
               const isClickable = s.id <= step
               return (
-                <div key={s.id} className="flex items-center gap-1">
+                <div key={s.id} className="flex items-center gap-2">
                   <button
                     type="button"
                     role="tab"
@@ -268,7 +229,7 @@ export default function CreateProductWizard() {
                   </button>
                   <span
                     className={cn(
-                      'text-[11px] hidden sm:inline',
+                      'text-[12px]',
                       isCurrent ? 'text-slate-900 font-medium' : 'text-slate-500',
                     )}
                   >
@@ -277,7 +238,7 @@ export default function CreateProductWizard() {
                   {idx < STEPS.length - 1 && (
                     <div
                       className={cn(
-                        'h-0.5 w-6 mx-1',
+                        'h-0.5 w-12 mx-2',
                         s.id < step ? 'bg-blue-600' : 'bg-slate-200',
                       )}
                     />
@@ -286,6 +247,11 @@ export default function CreateProductWizard() {
               )
             })}
           </ol>
+          <p className="text-center text-[11px] text-slate-500 mt-2">
+            After this, the listing wizard handles channels, markets,
+            categories, attributes, pricing and submit — same as for
+            existing products.
+          </p>
         </nav>
       </div>
 
@@ -293,11 +259,7 @@ export default function CreateProductWizard() {
       <div className="flex-1 px-6 py-8">
         <div className="max-w-2xl mx-auto">
           {step === 1 && <StepBasics state={state} set={set} />}
-          {step === 2 && <StepIdentifiers state={state} set={set} />}
-          {step === 3 && <StepPricing state={state} set={set} />}
-          {step === 4 && <StepInventory state={state} set={set} />}
-          {step === 5 && <StepVariations state={state} setState={setState} />}
-          {step === 6 && <StepReview state={state} />}
+          {step === 2 && <StepVariations state={state} setState={setState} />}
 
           {error && (
             <div className="mt-4 px-4 py-3 border border-rose-200 bg-rose-50 rounded-lg text-[12px] text-rose-700 inline-flex items-start gap-2 max-w-full">
@@ -310,7 +272,7 @@ export default function CreateProductWizard() {
 
       {/* ── Footer nav ────────────────────────────────────────── */}
       <div className="border-t border-slate-200 bg-white sticky bottom-0">
-        <div className="max-w-2xl mx-auto px-6 py-3 flex items-center justify-between">
+        <div className="max-w-2xl mx-auto px-6 py-3 flex items-center gap-2">
           <Button
             variant="secondary"
             size="sm"
@@ -319,7 +281,7 @@ export default function CreateProductWizard() {
           >
             Back
           </Button>
-          <span className="text-[11px] text-slate-500">
+          <span className="text-[11px] text-slate-500 mx-auto">
             Step {step} of {STEPS.length}
           </span>
           {!isLast ? (
@@ -332,15 +294,28 @@ export default function CreateProductWizard() {
               Continue
             </Button>
           ) : (
-            <Button
-              variant="primary"
-              size="sm"
-              loading={submitting}
-              disabled={submitting}
-              onClick={handleSubmit}
-            >
-              Create product
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={submitting}
+                disabled={submitting || !stepValid}
+                onClick={() => handleSubmit('edit')}
+                title="Create and open the edit page"
+              >
+                Save draft
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                loading={submitting}
+                disabled={submitting || !stepValid}
+                onClick={() => handleSubmit('list')}
+                title="Create and continue into the listing wizard"
+              >
+                Create & list on channels →
+              </Button>
+            </div>
           )}
         </div>
       </div>
@@ -358,7 +333,10 @@ function StepBasics({
   set: <K extends keyof State>(k: K, v: State[K]) => void
 }) {
   return (
-    <Card title="Basics" description="The core master data for this product.">
+    <Card
+      title="Basics"
+      description="Just the bare minimum so the product exists. Channels, productType, identifiers, attributes, pricing per market — all of that comes next in the listing wizard."
+    >
       <div className="space-y-3">
         <Field label="SKU" required>
           <input
@@ -380,7 +358,7 @@ function StepBasics({
           />
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Brand">
+          <Field label="Brand" hint="Optional — can be set per channel later">
             <input
               type="text"
               value={state.brand}
@@ -389,220 +367,16 @@ function StepBasics({
               className={inputCls}
             />
           </Field>
-          <Field label="Product Type" hint="e.g. OUTERWEAR, HELMET, GLOVES">
-            <input
-              type="text"
-              value={state.productType}
-              onChange={(e) => set('productType', e.target.value)}
-              placeholder="OUTERWEAR"
-              className={inputCls}
-            />
-          </Field>
-        </div>
-        <Field label="Description" hint="HTML allowed; can be edited later">
-          <textarea
-            rows={4}
-            value={state.description}
-            onChange={(e) => set('description', e.target.value)}
-            placeholder="High-end Italian motorcycle gear …"
-            className={cn(inputCls, 'min-h-[80px] resize-y')}
-          />
-        </Field>
-      </div>
-    </Card>
-  )
-}
-
-function StepIdentifiers({
-  state,
-  set,
-}: {
-  state: State
-  set: <K extends keyof State>(k: K, v: State[K]) => void
-}) {
-  return (
-    <Card
-      title="Identifiers"
-      description="UPC / EAN / GTIN are required by Amazon for most categories. eBay accepts 'Does Not Apply' for many — leave blank if you don't have one."
-    >
-      <div className="space-y-3">
-        <Field label="UPC" hint="12 digits (US/CA)">
-          <input
-            type="text"
-            value={state.upc}
-            onChange={(e) => set('upc', e.target.value)}
-            className={inputCls}
-          />
-        </Field>
-        <Field label="EAN" hint="13 digits (EU)">
-          <input
-            type="text"
-            value={state.ean}
-            onChange={(e) => set('ean', e.target.value)}
-            className={inputCls}
-          />
-        </Field>
-        <Field label="GTIN" hint="8–14 digits, any GS1 identifier">
-          <input
-            type="text"
-            value={state.gtin}
-            onChange={(e) => set('gtin', e.target.value)}
-            className={inputCls}
-          />
-        </Field>
-        <Field label="Manufacturer">
-          <input
-            type="text"
-            value={state.manufacturer}
-            onChange={(e) => set('manufacturer', e.target.value)}
-            className={inputCls}
-          />
-        </Field>
-      </div>
-    </Card>
-  )
-}
-
-function StepPricing({
-  state,
-  set,
-}: {
-  state: State
-  set: <K extends keyof State>(k: K, v: State[K]) => void
-}) {
-  return (
-    <Card
-      title="Pricing"
-      description="Base price is required. Per-channel / per-marketplace overrides happen in the listing wizard."
-    >
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Base price" required>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={state.basePrice}
-            onChange={(e) => set('basePrice', e.target.value)}
-            className={inputCls}
-          />
-        </Field>
-        <Field label="Cost price" hint="Used for margin calc">
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={state.costPrice}
-            onChange={(e) => set('costPrice', e.target.value)}
-            className={inputCls}
-          />
-        </Field>
-      </div>
-    </Card>
-  )
-}
-
-function StepInventory({
-  state,
-  set,
-}: {
-  state: State
-  set: <K extends keyof State>(k: K, v: State[K]) => void
-}) {
-  return (
-    <Card
-      title="Inventory & dimensions"
-      description="All fields optional; required ones (per channel) can be filled in the listing wizard."
-    >
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Stock">
-            <input
-              type="number"
-              min="0"
-              value={state.totalStock}
-              onChange={(e) => set('totalStock', e.target.value)}
-              className={inputCls}
-            />
-          </Field>
-          <Field label="Low stock alert">
-            <input
-              type="number"
-              min="0"
-              value={state.lowStockThreshold}
-              onChange={(e) => set('lowStockThreshold', e.target.value)}
-              className={inputCls}
-            />
-          </Field>
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          <Field label="Weight">
+          <Field label="Base price" required hint="Per-market overrides next">
             <input
               type="number"
               min="0"
               step="0.01"
-              value={state.weightValue}
-              onChange={(e) => set('weightValue', e.target.value)}
+              value={state.basePrice}
+              onChange={(e) => set('basePrice', e.target.value)}
+              placeholder="0.00"
               className={inputCls}
             />
-          </Field>
-          <Field label="Unit">
-            <select
-              value={state.weightUnit}
-              onChange={(e) =>
-                set('weightUnit', e.target.value as State['weightUnit'])
-              }
-              className={inputCls}
-            >
-              <option value="kg">kg</option>
-              <option value="g">g</option>
-              <option value="lb">lb</option>
-              <option value="oz">oz</option>
-            </select>
-          </Field>
-        </div>
-        <div className="grid grid-cols-4 gap-3">
-          <Field label="Length">
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={state.dimLength}
-              onChange={(e) => set('dimLength', e.target.value)}
-              className={inputCls}
-            />
-          </Field>
-          <Field label="Width">
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={state.dimWidth}
-              onChange={(e) => set('dimWidth', e.target.value)}
-              className={inputCls}
-            />
-          </Field>
-          <Field label="Height">
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={state.dimHeight}
-              onChange={(e) => set('dimHeight', e.target.value)}
-              className={inputCls}
-            />
-          </Field>
-          <Field label="Unit">
-            <select
-              value={state.dimUnit}
-              onChange={(e) =>
-                set('dimUnit', e.target.value as State['dimUnit'])
-              }
-              className={inputCls}
-            >
-              <option value="cm">cm</option>
-              <option value="mm">mm</option>
-              <option value="in">in</option>
-            </select>
           </Field>
         </div>
       </div>
@@ -647,17 +421,18 @@ function StepVariations({
 
   return (
     <Card
-      title="Variations (optional)"
-      description="Add child SKUs with size / color / etc. Skip this step if you're creating a single-SKU product."
+      title="Variants (optional)"
+      description="Skip this for a single-SKU product. Add child rows for size / colour / etc — they'll exist as ProductVariation records by the time the listing wizard's Step 4 picks the variation theme. The listing wizard handles per-channel variation themes (Amazon SIZE_COLOR, eBay aspects flagged variant-eligible) automatically once you reach it."
     >
       {state.variations.length === 0 ? (
         <div className="text-center py-6">
           <p className="text-[12px] text-slate-500 mb-3">
-            No variations yet. Add one or skip to Review.
+            No variants yet. Add one or click <strong>Save draft</strong> /{' '}
+            <strong>Create &amp; list</strong> to continue.
           </p>
           <Button variant="secondary" size="sm" onClick={addRow}>
             <Plus className="w-3.5 h-3.5 mr-1" />
-            Add variation
+            Add variant
           </Button>
         </div>
       ) : (
@@ -678,7 +453,7 @@ function StepVariations({
             className="w-full"
           >
             <Plus className="w-3.5 h-3.5 mr-1" />
-            Add another variation
+            Add another variant
           </Button>
         </div>
       )}
@@ -721,7 +496,7 @@ function VariationRow({
           type="button"
           onClick={onRemove}
           className="text-rose-500 hover:text-rose-700"
-          aria-label="Remove variation"
+          aria-label="Remove variant"
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
@@ -823,88 +598,12 @@ function VariationRow({
             Add
           </button>
         </div>
+        <p className="mt-1 text-[10px] text-slate-400">
+          Free-form for now (size, color, …). The listing wizard's Step
+          4 maps these to per-channel variation themes (Amazon
+          SIZE_COLOR, eBay variant-eligible aspects) automatically.
+        </p>
       </div>
-    </div>
-  )
-}
-
-function StepReview({ state }: { state: State }) {
-  return (
-    <Card
-      title="Review"
-      description="Looks good? Click Create. After that you can list it on Amazon, eBay, Shopify or WooCommerce via the existing listing wizard."
-    >
-      <div className="space-y-3 text-[12px]">
-        <ReviewRow label="SKU" value={state.sku} />
-        <ReviewRow label="Name" value={state.name} />
-        {state.brand && <ReviewRow label="Brand" value={state.brand} />}
-        {state.productType && (
-          <ReviewRow label="Product type" value={state.productType} />
-        )}
-        <ReviewRow label="Base price" value={state.basePrice || '0'} mono />
-        {state.totalStock && (
-          <ReviewRow label="Stock" value={state.totalStock} mono />
-        )}
-        {(state.upc || state.ean || state.gtin) && (
-          <ReviewRow
-            label="Identifier"
-            value={
-              state.upc
-                ? `UPC ${state.upc}`
-                : state.ean
-                ? `EAN ${state.ean}`
-                : `GTIN ${state.gtin}`
-            }
-            mono
-          />
-        )}
-        {state.variations.length > 0 && (
-          <div className="mt-2 border-t border-slate-100 pt-2">
-            <div className="text-[11px] font-medium text-slate-700 mb-1">
-              {state.variations.length} variation
-              {state.variations.length === 1 ? '' : 's'}
-            </div>
-            <ul className="space-y-1">
-              {state.variations.map((v) => (
-                <li
-                  key={v.id}
-                  className="text-[11px] text-slate-600 font-mono truncate"
-                >
-                  {v.sku}
-                  {Object.keys(v.attrs).length > 0 &&
-                    ` · ${Object.entries(v.attrs)
-                      .map(([k, val]) => `${k}=${val}`)
-                      .join(', ')}`}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-    </Card>
-  )
-}
-
-function ReviewRow({
-  label,
-  value,
-  mono,
-}: {
-  label: string
-  value: string
-  mono?: boolean
-}) {
-  return (
-    <div className="flex justify-between gap-3">
-      <span className="text-slate-500">{label}</span>
-      <span
-        className={cn(
-          'text-slate-900 truncate text-right',
-          mono && 'font-mono tabular-nums',
-        )}
-      >
-        {value}
-      </span>
     </div>
   )
 }
