@@ -1,6 +1,8 @@
-import ChannelMarketView from '@/components/listings/ChannelMarketView'
+import { COUNTRY_NAMES } from '@/lib/country-names'
+import ListingsWorkspace from '../../ListingsWorkspace'
 
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export default async function AmazonMarketPage({
   params,
@@ -8,5 +10,17 @@ export default async function AmazonMarketPage({
   params: Promise<{ market: string }>
 }) {
   const { market } = await params
-  return <ChannelMarketView channel="AMAZON" channelLabel="Amazon" marketCodeRaw={market} />
+  const code = market.toUpperCase()
+  const label = COUNTRY_NAMES[code] ?? code
+  return (
+    <ListingsWorkspace
+      lockChannel="AMAZON"
+      lockMarketplace={code}
+      breadcrumbs={[
+        { label: 'Listings', href: '/listings' },
+        { label: 'Amazon', href: '/listings/amazon' },
+        { label },
+      ]}
+    />
+  )
 }

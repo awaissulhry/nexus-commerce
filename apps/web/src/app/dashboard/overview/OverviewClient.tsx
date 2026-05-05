@@ -642,7 +642,12 @@ function MarketplaceMatrix({
                           v === 0 ? 'text-slate-300' : 'text-slate-700',
                         )}
                       >
-                        {v}
+                        {v > 0 ? (
+                          <Link
+                            href={`/listings/${c.toLowerCase()}?marketplace=${m}`}
+                            className="hover:text-blue-600 hover:underline"
+                          >{v}</Link>
+                        ) : v}
                       </td>
                     )
                   })}

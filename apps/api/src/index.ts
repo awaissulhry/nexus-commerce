@@ -41,6 +41,7 @@ import terminologyRoutes from "./routes/terminology.routes.js";
 import bulkOperationsRoutes from "./routes/bulk-operations.routes.js";
 import dashboardRoutes from "./routes/dashboard.routes.js";
 import pimRoutes from "./routes/pim.routes.js";
+import { listingsSyndicationRoutes } from "./routes/listings-syndication.routes.js";
 import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
 // Queue/worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS — Phase 2 will flip it on.
 // import { startJobs } from "./jobs/sync.job.js";
@@ -159,6 +160,7 @@ app.register(terminologyRoutes, { prefix: '/api' });
 app.register(bulkOperationsRoutes, { prefix: '/api' });
 app.register(dashboardRoutes, { prefix: '/api' });
 app.register(pimRoutes, { prefix: '/api' });
+app.register(listingsSyndicationRoutes, { prefix: '/api' });
 
 const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 8080;
 

@@ -3,11 +3,11 @@ import ListingsWorkspace from '../ListingsWorkspace'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-export default function ShopifyListingsPage() {
+export default function EtsyListingsPage() {
   return (
     <ListingsWorkspace
-      lockChannel="SHOPIFY"
-      breadcrumbs={[{ label: 'Listings', href: '/listings' }, { label: 'Shopify' }]}
+      lockChannel="ETSY"
+      breadcrumbs={[{ label: 'Listings', href: '/listings' }, { label: 'Etsy' }]}
     />
   )
 }
