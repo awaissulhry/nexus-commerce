@@ -265,6 +265,111 @@ export class AmazonSpApiClient {
   }
 
   /**
+   * G.5.1 — Price-only PATCH to an existing listing.
+   *
+   * Faster + lighter than the full `submitListingPayload`: only sends the
+   * purchasable_offer.our_price slot, leaves every other attribute alone.
+   * Use for repricing on an already-listed SKU.
+   *
+   * marketplaceId is the SP-API ID (APJ6JRA9NG5V4 for IT, etc.).
+   * priceWithTax distinguishes EU tax-inclusive markets from US-style
+   * tax-exclusive — caller resolves via Marketplace.taxInclusive.
+   */
+  async patchListingPrice(options: {
+    sellerId: string
+    sku: string
+    marketplaceId: string
+    productType: string
+    price: number
+    currencyCode: string
+    /** When true, the price is tax-inclusive (EU); when false, net (US). */
+    taxInclusive: boolean
+  }): Promise<{
+    success: boolean
+    sku: string
+    status?: string
+    submissionId?: string
+    error?: string
+    issues?: SPAPIResponse['issues']
+  }> {
+    const { sellerId, sku, marketplaceId, productType, price, currencyCode, taxInclusive } = options
+
+    try {
+      await this.applyRateLimit()
+      const accessToken = await this.getAccessToken()
+
+      // SP-API JSON Patch shape — replace purchasable_offer.our_price.schedule
+      // with a single fresh price entry. The whole purchasable_offer slot
+      // is overwritten because Amazon doesn't support deeper-than-attribute
+      // patches; the productType + marketplaceId in the wrap make the patch
+      // marketplace-specific.
+      const ourPrice = taxInclusive
+        ? [{ schedule: [{ value_with_tax: price }] }]
+        : [{ schedule: [{ value: price, currency: currencyCode }] }]
+
+      const patches = [
+        {
+          op: 'replace',
+          path: '/attributes/purchasable_offer',
+          value: [
+            {
+              marketplace_id: marketplaceId,
+              currency: currencyCode,
+              our_price: ourPrice,
+            },
+          ],
+        },
+      ]
+
+      const url = new URL(
+        `https://sellingpartnerapi-${this.region}.amazon.com/listings/2021-08-01/items/${sellerId}/${encodeURIComponent(
+          sku,
+        )}`,
+      )
+      url.searchParams.set('marketplaceIds', marketplaceId)
+
+      logger.info('SP-API: patchListingPrice', {
+        sku,
+        marketplaceId,
+        currencyCode,
+        price,
+        taxInclusive,
+      })
+
+      const response = await fetch(url.toString(), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-amzn-requestid': `nexus-${Date.now()}`,
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ productType, patches }),
+      })
+      const data = (await response.json()) as SPAPIResponse
+      const errorMessage = this.parseErrors(data)
+      if (errorMessage) {
+        return {
+          success: false,
+          sku,
+          error: errorMessage,
+          issues: data.issues,
+          submissionId: data.submissionId,
+        }
+      }
+      return {
+        success: true,
+        sku,
+        status: data.status,
+        submissionId: data.submissionId,
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      logger.error('SP-API patchListingPrice failed', { sku, error: errorMessage })
+      return { success: false, sku, error: errorMessage }
+    }
+  }
+
+  /**
    * E.8 — putListingsItem (full create-or-replace).
    *
    * Listings Items v2021-08-01 PUT endpoint. Use for first-time publish; the

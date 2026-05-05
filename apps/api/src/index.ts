@@ -48,6 +48,8 @@ import ordersReviewsRoutes from "./routes/orders-reviews.routes.js";
 import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
 import { startSalesReportIngestCron } from "./jobs/sales-report-ingest.job.js";
 import { startForecastCron } from "./jobs/forecast.job.js";
+import { startPricingCron } from "./jobs/pricing-refresh.job.js";
+import pricingRoutes from "./routes/pricing.routes.js";
 // Queue/worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS — Phase 2 will flip it on.
 // import { startJobs } from "./jobs/sync.job.js";
 // import { initializeBullMQWorker } from "./workers/bullmq-sync.worker.js";
@@ -156,6 +158,7 @@ app.register(amazonRoutes, { prefix: '/api/amazon' });
 app.register(marketplacesRoutes, { prefix: '/api' });
 app.register(fulfillmentRoutes, { prefix: '/api' });
 app.register(brandSettingsRoutes, { prefix: '/api' });
+app.register(pricingRoutes, { prefix: '/api' });
 app.register(marketingRoutes, { prefix: '/api' });
 app.register(productsRoutes, { prefix: '/api' });
 app.register(categoriesRoutes, { prefix: '/api' });
@@ -213,6 +216,13 @@ async function start() {
     // POST /api/fulfillment/forecast/run.
     if (process.env.NEXUS_ENABLE_FORECAST_CRON === '1') {
       startForecastCron();
+    }
+
+    // G.1 + G.2 — Nightly FX refresh + snapshot recompute. Gated
+    // separately so dev environments don't hit the pricing layer
+    // before they're ready.
+    if (process.env.NEXUS_ENABLE_PRICING_CRON === '1') {
+      startPricingCron();
     }
 
     logger.info('✅ API server initialized (workers disabled — Phase 2)', {

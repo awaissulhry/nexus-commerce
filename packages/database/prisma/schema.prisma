@@ -532,6 +532,22 @@ model ChannelListing {
   lastOverrideAt DateTime?
   lastOverrideBy String? // User ID or system identifier
 
+  // ── G.3: Marketplace fee + competitive snapshots ─────────────
+  // Filled by SP-API GetMyFeesEstimate (weekly) + GetItemOffersBatch
+  // (daily). The pricing engine factors these into the floor (cost +
+  // FBA fee + referral fee + minMargin) and competitive matching
+  // (when buy-box win-rate is low, drop toward lowestCompetitorPrice).
+  // All nullable until the workers run; engine treats null as "no
+  // signal" and falls back to manual cost-plus math.
+  estimatedFbaFee       Decimal?  @db.Decimal(10, 2) // per-unit FBA fee
+  referralFeePercent    Decimal?  @db.Decimal(5, 2) // 15.00 = 15%
+  lowestCompetitorPrice Decimal?  @db.Decimal(10, 2)
+  competitorFetchedAt   DateTime?
+  feeFetchedAt          DateTime?
+  // eBay-specific: auto-accept-above threshold for Best Offer flow.
+  // Engine surfaces this as an additional floor for eBay marketplaces.
+  bestOfferFloor        Decimal?  @db.Decimal(10, 2)
+
   // ── Relations ───────────────────────────────────────────────────
   offers            Offer[]
   images            ChannelListingImage[]
@@ -571,6 +587,18 @@ model Marketplace {
   language      String // "it" | "de" | "fr" | "en"
   domainUrl     String? // "amazon.it" | "ebay.de"
   isActive      Boolean @default(true)
+
+  // G.1 — Tax + FBA program metadata used by the pricing engine.
+  // EU Amazon marketplaces are tax-inclusive; SP-API expects
+  // value_with_tax for them. US/Asia are exclusive — pass net price,
+  // Amazon adds tax at checkout.
+  vatRate      Decimal? @db.Decimal(5, 2) // 22.00 = 22% (Italy), 19 (DE), 20 (FR), …
+  taxInclusive Boolean  @default(false) // true for Amazon EU
+  // Amazon FBA program a seller is enrolled in for this marketplace.
+  // Different programs have different fee structures: Pan-EU shares a
+  // single inventory pool (cheapest), MCI replicates per-FC, EFN ships
+  // cross-border from one origin (highest fees).
+  fbaProgram String? // 'PAN_EU' | 'MCI' | 'EFN' | null (non-Amazon)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1492,11 +1520,117 @@ model RetailEvent {
   source      String? // 'AMAZON_OFFICIAL', 'CUSTOM', 'INDUSTRY_CAL'
   isActive    Boolean @default(true)
 
+  // G.5 — Optional price actions for this event. When present, the
+  // scheduler materializes ChannelListing.salePrice for the event window
+  // and clears it after.
+  priceActions RetailEventPriceAction[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([startDate, endDate])
   @@index([channel, marketplace])
+  @@index([isActive])
+}
+
+// ── G.1: Pricing snapshot ──────────────────────────────────────────────────
+// Materialized output of pricing-engine.service.ts. One row per
+// (sku, channel, marketplace, fulfillmentMethod) — sub-50ms reads even at
+// 32K cells. Refreshed on price/cost/rule change, on FX update, and when
+// scheduled promotions enter or exit a window.
+model PricingSnapshot {
+  id String @id @default(cuid())
+
+  sku               String
+  channel           String
+  marketplace       String
+  // null => the listing's default fulfillment (used when no per-FBA/FBM
+  // override exists). FBA/FBM rows materialize separately when an Offer
+  // override is set.
+  fulfillmentMethod String?
+
+  // The resolved price + currency the engine arrived at.
+  computedPrice Decimal @db.Decimal(12, 2)
+  currency      String
+
+  // Where the price came from in the resolver chain (see
+  // pricing-engine.service.ts PriceSource enum).
+  source String // SCHEDULED_SALE | OFFER_OVERRIDE | CHANNEL_OVERRIDE |
+  // CHANNEL_RULE | PRICING_RULE | MASTER_INHERIT | FALLBACK
+
+  // Full resolution breakdown for the UI drawer + audit + "what would
+  // happen" simulator. JSON shape matches PriceResolution.breakdown.
+  breakdown Json @default("{}")
+
+  // Constraint clamping flag — true when the resolver had to floor or
+  // ceiling-cap. Pre-clamp value preserved for debugging.
+  isClamped   Boolean @default(false)
+  clampedFrom Decimal? @db.Decimal(12, 2)
+
+  // Soft warnings the UI surfaces as cell badges ("FX stale", "MAP
+  // violated", "cost not set", etc.). Non-blocking.
+  warnings String[] @default([])
+
+  computedAt DateTime @default(now())
+
+  @@unique([sku, channel, marketplace, fulfillmentMethod])
+  @@index([sku])
+  @@index([channel, marketplace])
+  @@index([source])
+  @@index([computedAt])
+}
+
+// ── G.2: FX rate cache ─────────────────────────────────────────────────────
+// Daily snapshot from frankfurter.app (ECB-backed, free, no auth).
+// Engine uses 24h cache; falls back to most-recent rate when fetch fails.
+// `source = 'manual'` rows let the seller override (e.g. lock UK at a fixed
+// rate while EUR/GBP shifts).
+model FxRate {
+  id           String  @id @default(cuid())
+  fromCurrency String // 'EUR'
+  toCurrency   String // 'GBP'
+  rate         Decimal @db.Decimal(14, 8)
+  asOf         DateTime @db.Date
+  source       String  @default("frankfurter") // 'frankfurter' | 'manual'
+
+  createdAt DateTime @default(now())
+
+  @@unique([fromCurrency, toCurrency, asOf])
+  @@index([asOf])
+}
+
+// ── G.5: Retail event price action ─────────────────────────────────────────
+// Links a RetailEvent to a price action (PERCENT_OFF / FIXED_PRICE) scoped
+// to (channel, marketplace, productType). Scheduler applies the action to
+// every matching ChannelListing.salePrice for the event window. Engine
+// reads salePrice as source = SCHEDULED_SALE.
+model RetailEventPriceAction {
+  id      String      @id @default(cuid())
+  eventId String
+  event   RetailEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  // Scope filters — null on any field => applies broadly.
+  channel     String?
+  marketplace String?
+  productType String?
+
+  // PERCENT_OFF: salePrice = currentPrice × (1 − value/100)
+  // FIXED_PRICE: salePrice = value (in marketplace currency)
+  action String // 'PERCENT_OFF' | 'FIXED_PRICE'
+  value  Decimal @db.Decimal(10, 2)
+
+  isActive Boolean @default(true)
+
+  // Timestamps the scheduler stamps onto affected ChannelListings as
+  // salePrice activation / expiry windows. Defaults to event window
+  // when null.
+  setSalePriceFrom  DateTime?
+  setSalePriceUntil DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([eventId])
   @@index([isActive])
 }
 
