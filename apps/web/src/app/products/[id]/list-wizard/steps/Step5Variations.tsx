@@ -1,11 +1,17 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
+  Layers,
   Loader2,
+  Package,
   PackageOpen,
+  Plus,
+  Search,
+  Trash2,
+  X,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -73,6 +79,9 @@ export default function Step5Variations({
   )
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // VV — single-product setup writes (link-to-parent, promote-to-parent,
+  // add-variants) refetch the variations payload via this counter.
+  const [refetchKey, setRefetchKey] = useState(0)
 
   const [commonTheme, setCommonTheme] = useState<string | null>(
     slice.commonTheme ?? null,
@@ -138,9 +147,11 @@ export default function Step5Variations({
       cancelled = true
     }
     // includedSkus / commonTheme intentionally omitted: only seeded on
-    // first load.
+    // first load. refetchKey is included so single-product setup
+    // (link / promote) can pull the updated payload without reloading
+    // the page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wizardId, channels.length])
+  }, [wizardId, channels.length, refetchKey])
 
   const onToggleSku = useCallback((sku: string) => {
     setIncludedSkus((prev) => {
@@ -265,35 +276,21 @@ export default function Step5Variations({
     wizardId,
   ])
 
-  // Single-product (non-parent) short-circuit.
+  // VV — single-product (non-parent, no children) branch. Now offers
+  // three paths: standalone (skip), link as variant of an existing
+  // parent, or promote this product to a parent and add variants.
+  // After link/promote, the payload refetches and the user falls
+  // through to the standard theme picker UI below.
   if (payload && !payload.isParent && payload.children.length === 0) {
     return (
-      <div className="max-w-2xl mx-auto py-12 px-6">
-        <div className="border border-slate-200 rounded-lg bg-white px-6 py-8">
-          <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 rounded-full bg-slate-100 text-slate-500">
-            <PackageOpen className="w-6 h-6" />
-          </div>
-          <h2 className="text-[18px] font-semibold text-slate-900 text-center">
-            No variations to configure
-          </h2>
-          <p className="mt-2 text-[13px] text-slate-600 text-center">
-            <span className="font-mono">{payload.parentSku}</span> is a single
-            product without size/color/etc. children. Click Continue to skip
-            this step.
-          </p>
-        </div>
-        <div className="mt-6 flex items-center justify-end">
-          <button
-            type="button"
-            onClick={() =>
-              updateWizardState({}, { advance: true }).catch(() => {})
-            }
-            className="h-8 px-4 rounded-md bg-blue-600 text-white text-[13px] font-medium hover:bg-blue-700"
-          >
-            Continue
-          </button>
-        </div>
-      </div>
+      <SingleProductSetup
+        productSku={payload.parentSku}
+        productName={payload.parentName}
+        onAdvance={() =>
+          updateWizardState({}, { advance: true }).catch(() => {})
+        }
+        onMutated={() => setRefetchKey((k) => k + 1)}
+      />
     )
   }
 
@@ -823,4 +820,686 @@ async function persistThemes(
   } catch {
     /* swallow — caller's debounce will retry */
   }
+}
+
+// ── VV — single-product setup ───────────────────────────────────────
+//
+// Renders three options for products that are neither parents nor
+// linked to one. After a successful Link or Promote+AddVariants
+// action we call onMutated() so the parent component refetches the
+// variations payload and the user falls through to the standard
+// theme picker UI.
+
+interface ParentHit {
+  id: string
+  sku: string
+  name: string
+}
+
+interface VariantDraft {
+  id: string // local-only react key
+  sku: string
+  name: string
+  attrs: Record<string, string>
+  price: string
+  stock: string
+}
+
+type SetupMode = 'standalone' | 'link' | 'promote'
+
+function SingleProductSetup({
+  productSku,
+  productName,
+  onAdvance,
+  onMutated,
+}: {
+  productSku: string
+  productName: string
+  onAdvance: () => void
+  onMutated: () => void
+}) {
+  const [mode, setMode] = useState<SetupMode>('standalone')
+
+  return (
+    <div className="max-w-3xl mx-auto py-10 px-6">
+      <div className="mb-6">
+        <h2 className="text-[20px] font-semibold text-slate-900">Variations</h2>
+        <p className="text-[13px] text-slate-600 mt-1">
+          <span className="font-mono">{productSku}</span> — {productName}.
+          Pick how this product fits into your catalog.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+        <ModeCard
+          icon={PackageOpen}
+          title="Standalone"
+          subtitle="No size / color / etc. — single SKU. Skip this step."
+          active={mode === 'standalone'}
+          onClick={() => setMode('standalone')}
+        />
+        <ModeCard
+          icon={Layers}
+          title="Variant of existing parent"
+          subtitle="Link this SKU under an existing parent. Inherits the parent's variation theme."
+          active={mode === 'link'}
+          onClick={() => setMode('link')}
+        />
+        <ModeCard
+          icon={Package}
+          title="Has variants"
+          subtitle="Promote to parent and add child SKUs (size, color, …)."
+          active={mode === 'promote'}
+          onClick={() => setMode('promote')}
+        />
+      </div>
+
+      {mode === 'standalone' && (
+        <StandalonePanel onAdvance={onAdvance} sku={productSku} />
+      )}
+      {mode === 'link' && <LinkParentPanel onLinked={onMutated} />}
+      {mode === 'promote' && <PromotePanel onPromoted={onMutated} />}
+    </div>
+  )
+}
+
+function ModeCard({
+  icon: Icon,
+  title,
+  subtitle,
+  active,
+  onClick,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  title: string
+  subtitle: string
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'text-left border rounded-lg p-3 transition-colors',
+        active
+          ? 'border-blue-300 bg-blue-50'
+          : 'border-slate-200 bg-white hover:border-slate-300',
+      )}
+    >
+      <Icon
+        className={cn(
+          'w-5 h-5 mb-2',
+          active ? 'text-blue-600' : 'text-slate-500',
+        )}
+      />
+      <div className="text-[13px] font-semibold text-slate-900 mb-1">{title}</div>
+      <div className="text-[11px] text-slate-600 leading-snug">{subtitle}</div>
+    </button>
+  )
+}
+
+function StandalonePanel({
+  onAdvance,
+  sku,
+}: {
+  onAdvance: () => void
+  sku: string
+}) {
+  return (
+    <div className="border border-slate-200 rounded-lg bg-white px-5 py-4">
+      <div className="flex items-start gap-3">
+        <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-600 flex-shrink-0" />
+        <div className="text-[12px] text-slate-700">
+          <span className="font-mono">{sku}</span> ships as a single SKU.
+          Click Continue to move on to attributes.
+        </div>
+      </div>
+      <div className="mt-4 flex items-center justify-end">
+        <button
+          type="button"
+          onClick={onAdvance}
+          className="h-8 px-4 rounded-md bg-blue-600 text-white text-[13px] font-medium hover:bg-blue-700"
+        >
+          Continue
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function LinkParentPanel({ onLinked }: { onLinked: () => void }) {
+  const [search, setSearch] = useState('')
+  const [results, setResults] = useState<ParentHit[]>([])
+  const [searching, setSearching] = useState(false)
+  const [selected, setSelected] = useState<ParentHit | null>(null)
+  const [parentVariants, setParentVariants] = useState<
+    Array<{ sku: string; attrs: Record<string, string> }>
+  >([])
+  const [variantsLoading, setVariantsLoading] = useState(false)
+  const [linking, setLinking] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const lastTermRef = useRef('')
+
+  // Debounced parent search.
+  useEffect(() => {
+    const term = search.trim()
+    if (term.length < 2) {
+      setResults([])
+      return
+    }
+    lastTermRef.current = term
+    const t = window.setTimeout(async () => {
+      setSearching(true)
+      try {
+        const url = new URL(`${getBackendUrl()}/api/products/bulk-fetch`)
+        url.searchParams.set('search', term)
+        url.searchParams.set('limit', '10')
+        const res = await fetch(url.toString())
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const json = await res.json()
+        if (lastTermRef.current !== term) return
+        const candidates: ParentHit[] = (json?.products ?? [])
+          .filter((p: { isParent?: boolean; id?: string }) => p.isParent && p.id)
+          .map((p: { id: string; sku: string; name: string }) => ({
+            id: p.id,
+            sku: p.sku,
+            name: p.name,
+          }))
+        setResults(candidates)
+      } catch (err) {
+        console.warn('[Step5] parent search failed', err)
+        setResults([])
+      } finally {
+        setSearching(false)
+      }
+    }, 250)
+    return () => window.clearTimeout(t)
+  }, [search])
+
+  // Fetch existing variants for the selected parent so the user can
+  // see the family they're joining.
+  useEffect(() => {
+    if (!selected) {
+      setParentVariants([])
+      return
+    }
+    let cancelled = false
+    setVariantsLoading(true)
+    fetch(
+      `${getBackendUrl()}/api/catalog/products/${encodeURIComponent(
+        selected.id,
+      )}`,
+    )
+      .then((r) => r.json())
+      .then((json) => {
+        if (cancelled) return
+        const variants =
+          json?.data?.variations?.map(
+            (v: {
+              sku: string
+              variationAttributes?: Record<string, unknown>
+            }) => ({
+              sku: v.sku,
+              attrs: Object.fromEntries(
+                Object.entries(v.variationAttributes ?? {}).map(([k, val]) => [
+                  k,
+                  String(val ?? ''),
+                ]),
+              ),
+            }),
+          ) ?? []
+        setParentVariants(variants)
+      })
+      .catch(() => setParentVariants([]))
+      .finally(() => {
+        if (!cancelled) setVariantsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selected])
+
+  const handleLink = async () => {
+    if (!selected) return
+    setLinking(true)
+    setError(null)
+    try {
+      // Get the current product id from the URL — the wizard's product
+      // is the one we're linking. We don't have direct access to the
+      // product id in StepProps, but the URL path /products/<id>/...
+      // is consistent.
+      const productId = window.location.pathname.split('/')[2]
+      if (!productId) {
+        setError('Could not resolve current product id from URL.')
+        return
+      }
+      const res = await fetch(`${getBackendUrl()}/api/products/bulk`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          changes: [
+            { id: productId, field: 'parentId', value: selected.id },
+            { id: productId, field: 'isParent', value: false },
+          ],
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || json?.success === false) {
+        setError(
+          json?.errors?.[0]?.error ??
+            json?.error ??
+            `Couldn't link to parent (HTTP ${res.status}).`,
+        )
+        return
+      }
+      onLinked()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLinking(false)
+    }
+  }
+
+  return (
+    <div className="border border-slate-200 rounded-lg bg-white">
+      <div className="px-5 py-4 border-b border-slate-100">
+        <div className="flex items-center gap-2">
+          <Search className="w-3.5 h-3.5 text-slate-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search parent SKU or name (min 2 chars)"
+            className="flex-1 h-8 text-[12px] border-0 focus:outline-none bg-transparent"
+            autoFocus
+          />
+          {searching && (
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />
+          )}
+        </div>
+      </div>
+
+      {!selected && (
+        <div className="max-h-[260px] overflow-y-auto">
+          {results.length === 0 && search.trim().length >= 2 && !searching && (
+            <div className="px-5 py-4 text-[12px] text-slate-500 text-center">
+              No parent products match.
+            </div>
+          )}
+          {results.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => setSelected(p)}
+              className="w-full text-left px-5 py-2.5 text-[12px] hover:bg-slate-50 border-b border-slate-100 last:border-b-0"
+            >
+              <div className="font-mono text-slate-900">{p.sku}</div>
+              <div className="text-[11px] text-slate-500 truncate">{p.name}</div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {selected && (
+        <div className="px-5 py-4">
+          <div className="flex items-start justify-between gap-3 mb-3 pb-3 border-b border-slate-100">
+            <div>
+              <div className="text-[12px] text-slate-500">Linking under:</div>
+              <div className="font-mono text-[14px] text-slate-900 mt-0.5">
+                {selected.sku}
+              </div>
+              <div className="text-[12px] text-slate-600">{selected.name}</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelected(null)}
+              className="text-slate-400 hover:text-slate-700"
+              aria-label="Pick a different parent"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="mb-4">
+            <div className="text-[11px] font-medium text-slate-700 mb-1.5">
+              Existing variants under this parent
+            </div>
+            {variantsLoading ? (
+              <div className="text-[11px] text-slate-500 inline-flex items-center gap-1.5">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Fetching variants…
+              </div>
+            ) : parentVariants.length === 0 ? (
+              <div className="text-[11px] text-slate-500 italic">
+                No variants yet — yours will be the first child.
+              </div>
+            ) : (
+              <ul className="space-y-1 max-h-[140px] overflow-y-auto">
+                {parentVariants.map((v) => (
+                  <li
+                    key={v.sku}
+                    className="text-[11px] flex items-center gap-2"
+                  >
+                    <span className="font-mono text-slate-700">{v.sku}</span>
+                    <span className="text-slate-500">
+                      {Object.entries(v.attrs)
+                        .map(([k, val]) => `${k}=${val}`)
+                        .join(' · ')}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {error && (
+            <div className="mb-3 px-3 py-2 border border-rose-200 bg-rose-50 rounded-md text-[11px] text-rose-700 inline-flex items-start gap-1.5">
+              <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+              <span className="break-words">{error}</span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-end">
+            <button
+              type="button"
+              onClick={handleLink}
+              disabled={linking}
+              className="h-8 px-4 rounded-md bg-blue-600 text-white text-[13px] font-medium hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+            >
+              {linking && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              Link as variant
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PromotePanel({ onPromoted }: { onPromoted: () => void }) {
+  const [variants, setVariants] = useState<VariantDraft[]>([])
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const addRow = () =>
+    setVariants((vs) => [
+      ...vs,
+      {
+        id: `v_${Date.now()}_${vs.length}`,
+        sku: '',
+        name: '',
+        attrs: {},
+        price: '',
+        stock: '',
+      },
+    ])
+  const removeRow = (id: string) =>
+    setVariants((vs) => vs.filter((v) => v.id !== id))
+  const update = (id: string, patch: Partial<VariantDraft>) =>
+    setVariants((vs) => vs.map((v) => (v.id === id ? { ...v, ...patch } : v)))
+
+  const valid =
+    variants.length > 0 &&
+    variants.every((v) => v.sku.trim().length > 0 && v.name.trim().length > 0)
+
+  const handlePromote = async () => {
+    if (!valid) return
+    setSubmitting(true)
+    setError(null)
+    try {
+      const productId = window.location.pathname.split('/')[2]
+      if (!productId) {
+        setError('Could not resolve current product id from URL.')
+        return
+      }
+      // Promote: flip isParent=true on this product.
+      const promoteRes = await fetch(`${getBackendUrl()}/api/products/bulk`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          changes: [{ id: productId, field: 'isParent', value: true }],
+        }),
+      })
+      const promoteJson = await promoteRes.json().catch(() => ({}))
+      if (!promoteRes.ok || promoteJson?.success === false) {
+        setError(
+          promoteJson?.errors?.[0]?.error ??
+            promoteJson?.error ??
+            `Couldn't promote to parent (HTTP ${promoteRes.status}).`,
+        )
+        return
+      }
+      // Add each variant via the catalog children endpoint. We
+      // serialize the calls so a partial failure leaves the UI
+      // pointing at the SKU that errored.
+      for (const v of variants) {
+        const childRes = await fetch(
+          `${getBackendUrl()}/api/catalog/products/${productId}/children`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sku: v.sku.trim(),
+              name: v.name.trim(),
+              basePrice: v.price.trim() ? Number(v.price) : 0,
+              totalStock: v.stock.trim() ? Number(v.stock) : 0,
+            }),
+          },
+        )
+        if (!childRes.ok) {
+          const j = await childRes.json().catch(() => ({}))
+          setError(
+            `Variant ${v.sku} failed: ${
+              j?.error?.message ?? j?.error ?? `HTTP ${childRes.status}`
+            }`,
+          )
+          return
+        }
+      }
+      onPromoted()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="border border-slate-200 rounded-lg bg-white">
+      <div className="px-5 py-4 border-b border-slate-100">
+        <div className="text-[12px] text-slate-700">
+          Add at least one variant. After save, this product becomes the
+          parent and the wizard refreshes to let you pick variation themes
+          per channel.
+        </div>
+      </div>
+      <div className="px-5 py-4 space-y-3">
+        {variants.length === 0 ? (
+          <div className="text-center py-6 border border-dashed border-slate-200 rounded-lg">
+            <p className="text-[12px] text-slate-500 mb-3">
+              No variants yet.
+            </p>
+            <button
+              type="button"
+              onClick={addRow}
+              className="h-7 px-3 text-[11px] rounded-md border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-1"
+            >
+              <Plus className="w-3 h-3" />
+              Add variant
+            </button>
+          </div>
+        ) : (
+          <>
+            {variants.map((v, idx) => (
+              <PromoteVariantRow
+                key={v.id}
+                row={v}
+                index={idx}
+                onChange={(patch) => update(v.id, patch)}
+                onRemove={() => removeRow(v.id)}
+              />
+            ))}
+            <button
+              type="button"
+              onClick={addRow}
+              className="w-full h-7 text-[11px] rounded-md border border-dashed border-slate-200 hover:bg-slate-50 inline-flex items-center justify-center gap-1"
+            >
+              <Plus className="w-3 h-3" />
+              Add another variant
+            </button>
+          </>
+        )}
+
+        {error && (
+          <div className="px-3 py-2 border border-rose-200 bg-rose-50 rounded-md text-[11px] text-rose-700 inline-flex items-start gap-1.5">
+            <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+            <span className="break-words">{error}</span>
+          </div>
+        )}
+
+        <div className="flex items-center justify-end pt-1">
+          <button
+            type="button"
+            onClick={handlePromote}
+            disabled={!valid || submitting}
+            className="h-8 px-4 rounded-md bg-blue-600 text-white text-[13px] font-medium hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+          >
+            {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            Promote to parent &amp; add {variants.length || 0} variant
+            {variants.length === 1 ? '' : 's'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PromoteVariantRow({
+  row,
+  index,
+  onChange,
+  onRemove,
+}: {
+  row: VariantDraft
+  index: number
+  onChange: (patch: Partial<VariantDraft>) => void
+  onRemove: () => void
+}) {
+  const [attrKeyDraft, setAttrKeyDraft] = useState('')
+  const [attrValDraft, setAttrValDraft] = useState('')
+  const addAttr = () => {
+    const k = attrKeyDraft.trim()
+    const v = attrValDraft.trim()
+    if (!k || !v) return
+    onChange({ attrs: { ...row.attrs, [k]: v } })
+    setAttrKeyDraft('')
+    setAttrValDraft('')
+  }
+  const removeAttr = (k: string) => {
+    const { [k]: _gone, ...rest } = row.attrs
+    onChange({ attrs: rest })
+  }
+  return (
+    <div className="border border-slate-200 rounded-md p-3 bg-slate-50/50">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] uppercase tracking-wide text-slate-500 font-medium">
+          Variant #{index + 1}
+        </span>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="text-rose-500 hover:text-rose-700"
+          aria-label="Remove variant"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-2 mb-2">
+        <input
+          type="text"
+          value={row.sku}
+          onChange={(e) => onChange({ sku: e.target.value })}
+          placeholder="Variant SKU"
+          className="h-7 px-2 text-[12px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+        />
+        <input
+          type="text"
+          value={row.name}
+          onChange={(e) => onChange({ name: e.target.value })}
+          placeholder="Variant name"
+          className="h-7 px-2 text-[12px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-2 mb-2">
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={row.price}
+          onChange={(e) => onChange({ price: e.target.value })}
+          placeholder="Price (opt)"
+          className="h-7 px-2 text-[12px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+        />
+        <input
+          type="number"
+          min="0"
+          value={row.stock}
+          onChange={(e) => onChange({ stock: e.target.value })}
+          placeholder="Stock (opt)"
+          className="h-7 px-2 text-[12px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+        />
+      </div>
+      {Object.entries(row.attrs).length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {Object.entries(row.attrs).map(([k, val]) => (
+            <span
+              key={k}
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[10px]"
+            >
+              <span className="font-mono">{k}</span>: {val}
+              <button
+                type="button"
+                onClick={() => removeAttr(k)}
+                className="text-slate-500 hover:text-rose-700"
+                aria-label={`Remove ${k}`}
+              >
+                <X className="w-2.5 h-2.5" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex items-center gap-1.5">
+        <input
+          type="text"
+          value={attrKeyDraft}
+          onChange={(e) => setAttrKeyDraft(e.target.value)}
+          placeholder="key (color)"
+          className="flex-1 h-6 px-2 text-[11px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+        />
+        <input
+          type="text"
+          value={attrValDraft}
+          onChange={(e) => setAttrValDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              addAttr()
+            }
+          }}
+          placeholder="value (red)"
+          className="flex-1 h-6 px-2 text-[11px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+        />
+        <button
+          type="button"
+          onClick={addAttr}
+          disabled={!attrKeyDraft.trim() || !attrValDraft.trim()}
+          className="h-6 px-2 text-[11px] rounded-md border border-slate-200 hover:bg-white disabled:opacity-40 bg-white"
+        >
+          Add
+        </button>
+      </div>
+    </div>
+  )
 }
