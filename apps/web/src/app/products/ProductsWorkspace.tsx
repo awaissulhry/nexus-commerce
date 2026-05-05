@@ -10,7 +10,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   Boxes, AlertTriangle, LayoutGrid, Sparkles, Search, RefreshCw,
-  Filter, Settings2, X, ChevronDown, Eye, EyeOff, Tag as TagIcon,
+  Filter, Settings2, X, ChevronDown, ChevronRight, Eye, EyeOff, Tag as TagIcon,
   Package, Plus, FolderTree, Network, Bookmark, BookmarkPlus,
   ExternalLink, Star, Copy, Trash2, Layers, Image as ImageIcon,
   CheckCircle2, XCircle,
@@ -44,6 +44,10 @@ type ProductRow = {
   photoCount: number
   channelCount: number
   variantCount: number
+  // Number of child Products (Product.children self-relation). Used by
+  // the grid to decide whether a parent gets a chevron. Differs from
+  // variantCount, which counts ProductVariation rows (matrix cells).
+  childCount?: number
   coverage: Record<string, { live: number; draft: number; error: number; total: number }> | null
   tags?: Array<{ id: string; name: string; color: string | null }>
   updatedAt: string
@@ -178,6 +182,14 @@ export default function ProductsWorkspace() {
   const [tagEditorProductId, setTagEditorProductId] = useState<string | null>(null)
   const [bundleEditorOpen, setBundleEditorOpen] = useState(false)
 
+  // Grid expand-on-chevron: parents lazy-load their children via the
+  // same /api/products endpoint with ?parentId=<id>. Cached so opening
+  // the same parent twice doesn't re-fetch. The 30s page-level poll
+  // does not refresh open child sets — toggling closed-then-open does.
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set())
+  const [childrenByParent, setChildrenByParent] = useState<Record<string, ProductRow[]>>({})
+  const [loadingChildren, setLoadingChildren] = useState<Set<string>>(new Set())
+
   const [tags, setTags] = useState<Tag[]>([])
   const [facets, setFacets] = useState<Facets | null>(null)
   const [savedViews, setSavedViews] = useState<SavedView[]>([])
@@ -269,6 +281,60 @@ export default function ProductsWorkspace() {
         setSavedViews(data.items ?? [])
       }
     } catch {}
+  }, [])
+
+  // Lazy-load a parent's children. Cached after first fetch. Returns
+  // void so the caller can fire-and-forget; loading/error state is
+  // surfaced via loadingChildren and a fallback message in the row.
+  const fetchChildrenFor = useCallback(async (parentId: string) => {
+    if (childrenByParent[parentId]) return // cache hit
+    setLoadingChildren((prev) => {
+      const next = new Set(prev)
+      next.add(parentId)
+      return next
+    })
+    try {
+      const qs = new URLSearchParams({
+        parentId,
+        limit: '200',
+        includeCoverage: 'true',
+        includeTags: 'true',
+      })
+      const res = await fetch(`${getBackendUrl()}/api/products?${qs.toString()}`, { cache: 'no-store' })
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+      const data = await res.json()
+      setChildrenByParent((prev) => ({ ...prev, [parentId]: data.products ?? [] }))
+    } catch {
+      // On failure, drop a marker [] so the row shows "no variants found"
+      // instead of an infinite spinner. Re-collapse + re-expand retries.
+      setChildrenByParent((prev) => ({ ...prev, [parentId]: [] }))
+    } finally {
+      setLoadingChildren((prev) => {
+        const next = new Set(prev)
+        next.delete(parentId)
+        return next
+      })
+    }
+  }, [childrenByParent])
+
+  const toggleExpand = useCallback((parentId: string) => {
+    setExpandedParents((prev) => {
+      const next = new Set(prev)
+      if (next.has(parentId)) {
+        next.delete(parentId)
+      } else {
+        next.add(parentId)
+        void fetchChildrenFor(parentId)
+      }
+      return next
+    })
+  }, [fetchChildrenFor])
+
+  // After a refresh of the top-level rows, evict child caches so the
+  // next expand re-fetches against possibly-changed children. Cheap:
+  // children render only when the user re-opens.
+  const onTopLevelRefresh = useCallback(() => {
+    setChildrenByParent({})
   }, [])
 
   useEffect(() => { if (lens === 'grid') fetchProducts() }, [lens, fetchProducts])
@@ -440,7 +506,11 @@ export default function ProductsWorkspace() {
           onPage={(p: number) => updateUrl({ page: p === 1 ? undefined : String(p) })}
           onPageSize={(s: number) => updateUrl({ pageSize: s === 100 ? undefined : String(s), page: undefined })}
           onTagEdit={(id: string) => setTagEditorProductId(id)}
-          onChanged={fetchProducts}
+          onChanged={() => { onTopLevelRefresh(); fetchProducts() }}
+          expandedParents={expandedParents}
+          childrenByParent={childrenByParent}
+          loadingChildren={loadingChildren}
+          onToggleExpand={toggleExpand}
         />
       )}
 
@@ -950,7 +1020,36 @@ function GridLens(props: any) {
     products, loading, error, page, pageSize, totalPages, total,
     visibleColumns, setVisibleColumns, columnPickerOpen, setColumnPickerOpen,
     sortBy, onSort, selected, setSelected, onPage, onPageSize, onTagEdit, onChanged,
-  } = props
+    // Expand-on-chevron — see ProductsWorkspace for state ownership.
+    expandedParents,
+    childrenByParent,
+    loadingChildren,
+    onToggleExpand,
+  } = props as {
+    products: ProductRow[]
+    loading: boolean
+    error: string | null
+    page: number
+    pageSize: number
+    totalPages: number
+    total: number
+    visibleColumns: string[]
+    setVisibleColumns: (cols: string[]) => void
+    columnPickerOpen: boolean
+    setColumnPickerOpen: (open: boolean) => void
+    sortBy: string
+    onSort: (key: string) => void
+    selected: Set<string>
+    setSelected: (sel: Set<string>) => void
+    onPage: (n: number) => void
+    onPageSize: (n: number) => void
+    onTagEdit: (id: string) => void
+    onChanged: () => void
+    expandedParents: Set<string>
+    childrenByParent: Record<string, ProductRow[]>
+    loadingChildren: Set<string>
+    onToggleExpand: (parentId: string) => void
+  }
 
   const visible = useMemo(() => ALL_COLUMNS.filter((c) => visibleColumns.includes(c.key) || c.locked), [visibleColumns])
 
@@ -1013,6 +1112,10 @@ function GridLens(props: any) {
                 <th className="px-3 py-2 w-8">
                   <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} />
                 </th>
+                {/* Chevron column — narrow, no header label. Renders for
+                    parents only. Standalones and child rows get an empty
+                    cell of the same width so columns line up. */}
+                <th className="px-1 py-2 w-6" aria-label="Expand variants" />
                 {visible.map((col) => (
                   <th
                     key={col.key}
@@ -1040,12 +1143,32 @@ function GridLens(props: any) {
               </tr>
             </thead>
             <tbody>
-              {products.map((p: ProductRow) => {
+              {products.flatMap((p: ProductRow) => {
                 const isSelected = selected.has(p.id)
-                return (
+                const childCount = p.childCount ?? 0
+                const canExpand = p.isParent && childCount > 0
+                const isExpanded = expandedParents.has(p.id)
+                const isLoadingChildren = loadingChildren.has(p.id)
+                const children = childrenByParent[p.id] ?? []
+
+                const parentRow = (
                   <tr key={p.id} className={`border-b border-slate-100 hover:bg-slate-50 ${isSelected ? 'bg-blue-50/30' : ''}`}>
                     <td className="px-3 py-2">
                       <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(p.id)} />
+                    </td>
+                    <td className="px-1 py-2 align-middle">
+                      {canExpand ? (
+                        <button
+                          type="button"
+                          onClick={() => onToggleExpand(p.id)}
+                          aria-expanded={isExpanded}
+                          aria-label={isExpanded ? `Collapse variants of ${p.sku}` : `Expand variants of ${p.sku} (${childCount})`}
+                          title={`${childCount} variant${childCount === 1 ? '' : 's'}`}
+                          className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-slate-200 text-slate-600"
+                        >
+                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        </button>
+                      ) : null}
                     </td>
                     {visible.map((col) => (
                       <td key={col.key} className="px-3 py-2 align-middle" style={{ width: col.width, minWidth: col.width }}>
@@ -1054,6 +1177,58 @@ function GridLens(props: any) {
                     ))}
                   </tr>
                 )
+
+                if (!isExpanded) return [parentRow]
+
+                // Child rows — same shape, indented + tinted to read as nested.
+                // Loading and empty states are inline so the user gets
+                // feedback without a layout jump.
+                const totalCols = 2 + visible.length // checkbox + chevron + visible cells
+                const childRows: JSX.Element[] = []
+
+                if (isLoadingChildren) {
+                  childRows.push(
+                    <tr key={`${p.id}-loading`} className="bg-slate-50/60 border-b border-slate-100">
+                      <td colSpan={totalCols} className="px-3 py-2 text-[12px] text-slate-500 italic">
+                        Loading variants…
+                      </td>
+                    </tr>
+                  )
+                } else if (children.length === 0) {
+                  childRows.push(
+                    <tr key={`${p.id}-empty`} className="bg-slate-50/60 border-b border-slate-100">
+                      <td colSpan={totalCols} className="px-3 py-2 text-[12px] text-slate-500 italic">
+                        No variants found{childCount > 0 ? ' (fetch failed — try collapsing and re-opening)' : ''}.
+                      </td>
+                    </tr>
+                  )
+                } else {
+                  for (const child of children as ProductRow[]) {
+                    const childSelected = selected.has(child.id)
+                    childRows.push(
+                      <tr
+                        key={child.id}
+                        className={`border-b border-slate-100 bg-slate-50/40 hover:bg-slate-100/60 ${childSelected ? 'bg-blue-50/40' : ''}`}
+                      >
+                        <td className="px-3 py-2">
+                          <input type="checkbox" checked={childSelected} onChange={() => toggleSelect(child.id)} />
+                        </td>
+                        <td className="px-1 py-2 align-middle">
+                          {/* Visual tree-line indent — keeps the chevron
+                              column aligned but signals nesting. */}
+                          <span className="block h-4 w-4 ml-1 border-l-2 border-b-2 border-slate-300 rounded-bl" />
+                        </td>
+                        {visible.map((col) => (
+                          <td key={col.key} className="px-3 py-2 align-middle" style={{ width: col.width, minWidth: col.width }}>
+                            <ProductCell col={col.key} product={child} onTagEdit={onTagEdit} onChanged={onChanged} />
+                          </td>
+                        ))}
+                      </tr>
+                    )
+                  }
+                }
+
+                return [parentRow, ...childRows]
               })}
             </tbody>
           </table>

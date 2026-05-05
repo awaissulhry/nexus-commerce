@@ -110,8 +110,12 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
   //   ?sort=updated|created|sku|name|price-asc|price-desc|stock-asc|stock-desc
   //
   // limit is clamped to 200 to prevent accidental fetch-all calls.
-  // parentId=null is enforced so variations don't flood the page;
-  // child SKUs live on the variations tab of /products/[id]/edit.
+  //
+  // Default scope is top-level products (parentId=null) so variation
+  // children don't flood the page. The grid expand-on-chevron flow
+  // re-uses this endpoint with ?parentId=<id> to lazy-load a parent's
+  // children — same response shape, same filter set, just a different
+  // scope.
   fastify.get<{
     Querystring: {
       page?: string
@@ -130,6 +134,9 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       hasPhotos?: string
       includeCoverage?: string
       includeTags?: string
+      // Lazy-load children of this parent. Pass the parent's ID
+      // verbatim. Disables the default parentId=null filter.
+      parentId?: string
     }
   }>('/products', async (request, reply) => {
     try {
@@ -158,7 +165,10 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       const includeCoverage = q.includeCoverage === 'true' || q.includeCoverage === '1'
       const includeTags = q.includeTags === 'true' || q.includeTags === '1'
 
-      const where: any = { parentId: null }
+      // Default scope: top-level rows only. Override with ?parentId=<id>
+      // to fetch children of a specific parent (used by the grid's
+      // expand-on-chevron flow).
+      const where: any = q.parentId ? { parentId: q.parentId } : { parentId: null }
       if (search) {
         where.OR = [
           { sku: { contains: search, mode: 'insensitive' } },
@@ -253,7 +263,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
               take: 1,
             },
             _count: {
-              select: { images: true, channelListings: true, variations: true },
+              select: { images: true, channelListings: true, variations: true, children: true },
             },
             ...(includeCoverage
               ? {
@@ -342,6 +352,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           photoCount,
           channelCount: p._count?.channelListings ?? 0,
           variantCount: p._count?.variations ?? 0,
+          childCount: p._count?.children ?? 0,
           coverage,
           tags: includeTags ? (tagsByProduct.get(p.id) ?? []) : undefined,
         }
