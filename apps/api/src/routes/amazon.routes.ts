@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import { amazonOrdersService } from '../services/amazon-orders.service.js'
+import { amazonInventoryService } from '../services/amazon-inventory.service.js'
 import prisma from '../db.js'
 import {
   detectVariationGroups,
@@ -1480,6 +1481,44 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
       return { success: true, ...summary }
     } catch (error) {
       fastify.log.error({ err: error }, '[amazon/orders/sync] failed')
+      return reply.code(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  })
+
+  // POST /api/amazon/inventory/sync — pull live FBA inventory from
+  // SP-API getInventorySummaries into Product.totalStock. Two modes:
+  //   - body { sellerSkus: [...] } → bounded refresh (max 50 SKUs)
+  //   - no body OR body { marketplaceId? } → full FBA sweep
+  // Critical: SKUs absent from the SP-API response are NOT zeroed.
+  // The endpoint covers FBA only; MFN stock is left untouched. See
+  // amazon-inventory.service.ts for the full safety contract.
+  fastify.post<{
+    Body?: { sellerSkus?: string[]; marketplaceId?: string }
+  }>('/inventory/sync', async (request, reply) => {
+    if (!amazonInventoryService.isConfigured()) {
+      return reply.code(503).send({
+        success: false,
+        error:
+          'Amazon SP-API credentials are not configured. Required: AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ROLE_ARN',
+      })
+    }
+
+    const body = request.body ?? {}
+    try {
+      const summary =
+        body.sellerSkus && body.sellerSkus.length > 0
+          ? await amazonInventoryService.syncFBAInventoryForSkus(body.sellerSkus, {
+              marketplaceId: body.marketplaceId,
+            })
+          : await amazonInventoryService.syncFBAInventory({
+              marketplaceId: body.marketplaceId,
+            })
+      return { success: true, ...summary }
+    } catch (error) {
+      fastify.log.error({ err: error }, '[amazon/inventory/sync] failed')
       return reply.code(500).send({
         success: false,
         error: error instanceof Error ? error.message : String(error),

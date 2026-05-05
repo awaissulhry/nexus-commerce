@@ -94,6 +94,22 @@ export interface AmazonOrderItemRaw {
   PromotionDiscount?: { CurrencyCode: string; Amount: string }
 }
 
+/** Single FBA inventory row mapped from getInventorySummaries.
+ *  All quantity buckets are summed across conditions for the same SKU
+ *  in `fetchFBAInventory` (most sellers run "New" only; if not, we
+ *  prefer "more stock" over "lose stock"). */
+export interface FBAInventoryRow {
+  sku: string                  // sellerSKU (the merchant's SKU, our join key)
+  asin: string | null
+  fnsku: string | null
+  fulfillableQuantity: number  // what Amazon will actually ship today
+  inboundQuantity: number      // working + shipped + receiving (in-flight to FC)
+  reservedQuantity: number     // pending orders + transshipment + FC processing
+  unfulfillableQuantity: number
+  totalQuantity: number        // sum of all buckets — equals SP-API field
+  lastUpdatedTime: string | null
+}
+
 /** Options accepted by `fetchOrders`. Mutually-exclusive cursors:
  *  - `since`: fetch orders with `LastUpdatedAfter >= since` (incremental polling)
  *  - `daysBack`: fetch `CreatedAfter >= now - daysBack days` (initial backfill)
@@ -869,6 +885,149 @@ export class AmazonService {
         console.error(
           '[Amazon] fetchOrders failed:',
           extractErrorMessage(error)
+        )
+        throw error
+      }
+    }
+  }
+
+  /* ────────────────────────────────────────────────────────────── */
+  /*  fetchFBAInventory                                             */
+  /* ────────────────────────────────────────────────────────────── */
+
+  /**
+   * Fetch real-time FBA inventory via SP-API getInventorySummaries.
+   *
+   * Two callers:
+   *   - The /api/amazon/inventory/sync route (manual)
+   *   - The 15-min amazon-inventory-sync.job cron
+   *
+   * Coverage caveat: this endpoint ONLY returns FBA-managed inventory.
+   * MFN/FBM SKUs are absent from the response — the caller MUST treat
+   * "absent" as "no information" (NOT zero), so MFN stock numbers are
+   * preserved by the cron. Sellers running mixed FBA+FBM cannot infer
+   * total stock from this endpoint alone; the catalog refresh report
+   * (GET_MERCHANT_LISTINGS_ALL_DATA) carries MFN numbers.
+   *
+   * Multi-condition handling: if a SKU has rows for multiple conditions
+   * (e.g. New + Used), we SUM the quantities. Most sellers run "New"
+   * only; the SUM is the safe default — better to overstate by a few
+   * than starve a listing.
+   *
+   * Pagination via nextToken (camelCase, unlike Orders V0). Library
+   * throttles for us; a 250 ms pause keeps log noise down.
+   */
+  async fetchFBAInventory(
+    options: { marketplaceId?: string; sellerSkus?: string[] } = {},
+  ): Promise<FBAInventoryRow[]> {
+    const sp = await this.getClient()
+    const marketplaceId =
+      options.marketplaceId ??
+      process.env.AMAZON_MARKETPLACE_ID ??
+      'APJ6JRA9NG5V4'
+
+    const baseQuery: Record<string, unknown> = {
+      details: true,
+      granularityType: 'Marketplace',
+      granularityId: marketplaceId,
+      marketplaceIds: [marketplaceId],
+    }
+    if (options.sellerSkus && options.sellerSkus.length > 0) {
+      // SP-API caps sellerSkus per request at 50; caller is responsible
+      // for chunking if they want more than that.
+      baseQuery.sellerSkus = options.sellerSkus.slice(0, 50)
+    }
+
+    // Group by SKU as we paginate so multi-condition rows for the same
+    // SKU can be summed in one pass.
+    const bySku = new Map<string, FBAInventoryRow>()
+    let nextToken: string | undefined
+
+    while (true) {
+      try {
+        const callQuery: Record<string, unknown> = nextToken
+          ? { ...baseQuery, nextToken }
+          : baseQuery
+
+        const res: any = await (sp as any).callAPI({
+          operation: 'getInventorySummaries',
+          endpoint: 'fbaInventory',
+          query: callQuery,
+        })
+
+        const payload = res?.payload ?? res
+        const summaries = payload?.inventorySummaries ?? []
+
+        for (const s of summaries as Array<{
+          sellerSku?: string
+          asin?: string
+          fnSku?: string
+          totalQuantity?: number
+          lastUpdatedTime?: string
+          inventoryDetails?: {
+            fulfillableQuantity?: number
+            inboundWorkingQuantity?: number
+            inboundShippedQuantity?: number
+            inboundReceivingQuantity?: number
+            unfulfillableQuantity?: { totalUnfulfillableQuantity?: number } | number
+            reservedQuantity?: { totalReservedQuantity?: number }
+          }
+        }>) {
+          if (!s.sellerSku) continue
+          const det = s.inventoryDetails ?? {}
+          const fulfillable = det.fulfillableQuantity ?? 0
+          const inbound =
+            (det.inboundWorkingQuantity ?? 0) +
+            (det.inboundShippedQuantity ?? 0) +
+            (det.inboundReceivingQuantity ?? 0)
+          const reserved = det.reservedQuantity?.totalReservedQuantity ?? 0
+          // unfulfillableQuantity in the SP-API model is sometimes an
+          // object with totalUnfulfillableQuantity, sometimes a number.
+          // Normalize.
+          const unfulfillable =
+            typeof det.unfulfillableQuantity === 'object'
+              ? det.unfulfillableQuantity?.totalUnfulfillableQuantity ?? 0
+              : (det.unfulfillableQuantity as number | undefined) ?? 0
+
+          const existing = bySku.get(s.sellerSku)
+          if (existing) {
+            existing.fulfillableQuantity += fulfillable
+            existing.inboundQuantity += inbound
+            existing.reservedQuantity += reserved
+            existing.unfulfillableQuantity += unfulfillable
+            existing.totalQuantity += s.totalQuantity ?? 0
+            // Keep the most recent lastUpdatedTime
+            if (
+              s.lastUpdatedTime &&
+              (!existing.lastUpdatedTime ||
+                s.lastUpdatedTime > existing.lastUpdatedTime)
+            ) {
+              existing.lastUpdatedTime = s.lastUpdatedTime
+            }
+          } else {
+            bySku.set(s.sellerSku, {
+              sku: s.sellerSku,
+              asin: s.asin ?? null,
+              fnsku: s.fnSku ?? null,
+              fulfillableQuantity: fulfillable,
+              inboundQuantity: inbound,
+              reservedQuantity: reserved,
+              unfulfillableQuantity: unfulfillable,
+              totalQuantity: s.totalQuantity ?? 0,
+              lastUpdatedTime: s.lastUpdatedTime ?? null,
+            })
+          }
+        }
+
+        nextToken = payload?.nextToken
+        if (!nextToken) {
+          return Array.from(bySku.values())
+        }
+        await sleep(250)
+      } catch (error) {
+        console.error(
+          '[Amazon] fetchFBAInventory failed:',
+          extractErrorMessage(error),
         )
         throw error
       }

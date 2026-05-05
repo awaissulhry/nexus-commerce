@@ -52,6 +52,7 @@ import { startPricingCron } from "./jobs/pricing-refresh.job.js";
 import { startCatalogRefreshCron } from "./jobs/catalog-refresh.job.js";
 import { startEbayTokenRefreshCron } from "./jobs/ebay-token-refresh.job.js";
 import { startAmazonOrdersCron } from "./jobs/amazon-orders-sync.job.js";
+import { startAmazonInventoryCron } from "./jobs/amazon-inventory-sync.job.js";
 import pricingRoutes from "./routes/pricing.routes.js";
 // BullMQ worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS=1.
 // initializeQueue pings Redis and throws on failure; tryStartQueueWorkers
@@ -275,6 +276,16 @@ async function start() {
     // Gated behind NEXUS_ENABLE_AMAZON_ORDERS_CRON=1.
     if (process.env.NEXUS_ENABLE_AMAZON_ORDERS_CRON === '1') {
       startAmazonOrdersCron();
+    }
+
+    // FBA inventory polling — every 15 min, full SP-API
+    // getInventorySummaries sweep, writes fulfillableQuantity into
+    // Product.totalStock. SKUs absent from the response are NOT zeroed
+    // (MFN inventory ledger preservation — see service comment).
+    // Manual trigger: POST /api/amazon/inventory/sync.
+    // Gated behind NEXUS_ENABLE_AMAZON_INVENTORY_CRON=1.
+    if (process.env.NEXUS_ENABLE_AMAZON_INVENTORY_CRON === '1') {
+      startAmazonInventoryCron();
     }
 
     logger.info('✅ API server initialized', {
