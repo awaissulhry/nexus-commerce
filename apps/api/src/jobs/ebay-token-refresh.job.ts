@@ -15,7 +15,8 @@
  * has > 5 min remaining), and logs the result. With the default
  * schedule (every 30 min), no token is ever served stale.
  *
- * Gated behind NEXUS_ENABLE_EBAY_TOKEN_REFRESH_CRON=1.
+ * Default-ON. Set NEXUS_ENABLE_EBAY_TOKEN_REFRESH_CRON=0 to opt out
+ * (the wiring lives in apps/api/src/index.ts where the cron starts).
  */
 
 import cron from 'node-cron'

@@ -485,9 +485,9 @@ export function ChannelsClient() {
       <Card title="About marketplace connections">
         <ul className="text-[12px] text-slate-600 space-y-1.5">
           <li>· Each connection authorizes Nexus to read products, listings, and orders from that channel.</li>
-          <li>· OAuth tokens are stored encrypted and refreshed automatically before expiry.</li>
+          <li>· OAuth tokens are refreshed automatically every 30 minutes before expiry.</li>
           <li>· Disconnecting revokes the token and stops all syncs for that channel.</li>
-          <li>· Currently live: <strong>eBay OAuth</strong>. Other channels are stubbed pending Phase 5.</li>
+          <li>· Currently live: <strong>eBay OAuth</strong> + <strong>Amazon (env-managed)</strong>. Shopify, WooCommerce, and Etsy connectors are deferred.</li>
         </ul>
       </Card>
     </div>

@@ -262,10 +262,13 @@ async function start() {
 
     // Proactive eBay access-token refresh sweep. The reactive refresh
     // in EbayAuthService.getValidToken handles per-call refresh, but
-    // when no sync runs for >2 hours the token expires silently. This
-    // cron walks every active connection every 30 min so a token never
-    // serves stale. Gated behind NEXUS_ENABLE_EBAY_TOKEN_REFRESH_CRON=1.
-    if (process.env.NEXUS_ENABLE_EBAY_TOKEN_REFRESH_CRON === '1') {
+    // when no sync runs for >2 hours the token expires silently.
+    // Default-ON because a missing env flag silently breaking eBay is
+    // exactly the failure mode this cron exists to prevent. The sweep
+    // is a no-op when there are no active connections, so the
+    // default-ON behaviour is safe in fresh / dev environments.
+    // Set NEXUS_ENABLE_EBAY_TOKEN_REFRESH_CRON=0 to opt out.
+    if (process.env.NEXUS_ENABLE_EBAY_TOKEN_REFRESH_CRON !== '0') {
       startEbayTokenRefreshCron();
     }
 
