@@ -527,10 +527,62 @@ gated on the wizard UI, which is what this round delivered.
 
 ---
 
+## 37. 🔴 Column-level schema drift detection (escalation of #0)
+
+**Symptom:** Item #0's drift gate catches **table-level** drift (model in `schema.prisma` with no matching `CREATE TABLE` in any migration). It does NOT catch **column-level** drift — a model whose columns don't match the production table's columns. This bug class has now bitten three times in a single working session:
+- `ChannelConnection` columns added to schema, never migrated (resolved by #31)
+- `VariantChannelListing` columns drifted (resolved by #31)
+- `Return` table — schema redefined with 22 cols against an existing 8-col table from a 2026-04-22 phase-2 migration; `CREATE TABLE IF NOT EXISTS` silently no-op'd, then `CREATE INDEX ... ON ("channel")` failed with `42703 column does not exist`. Took down Railway production for ~30 min on 2026-05-05 with P3009 blocking all subsequent deploys until the failed migration was manually rolled back.
+
+**Surfaced at:** B.1 fulfillment spine migration on 2026-05-05.
+
+**Workaround applied:** Manually edited the migration to `DROP TABLE IF EXISTS "Return" CASCADE;` before `CREATE TABLE "Return"`, removed `IF NOT EXISTS` so silent collisions become loud errors. Rolled back via `prisma migrate resolve --rolled-back` then redeployed.
+
+**Proper fix:** Pre-push gate runs `prisma migrate diff` against a shadow DB:
+
+```
+prisma migrate diff \
+  --from-migrations ./prisma/migrations \
+  --to-schema-datamodel ./prisma/schema.prisma \
+  --shadow-database-url $SHADOW_DATABASE_URL \
+  --exit-code
+```
+
+This catches column-level drift the existing table-level gate can't. Requires:
+- Shadow Postgres URL (Railway dev DB or local Docker postgres) wired into pre-push hook + CI
+- `SHADOW_DATABASE_URL` env var available to the hook
+- ~2-3 hours of work
+
+**Defense in depth:** also lint migrations themselves — see #38.
+
+---
+
+## 38. 🟡 Audit `IF NOT EXISTS` patterns in migrations
+
+**Symptom:** `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS` are silent on collision. When a model is redefined with new columns but the table already exists with the old shape, the CREATE no-ops and any subsequent reference to the new columns crashes — far from the actual bug. This is what hid the Return table collision for the entire fulfillment B.1 review cycle.
+
+**Surfaced at:** B.1 fulfillment migration P3018.
+
+**Workaround:** N/A — process problem, not a code bug.
+
+**Proper fix:**
+1. Sweep every migration for `IF NOT EXISTS` on a CREATE TABLE/INDEX:
+   ```
+   grep -rn "CREATE TABLE IF NOT EXISTS\|CREATE INDEX IF NOT EXISTS" \
+     packages/database/prisma/migrations
+   ```
+2. For each instance: was the IF NOT EXISTS added for legitimate idempotent-rerun reasons (the migration is supposed to be reentrant on dev DBs that partially ran prior versions), or was it boilerplate cargo-culted from somewhere? If the latter, remove it so failures are loud.
+3. Document the pattern: only use `IF NOT EXISTS` when there's an explicit `DROP` before, or when re-runs against partial state are an explicit goal.
+
+**Why P1 not P0:** #37's shadow-DB gate would have caught the Return collision before it shipped — that's the load-bearing fix. This sweep is defense-in-depth, valuable but not the same blast radius.
+
+---
+
 ## Triage summary
 
 **🔴 P0 — tackle next:**
-- **0** ✅ Schema-migration drift gate landed 2026-05-02 (script + npm script + .githooks/pre-push). Allow-list down to 1 (DraftListing only).
+- **0** ✅ Schema-migration drift gate landed 2026-05-02 (script + npm script + .githooks/pre-push). Allow-list down to 1 (DraftListing only). **#37 is the column-level escalation.**
+- **37** Column-level drift detection — table-level gate misses column drift. Three incidents this session, latest took prod down 30 min. Shadow-DB `prisma migrate diff` is the fix.
 - **8** ✅ Resolved 2026-05-02 — verified GTIN wizard validator was already on the correct ProductImage relation; deleted the orphan `Image` model + dead Express service & route (~1,213 lines). Demoted to P2 for the remaining UX polish.
 - **27** ✅ Resolved 2026-05-02 — TerminologyPreference table + CRUD API + AI prompt injection + admin UI at `/settings/terminology`. Seeded with 7 Xavia/IT entries (Giacca, Pantaloni, Casco, Stivali, Protezioni, Pelle, Rete). Verify post-deploy that "Giacca" wins consistently in regenerations; add new preferences inline as drift surfaces.
 - **31** ✅ Resolved 2026-05-03 — migration `20260503_p0_31_channel_connection` adds the table + fixes substantial column-level drift on `VariantChannelListing` surfaced by the audit. eBay auth + listing flows are now operational; orders flow has separate refactor work tracked at #33.
@@ -550,7 +602,8 @@ gated on the wizard UI, which is what this round delivered.
 - **33** Rewrite `ebay-orders.service.ts` against Phase 26 unified Order schema (orders sync flow currently broken)
 - **34** Bulk operations Path A-Lite deferrals — rollback, `LISTING_SYNC` handler, queue infra for big jobs, `DELETE` action, "selected items" scope
 - **35** Listing wizard — channel publish adapters all NOT_IMPLEMENTED (Phase J orchestrator + `/submit` + `/poll` + `/retry` are real; only `ChannelPublishService.publishToChannel()` per-platform branches need real implementations: Amazon `putListingsItem`, Shopify wiring of existing `createProduct`, WooCommerce create, eBay Phase 2A)
-- **36** Dedicated image-manager page at `/products/:id/images` — Phase F shipped the wizard step as a quick-reorder + per-channel validation summary only, with the full multi-scope (GLOBAL/PLATFORM/MARKETPLACE) + variation-aware ListingImage editing deferred to a standalone page. The schema, resolution cascade, and validation service are already in place; the page itself + upload service + dnd-kit drag-to-reorder are the remaining work.
+- **36** Dedicated image-manager page at `/products/:id/images`
+- **38** Audit `IF NOT EXISTS` patterns in migrations — silent-on-collision is what hid the Return table drift; sweep + tighten policy — Phase F shipped the wizard step as a quick-reorder + per-channel validation summary only, with the full multi-scope (GLOBAL/PLATFORM/MARKETPLACE) + variation-aware ListingImage editing deferred to a standalone page. The schema, resolution cascade, and validation service are already in place; the page itself + upload service + dnd-kit drag-to-reorder are the remaining work.
 
 **🟢 P2 — when in the area:**
 - **4** CategorySchema "unknown" rows
