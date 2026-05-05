@@ -84,3 +84,55 @@ npx prisma generate        # regenerate client types
 
 - **API** — Railway. The `start` npm script runs `prisma migrate deploy` before `node apps/api/dist/index.js`, so migrations land before the server boots.
 - **Web** — Vercel. Standard Next.js build.
+
+## Test Data Lifecycle
+
+### `importSource` markers
+
+The `Product.importSource` field distinguishes data origin. The cleanup script and the audit doc both rely on these values being honest.
+
+| Value | Meaning | Action |
+|---|---|---|
+| `NULL` | Real products from early imports (pre-tracking) | KEEP |
+| `MANUAL` | Real products manually entered via UI | KEEP |
+| `AMAZON_AUTO_IMPORT` | Real products from Amazon SP-API sync | KEEP |
+| `XAVIA_REALISTIC_TEST` | Test seed data with realistic shape | DELETE |
+| `PERFORMANCE_TEST` | Legacy stress-test data | DELETE |
+
+### Rules
+
+1. Test data **must** have a non-NULL, non-MANUAL `importSource` value.
+2. Real data **must not** have a test `importSource` value.
+3. The cleanup script is idempotent — re-running it is always safe.
+4. Variations cascade — deleting a Product cascades to its `ProductVariation` rows.
+
+### Cleanup script
+
+Location: `packages/database/scripts/cleanup-test-data.sql`
+
+```bash
+# Preferred: run via Neon SQL Editor.
+# Alternative: from a shell with the production DATABASE_URL:
+psql "$DATABASE_URL" -f packages/database/scripts/cleanup-test-data.sql
+```
+
+Verify counts before AND after running. The verification SELECT at the end of the script prints the post-state.
+
+### Adding test data
+
+Always set `importSource` when seeding:
+
+```ts
+await prisma.product.create({
+  data: {
+    sku: 'TEST-XYZ',
+    name: 'Test Product',
+    importSource: 'XAVIA_REALISTIC_TEST', // ← required for test data
+    // ...
+  },
+})
+```
+
+A test fixture written without `importSource` is invisible to the cleanup script and ends up surviving as fake "real" data — exactly the mess the 2026-05-05 cleanup undid.
+
+See `packages/database/AUDIT.md` for the post-cleanup state of record.

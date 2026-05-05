@@ -57,3 +57,7 @@ Thumbs.db
 
 # Prisma
 prisma/migrations/
+.vercel
+
+# Generated tool output
+repomix-output.xml

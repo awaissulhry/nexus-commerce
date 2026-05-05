@@ -55,123 +55,12 @@ interface ValidationResult {
   errors: ValidationError[];
 }
 
-// ── Mock Product Types (for testing without real Amazon API) ──────────────
-
-const MOCK_PRODUCT_TYPES: Record<string, ProductTypeSchema> = {
-  LUGGAGE: {
-    productType: "LUGGAGE",
-    requirements: {
-      material: {
-        required: true,
-        dataType: "ENUM",
-        description: "Material of the luggage",
-        enumValues: ["Nylon", "Leather", "Canvas", "Polycarbonate", "ABS"],
-      },
-      dimensions: {
-        required: true,
-        dataType: "STRING",
-        description: "Dimensions in format: LxWxH (e.g., 20x14x9)",
-        maxLength: 50,
-      },
-      weight: {
-        required: true,
-        dataType: "DECIMAL",
-        description: "Weight in pounds",
-        minValue: 0,
-        maxValue: 100,
-      },
-      color: {
-        required: false,
-        dataType: "STRING",
-        description: "Color of the luggage",
-        maxLength: 50,
-      },
-      warranty: {
-        required: false,
-        dataType: "STRING",
-        description: "Warranty information",
-        maxLength: 200,
-      },
-    },
-  },
-  OUTERWEAR: {
-    productType: "OUTERWEAR",
-    requirements: {
-      material: {
-        required: true,
-        dataType: "ENUM",
-        description: "Primary material",
-        enumValues: ["Cotton", "Polyester", "Wool", "Silk", "Synthetic"],
-      },
-      size: {
-        required: true,
-        dataType: "ENUM",
-        description: "Clothing size",
-        enumValues: ["XS", "S", "M", "L", "XL", "XXL"],
-      },
-      color: {
-        required: true,
-        dataType: "STRING",
-        description: "Color",
-        maxLength: 50,
-      },
-      care_instructions: {
-        required: false,
-        dataType: "STRING",
-        description: "Care instructions",
-        maxLength: 500,
-      },
-      gender: {
-        required: false,
-        dataType: "ENUM",
-        description: "Gender",
-        enumValues: ["Men", "Women", "Unisex"],
-      },
-    },
-  },
-  ELECTRONICS: {
-    productType: "ELECTRONICS",
-    requirements: {
-      voltage: {
-        required: true,
-        dataType: "ENUM",
-        description: "Operating voltage",
-        enumValues: ["110V", "220V", "110-220V"],
-      },
-      wattage: {
-        required: true,
-        dataType: "INT",
-        description: "Power consumption in watts",
-        minValue: 1,
-        maxValue: 10000,
-      },
-      warranty_months: {
-        required: false,
-        dataType: "INT",
-        description: "Warranty period in months",
-        minValue: 0,
-        maxValue: 60,
-      },
-      color: {
-        required: false,
-        dataType: "STRING",
-        description: "Color",
-        maxLength: 50,
-      },
-    },
-  },
-};
-
 // ── Amazon Catalog Service ───────────────────────────────────────────────
 
 export class AmazonCatalogService {
   private schemaCache: Map<string, CachedSchema> = new Map();
   private readonly CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-  private readonly USE_MOCK_DATA = true; // Set to false when real Amazon API is ready
 
-  /**
-   * Get product type schema (with caching)
-   */
   async getProductTypeSchema(productType: string): Promise<ParsedSchema> {
     // Validate product type format
     if (!this.isValidProductType(productType)) {
@@ -204,20 +93,7 @@ export class AmazonCatalogService {
     return parsedSchema;
   }
 
-  /**
-   * Fetch schema from Amazon API or mock data
-   */
   private async fetchSchema(productType: string): Promise<ProductTypeSchema> {
-    if (this.USE_MOCK_DATA) {
-      // Use mock data for testing
-      const mockSchema = MOCK_PRODUCT_TYPES[productType];
-      if (!mockSchema) {
-        throw new Error(`Product type "${productType}" not found in catalog`);
-      }
-      return mockSchema;
-    }
-
-    // Real Amazon SP-API call (when credentials are available)
     return this.fetchFromAmazonAPI(productType);
   }
 
@@ -443,15 +319,8 @@ export class AmazonCatalogService {
     };
   }
 
-  /**
-   * Get list of available product types
-   */
   async getAvailableProductTypes(): Promise<string[]> {
-    if (this.USE_MOCK_DATA) {
-      return Object.keys(MOCK_PRODUCT_TYPES).sort();
-    }
-
-    // TODO: Fetch from Amazon API when available
+    // TODO: implement SP-API product types endpoint
     return [];
   }
 

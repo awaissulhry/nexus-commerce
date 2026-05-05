@@ -1,46 +1,49 @@
-#!/usr/bin/env node
-
-import { PrismaClient } from "@nexus/database";
+import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-async function checkParents() {
-  console.log("🔍 Checking parent products in database...\n");
-
+async function main() {
   try {
-    // Check all products marked as isParent
-    const parents = await prisma.$queryRaw<any[]>`
-      SELECT id, sku, name, "isParent", "parentId", 
-             (SELECT COUNT(*) FROM "Product" WHERE "parentId" = p.id) as child_count
+    // Get overall stats
+    const stats = await prisma.$queryRaw`
+      SELECT 
+        COUNT(*) as total_products,
+        SUM(CASE WHEN "parentId" IS NULL THEN 1 ELSE 0 END) as top_level_items,
+        SUM(CASE WHEN "parentId" IS NOT NULL THEN 1 ELSE 0 END) as child_items,
+        SUM(CASE WHEN "isParent" = true THEN 1 ELSE 0 END) as marked_as_parent
+      FROM "Product"
+    `;
+    
+    console.log('Database Statistics:');
+    const stat = (stats as any[])[0];
+    console.log(`  Total products: ${stat.total_products}`);
+    console.log(`  Top-level items: ${stat.top_level_items}`);
+    console.log(`  Child items: ${stat.child_items}`);
+    console.log(`  Marked as parent: ${stat.marked_as_parent}`);
+    
+    // Get parents with children
+    const parentsWithChildren = await prisma.$queryRaw`
+      SELECT 
+        p.sku as parent_sku,
+        COUNT(c.id) as child_count
       FROM "Product" p
-      WHERE "isParent" = true
-      ORDER BY sku
+      LEFT JOIN "Product" c ON c."parentId" = p.id
+      WHERE p."parentId" IS NULL AND p."isParent" = true
+      GROUP BY p.id, p.sku
+      ORDER BY COUNT(c.id) DESC
+      LIMIT 15
     `;
-
-    console.log(`✅ Found ${parents.length} products marked as isParent = true:\n`);
-    parents.forEach((p: any) => {
-      console.log(`  ${p.sku.padEnd(30)} | Children: ${p.child_count}`);
+    
+    console.log('\nParents with their child counts:');
+    (parentsWithChildren as any[]).forEach((row: any) => {
+      console.log(`  ${row.parent_sku}: ${row.child_count} children`);
     });
-
-    // Check top-level products
-    const topLevel = await prisma.$queryRaw<any[]>`
-      SELECT COUNT(*)::int as count FROM "Product" WHERE "parentId" IS NULL
-    `;
-
-    console.log(`\n📊 Top-level products (parentId IS NULL): ${topLevel[0].count}`);
-
-    // Check products with children
-    const withChildren = await prisma.$queryRaw<any[]>`
-      SELECT COUNT(*)::int as count FROM "Product" WHERE "parentId" IS NOT NULL
-    `;
-
-    console.log(`📊 Products with parent (parentId IS NOT NULL): ${withChildren[0].count}`);
-
+    
   } catch (error) {
-    console.error("❌ Error:", error);
+    console.error('Error:', error);
   } finally {
     await prisma.$disconnect();
   }
 }
 
-checkParents();
+main();

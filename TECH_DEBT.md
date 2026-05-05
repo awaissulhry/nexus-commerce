@@ -622,6 +622,99 @@ Tied to #35 (channel publish wiring); both want a real first publish to drive th
 
 ---
 
+## Data Quality Issues (P2)
+
+Surfaced by the 2026-05-05 cleanup + 2026-05-06 comprehensive audit (see `packages/database/AUDIT.md`). These are P2 because they don't block functionality but degrade data integrity and will mislead UI surfaces (search, filters, pricing, inventory). Address after the catalog is verified against Xavia's actual SKU list and the Amazon SP-API sync is connected.
+
+### DQ-1. 🟢 Zero-price products (7 jackets)
+
+`basePrice = 0` on real Xavia jackets — the catalog page, pricing matrix, and any margin calc treat these as free.
+
+- `AIRMESH-JACKET-BLACK-MEN`, `AIRMESH-JACKET-YELLOW-MEN` (the no-size "parents")
+- `3K-HP05-BH9I` (MISANO leather jacket)
+- `GALE-JACKET`, `IT-MOSS-JACKET`, `REGAL-JACKET`, `VENTRA-JACKET`
+
+**Fix:** source authoritative price from Amazon Seller Central or enter manually via `/products/:id`. Easier once SP-API sync runs and overwrites.
+
+### DQ-2. 🟡 AIRMESH triple-stacked duplication
+
+For each colour (BLACK / YELLOW), the database holds:
+- 1× "no-size" parent at €0 (`AIRMESH-JACKET-{COLOR}-MEN`)
+- 6× sized children at €109.99 (`AIRMESH-JACKET-{COLOR}-MEN-{S,M,L,XL,XXL,3XL}`)
+- BLACK only: 1× MANUAL master at €109.99 (`XAVIA-AIRMESH-GIACCA-MOTO`)
+
+15 SKUs covering one product family. Confuses every channel publisher — Amazon will pick a different ASIN than eBay.
+
+**Fix:** keep the 12 sized SKUs as `ProductVariation` rows under one parent Product per colour; delete the no-size €0 parents and the legacy MANUAL master once data is migrated. Migration ticket needed.
+
+### DQ-3. 🟡 Glove sizes stored as separate Products
+
+Schema misuse: each size is its own `Product` row instead of a `ProductVariation`.
+
+- `xriser-bla-{S,M,L,XL,XXL}` — 5 rows
+- `xevo-mar-{S,M,L,XL,XXL}` — 5 rows
+- `xevo-black-{S,M,L,XL,XXL}` — 5 rows
+
+15 Products that should be 3 Products × 5 size-variations. All currently 0 stock so re-stocking is a good moment to migrate.
+
+**Fix:** consolidation migration script — pick canonical parent SKU per glove model, move the 5 sizes into `ProductVariation` rows, delete the 4 redundant Product rows per model. Ticket: write a one-shot migration in `packages/database/scripts/`.
+
+### DQ-4. 🟡 Knee slider colours stored as separate Products
+
+Same issue as DQ-3. **Eight** colours (not six as initial triage guessed):
+
+`xavia-knee-slider-{black, blue, green, orange, pink, red, white, yellow}`
+
+Two have stock (green=12, orange=22), the other six are 0. €21.99 each.
+
+**Fix:** consolidate to one Product with 8 colour-variations. Same migration pattern as DQ-3.
+
+### DQ-5. 🟡 Every Product has `brand = NULL`
+
+All 267 rows. The catalog page and all brand filters can't function meaningfully.
+
+**Fix (cautious):** verify each is a Xavia product, then `UPDATE "Product" SET brand = 'Xavia Racing' WHERE brand IS NULL;`. Don't blanket-update without spot-checking — the import history is mixed and the 5 MANUAL rows are explicitly user-entered.
+
+### DQ-6. 🟢 30 abandoned ListingWizard drafts
+
+All 30 `ListingWizard` rows have `status = 'DRAFT'`. They're abandoned wizard sessions that clutter the resume-draft view.
+
+**Fix:** add a TTL job (delete drafts older than N days) or a one-shot cleanup. Low risk — drafts are user-recoverable per row, but bulk-old ones are noise.
+
+### DQ-7. 🟢 7 inactive ChannelConnection rows
+
+8 connections, only 1 active. The 7 inactive rows are dead OAuth tokens (likely expired refresh tokens or revoked apps).
+
+**Fix:** delete inactive connections that haven't been refreshed in N days, OR add a `lastRefreshAttemptAt` column and a refresh job. The user-facing "channels" UI shows them today, which is misleading.
+
+### DQ-8. 🟢 `playing_with_neon` table
+
+Neon's default sample table, 60 rows. Harmless but pollutes `\dt` and the audit.
+
+**Fix:** `DROP TABLE "playing_with_neon" CASCADE;`. Verify no app code references it first (none does — it predates the project).
+
+### DQ-9. 🟢 `Listing` table coexists with `ChannelListing`
+
+Both tables exist in the schema. `ChannelListing` is the post-Phase-26 unified model; `Listing` is legacy with no clear remaining caller.
+
+**Fix:** grep for `prisma\.listing\.` (lowercase = `Listing`) vs `prisma\.channelListing\.`. If `Listing` truly has no callers, drop the model + ship a migration. Same flavour as TECH_DEBT #32 (DraftListing).
+
+### DQ-10. 🟢 StockMovement table is empty (0 rows)
+
+We have a Warehouse, 4 PurchaseOrders, 262 PurchaseOrderItems, an InboundShipment — and zero StockMovement rows. The inventory ledger is never written; stock is tracked through `Product.totalStock` only.
+
+**Fix (decide):** either (a) wire stock movements through the inbound/PO flow so the ledger is the source of truth, or (b) drop the `StockMovement` model if we don't actually need event-sourced inventory. Don't leave it half-built.
+
+### Resolution strategy
+
+These are P2 because they don't block shipping. Address after:
+
+1. Verifying the current 267-product catalog matches Xavia's actual SKU list (manual reconciliation against Amazon Seller Central listing report).
+2. Connecting Amazon SP-API for authoritative product data — running `POST /api/amazon/products` and reconciling the diff.
+3. Writing a single consolidation migration that fixes DQ-2/3/4 in one shot (variation theme: SIZE for gloves+jackets, COLOR for knee sliders, COLOR+SIZE compound for AIRMESH).
+
+---
+
 ## Triage summary
 
 **🔴 P0 — tackle next:**
