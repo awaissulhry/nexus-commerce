@@ -27,6 +27,7 @@ type OperationType =
   | 'STATUS_UPDATE'
   | 'ATTRIBUTE_UPDATE'
   | 'SCHEMA_FIELD_UPDATE'
+  | 'MARKETPLACE_OVERRIDE_UPDATE'
 
 interface OperationConfig {
   type: OperationType
@@ -184,6 +185,172 @@ const OPERATIONS: OperationConfig[] = [
         </select>
       </Field>
     ),
+  },
+  {
+    // E.7 — Per-marketplace ChannelListing override updates. Targets
+    // ChannelListing rows directly, scoped by (channel, marketplace) +
+    // optional brand / productType / status filters. Use case: "set
+    // quantity buffer = 5 across all Amazon DE listings", "toggle
+    // followMasterPrice = false for FR listings to make pricing
+    // marketplace-local", etc.
+    type: 'MARKETPLACE_OVERRIDE_UPDATE',
+    label: 'Per-marketplace overrides',
+    description:
+      'Apply per-marketplace overrides directly on ChannelListing rows. Pick one or more fields to update — empty fields are left untouched.',
+    initialPayload: {},
+    isPayloadValid: (p) => {
+      // At least one override field must be set. Empty payload would be
+      // a no-op and the backend rejects it.
+      const keys = [
+        'priceOverride',
+        'quantityOverride',
+        'stockBuffer',
+        'followMasterTitle',
+        'followMasterDescription',
+        'followMasterPrice',
+        'followMasterQuantity',
+        'followMasterImages',
+        'followMasterBulletPoints',
+        'isPublished',
+        'pricingRule',
+        'priceAdjustmentPercent',
+      ]
+      return keys.some((k) => k in p)
+    },
+    renderParams: (p, set) => {
+      const onNumberToggle = (key: string, current: unknown) =>
+        key in p
+          ? (() => {
+              const next = { ...p }
+              delete next[key]
+              set(next)
+            })()
+          : set({ ...p, [key]: current })
+      const onBoolToggle = (key: string) =>
+        key in p
+          ? (() => {
+              const next = { ...p }
+              delete next[key]
+              set(next)
+            })()
+          : set({ ...p, [key]: true })
+      return (
+        <>
+          <div className="text-[11px] text-slate-500 mb-1">
+            Tick a field to include it in this bulk update. Untouched fields
+            keep their existing per-listing values.
+          </div>
+
+          <OverrideNumber
+            label="Price override (€)"
+            hint="Sets ChannelListing.priceOverride. Use empty to clear."
+            field="priceOverride"
+            payload={p}
+            onToggle={() => onNumberToggle('priceOverride', null)}
+            onChange={(v) => set({ ...p, priceOverride: v })}
+          />
+
+          <OverrideNumber
+            label="Quantity override"
+            hint="Sets ChannelListing.quantityOverride. Use empty to clear."
+            field="quantityOverride"
+            payload={p}
+            onToggle={() => onNumberToggle('quantityOverride', null)}
+            onChange={(v) => set({ ...p, quantityOverride: v })}
+            integer
+          />
+
+          <OverrideNumber
+            label="Stock buffer"
+            hint="Reserved units; marketplace sees (actualStock − stockBuffer)."
+            field="stockBuffer"
+            payload={p}
+            onToggle={() => onNumberToggle('stockBuffer', 0)}
+            onChange={(v) => set({ ...p, stockBuffer: v ?? 0 })}
+            integer
+          />
+
+          <div className="border border-slate-200 rounded-md p-2 space-y-1">
+            <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold mb-1">
+              SSOT toggles
+            </div>
+            {[
+              ['followMasterTitle', 'Follow master title'],
+              ['followMasterDescription', 'Follow master description'],
+              ['followMasterPrice', 'Follow master price'],
+              ['followMasterQuantity', 'Follow master quantity'],
+              ['followMasterImages', 'Follow master images'],
+              ['followMasterBulletPoints', 'Follow master bullet points'],
+              ['isPublished', 'Publish to marketplace'],
+            ].map(([key, label]) => (
+              <BoolField
+                key={key}
+                label={label}
+                field={key}
+                payload={p}
+                onToggle={() => onBoolToggle(key)}
+                onChange={(v) => set({ ...p, [key]: v })}
+              />
+            ))}
+          </div>
+
+          <div className="border border-slate-200 rounded-md p-2 space-y-1">
+            <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold mb-1">
+              Pricing rule
+            </div>
+            <label className="flex items-center gap-2 text-[12px]">
+              <input
+                type="checkbox"
+                checked={'pricingRule' in p}
+                onChange={(e) => {
+                  if (e.target.checked) set({ ...p, pricingRule: 'FIXED' })
+                  else {
+                    const next = { ...p }
+                    delete next.pricingRule
+                    delete next.priceAdjustmentPercent
+                    set(next)
+                  }
+                }}
+              />
+              <span>Set pricing rule</span>
+            </label>
+            {'pricingRule' in p && (
+              <>
+                <select
+                  value={(p.pricingRule as string) ?? 'FIXED'}
+                  onChange={(e) =>
+                    set({ ...p, pricingRule: e.target.value })
+                  }
+                  className={inputCls}
+                >
+                  <option value="FIXED">Fixed price</option>
+                  <option value="MATCH_AMAZON">Match Amazon Buy Box</option>
+                  <option value="PERCENT_OF_MASTER">Percent of master</option>
+                </select>
+                {p.pricingRule === 'PERCENT_OF_MASTER' && (
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={
+                      (p.priceAdjustmentPercent as number | undefined) ?? 0
+                    }
+                    onChange={(e) =>
+                      set({
+                        ...p,
+                        priceAdjustmentPercent:
+                          parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    placeholder="Adjustment % (e.g. 10 for +10%)"
+                    className={inputCls}
+                  />
+                )}
+              </>
+            )}
+          </div>
+        </>
+      )
+    },
   },
   {
     type: 'ATTRIBUTE_UPDATE',
@@ -1080,6 +1247,114 @@ function Field({
     <label className="block">
       <div className="text-[11px] text-slate-600 mb-1">{label}</div>
       {children}
+    </label>
+  )
+}
+
+// E.7 — Toggleable numeric override for MARKETPLACE_OVERRIDE_UPDATE.
+// "Apply this field" checkbox controls whether the field is included in
+// the bulk payload at all. When unchecked, the key is absent and the
+// backend leaves the column untouched.
+function OverrideNumber({
+  label,
+  hint,
+  field,
+  payload,
+  onToggle,
+  onChange,
+  integer,
+}: {
+  label: string
+  hint?: string
+  field: string
+  payload: Record<string, unknown>
+  onToggle: () => void
+  onChange: (value: number | null) => void
+  integer?: boolean
+}) {
+  const enabled = field in payload
+  const raw = payload[field]
+  const display = raw === null || raw === undefined ? '' : String(raw)
+  return (
+    <div className="border border-slate-200 rounded-md p-2">
+      <label className="flex items-center gap-2 text-[12px] text-slate-700 mb-1">
+        <input type="checkbox" checked={enabled} onChange={onToggle} />
+        <span className="font-medium">{label}</span>
+      </label>
+      {hint && (
+        <div className="text-[11px] text-slate-500 mb-1.5 ml-5">{hint}</div>
+      )}
+      {enabled && (
+        <input
+          type="number"
+          step={integer ? '1' : '0.01'}
+          value={display}
+          onChange={(e) => {
+            if (e.target.value === '') {
+              onChange(null)
+              return
+            }
+            const v = integer
+              ? parseInt(e.target.value, 10)
+              : parseFloat(e.target.value)
+            onChange(Number.isNaN(v) ? null : v)
+          }}
+          placeholder="(empty = clear override)"
+          className={`${inputCls} ml-5`}
+          style={{ width: 'calc(100% - 1.25rem)' }}
+        />
+      )}
+    </div>
+  )
+}
+
+function BoolField({
+  label,
+  field,
+  payload,
+  onToggle,
+  onChange,
+}: {
+  label: string
+  field: string
+  payload: Record<string, unknown>
+  onToggle: () => void
+  onChange: (value: boolean) => void
+}) {
+  const enabled = field in payload
+  const value = enabled ? (payload[field] as boolean) : false
+  return (
+    <label className="flex items-center gap-2 text-[12px]">
+      <input type="checkbox" checked={enabled} onChange={onToggle} />
+      <span className={enabled ? 'text-slate-800' : 'text-slate-500'}>
+        {label}
+      </span>
+      {enabled && (
+        <span className="ml-auto inline-flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => onChange(true)}
+            className={`h-5 px-2 text-[10px] uppercase tracking-wide font-medium rounded border ${
+              value
+                ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                : 'bg-white border-slate-200 text-slate-500'
+            }`}
+          >
+            On
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange(false)}
+            className={`h-5 px-2 text-[10px] uppercase tracking-wide font-medium rounded border ${
+              !value
+                ? 'bg-rose-50 border-rose-300 text-rose-700'
+                : 'bg-white border-slate-200 text-slate-500'
+            }`}
+          >
+            Off
+          </button>
+        </span>
+      )}
     </label>
   )
 }

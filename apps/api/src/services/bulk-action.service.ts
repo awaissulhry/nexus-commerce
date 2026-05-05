@@ -8,6 +8,7 @@ import { prisma } from '@nexus/database';
 import { Prisma } from '@prisma/client';
 import type {
   BulkActionJob,
+  ChannelListing,
   PrismaClient,
   Product,
   ProductVariation,
@@ -26,14 +27,16 @@ export type BulkActionType =
   | 'INVENTORY_UPDATE'
   | 'STATUS_UPDATE'
   | 'ATTRIBUTE_UPDATE'
-  | 'LISTING_SYNC';
+  | 'LISTING_SYNC'
+  | 'MARKETPLACE_OVERRIDE_UPDATE';
 
 /**
  * Which Prisma entity each action type operates on. Keeps
  * getItemsForJob honest — STATUS lives on Product, everything
- * else lives on ProductVariation. Phase B-4's per-action-type
- * dispatcher consumes this so the filter+fetch path picks the
- * right table.
+ * else lives on ProductVariation. E.5a adds 'channelListing' for
+ * MARKETPLACE_OVERRIDE_UPDATE which writes per-marketplace overrides
+ * (price, quantity, stockBuffer, followMaster* toggles) directly on
+ * ChannelListing rows.
  */
 const ACTION_ENTITY = {
   PRICING_UPDATE: 'variation',
@@ -41,7 +44,11 @@ const ACTION_ENTITY = {
   STATUS_UPDATE: 'product',
   ATTRIBUTE_UPDATE: 'variation',
   LISTING_SYNC: 'variation',
-} as const satisfies Record<BulkActionType, 'product' | 'variation'>;
+  MARKETPLACE_OVERRIDE_UPDATE: 'channelListing',
+} as const satisfies Record<
+  BulkActionType,
+  'product' | 'variation' | 'channelListing'
+>;
 
 /**
  * User-facing scope filter shape — what the frontend scope picker
@@ -129,6 +136,7 @@ export class BulkActionService {
         totalItems = await this.countItemsByFilters(
           input.filters as ScopeFilters,
           target,
+          input.channel,
         );
       }
 
@@ -560,7 +568,37 @@ export class BulkActionService {
 
     // ── Affected count (no DB write, no item load) ────────────────
     let affectedCount = 0;
-    if (target === 'product') {
+    if (target === 'channelListing') {
+      // E.5a — direct count of ChannelListing rows in scope.
+      if (input.targetProductIds?.length) {
+        affectedCount = await this.prisma.channelListing.count({
+          where: this.buildChannelListingWhere(
+            { channel: input.channel ?? null } as BulkActionJob,
+            { productIds: input.targetProductIds },
+          ),
+        });
+      } else if (input.targetVariationIds?.length) {
+        const variations = await this.prisma.productVariation.findMany({
+          where: { id: { in: input.targetVariationIds } },
+          select: { productId: true },
+        });
+        const productIds = Array.from(
+          new Set(variations.map((v) => v.productId)),
+        );
+        affectedCount = await this.prisma.channelListing.count({
+          where: this.buildChannelListingWhere(
+            { channel: input.channel ?? null } as BulkActionJob,
+            { productIds },
+          ),
+        });
+      } else if (input.filters) {
+        affectedCount = await this.countItemsByFilters(
+          input.filters as ScopeFilters,
+          target,
+          input.channel,
+        );
+      }
+    } else if (target === 'product') {
       if (input.targetProductIds?.length) {
         affectedCount = input.targetProductIds.length;
       } else if (input.targetVariationIds?.length) {
@@ -770,10 +808,49 @@ export class BulkActionService {
   private async getItemsForJob(
     job: BulkActionJob,
     options?: { limit?: number },
-  ): Promise<Product[] | ProductVariation[]> {
+  ): Promise<Product[] | ProductVariation[] | ChannelListing[]> {
     try {
       const target = ACTION_ENTITY[job.actionType as BulkActionType];
       const take = options?.limit;
+
+      if (target === 'channelListing') {
+        // E.5a — per-marketplace override updates target ChannelListing rows
+        // directly. Filters tighten by (channel, marketplace, status); the
+        // job.channel + filters.marketplace duo identifies the (channel,
+        // marketplace) tuple; targetProductIds expand to "all listings on
+        // these products"; targetVariationIds resolve up to parent products
+        // first.
+        if (job.targetProductIds && job.targetProductIds.length > 0) {
+          return await this.prisma.channelListing.findMany({
+            where: this.buildChannelListingWhere(job, {
+              productIds: job.targetProductIds,
+            }),
+            ...(take ? { take } : {}),
+          });
+        }
+        if (job.targetVariationIds && job.targetVariationIds.length > 0) {
+          const variations = await this.prisma.productVariation.findMany({
+            where: { id: { in: job.targetVariationIds } },
+            select: { productId: true },
+          });
+          const productIds = Array.from(
+            new Set(variations.map((v) => v.productId)),
+          );
+          return await this.prisma.channelListing.findMany({
+            where: this.buildChannelListingWhere(job, { productIds }),
+            ...(take ? { take } : {}),
+          });
+        }
+        if (job.filters) {
+          return await this.prisma.channelListing.findMany({
+            where: this.buildChannelListingWhere(job, {
+              filters: job.filters as ScopeFilters,
+            }),
+            ...(take ? { take } : {}),
+          });
+        }
+        return [];
+      }
 
       if (target === 'product') {
         if (job.targetProductIds && job.targetProductIds.length > 0) {
@@ -884,6 +961,11 @@ export class BulkActionService {
           item as ProductVariation | Product,
           payload,
           channel,
+        );
+      case 'MARKETPLACE_OVERRIDE_UPDATE':
+        return await this.processMarketplaceOverrideUpdate(
+          item as ChannelListing,
+          payload,
         );
       default:
         throw new Error(`Unknown action type: ${job.actionType}`);
@@ -1106,6 +1188,110 @@ export class BulkActionService {
   }
 
   /**
+   * E.5a — MARKETPLACE_OVERRIDE_UPDATE — write per-marketplace overrides
+   * directly on a ChannelListing row. Lets the seller, in one bulk pass,
+   * adjust 200 listings on Amazon DE without touching their IT counterparts.
+   *
+   * Payload (one or more keys; missing keys are no-ops):
+   *   priceOverride?: number | null    — overrides master price; null clears
+   *   quantityOverride?: number | null — overrides master quantity; null clears
+   *   stockBuffer?: number             — overselling-protection units
+   *   followMasterTitle?: boolean      — when false, keep titleOverride
+   *   followMasterDescription?: boolean
+   *   followMasterPrice?: boolean
+   *   followMasterQuantity?: boolean
+   *   followMasterImages?: boolean
+   *   followMasterBulletPoints?: boolean
+   *   isPublished?: boolean            — master toggle for marketplace push
+   *   pricingRule?: 'FIXED' | 'MATCH_AMAZON' | 'PERCENT_OF_MASTER'
+   *   priceAdjustmentPercent?: number  — paired with PERCENT_OF_MASTER rule
+   */
+  private async processMarketplaceOverrideUpdate(
+    item: ChannelListing,
+    payload: Record<string, any>,
+  ): Promise<{ status: 'processed' | 'skipped' }> {
+    const data: Prisma.ChannelListingUpdateInput = {}
+    let touched = false
+
+    const numOrNull = (v: unknown): number | null | undefined => {
+      if (v === null) return null
+      if (typeof v === 'number' && !Number.isNaN(v)) return v
+      if (typeof v === 'string' && v.length > 0 && !Number.isNaN(Number(v))) {
+        return Number(v)
+      }
+      return undefined
+    }
+
+    if ('priceOverride' in payload) {
+      const v = numOrNull(payload.priceOverride)
+      if (v !== undefined) {
+        data.priceOverride = v === null ? null : v.toFixed(2)
+        touched = true
+      }
+    }
+    if ('quantityOverride' in payload) {
+      const v = numOrNull(payload.quantityOverride)
+      if (v !== undefined) {
+        data.quantityOverride = v === null ? null : Math.max(0, Math.floor(v))
+        touched = true
+      }
+    }
+    if (typeof payload.stockBuffer === 'number') {
+      data.stockBuffer = Math.max(0, Math.floor(payload.stockBuffer))
+      touched = true
+    }
+
+    const followKeys = [
+      'followMasterTitle',
+      'followMasterDescription',
+      'followMasterPrice',
+      'followMasterQuantity',
+      'followMasterImages',
+      'followMasterBulletPoints',
+    ] as const
+    for (const k of followKeys) {
+      if (typeof payload[k] === 'boolean') {
+        ;(data as any)[k] = payload[k]
+        touched = true
+      }
+    }
+
+    if (typeof payload.isPublished === 'boolean') {
+      data.isPublished = payload.isPublished
+      touched = true
+    }
+
+    const VALID_RULES = ['FIXED', 'MATCH_AMAZON', 'PERCENT_OF_MASTER'] as const
+    if (
+      typeof payload.pricingRule === 'string' &&
+      (VALID_RULES as readonly string[]).includes(payload.pricingRule)
+    ) {
+      data.pricingRule = payload.pricingRule as Prisma.ChannelListingUpdateInput['pricingRule']
+      touched = true
+    }
+    if (typeof payload.priceAdjustmentPercent === 'number') {
+      data.priceAdjustmentPercent = payload.priceAdjustmentPercent.toFixed(2)
+      touched = true
+    }
+
+    if (!touched) {
+      throw new Error(
+        'Invalid MARKETPLACE_OVERRIDE_UPDATE payload: at least one override field required',
+      )
+    }
+
+    // Bump audit-trail timestamp for any non-trivial write.
+    data.lastOverrideAt = new Date()
+
+    await this.prisma.channelListing.update({
+      where: { id: item.id },
+      data,
+    })
+
+    return { status: 'processed' }
+  }
+
+  /**
    * Sync price to marketplace
    * Handles rate limiting and retries
    */
@@ -1264,9 +1450,23 @@ export class BulkActionService {
    */
   private async countItemsByFilters(
     filters: ScopeFilters,
-    target: 'product' | 'variation',
+    target: 'product' | 'variation' | 'channelListing',
+    channel?: string | null,
   ): Promise<number> {
     try {
+      if (target === 'channelListing') {
+        const where: Prisma.ChannelListingWhereInput = {};
+        if (channel) where.channel = channel;
+        if (filters.marketplace) where.marketplace = filters.marketplace;
+        if (filters.brand || filters.productType || filters.status) {
+          const productClause: Prisma.ProductWhereInput = {};
+          if (filters.brand) productClause.brand = filters.brand;
+          if (filters.productType) productClause.productType = filters.productType;
+          if (filters.status) productClause.status = filters.status;
+          where.product = productClause;
+        }
+        return await this.prisma.channelListing.count({ where });
+      }
       if (target === 'product') {
         return await this.prisma.product.count({
           where: this.buildProductFilterWhere(filters),
@@ -1320,6 +1520,37 @@ export class BulkActionService {
    *     the .product relation (those columns live on the parent)
    *   - stockMin / stockMax → ProductVariation.stock (per-variant)
    */
+  /**
+   * E.5a — Translate (job.channel, scope, filters) → ChannelListingWhereInput.
+   * Used by MARKETPLACE_OVERRIDE_UPDATE. The job's `channel` field is the
+   * target channel ("AMAZON", "EBAY"); filters.marketplace narrows to a
+   * specific marketplace ("DE", "IT"); productIds (when scope is products)
+   * tighten further. Listings without a channel match are excluded — this
+   * action only ever touches the rows it's authorized to.
+   */
+  private buildChannelListingWhere(
+    job: BulkActionJob,
+    args: { productIds?: string[]; filters?: ScopeFilters },
+  ): Prisma.ChannelListingWhereInput {
+    const where: Prisma.ChannelListingWhereInput = {};
+    if (job.channel) where.channel = job.channel;
+    if (args.productIds && args.productIds.length > 0) {
+      where.productId = { in: args.productIds };
+    }
+    const f = args.filters;
+    if (f) {
+      if (f.marketplace) where.marketplace = f.marketplace;
+      if (f.brand || f.productType || f.status) {
+        const productClause: Prisma.ProductWhereInput = {};
+        if (f.brand) productClause.brand = f.brand;
+        if (f.productType) productClause.productType = f.productType;
+        if (f.status) productClause.status = f.status;
+        where.product = productClause;
+      }
+    }
+    return where;
+  }
+
   private buildVariationFilterWhere(
     filters: ScopeFilters,
   ): Prisma.ProductVariationWhereInput {

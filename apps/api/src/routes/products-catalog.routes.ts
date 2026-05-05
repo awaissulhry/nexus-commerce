@@ -40,7 +40,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/products/facets', async (_request, reply) => {
     try {
       reply.header('Cache-Control', 'private, max-age=60')
-      const [productTypes, brands, fulfillment, statusCounts] = await Promise.all([
+      const [productTypes, brands, fulfillment, statusCounts, marketplaceCounts, marketplaceLookup] = await Promise.all([
         prisma.product.groupBy({
           by: ['productType'],
           where: { parentId: null, productType: { not: null } },
@@ -61,7 +61,25 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
           where: { parentId: null },
           _count: true,
         }),
+        // E.5b — distinct (channel, marketplace) pairs in actual use, with
+        // counts of how many ChannelListing rows live there. Single
+        // groupBy on the indexed (channel, marketplace) tuple — fast even
+        // at 16K+ listing rows.
+        prisma.channelListing.groupBy({
+          by: ['channel', 'marketplace'],
+          _count: true,
+        }),
+        // Static reference: per-marketplace human label + region. Small
+        // table (~17 rows post-seed); cached at the facet response level.
+        prisma.marketplace.findMany({
+          where: { isActive: true },
+          select: { channel: true, code: true, name: true, region: true },
+        }),
       ])
+
+      const labelByKey = new Map(
+        marketplaceLookup.map((m) => [`${m.channel}:${m.code}`, { name: m.name, region: m.region }]),
+      )
 
       return {
         productTypes: productTypes
@@ -76,6 +94,21 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
           .filter((f) => f.fulfillmentMethod)
           .map((f) => ({ value: f.fulfillmentMethod!, count: f._count })),
         statuses: statusCounts.map((s) => ({ value: s.status, count: s._count })),
+        // E.5b — facet shape mirrors the others: { value, count } plus
+        // channel + label so the frontend can group/label without a
+        // second roundtrip.
+        marketplaces: marketplaceCounts
+          .map((m) => {
+            const meta = labelByKey.get(`${m.channel}:${m.marketplace}`)
+            return {
+              value: m.marketplace,
+              channel: m.channel,
+              label: meta?.name ?? `${m.channel} ${m.marketplace}`,
+              region: meta?.region ?? null,
+              count: m._count,
+            }
+          })
+          .sort((a, b) => b.count - a.count),
       }
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? String(err) })

@@ -1457,7 +1457,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         product: product ? { sku: product.sku } : undefined,
       }
       const validation = submissionService.validateMultiChannel(w)
-      const payloads = submissionService.composeMultiChannelPayloads(w)
+      const payloads = await submissionService.composeMultiChannelPayloads(w)
       return {
         wizard: {
           id: wizard.id,
@@ -1546,7 +1546,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
 
-      const payloads = submissionService.composeMultiChannelPayloads(w)
+      const payloads = await submissionService.composeMultiChannelPayloads(w)
       // Dispatch all channels in parallel. Each adapter handles its
       // own errors and returns a SubmissionEntry — never throws.
       const submissions = await Promise.all(
@@ -1558,8 +1558,34 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
             payload: p.payload as Record<string, unknown> | undefined,
             unsupported: p.unsupported,
             reason: p.reason,
+            productId: wizard.productId,
           }),
         ),
+      )
+
+      // E.8 — Persist any ASINs that landed in the immediate publish call to
+      // ChannelListing.externalParentId + VariantChannelListing.channelProductId
+      // scoped to the right marketplace. Async ASIN assignments arrive later
+      // via /poll; the same write-back path handles both.
+      await Promise.all(
+        submissions.map(async (entry) => {
+          if (entry.platform.toUpperCase() !== 'AMAZON' || !entry.parentAsin) {
+            return
+          }
+          try {
+            await submissionService.writeAsinsBack({
+              productId: wizard.productId,
+              marketplace: entry.marketplace,
+              parentAsin: entry.parentAsin,
+              childAsinByMasterSku: entry.childAsinsByMasterSku,
+            })
+          } catch (err) {
+            request.log?.warn?.(
+              { err, productId: wizard.productId, marketplace: entry.marketplace },
+              'writeAsinsBack failed (post-submit)',
+            )
+          }
+        }),
       )
 
       // Wizard status: LIVE if every entry succeeded; FAILED if any
@@ -1614,9 +1640,84 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       if (!Array.isArray(current) || current.length === 0) {
         return { submissions: [] }
       }
-      const polled = await Promise.all(
-        current.map((entry) => channelPublishService.pollStatus(entry)),
+
+      // E.8 — Poll context: re-compose payloads so the poll path knows the
+      // marketplace-scoped parent + child SKUs and the SP-API marketplaceId.
+      // One Promise.all per the same wizard so the resolution is one round.
+      const product = await prisma.product.findUnique({
+        where: { id: wizard.productId },
+        select: { sku: true },
+      })
+      const w = {
+        id: wizard.id,
+        channels: (wizard.channels ?? []) as Array<{
+          platform: string
+          marketplace: string
+        }>,
+        state: (wizard.state ?? {}) as Record<string, any>,
+        channelStates:
+          ((wizard.channelStates ?? {}) as Record<
+            string,
+            Record<string, any>
+          >) ?? {},
+        product: product ? { sku: product.sku } : undefined,
+      }
+      const payloads = await submissionService.composeMultiChannelPayloads(w)
+      const payloadByKey = new Map(
+        payloads.map((p) => [p.channelKey, p] as const),
       )
+
+      const polled = await Promise.all(
+        current.map((entry) => {
+          const p = payloadByKey.get(entry.channelKey)
+          const amazonPayload = p?.payload as
+            | {
+                parentSku?: string
+                marketplaceId?: string
+                children?: Array<{
+                  masterSku: string
+                  channelSku: string
+                }>
+              }
+            | undefined
+          return channelPublishService.pollStatus(
+            entry,
+            entry.platform.toUpperCase() === 'AMAZON' && amazonPayload
+              ? {
+                  parentSku: amazonPayload.parentSku,
+                  marketplaceId: amazonPayload.marketplaceId,
+                  childMasterSkus: amazonPayload.children?.map((c) => ({
+                    masterSku: c.masterSku,
+                    channelSku: c.channelSku,
+                  })),
+                }
+              : undefined,
+          )
+        }),
+      )
+
+      // E.8 — Persist any new ASINs surfaced by the poll.
+      await Promise.all(
+        polled.map(async (entry) => {
+          if (entry.platform.toUpperCase() !== 'AMAZON' || !entry.parentAsin) {
+            return
+          }
+          try {
+            await submissionService.writeAsinsBack({
+              productId: wizard.productId,
+              marketplace: entry.marketplace,
+              parentAsin: entry.parentAsin,
+              childAsinByMasterSku: entry.childAsinsByMasterSku,
+            })
+          } catch (err) {
+            request.log?.warn?.(
+              { err, productId: wizard.productId, marketplace: entry.marketplace },
+              'writeAsinsBack failed (post-poll)',
+            )
+          }
+        }),
+      )
+
       const overallStatus = computeOverallStatus(polled)
       const updated = await prisma.listingWizard.update({
         where: { id: wizard.id },
@@ -1687,9 +1788,11 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const payloadByKey = new Map<
         string,
-        ReturnType<typeof submissionService.composeMultiChannelPayloads>[number]
+        Awaited<
+          ReturnType<typeof submissionService.composeMultiChannelPayloads>
+        >[number]
       >()
-      for (const p of submissionService.composeMultiChannelPayloads(w)) {
+      for (const p of await submissionService.composeMultiChannelPayloads(w)) {
         payloadByKey.set(p.channelKey, p)
       }
 

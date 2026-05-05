@@ -290,6 +290,20 @@ function ChannelCard({
         </div>
       </div>
 
+      {/* E.6 — Per-marketplace listing summary. Reads from the composed
+          payload so the user can see exactly what'll be sent to THIS
+          marketplace before submitting: resolved parent SKU, child SKU
+          map (with channel-scoped overrides), currency, language,
+          variation theme, and the expected ASIN behaviour Amazon will
+          apply on its end. */}
+      {payload && !payload.unsupported && (
+        <ListingSummary
+          platform={report.platform}
+          marketplace={report.marketplace}
+          payload={payload.payload}
+        />
+      )}
+
       {/* Always-visible blocking items + warnings */}
       {(incomplete.length > 0 || report.warnings.length > 0) && (
         <div className="px-4 py-2 space-y-1 border-b border-slate-100">
@@ -389,6 +403,230 @@ function ChannelCard({
           {payload.reason}
         </div>
       )}
+    </div>
+  )
+}
+
+// E.6 — Per-marketplace listing summary card. Renders a compact view
+// of what's about to publish on each (channel, marketplace) tuple so
+// the user can sanity-check the resolved parent SKU + child SKU map
+// + currency + ASIN behaviour without expanding the raw JSON payload.
+const MARKETPLACE_TO_CURRENCY: Record<string, string> = {
+  IT: 'EUR', DE: 'EUR', FR: 'EUR', ES: 'EUR', NL: 'EUR', SE: 'SEK', PL: 'PLN',
+  UK: 'GBP', GB: 'GBP', US: 'USD', CA: 'CAD', MX: 'MXN', AU: 'AUD', JP: 'JPY',
+  GLOBAL: 'EUR',
+}
+const MARKETPLACE_TO_LANGUAGE: Record<string, string> = {
+  IT: 'it', DE: 'de', FR: 'fr', ES: 'es', NL: 'nl', SE: 'sv', PL: 'pl',
+  UK: 'en', GB: 'en', US: 'en', CA: 'en', MX: 'es', AU: 'en', JP: 'ja',
+  GLOBAL: 'en',
+}
+
+function ListingSummary({
+  platform,
+  marketplace,
+  payload,
+}: {
+  platform: string
+  marketplace: string
+  payload: any
+}) {
+  const mp = marketplace.toUpperCase()
+  const isAmazon = platform.toUpperCase() === 'AMAZON'
+  const isEbay = platform.toUpperCase() === 'EBAY'
+
+  if (!payload) return null
+
+  const currency = MARKETPLACE_TO_CURRENCY[mp] ?? '—'
+  const language = MARKETPLACE_TO_LANGUAGE[mp] ?? '—'
+
+  // Amazon shape (from submission.service.ts AmazonListingPayload):
+  //   parentSku, children[{masterSku, channelSku, channelProductId,...}],
+  //   marketplaceId (SP-API id), variationTheme, productType
+  const parentSku = isAmazon ? payload.parentSku : payload.sku
+  const variationTheme = isAmazon ? payload.variationTheme : null
+  const children: Array<{
+    masterSku: string
+    channelSku: string
+    channelProductId: string | null
+  }> = isAmazon && Array.isArray(payload.children) ? payload.children : []
+  const marketplaceId = isAmazon ? payload.marketplaceId : payload.marketplaceId
+
+  // Expected ASIN behaviour copy — calibrated to Amazon's actual catalog
+  // clustering: NA marketplaces typically share child ASINs, EU marketplaces
+  // often do too within a category, JP/AU are independent.
+  const asinExpectation = (() => {
+    if (!isAmazon) return null
+    const hasAssigned = children.some((c) => c.channelProductId)
+    if (hasAssigned) {
+      return 'Existing child ASINs detected — Amazon will reuse where attributes match.'
+    }
+    if (['IT', 'DE', 'FR', 'ES', 'NL', 'SE', 'PL'].includes(mp)) {
+      return 'Amazon will assign a new parent ASIN. Child ASINs typically cluster across EU marketplaces when attributes match.'
+    }
+    if (['US', 'CA', 'MX'].includes(mp)) {
+      return 'Amazon will assign a new parent ASIN. Child ASINs typically cluster across NA marketplaces when attributes match.'
+    }
+    if (mp === 'UK' || mp === 'GB') {
+      return 'Amazon will assign a new parent ASIN. UK/EU child ASIN clustering ended after Brexit — UK ASINs are now independent.'
+    }
+    return 'Amazon will assign a new parent ASIN. Child ASINs are marketplace-specific.'
+  })()
+
+  return (
+    <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/40">
+      {/* Top metadata row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px] mb-2">
+        <SummaryField
+          label="Parent SKU"
+          value={parentSku ?? '—'}
+          mono
+        />
+        {isAmazon && (
+          <SummaryField
+            label="SP-API ID"
+            value={marketplaceId ?? '—'}
+            mono
+          />
+        )}
+        {isEbay && (
+          <SummaryField
+            label="eBay site"
+            value={marketplaceId ?? '—'}
+            mono
+          />
+        )}
+        <SummaryField label="Currency" value={currency} />
+        <SummaryField label="Language" value={language} />
+      </div>
+
+      {/* Variation summary */}
+      {isAmazon && (variationTheme || children.length > 0) && (
+        <div className="text-[11px] text-slate-600 mb-2">
+          <span className="text-slate-500">Variations: </span>
+          {children.length > 0 ? (
+            <>
+              <span className="font-semibold text-slate-800">
+                {children.length}
+              </span>{' '}
+              child{children.length === 1 ? '' : 'ren'}
+              {variationTheme && (
+                <>
+                  {' · theme '}
+                  <span className="font-mono text-slate-700">{variationTheme}</span>
+                </>
+              )}
+            </>
+          ) : (
+            'single product (no variations selected)'
+          )}
+        </div>
+      )}
+
+      {/* Child SKU map — only show divergent/assigned rows so common case
+          (every channelSku === masterSku) doesn't add visual noise. */}
+      {isAmazon && children.length > 0 && (
+        <ChildSkuMap children={children} />
+      )}
+
+      {/* Expected ASIN behaviour */}
+      {asinExpectation && (
+        <div className="mt-2 text-[11px] text-slate-500 italic">
+          {asinExpectation}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SummaryField({
+  label,
+  value,
+  mono,
+}: {
+  label: string
+  value: string
+  mono?: boolean
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[10px] uppercase tracking-wide text-slate-500 font-medium">
+        {label}
+      </div>
+      <div
+        className={cn(
+          'truncate text-slate-800',
+          mono ? 'font-mono text-[11px]' : 'text-[12px]',
+        )}
+        title={value}
+      >
+        {value}
+      </div>
+    </div>
+  )
+}
+
+function ChildSkuMap({
+  children,
+}: {
+  children: Array<{
+    masterSku: string
+    channelSku: string
+    channelProductId: string | null
+  }>
+}) {
+  // Default case — every channelSku equals masterSku and no ASINs assigned.
+  // Surface a one-line "no overrides" tag rather than rendering a map of
+  // identical rows. Power users (per-marketplace SKU strategy) and post-
+  // publish state (ASINs landed) get the full table.
+  const hasOverrides = children.some(
+    (c) => c.channelSku !== c.masterSku || c.channelProductId,
+  )
+  if (!hasOverrides) {
+    return (
+      <div className="text-[11px] text-slate-500">
+        Child SKUs: shared across marketplaces ·{' '}
+        <span className="text-slate-400">no ASINs assigned yet</span>
+      </div>
+    )
+  }
+  return (
+    <div className="border border-slate-200 rounded bg-white overflow-hidden">
+      <div className="grid grid-cols-3 gap-2 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-500 font-medium border-b border-slate-100 bg-slate-50">
+        <div>Master SKU</div>
+        <div>Marketplace SKU</div>
+        <div>Child ASIN</div>
+      </div>
+      <div className="max-h-[140px] overflow-auto">
+        {children.map((c) => (
+          <div
+            key={c.masterSku}
+            className="grid grid-cols-3 gap-2 px-2 py-1 text-[11px] font-mono border-b border-slate-50 last:border-b-0"
+          >
+            <div className="truncate text-slate-700" title={c.masterSku}>
+              {c.masterSku}
+            </div>
+            <div
+              className={cn(
+                'truncate',
+                c.channelSku === c.masterSku ? 'text-slate-400' : 'text-slate-700',
+              )}
+              title={c.channelSku}
+            >
+              {c.channelSku === c.masterSku ? '—' : c.channelSku}
+            </div>
+            <div
+              className={cn(
+                'truncate',
+                c.channelProductId ? 'text-slate-700' : 'text-slate-400',
+              )}
+              title={c.channelProductId ?? 'not yet assigned'}
+            >
+              {c.channelProductId ?? '—'}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

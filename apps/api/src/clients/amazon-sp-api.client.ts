@@ -33,6 +33,26 @@ interface SubmitListingPayloadOptions {
   payload: any
 }
 
+interface PutListingsItemOptions {
+  sellerId: string
+  sku: string
+  marketplaceId: string
+  productType: string
+  attributes: Record<string, unknown>
+  /** SP-API requirements set: 'LISTING' (full create) or 'LISTING_OFFER_ONLY'
+   *  (existing catalog item, just attach offer). Default 'LISTING'. */
+  requirements?: 'LISTING' | 'LISTING_OFFER_ONLY' | 'LISTING_PRODUCT_ONLY'
+}
+
+interface GetListingsItemOptions {
+  sellerId: string
+  sku: string
+  marketplaceId: string
+  /** SP-API includedData set: which sections to return. Default ['summaries']
+   *  (parent ASIN + status). */
+  includedData?: Array<'summaries' | 'attributes' | 'issues' | 'offers'>
+}
+
 export class AmazonSpApiClient {
   private accessToken: string | null = null
   private tokenExpiresAt: number = 0
@@ -239,6 +259,204 @@ export class AmazonSpApiClient {
       return {
         success: false,
         sku,
+        error: errorMessage,
+      }
+    }
+  }
+
+  /**
+   * E.8 — putListingsItem (full create-or-replace).
+   *
+   * Listings Items v2021-08-01 PUT endpoint. Use for first-time publish; the
+   * existing PATCH-based `submitListingPayload` is right for partial updates
+   * to already-listed SKUs.
+   *
+   * SP-API rejects payloads where `marketplace_id` in the wrapped attributes
+   * is a country code; the SP-API ID (e.g. APJ6JRA9NG5V4) must be passed in
+   * BOTH the query string `marketplaceIds` and inside each attribute envelope.
+   * The composer (submission.service.ts) already wraps attributes with the
+   * SP-API ID; here we just pass the same value through to the URL params.
+   */
+  async putListingsItem(options: PutListingsItemOptions): Promise<{
+    success: boolean
+    sku: string
+    submissionId?: string
+    status?: string
+    issues?: SPAPIResponse['issues']
+    error?: string
+    rawResponse?: SPAPIResponse
+  }> {
+    const {
+      sellerId,
+      sku,
+      marketplaceId,
+      productType,
+      attributes,
+      requirements = 'LISTING',
+    } = options
+
+    try {
+      await this.applyRateLimit()
+      const accessToken = await this.getAccessToken()
+
+      const body = {
+        productType,
+        requirements,
+        attributes,
+      }
+
+      logger.info('PUT listings item to SP-API', {
+        sku,
+        sellerId,
+        marketplaceId,
+        productType,
+        attributeCount: Object.keys(attributes).length,
+      })
+
+      const url = new URL(
+        `https://sellingpartnerapi-${this.region}.amazon.com/listings/2021-08-01/items/${sellerId}/${encodeURIComponent(
+          sku,
+        )}`,
+      )
+      url.searchParams.set('marketplaceIds', marketplaceId)
+
+      const response = await fetch(url.toString(), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-amzn-requestid': `nexus-${Date.now()}`,
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(body),
+      })
+
+      const data = (await response.json()) as SPAPIResponse
+
+      const errorMessage = this.parseErrors(data)
+      if (errorMessage) {
+        logger.warn('SP-API putListingsItem returned issues', {
+          sku,
+          errors: errorMessage,
+        })
+        return {
+          success: false,
+          sku,
+          submissionId: data.submissionId,
+          issues: data.issues,
+          error: errorMessage,
+          rawResponse: data,
+        }
+      }
+
+      return {
+        success: true,
+        sku,
+        submissionId: data.submissionId,
+        status: data.status,
+        rawResponse: data,
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error)
+      logger.error('Failed putListingsItem', { sku, error: errorMessage })
+      return { success: false, sku, error: errorMessage }
+    }
+  }
+
+  /**
+   * E.8 — getListingsItem.
+   *
+   * Reads a published listing's current state. Used after putListingsItem to
+   * pull back the parent/child ASIN that Amazon assigned, surface BUYABLE
+   * status, and detect post-submit issues. The wizard publish path polls
+   * this until status === 'BUYABLE' (or until issues are non-empty).
+   */
+  async getListingsItem(options: GetListingsItemOptions): Promise<{
+    success: boolean
+    sku: string
+    asin: string | null
+    status: string | null
+    issues?: SPAPIResponse['issues']
+    error?: string
+    rawResponse?: SPAPIResponse
+  }> {
+    const {
+      sellerId,
+      sku,
+      marketplaceId,
+      includedData = ['summaries'],
+    } = options
+
+    try {
+      await this.applyRateLimit()
+      const accessToken = await this.getAccessToken()
+
+      const url = new URL(
+        `https://sellingpartnerapi-${this.region}.amazon.com/listings/2021-08-01/items/${sellerId}/${encodeURIComponent(
+          sku,
+        )}`,
+      )
+      url.searchParams.set('marketplaceIds', marketplaceId)
+      for (const d of includedData) {
+        url.searchParams.append('includedData', d)
+      }
+
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          'x-amzn-requestid': `nexus-${Date.now()}`,
+          Authorization: `Bearer ${accessToken}`,
+        },
+      })
+
+      if (response.status === 404) {
+        // Listing doesn't exist yet — typical right after a PUT, before
+        // Amazon has indexed it. Caller treats this as "still propagating".
+        return {
+          success: true,
+          sku,
+          asin: null,
+          status: null,
+        }
+      }
+
+      const data = (await response.json()) as SPAPIResponse
+      const errorMessage = this.parseErrors(data)
+      if (errorMessage) {
+        return {
+          success: false,
+          sku,
+          asin: null,
+          status: null,
+          issues: data.issues,
+          error: errorMessage,
+          rawResponse: data,
+        }
+      }
+
+      // Per SP-API docs: summaries is an array (one per marketplace included
+      // in the request); since we send one marketplaceId, it's a 1-element
+      // array with the parent or buyable ASIN.
+      const summary = Array.isArray(data.summaries) ? data.summaries[0] : null
+      const asin: string | null = summary?.asin ?? data.asin ?? null
+      const status: string | null = summary?.status ?? data.status ?? null
+
+      return {
+        success: true,
+        sku,
+        asin,
+        status,
+        rawResponse: data,
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error)
+      logger.error('Failed getListingsItem', { sku, error: errorMessage })
+      return {
+        success: false,
+        sku,
+        asin: null,
+        status: null,
         error: errorMessage,
       }
     }

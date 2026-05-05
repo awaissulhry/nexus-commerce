@@ -53,7 +53,13 @@ export class AmazonMapperService {
         productId,
       });
 
-      // Fetch the master product with all relations
+      // Fetch the master product with all relations.
+      // NOTE: this path uses the Phase 31 "Hub & Spoke Matrix" — children
+      // are sub-Products via the masterVariations self-relation, not the
+      // ProductVariation rows. The wizard composition path (E.2,
+      // submission.service.ts) is the one that uses ProductVariation +
+      // VariantChannelListing. These are two parallel architectures the
+      // codebase carries today; unifying them is a separate piece of work.
       const product = await (prisma as any).product.findUnique({
         where: { id: productId },
         include: {

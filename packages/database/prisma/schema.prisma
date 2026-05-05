@@ -365,6 +365,12 @@ model VariantChannelListing {
   // Channel Type
   channel String? // "AMAZON", "EBAY", "SHOPIFY", etc.
 
+  // E.1 — Per-marketplace identity. Country code ("IT", "DE", "FR", ...) for
+  // region-scoped channels, or "GLOBAL" for single-store channels. The same
+  // (variantId, channel) pair can have multiple rows — one per marketplace —
+  // each with its own channelProductId (child ASIN), channelSku, price, qty.
+  marketplace String @default("GLOBAL")
+
   // Channel-specific SKU and IDs
   channelSku        String? // SKU as known by the channel
   channelProductId  String? // Channel-specific ID (child ASIN, eBay variation spec)
@@ -391,10 +397,13 @@ model VariantChannelListing {
   lastSyncError       String?
 
   @@unique([variantId, channelId])
+  @@unique([variantId, channel, marketplace])
   @@index([variantId])
   @@index([channelId])
   @@index([channelConnectionId])
   @@index([externalListingId])
+  @@index([marketplace])
+  @@index([channel, marketplace, listingStatus])
 }
 
 // ── PHASE 9: Channel Listing (Platform-Specific Data) ──────────────────────
@@ -545,6 +554,7 @@ model ChannelListing {
   @@index([listingStatus])
   @@index([syncStatus])
   @@index([validationStatus])
+  @@index([channel, marketplace, listingStatus])
 }
 
 // ── Phase 31b: Marketplace lookup ──────────────────────────────────────────

@@ -57,6 +57,15 @@ type Facets = {
   brands: Array<{ value: string; count: number }>
   fulfillment: Array<{ value: string; count: number }>
   statuses: Array<{ value: string; count: number }>
+  // E.5b — per-(channel, marketplace) facet, populated from
+  // ChannelListing groupBy + Marketplace lookup.
+  marketplaces?: Array<{
+    value: string
+    channel: string
+    label: string
+    region: string | null
+    count: number
+  }>
 }
 type SavedView = {
   id: string
@@ -365,6 +374,7 @@ export default function ProductsWorkspace() {
         setSearchInput={setSearchInput}
         statusFilters={statusFilters}
         channelFilters={channelFilters}
+        marketplaceFilters={marketplaceFilters}
         productTypeFilters={productTypeFilters}
         brandFilters={brandFilters}
         tagFilters={tagFilters}
@@ -471,7 +481,7 @@ function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) =>
 function FilterBar(props: any) {
   const {
     searchInput, setSearchInput,
-    statusFilters, channelFilters, productTypeFilters, brandFilters, tagFilters, fulfillmentFilters,
+    statusFilters, channelFilters, marketplaceFilters, productTypeFilters, brandFilters, tagFilters, fulfillmentFilters,
     stockLevel, hasPhotos, filterCount, filtersOpen, setFiltersOpen, facets, tags, updateUrl,
   } = props
 
@@ -527,6 +537,23 @@ function FilterBar(props: any) {
               selected={channelFilters}
               onToggle={(v: string) => updateUrl({ channels: toggleArr(channelFilters, v).join(',') || undefined, page: undefined })}
             />
+            {facets?.marketplaces && facets.marketplaces.length > 0 && (
+              <FilterGroup
+                label="Marketplace"
+                // E.5b — show every (channel, marketplace) pair that
+                // currently has at least one listing. Filter chip key
+                // is the marketplace code (IT/DE/...); matches the
+                // products list endpoint's `marketplaces=` query param.
+                options={facets.marketplaces.map((m: any) => m.value)}
+                selected={marketplaceFilters}
+                counts={facets.marketplaces.reduce((m: any, s: any) => { m[s.value] = s.count; return m }, {})}
+                renderLabel={(v: string) => {
+                  const meta = facets.marketplaces!.find((m: any) => m.value === v)
+                  return meta ? `${meta.label} (${v})` : v
+                }}
+                onToggle={(v: string) => updateUrl({ marketplaces: toggleArr(marketplaceFilters, v).join(',') || undefined, page: undefined })}
+              />
+            )}
             <FilterGroup
               label="Fulfillment"
               options={['FBA', 'FBM']}

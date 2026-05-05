@@ -74,6 +74,8 @@ function getActionTypeColor(type: string): string {
       return 'bg-orange-50 text-orange-700 border border-orange-200';
     case 'LISTING_SYNC':
       return 'bg-pink-50 text-pink-700 border border-pink-200';
+    case 'MARKETPLACE_OVERRIDE_UPDATE':
+      return 'bg-indigo-50 text-indigo-700 border border-indigo-200';
     default:
       return 'bg-gray-50 text-gray-700 border border-gray-200';
   }

@@ -37,9 +37,29 @@ export interface AmazonListingPayload {
   productType: string
   marketplaceId: string
   attributes: Record<string, unknown>
+  /** E.3 — Marketplace-scoped parent SKU. When the user runs the default
+   *  "shared parent SKU" strategy this matches the master Product.sku.
+   *  When they've opted into per-marketplace SKUs (Step 1), the suffix
+   *  (-IT, -DE, ...) is appended. SP-API's putListingsItem keys on this. */
+  parentSku?: string
   /** Children (variations) the user picked in Step 5. Each becomes a
    *  separate listing under the parent's variation theme. */
   childSkus?: string[]
+  /** E.2 — Per-marketplace child resolution. Each entry has the master
+   *  SKU + the marketplace-scoped channelSku (falls back to master SKU
+   *  when the user runs the default "shared SKU across marketplaces"
+   *  strategy) + the channelProductId (child ASIN if Amazon assigned
+   *  one on a prior publish). The publish path uses these to issue one
+   *  putListingsItem per child, scoped to the parent's marketplace.
+   */
+  children?: Array<{
+    masterSku: string
+    channelSku: string
+    channelProductId: string | null
+    variationAttributes: Record<string, unknown>
+    price: number | null
+    quantity: number | null
+  }>
   variationTheme?: string
   /** Image URLs — first is main, rest are alts. Amazon expects at
    *  most 9. */
@@ -136,6 +156,183 @@ const MARKETPLACE_TO_CURRENCY: Record<string, string> = {
 
 function pricingCurrencyFor(marketplace: string): string {
   return MARKETPLACE_TO_CURRENCY[marketplace.toUpperCase()] ?? 'USD'
+}
+
+/**
+ * E.2 — Resolve country codes ("IT", "DE", "FR") to SP-API marketplace IDs
+ * ("APJ6JRA9NG5V4", "A1PA6795UKMFR9", "A13V1IB3VIYZZH") via the Marketplace
+ * lookup table. SP-API rejects payloads that send the country code in
+ * `marketplace_id`; this is the load-bearing fix for actually reaching Amazon.
+ *
+ * Single Marketplace.findMany call per composition, results cached in a Map
+ * the composer reads inline. Falls back to the region code if no Marketplace
+ * row exists so unseeded environments stay debuggable instead of crashing.
+ */
+async function resolveAmazonMarketplaceIds(
+  prisma: PrismaClient,
+  channels: Array<{ platform: string; marketplace: string }>,
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  const amazonCodes = [
+    ...new Set(
+      channels
+        .filter((c) => c.platform.toUpperCase() === 'AMAZON')
+        .map((c) => c.marketplace.toUpperCase()),
+    ),
+  ]
+  if (amazonCodes.length === 0) return out
+
+  const rows = await prisma.marketplace.findMany({
+    where: { channel: 'AMAZON', code: { in: amazonCodes } },
+    select: { code: true, marketplaceId: true },
+  })
+  const byCode = new Map(rows.map((r) => [r.code, r.marketplaceId ?? '']))
+
+  for (const code of amazonCodes) {
+    const id = byCode.get(code)
+    out.set(`AMAZON:${code}`, id && id.length > 0 ? id : code)
+  }
+  return out
+}
+
+/**
+ * E.2 — Resolve per-child VariantChannelListing data for every Amazon
+ * (channel, marketplace) the wizard targets. Returns:
+ *
+ *   Map<"AMAZON:DE", Map<masterSku, ChildResolved>>
+ *
+ * One ProductVariation findMany + one VariantChannelListing findMany,
+ * scoped to the SKUs in `includedSkus` and the Amazon marketplaces in
+ * `channels`. Composer reads from the map inline — no per-child query.
+ *
+ * `channelSku` falls back to the master SKU when no per-marketplace
+ * row exists; `channelProductId` is null until Amazon assigns ASINs.
+ * Default ("shared SKU across marketplaces") naturally returns
+ * masterSku for every entry, which is the desired behavior.
+ */
+interface ChildResolved {
+  masterSku: string
+  channelSku: string
+  channelProductId: string | null
+  variationAttributes: Record<string, unknown>
+  price: number | null
+  quantity: number | null
+}
+
+interface SkuStrategy {
+  parentSku: 'shared' | 'per-marketplace'
+  childSku: 'shared' | 'per-marketplace'
+  fbaFbm: 'same' | 'suffixed'
+}
+
+function readSkuStrategy(state: Record<string, any>): SkuStrategy {
+  const raw = (state?.skuStrategy ?? {}) as Partial<SkuStrategy>
+  return {
+    parentSku: raw.parentSku === 'per-marketplace' ? 'per-marketplace' : 'shared',
+    childSku: raw.childSku === 'per-marketplace' ? 'per-marketplace' : 'shared',
+    fbaFbm: raw.fbaFbm === 'suffixed' ? 'suffixed' : 'same',
+  }
+}
+
+/**
+ * E.3 — Derive the marketplace-scoped SKU based on the user's stated strategy.
+ *
+ *   shared        → return masterSku unchanged (default; ~95% case)
+ *   per-marketplace → append "-{MARKETPLACE}" suffix (XAV-AETHER-M-BLK-DE)
+ *
+ * VariantChannelListing.channelSku still wins when explicitly set on the row
+ * — that's a manual override the seller has chosen for one marketplace and
+ * should always take precedence over the derived suffix.
+ */
+function applySkuStrategy(
+  masterSku: string,
+  marketplace: string,
+  strategy: 'shared' | 'per-marketplace',
+  explicitChannelSku: string | null | undefined,
+): string {
+  if (explicitChannelSku && explicitChannelSku.length > 0) return explicitChannelSku
+  if (strategy === 'shared') return masterSku
+  return `${masterSku}-${marketplace.toUpperCase()}`
+}
+
+async function resolveAmazonChildren(
+  prisma: PrismaClient,
+  channels: Array<{ platform: string; marketplace: string }>,
+  includedSkus: string[],
+  childStrategy: 'shared' | 'per-marketplace',
+): Promise<Map<string, Map<string, ChildResolved>>> {
+  const out = new Map<string, Map<string, ChildResolved>>()
+  if (includedSkus.length === 0) return out
+
+  const amazonChannels = channels.filter(
+    (c) => c.platform.toUpperCase() === 'AMAZON',
+  )
+  if (amazonChannels.length === 0) return out
+
+  const variants = await prisma.productVariation.findMany({
+    where: { sku: { in: includedSkus } },
+    select: {
+      id: true,
+      sku: true,
+      variationAttributes: true,
+      price: true,
+      stock: true,
+    },
+  })
+  if (variants.length === 0) return out
+
+  const variantIds = variants.map((v) => v.id)
+  const marketplaces = [
+    ...new Set(amazonChannels.map((c) => c.marketplace.toUpperCase())),
+  ]
+  const vcls = await prisma.variantChannelListing.findMany({
+    where: {
+      variantId: { in: variantIds },
+      channel: 'AMAZON',
+      marketplace: { in: marketplaces },
+    },
+    select: {
+      variantId: true,
+      marketplace: true,
+      channelSku: true,
+      channelProductId: true,
+      channelPrice: true,
+      channelQuantity: true,
+    },
+  })
+
+  // Index VCL rows by (variantId, marketplace) for inline lookup.
+  const vclByVariantMp = new Map<string, (typeof vcls)[number]>()
+  for (const vcl of vcls) {
+    vclByVariantMp.set(`${vcl.variantId}:${vcl.marketplace}`, vcl)
+  }
+
+  for (const c of amazonChannels) {
+    const mp = c.marketplace.toUpperCase()
+    const channelKey = `AMAZON:${mp}`
+    const childMap = new Map<string, ChildResolved>()
+
+    for (const v of variants) {
+      const vcl = vclByVariantMp.get(`${v.id}:${mp}`)
+      const variationAttributes =
+        (v.variationAttributes as Record<string, unknown> | null) ?? {}
+      childMap.set(v.sku, {
+        masterSku: v.sku,
+        channelSku: applySkuStrategy(v.sku, mp, childStrategy, vcl?.channelSku),
+        channelProductId: vcl?.channelProductId ?? null,
+        variationAttributes,
+        price: vcl?.channelPrice
+          ? Number(vcl.channelPrice)
+          : v.price
+          ? Number(v.price)
+          : null,
+        quantity: vcl?.channelQuantity ?? v.stock ?? null,
+      })
+    }
+    out.set(channelKey, childMap)
+  }
+
+  return out
 }
 
 export class SubmissionService {
@@ -325,124 +522,11 @@ export class SubmissionService {
   }
 
   // ── Payload composition ────────────────────────────────────────
-
-  composeAmazonPayload(wizard: WizardWithState): AmazonListingPayload | null {
-    if (wizard.channel.toUpperCase() !== 'AMAZON') return null
-    const state = wizard.state ?? {}
-    const productType = state.productType?.productType
-    if (typeof productType !== 'string' || productType.length === 0) return null
-
-    // Wrap each user-supplied attribute in Amazon's
-    // [{ marketplace_id, value, language_tag? }] convention.
-    const userAttrs = (state.attributes ?? {}) as Record<string, unknown>
-    const marketplaceId = wizard.marketplace
-    const attributes: Record<string, unknown> = {}
-    for (const [key, value] of Object.entries(userAttrs)) {
-      attributes[key] = [{ marketplace_id: marketplaceId, value }]
-    }
-
-    // Title + bullets + description from Step 6.
-    const content = state.content ?? {}
-    if (typeof content.title === 'string' && content.title.trim().length > 0) {
-      attributes.item_name = [
-        {
-          marketplace_id: marketplaceId,
-          value: content.title.trim(),
-        },
-      ]
-    }
-    if (Array.isArray(content.bullets)) {
-      attributes.bullet_point = content.bullets
-        .filter(
-          (b: unknown) => typeof b === 'string' && b.trim().length > 0,
-        )
-        .map((b: string) => ({
-          marketplace_id: marketplaceId,
-          value: b.trim(),
-        }))
-    }
-    if (
-      typeof content.description === 'string' &&
-      content.description.trim().length > 0
-    ) {
-      attributes.product_description = [
-        {
-          marketplace_id: marketplaceId,
-          value: content.description.trim(),
-        },
-      ]
-    }
-    if (
-      typeof content.keywords === 'string' &&
-      content.keywords.trim().length > 0
-    ) {
-      attributes.generic_keyword = [
-        {
-          marketplace_id: marketplaceId,
-          value: content.keywords.trim(),
-        },
-      ]
-    }
-
-    // Pricing → purchasable_offer
-    const pricing = state.pricing ?? {}
-    if (
-      typeof pricing.marketplacePrice === 'number' &&
-      pricing.marketplacePrice > 0
-    ) {
-      attributes.purchasable_offer = [
-        {
-          marketplace_id: marketplaceId,
-          our_price: [
-            {
-              schedule: [
-                { value_with_tax: pricing.marketplacePrice },
-              ],
-            },
-          ],
-        },
-      ]
-    }
-
-    const images = state.images ?? {}
-    const imageUrls = Array.isArray(images.orderedUrls)
-      ? images.orderedUrls.slice(0, 9)
-      : []
-    if (imageUrls.length > 0) {
-      attributes.main_product_image_locator = [
-        {
-          marketplace_id: marketplaceId,
-          media_location: imageUrls[0],
-        },
-      ]
-      if (imageUrls.length > 1) {
-        attributes.other_product_image_locator = imageUrls
-          .slice(1)
-          .map((url) => ({
-            marketplace_id: marketplaceId,
-            media_location: url,
-          }))
-      }
-    }
-
-    // Variations
-    const vars = state.variations ?? {}
-
-    return {
-      productType,
-      marketplaceId,
-      attributes,
-      childSkus:
-        Array.isArray(vars.includedSkus) && vars.includedSkus.length > 0
-          ? vars.includedSkus
-          : undefined,
-      variationTheme:
-        typeof vars.theme === 'string' && vars.theme.length > 0
-          ? vars.theme
-          : undefined,
-      imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
-    }
-  }
+  //
+  // E.2 — Single-channel composeAmazonPayload was removed; the multi-channel
+  // path supersedes it and resolves SP-API marketplace IDs through the
+  // Marketplace lookup table. Use composeMultiChannelPayloads() with a
+  // single-element channels array if you need a one-off Amazon payload.
 
   // ── Phase I — multi-channel validation + payload composition ──
 
@@ -704,9 +788,9 @@ export class SubmissionService {
     }
   }
 
-  composeMultiChannelPayloads(
+  async composeMultiChannelPayloads(
     wizard: MultiChannelWizard,
-  ): ChannelPayloadEntry[] {
+  ): Promise<ChannelPayloadEntry[]> {
     const state = wizard.state ?? {}
     const channelStates = wizard.channelStates ?? {}
     const fallbackProductType =
@@ -725,6 +809,22 @@ export class SubmissionService {
     const orderedUrls: string[] = Array.isArray(state.images?.orderedUrls)
       ? state.images.orderedUrls
       : []
+
+    // E.2/E.3 — Pre-fetch SP-API marketplace IDs and per-child VCL data for
+    // every Amazon channel in this wizard. The user's SKU strategy (set in
+    // Step 1) drives whether children get suffixed marketplace SKUs or share
+    // the master SKU; explicit VariantChannelListing.channelSku overrides
+    // either way. Two queries total, both well-indexed.
+    const skuStrategy = readSkuStrategy(state)
+    const [amazonMarketplaceIds, amazonChildrenByChannel] = await Promise.all([
+      resolveAmazonMarketplaceIds(this.prisma, wizard.channels),
+      resolveAmazonChildren(
+        this.prisma,
+        wizard.channels,
+        includedSkus,
+        skuStrategy.childSku,
+      ),
+    ])
 
     return wizard.channels.map((cRaw) => {
       const c = {
@@ -875,7 +975,10 @@ export class SubmissionService {
           ? basePricing.basePrice
           : undefined
 
-      const marketplaceId = c.marketplace
+      // E.2 — SP-API expects the numeric marketplace ID ("APJ6JRA9NG5V4"),
+      // not the country code ("IT"). Resolved above; falls back to the code
+      // if the Marketplace lookup row is missing (unseeded env).
+      const marketplaceId = amazonMarketplaceIds.get(channelKey) ?? c.marketplace
       const amazonAttributes: Record<string, unknown> = {}
       for (const [k, v] of Object.entries(mergedAttrs)) {
         if (v === undefined || v === null || v === '') continue
@@ -981,11 +1084,35 @@ export class SubmissionService {
         }
       }
 
+      // E.2 — Per-marketplace child resolution: master child SKUs the user
+      // picked in Step 5, mapped through VariantChannelListing for THIS
+      // marketplace. When the user runs the default "shared SKU" strategy,
+      // channelSku === masterSku for every entry. When they've opted into
+      // per-marketplace SKUs (Step 1 SKU strategy), the suffixed value wins.
+      const childMap = amazonChildrenByChannel.get(channelKey)
+      const children = childMap
+        ? includedSkus
+            .map((sku) => childMap.get(sku))
+            .filter((c): c is ChildResolved => c !== undefined)
+        : []
+
+      const masterParentSku = wizard.product?.sku
+      const parentSku = masterParentSku
+        ? applySkuStrategy(
+            masterParentSku,
+            c.marketplace,
+            skuStrategy.parentSku,
+            null,
+          )
+        : undefined
+
       const payload: AmazonListingPayload = {
         productType,
         marketplaceId,
         attributes: amazonAttributes,
+        parentSku,
         childSkus: includedSkus.length > 0 ? includedSkus : undefined,
+        children: children.length > 0 ? children : undefined,
         variationTheme: theme,
         imageUrls: orderedUrls.length > 0 ? orderedUrls.slice(0, 9) : undefined,
       }
@@ -997,6 +1124,82 @@ export class SubmissionService {
         payload,
       }
     })
+  }
+
+  /**
+   * E.2 — Write Amazon-assigned ASINs back to the right marketplace rows.
+   * Called by the publish path (TECH_DEBT #35) once putListingsItem succeeds
+   * and getListingsItem reports the ASIN. The caller passes:
+   *
+   *   - productId + (channel='AMAZON', marketplace) → identifies one
+   *     ChannelListing row to receive the parent ASIN
+   *   - parentAsin → written to ChannelListing.externalParentId
+   *   - childAsinByMasterSku → optional map of master child SKU → child ASIN;
+   *     written to VariantChannelListing.channelProductId scoped to the same
+   *     marketplace. Per-marketplace child ASINs are now possible because of
+   *     E.1's marketplace column on VariantChannelListing.
+   *
+   * Idempotent — safe to call multiple times. Upserts the per-variant row so
+   * a child publishing for the first time gets a new VCL row stamped with
+   * the correct marketplace.
+   */
+  async writeAsinsBack(args: {
+    productId: string
+    marketplace: string
+    parentAsin: string
+    childAsinByMasterSku?: Record<string, string>
+  }): Promise<void> {
+    const marketplace = args.marketplace.toUpperCase()
+
+    await this.prisma.channelListing.update({
+      where: {
+        productId_channel_marketplace: {
+          productId: args.productId,
+          channel: 'AMAZON',
+          marketplace,
+        },
+      },
+      data: {
+        externalParentId: args.parentAsin,
+        platformProductId: args.parentAsin,
+      },
+    })
+
+    const childMap = args.childAsinByMasterSku ?? {}
+    const skus = Object.keys(childMap)
+    if (skus.length === 0) return
+
+    const variants = await this.prisma.productVariation.findMany({
+      where: { sku: { in: skus }, productId: args.productId },
+      select: { id: true, sku: true },
+    })
+
+    await Promise.all(
+      variants.map((v) => {
+        const asin = childMap[v.sku]
+        if (!asin) return Promise.resolve()
+        return this.prisma.variantChannelListing.upsert({
+          where: {
+            variantId_channel_marketplace: {
+              variantId: v.id,
+              channel: 'AMAZON',
+              marketplace,
+            },
+          },
+          create: {
+            variantId: v.id,
+            channel: 'AMAZON',
+            marketplace,
+            channelProductId: asin,
+            channelPrice: 0,
+            channelQuantity: 0,
+          },
+          update: {
+            channelProductId: asin,
+          },
+        })
+      }),
+    )
   }
 }
 

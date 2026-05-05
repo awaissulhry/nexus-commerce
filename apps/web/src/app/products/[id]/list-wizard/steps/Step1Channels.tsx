@@ -53,8 +53,29 @@ const PLATFORM_ICON: Record<Platform, React.ComponentType<{ className?: string }
   WOOCOMMERCE: Globe,
 }
 
+type ParentSkuStrategy = 'shared' | 'per-marketplace'
+type ChildSkuStrategy = 'shared' | 'per-marketplace'
+type FulfillmentSkuStrategy = 'same' | 'suffixed'
+
+interface SkuStrategy {
+  parentSku: ParentSkuStrategy
+  childSku: ChildSkuStrategy
+  fbaFbm: FulfillmentSkuStrategy
+}
+
+function readSkuStrategy(state: Record<string, unknown>): SkuStrategy {
+  const raw = (state?.skuStrategy ?? {}) as Partial<SkuStrategy>
+  return {
+    parentSku: raw.parentSku === 'per-marketplace' ? 'per-marketplace' : 'shared',
+    childSku: raw.childSku === 'per-marketplace' ? 'per-marketplace' : 'shared',
+    fbaFbm: raw.fbaFbm === 'suffixed' ? 'suffixed' : 'same',
+  }
+}
+
 export default function Step1Channels({
   channels: initialChannels,
+  wizardState,
+  updateWizardState,
   updateWizardChannels,
 }: StepProps) {
   const [status, setStatus] = useState<ConnectionStatus | null>(null)
@@ -70,6 +91,15 @@ export default function Step1Channels({
     }
     return set
   })
+
+  // E.3 — SKU strategy. Defaults to "shared parent, shared children,
+  // same FBA/FBM SKU" — the model that fits ~95% of multi-marketplace
+  // catalogs and is what Amazon's catalog-clustering logic optimizes
+  // for. Power users can opt into per-marketplace divergence.
+  const [skuStrategy, setSkuStrategy] = useState<SkuStrategy>(() =>
+    readSkuStrategy(wizardState),
+  )
+  const [strategyExpanded, setStrategyExpanded] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -127,8 +157,13 @@ export default function Step1Channels({
 
   const onContinue = useCallback(async () => {
     if (channelTuples.length === 0) return
+    // E.3 — Persist SKU strategy alongside the channel selection. The
+    // composition layer reads state.skuStrategy when resolving per-child
+    // channelSku (default "shared" returns master SKU, "per-marketplace"
+    // would derive a suffixed value at variation step).
+    await updateWizardState({ skuStrategy }, { advance: false })
     await updateWizardChannels(channelTuples, { advance: true })
-  }, [channelTuples, updateWizardChannels])
+  }, [channelTuples, skuStrategy, updateWizardChannels, updateWizardState])
 
   if (loading) {
     return (
@@ -177,6 +212,99 @@ export default function Step1Channels({
             onToggle={toggle}
           />
         ))}
+      </div>
+
+      {/* E.3 — SKU strategy. Collapsed by default; the standard "shared
+          parent + shared children + same FBA/FBM SKU" answer is what
+          almost everyone wants and matches Amazon's catalog clustering
+          assumptions. Power users open this for per-marketplace SKU
+          divergence (e.g., XAV-RJK-AETHER-PARENT-IT vs -DE). */}
+      <div className="mt-6 border border-slate-200 rounded-lg bg-white">
+        <button
+          type="button"
+          onClick={() => setStrategyExpanded((v) => !v)}
+          className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50"
+        >
+          <div className="min-w-0">
+            <div className="text-[13px] font-semibold text-slate-900">
+              SKU strategy
+            </div>
+            <div className="text-[11px] text-slate-500 mt-0.5 truncate">
+              {skuStrategy.parentSku === 'shared' &&
+              skuStrategy.childSku === 'shared' &&
+              skuStrategy.fbaFbm === 'same'
+                ? 'Default — shared parent + child SKUs across marketplaces, single FBA/FBM SKU'
+                : 'Custom — see settings'}
+            </div>
+          </div>
+          <span className="text-[11px] text-slate-500 flex-shrink-0">
+            {strategyExpanded ? 'Hide' : 'Edit'}
+          </span>
+        </button>
+        {strategyExpanded && (
+          <div className="px-4 py-3 border-t border-slate-100 space-y-4">
+            <SkuStrategyRow
+              label="Parent SKU"
+              hint="The master SKU on every marketplace listing's parent. Amazon assigns a different parent ASIN per marketplace regardless of this choice."
+              value={skuStrategy.parentSku}
+              options={[
+                {
+                  value: 'shared',
+                  label: 'Same across all marketplaces',
+                  recommended: true,
+                },
+                {
+                  value: 'per-marketplace',
+                  label: 'Suffix per marketplace (-IT, -DE, …)',
+                },
+              ]}
+              onChange={(v) =>
+                setSkuStrategy((s) => ({ ...s, parentSku: v as ParentSkuStrategy }))
+              }
+            />
+            <SkuStrategyRow
+              label="Child SKUs"
+              hint="One SKU per child variation. Amazon usually clusters children to the same child ASIN across EU marketplaces; per-marketplace child SKUs force separate ASINs."
+              value={skuStrategy.childSku}
+              options={[
+                {
+                  value: 'shared',
+                  label: 'Same across all marketplaces',
+                  recommended: true,
+                },
+                {
+                  value: 'per-marketplace',
+                  label: 'Suffix per marketplace',
+                },
+              ]}
+              onChange={(v) =>
+                setSkuStrategy((s) => ({ ...s, childSku: v as ChildSkuStrategy }))
+              }
+            />
+            <SkuStrategyRow
+              label="FBA / FBM SKU"
+              hint="Amazon supports separate offer SKUs per fulfillment method. Most sellers run a single SKU and let inventory split logically."
+              value={skuStrategy.fbaFbm}
+              options={[
+                {
+                  value: 'same',
+                  label: 'Single SKU for both fulfillment methods',
+                  recommended: true,
+                },
+                {
+                  value: 'suffixed',
+                  label: 'Append -FBA / -FBM to distinguish offers',
+                },
+              ]}
+              onChange={(v) =>
+                setSkuStrategy((s) => ({
+                  ...s,
+                  fbaFbm: v as FulfillmentSkuStrategy,
+                }))
+              }
+            />
+          </div>
+        )}
       </div>
 
       <div className="mt-6">
@@ -305,6 +433,59 @@ function PlatformCard({
               <span className="text-slate-500 text-[11px]">{m.label}</span>
               {isSelected && (
                 <CheckCircle2 className="w-3 h-3 text-blue-600 flex-shrink-0" />
+              )}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function SkuStrategyRow({
+  label,
+  hint,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  hint: string
+  value: string
+  options: Array<{ value: string; label: string; recommended?: boolean }>
+  onChange: (v: string) => void
+}) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-3 mb-1.5">
+        <div className="text-[12px] font-semibold text-slate-800">{label}</div>
+      </div>
+      <div className="text-[11px] text-slate-500 mb-2 leading-relaxed">{hint}</div>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((o) => {
+          const active = value === o.value
+          return (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => onChange(o.value)}
+              className={cn(
+                'inline-flex items-center gap-1.5 h-7 px-2.5 text-[11px] rounded-md border transition-colors',
+                active
+                  ? 'bg-blue-50 border-blue-300 text-blue-800'
+                  : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300',
+              )}
+            >
+              {o.label}
+              {o.recommended && (
+                <span
+                  className={cn(
+                    'text-[9px] uppercase tracking-wide font-semibold',
+                    active ? 'text-blue-600' : 'text-emerald-600',
+                  )}
+                >
+                  Recommended
+                </span>
               )}
             </button>
           )
