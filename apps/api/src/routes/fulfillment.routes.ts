@@ -7,6 +7,10 @@ import {
   ingestSalesTrafficForDay,
   ingestAllAmazonMarketplaces,
 } from '../services/sales-report-ingest.service.js'
+import {
+  generateForecastForSeries,
+  generateForecastsForAll,
+} from '../services/forecast.service.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // FULFILLMENT B.3–B.9 — full domain API surface
@@ -1243,16 +1247,93 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         products: products.map((p) => ({ id: p.id, sku: p.sku })),
       })
 
+      // F.4 — Pre-fetch ReplenishmentForecast rows for the entire visible
+      // horizon (max lead time among the products) in one query, then
+      // sum per-(sku, horizonDay) inline. Forecasts are scoped to the
+      // active channel/marketplace filters so multi-marketplace SKUs
+      // sum only the relevant marketplace's forecast.
+      //
+      // Two summary metrics per SKU:
+      //   forecastedDemandLeadTime — sum over (today, today+leadTime+safety)
+      //   forecastedDemand30d      — sum over the next 30 days (UI surface)
+      // Plus lower80 / upper80 confidence bands for the lead-time horizon.
+      const today = new Date()
+      today.setUTCHours(0, 0, 0, 0)
+      const horizonEnd = new Date(today)
+      horizonEnd.setUTCDate(horizonEnd.getUTCDate() + 90) // 90-day cap
+      const forecasts = await prisma.replenishmentForecast.findMany({
+        where: {
+          sku: { in: skus },
+          horizonDay: { gte: today, lte: horizonEnd },
+          ...(channelFilter ? { channel: channelFilter } : {}),
+          ...(marketplaceFilter ? { marketplace: marketplaceFilter } : {}),
+        },
+        select: {
+          sku: true,
+          horizonDay: true,
+          forecastUnits: true,
+          lower80: true,
+          upper80: true,
+        },
+      })
+      // Index by SKU; each row is one (sku, horizonDay) point. We sum
+      // per-SKU at the right slices in the suggestions loop below.
+      const forecastsBySku = new Map<
+        string,
+        Array<{ horizonDay: Date; units: number; lower: number; upper: number }>
+      >()
+      for (const f of forecasts) {
+        const arr = forecastsBySku.get(f.sku) ?? []
+        arr.push({
+          horizonDay: f.horizonDay,
+          units: Number(f.forecastUnits),
+          lower: Number(f.lower80),
+          upper: Number(f.upper80),
+        })
+        forecastsBySku.set(f.sku, arr)
+      }
+
       const suggestions = products.map((p) => {
         const rule = rulesByProduct.get(p.id)
         const atp = atpByProduct.get(p.id)
         const unitsSold = soldBySku.get(p.sku) ?? 0
-        const velocity = unitsSold / window // units per day
+        const trailingVelocity = unitsSold / window // units per day, trailing
         const safetyDays = rule?.safetyStockDays ?? 7
         const leadTimeDays = atp?.leadTimeDays ?? DEFAULT_LEAD_TIME_DAYS
         const inboundWithinLeadTime = atp?.inboundWithinLeadTime ?? 0
         const totalOpenInbound = atp?.totalOpenInbound ?? 0
         const effectiveStock = p.totalStock + inboundWithinLeadTime
+
+        // F.4 — Sum forecast over the relevant horizon. Falls back to
+        // trailing velocity × days when no forecast row exists yet
+        // (cold start before the first forecast worker run).
+        const seriesForecasts = forecastsBySku.get(p.sku) ?? []
+        const horizonWindowDays = leadTimeDays + safetyDays
+        let forecastedDemandLeadTime = 0
+        let forecastedLower = 0
+        let forecastedUpper = 0
+        let forecastedDemand30d = 0
+        const horizonCutoffMs =
+          today.getTime() + horizonWindowDays * 86400000
+        const thirtyDayCutoffMs = today.getTime() + 30 * 86400000
+        for (const f of seriesForecasts) {
+          const ms = f.horizonDay.getTime()
+          if (ms < horizonCutoffMs) {
+            forecastedDemandLeadTime += f.units
+            forecastedLower += f.lower
+            forecastedUpper += f.upper
+          }
+          if (ms < thirtyDayCutoffMs) {
+            forecastedDemand30d += f.units
+          }
+        }
+        const hasForecast = seriesForecasts.length > 0
+        const forecastVelocity = hasForecast
+          ? forecastedDemand30d / 30
+          : trailingVelocity
+        // Velocity used for urgency / reorder-point math: prefer
+        // forecast-derived value, fall back to trailing.
+        const velocity = forecastVelocity
 
         const reorderPoint = rule?.reorderPoint ?? Math.ceil(velocity * (leadTimeDays + safetyDays))
         const reorderQuantity = rule?.reorderQuantity ?? Math.max(1, Math.ceil(velocity * 30))
@@ -1280,7 +1361,24 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           effectiveStock,
           openShipments: atp?.openShipments ?? [],
           unitsSold30d: unitsSold,
+          // F.4 — forecast-driven velocity + horizon demand. Trailing
+          // velocity is kept as a reference so the UI can show
+          // "trailing 30d: X/day" alongside "forecast next 30d: Y/day".
           velocity: Number(velocity.toFixed(2)),
+          trailingVelocity: Number(trailingVelocity.toFixed(2)),
+          forecastedDemand30d: hasForecast
+            ? Number(forecastedDemand30d.toFixed(2))
+            : null,
+          forecastedDemandLeadTime: hasForecast
+            ? Number(forecastedDemandLeadTime.toFixed(2))
+            : null,
+          forecastedDemandLower80: hasForecast
+            ? Number(forecastedLower.toFixed(2))
+            : null,
+          forecastedDemandUpper80: hasForecast
+            ? Number(forecastedUpper.toFixed(2))
+            : null,
+          forecastSource: hasForecast ? 'FORECAST' : 'TRAILING_VELOCITY',
           daysOfStockLeft: daysOfStockLeft === Infinity ? null : daysOfStockLeft,
           reorderPoint,
           reorderQuantity,
@@ -1411,6 +1509,50 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       return { ok: true, results }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[sales-reports/ingest] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // F.4 — Manual forecast trigger. Without a body, regenerates forecasts
+  // for every series in the catalog. With { sku, channel, marketplace }
+  // body, regenerates a single series (useful for debugging a specific
+  // SKU's forecast in dev / after a manual data correction).
+  fastify.post('/fulfillment/forecast/run', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as {
+        sku?: string
+        channel?: string
+        marketplace?: string
+        includeColdStart?: boolean
+      }
+      if (body.sku && body.channel && body.marketplace) {
+        // Resolve productType for category-aware weather elasticity.
+        const product = await prisma.product.findFirst({
+          where: { sku: body.sku },
+          select: { productType: true },
+        })
+        const variant = !product
+          ? await prisma.productVariation.findFirst({
+              where: { sku: body.sku },
+              select: { product: { select: { productType: true } } },
+            })
+          : null
+        const productType = product?.productType ?? variant?.product.productType ?? null
+
+        const result = await generateForecastForSeries({
+          sku: body.sku,
+          channel: body.channel.toUpperCase(),
+          marketplace: body.marketplace.toUpperCase(),
+          productType,
+        })
+        return { ok: true, single: result }
+      }
+      const result = await generateForecastsForAll({
+        includeColdStart: !!body.includeColdStart,
+      })
+      return { ok: true, ...result }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[forecast/run] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })

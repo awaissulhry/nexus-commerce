@@ -46,6 +46,7 @@ import productsCatalogRoutes from "./routes/products-catalog.routes.js";
 import ordersReviewsRoutes from "./routes/orders-reviews.routes.js";
 import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
 import { startSalesReportIngestCron } from "./jobs/sales-report-ingest.job.js";
+import { startForecastCron } from "./jobs/forecast.job.js";
 // Queue/worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS — Phase 2 will flip it on.
 // import { startJobs } from "./jobs/sync.job.js";
 // import { initializeBullMQWorker } from "./workers/bullmq-sync.worker.js";
@@ -202,6 +203,14 @@ async function start() {
     // manual trigger when the cron is off.
     if (process.env.NEXUS_ENABLE_SALES_REPORT_CRON === '1') {
       startSalesReportIngestCron();
+    }
+
+    // F.4 — Nightly forecast regeneration. Gated separately from sales-
+    // report ingest so the forecast can run on OrderItem-derived data
+    // even before SP-API access is configured. Manual trigger:
+    // POST /api/fulfillment/forecast/run.
+    if (process.env.NEXUS_ENABLE_FORECAST_CRON === '1') {
+      startForecastCron();
     }
 
     logger.info('✅ API server initialized (workers disabled — Phase 2)', {
