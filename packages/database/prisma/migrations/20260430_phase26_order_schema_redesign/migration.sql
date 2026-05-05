@@ -7,16 +7,45 @@
 -- environment populated only with mock orders from ingestMockOrders().
 
 -- ── Step 1: Drop FKs that reference Order ───────────────────────────────────
-ALTER TABLE "OrderItem" DROP CONSTRAINT IF EXISTS "OrderItem_orderId_fkey";
-ALTER TABLE "Return"    DROP CONSTRAINT IF EXISTS "Return_orderId_fkey";
+-- OO.2 — wrapped each table operation in a IF-EXISTS guard so this
+-- migration is idempotent on fresh dev DBs that never had the
+-- legacy Return / OrderItem / Order tables. The structural DROP
+-- TABLEs below already use IF EXISTS; this lifts the same guard up
+-- to the constraint + truncate steps.
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'OrderItem') THEN
+    ALTER TABLE "OrderItem" DROP CONSTRAINT IF EXISTS "OrderItem_orderId_fkey";
+  END IF;
+END $$;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'Return') THEN
+    ALTER TABLE "Return" DROP CONSTRAINT IF EXISTS "Return_orderId_fkey";
+  END IF;
+END $$;
 
 -- ── Step 2: Drop FKs on Order itself ───────────────────────────────────────
-ALTER TABLE "Order" DROP CONSTRAINT IF EXISTS "Order_channelId_fkey";
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'Order') THEN
+    ALTER TABLE "Order" DROP CONSTRAINT IF EXISTS "Order_channelId_fkey";
+  END IF;
+END $$;
 
 -- ── Step 3: Clear dependent rows (mock data only) ──────────────────────────
-TRUNCATE TABLE "OrderItem";
-TRUNCATE TABLE "Return";
-TRUNCATE TABLE "Order";
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'OrderItem') THEN
+    TRUNCATE TABLE "OrderItem";
+  END IF;
+END $$;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'Return') THEN
+    TRUNCATE TABLE "Return";
+  END IF;
+END $$;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'Order') THEN
+    TRUNCATE TABLE "Order";
+  END IF;
+END $$;
 
 -- ── Step 4: Drop the old Order and OrderItem tables ─────────────────────────
 DROP TABLE IF EXISTS "OrderItem";
