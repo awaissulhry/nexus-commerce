@@ -1513,6 +1513,330 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // F.5 — Upcoming retail events for the banner. Returns events whose
+  // window overlaps with the next 90 days, sorted by startDate ASC. Each
+  // event carries a `prepDeadline` derived from startDate − prepLeadTimeDays
+  // so the UI can render "Black Friday in 47 days — last day to PO: Oct 13".
+  fastify.get('/fulfillment/replenishment/upcoming-events', async (_request, reply) => {
+    try {
+      const today = new Date()
+      today.setUTCHours(0, 0, 0, 0)
+      const horizonEnd = new Date(today)
+      horizonEnd.setUTCDate(horizonEnd.getUTCDate() + 90)
+
+      const events = await prisma.retailEvent.findMany({
+        where: {
+          isActive: true,
+          startDate: { lte: horizonEnd },
+          endDate: { gte: today },
+        },
+        orderBy: { startDate: 'asc' },
+        take: 20,
+      })
+
+      const annotated = events.map((e) => {
+        const prepDeadline = new Date(e.startDate)
+        prepDeadline.setUTCDate(
+          prepDeadline.getUTCDate() - e.prepLeadTimeDays,
+        )
+        const daysUntilStart = Math.ceil(
+          (e.startDate.getTime() - today.getTime()) / 86400000,
+        )
+        const daysUntilDeadline = Math.ceil(
+          (prepDeadline.getTime() - today.getTime()) / 86400000,
+        )
+        return {
+          id: e.id,
+          name: e.name,
+          startDate: e.startDate.toISOString().slice(0, 10),
+          endDate: e.endDate.toISOString().slice(0, 10),
+          channel: e.channel,
+          marketplace: e.marketplace,
+          productType: e.productType,
+          expectedLift: Number(e.expectedLift),
+          prepLeadTimeDays: e.prepLeadTimeDays,
+          prepDeadline: prepDeadline.toISOString().slice(0, 10),
+          daysUntilStart,
+          daysUntilDeadline,
+          description: e.description,
+        }
+      })
+      return { events: annotated }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[replenishment/upcoming-events] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // F.5 — Per-SKU forecast detail. Returns 90 days of point forecasts,
+  // confidence bands, signal breakdown, recent (60d) actuals, and any
+  // open inbound shipments — enough to render the row-detail drawer's
+  // chart + signal panel + shipment list without further API calls.
+  fastify.get<{ Params: { productId: string } }>(
+    '/fulfillment/replenishment/:productId/forecast-detail',
+    async (request, reply) => {
+      try {
+        const { productId } = request.params
+        const q = request.query as any
+        const channel =
+          typeof q.channel === 'string' && q.channel.length > 0
+            ? q.channel.toUpperCase()
+            : null
+        const marketplace =
+          typeof q.marketplace === 'string' && q.marketplace.length > 0
+            ? q.marketplace.toUpperCase()
+            : null
+
+        const product = await prisma.product.findUnique({
+          where: { id: productId },
+          select: { id: true, sku: true, name: true, totalStock: true },
+        })
+        if (!product) return reply.code(404).send({ error: 'Product not found' })
+
+        const today = new Date()
+        today.setUTCHours(0, 0, 0, 0)
+        const horizonEnd = new Date(today)
+        horizonEnd.setUTCDate(horizonEnd.getUTCDate() + 90)
+        const historyStart = new Date(today)
+        historyStart.setUTCDate(historyStart.getUTCDate() - 60)
+
+        const [forecastRows, historyRows, atpEntry] = await Promise.all([
+          prisma.replenishmentForecast.findMany({
+            where: {
+              sku: product.sku,
+              horizonDay: { gte: today, lte: horizonEnd },
+              ...(channel ? { channel } : {}),
+              ...(marketplace ? { marketplace } : {}),
+            },
+            orderBy: { horizonDay: 'asc' },
+            select: {
+              horizonDay: true,
+              forecastUnits: true,
+              lower80: true,
+              upper80: true,
+              signals: true,
+              model: true,
+              generationTag: true,
+            },
+          }),
+          prisma.dailySalesAggregate.findMany({
+            where: {
+              sku: product.sku,
+              day: { gte: historyStart, lt: today },
+              ...(channel ? { channel } : {}),
+              ...(marketplace ? { marketplace } : {}),
+            },
+            orderBy: { day: 'asc' },
+            select: { day: true, unitsSold: true },
+          }),
+          resolveAtp({ products: [{ id: product.id, sku: product.sku }] }).then(
+            (m) => m.get(product.id) ?? null,
+          ),
+        ])
+
+        // Aggregate per-day across channels/marketplaces if no filter
+        // (frontend usually passes filter; this branch is the catch-all).
+        const historyByDay = new Map<string, number>()
+        for (const r of historyRows) {
+          const key = r.day.toISOString().slice(0, 10)
+          historyByDay.set(key, (historyByDay.get(key) ?? 0) + r.unitsSold)
+        }
+        const forecastByDay = new Map<string, {
+          point: number
+          lower: number
+          upper: number
+          signals: any
+        }>()
+        for (const r of forecastRows) {
+          const key = r.horizonDay.toISOString().slice(0, 10)
+          const existing = forecastByDay.get(key)
+          if (existing) {
+            existing.point += Number(r.forecastUnits)
+            existing.lower += Number(r.lower80)
+            existing.upper += Number(r.upper80)
+          } else {
+            forecastByDay.set(key, {
+              point: Number(r.forecastUnits),
+              lower: Number(r.lower80),
+              upper: Number(r.upper80),
+              signals: r.signals,
+            })
+          }
+        }
+
+        // Build a continuous 60d-history + 90d-forecast series for the chart.
+        const series: Array<{
+          day: string
+          actual: number | null
+          forecast: number | null
+          lower80: number | null
+          upper80: number | null
+        }> = []
+        const cursor = new Date(historyStart)
+        while (cursor < today) {
+          const key = cursor.toISOString().slice(0, 10)
+          series.push({
+            day: key,
+            actual: historyByDay.get(key) ?? 0,
+            forecast: null,
+            lower80: null,
+            upper80: null,
+          })
+          cursor.setUTCDate(cursor.getUTCDate() + 1)
+        }
+        const forecastCursor = new Date(today)
+        for (let i = 0; i < 90; i++) {
+          const key = forecastCursor.toISOString().slice(0, 10)
+          const f = forecastByDay.get(key)
+          series.push({
+            day: key,
+            actual: null,
+            forecast: f?.point ?? null,
+            lower80: f?.lower ?? null,
+            upper80: f?.upper ?? null,
+          })
+          forecastCursor.setUTCDate(forecastCursor.getUTCDate() + 1)
+        }
+
+        // Signal breakdown — use the most recent forecast row's signals
+        // (they're typically constant across the horizon for a given series
+        // unless events mid-window). Caller can drill if they want per-day.
+        const latestSignals =
+          forecastRows.length > 0 ? forecastRows[0].signals : null
+
+        return {
+          product: {
+            id: product.id,
+            sku: product.sku,
+            name: product.name,
+            currentStock: product.totalStock,
+          },
+          atp: atpEntry,
+          model: forecastRows[0]?.model ?? null,
+          generationTag: forecastRows[0]?.generationTag ?? null,
+          signals: latestSignals,
+          series,
+        }
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[replenishment/forecast-detail] failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
+  // F.5 — Bulk draft PO. Accepts an array of {productId, quantity,
+  // supplierId?, notes?} and groups them into one PO per supplier.
+  // Lets the user multi-select 12 SKUs in the grid and one-click
+  // "Create POs from selection" without 12 round-trips.
+  fastify.post('/fulfillment/replenishment/bulk-draft-po', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as {
+        items?: Array<{
+          productId: string
+          quantity: number
+          supplierId?: string | null
+          notes?: string | null
+        }>
+        notes?: string
+      }
+      const items = body.items ?? []
+      if (items.length === 0) {
+        return reply.code(400).send({ error: 'items[] is required' })
+      }
+
+      // Resolve missing supplierIds via ReplenishmentRule. Group by
+      // supplier so each supplier gets one PO per call. Items without
+      // a resolved supplier go into a single "no-supplier" PO that the
+      // user must assign before submitting (matches the single-SKU
+      // /draft-po behaviour today).
+      const productIds = items.map((i) => i.productId)
+      const products = await prisma.product.findMany({
+        where: { id: { in: productIds } },
+        select: { id: true, sku: true },
+      })
+      const productById = new Map(products.map((p) => [p.id, p]))
+
+      const rules = await prisma.replenishmentRule.findMany({
+        where: { productId: { in: productIds } },
+        select: { productId: true, preferredSupplierId: true },
+      })
+      const ruleByProduct = new Map(
+        rules.map((r) => [r.productId, r.preferredSupplierId] as const),
+      )
+
+      const grouped = new Map<
+        string,
+        Array<{ productId: string; sku: string; quantity: number; notes?: string | null }>
+      >()
+      const skipped: Array<{ productId: string; reason: string }> = []
+      for (const item of items) {
+        const product = productById.get(item.productId)
+        if (!product) {
+          skipped.push({ productId: item.productId, reason: 'product not found' })
+          continue
+        }
+        if (!Number.isFinite(item.quantity) || item.quantity <= 0) {
+          skipped.push({ productId: item.productId, reason: 'quantity must be > 0' })
+          continue
+        }
+        const supplierId =
+          item.supplierId ?? ruleByProduct.get(item.productId) ?? null
+        const key = supplierId ?? '__no_supplier__'
+        const arr = grouped.get(key) ?? []
+        arr.push({
+          productId: item.productId,
+          sku: product.sku,
+          quantity: Math.floor(item.quantity),
+          notes: item.notes ?? null,
+        })
+        grouped.set(key, arr)
+      }
+
+      const createdPos: Array<{
+        id: string
+        poNumber: string
+        supplierId: string | null
+        itemCount: number
+      }> = []
+      for (const [supplierKey, lineItems] of grouped) {
+        const supplierId = supplierKey === '__no_supplier__' ? null : supplierKey
+        const po = await prisma.purchaseOrder.create({
+          data: {
+            poNumber: generatePoNumber(),
+            supplierId,
+            status: 'DRAFT',
+            totalCents: 0,
+            notes: body.notes ?? null,
+            items: {
+              create: lineItems.map((li) => ({
+                productId: li.productId,
+                sku: li.sku,
+                quantityOrdered: li.quantity,
+              })),
+            },
+          },
+          select: { id: true, poNumber: true, supplierId: true, _count: { select: { items: true } } },
+        })
+        createdPos.push({
+          id: po.id,
+          poNumber: po.poNumber,
+          supplierId: po.supplierId,
+          itemCount: po._count.items,
+        })
+      }
+
+      return {
+        ok: true,
+        createdPos,
+        itemsAccepted: items.length - skipped.length,
+        skipped,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[replenishment/bulk-draft-po] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // F.4 — Manual forecast trigger. Without a body, regenerates forecasts
   // for every series in the catalog. With { sku, channel, marketplace }
   // body, regenerates a single series (useful for debugging a specific
