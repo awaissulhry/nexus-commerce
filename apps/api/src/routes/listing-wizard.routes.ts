@@ -1447,6 +1447,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       const channels = normalizeChannels(wizard.channels)
       const w = {
         id: wizard.id,
+        productId: wizard.productId,
         channels,
         state: (wizard.state ?? {}) as Record<string, any>,
         channelStates:
@@ -1529,6 +1530,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       })
       const w = {
         id: wizard.id,
+        productId: wizard.productId,
         channels,
         state: (wizard.state ?? {}) as Record<string, any>,
         channelStates:
@@ -1777,6 +1779,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       })
       const w = {
         id: wizard.id,
+        productId: wizard.productId,
         channels,
         state: (wizard.state ?? {}) as Record<string, any>,
         channelStates:
@@ -1822,8 +1825,30 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           payload: p.payload as Record<string, unknown> | undefined,
           unsupported: p.unsupported,
           reason: p.reason,
+          productId: wizard.productId,
         })
         updatedSubmissions.push(next)
+
+        // Audit-fix #2 — persist any ASIN that landed inline on this retry.
+        // Without this the retried channel held a fresh ASIN on the in-memory
+        // entry but never got it written to ChannelListing/VariantChannelListing,
+        // forcing /poll to re-discover it (or never, if the SP-API GET also
+        // failed in the same way). Mirrors the /submit and /poll routes.
+        if (next.platform.toUpperCase() === 'AMAZON' && next.parentAsin) {
+          try {
+            await submissionService.writeAsinsBack({
+              productId: wizard.productId,
+              marketplace: next.marketplace,
+              parentAsin: next.parentAsin,
+              childAsinByMasterSku: next.childAsinsByMasterSku,
+            })
+          } catch (err) {
+            request.log?.warn?.(
+              { err, productId: wizard.productId, marketplace: next.marketplace },
+              'writeAsinsBack failed (post-retry)',
+            )
+          }
+        }
       }
 
       const overallStatus = computeOverallStatus(updatedSubmissions)

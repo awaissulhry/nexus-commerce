@@ -123,6 +123,26 @@ const IT_TERMS: Record<string, string> = {
   BAG: 'Borsa',
 }
 
+// E.5b — Country/marketplace code → display name. Used by the Marketplace
+// filter group; codes match Marketplace.code values (IT/DE/.../GLOBAL).
+const MARKETPLACE_DISPLAY_NAMES: Record<string, string> = {
+  IT: 'Italy',
+  DE: 'Germany',
+  FR: 'France',
+  ES: 'Spain',
+  NL: 'Netherlands',
+  SE: 'Sweden',
+  PL: 'Poland',
+  UK: 'United Kingdom',
+  GB: 'United Kingdom',
+  US: 'United States',
+  CA: 'Canada',
+  MX: 'Mexico',
+  AU: 'Australia',
+  JP: 'Japan',
+  GLOBAL: 'Global',
+}
+
 export default function ProductsWorkspace() {
   const router = useRouter()
   const pathname = usePathname()
@@ -537,23 +557,45 @@ function FilterBar(props: any) {
               selected={channelFilters}
               onToggle={(v: string) => updateUrl({ channels: toggleArr(channelFilters, v).join(',') || undefined, page: undefined })}
             />
-            {facets?.marketplaces && facets.marketplaces.length > 0 && (
-              <FilterGroup
-                label="Marketplace"
-                // E.5b — show every (channel, marketplace) pair that
-                // currently has at least one listing. Filter chip key
-                // is the marketplace code (IT/DE/...); matches the
-                // products list endpoint's `marketplaces=` query param.
-                options={facets.marketplaces.map((m: any) => m.value)}
-                selected={marketplaceFilters}
-                counts={facets.marketplaces.reduce((m: any, s: any) => { m[s.value] = s.count; return m }, {})}
-                renderLabel={(v: string) => {
-                  const meta = facets.marketplaces!.find((m: any) => m.value === v)
-                  return meta ? `${meta.label} (${v})` : v
-                }}
-                onToggle={(v: string) => updateUrl({ marketplaces: toggleArr(marketplaceFilters, v).join(',') || undefined, page: undefined })}
-              />
-            )}
+            {facets?.marketplaces && facets.marketplaces.length > 0 && (() => {
+              // E.5b — Marketplace filter is channel-agnostic (the backend
+              // matches `marketplace='IT'` across every ChannelListing
+              // regardless of channel). Combine with the Channels filter
+              // above to narrow to a single (channel, marketplace) tuple.
+              //
+              // Dedupe the per-(channel, marketplace) rows from the facet
+              // API into one chip per marketplace code, summing counts so
+              // a code that exists on both Amazon and eBay shows the
+              // combined total.
+              const merged = new Map<string, number>()
+              for (const m of facets.marketplaces!) {
+                merged.set(m.value, (merged.get(m.value) ?? 0) + m.count)
+              }
+              const codes = Array.from(merged.keys()).sort((a, b) =>
+                (merged.get(b) ?? 0) - (merged.get(a) ?? 0),
+              )
+              const counts = Object.fromEntries(merged)
+              return (
+                <FilterGroup
+                  label="Marketplace"
+                  options={codes}
+                  selected={marketplaceFilters}
+                  counts={counts}
+                  renderLabel={(v: string) =>
+                    MARKETPLACE_DISPLAY_NAMES[v]
+                      ? `${MARKETPLACE_DISPLAY_NAMES[v]} (${v})`
+                      : v
+                  }
+                  onToggle={(v: string) =>
+                    updateUrl({
+                      marketplaces:
+                        toggleArr(marketplaceFilters, v).join(',') || undefined,
+                      page: undefined,
+                    })
+                  }
+                />
+              )
+            })()}
             <FilterGroup
               label="Fulfillment"
               options={['FBA', 'FBM']}

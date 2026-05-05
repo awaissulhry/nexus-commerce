@@ -43,6 +43,7 @@ interface AmazonPayload {
     quantity: number | null
   }>
   variationTheme?: string
+  variationMapping?: Record<string, string>
   imageUrls?: string[]
 }
 
@@ -137,6 +138,7 @@ export class AmazonPublishAdapter {
           marketplaceId: payload.marketplaceId,
           variationTheme: payload.variationTheme,
           variationAttributes: child.variationAttributes,
+          variationMapping: payload.variationMapping,
           price: child.price,
           quantity: child.quantity,
         })
@@ -219,16 +221,34 @@ export class AmazonPublishAdapter {
    * Build the wrapped attribute envelope for a child PUT call. SP-API
    * needs parentage_level + child_parent_sku_relationship + the variation
    * theme axis values, plus a purchasable_offer if we have price/qty.
+   *
+   * Audit-fix #4 — Axis attribute names come from the per-marketplace
+   * `variationMapping` (ChannelListing.variationMapping, e.g.
+   * { Size: 'size_name', Color: 'color_name' }). Falls back to a
+   * `_name`-suffixed axis name (`size_name`, `color_name`) which is the
+   * dominant SP-API convention for fashion / apparel / consumer goods —
+   * correct for Xavia's motorcycle-gear catalog. Edge categories (e.g.
+   * BAG → `bag_size_name`, ELECTRONICS → `model_name`) need a real entry
+   * in variationMapping; without one, SP-API returns a clear "unknown
+   * attribute" issue that surfaces on the FAILED submission.
    */
   private buildChildAttributes(args: {
     parentSku: string
     marketplaceId: string
     variationTheme: string
     variationAttributes: Record<string, unknown>
+    variationMapping?: Record<string, string>
     price: number | null
     quantity: number | null
   }): Record<string, unknown> {
-    const { parentSku, marketplaceId, variationTheme, variationAttributes, price } = args
+    const {
+      parentSku,
+      marketplaceId,
+      variationTheme,
+      variationAttributes,
+      variationMapping,
+      price,
+    } = args
 
     const wrap = (value: unknown) => ({ marketplace_id: marketplaceId, value })
 
@@ -246,11 +266,16 @@ export class AmazonPublishAdapter {
       ],
     }
 
-    // Variation axis values: each axis on the theme (Size, Color, ...) becomes
-    // its own SP-API attribute, wrapped per the standard convention.
+    // Variation axis values — each axis (Size, Color, ...) becomes its own
+    // SP-API attribute. Mapping precedence: explicit variationMapping →
+    // `<axis>_name` fallback. Original-cased axes (like "Size") are
+    // accepted as-is too if mapping omits them and the lowercase form
+    // doesn't exist on the productType.
     for (const [axis, value] of Object.entries(variationAttributes)) {
       if (value === undefined || value === null || value === '') continue
-      out[axis.toLowerCase()] = [wrap(value)]
+      const mapped = variationMapping?.[axis] ?? variationMapping?.[axis.toLowerCase()]
+      const attrName = mapped ?? `${axis.toLowerCase()}_name`
+      out[attrName] = [wrap(value)]
     }
 
     // Pricing — purchasable_offer envelope if we have a price.

@@ -35,6 +35,12 @@ interface SubmissionEntry {
   updatedAt: string
   listingUrl?: string
   notImplementedReason?: string
+  /** Audit-fix #7 — Amazon parent ASIN, populated by the publish/poll path
+   *  once SP-API assigns it. Persisted to ChannelListing.externalParentId. */
+  parentAsin?: string
+  /** Audit-fix #7 — Per-child ASIN map: master SKU → child ASIN. Persisted
+   *  to VariantChannelListing.channelProductId scoped to (channel, marketplace). */
+  childAsinsByMasterSku?: Record<string, string>
 }
 
 interface SubmitResponse {
@@ -532,6 +538,31 @@ function SubmissionRow({
         <div className="mt-2 text-[11px] text-rose-700 inline-flex items-start gap-1.5">
           <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
           {entry.error}
+        </div>
+      )}
+      {/* Audit-fix #7 — Amazon ASINs once they land. Parent ASIN inline,
+          per-child counts surfaced to confirm catalog assignment without
+          requiring the user to dive into the DB. */}
+      {entry.parentAsin && (
+        <div className="mt-2 text-[11px] text-slate-700 inline-flex items-center gap-2 flex-wrap">
+          <span className="text-slate-500">Parent ASIN:</span>
+          <span className="font-mono font-medium text-slate-900">
+            {entry.parentAsin}
+          </span>
+          {entry.childAsinsByMasterSku &&
+            Object.keys(entry.childAsinsByMasterSku).length > 0 && (
+              <span className="text-slate-500">
+                ·{' '}
+                <span className="font-medium text-slate-700">
+                  {Object.keys(entry.childAsinsByMasterSku).length}
+                </span>{' '}
+                child ASIN
+                {Object.keys(entry.childAsinsByMasterSku).length === 1
+                  ? ''
+                  : 's'}{' '}
+                assigned
+              </span>
+            )}
         </div>
       )}
       {entry.notImplementedReason && (

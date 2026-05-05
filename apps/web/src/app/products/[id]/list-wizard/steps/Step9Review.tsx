@@ -46,6 +46,9 @@ interface ChannelPayloadEntry {
   payload?: any
   unsupported?: boolean
   reason?: string
+  /** Audit-fix #6 — Picked child SKUs that no longer exist. Surfaced as a
+   *  warning row in the channel card. */
+  missingChildSkus?: string[]
 }
 
 interface ReviewResponse {
@@ -302,6 +305,31 @@ function ChannelCard({
           marketplace={report.marketplace}
           payload={payload.payload}
         />
+      )}
+
+      {/* Audit-fix #6 — picked-but-missing child SKUs warning. Surfaces
+          the gap between Step 5 selection and what actually resolved at
+          composition time so the user knows specific picks were dropped. */}
+      {payload?.missingChildSkus && payload.missingChildSkus.length > 0 && (
+        <div className="px-4 py-2 border-b border-slate-100 bg-amber-50/40">
+          <div className="text-[12px] text-amber-800 inline-flex items-start gap-1.5">
+            <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+            <span>
+              <span className="font-semibold">
+                {payload.missingChildSkus.length}
+              </span>{' '}
+              picked child SKU
+              {payload.missingChildSkus.length === 1 ? '' : 's'} no longer
+              exist and will be skipped:{' '}
+              <span className="font-mono text-[11px]">
+                {payload.missingChildSkus.slice(0, 5).join(', ')}
+                {payload.missingChildSkus.length > 5
+                  ? ` +${payload.missingChildSkus.length - 5} more`
+                  : ''}
+              </span>
+            </span>
+          </div>
+        </div>
       )}
 
       {/* Always-visible blocking items + warnings */}

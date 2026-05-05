@@ -121,6 +121,19 @@ export class BulkActionService {
    */
   async createJob(input: CreateJobInput): Promise<BulkActionJob> {
     try {
+      // Audit-fix #3 — MARKETPLACE_OVERRIDE_UPDATE writes to ChannelListing
+      // rows; without `channel` the filter spans every channel (could blast
+      // Shopify rows when targeting Amazon DE). Refuse the job rather than
+      // letting the caller miss the constraint.
+      if (
+        input.actionType === 'MARKETPLACE_OVERRIDE_UPDATE' &&
+        (!input.channel || input.channel.trim().length === 0)
+      ) {
+        throw new Error(
+          'MARKETPLACE_OVERRIDE_UPDATE requires `channel` to be set (e.g. "AMAZON"). Refusing to run without a channel scope.',
+        );
+      }
+
       // Calculate total items to process
       let totalItems = 0;
 

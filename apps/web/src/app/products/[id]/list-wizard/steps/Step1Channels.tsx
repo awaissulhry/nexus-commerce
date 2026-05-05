@@ -72,6 +72,26 @@ function readSkuStrategy(state: Record<string, unknown>): SkuStrategy {
   }
 }
 
+// Audit-fix #8 — concrete summary line for the collapsed strategy panel.
+// Lists exactly which axes the user has customized so the user doesn't need
+// to expand the panel just to see what they previously set.
+function summarizeSkuStrategy(s: SkuStrategy): string {
+  const customs: string[] = []
+  if (s.parentSku === 'per-marketplace') {
+    customs.push('per-marketplace parent SKU')
+  }
+  if (s.childSku === 'per-marketplace') {
+    customs.push('per-marketplace child SKUs')
+  }
+  if (s.fbaFbm === 'suffixed') {
+    customs.push('-FBA/-FBM suffix')
+  }
+  if (customs.length === 0) {
+    return 'Default — shared parent + child SKUs across marketplaces, single FBA/FBM SKU'
+  }
+  return `Custom — ${customs.join(', ')}`
+}
+
 export default function Step1Channels({
   channels: initialChannels,
   wizardState,
@@ -230,11 +250,7 @@ export default function Step1Channels({
               SKU strategy
             </div>
             <div className="text-[11px] text-slate-500 mt-0.5 truncate">
-              {skuStrategy.parentSku === 'shared' &&
-              skuStrategy.childSku === 'shared' &&
-              skuStrategy.fbaFbm === 'same'
-                ? 'Default — shared parent + child SKUs across marketplaces, single FBA/FBM SKU'
-                : 'Custom — see settings'}
+              {summarizeSkuStrategy(skuStrategy)}
             </div>
           </div>
           <span className="text-[11px] text-slate-500 flex-shrink-0">

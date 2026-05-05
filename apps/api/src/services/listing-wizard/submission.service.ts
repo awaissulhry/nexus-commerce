@@ -42,6 +42,12 @@ export interface AmazonListingPayload {
    *  When they've opted into per-marketplace SKUs (Step 1), the suffix
    *  (-IT, -DE, ...) is appended. SP-API's putListingsItem keys on this. */
   parentSku?: string
+  /** Audit-fix #4 — Maps master variation axis names (e.g. "Size", "Color")
+   *  to the SP-API attribute names Amazon expects for this marketplace's
+   *  productType (e.g. "size_name", "color_name"). Pulled from
+   *  ChannelListing.variationMapping at composition time; the publish
+   *  adapter falls back to a best-effort `_name` suffix when missing. */
+  variationMapping?: Record<string, string>
   /** Children (variations) the user picked in Step 5. Each becomes a
    *  separate listing under the parent's variation theme. */
   childSkus?: string[]
@@ -105,10 +111,20 @@ export interface ChannelPayloadEntry {
   payload?: AmazonListingPayload | Record<string, unknown>
   unsupported?: boolean
   reason?: string
+  /** Audit-fix #6 — Master child SKUs the user picked in Step 5 that no
+   *  ProductVariation matches (deleted variant, typo). Same value on every
+   *  channel entry — surfaced per-entry so the UI can render the warning
+   *  next to the channel card without re-aggregating. */
+  missingChildSkus?: string[]
 }
 
 export interface MultiChannelWizard {
   id: string
+  /** Audit-fix #4 — Master Product.id. Used by the composer to pull
+   *  ChannelListing.variationMapping per marketplace; optional for legacy
+   *  callers (composition still works, just falls back to default attribute
+   *  names in the adapter). */
+  productId?: string
   channels: Array<{ platform: string; marketplace: string }>
   state: Record<string, any>
   channelStates: Record<string, Record<string, any>>
@@ -196,6 +212,57 @@ async function resolveAmazonMarketplaceIds(
 }
 
 /**
+ * Audit-fix #4 — Resolve per-marketplace ChannelListing.variationMapping for
+ * every Amazon channel in this wizard. Maps master axis names ("Size",
+ * "Color") to the SP-API attribute names Amazon expects for the listing's
+ * productType ("size_name", "color_name", etc.).
+ *
+ * One findMany scoped to (productId, AMAZON, marketplaces). Empty mapping
+ * is a valid result — the adapter falls back to a `_name` suffix on common
+ * axes when no row exists.
+ */
+async function resolveAmazonVariationMappings(
+  prisma: PrismaClient,
+  productId: string | undefined,
+  channels: Array<{ platform: string; marketplace: string }>,
+): Promise<Map<string, Record<string, string>>> {
+  const out = new Map<string, Record<string, string>>()
+  if (!productId) return out
+
+  const marketplaces = [
+    ...new Set(
+      channels
+        .filter((c) => c.platform.toUpperCase() === 'AMAZON')
+        .map((c) => c.marketplace.toUpperCase()),
+    ),
+  ]
+  if (marketplaces.length === 0) return out
+
+  const rows = await prisma.channelListing.findMany({
+    where: {
+      productId,
+      channel: 'AMAZON',
+      marketplace: { in: marketplaces },
+    },
+    select: { marketplace: true, variationMapping: true },
+  })
+
+  for (const row of rows) {
+    const mapping = row.variationMapping as Record<string, unknown> | null
+    if (!mapping || typeof mapping !== 'object') continue
+    // Coerce JSON values to string — anything non-string is dropped.
+    const coerced: Record<string, string> = {}
+    for (const [k, v] of Object.entries(mapping)) {
+      if (typeof v === 'string' && v.length > 0) coerced[k] = v
+    }
+    if (Object.keys(coerced).length > 0) {
+      out.set(`AMAZON:${row.marketplace}`, coerced)
+    }
+  }
+  return out
+}
+
+/**
  * E.2 — Resolve per-child VariantChannelListing data for every Amazon
  * (channel, marketplace) the wizard targets. Returns:
  *
@@ -255,19 +322,27 @@ function applySkuStrategy(
   return `${masterSku}-${marketplace.toUpperCase()}`
 }
 
+interface AmazonChildrenResolution {
+  byChannel: Map<string, Map<string, ChildResolved>>
+  /** Audit-fix #6 — SKUs the user picked in Step 5 but that no ProductVariation
+   *  matches. The composer surfaces this on the validation report so the user
+   *  knows specific picks were dropped (deleted variant, typo, etc.). */
+  missingSkus: string[]
+}
+
 async function resolveAmazonChildren(
   prisma: PrismaClient,
   channels: Array<{ platform: string; marketplace: string }>,
   includedSkus: string[],
   childStrategy: 'shared' | 'per-marketplace',
-): Promise<Map<string, Map<string, ChildResolved>>> {
+): Promise<AmazonChildrenResolution> {
   const out = new Map<string, Map<string, ChildResolved>>()
-  if (includedSkus.length === 0) return out
+  if (includedSkus.length === 0) return { byChannel: out, missingSkus: [] }
 
   const amazonChannels = channels.filter(
     (c) => c.platform.toUpperCase() === 'AMAZON',
   )
-  if (amazonChannels.length === 0) return out
+  if (amazonChannels.length === 0) return { byChannel: out, missingSkus: [] }
 
   const variants = await prisma.productVariation.findMany({
     where: { sku: { in: includedSkus } },
@@ -279,7 +354,16 @@ async function resolveAmazonChildren(
       stock: true,
     },
   })
-  if (variants.length === 0) return out
+
+  // Audit-fix #6 — compute the diff between requested SKUs and resolved
+  // variants. Set lookup is O(1); array remains the source of truth for
+  // ordering downstream.
+  const foundSet = new Set(variants.map((v) => v.sku))
+  const missingSkus = includedSkus.filter((sku) => !foundSet.has(sku))
+
+  if (variants.length === 0) {
+    return { byChannel: out, missingSkus }
+  }
 
   const variantIds = variants.map((v) => v.id)
   const marketplaces = [
@@ -332,7 +416,7 @@ async function resolveAmazonChildren(
     out.set(channelKey, childMap)
   }
 
-  return out
+  return { byChannel: out, missingSkus }
 }
 
 export class SubmissionService {
@@ -814,9 +898,15 @@ export class SubmissionService {
     // every Amazon channel in this wizard. The user's SKU strategy (set in
     // Step 1) drives whether children get suffixed marketplace SKUs or share
     // the master SKU; explicit VariantChannelListing.channelSku overrides
-    // either way. Two queries total, both well-indexed.
+    // either way. Audit-fix #4 also pulls ChannelListing.variationMapping
+    // per marketplace so SP-API child-attribute names are correct per
+    // productType. Three queries total, all well-indexed.
     const skuStrategy = readSkuStrategy(state)
-    const [amazonMarketplaceIds, amazonChildrenByChannel] = await Promise.all([
+    const [
+      amazonMarketplaceIds,
+      childrenResolution,
+      amazonVariationMappings,
+    ] = await Promise.all([
       resolveAmazonMarketplaceIds(this.prisma, wizard.channels),
       resolveAmazonChildren(
         this.prisma,
@@ -824,7 +914,24 @@ export class SubmissionService {
         includedSkus,
         skuStrategy.childSku,
       ),
+      resolveAmazonVariationMappings(
+        this.prisma,
+        wizard.productId,
+        wizard.channels,
+      ),
     ])
+    const amazonChildrenByChannel = childrenResolution.byChannel
+    // Audit-fix #6 — surface missing SKUs as a top-level signal so callers
+    // (the wizard /preview + /submit endpoints) can show "2 picked SKUs no
+    // longer exist" warnings without having to recompute.
+    if (childrenResolution.missingSkus.length > 0) {
+      console.warn(
+        '[submission] resolveAmazonChildren: dropped',
+        childrenResolution.missingSkus.length,
+        'missing master SKUs from variation payload:',
+        childrenResolution.missingSkus,
+      )
+    }
 
     return wizard.channels.map((cRaw) => {
       const c = {
@@ -1114,6 +1221,7 @@ export class SubmissionService {
         childSkus: includedSkus.length > 0 ? includedSkus : undefined,
         children: children.length > 0 ? children : undefined,
         variationTheme: theme,
+        variationMapping: amazonVariationMappings.get(channelKey),
         imageUrls: orderedUrls.length > 0 ? orderedUrls.slice(0, 9) : undefined,
       }
 
@@ -1122,6 +1230,10 @@ export class SubmissionService {
         platform: c.platform,
         marketplace: c.marketplace,
         payload,
+        missingChildSkus:
+          childrenResolution.missingSkus.length > 0
+            ? childrenResolution.missingSkus
+            : undefined,
       }
     })
   }
@@ -1151,7 +1263,13 @@ export class SubmissionService {
   }): Promise<void> {
     const marketplace = args.marketplace.toUpperCase()
 
-    await this.prisma.channelListing.update({
+    // Audit-fix #1 — upsert (not update) the parent ChannelListing. First-time
+    // publish to a new marketplace doesn't have a pre-existing ChannelListing
+    // row; the original update() crashed with P2025 and silently dropped the
+    // ASIN. The legacy `channelMarket` composite key is `<CHANNEL>_<REGION>`
+    // by Phase 9 convention; `region` mirrors `marketplace` for region-scoped
+    // channels. Schema defaults handle everything else.
+    await this.prisma.channelListing.upsert({
       where: {
         productId_channel_marketplace: {
           productId: args.productId,
@@ -1159,7 +1277,16 @@ export class SubmissionService {
           marketplace,
         },
       },
-      data: {
+      create: {
+        productId: args.productId,
+        channel: 'AMAZON',
+        marketplace,
+        region: marketplace,
+        channelMarket: `AMAZON_${marketplace}`,
+        externalParentId: args.parentAsin,
+        platformProductId: args.parentAsin,
+      },
+      update: {
         externalParentId: args.parentAsin,
         platformProductId: args.parentAsin,
       },
