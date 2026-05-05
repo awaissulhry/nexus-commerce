@@ -473,11 +473,15 @@ function AddProductsMenu({ onUploadClick }: { onUploadClick: () => void }) {
             onClick={() => setOpen(false)}
           />
           <div className="my-1 border-t border-slate-100" />
+          {/* PP — single-product create wizard. Mirrors the listing
+              wizard's step-by-step shell so users get a guided flow
+              instead of fighting a spreadsheet for a one-off SKU. */}
           <MenuItem
             icon={Sparkles}
-            title="Single product (coming soon)"
-            subtitle="Guided form with type, images, channels"
-            disabled
+            title="Single product"
+            subtitle="Guided wizard — basics, identifiers, variations"
+            href="/products/new"
+            onClick={() => setOpen(false)}
           />
         </div>
       )}

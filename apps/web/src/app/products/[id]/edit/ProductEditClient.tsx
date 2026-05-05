@@ -1,8 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { ChevronLeft, AlertCircle, TableProperties } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import {
+  ChevronLeft,
+  AlertCircle,
+  CheckCircle2,
+  TableProperties,
+  X,
+} from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import ListOnChannelDropdown from './ListOnChannelDropdown'
@@ -67,10 +73,18 @@ export default function ProductEditClient({
   childrenList,
 }: Props) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [topTab, setTopTab] = useState<TopTab>('master')
   // Per-channel selected marketplace (key by channel)
   const [marketSelection, setMarketSelection] = useState<Record<string, string>>({})
   const [unsavedChanges, setUnsavedChanges] = useState(false)
+  // PP — bridge banner from /products/new. The wizard redirects with
+  // ?created=1; we show a one-time success card with a "List on
+  // channel" CTA so the user can flow straight into the existing
+  // listing wizard without hunting for the dropdown.
+  const [showCreatedBanner, setShowCreatedBanner] = useState(
+    () => searchParams?.get('created') === '1',
+  )
 
   // NN.3 — beforeunload guard so closing the tab / hitting back
   // doesn't silently drop unsaved edits. Only attached when the
@@ -221,6 +235,35 @@ export default function ProductEditClient({
 
       {/* ── Body ───────────────────────────────────────────────── */}
       <main className="max-w-7xl mx-auto px-6 py-6">
+        {/* PP — post-create bridge banner. Surfaces immediately after
+            the create wizard redirects here so the user can hop into
+            the listing wizard without hunting for the dropdown. */}
+        {showCreatedBanner && (
+          <div className="mb-4 border border-emerald-200 bg-emerald-50 rounded-lg px-4 py-3 flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2 min-w-0">
+              <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-600 flex-shrink-0" />
+              <div className="min-w-0">
+                <div className="text-[13px] font-semibold text-emerald-900">
+                  {product.sku} created
+                </div>
+                <div className="text-[11px] text-emerald-800 mt-0.5">
+                  Master data is saved. Use the <strong>List on Channel</strong>{' '}
+                  dropdown above to publish to Amazon, eBay, Shopify or
+                  WooCommerce — the wizard handles per-channel attributes,
+                  pricing and submit.
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowCreatedBanner(false)}
+              className="text-emerald-600 hover:text-emerald-900 flex-shrink-0"
+              aria-label="Dismiss"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
         {topTab === 'master' && (
           <MasterDataTab product={product} onChange={() => setUnsavedChanges(true)} />
         )}

@@ -1387,6 +1387,220 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── D.4: CSV / XLSX bulk upload ────────────────────────────────
+  // PP — Single-product create wizard endpoint.
+  //
+  // POST /api/products/create-wizard
+  //   Body: master product fields + optional variations[]. Creates
+  //   the Product row and (optionally) per-variant ProductVariation
+  //   rows in one transaction so a partial create can't leave
+  //   orphaned variants. Channel listings are NOT created here —
+  //   that's the listing wizard's job; the user can chain into it
+  //   from the success page.
+  //
+  // Returns { product: { id, sku, ... }, variationCount } on 201.
+  fastify.post<{
+    Body: {
+      sku: string
+      name: string
+      brand?: string | null
+      productType?: string | null
+      description?: string | null
+      basePrice: number
+      costPrice?: number | null
+      totalStock?: number | null
+      lowStockThreshold?: number | null
+      upc?: string | null
+      ean?: string | null
+      gtin?: string | null
+      weightValue?: number | null
+      weightUnit?: string | null
+      dimLength?: number | null
+      dimWidth?: number | null
+      dimHeight?: number | null
+      dimUnit?: string | null
+      manufacturer?: string | null
+      categoryAttributes?: Record<string, unknown>
+      variations?: Array<{
+        sku: string
+        name?: string | null
+        variationAttributes?: Record<string, string>
+        price?: number | null
+        stock?: number | null
+      }>
+    }
+  }>('/products/create-wizard', async (request, reply) => {
+    const body = request.body ?? ({} as any)
+    // Required-field guards. Mirror the catalog endpoint so error
+    // shape matches and clients can branch the same way.
+    if (!body.sku?.trim()) {
+      return reply
+        .code(400)
+        .send({ error: 'sku is required', code: 'INVALID_REQUEST' })
+    }
+    if (!body.name?.trim()) {
+      return reply
+        .code(400)
+        .send({ error: 'name is required', code: 'INVALID_REQUEST' })
+    }
+    if (
+      typeof body.basePrice !== 'number' ||
+      Number.isNaN(body.basePrice) ||
+      body.basePrice < 0
+    ) {
+      return reply.code(400).send({
+        error: 'basePrice must be a non-negative number',
+        code: 'INVALID_REQUEST',
+      })
+    }
+
+    // SKU uniqueness — check master + every variation up front so we
+    // can return a clean conflict before the transaction starts.
+    const variationSkus = (body.variations ?? []).map((v) => v.sku?.trim())
+    if (variationSkus.some((s) => !s)) {
+      return reply.code(400).send({
+        error: 'every variation must have a non-empty sku',
+        code: 'INVALID_REQUEST',
+      })
+    }
+    const allSkus = [body.sku.trim(), ...variationSkus]
+    if (new Set(allSkus).size !== allSkus.length) {
+      return reply.code(400).send({
+        error: 'duplicate SKUs in this request — master and variations must be unique',
+        code: 'DUPLICATE_SKU',
+      })
+    }
+    const conflict = await prisma.product.findFirst({
+      where: { sku: { in: allSkus } },
+      select: { sku: true },
+    })
+    if (conflict) {
+      return reply.code(409).send({
+        error: `SKU "${conflict.sku}" already exists`,
+        code: 'DUPLICATE_SKU',
+      })
+    }
+
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        const isParent = (body.variations?.length ?? 0) > 0
+        const masterData: Record<string, unknown> = {
+          sku: body.sku.trim(),
+          name: body.name.trim(),
+          basePrice: body.basePrice,
+          isParent,
+          status: 'ACTIVE',
+          syncChannels: [],
+          validationStatus: 'VALID',
+          validationErrors: [],
+          hasChannelOverrides: false,
+        }
+        // Optional fields: only set when present so we don't blow
+        // away DB defaults with explicit null/undefined.
+        if (body.brand !== undefined) masterData.brand = body.brand
+        if (body.productType !== undefined)
+          masterData.productType = body.productType
+        if (body.description !== undefined)
+          masterData.description = body.description
+        if (typeof body.costPrice === 'number')
+          masterData.costPrice = body.costPrice
+        if (typeof body.totalStock === 'number')
+          masterData.totalStock = body.totalStock
+        if (typeof body.lowStockThreshold === 'number')
+          masterData.lowStockThreshold = body.lowStockThreshold
+        if (body.upc !== undefined) masterData.upc = body.upc
+        if (body.ean !== undefined) masterData.ean = body.ean
+        if (body.gtin !== undefined) masterData.gtin = body.gtin
+        if (typeof body.weightValue === 'number')
+          masterData.weightValue = body.weightValue
+        if (body.weightUnit !== undefined)
+          masterData.weightUnit = body.weightUnit
+        if (typeof body.dimLength === 'number')
+          masterData.dimLength = body.dimLength
+        if (typeof body.dimWidth === 'number')
+          masterData.dimWidth = body.dimWidth
+        if (typeof body.dimHeight === 'number')
+          masterData.dimHeight = body.dimHeight
+        if (body.dimUnit !== undefined) masterData.dimUnit = body.dimUnit
+        if (body.manufacturer !== undefined)
+          masterData.manufacturer = body.manufacturer
+        if (
+          body.categoryAttributes &&
+          Object.keys(body.categoryAttributes).length > 0
+        ) {
+          masterData.categoryAttributes = body.categoryAttributes
+        }
+
+        const product = await tx.product.create({ data: masterData as any })
+
+        if (isParent && body.variations) {
+          // Each variation also gets a Product row with parentId set
+          // (the canonical "child product" pattern in this codebase),
+          // plus a ProductVariation row with the attribute map. This
+          // matches what catalog.routes.ts does for child creation.
+          for (const v of body.variations) {
+            const child = await tx.product.create({
+              data: {
+                sku: v.sku.trim(),
+                name: v.name?.trim() || `${body.name} — ${v.sku.trim()}`,
+                basePrice: v.price ?? body.basePrice,
+                totalStock: v.stock ?? 0,
+                parentId: product.id,
+                isParent: false,
+                isMasterProduct: false,
+                status: 'ACTIVE',
+                syncChannels: [],
+                validationStatus: 'VALID',
+                validationErrors: [],
+                hasChannelOverrides: false,
+              } as any,
+            })
+            await tx.productVariation.create({
+              data: {
+                productId: product.id,
+                sku: v.sku.trim(),
+                variationAttributes: (v.variationAttributes ?? {}) as any,
+                price: v.price ?? body.basePrice,
+                stock: v.stock ?? 0,
+              } as any,
+            })
+            void child
+          }
+        }
+
+        return product
+      })
+
+      // NN.4 — audit log the creation.
+      void auditLogService.write({
+        userId: null,
+        ip: request.ip ?? null,
+        entityType: 'Product',
+        entityId: result.id,
+        action: 'create',
+        after: { sku: result.sku, name: result.name },
+        metadata: {
+          source: 'create-wizard',
+          variationCount: body.variations?.length ?? 0,
+        },
+      })
+
+      return reply.code(201).send({
+        success: true,
+        product: {
+          id: result.id,
+          sku: result.sku,
+          name: result.name,
+          isParent: result.isParent,
+        },
+        variationCount: body.variations?.length ?? 0,
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[products/create-wizard] failed')
+      return reply.code(500).send({ error: msg, code: 'CREATE_FAILED' })
+    }
+  })
+
   //
   // POST /api/products/bulk-upload
   //   multipart/form-data with one file. Parses + validates against
