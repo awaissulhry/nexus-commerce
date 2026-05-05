@@ -1,9 +1,9 @@
 'use client'
 
-import { Fragment, useMemo } from 'react'
+import { Fragment } from 'react'
 import { Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { STEPS, SETUP_STEP } from '../lib/steps'
+import { STEPS } from '../lib/steps'
 
 interface Props {
   currentStep: number
@@ -34,19 +34,6 @@ export default function WizardStepper({
   // announce 'current page' / 'current step' on focus. Step labels
   // are exposed via aria-label so the visual number is paired with
   // the human title.
-  //
-  // TT — render the Setup pre-step only when this wizard is in or
-  // has just left the create flow (currentStep === 0 OR setup is in
-  // completedSteps). Existing wizards have currentStep starting at
-  // 1 and have never had 0 in completedSteps, so this branch
-  // produces zero visual change for them.
-  const renderedSteps = useMemo(
-    () =>
-      currentStep === 0 || completedSteps.has(0)
-        ? [SETUP_STEP, ...STEPS]
-        : STEPS,
-    [currentStep, completedSteps],
-  )
   return (
     <nav
       aria-label="Listing wizard steps"
@@ -57,7 +44,7 @@ export default function WizardStepper({
         aria-orientation="horizontal"
         className="flex items-center gap-1 min-w-max"
       >
-        {renderedSteps.map((step, idx) => {
+        {STEPS.map((step, idx) => {
           const isCurrent = step.id === currentStep
           const isCompleted = completedSteps.has(step.id)
           const isSkipped = skippedSteps?.has(step.id) ?? false
@@ -72,7 +59,7 @@ export default function WizardStepper({
                 role="tab"
                 aria-selected={isCurrent}
                 aria-current={isCurrent ? 'step' : undefined}
-                aria-label={`Step ${idx + 1} of ${renderedSteps.length}: ${step.title}${
+                aria-label={`Step ${step.id} of ${STEPS.length}: ${step.title}${
                   isCompleted ? ' (completed)' : isSkipped ? ' (skipped)' : ''
                 }`}
                 tabIndex={isCurrent ? 0 : -1}
@@ -109,16 +96,12 @@ export default function WizardStepper({
                 ) : isCompleted ? (
                   <Check className="w-3.5 h-3.5" />
                 ) : (
-                  // TT — display index+1 so the SETUP_STEP (id=0)
-                  // shows as "1" not "0". For the standard 9-step
-                  // flow this evaluates identically to the previous
-                  // step.id rendering.
-                  idx + 1
+                  step.id
                 )}
               </button>
 
               </li>
-              {idx < renderedSteps.length - 1 && (
+              {idx < STEPS.length - 1 && (
                 <li
                   role="presentation"
                   aria-hidden="true"
