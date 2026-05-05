@@ -73,10 +73,42 @@ export default function CreateProductWizard() {
           )
           return
         }
-        // Drop straight into the listing wizard. The wizard handles
-        // every dynamic step from here — same flow as for an
-        // existing product. SKU/name placeholders can be renamed
-        // later via /products/[id]/edit on the master tab.
+        // TT — start a wizard for this product, then PATCH it to
+        // currentStep=0 so the user lands on the new Setup pre-step
+        // first. Existing wizards keep their default of currentStep=1
+        // — only the create flow ever has currentStep=0.
+        const startRes = await fetch(
+          `${getBackendUrl()}/api/listing-wizard/start`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productId: json.product.id }),
+          },
+        )
+        const startJson = (await startRes.json().catch(() => ({}))) as {
+          wizard?: { id: string }
+          error?: string
+        }
+        if (!startRes.ok || !startJson?.wizard?.id) {
+          setError(
+            startJson?.error ??
+              `Couldn't start the listing wizard (HTTP ${startRes.status}).`,
+          )
+          return
+        }
+        await fetch(
+          `${getBackendUrl()}/api/listing-wizard/${startJson.wizard.id}`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ currentStep: 0 }),
+          },
+        ).catch(() => {
+          // Soft-fail: if the PATCH errors, the wizard still works,
+          // just lands on Step 1 (Channels) instead of Step 0 (Setup).
+          // The user can still rename the SKU/name from the edit
+          // page; we don't want to block the redirect on this.
+        })
         router.replace(`/products/${json.product.id}/list-wizard`)
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err))

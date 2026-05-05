@@ -29,7 +29,22 @@ export interface StepConfig {
     | 'Phase H'
     | 'Phase I'
     | 'Phase J'
+    | 'TT'
   preview: string
+}
+
+// TT — Setup pre-step. Shown only in create-flow (when the user
+// arrives via /products/new — the wizard advances from id 0 to 1
+// after the master row is initialised). Existing wizards skip it
+// because their currentStep starts at 1.
+export const SETUP_STEP: StepConfig = {
+  id: 0,
+  title: 'Setup',
+  shortLabel: 'Setup',
+  description: 'Parent or variant? SKU? Master name and base price',
+  filledIn: 'TT',
+  preview:
+    'New-product entry: pick parent or child (parent gets variants in Step 4; child links to an existing parent SKU), set the master SKU, name and base price.',
 }
 
 export const STEPS: StepConfig[] = [

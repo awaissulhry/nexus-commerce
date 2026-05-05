@@ -16,6 +16,7 @@ import Step8Pricing from './steps/Step8Pricing'
 import Step9Review from './steps/Step9Review'
 import Step10Submit from './steps/Step10Submit'
 import Step1Channels from './steps/Step1Channels'
+import Step0Setup from './steps/Step0Setup'
 import { STEPS, findStep } from './lib/steps'
 
 export interface ChannelTuple {
@@ -330,6 +331,13 @@ export default function ListWizardClient({
             channel: firstChannel.platform,
             marketplace: firstChannel.marketplace,
           }
+
+          // TT — Step 0: Setup (create-flow only). Existing wizards
+          // never have currentStep === 0 — their default is 1, so
+          // this branch is invisible to anyone editing an existing
+          // product. Only the /products/new auto-create path lands
+          // a wizard with currentStep=0 to surface this step.
+          if (currentStep === 0) return <Step0Setup {...stepProps} />
 
           // ── Phase B step routing ────────────────────────────────
           // Step 1: Channels & Markets (NEW)
