@@ -1286,6 +1286,73 @@ model OrderItem {
   @@index([sku])
 }
 
+// ── F.1: Daily Sales Aggregate ─────────────────────────────────────────────
+// One row per (sku, channel, marketplace, day) — pre-aggregated demand
+// signal that the replenishment algorithm reads from. Replaces live
+// `OrderItem.groupBy` on the read path. Refreshed by a service that
+// re-aggregates from OrderItem on a schedule + after every order write.
+//
+// Future SP-API report ingest (F.3) writes the same shape with `source`
+// flipped to `AMAZON_REPORT` etc., overriding the OrderItem-derived
+// numbers when reports land canonical figures (refunds, taxes, returns).
+model DailySalesAggregate {
+  id String @id @default(cuid())
+
+  // ── Identity ────────────────────────────────────────────────────
+  sku         String
+  // OrderChannel as a string (AMAZON/EBAY/SHOPIFY/...) so SP-API report
+  // ingest paths can write here without depending on the enum.
+  channel     String
+  // Country code (IT/DE/...) for region-scoped channels, GLOBAL for
+  // single-store channels (Shopify, Etsy, WooCommerce). Mirrors the
+  // ChannelListing.marketplace convention.
+  marketplace String
+  // Day key (DATE, no time component). Postgres `DATE` storage.
+  day         DateTime @db.Date
+
+  // ── Core demand metrics (always populated) ──────────────────────
+  unitsSold    Int     @default(0)
+  // Sum of OrderItem.price * quantity in the order's currency. For
+  // multi-currency setups, the currency is tracked per source channel;
+  // analytics that compare across marketplaces should normalize separately.
+  grossRevenue Decimal @db.Decimal(14, 2) @default(0)
+  // Distinct order count contributing to this row (units / orders =
+  // average basket size for this SKU on this day).
+  ordersCount  Int     @default(0)
+
+  // ── F.3: SP-API report fields (nullable until reports land) ────
+  // Populated by Amazon Sales & Traffic report (sessions, buy-box %,
+  // conversion). Left null for OrderItem-derived rows.
+  sessions            Int?
+  buyBoxPct           Decimal? @db.Decimal(5, 2)
+  conversionRate      Decimal? @db.Decimal(5, 4)
+  // True if the SKU was out of stock at any point during the day.
+  // Critical for the forecaster — zero sales due to no stock should
+  // not lower the demand baseline.
+  isStockOut          Boolean  @default(false)
+  // ASP (average selling price) for the day. Helps detect price
+  // changes that explain demand shifts.
+  averageSellingPrice Decimal? @db.Decimal(10, 2)
+
+  // ── Provenance ──────────────────────────────────────────────────
+  // ORDER_ITEM | AMAZON_REPORT | EBAY_REPORT | SHOPIFY_REPORT | MANUAL
+  // The forecaster prefers report-sourced rows when available; the
+  // refresh service won't overwrite a higher-priority source with a
+  // lower-priority one (see refreshSalesAggregates docstring).
+  source String @default("ORDER_ITEM")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One row per identity tuple — upsert key. Source is intentionally
+  // NOT in the unique because a SKU's day should resolve to a single
+  // canonical aggregate; precedence is resolved at write time.
+  @@unique([sku, channel, marketplace, day])
+  @@index([sku, day])
+  @@index([channel, marketplace, day])
+  @@index([day])
+}
+
 model FinancialTransaction {
   id String @id @default(cuid())
 

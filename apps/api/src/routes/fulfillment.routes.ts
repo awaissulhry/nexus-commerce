@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { applyStockMovement, listStockMovements } from '../services/stock-movement.service.js'
+import { refreshSalesAggregates } from '../services/sales-aggregate.service.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // FULFILLMENT B.3–B.9 — full domain API surface
@@ -1181,8 +1182,20 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const q = request.query as any
       const window = Math.min(90, Math.max(7, safeNum(q.window, 30) ?? 30))
       const since = new Date(Date.now() - window * 24 * 60 * 60 * 1000)
+      since.setUTCHours(0, 0, 0, 0)
+      // F.1 — Optional marketplace filter. When set, velocity is per-marketplace
+      // (Amazon DE alone, eBay IT alone, etc.); when absent, all marketplaces sum.
+      const marketplaceFilter =
+        typeof q.marketplace === 'string' && q.marketplace.length > 0
+          ? q.marketplace.toUpperCase()
+          : null
+      // F.1 — Optional channel filter. Same pattern.
+      const channelFilter =
+        typeof q.channel === 'string' && q.channel.length > 0
+          ? q.channel.toUpperCase()
+          : null
 
-      // Pull all non-parent products + their 30d sales (sum of OrderItem.quantity)
+      // Pull all non-parent products
       const products = await prisma.product.findMany({
         where: { isParent: false, status: { not: 'INACTIVE' } },
         select: {
@@ -1192,17 +1205,23 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         take: 1000,
       })
 
-      // Aggregate units sold per product in the window via OrderItem
-      const sold = await prisma.orderItem.groupBy({
-        by: ['productId'],
+      // F.1 — Read pre-aggregated demand from DailySalesAggregate instead of
+      // GroupBy-ing the live OrderItem table. The aggregate is keyed by SKU
+      // (not productId), so the join key here is sku — matches the data layer
+      // and lets per-marketplace rows aggregate naturally.
+      const skus = products.map((p) => p.sku)
+      const sold = await prisma.dailySalesAggregate.groupBy({
+        by: ['sku'],
         where: {
-          createdAt: { gte: since },
-          productId: { in: products.map((p) => p.id) },
+          sku: { in: skus },
+          day: { gte: since },
+          ...(channelFilter ? { channel: channelFilter } : {}),
+          ...(marketplaceFilter ? { marketplace: marketplaceFilter } : {}),
         },
-        _sum: { quantity: true },
+        _sum: { unitsSold: true },
       })
-      const soldByProduct = new Map<string, number>()
-      for (const r of sold) if (r.productId) soldByProduct.set(r.productId, r._sum.quantity ?? 0)
+      const soldBySku = new Map<string, number>()
+      for (const r of sold) soldBySku.set(r.sku, r._sum.unitsSold ?? 0)
 
       // Pull replenishment rules (overrides) + supplier lead times
       const rules = await prisma.replenishmentRule.findMany({
@@ -1212,7 +1231,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
       const suggestions = products.map((p) => {
         const rule = rulesByProduct.get(p.id)
-        const unitsSold = soldByProduct.get(p.id) ?? 0
+        const unitsSold = soldBySku.get(p.sku) ?? 0
         const velocity = unitsSold / window // units per day
         const safetyDays = rule?.safetyStockDays ?? 7
         const leadTimeDays = 14 // TODO: derive from primary supplier
@@ -1258,9 +1277,68 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         low: suggestions.filter((s) => s.urgency === 'LOW').length,
       }
 
-      return { suggestions, counts, window }
+      return {
+        suggestions,
+        counts,
+        window,
+        // F.1 — surface the active filters so the UI can render them
+        // without re-parsing the query string.
+        filter: {
+          channel: channelFilter,
+          marketplace: marketplaceFilter,
+        },
+      }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[fulfillment/replenishment] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // F.1 — Manual recompute. Re-aggregates OrderItem rows in the given
+  // window into DailySalesAggregate. Useful after order corrections
+  // (refunds, cancellations) when waiting for the nightly job is too slow.
+  // Defaults: last 7 days. Window cap: 365 days per call.
+  fastify.post('/fulfillment/replenishment/refresh-aggregates', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as {
+        from?: string
+        to?: string
+        days?: number
+        overrideReportSources?: boolean
+      }
+      const days = body.days
+        ? Math.min(365, Math.max(1, Math.floor(body.days)))
+        : null
+      const now = new Date()
+      let to: Date
+      let from: Date
+      if (body.from && body.to) {
+        from = new Date(body.from)
+        to = new Date(body.to)
+      } else if (days != null) {
+        to = now
+        from = new Date(now.getTime() - (days - 1) * 86400000)
+      } else {
+        to = now
+        from = new Date(now.getTime() - 6 * 86400000) // last 7 days inclusive
+      }
+      if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+        return reply.code(400).send({ error: 'Invalid from/to dates' })
+      }
+
+      const result = await refreshSalesAggregates({
+        from,
+        to,
+        overrideReportSources: !!body.overrideReportSources,
+      })
+      return {
+        ok: true,
+        from: from.toISOString().slice(0, 10),
+        to: to.toISOString().slice(0, 10),
+        ...result,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[replenishment/refresh-aggregates] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })
