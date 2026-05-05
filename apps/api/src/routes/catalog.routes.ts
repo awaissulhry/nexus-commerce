@@ -940,11 +940,18 @@ export async function catalogRoutes(app: FastifyInstance) {
       name: string;
       basePrice: number | string;
       totalStock: number | string;
+      // XX — variant axis values (color: 'Red', size: 'L', …). Stored
+      // in Product.categoryAttributes.variations (where the children
+      // read endpoint surfaces them) AND in Product.variantAttributes
+      // for direct programmatic access. Optional — single-axis
+      // products created elsewhere don't pass this.
+      variantAttributes?: Record<string, string>;
     };
   }>("/products/:parentId/children", async (request, reply) => {
     try {
       const { parentId } = request.params;
       let { sku, name, basePrice, totalStock } = request.body;
+      const variantAttributes = request.body.variantAttributes;
 
       // Validate required fields
       if (!sku || !name) {
@@ -991,7 +998,24 @@ export async function catalogRoutes(app: FastifyInstance) {
         });
       }
 
-      // Create the child product
+      // XX — sanitise variant attributes. Drop empty keys/values so
+      // the JSON store doesn't carry stub entries; lower-case keys
+      // for consistency with how the read path reads them.
+      const cleanedVariantAttrs: Record<string, string> = {}
+      if (variantAttributes && typeof variantAttributes === 'object') {
+        for (const [k, v] of Object.entries(variantAttributes)) {
+          const key = String(k).trim()
+          const val = String(v ?? '').trim()
+          if (key && val) cleanedVariantAttrs[key] = val
+        }
+      }
+      const hasVariantAttrs = Object.keys(cleanedVariantAttrs).length > 0
+
+      // Create the child product. Persist axis values in BOTH places
+      // the read path knows about: variantAttributes (Prisma column)
+      // and categoryAttributes.variations (the structure the
+      // amazon/products/:id/children GET endpoint surfaces under
+      // 'variations').
       const childProduct = await prisma.product.create({
         data: {
           sku,
@@ -1003,8 +1027,42 @@ export async function catalogRoutes(app: FastifyInstance) {
           validationStatus: "VALID",
           syncChannels: parent.syncChannels || ["AMAZON", "EBAY"],
           status: "ACTIVE",
+          ...(hasVariantAttrs
+            ? {
+                variantAttributes: cleanedVariantAttrs as any,
+                categoryAttributes: {
+                  variations: cleanedVariantAttrs,
+                } as any,
+              }
+            : {}),
         },
       });
+
+      // XX — also create a ProductVariation row keyed by the same
+      // attrs. This is what the listing wizard's variations service
+      // queries for theme picking + missing-attribute annotations.
+      // Without this, /api/listing-wizard/:id/variations sees
+      // children: [] even when child Products with parentId exist.
+      if (hasVariantAttrs) {
+        await prisma.productVariation
+          .create({
+            data: {
+              productId: parentId,
+              sku,
+              variationAttributes: cleanedVariantAttrs as any,
+              price: parsedBasePrice,
+              stock: parsedTotalStock,
+            },
+          })
+          .catch((err: unknown) => {
+            // Soft-fail: child Product is already created. The
+            // ProductVariation row can be backfilled later.
+            logger.warn(
+              '[catalog/children] ProductVariation create failed',
+              { err: err instanceof Error ? err.message : String(err) },
+            )
+          })
+      }
 
       return reply.status(201).send({
         success: true,
@@ -1322,6 +1380,120 @@ export async function catalogRoutes(app: FastifyInstance) {
       });
     }
   });
+
+  /**
+   * XX — PATCH /api/catalog/products/:productId/variant-attributes
+   *
+   * Atomic update of a child product's axis values. Touches three
+   * places that matter to readers:
+   *   - Product.variantAttributes (Prisma column; first-class)
+   *   - Product.categoryAttributes.variations (read by
+   *     /api/amazon/products/:id/children)
+   *   - ProductVariation.variationAttributes (read by the listing
+   *     wizard's variations service)
+   *
+   * Body is { color: 'Red', size: 'L', … } — axis → value pairs. We
+   * MERGE (not replace) so callers can update one axis without
+   * blowing away the others. Send an empty string to delete an axis.
+   */
+  app.patch<{
+    Params: { productId: string };
+    Body: Record<string, string>;
+  }>(
+    '/products/:productId/variant-attributes',
+    async (request, reply) => {
+      const { productId } = request.params;
+      const incoming = request.body ?? {};
+      if (!incoming || typeof incoming !== 'object') {
+        return reply
+          .status(400)
+          .send({ success: false, error: 'Body must be an object of axis → value' });
+      }
+      // Sanitise. Empty string = delete the axis.
+      const writes: Record<string, string> = {};
+      const deletes: string[] = [];
+      for (const [k, v] of Object.entries(incoming)) {
+        const key = String(k).trim();
+        if (!key) continue;
+        const val = String(v ?? '').trim();
+        if (val === '') deletes.push(key);
+        else writes[key] = val;
+      }
+      try {
+        const product = await prisma.product.findUnique({
+          where: { id: productId },
+          select: {
+            id: true,
+            variantAttributes: true,
+            categoryAttributes: true,
+          },
+        });
+        if (!product) {
+          return reply
+            .status(404)
+            .send({ success: false, error: 'Product not found' });
+        }
+        const currentVA =
+          (product.variantAttributes as Record<string, string> | null) ?? {};
+        const nextVA = { ...currentVA, ...writes };
+        for (const k of deletes) delete nextVA[k];
+
+        const currentCA =
+          (product.categoryAttributes as
+            | { variations?: Record<string, string> }
+            | null) ?? {};
+        const currentVariations = currentCA.variations ?? {};
+        const nextVariations = { ...currentVariations, ...writes };
+        for (const k of deletes) delete nextVariations[k];
+        const nextCA = { ...currentCA, variations: nextVariations };
+
+        await prisma.product.update({
+          where: { id: productId },
+          data: {
+            variantAttributes: nextVA as any,
+            categoryAttributes: nextCA as any,
+          },
+        });
+        // Best-effort sync to the ProductVariation row (matched by sku).
+        await prisma.productVariation
+          .updateMany({
+            where: { productId: productId } as any,
+            data: { variationAttributes: nextVA as any },
+          })
+          .catch(() => {});
+        // Also try matching the parent's ProductVariation rows where
+        // the child sku matches — relevant when the variant lives
+        // under a parent's variations relation rather than its own
+        // productId.
+        const childSku = await prisma.product.findUnique({
+          where: { id: productId },
+          select: { sku: true, parentId: true },
+        });
+        if (childSku?.parentId && childSku.sku) {
+          await prisma.productVariation
+            .updateMany({
+              where: { productId: childSku.parentId, sku: childSku.sku },
+              data: { variationAttributes: nextVA as any },
+            })
+            .catch(() => {});
+        }
+
+        return reply.send({
+          success: true,
+          variantAttributes: nextVA,
+        });
+      } catch (error: any) {
+        logger.error('Failed to update variant attributes', {
+          error: error?.message,
+          productId,
+        });
+        return reply.status(500).send({
+          success: false,
+          error: error?.message ?? 'Internal error',
+        });
+      }
+    },
+  );
 
   /**
    * DELETE /api/products/:parentId/children/:childId

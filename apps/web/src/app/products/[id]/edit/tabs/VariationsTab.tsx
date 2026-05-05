@@ -39,7 +39,9 @@ import {
   AlertCircle,
   CheckCircle2,
   Edit2,
+  Loader2,
   Plus,
+  RefreshCw,
   Trash2,
   X,
 } from 'lucide-react'
@@ -77,6 +79,12 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
     kind: 'success' | 'error'
     text: string
   } | null>(null)
+  // YY — track when we last saw fresh data so the user knows whether
+  // the prices/quantities are real-time. Bumped on initial render and
+  // on every refresh.
+  const [lastRefreshed, setLastRefreshed] = useState<number>(() => Date.now())
+  const [refreshing, setRefreshing] = useState(false)
+
   // Auto-clear status banner so it doesn't persist forever.
   useEffect(() => {
     if (!statusMsg) return
@@ -87,7 +95,61 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
   // Keep rows in sync if the page-level fetch revalidates.
   useEffect(() => {
     setRows(childrenList)
+    setLastRefreshed(Date.now())
   }, [childrenList])
+
+  // YY — direct fetch from the children endpoint so prices/quantities
+  // reflect the DB without a full page reload. Used by the manual
+  // refresh button + the visibility/interval triggers below.
+  const refetch = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/amazon/products/${parent.id}/children`,
+        { cache: 'no-store' },
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const json = await res.json()
+      const list = (json?.children ?? []) as VariantRow[]
+      setRows(list)
+      setLastRefreshed(Date.now())
+    } catch (err) {
+      setStatusMsg({
+        kind: 'error',
+        text: `Refresh failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      })
+    } finally {
+      setRefreshing(false)
+    }
+  }, [parent.id])
+
+  // YY — refresh when the tab regains focus. Cheap (one GET) and
+  // ensures prices/quantities are current after the user comes back
+  // from another browser tab where they may have edited via bulk-ops.
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === 'visible') void refetch()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+    }
+  }, [refetch])
+
+  // YY — periodic poll while the tab is focused. 30s is generous for
+  // a catalog editor; aggressive enough to feel live, light enough
+  // to not hammer the API.
+  useEffect(() => {
+    const t = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return
+      void refetch()
+    }, 30_000)
+    return () => window.clearInterval(t)
+  }, [refetch])
 
   const variationAxes: string[] = useMemo(() => {
     if (Array.isArray(parent.variationAxes) && parent.variationAxes.length > 0) {
@@ -124,10 +186,14 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
 
   const skuSet = useMemo(() => new Set(rows.map((r) => r.sku)), [rows])
 
+  // YY — after a mutation, both refetch directly (immediate UI
+  // update) AND router.refresh() (so the page-level server fetch
+  // re-runs and any other tab on the same page sees the change).
   const refresh = useCallback(async () => {
     onChange()
+    await refetch()
     router.refresh()
-  }, [onChange, router])
+  }, [onChange, refetch, router])
 
   return (
     <div className="space-y-4">
@@ -162,24 +228,45 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
 
       <Card
         title="Variation Configuration"
-        description={`${rows.length} variation${
-          rows.length === 1 ? '' : 's'
-        }${
-          variationAxes.length > 0
-            ? ` across ${variationAxes.length} ${
-                variationAxes.length === 1 ? 'axis' : 'axes'
-              }`
-            : ''
-        }`}
+        description={
+          <span className="inline-flex items-center gap-2 flex-wrap">
+            <span>
+              {rows.length} variation{rows.length === 1 ? '' : 's'}
+              {variationAxes.length > 0
+                ? ` across ${variationAxes.length} ${
+                    variationAxes.length === 1 ? 'axis' : 'axes'
+                  }`
+                : ''}
+            </span>
+            <span className="text-slate-300">·</span>
+            <RelativeTimestamp at={lastRefreshed} />
+          </span>
+        }
         action={
-          <Button
-            variant="primary"
-            size="sm"
-            icon={<Plus className="w-3.5 h-3.5" />}
-            onClick={() => setCreateOpen(true)}
-          >
-            Add Variation
-          </Button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              disabled={refreshing}
+              title="Refresh prices & quantities from the database"
+              className="inline-flex items-center gap-1 h-7 px-2 text-[11px] font-medium text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50"
+            >
+              {refreshing ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3 h-3" />
+              )}
+              Refresh
+            </button>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Plus className="w-3.5 h-3.5" />}
+              onClick={() => setCreateOpen(true)}
+            >
+              Add Variation
+            </Button>
+          </div>
         }
       >
         {variationAxes.length > 0 ? (
@@ -530,6 +617,10 @@ function VariantFormModal({
           name: name.trim(),
           basePrice: basePrice.trim() ? Number(basePrice) : 0,
           totalStock: totalStock.trim() ? Number(totalStock) : 0,
+          // XX — send axis values to the catalog endpoint directly
+          // instead of a follow-up attr_* PATCH that landed in the
+          // wrong JSON path.
+          variantAttributes: variantAttrs,
         }
         const res = await fetch(
           `${getBackendUrl()}/api/catalog/products/${parent.id}/children`,
@@ -552,25 +643,6 @@ function VariantFormModal({
           return
         }
         const childId = json?.data?.id ?? json?.child?.id ?? json?.product?.id
-        // Persist variant attributes via bulk PATCH so the row's
-        // categoryAttributes.variations map (Amazon convention used
-        // by getAttr) is set. Soft-fails on PATCH error so the create
-        // still counts.
-        if (
-          childId &&
-          (Object.keys(variantAttrs).length > 0 || newAxes.length > 0)
-        ) {
-          const attrChanges = Object.entries(variantAttrs).map(([k, v]) => ({
-            id: childId,
-            field: `attr_${k}`,
-            value: v,
-          }))
-          await fetch(`${getBackendUrl()}/api/products/bulk`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ changes: attrChanges }),
-          }).catch(() => {})
-        }
         await onSaved({
           id: childId ?? `local_${Date.now()}`,
           sku: body.sku,
@@ -582,18 +654,32 @@ function VariantFormModal({
         })
         return
       }
-      // Edit mode — PATCH only the changed fields.
-      const changes: Array<{ id: string; field: string; value: unknown }> = []
+      // Edit mode — PATCH scalars via /api/products/bulk and axis
+      // values via the dedicated /variant-attributes endpoint so the
+      // edit lands in the same JSON paths the reads consume. Mixing
+      // attr_* with bulk PATCH was the bug that landed values in
+      // categoryAttributes.<axis> instead of categoryAttributes.
+      // variations.<axis>.
+      const scalarChanges: Array<{
+        id: string
+        field: string
+        value: unknown
+      }> = []
+      const axisDiff: Record<string, string> = {}
       if (initial) {
         if (skuTrimmed !== initial.sku) {
-          changes.push({ id: initial.id, field: 'sku', value: skuTrimmed })
+          scalarChanges.push({ id: initial.id, field: 'sku', value: skuTrimmed })
         }
         if (name.trim() !== (initial.name ?? '')) {
-          changes.push({ id: initial.id, field: 'name', value: name.trim() })
+          scalarChanges.push({
+            id: initial.id,
+            field: 'name',
+            value: name.trim(),
+          })
         }
         const newPrice = basePrice.trim() ? Number(basePrice) : 0
         if (newPrice !== Number(initial.basePrice ?? 0)) {
-          changes.push({
+          scalarChanges.push({
             id: initial.id,
             field: 'basePrice',
             value: newPrice,
@@ -601,7 +687,7 @@ function VariantFormModal({
         }
         const newStock = totalStock.trim() ? Number(totalStock) : 0
         if (newStock !== Number(initial.totalStock ?? 0)) {
-          changes.push({
+          scalarChanges.push({
             id: initial.id,
             field: 'totalStock',
             value: newStock,
@@ -609,28 +695,45 @@ function VariantFormModal({
         }
         for (const [k, v] of Object.entries(variantAttrs)) {
           const oldVal = getAttr(initial, k)
-          if (v !== oldVal) {
-            changes.push({ id: initial.id, field: `attr_${k}`, value: v })
-          }
+          if (v !== oldVal) axisDiff[k] = v
         }
       }
-      if (changes.length === 0) {
+      if (scalarChanges.length === 0 && Object.keys(axisDiff).length === 0) {
         await onSaved(initial!)
         return
       }
-      const res = await fetch(`${getBackendUrl()}/api/products/bulk`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ changes }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok || json?.success === false) {
-        setError(
-          json?.errors?.[0]?.error ??
-            json?.error ??
-            `Couldn't save changes (HTTP ${res.status}).`,
+      if (scalarChanges.length > 0) {
+        const res = await fetch(`${getBackendUrl()}/api/products/bulk`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ changes: scalarChanges }),
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok || json?.success === false) {
+          setError(
+            json?.errors?.[0]?.error ??
+              json?.error ??
+              `Couldn't save scalar changes (HTTP ${res.status}).`,
+          )
+          return
+        }
+      }
+      if (Object.keys(axisDiff).length > 0 && initial) {
+        const res = await fetch(
+          `${getBackendUrl()}/api/catalog/products/${initial.id}/variant-attributes`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(axisDiff),
+          },
         )
-        return
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok || json?.success === false) {
+          setError(
+            json?.error ?? `Couldn't save axis changes (HTTP ${res.status}).`,
+          )
+          return
+        }
       }
       await onSaved({
         ...(initial as VariantRow),
@@ -1037,6 +1140,42 @@ function DeleteConfirmModal({
         </div>
       </div>
     </div>
+  )
+}
+
+// YY — live "updated X seconds ago" pill. Re-renders every 5s so
+// the user always sees an honest staleness indicator without a hard
+// dependency on parent state.
+function RelativeTimestamp({ at }: { at: number }) {
+  const [, force] = useState(0)
+  useEffect(() => {
+    const t = window.setInterval(() => force((n) => n + 1), 5_000)
+    return () => window.clearInterval(t)
+  }, [])
+  const seconds = Math.max(0, Math.floor((Date.now() - at) / 1000))
+  const label =
+    seconds < 5
+      ? 'just now'
+      : seconds < 60
+      ? `${seconds}s ago`
+      : seconds < 3600
+      ? `${Math.floor(seconds / 60)}m ago`
+      : `${Math.floor(seconds / 3600)}h ago`
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 text-[10px] tabular-nums',
+        seconds < 30
+          ? 'text-emerald-600'
+          : seconds < 120
+          ? 'text-slate-500'
+          : 'text-amber-600',
+      )}
+      title={`Last refreshed at ${new Date(at).toLocaleTimeString()}`}
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />
+      {label}
+    </span>
   )
 }
 
