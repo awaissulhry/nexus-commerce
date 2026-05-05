@@ -20,10 +20,12 @@ import {
   CalendarClock,
   CheckCircle2,
   ChevronRight,
+  Copy,
   Factory,
   FileText,
   FileWarning,
   Loader2,
+  Mail,
   RefreshCw,
   ShoppingCart,
   Sparkles,
@@ -1115,8 +1117,14 @@ function BulkPoModal({
       id: string
       poNumber: string
       supplierId: string | null
+      supplierName: string | null
+      supplierEmail: string | null
       itemCount: number
+      totalUnits: number
     }> | null
+  >(null)
+  const [createdWorkOrders, setCreatedWorkOrders] = useState<
+    Array<{ id: string; productId: string; quantity: number }> | null
   >(null)
 
   // Group by supplier so the user sees how many POs will get created.
@@ -1154,6 +1162,7 @@ function BulkPoModal({
       }
       const json = await res.json()
       setCreatedPos(json.createdPos)
+      setCreatedWorkOrders(json.createdWorkOrders ?? null)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -1195,44 +1204,58 @@ function BulkPoModal({
           </button>
         </div>
 
-        {/* F.6 — Success state with download links per PO */}
+        {/* F.6 + Constraint #2/#5 — Success state with download links per
+            PO, email-to-supplier mailto: action, and Work Order separation. */}
         {createdPos ? (
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
-            <div className="text-[12px] text-emerald-700 inline-flex items-center gap-1.5 mb-2">
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+            <div className="text-[12px] text-emerald-700 inline-flex items-center gap-1.5">
               <CheckCircle2 size={14} />
               <span>
                 All POs land as DRAFT. Open each PDF, review with the factory,
                 and submit when you're ready.
               </span>
             </div>
-            {createdPos.map((po) => (
-              <div
-                key={po.id}
-                className="border border-slate-200 rounded px-3 py-2 flex items-center justify-between gap-3"
-              >
-                <div className="min-w-0">
-                  <div className="text-[13px] font-mono font-medium text-slate-900">
-                    {po.poNumber}
-                  </div>
-                  <div className="text-[11px] text-slate-500">
-                    {po.itemCount} item{po.itemCount === 1 ? '' : 's'}
-                    {po.supplierId ? (
-                      <> · supplier {po.supplierId.slice(-8)}</>
-                    ) : (
-                      <span className="text-amber-700"> · no supplier assigned</span>
-                    )}
-                  </div>
+
+            {createdPos.length > 0 && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
+                  Purchase orders
                 </div>
-                <a
-                  href={`${getBackendUrl()}/api/fulfillment/purchase-orders/${po.id}/factory.pdf`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="h-7 px-3 text-[12px] bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5"
-                >
-                  <FileText size={12} /> Factory PDF
-                </a>
+                <div className="space-y-1.5">
+                  {createdPos.map((po) => (
+                    <PoSuccessRow key={po.id} po={po} />
+                  ))}
+                </div>
               </div>
-            ))}
+            )}
+
+            {createdWorkOrders && createdWorkOrders.length > 0 && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-violet-700 font-semibold mb-1.5 inline-flex items-center gap-1">
+                  <Factory size={10} /> Work orders (manufactured items)
+                </div>
+                <div className="space-y-1.5">
+                  {createdWorkOrders.map((wo) => (
+                    <div
+                      key={wo.id}
+                      className="border border-violet-200 bg-violet-50/40 rounded px-3 py-2 flex items-center justify-between gap-3"
+                    >
+                      <div>
+                        <div className="text-[12px] font-mono text-slate-900">
+                          WO {wo.id.slice(-10)}
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          {wo.quantity} units · status PLANNED
+                        </div>
+                      </div>
+                      <span className="text-[10px] uppercase tracking-wider font-semibold text-violet-700 bg-violet-100 border border-violet-200 px-1.5 py-0.5 rounded">
+                        Manufacturing
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
         <div className="flex-1 overflow-y-auto px-5 py-3">
@@ -1342,5 +1365,131 @@ function BulkPoModal({
         </div>
       </div>
     </div>
+  )
+}
+
+// Constraint #2 — Per-PO success row with Factory PDF + Email supplier
+// actions. Email path uses mailto: with subject + body pre-filled and a
+// link to the PDF endpoint; user attaches the actual PDF manually
+// (mailto: doesn't support attachments). Email button is disabled with
+// a clear "no email on supplier" tooltip when supplier.email is missing.
+function PoSuccessRow({
+  po,
+}: {
+  po: {
+    id: string
+    poNumber: string
+    supplierId: string | null
+    supplierName: string | null
+    supplierEmail: string | null
+    itemCount: number
+    totalUnits: number
+  }
+}) {
+  const pdfUrl = `${getBackendUrl()}/api/fulfillment/purchase-orders/${po.id}/factory.pdf`
+  const mailtoUrl = po.supplierEmail
+    ? buildSupplierMailto({
+        to: po.supplierEmail,
+        supplierName: po.supplierName,
+        poNumber: po.poNumber,
+        itemCount: po.itemCount,
+        totalUnits: po.totalUnits,
+        pdfUrl,
+      })
+    : null
+  const copyEmail = po.supplierEmail
+    ? () => navigator.clipboard?.writeText(po.supplierEmail!)
+    : null
+  return (
+    <div className="border border-slate-200 rounded px-3 py-2 flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <div className="text-[13px] font-mono font-medium text-slate-900">
+          {po.poNumber}
+        </div>
+        <div className="text-[11px] text-slate-500">
+          {po.itemCount} item{po.itemCount === 1 ? '' : 's'} · {po.totalUnits} units
+          {po.supplierName ? (
+            <> · {po.supplierName}</>
+          ) : (
+            <span className="text-amber-700"> · no supplier assigned</span>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        {mailtoUrl ? (
+          <a
+            href={mailtoUrl}
+            className="h-7 px-2.5 text-[12px] border border-slate-200 text-slate-700 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+            title={`Email ${po.supplierEmail}`}
+          >
+            <Mail size={12} /> Email
+          </a>
+        ) : (
+          <button
+            type="button"
+            disabled
+            className="h-7 px-2.5 text-[12px] border border-slate-200 text-slate-400 rounded cursor-not-allowed inline-flex items-center gap-1.5"
+            title={
+              po.supplierId
+                ? 'Supplier has no email on file — set it in Suppliers'
+                : 'No supplier assigned'
+            }
+          >
+            <Mail size={12} /> Email
+          </button>
+        )}
+        {copyEmail && (
+          <button
+            type="button"
+            onClick={copyEmail}
+            className="h-7 px-2 text-[12px] border border-slate-200 text-slate-500 rounded hover:bg-slate-50"
+            title="Copy supplier email to clipboard"
+          >
+            <Copy size={12} />
+          </button>
+        )}
+        <a
+          href={pdfUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="h-7 px-3 text-[12px] bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5"
+        >
+          <FileText size={12} /> Factory PDF
+        </a>
+      </div>
+    </div>
+  )
+}
+
+// Builds a mailto: URL with subject + body pre-filled. Body includes a
+// direct link to the PDF endpoint as a fallback for users who don't
+// notice the manual-attach instruction. Encoding via encodeURIComponent
+// per RFC 6068 — whitespace, line breaks, and special chars all valid.
+function buildSupplierMailto(args: {
+  to: string
+  supplierName: string | null
+  poNumber: string
+  itemCount: number
+  totalUnits: number
+  pdfUrl: string
+}): string {
+  const subject = `Purchase Order ${args.poNumber}`
+  const greeting = args.supplierName ? `Hi ${args.supplierName},` : 'Hello,'
+  const body = [
+    greeting,
+    '',
+    `Please find attached our purchase order ${args.poNumber} (${args.itemCount} line item${args.itemCount === 1 ? '' : 's'}, ${args.totalUnits} units total).`,
+    '',
+    `If the PDF didn't attach, you can also download it here:`,
+    args.pdfUrl,
+    '',
+    'Please confirm receipt and the expected delivery date at your earliest convenience.',
+    '',
+    'Thank you,',
+  ].join('\r\n')
+  return (
+    `mailto:${encodeURIComponent(args.to)}` +
+    `?subject=${encodeURIComponent(subject)}` +
+    `&body=${encodeURIComponent(body)}`
   )
 }

@@ -154,6 +154,7 @@ const NAV_SECTIONS: NavSectionConfig[] = [
     icon: "⚙️",
     items: [
       { label: "Account", href: "/settings/account", icon: "🏢" },
+      { label: "Company / Brand", href: "/settings/company", icon: "📄" },
       { label: "Notifications", href: "/settings/notifications", icon: "🔔" },
       { label: "API Keys", href: "/settings/api-keys", icon: "🔑" },
       { label: "Profile", href: "/settings/profile", icon: "👤" },

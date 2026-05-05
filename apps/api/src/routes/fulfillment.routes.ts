@@ -876,77 +876,152 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       })
       if (!po) return reply.code(404).send({ error: 'PO not found' })
 
-      // Fetch products + their parent's variation attributes + main image.
-      // Group items by parent (or by self when standalone) so the matrix
-      // builder has the full set of variants per product family.
-      const productIds = po.items.map((it) => it.productId).filter((id): id is string => !!id)
-      const products = await prisma.product.findMany({
-        where: { id: { in: productIds } },
-        select: {
-          id: true,
-          sku: true,
-          name: true,
-          productType: true,
-          brand: true,
-          parentId: true,
-          isParent: true,
-          images: {
-            where: { type: 'MAIN' },
-            select: { url: true },
-            take: 1,
-          },
-        },
-      })
-      const productById = new Map(products.map((p) => [p.id, p]))
-
-      // For each item, resolve its variation attrs from ProductVariation
-      // (where the SKU lives at the variant level). For Phase-31 Hub-and-
-      // Spoke products (where children are themselves Products), we walk
-      // up via parentId. For ProductVariation children, we look up by SKU.
+      // Constraint #3 — Robust dual-architecture resolution. The codebase
+      // carries two parent/child shapes:
+      //   * ProductVariation: master Product → many ProductVariation rows
+      //     (typical Amazon parent ASIN with size/color variants)
+      //   * Hub-and-spoke (Phase 31): master Product → child Product rows
+      //     via parentId (legacy pattern still in use for some catalogs)
+      // SKUs may exist in either space; in pathological cases, the same
+      // SKU could exist in BOTH (data drift). We resolve in this order:
+      //   1. ProductVariation (canonical for new data)
+      //   2. Child Product → parent Product (hub-and-spoke fallback)
+      //   3. Standalone Product (no parent)
+      //   4. Orphan (productId null or both lookups miss)
+      // When step 1 + step 2/3 both match, we log a warning so data drift
+      // is observable rather than silent.
+      //
+      // Two batched queries up front: variants by SKU (step 1) and products
+      // by id+parentId chain (steps 2-3). Parents that aren't directly on
+      // po.items get pulled in a second query.
+      const itemProductIds = po.items
+        .map((it) => it.productId)
+        .filter((id): id is string => !!id)
       const itemSkus = po.items.map((it) => it.sku)
-      const variants = await prisma.productVariation.findMany({
-        where: { sku: { in: itemSkus } },
-        select: {
-          sku: true,
-          productId: true,
-          variationAttributes: true,
-          product: {
-            select: {
-              id: true,
-              name: true,
-              brand: true,
-              productType: true,
-              images: {
-                where: { type: 'MAIN' },
-                select: { url: true },
-                take: 1,
-              },
-            },
-          },
-        },
-      })
-      const variantBySku = new Map(variants.map((v) => [v.sku, v]))
 
-      // Group by "parent" — either ProductVariation.productId (variant case)
-      // or Product.parentId / Product.id (Hub-and-Spoke case) or Product.id
-      // (standalone). Each group becomes one section in the PDF.
-      const groupMap = new Map<string, FactoryPoProductGroup>()
-      const upsertGroup = (
-        key: string,
-        seed: () => FactoryPoProductGroup,
-        line: FactoryPoVariantLine,
-      ) => {
-        const existing = groupMap.get(key)
-        if (existing) {
-          existing.lines.push(line)
-        } else {
-          const g = seed()
-          g.lines.push(line)
-          groupMap.set(key, g)
+      const productSelect = {
+        id: true,
+        sku: true,
+        name: true,
+        productType: true,
+        brand: true,
+        parentId: true,
+        isParent: true,
+        images: {
+          where: { type: 'MAIN' as const },
+          select: { url: true },
+          take: 1,
+        },
+      } as const
+
+      const [variants, directProducts] = await Promise.all([
+        prisma.productVariation.findMany({
+          where: { sku: { in: itemSkus } },
+          select: {
+            sku: true,
+            productId: true,
+            variationAttributes: true,
+            product: { select: productSelect },
+          },
+        }),
+        prisma.product.findMany({
+          where: { id: { in: itemProductIds } },
+          select: productSelect,
+        }),
+      ])
+
+      const variantBySku = new Map(variants.map((v) => [v.sku, v]))
+      const productById = new Map(directProducts.map((p) => [p.id, p]))
+
+      // Pull parent products for any hub-and-spoke children whose parents
+      // aren't already loaded. Without this, a SKU's parent would fall
+      // through to the child as the group identity (image / name / brand
+      // come from the child instead of the parent product family).
+      const missingParentIds = directProducts
+        .map((p) => p.parentId)
+        .filter(
+          (pid): pid is string => !!pid && !productById.has(pid),
+        )
+      if (missingParentIds.length > 0) {
+        const parents = await prisma.product.findMany({
+          where: { id: { in: [...new Set(missingParentIds)] } },
+          select: productSelect,
+        })
+        for (const p of parents) productById.set(p.id, p)
+      }
+
+      // Detect SKUs that exist in BOTH spaces — data drift. Log + flag
+      // for observability without blocking the render.
+      const dualSpaceSkus: string[] = []
+      for (const item of po.items) {
+        if (variantBySku.has(item.sku) && productById.has(item.productId ?? '')) {
+          dualSpaceSkus.push(item.sku)
+        }
+      }
+      if (dualSpaceSkus.length > 0) {
+        fastify.log.warn(
+          { skus: dualSpaceSkus, poId: id, poNumber: po.poNumber },
+          'factory-pdf: SKUs found in both ProductVariation and Product spaces; preferring variant lookup',
+        )
+      }
+
+      // Centralized resolver — always returns a group identity. This is
+      // the single source of truth for "which group does this PO line
+      // belong to"; the upsertGroup loop just picks up whatever this
+      // returns.
+      type ResolvedGroupIdentity = {
+        groupKey: string
+        productId: string
+        productName: string
+        productType: string | null
+        brand: string | null
+        imageUrl: string | null
+      }
+      const resolveGroupIdentity = (
+        item: (typeof po.items)[number],
+      ): ResolvedGroupIdentity => {
+        // 1. ProductVariation (canonical)
+        const variant = variantBySku.get(item.sku)
+        if (variant) {
+          const parent = variant.product
+          return {
+            groupKey: parent.id,
+            productId: parent.id,
+            productName: parent.name,
+            productType: parent.productType ?? null,
+            brand: parent.brand ?? null,
+            imageUrl: parent.images[0]?.url ?? null,
+          }
+        }
+        // 2 + 3. Direct product lookup (hub-and-spoke + standalone)
+        const product = item.productId ? productById.get(item.productId) : null
+        if (product) {
+          const parent = product.parentId
+            ? productById.get(product.parentId) ?? product
+            : product
+          return {
+            groupKey: parent.id,
+            productId: parent.id,
+            productName: parent.name,
+            productType: parent.productType ?? null,
+            brand: parent.brand ?? null,
+            imageUrl: parent.images[0]?.url ?? null,
+          }
+        }
+        // 4. Orphan
+        return {
+          groupKey: `__orphan_${item.sku}`,
+          productId: `__orphan_${item.sku}`,
+          productName: `Unknown product (SKU: ${item.sku})`,
+          productType: null,
+          brand: null,
+          imageUrl: null,
         }
       }
 
+      const groupMap = new Map<string, FactoryPoProductGroup>()
       for (const item of po.items) {
+        const identity = resolveGroupIdentity(item)
         const variant = variantBySku.get(item.sku)
         const line: FactoryPoVariantLine = {
           sku: item.sku,
@@ -955,62 +1030,18 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             ? (variant.variationAttributes as Record<string, string> | null)
             : null,
         }
-
-        if (variant) {
-          // Variant — group by parent product (the ProductVariation's product)
-          const parent = variant.product
-          upsertGroup(
-            parent.id,
-            () => ({
-              productId: parent.id,
-              productName: parent.name,
-              productType: parent.productType,
-              brand: parent.brand,
-              imageUrl: parent.images[0]?.url ?? null,
-              lines: [],
-            }),
-            line,
-          )
-          continue
-        }
-
-        // No matching ProductVariation — fall back to Product lookup.
-        const product = item.productId ? productById.get(item.productId) : null
-        if (product) {
-          // Hub-and-spoke: children are Products with parentId. Resolve
-          // the parent for grouping if present; otherwise the product
-          // itself is the group.
-          const parentKey = product.parentId ?? product.id
-          const parent = product.parentId
-            ? productById.get(product.parentId) ?? product
-            : product
-          upsertGroup(
-            parentKey,
-            () => ({
-              productId: parent.id,
-              productName: parent.name,
-              productType: parent.productType,
-              brand: parent.brand,
-              imageUrl: parent.images[0]?.url ?? null,
-              lines: [],
-            }),
-            line,
-          )
+        const existing = groupMap.get(identity.groupKey)
+        if (existing) {
+          existing.lines.push(line)
         } else {
-          // Orphan SKU (item.productId null or product deleted) — render
-          // as its own group so the PDF is at least complete.
-          upsertGroup(
-            `__orphan_${item.sku}`,
-            () => ({
-              productId: `__orphan_${item.sku}`,
-              productName: `Unknown product (SKU: ${item.sku})`,
-              productType: null,
-              brand: null,
-              imageUrl: null,
-              lines: [],
-            }),
-            line,
-          )
+          groupMap.set(identity.groupKey, {
+            productId: identity.productId,
+            productName: identity.productName,
+            productType: identity.productType,
+            brand: identity.brand,
+            imageUrl: identity.imageUrl,
+            lines: [line],
+          })
         }
       }
 
@@ -1961,11 +1992,13 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(400).send({ error: 'items[] is required' })
       }
 
-      // Resolve missing supplierIds via ReplenishmentRule. Group by
-      // supplier so each supplier gets one PO per call. Items without
-      // a resolved supplier go into a single "no-supplier" PO that the
-      // user must assign before submitting (matches the single-SKU
-      // /draft-po behaviour today).
+      // Resolve supplierIds + manufactured flag per product via
+      // ReplenishmentRule. Items split into two paths:
+      //   * Manufactured (rule.isManufactured = true) → one WorkOrder per
+      //     item (manufacturing is per-product, not batched by supplier).
+      //   * Sourced from a supplier → grouped into one PO per supplier;
+      //     items without a resolved supplier land in a single
+      //     "no-supplier" PO the user must assign before submitting.
       const productIds = items.map((i) => i.productId)
       const products = await prisma.product.findMany({
         where: { id: { in: productIds } },
@@ -1975,16 +2008,35 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
       const rules = await prisma.replenishmentRule.findMany({
         where: { productId: { in: productIds } },
-        select: { productId: true, preferredSupplierId: true },
+        select: {
+          productId: true,
+          preferredSupplierId: true,
+          isManufactured: true,
+        },
       })
       const ruleByProduct = new Map(
-        rules.map((r) => [r.productId, r.preferredSupplierId] as const),
+        rules.map(
+          (r) =>
+            [
+              r.productId,
+              {
+                supplierId: r.preferredSupplierId,
+                isManufactured: r.isManufactured,
+              },
+            ] as const,
+        ),
       )
 
       const grouped = new Map<
         string,
         Array<{ productId: string; sku: string; quantity: number; notes?: string | null }>
       >()
+      const manufactured: Array<{
+        productId: string
+        sku: string
+        quantity: number
+        notes?: string | null
+      }> = []
       const skipped: Array<{ productId: string; reason: string }> = []
       for (const item of items) {
         const product = productById.get(item.productId)
@@ -1996,27 +2048,53 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           skipped.push({ productId: item.productId, reason: 'quantity must be > 0' })
           continue
         }
-        const supplierId =
-          item.supplierId ?? ruleByProduct.get(item.productId) ?? null
-        const key = supplierId ?? '__no_supplier__'
-        const arr = grouped.get(key) ?? []
-        arr.push({
+        const rule = ruleByProduct.get(item.productId)
+        const line = {
           productId: item.productId,
           sku: product.sku,
           quantity: Math.floor(item.quantity),
           notes: item.notes ?? null,
-        })
+        }
+        // Manufactured items create a WorkOrder, not a PO line.
+        if (rule?.isManufactured) {
+          manufactured.push(line)
+          continue
+        }
+        const supplierId = item.supplierId ?? rule?.supplierId ?? null
+        const key = supplierId ?? '__no_supplier__'
+        const arr = grouped.get(key) ?? []
+        arr.push(line)
         grouped.set(key, arr)
       }
+
+      // Pre-fetch supplier contact info so the response carries enough
+      // data for the UI to build a "Email supplier" mailto: link without
+      // a second round-trip.
+      const involvedSupplierIds = [...grouped.keys()].filter(
+        (k) => k !== '__no_supplier__',
+      )
+      const suppliers =
+        involvedSupplierIds.length > 0
+          ? await prisma.supplier.findMany({
+              where: { id: { in: involvedSupplierIds } },
+              select: { id: true, name: true, email: true, contactName: true },
+            })
+          : []
+      const supplierById = new Map(suppliers.map((s) => [s.id, s]))
 
       const createdPos: Array<{
         id: string
         poNumber: string
         supplierId: string | null
+        supplierName: string | null
+        supplierEmail: string | null
         itemCount: number
+        totalUnits: number
       }> = []
       for (const [supplierKey, lineItems] of grouped) {
         const supplierId = supplierKey === '__no_supplier__' ? null : supplierKey
+        const supplier = supplierId ? supplierById.get(supplierId) : null
+        const totalUnits = lineItems.reduce((acc, li) => acc + li.quantity, 0)
         const po = await prisma.purchaseOrder.create({
           data: {
             poNumber: generatePoNumber(),
@@ -2038,13 +2116,37 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           id: po.id,
           poNumber: po.poNumber,
           supplierId: po.supplierId,
+          supplierName: supplier?.name ?? null,
+          supplierEmail: supplier?.email ?? null,
           itemCount: po._count.items,
+          totalUnits,
         })
+      }
+
+      // Manufactured items → one WorkOrder per line. WorkOrders have no
+      // SKU concept; the productId carries the manufacturing target.
+      const createdWorkOrders: Array<{
+        id: string
+        productId: string
+        quantity: number
+      }> = []
+      for (const line of manufactured) {
+        const wo = await prisma.workOrder.create({
+          data: {
+            productId: line.productId,
+            quantity: line.quantity,
+            status: 'PLANNED',
+            notes: body.notes ?? null,
+          },
+          select: { id: true, productId: true, quantity: true },
+        })
+        createdWorkOrders.push(wo)
       }
 
       return {
         ok: true,
         createdPos,
+        createdWorkOrders,
         itemsAccepted: items.length - skipped.length,
         skipped,
       }
