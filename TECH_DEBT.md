@@ -582,6 +582,46 @@ This catches column-level drift the existing table-level gate can't. Requires:
 
 ---
 
+## 39. 🟢 Per-seller primary marketplace setting
+
+**Symptom:** Two places in the multi-marketplace work hardcode `'IT'` as the primary marketplace because Xavia is the only live tenant:
+
+1. The E.9 backfill migration (`20260505_e9_..._backfill_fix`) prefers `AMAZON:IT` over alphabetic-MIN when correcting VCL marketplace tagging.
+2. (Implicit) The audit-fix #5 follow-up logic only knows IT is primary.
+
+This works for Xavia. The minute Nexus has a second seller whose primary is DE / US / UK, the IT preference is wrong for them — both at backfill time and anywhere else "primary marketplace" surfaces (defaults for new wizards, fallback in resolvers, etc.).
+
+**Surfaced at:** E.9 audit fixes, 2026-05-05.
+
+**Workaround:** Hardcoded to IT. For a Xavia-only deployment this is correct; ignore until a second tenant lands.
+
+**Proper fix:** Add a per-seller settings table (or extend `AccountSettings`) with `primaryChannel + primaryMarketplace` per seller. Resolver helpers (`getPrimaryMarketplace(channel)`) replace hardcoded `'IT'`. New backfills / resolver fallbacks read the setting. Onboarding flow should ask the user up front and seed it.
+
+**Other places that would benefit from the same setting:**
+- Listing wizard Step 1 default channel selection (preselect the primary channel + marketplace).
+- `/products` default sort / facet pre-selection.
+- Order list default filter when no explicit filter is set.
+- Bulk-ops scope picker default `marketplace=` value.
+
+---
+
+## 40. 🟢 SP-API variation attribute mapping seed
+
+**Symptom:** `AmazonPublishAdapter.buildChildAttributes` reads `ChannelListing.variationMapping` to map master axes (`Size`, `Color`) to SP-API attribute names (`size_name`, `color_name`, etc.) and falls back to a `_name` suffix when no mapping is present. The fallback is right for fashion/apparel/consumer-goods (Xavia's whole catalog) but wrong for some categories (LUGGAGE wants `size_name`, ELECTRONICS sometimes wants `model_name`, BAG wants `bag_size_name`).
+
+**Surfaced at:** E.9 audit fix #4 — flagged but not fixed because every category needs verification against a real SP-API response, not guesswork.
+
+**Workaround:** Fallback covers the common case. Edge categories will fail with clear "unknown attribute" issues on the FAILED submission, telling the user exactly which attribute name to set in `variationMapping`.
+
+**Proper fix:**
+1. After the first credentialed publish per productType, capture the actual SP-API expected attribute names (from `getProductTypeDefinitions` SP-API endpoint).
+2. Seed `ChannelListing.variationMapping` automatically from that response when the wizard creates a listing for a new productType.
+3. UI affordance to inspect / override the mapping per listing if the auto-seed gets it wrong.
+
+Tied to #35 (channel publish wiring); both want a real first publish to drive the work.
+
+---
+
 ## Triage summary
 
 **🔴 P0 — tackle next:**
@@ -621,3 +661,5 @@ This catches column-level drift the existing table-level gate can't. Requires:
 - **22** Derived-column sort
 - **23–24** `/inventory` sub-routes URL migration + legacy component cleanup
 - **32** Delete the orphan `DraftListing` model from schema.prisma
+- **39** Per-seller primary marketplace setting — replaces hardcoded `'IT'` in E.9 backfill + future resolver fallbacks; needed once Nexus serves a second tenant
+- **40** SP-API variation attribute mapping seed — auto-populate `ChannelListing.variationMapping` from `getProductTypeDefinitions` once a real publish lands; tied to #35
