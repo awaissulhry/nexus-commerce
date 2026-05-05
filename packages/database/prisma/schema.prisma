@@ -2202,3 +2202,72 @@ model ReplenishmentRule {
 
   @@index([preferredSupplierId])
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// PRODUCTS REBUILD C.1 — Tags, Bundles, SavedView
+// ─────────────────────────────────────────────────────────────────────
+
+model Tag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products ProductTag[]
+}
+
+model ProductTag {
+  productId String
+  tagId     String
+  createdAt DateTime @default(now())
+
+  tag Tag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([productId, tagId])
+  @@index([productId])
+  @@index([tagId])
+}
+
+model Bundle {
+  id                String   @id @default(cuid())
+  productId         String   @unique
+  name              String
+  description       String?
+  computedCostCents Int      @default(0)
+  isActive          Boolean  @default(true)
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  components BundleComponent[]
+}
+
+model BundleComponent {
+  id            String @id @default(cuid())
+  bundleId      String
+  productId     String
+  quantity      Int    @default(1)
+  unitCostCents Int?
+
+  bundle Bundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+
+  @@unique([bundleId, productId])
+  @@index([bundleId])
+  @@index([productId])
+}
+
+model SavedView {
+  id        String   @id @default(cuid())
+  userId    String
+  surface   String   @default("products")
+  name      String
+  filters   Json
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, surface, name])
+  @@index([userId, surface])
+}

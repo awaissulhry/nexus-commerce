@@ -125,13 +125,22 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       channels?: string
       stockLevel?: string
       sort?: string
+      // C.2 — new filters
+      productTypes?: string
+      brands?: string
+      tags?: string
+      fulfillment?: string
+      marketplaces?: string
+      hasPhotos?: string
+      includeCoverage?: string
+      includeTags?: string
     }
   }>('/products', async (request, reply) => {
     try {
       const q = request.query
       const page = Math.max(parseInt(q.page ?? '1', 10) || 1, 1)
       const limit = Math.max(
-        Math.min(parseInt(q.limit ?? '50', 10) || 50, 200),
+        Math.min(parseInt(q.limit ?? '50', 10) || 50, 500),
         1,
       )
       const search = (q.search ?? '').trim()
@@ -143,8 +152,15 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         .split(',')
         .map((s) => s.trim().toUpperCase())
         .filter(Boolean)
+      const productTypeList = (q.productTypes ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      const brandList = (q.brands ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      const tagIdList = (q.tags ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      const fulfillmentList = (q.fulfillment ?? '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
+      const marketplaceList = (q.marketplaces ?? '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
       const stockLevel = (q.stockLevel ?? 'all').toLowerCase()
       const sort = q.sort ?? 'updated'
+      const includeCoverage = q.includeCoverage === 'true' || q.includeCoverage === '1'
+      const includeTags = q.includeTags === 'true' || q.includeTags === '1'
 
       const where: any = { parentId: null }
       if (search) {
@@ -161,6 +177,24 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       if (channelList.length > 0) {
         where.syncChannels = { hasSome: channelList }
       }
+      if (productTypeList.length > 0) where.productType = { in: productTypeList }
+      if (brandList.length > 0) where.brand = { in: brandList }
+      if (fulfillmentList.length > 0) where.fulfillmentMethod = { in: fulfillmentList }
+      if (marketplaceList.length > 0) {
+        where.channelListings = { some: { marketplace: { in: marketplaceList } } }
+      }
+      if (tagIdList.length > 0) {
+        // Filter products that have AT LEAST ONE of the selected tags
+        where.id = {
+          in: (await prisma.productTag.findMany({
+            where: { tagId: { in: tagIdList } },
+            select: { productId: true },
+            distinct: ['productId'],
+          })).map((r) => r.productId),
+        }
+      }
+      if (q.hasPhotos === 'true') where.images = { some: {} }
+      if (q.hasPhotos === 'false') where.images = { none: {} }
       if (stockLevel === 'in') {
         where.totalStock = { gt: 0 }
       } else if (stockLevel === 'low') {
@@ -204,11 +238,15 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             brand: true,
             basePrice: true,
             totalStock: true,
+            lowStockThreshold: true,
             status: true,
             syncChannels: true,
             updatedAt: true,
             createdAt: true,
             isParent: true,
+            parentId: true,
+            productType: true,
+            fulfillmentMethod: true,
             // Use ProductImage (the table that actually exists in
             // Postgres) — the Image model is in schema.prisma but its
             // table was never migrated. Order by createdAt so the
@@ -218,6 +256,22 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
               orderBy: { createdAt: 'asc' },
               take: 1,
             },
+            _count: {
+              select: { images: true, channelListings: true, variations: true },
+            },
+            ...(includeCoverage
+              ? {
+                  channelListings: {
+                    select: {
+                      channel: true,
+                      marketplace: true,
+                      listingStatus: true,
+                      lastSyncStatus: true,
+                      isPublished: true,
+                    },
+                  },
+                }
+              : {}),
           },
         }),
         prisma.product.count({ where }),
@@ -240,20 +294,62 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         ]),
       ])
 
-      const products = rawProducts.map((p) => ({
-        id: p.id,
-        sku: p.sku,
-        name: p.name,
-        brand: p.brand,
-        basePrice: Number(p.basePrice),
-        totalStock: p.totalStock,
-        status: p.status,
-        syncChannels: p.syncChannels,
-        updatedAt: p.updatedAt,
-        createdAt: p.createdAt,
-        isParent: p.isParent,
-        imageUrl: p.images[0]?.url ?? null,
-      }))
+      // Optional tag rollup — single grouped query, fan out client-side
+      let tagsByProduct: Map<string, Array<{ id: string; name: string; color: string | null }>> = new Map()
+      if (includeTags) {
+        const productIds = rawProducts.map((p) => p.id)
+        const rows = await prisma.productTag.findMany({
+          where: { productId: { in: productIds } },
+          select: {
+            productId: true,
+            tag: { select: { id: true, name: true, color: true } },
+          },
+        })
+        for (const r of rows) {
+          const arr = tagsByProduct.get(r.productId) ?? []
+          arr.push(r.tag)
+          tagsByProduct.set(r.productId, arr)
+        }
+      }
+
+      const products = rawProducts.map((p: any) => {
+        const photoCount = p._count?.images ?? 0
+        // Channel coverage rollup: per-channel { live, draft, error, total }
+        let coverage: Record<string, { live: number; draft: number; error: number; total: number }> | null = null
+        if (includeCoverage && Array.isArray(p.channelListings)) {
+          coverage = {}
+          for (const cl of p.channelListings) {
+            const c = (coverage[cl.channel] ??= { live: 0, draft: 0, error: 0, total: 0 })
+            c.total++
+            if (cl.listingStatus === 'ACTIVE' && cl.isPublished) c.live++
+            else if (cl.listingStatus === 'DRAFT') c.draft++
+            else if (cl.listingStatus === 'ERROR' || cl.lastSyncStatus === 'FAILED') c.error++
+          }
+        }
+        return {
+          id: p.id,
+          sku: p.sku,
+          name: p.name,
+          brand: p.brand,
+          basePrice: Number(p.basePrice),
+          totalStock: p.totalStock,
+          lowStockThreshold: p.lowStockThreshold,
+          status: p.status,
+          syncChannels: p.syncChannels,
+          updatedAt: p.updatedAt,
+          createdAt: p.createdAt,
+          isParent: p.isParent,
+          parentId: p.parentId,
+          productType: p.productType,
+          fulfillmentMethod: p.fulfillmentMethod,
+          imageUrl: p.images[0]?.url ?? null,
+          photoCount,
+          channelCount: p._count?.channelListings ?? 0,
+          variantCount: p._count?.variations ?? 0,
+          coverage,
+          tags: includeTags ? (tagsByProduct.get(p.id) ?? []) : undefined,
+        }
+      })
 
       return {
         products,
