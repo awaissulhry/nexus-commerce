@@ -174,7 +174,7 @@ export default async function AccountHealthPage() {
                   <p className="text-xs text-gray-500">{pendingReturns} return{pendingReturns !== 1 ? 's' : ''} awaiting action</p>
                 </div>
               </div>
-              <Link href="/orders/returns" className="px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 transition-colors">
+              <Link href="/orders?lens=returns" className="px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 transition-colors">
                 Review Returns
               </Link>
             </div>

@@ -1,54 +1,47 @@
 /**
- * Phase 26: Orders API Routes
- * Cross-channel order management endpoints
+ * Orders API — D.2 rebuild.
+ *
+ * Replaces the legacy `{ success, data }` response shape with a flat
+ * paginated payload (matching /api/products and /api/listings). Adds
+ * rich filters, per-row coverage rollups, and a customer-aware lens.
+ *
+ * The old @fastify/compress empty-body bug is sidestepped by returning
+ * the payload directly (`return { ... }`) instead of `reply.send(...)`.
+ * Keep this pattern for any new GET handler in this file.
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { logger } from '../utils/logger.js'
-import {
-  ingestMockOrders,
-  getOrders,
-  shipOrder,
-} from '../services/order-ingestion.service.js'
+import { ingestMockOrders, shipOrder } from '../services/order-ingestion.service.js'
 import prisma from '../db.js'
 
+const ALL_CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY', 'MANUAL'] as const
+
+function safeNum(v: unknown, fallback?: number): number | undefined {
+  if (v == null) return fallback
+  const n = Number(v)
+  return Number.isFinite(n) ? n : fallback
+}
+
+function csvParam(v: unknown): string[] | undefined {
+  if (typeof v !== 'string' || !v || v === 'ALL') return undefined
+  return v.split(',').map((s) => s.trim()).filter(Boolean)
+}
+
 export async function ordersRoutes(app: FastifyInstance) {
-  /**
-   * POST /api/orders/ingest
-   * Trigger mock order ingestion from multiple channels
-   */
-  app.post('/api/orders/ingest', async (request: FastifyRequest, reply: FastifyReply) => {
+  // ── Mock ingest (kept for demo/testing) ──────────────────────────
+  app.post('/api/orders/ingest', async (_request, reply) => {
     try {
-      logger.info('[ORDERS API] Ingesting mock orders...')
-
       const stats = await ingestMockOrders()
-
-      reply.status(200).send({
-        success: true,
-        message: 'Mock orders ingested successfully',
-        data: stats,
-      })
+      return { success: true, message: 'Mock orders ingested', data: stats }
     } catch (error: any) {
-      logger.error('[ORDERS API] Error ingesting orders', { message: error.message, code: error.code, meta: error.meta })
-      reply.status(500).send({
-        success: false,
-        error: error.message,
-        code: error.code,
-        meta: error.meta,
-      })
+      logger.error('[ORDERS API] ingest failed', { message: error.message })
+      return reply.status(500).send({ success: false, error: error.message })
     }
   })
 
-  /**
-   * GET /api/orders
-   * Fetch all orders with pagination
-   */
-  /**
-   * GET /api/orders/stats
-   * Counts grouped by status — used by the orders StatsBar.
-   * 30s cache.
-   */
-  app.get('/api/orders/stats', async (_request: FastifyRequest, reply: FastifyReply) => {
+  // ── Stats (kept, lighter response shape) ─────────────────────────
+  app.get('/api/orders/stats', async (_request, reply) => {
     try {
       reply.header('Cache-Control', 'private, max-age=30')
       const [total, pending, shipped, cancelled, delivered] = await Promise.all([
@@ -60,71 +53,389 @@ export async function ordersRoutes(app: FastifyInstance) {
       ])
       const last = await prisma.order.findFirst({
         orderBy: { createdAt: 'desc' },
-        select: { createdAt: true },
+        select: { createdAt: true, purchaseDate: true },
       })
-      reply.send({
-        total,
-        pending,
-        shipped,
-        cancelled,
-        delivered,
-        lastOrderAt: last?.createdAt ?? null,
-      })
+      return {
+        total, pending, shipped, cancelled, delivered,
+        lastOrderAt: last?.purchaseDate ?? last?.createdAt ?? null,
+      }
     } catch (error: any) {
       logger.error('[ORDERS API] stats failed', { message: error.message })
-      reply
-        .status(500)
-        .send({ success: false, error: error?.message ?? 'Unknown error' })
+      return reply.status(500).send({ error: error.message })
     }
   })
 
-  app.get('/api/orders', async (request: FastifyRequest, reply: FastifyReply) => {
+  // ── GET /api/orders — paginated, filterable, per-row enriched ─────
+  app.get('/api/orders', async (request, reply) => {
     try {
-      const page = parseInt((request.query as any).page as string) || 1
-      const limit = parseInt((request.query as any).limit as string) || 20
+      const q = request.query as any
 
-      logger.info('[ORDERS API] Fetching orders', { page, limit })
+      const page = Math.max(1, Math.floor(safeNum(q.page, 1) ?? 1))
+      const pageSize = Math.min(500, Math.max(1, Math.floor(safeNum(q.pageSize, 50) ?? 50)))
+      const search = (q.search ?? '').trim()
 
-      const result = await getOrders(page, limit)
+      const channels = csvParam(q.channel)
+      const marketplaces = csvParam(q.marketplace)
+      const statuses = csvParam(q.status)
+      const fulfillment = csvParam(q.fulfillment)
+      const tagIds = csvParam(q.tags)
+      const reviewStatus = csvParam(q.reviewStatus)
+      const customerEmail = (q.customerEmail ?? '').trim() || null
+      const dateFrom = q.dateFrom ? new Date(q.dateFrom) : null
+      const dateTo = q.dateTo ? new Date(q.dateTo) : null
+      const hasReturn = q.hasReturn === 'true' ? true : q.hasReturn === 'false' ? false : null
+      const hasRefund = q.hasRefund === 'true' ? true : q.hasRefund === 'false' ? false : null
+      const reviewEligible = q.reviewEligible === 'true'
 
-      reply.status(200).send({
-        success: true,
-        data: result,
-      })
+      const sortBy = (q.sortBy ?? 'purchaseDate') as string
+      const sortDir = (q.sortDir === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc'
+
+      const where: any = {}
+      if (channels && channels.length) where.channel = { in: channels }
+      if (marketplaces && marketplaces.length) where.marketplace = { in: marketplaces }
+      if (statuses && statuses.length) where.status = { in: statuses }
+      if (fulfillment && fulfillment.length) where.fulfillmentMethod = { in: fulfillment }
+      if (customerEmail) where.customerEmail = { contains: customerEmail, mode: 'insensitive' }
+      if (dateFrom || dateTo) {
+        where.purchaseDate = {}
+        if (dateFrom) where.purchaseDate.gte = dateFrom
+        if (dateTo) where.purchaseDate.lte = dateTo
+      }
+      if (search) {
+        where.OR = [
+          { channelOrderId: { contains: search, mode: 'insensitive' } },
+          { customerName: { contains: search, mode: 'insensitive' } },
+          { customerEmail: { contains: search, mode: 'insensitive' } },
+          { items: { some: { sku: { contains: search, mode: 'insensitive' } } } },
+        ]
+      }
+      if (tagIds && tagIds.length) {
+        where.tags = { some: { tagId: { in: tagIds } } }
+      }
+      if (reviewStatus && reviewStatus.length) {
+        where.reviewRequests = { some: { status: { in: reviewStatus } } }
+      }
+      if (reviewEligible) {
+        where.deliveredAt = { not: null }
+        where.AND = [
+          { reviewRequests: { none: {} } },
+          { returns: { none: { status: { in: ['REQUESTED', 'AUTHORIZED', 'IN_TRANSIT', 'RECEIVED', 'INSPECTING'] } } } },
+        ]
+      }
+
+      // Order-by translation
+      let orderBy: any
+      switch (sortBy) {
+        case 'createdAt': orderBy = { createdAt: sortDir }; break
+        case 'updatedAt': orderBy = { updatedAt: sortDir }; break
+        case 'totalPrice': orderBy = { totalPrice: sortDir }; break
+        case 'customer': orderBy = { customerEmail: sortDir }; break
+        case 'channel': orderBy = [{ channel: sortDir }, { marketplace: 'asc' }]; break
+        case 'status': orderBy = { status: sortDir }; break
+        case 'purchaseDate':
+        default: orderBy = { purchaseDate: sortDir }
+      }
+
+      const [total, rawOrders] = await Promise.all([
+        prisma.order.count({ where }),
+        prisma.order.findMany({
+          where,
+          orderBy,
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+          include: {
+            items: { select: { id: true, sku: true, quantity: true, price: true, productId: true } },
+            tags: { include: { tag: { select: { id: true, name: true, color: true } } } },
+            reviewRequests: { select: { id: true, channel: true, status: true, sentAt: true, scheduledFor: true } },
+            _count: { select: { items: true, shipments: true, returns: true, financialTransactions: true } },
+          },
+        }),
+      ])
+
+      // Optional flags computed in JS — has-return / has-refund / repeat-customer
+      const orderIds = rawOrders.map((o) => o.id)
+      const emails = Array.from(new Set(rawOrders.map((o) => o.customerEmail).filter(Boolean)))
+
+      const [activeReturnsByOrder, refundsByOrder, customerOrderCounts] = await Promise.all([
+        prisma.return.groupBy({
+          by: ['orderId'],
+          where: { orderId: { in: orderIds }, status: { in: ['REQUESTED', 'AUTHORIZED', 'IN_TRANSIT', 'RECEIVED', 'INSPECTING'] } },
+          _count: true,
+        }),
+        prisma.financialTransaction.groupBy({
+          by: ['orderId'],
+          where: { orderId: { in: orderIds }, transactionType: 'Refund' },
+          _count: true,
+        }),
+        emails.length === 0 ? Promise.resolve([] as Array<{ customerEmail: string; _count: number }>) : prisma.order.groupBy({
+          by: ['customerEmail'],
+          where: { customerEmail: { in: emails } },
+          _count: true,
+        }),
+      ])
+      const activeReturns = new Set(activeReturnsByOrder.map((r) => r.orderId))
+      const hasRefundSet = new Set(refundsByOrder.map((r) => r.orderId))
+      const customerOrderCountMap = new Map(customerOrderCounts.map((c: any) => [c.customerEmail, c._count]))
+
+      const orders = rawOrders
+        .filter((o) => {
+          if (hasReturn === true && !activeReturns.has(o.id)) return false
+          if (hasReturn === false && activeReturns.has(o.id)) return false
+          if (hasRefund === true && !hasRefundSet.has(o.id)) return false
+          if (hasRefund === false && hasRefundSet.has(o.id)) return false
+          return true
+        })
+        .map((o) => ({
+          id: o.id,
+          channel: o.channel,
+          marketplace: o.marketplace,
+          channelOrderId: o.channelOrderId,
+          status: o.status,
+          fulfillmentMethod: o.fulfillmentMethod,
+          totalPrice: Number(o.totalPrice),
+          currencyCode: o.currencyCode,
+          customerName: o.customerName,
+          customerEmail: o.customerEmail,
+          shippingAddress: o.shippingAddress,
+          purchaseDate: o.purchaseDate,
+          paidAt: o.paidAt,
+          shippedAt: o.shippedAt,
+          deliveredAt: o.deliveredAt,
+          cancelledAt: o.cancelledAt,
+          createdAt: o.createdAt,
+          updatedAt: o.updatedAt,
+          itemCount: o._count.items,
+          shipmentCount: o._count.shipments,
+          returnCount: o._count.returns,
+          financialTxCount: o._count.financialTransactions,
+          hasActiveReturn: activeReturns.has(o.id),
+          hasRefund: hasRefundSet.has(o.id),
+          customerOrderCount: customerOrderCountMap.get(o.customerEmail) ?? 1,
+          tags: o.tags.map((t: any) => t.tag),
+          reviewRequests: o.reviewRequests,
+          items: o.items.map((it) => ({ ...it, price: Number(it.price) })),
+        }))
+
+      return {
+        orders,
+        page,
+        pageSize,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      }
     } catch (error: any) {
-      logger.error('[ORDERS API] Error fetching orders', { message: error.message, code: error.code, meta: error.meta })
-      reply.status(500).send({
-        success: false,
-        error: error.message,
-        code: error.code,
-        meta: error.meta,
-      })
+      logger.error('[ORDERS API] list failed', { message: error.message })
+      return reply.status(500).send({ error: error.message })
     }
   })
 
-  /**
-   * PATCH /api/orders/:id/ship
-   * Update order status to SHIPPED
-   */
-  app.patch('/api/orders/:id/ship', async (request: FastifyRequest, reply: FastifyReply) => {
+  // ── GET /api/orders/facets — distinct channels, marketplaces, tags
+  app.get('/api/orders/facets', async (_request, reply) => {
+    try {
+      reply.header('Cache-Control', 'private, max-age=60')
+      const [channels, marketplaces, fulfillment] = await Promise.all([
+        prisma.order.groupBy({ by: ['channel'], _count: true }),
+        prisma.order.groupBy({ by: ['marketplace'], where: { marketplace: { not: null } }, _count: true }),
+        prisma.order.groupBy({ by: ['fulfillmentMethod'], where: { fulfillmentMethod: { not: null } }, _count: true }),
+      ])
+      return {
+        channels: channels.map((c) => ({ value: c.channel, count: c._count })),
+        marketplaces: marketplaces.filter((m) => m.marketplace).map((m) => ({ value: m.marketplace!, count: m._count })),
+        fulfillment: fulfillment.filter((f) => f.fulfillmentMethod).map((f) => ({ value: f.fulfillmentMethod!, count: f._count })),
+      }
+    } catch (error: any) {
+      return reply.status(500).send({ error: error.message })
+    }
+  })
+
+  // ── GET /api/orders/:id — full detail with relations ─────────────
+  app.get('/api/orders/:id', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-
-      logger.info('[ORDERS API] Shipping order', { orderId: id })
-
-      const order = await shipOrder(id)
-
-      reply.status(200).send({
-        success: true,
-        message: 'Order marked as shipped',
-        data: order,
+      const order = await prisma.order.findUnique({
+        where: { id },
+        include: {
+          items: {
+            include: {
+              product: { select: { id: true, sku: true, name: true, basePrice: true, images: { select: { url: true }, take: 1 } } },
+            },
+          },
+          financialTransactions: { orderBy: { transactionDate: 'desc' } },
+          shipments: { include: { items: true, warehouse: { select: { code: true, name: true } } }, orderBy: { createdAt: 'desc' } },
+          returns: { include: { items: true }, orderBy: { createdAt: 'desc' } },
+          reviewRequests: { include: { rule: { select: { id: true, name: true } } }, orderBy: { createdAt: 'desc' } },
+          tags: { include: { tag: true } },
+        },
       })
+      if (!order) return reply.status(404).send({ error: 'Order not found' })
+
+      // Customer history sidebar — last 10 orders from this email
+      const history = await prisma.order.findMany({
+        where: { customerEmail: order.customerEmail, id: { not: order.id } },
+        select: { id: true, channelOrderId: true, channel: true, totalPrice: true, status: true, purchaseDate: true, createdAt: true },
+        orderBy: { purchaseDate: 'desc' },
+        take: 10,
+      })
+
+      return {
+        ...order,
+        totalPrice: Number(order.totalPrice),
+        items: order.items.map((it) => ({
+          ...it,
+          price: Number(it.price),
+          product: it.product
+            ? { ...it.product, basePrice: Number(it.product.basePrice), thumbnailUrl: it.product.images?.[0]?.url ?? null }
+            : null,
+        })),
+        financialTransactions: order.financialTransactions.map((tx) => ({
+          ...tx,
+          amount: Number(tx.amount),
+          amazonFee: Number(tx.amazonFee),
+          fbaFee: Number(tx.fbaFee),
+          paymentServicesFee: Number(tx.paymentServicesFee),
+          ebayFee: Number(tx.ebayFee),
+          paypalFee: Number(tx.paypalFee),
+          otherFees: Number(tx.otherFees),
+          grossRevenue: Number(tx.grossRevenue),
+          netRevenue: Number(tx.netRevenue),
+        })),
+        tags: order.tags.map((t: any) => t.tag),
+        customerHistory: history.map((h) => ({ ...h, totalPrice: Number(h.totalPrice) })),
+      }
     } catch (error: any) {
-      logger.error('[ORDERS API] Error shipping order:', error.message)
-      reply.status(500).send({
-        success: false,
-        error: error.message,
+      logger.error('[ORDERS API] detail failed', { message: error.message })
+      return reply.status(500).send({ error: error.message })
+    }
+  })
+
+  // ── GET /api/orders/:id/timeline — synthesized event log ─────────
+  app.get('/api/orders/:id/timeline', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const order = await prisma.order.findUnique({
+        where: { id },
+        include: {
+          shipments: { select: { id: true, status: true, carrierCode: true, trackingNumber: true, shippedAt: true, deliveredAt: true, createdAt: true } },
+          returns: { select: { id: true, rmaNumber: true, status: true, receivedAt: true, refundedAt: true, restockedAt: true, createdAt: true } },
+          reviewRequests: { select: { id: true, channel: true, status: true, scheduledFor: true, sentAt: true, errorMessage: true } },
+        },
       })
+      if (!order) return reply.status(404).send({ error: 'Order not found' })
+
+      type Event = { at: Date; kind: string; label: string; meta?: any }
+      const events: Event[] = []
+      if (order.purchaseDate) events.push({ at: order.purchaseDate, kind: 'placed', label: 'Order placed' })
+      if (order.paidAt) events.push({ at: order.paidAt, kind: 'paid', label: 'Payment received' })
+      if (order.shippedAt) events.push({ at: order.shippedAt, kind: 'shipped', label: 'Shipped' })
+      if (order.deliveredAt) events.push({ at: order.deliveredAt, kind: 'delivered', label: 'Delivered' })
+      if (order.cancelledAt) events.push({ at: order.cancelledAt, kind: 'cancelled', label: 'Cancelled' })
+      for (const s of order.shipments) {
+        if (s.shippedAt) events.push({ at: s.shippedAt, kind: 'shipment-shipped', label: `Shipment ${s.trackingNumber ?? ''} shipped`, meta: { shipmentId: s.id, carrier: s.carrierCode } })
+        if (s.deliveredAt) events.push({ at: s.deliveredAt, kind: 'shipment-delivered', label: `Shipment ${s.trackingNumber ?? ''} delivered`, meta: { shipmentId: s.id } })
+      }
+      for (const r of order.returns) {
+        if (r.receivedAt) events.push({ at: r.receivedAt, kind: 'return-received', label: `Return ${r.rmaNumber ?? ''} received`, meta: { returnId: r.id } })
+        if (r.refundedAt) events.push({ at: r.refundedAt, kind: 'return-refunded', label: `Return ${r.rmaNumber ?? ''} refunded`, meta: { returnId: r.id } })
+        if (r.restockedAt) events.push({ at: r.restockedAt, kind: 'return-restocked', label: `Return ${r.rmaNumber ?? ''} restocked`, meta: { returnId: r.id } })
+      }
+      for (const rr of order.reviewRequests) {
+        if (rr.sentAt) events.push({ at: rr.sentAt, kind: 'review-sent', label: `Review request sent on ${rr.channel}`, meta: { reviewRequestId: rr.id, status: rr.status } })
+        if (rr.scheduledFor && !rr.sentAt) events.push({ at: rr.scheduledFor, kind: 'review-scheduled', label: `Review request scheduled (${rr.channel})`, meta: { reviewRequestId: rr.id } })
+      }
+      events.sort((a, b) => a.at.getTime() - b.at.getTime())
+      return { events }
+    } catch (error: any) {
+      return reply.status(500).send({ error: error.message })
+    }
+  })
+
+  // ── GET /api/orders/:id/financials — gross/fees/net rollup ───────
+  app.get('/api/orders/:id/financials', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const txs = await prisma.financialTransaction.findMany({
+        where: { orderId: id },
+        orderBy: { transactionDate: 'desc' },
+      })
+      let gross = 0, fees = 0, net = 0
+      for (const tx of txs) {
+        gross += Number(tx.grossRevenue)
+        fees += Number(tx.amazonFee) + Number(tx.fbaFee) + Number(tx.paymentServicesFee) + Number(tx.ebayFee) + Number(tx.paypalFee) + Number(tx.otherFees)
+        net += Number(tx.netRevenue)
+      }
+      return {
+        rollup: { gross, fees, net },
+        transactions: txs.map((tx) => ({
+          ...tx,
+          amount: Number(tx.amount),
+          amazonFee: Number(tx.amazonFee),
+          fbaFee: Number(tx.fbaFee),
+          paymentServicesFee: Number(tx.paymentServicesFee),
+          ebayFee: Number(tx.ebayFee),
+          paypalFee: Number(tx.paypalFee),
+          otherFees: Number(tx.otherFees),
+          grossRevenue: Number(tx.grossRevenue),
+          netRevenue: Number(tx.netRevenue),
+        })),
+      }
+    } catch (error: any) {
+      return reply.status(500).send({ error: error.message })
+    }
+  })
+
+  // ── GET /api/orders/customers/:email — customer profile ──────────
+  app.get('/api/orders/customers/:email', async (request, reply) => {
+    try {
+      const { email } = request.params as { email: string }
+      const decoded = decodeURIComponent(email)
+      const orders = await prisma.order.findMany({
+        where: { customerEmail: decoded },
+        orderBy: { purchaseDate: 'desc' },
+        take: 100,
+        select: {
+          id: true, channelOrderId: true, channel: true, marketplace: true,
+          status: true, totalPrice: true, currencyCode: true,
+          purchaseDate: true, createdAt: true,
+        },
+      })
+      const totalSpent = orders.reduce((s, o) => s + Number(o.totalPrice), 0)
+      return {
+        email: decoded,
+        orderCount: orders.length,
+        totalSpent,
+        firstOrderAt: orders[orders.length - 1]?.purchaseDate ?? null,
+        lastOrderAt: orders[0]?.purchaseDate ?? null,
+        orders: orders.map((o) => ({ ...o, totalPrice: Number(o.totalPrice) })),
+      }
+    } catch (error: any) {
+      return reply.status(500).send({ error: error.message })
+    }
+  })
+
+  // ── PATCH /api/orders/:id/ship — legacy single-mark-shipped ─────
+  app.patch('/api/orders/:id/ship', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const order = await shipOrder(id)
+      return { success: true, data: order }
+    } catch (error: any) {
+      return reply.status(500).send({ success: false, error: error.message })
+    }
+  })
+
+  // ── POST /api/orders/bulk-mark-shipped ───────────────────────────
+  app.post('/api/orders/bulk-mark-shipped', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as { orderIds?: string[] }
+      const ids = Array.isArray(body.orderIds) ? body.orderIds : []
+      if (ids.length === 0) return reply.status(400).send({ error: 'orderIds[] required' })
+      const result = await prisma.order.updateMany({
+        where: { id: { in: ids }, status: { in: ['PENDING'] } },
+        data: { status: 'SHIPPED', shippedAt: new Date() },
+      })
+      return { ok: true, updated: result.count }
+    } catch (error: any) {
+      return reply.status(500).send({ error: error.message })
     }
   })
 }

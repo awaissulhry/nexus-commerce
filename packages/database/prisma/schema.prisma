@@ -1181,6 +1181,9 @@ enum OrderChannel {
   AMAZON
   EBAY
   SHOPIFY
+  WOOCOMMERCE
+  ETSY
+  MANUAL
 }
 
 enum OrderStatus {
@@ -1196,28 +1199,54 @@ model Order {
   // ── Phase 26: Unified Order Command ──────────────────────────────────
   // Cross-channel order ingestion
   channel         OrderChannel
+  // D.1: marketplace code (IT/DE/UK/GLOBAL/etc.) — nullable for legacy rows.
+  marketplace     String?
   channelOrderId  String // Unique per channel
   status          OrderStatus  @default(PENDING)
   totalPrice      Decimal      @db.Decimal(12, 2)
+  // D.1: per-order currency snapshot at import time. Falls back to EUR.
+  currencyCode    String?      @default("EUR")
   customerName    String
   customerEmail   String
   shippingAddress Json // { street, city, state, postalCode, country }
 
+  // D.1: Phase 28 — real customer-side timestamps. createdAt is the row
+  // insert time (ingestion); these track the order's own lifecycle.
+  purchaseDate DateTime?
+  paidAt       DateTime?
+  shippedAt    DateTime?
+  deliveredAt  DateTime?
+  cancelledAt  DateTime?
+
+  // D.1: FBA vs FBM (Amazon) or null for non-Amazon. Pulled from
+  // SP-API FulfillmentChannel (AFN=FBA, MFN=FBM).
+  fulfillmentMethod String?
+
   // Relations
   items                 OrderItem[]
   financialTransactions FinancialTransaction[]
+  shipments             Shipment[]
+  returns               Return[]
+  reviewRequests        ReviewRequest[]
+  tags                  OrderTag[]
 
   // Metadata
-  amazonMetadata Json?
-  ebayMetadata   Json?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  amazonMetadata      Json?
+  ebayMetadata        Json?
+  shopifyMetadata     Json?
+  woocommerceMetadata Json?
+  etsyMetadata        Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   @@unique([channel, channelOrderId])
   @@index([channel])
+  @@index([marketplace])
   @@index([status])
   @@index([customerEmail])
   @@index([createdAt])
+  @@index([purchaseDate])
+  @@index([deliveredAt])
 }
 
 model OrderItem {
@@ -1909,6 +1938,9 @@ model Carrier {
 // FBA orders DO NOT use this — Amazon ships them.
 model Shipment {
   id          String            @id @default(cuid())
+  // D.1: real FK to Order (was previously a free-form string with no constraint).
+  // SET NULL on order delete since shipments outlive orders for archival.
+  order       Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
   orderId     String?
   warehouseId String?
   carrierCode CarrierCode       @default(SENDCLOUD)
@@ -2132,6 +2164,8 @@ model WorkOrder {
 
 model Return {
   id                 String                @id @default(cuid())
+  // D.1: real FK to Order (was a free-form string).
+  order              Order?                @relation(fields: [orderId], references: [id], onDelete: SetNull)
   orderId            String?
   channel            String // AMAZON | EBAY | SHOPIFY | WOOCOMMERCE | ETSY
   marketplace        String?
@@ -2216,6 +2250,7 @@ model Tag {
   updatedAt DateTime @updatedAt
 
   products ProductTag[]
+  orders   OrderTag[]
 }
 
 model ProductTag {
@@ -2270,4 +2305,103 @@ model SavedView {
 
   @@unique([userId, surface, name])
   @@index([userId, surface])
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// ORDERS REBUILD D.1 — review request engine + tags
+// ─────────────────────────────────────────────────────────────────────
+
+enum ReviewRequestStatus {
+  ELIGIBLE // matched a rule, ready to send
+  SCHEDULED // queued for the next worker tick
+  SENT // request delivered to channel
+  SUPPRESSED // skipped due to exclusion (return, refund, age window, etc.)
+  FAILED // channel API returned an error
+  SKIPPED // manually skipped by operator
+}
+
+enum ReviewRuleScope {
+  AMAZON_PER_MARKETPLACE
+  AMAZON_GLOBAL
+  EBAY
+  SHOPIFY
+  WOOCOMMERCE
+  ETSY
+  MANUAL
+}
+
+model ReviewRequest {
+  id                   String              @id @default(cuid())
+  orderId              String
+  channel              String // AMAZON | EBAY | SHOPIFY | WOOCOMMERCE | ETSY | MANUAL
+  marketplace          String?
+  status               ReviewRequestStatus @default(ELIGIBLE)
+  // When the worker should attempt the send (post-delivery + ruleSendDelayDays)
+  scheduledFor         DateTime?
+  sentAt               DateTime?
+  // Channel-specific tracking — Amazon Solicitations API returns a Request-Id
+  // on success; we persist for audit + dedup.
+  providerRequestId    String?
+  providerResponseCode String?
+  errorMessage         String?
+  suppressedReason     String?
+  // Which rule matched (null for manual one-off sends from the detail page)
+  ruleId               String?
+
+  order Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  rule  ReviewRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Dedup: at most one request row per (orderId, channel) — the rules engine
+  // checks for an existing row before inserting a new one.
+  @@unique([orderId, channel])
+  @@index([status])
+  @@index([scheduledFor])
+  @@index([sentAt])
+}
+
+model ReviewRule {
+  id                   String          @id @default(cuid())
+  name                 String
+  scope                ReviewRuleScope
+  // For AMAZON_PER_MARKETPLACE rules — which marketplace this rule binds to.
+  // Null for AMAZON_GLOBAL or single-store channels.
+  marketplace          String?
+  isActive             Boolean         @default(true)
+  // Day window relative to deliveredAt. Amazon Solicitations requires
+  // 4–30 days; we expose minDays/maxDays so users can tighten it.
+  minDaysSinceDelivery Int             @default(7)
+  maxDaysSinceDelivery Int             @default(25)
+  // Exclusions encoded as a stable string set:
+  //   "has_active_return"  | "has_refund" | "has_negative_message"
+  //   "low_value_order"    | "fba_only"   | "fbm_only"
+  exclusions           String[]        @default([])
+  // Optional: only apply to orders >= this gross
+  minOrderTotalCents   Int?
+  // Snapshot of who created the rule (single-tenant: "default-user")
+  createdBy            String?
+  notes                String?
+
+  requests ReviewRequest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, scope, marketplace])
+  @@index([scope, isActive])
+}
+
+model OrderTag {
+  orderId   String
+  tagId     String
+  createdAt DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tag   Tag   @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([orderId, tagId])
+  @@index([orderId])
+  @@index([tagId])
 }

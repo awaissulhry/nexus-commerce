@@ -40,7 +40,11 @@ A CI gate is the right answer; the post-deploy smoke test is the belt-and-braces
 
 ---
 
-## 1. 🟡 `@fastify/compress` empty-body bug on `/api/orders` list
+## 1. ✅ `@fastify/compress` empty-body bug on `/api/orders` list — resolved 2026-05-05 in D.8
+
+The /orders rebuild (D.2) replaced `reply.status(200).send(...)` with `return { ... }` and explicitly coerces every Prisma `Decimal` to `Number` before serialization. The empty-body workaround (`Accept-Encoding: identity`) has been removed from the client. If this regresses, the symptom is the legacy Decimal-with-compress interaction — re-add the coercion.
+
+## 1.legacy 🟡 `@fastify/compress` empty-body bug on `/api/orders` list (kept for history)
 
 **Symptom:** `GET /api/orders?page=...&limit=...` returns `200` with `content-encoding: gzip` and `content-length: 0` (empty body) when the client requests gzip. The same payload returns 6+ KB of JSON when `Accept-Encoding: identity` is sent.
 
