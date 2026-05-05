@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
+import { amazonOrdersService } from '../services/amazon-orders.service.js'
 import prisma from '../db.js'
 import {
   detectVariationGroups,
@@ -1430,6 +1431,59 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (error: any) {
       fastify.log.error({ err: error }, '[pim/bulk-link-amazon] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // POST /api/amazon/orders/sync — pull orders from SP-API into the
+  // Phase-26 unified Order schema. Two cursor modes:
+  //   - body { since: ISO-8601 } → incremental poll (LastUpdatedAfter)
+  //   - body { daysBack: N }     → backfill (CreatedAfter, default 30 days)
+  // Without a body, runs incremental from the latest known purchase
+  // date, falling back to a 30-day backfill if no Amazon orders exist
+  // yet. Mirrors the cron's auto-cursor behaviour so manual + cron
+  // produce identical results.
+  fastify.post<{
+    Body?: { since?: string; daysBack?: number; limit?: number }
+  }>('/orders/sync', async (request, reply) => {
+    if (!amazonOrdersService.isConfigured()) {
+      return reply.code(503).send({
+        success: false,
+        error:
+          'Amazon SP-API credentials are not configured. Required: AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ROLE_ARN',
+      })
+    }
+
+    const body = request.body ?? {}
+    try {
+      let summary
+      if (body.since) {
+        const since = new Date(body.since)
+        if (isNaN(since.getTime())) {
+          return reply.code(400).send({
+            success: false,
+            error: `Invalid 'since' timestamp: ${body.since}`,
+          })
+        }
+        summary = await amazonOrdersService.syncNewOrders(since, { limit: body.limit })
+      } else if (typeof body.daysBack === 'number') {
+        summary = await amazonOrdersService.syncAllOrders({
+          daysBack: body.daysBack,
+          limit: body.limit,
+        })
+      } else {
+        // No explicit cursor — auto-detect.
+        const latest = await amazonOrdersService.getLatestPurchaseDate()
+        summary = latest
+          ? await amazonOrdersService.syncNewOrders(latest, { limit: body.limit })
+          : await amazonOrdersService.syncAllOrders({ limit: body.limit })
+      }
+      return { success: true, ...summary }
+    } catch (error) {
+      fastify.log.error({ err: error }, '[amazon/orders/sync] failed')
+      return reply.code(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
   })
 }

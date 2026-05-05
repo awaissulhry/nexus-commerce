@@ -45,6 +45,66 @@ export interface ProductImageData {
   type: "MAIN" | "ALT" | "LIFESTYLE";
 }
 
+/** Order returned from SP-API getOrders. Field names match Amazon's PascalCase wire format. */
+export interface AmazonOrderRaw {
+  AmazonOrderId: string
+  PurchaseDate: string
+  LastUpdateDate?: string
+  OrderStatus: string
+  FulfillmentChannel?: 'AFN' | 'MFN' | string
+  SalesChannel?: string
+  OrderTotal?: { CurrencyCode: string; Amount: string }
+  NumberOfItemsShipped?: number
+  NumberOfItemsUnshipped?: number
+  MarketplaceId?: string
+  ShipmentServiceLevelCategory?: string
+  BuyerInfo?: {
+    BuyerEmail?: string
+    BuyerName?: string
+  }
+  ShippingAddress?: {
+    Name?: string
+    AddressLine1?: string
+    AddressLine2?: string
+    AddressLine3?: string
+    City?: string
+    StateOrRegion?: string
+    PostalCode?: string
+    CountryCode?: string
+    Phone?: string
+  }
+  EarliestShipDate?: string
+  LatestShipDate?: string
+  IsBusinessOrder?: boolean
+  IsPrime?: boolean
+}
+
+/** Order item returned from SP-API getOrderItems. */
+export interface AmazonOrderItemRaw {
+  ASIN: string
+  SellerSKU?: string
+  OrderItemId: string
+  Title?: string
+  QuantityOrdered: number
+  QuantityShipped?: number
+  ItemPrice?: { CurrencyCode: string; Amount: string }
+  ShippingPrice?: { CurrencyCode: string; Amount: string }
+  ItemTax?: { CurrencyCode: string; Amount: string }
+  ShippingTax?: { CurrencyCode: string; Amount: string }
+  PromotionDiscount?: { CurrencyCode: string; Amount: string }
+}
+
+/** Options accepted by `fetchOrders`. Mutually-exclusive cursors:
+ *  - `since`: fetch orders with `LastUpdatedAfter >= since` (incremental polling)
+ *  - `daysBack`: fetch `CreatedAfter >= now - daysBack days` (initial backfill)
+ *  Pass exactly one. */
+export interface FetchOrdersOptions {
+  since?: Date
+  daysBack?: number
+  limit?: number          // hard cap on total orders returned (default 1000)
+  marketplaceId?: string  // defaults to env AMAZON_MARKETPLACE_ID
+}
+
 /** Rich product details aligned with the Prisma Product schema. */
 export interface ProductDetails {
   sku: string;
@@ -724,6 +784,133 @@ export class AmazonService {
         message
       );
       throw error;
+    }
+  }
+
+  /* ────────────────────────────────────────────────────────────── */
+  /*  fetchOrders                                                   */
+  /* ────────────────────────────────────────────────────────────── */
+
+  /**
+   * Fetch orders from SP-API Orders v0.
+   *
+   * Supports two cursor modes (mutually exclusive):
+   *   - `options.since`     → incremental poll (uses `LastUpdatedAfter`)
+   *   - `options.daysBack`  → initial backfill (uses `CreatedAfter`)
+   *
+   * Pagination is handled internally via `NextToken` until either:
+   *   - Amazon returns no NextToken, or
+   *   - the running total reaches `options.limit` (default 1000).
+   *
+   * Amazon's getOrders enforces a 60-second minimum cursor — passing
+   * `since` < 60s ago raises InvalidInput. The caller should clamp.
+   *
+   * Returns raw payloads; mapping to the Phase-26 `Order` schema lives
+   * in `amazon-orders.service.ts`.
+   */
+  async fetchOrders(options: FetchOrdersOptions = {}): Promise<AmazonOrderRaw[]> {
+    const sp = await this.getClient()
+    const marketplaceId =
+      options.marketplaceId ??
+      process.env.AMAZON_MARKETPLACE_ID ??
+      'APJ6JRA9NG5V4'
+    const limit = options.limit ?? 1000
+
+    // Build the query — exactly one of CreatedAfter / LastUpdatedAfter.
+    // SP-API docs: at least one of CreatedAfter or LastUpdatedAfter is required.
+    const query: Record<string, unknown> = {
+      MarketplaceIds: [marketplaceId],
+      MaxResultsPerPage: 100, // SP-API max
+    }
+    if (options.since) {
+      // Clamp to 60s ago to avoid InvalidInput.
+      const minAgo = new Date(Date.now() - 60_000)
+      const cursor = options.since.getTime() > minAgo.getTime() ? minAgo : options.since
+      query.LastUpdatedAfter = cursor.toISOString()
+    } else {
+      const days = options.daysBack ?? 30
+      const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+      query.CreatedAfter = cutoff.toISOString()
+    }
+
+    const collected: AmazonOrderRaw[] = []
+    let nextToken: string | undefined
+
+    while (true) {
+      try {
+        const callQuery: Record<string, unknown> = nextToken
+          ? { MarketplaceIds: [marketplaceId], NextToken: nextToken }
+          : query
+
+        const res: any = await sp.callAPI({
+          operation: 'getOrders',
+          endpoint: 'orders',
+          query: callQuery,
+        })
+
+        const payload = res?.payload ?? res
+        const orders: AmazonOrderRaw[] = payload?.Orders ?? []
+        collected.push(...orders)
+
+        if (collected.length >= limit) {
+          return collected.slice(0, limit)
+        }
+
+        nextToken = payload?.NextToken
+        if (!nextToken) {
+          return collected
+        }
+
+        // Be a polite citizen — getOrders is rate-limited to 0.0167 req/s
+        // burst 20. The library throttles for us when auto_request_throttled
+        // is on, but a small pause keeps log noise down.
+        await sleep(250)
+      } catch (error) {
+        console.error(
+          '[Amazon] fetchOrders failed:',
+          extractErrorMessage(error)
+        )
+        throw error
+      }
+    }
+  }
+
+  /**
+   * Fetch line items for a single order. SP-API getOrderItems is
+   * paginated separately from getOrders and uses its own NextToken.
+   * Order item arrays are usually small (<10) — pagination only kicks
+   * in for bulk B2B shipments.
+   */
+  async fetchOrderItems(amazonOrderId: string): Promise<AmazonOrderItemRaw[]> {
+    const sp = await this.getClient()
+    const collected: AmazonOrderItemRaw[] = []
+    let nextToken: string | undefined
+
+    while (true) {
+      try {
+        const res: any = await sp.callAPI({
+          operation: 'getOrderItems',
+          endpoint: 'orders',
+          path: { orderId: amazonOrderId },
+          query: nextToken ? { nextToken } : undefined,
+        })
+
+        const payload = res?.payload ?? res
+        const items: AmazonOrderItemRaw[] = payload?.OrderItems ?? []
+        collected.push(...items)
+
+        nextToken = payload?.NextToken
+        if (!nextToken) {
+          return collected
+        }
+        await sleep(250)
+      } catch (error) {
+        console.error(
+          `[Amazon] fetchOrderItems failed for ${amazonOrderId}:`,
+          extractErrorMessage(error)
+        )
+        throw error
+      }
     }
   }
 }

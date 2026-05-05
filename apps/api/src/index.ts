@@ -49,14 +49,43 @@ import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
 import { startSalesReportIngestCron } from "./jobs/sales-report-ingest.job.js";
 import { startForecastCron } from "./jobs/forecast.job.js";
 import { startPricingCron } from "./jobs/pricing-refresh.job.js";
+import { startCatalogRefreshCron } from "./jobs/catalog-refresh.job.js";
+import { startEbayTokenRefreshCron } from "./jobs/ebay-token-refresh.job.js";
+import { startAmazonOrdersCron } from "./jobs/amazon-orders-sync.job.js";
 import pricingRoutes from "./routes/pricing.routes.js";
-// Queue/worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS — Phase 2 will flip it on.
-// import { startJobs } from "./jobs/sync.job.js";
-// import { initializeBullMQWorker } from "./workers/bullmq-sync.worker.js";
-// import { initializeChannelSyncWorker } from "./workers/channel-sync.worker.js";
-// import { initializeBulkListWorker } from "./workers/bulk-list.worker.js";
-// import { initializeQueue, closeQueue } from "./lib/queue.js";
+// BullMQ worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS=1.
+// initializeQueue pings Redis and throws on failure; tryStartQueueWorkers
+// catches that so a missing/unreachable Redis can't crash the API process
+// (the HTTP routes still work, only the queue surface is dormant).
+import { initializeBullMQWorker } from "./workers/bullmq-sync.worker.js";
+import { initializeChannelSyncWorker } from "./workers/channel-sync.worker.js";
+import { initializeBulkListWorker } from "./workers/bulk-list.worker.js";
+import { initializeQueue, closeQueue } from "./lib/queue.js";
 import { logger } from "./utils/logger.js";
+
+let queueWorkersStarted = false;
+
+async function tryStartQueueWorkers(): Promise<void> {
+  if (process.env.ENABLE_QUEUE_WORKERS !== '1') {
+    return;
+  }
+  if (!process.env.REDIS_URL && !process.env.REDIS_HOST) {
+    logger.warn('queue workers: ENABLE_QUEUE_WORKERS=1 but neither REDIS_URL nor REDIS_HOST is set — skipping');
+    return;
+  }
+  try {
+    await initializeQueue();
+    initializeBullMQWorker();
+    initializeChannelSyncWorker();
+    initializeBulkListWorker();
+    queueWorkersStarted = true;
+    logger.info('✅ Queue workers started (BullMQ outbound-sync + channel-sync + bulk-list)');
+  } catch (err) {
+    logger.error('queue workers: initialization failed — HTTP routes still served, queue surface dormant', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
 
 const app = Fastify({ logger: true });
 
@@ -184,13 +213,10 @@ async function start() {
 
     app.log.info(`API server listening at http://0.0.0.0:${port}`);
 
-    // ── PHASE 13: Initialize BullMQ Infrastructure ──────────────────────
-    // TEMPORARILY DISABLED - Phase 2 will re-enable workers
-    // await initializeQueue();
-    // initializeBullMQWorker();
-    // initializeChannelSyncWorker();
-    // initializeBulkListWorker();
-    // startJobs();
+    // ── BullMQ queue workers (outbound sync, channel sync, bulk list) ──
+    // Opt-in via ENABLE_QUEUE_WORKERS=1. Requires REDIS_URL or REDIS_HOST.
+    // Failure to reach Redis logs and continues — HTTP routes stay up.
+    await tryStartQueueWorkers();
 
     // NN.14 / OO.1 — daily cron for abandoned wizard cleanup. Now
     // gated behind NEXUS_ENABLE_WIZARD_CLEANUP=1 so the destructive
@@ -225,7 +251,34 @@ async function start() {
       startPricingCron();
     }
 
-    logger.info('✅ API server initialized (workers disabled — Phase 2)', {
+    // Nightly Amazon catalog refresh. Mirrors GET /api/amazon/products
+    // upsert + parent/child hierarchy logic on a 03:00 UTC schedule
+    // (one hour after sales-report cron, to avoid SP-API throttle
+    // collision). Gated behind NEXUS_ENABLE_CATALOG_SYNC_CRON=1.
+    if (process.env.NEXUS_ENABLE_CATALOG_SYNC_CRON === '1') {
+      startCatalogRefreshCron();
+    }
+
+    // Proactive eBay access-token refresh sweep. The reactive refresh
+    // in EbayAuthService.getValidToken handles per-call refresh, but
+    // when no sync runs for >2 hours the token expires silently. This
+    // cron walks every active connection every 30 min so a token never
+    // serves stale. Gated behind NEXUS_ENABLE_EBAY_TOKEN_REFRESH_CRON=1.
+    if (process.env.NEXUS_ENABLE_EBAY_TOKEN_REFRESH_CRON === '1') {
+      startEbayTokenRefreshCron();
+    }
+
+    // Incremental Amazon orders polling — runs every 15 min, picks up
+    // new orders + status transitions on existing ones. Cursor derived
+    // from MAX(Order.purchaseDate) per the auto-detect rule in the
+    // service. Manual trigger: POST /api/amazon/orders/sync.
+    // Gated behind NEXUS_ENABLE_AMAZON_ORDERS_CRON=1.
+    if (process.env.NEXUS_ENABLE_AMAZON_ORDERS_CRON === '1') {
+      startAmazonOrdersCron();
+    }
+
+    logger.info('✅ API server initialized', {
+      queueWorkers: queueWorkersStarted,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
@@ -242,12 +295,20 @@ start();
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully...');
-  // await closeQueue(); // re-enable in Phase 2 when workers are bootstrapped
+  if (queueWorkersStarted) {
+    try { await closeQueue(); } catch (err) {
+      logger.warn('closeQueue failed during shutdown', { error: err instanceof Error ? err.message : String(err) });
+    }
+  }
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   logger.info('SIGINT received, shutting down gracefully...');
-  // await closeQueue(); // re-enable in Phase 2 when workers are bootstrapped
+  if (queueWorkersStarted) {
+    try { await closeQueue(); } catch (err) {
+      logger.warn('closeQueue failed during shutdown', { error: err instanceof Error ? err.message : String(err) });
+    }
+  }
   process.exit(0);
 });
