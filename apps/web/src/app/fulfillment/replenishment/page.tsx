@@ -1,15 +1,8 @@
-import { RefreshCw } from 'lucide-react'
-import ComingSoonPage from '@/components/layout/ComingSoonPage'
+import ReplenishmentWorkspace from './ReplenishmentWorkspace'
 
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
-export default function SmartReplenishmentPage() {
-  return (
-    <ComingSoonPage
-      title="Smart Replenishment"
-      description="Reorder forecasts based on velocity and lead times"
-      icon={RefreshCw}
-      emptyDescription="AI-driven reorder recommendations using sales velocity, supplier lead times, and seasonality. Ships in Phase 5 once we have 30 days of order history."
-    />
-  )
+export default function ReplenishmentPage() {
+  return <ReplenishmentWorkspace />
 }

@@ -79,6 +79,31 @@ export async function syncGlobalStock(
 
     logger.info(`[INVENTORY SYNC] Updated SSOT: ${sku} from ${previousQuantity} to ${newQuantity}`)
 
+    // B.1/B.2 — append-only audit row for every stock change. Mapping
+    // legacy reasons to the StockMovementReason enum.
+    if (quantityChanged !== 0) {
+      const reasonMap: Record<string, any> = {
+        SALE: 'ORDER_PLACED',
+        RESTOCK: 'INBOUND_RECEIVED',
+        ADJUSTMENT: 'MANUAL_ADJUSTMENT',
+        RETURN: 'RETURN_RECEIVED',
+      }
+      try {
+        await prisma.stockMovement.create({
+          data: {
+            productId: product.id,
+            change: quantityChanged,
+            balanceAfter: newQuantity,
+            reason: reasonMap[reason] ?? 'MANUAL_ADJUSTMENT',
+            referenceType: 'inventory-sync.service',
+            actor: 'system',
+          },
+        })
+      } catch (e) {
+        logger.warn(`[INVENTORY SYNC] StockMovement audit failed for ${sku}:`, e)
+      }
+    }
+
     // Find all channel listings for this product (including stock buffers)
     const channelListings = await prisma.listing.findMany({
       where: { productId: product.id },

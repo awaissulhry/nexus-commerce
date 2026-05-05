@@ -1424,30 +1424,40 @@ model BulkOpsTemplate {
   id          String  @id @default(cuid())
   name        String
   description String?
-  /** Reserved — null today (workspace-shared). When set, scopes the
-   *  template to a specific user. Indexed so per-user lookups stay
-   *  cheap when scoping lands. */
+  /**
+   * Reserved — null today (workspace-shared). When set, scopes the
+   * template to a specific user. Indexed so per-user lookups stay
+   * cheap when scoping lands.
+   */
   userId      String?
 
-  /** Column ids to render, in display order. Mirrors the existing
-   *  saved-views shape. */
-  columnIds   String[]
+  /**
+   * Column ids to render, in display order. Mirrors the existing
+   * saved-views shape.
+   */
+  columnIds String[]
 
-  /** FilterState shape from apps/web/.../bulk-operations/lib/types.ts:
-   *  status[], channels[], stockLevel, productTypes[], parentage,
-   *  hasAsin, hasGtin, missingRequired. Stored as JSONB so the shape
-   *  can evolve without migrations. */
+  /**
+   * FilterState shape from apps/web/.../bulk-operations/lib/types.ts:
+   * status[], channels[], stockLevel, productTypes[], parentage,
+   * hasAsin, hasGtin, missingRequired. Stored as JSONB so the shape
+   * can evolve without migrations.
+   */
   filterState Json?
 
-  /** Channel + productType filters that drive the column registry —
-   *  separate from filterState because they affect WHICH fields are
-   *  fetched, not WHICH rows are visible. */
+  /**
+   * Channel + productType filters that drive the column registry —
+   * separate from filterState because they affect WHICH fields are
+   * fetched, not WHICH rows are visible.
+   */
   enabledChannels     String[] @default([])
   enabledProductTypes String[] @default([])
 
-  /** W.10 — group keys collapsed in the band when the user saved the
-   *  template. Restored on load so the user's preferred density
-   *  survives. */
+  /**
+   * W.10 — group keys collapsed in the band when the user saved the
+   * template. Restored on load so the user's preferred density
+   * survives.
+   */
   collapsedGroups String[] @default([])
 
   createdAt DateTime @default(now())
@@ -1725,4 +1735,470 @@ model SchemaChange {
 
   @@index([channel, marketplace, productType])
   @@index([detectedAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// FULFILLMENT B.1 — domain spine for warehouse, shipments, returns,
+// suppliers, POs, manufacturing, replenishment, stock movements.
+// Single warehouse today (Italy) but modeled multi-warehouse-ready.
+// Sendcloud is the carrier middleware; FBA is a distinct lane.
+// ─────────────────────────────────────────────────────────────────────
+
+enum StockMovementReason {
+  ORDER_PLACED
+  ORDER_CANCELLED
+  ORDER_REFUNDED
+  RETURN_RECEIVED
+  RETURN_RESTOCKED
+  INBOUND_RECEIVED
+  SUPPLIER_DELIVERY
+  MANUFACTURING_OUTPUT
+  FBA_TRANSFER_OUT
+  FBA_TRANSFER_IN
+  MANUAL_ADJUSTMENT
+  INVENTORY_COUNT
+  WRITE_OFF
+  RESERVATION_RELEASED
+}
+
+enum ShipmentStatusFBM {
+  DRAFT
+  READY_TO_PICK
+  PICKED
+  PACKED
+  LABEL_PRINTED
+  SHIPPED
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+  RETURNED
+}
+
+enum ReturnStatusFlow {
+  REQUESTED
+  AUTHORIZED
+  IN_TRANSIT
+  RECEIVED
+  INSPECTING
+  RESTOCKED
+  REFUNDED
+  REJECTED
+  SCRAPPED
+}
+
+enum ReturnConditionGrade {
+  NEW
+  LIKE_NEW
+  GOOD
+  DAMAGED
+  UNUSABLE
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  SUBMITTED
+  CONFIRMED
+  PARTIAL
+  RECEIVED
+  CANCELLED
+}
+
+enum WorkOrderStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum InboundType {
+  FBA
+  SUPPLIER
+  MANUFACTURING
+  TRANSFER
+}
+
+enum InboundStatus {
+  DRAFT
+  IN_TRANSIT
+  ARRIVED
+  RECEIVING
+  CLOSED
+  CANCELLED
+}
+
+enum CarrierCode {
+  SENDCLOUD
+  AMAZON_BUY_SHIPPING
+  MANUAL
+}
+
+enum ReplenishmentUrgency {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+model Warehouse {
+  id           String  @id @default(cuid())
+  code         String  @unique // e.g. "IT-MAIN"
+  name         String
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  postalCode   String?
+  country      String  @default("IT")
+  isDefault    Boolean @default(false)
+  isActive     Boolean @default(true)
+
+  // Sendcloud sender address mapping — Sendcloud uses sender_address_id
+  sendcloudSenderId Int?
+
+  stockMovements   StockMovement[]
+  shipments        Shipment[]
+  inboundShipments InboundShipment[]
+  purchaseOrders   PurchaseOrder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Append-only audit trail for every stock change. Parent product totalStock
+// is the running sum; balanceAfter is captured on each row for fast
+// "what was stock at time T" queries without replaying.
+model StockMovement {
+  id            String              @id @default(cuid())
+  productId     String
+  variationId   String?
+  warehouseId   String?
+  change        Int // signed (+5 or -3)
+  balanceAfter  Int
+  reason        StockMovementReason
+  // Polymorphic ref to whatever caused the movement
+  referenceType String? // "Order" | "Return" | "InboundShipment" | "PurchaseOrder" | "WorkOrder" | "FBAShipment" | "Manual"
+  referenceId   String?
+  notes         String?
+  actor         String? // userId or "system"
+  createdAt     DateTime            @default(now())
+
+  warehouse Warehouse? @relation(fields: [warehouseId], references: [id])
+
+  @@index([productId, createdAt])
+  @@index([variationId, createdAt])
+  @@index([warehouseId, createdAt])
+  @@index([reason])
+  @@index([referenceType, referenceId])
+}
+
+model Carrier {
+  id                   String      @id @default(cuid())
+  code                 CarrierCode @unique
+  name                 String
+  isActive             Boolean     @default(false)
+  // Encrypted credentials JSON (AES-256-GCM, same pattern as MarketplaceCredential).
+  // Sendcloud: { publicKey, privateKey, integrationId }
+  credentialsEncrypted String?
+  // Default Sendcloud shipping_method_id mapping per channel/marketplace
+  defaultServiceMap    Json? // { "AMAZON_IT": 12345, "EBAY_IT": 67890, ... }
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+}
+
+// Outbound shipment for FBM/eBay/Shopify/Woo/Etsy orders.
+// One shipment can cover multiple OrderItems but is bound to one Order.
+// FBA orders DO NOT use this — Amazon ships them.
+model Shipment {
+  id          String            @id @default(cuid())
+  orderId     String?
+  warehouseId String?
+  carrierCode CarrierCode       @default(SENDCLOUD)
+  status      ShipmentStatusFBM @default(DRAFT)
+
+  // Sendcloud parcel binding
+  sendcloudParcelId String? @unique
+  trackingNumber    String?
+  trackingUrl       String?
+  labelUrl          String?
+  serviceCode       String? // e.g. "GLS_BusinessParcel" or Sendcloud method id
+  serviceName       String?
+
+  // Parcel measurements at pack time
+  weightGrams Int?
+  lengthCm    Decimal? @db.Decimal(10, 2)
+  widthCm     Decimal? @db.Decimal(10, 2)
+  heightCm    Decimal? @db.Decimal(10, 2)
+
+  // Cost tracking (cents to avoid float drift)
+  costCents    Int?
+  currencyCode String? @default("EUR")
+
+  // Lifecycle timestamps
+  pickedAt       DateTime?
+  packedAt       DateTime?
+  labelPrintedAt DateTime?
+  shippedAt      DateTime?
+  deliveredAt    DateTime?
+  cancelledAt    DateTime?
+
+  // Tracking pushback to channel — null until acked
+  trackingPushedAt  DateTime?
+  trackingPushError String?
+
+  pickedBy String?
+  packedBy String?
+
+  notes   String?
+  version Int     @default(1)
+
+  warehouse Warehouse?     @relation(fields: [warehouseId], references: [id])
+  items     ShipmentItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([status])
+  @@index([carrierCode])
+  @@index([trackingNumber])
+  @@index([createdAt])
+}
+
+model ShipmentItem {
+  id          String  @id @default(cuid())
+  shipmentId  String
+  orderItemId String?
+  productId   String?
+  sku         String
+  quantity    Int
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId])
+  @@index([productId])
+}
+
+model Supplier {
+  id              String  @id @default(cuid())
+  name            String
+  contactName     String?
+  email           String?
+  phone           String?
+  addressLine1    String?
+  city            String?
+  postalCode      String?
+  country         String? @default("IT")
+  taxId           String? // partita IVA / VAT number
+  paymentTerms    String? // e.g. "Net 30" / "30gg DF"
+  defaultCurrency String? @default("EUR")
+  leadTimeDays    Int     @default(14)
+  isActive        Boolean @default(true)
+  notes           String?
+
+  products       SupplierProduct[]
+  purchaseOrders PurchaseOrder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SupplierProduct {
+  id                   String  @id @default(cuid())
+  supplierId           String
+  productId            String
+  supplierSku          String?
+  costCents            Int? // cost per unit in supplier's default currency
+  currencyCode         String? @default("EUR")
+  moq                  Int     @default(1) // minimum order quantity
+  leadTimeDaysOverride Int?
+  isPrimary            Boolean @default(false)
+
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([supplierId, productId])
+  @@index([productId])
+}
+
+model PurchaseOrder {
+  id                   String              @id @default(cuid())
+  poNumber             String              @unique
+  supplierId           String?
+  warehouseId          String?
+  status               PurchaseOrderStatus @default(DRAFT)
+  expectedDeliveryDate DateTime?
+  totalCents           Int                 @default(0)
+  currencyCode         String              @default("EUR")
+  notes                String?
+  createdBy            String?
+  version              Int                 @default(1)
+
+  supplier         Supplier?           @relation(fields: [supplierId], references: [id])
+  warehouse        Warehouse?          @relation(fields: [warehouseId], references: [id])
+  items            PurchaseOrderItem[]
+  inboundShipments InboundShipment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([supplierId])
+  @@index([status])
+}
+
+model PurchaseOrderItem {
+  id               String  @id @default(cuid())
+  purchaseOrderId  String
+  productId        String?
+  supplierSku      String?
+  sku              String
+  quantityOrdered  Int
+  quantityReceived Int     @default(0)
+  unitCostCents    Int     @default(0)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseOrderId])
+  @@index([productId])
+}
+
+model InboundShipment {
+  id        String        @id @default(cuid())
+  type      InboundType
+  status    InboundStatus @default(DRAFT)
+  reference String? // free-form reference (supplier invoice #, transport doc, etc.)
+
+  // Optional links — set whichever is relevant by `type`
+  warehouseId     String?
+  fbaShipmentId   String? // Amazon FBA shipment plan id (for type=FBA)
+  purchaseOrderId String?
+  workOrderId     String?
+  asnNumber       String?
+
+  expectedAt DateTime?
+  arrivedAt  DateTime?
+  closedAt   DateTime?
+
+  notes   String?
+  version Int     @default(1)
+
+  warehouse     Warehouse?            @relation(fields: [warehouseId], references: [id])
+  purchaseOrder PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id])
+  workOrder     WorkOrder?            @relation(fields: [workOrderId], references: [id])
+  items         InboundShipmentItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+  @@index([status])
+  @@index([fbaShipmentId])
+}
+
+model InboundShipmentItem {
+  id                String  @id @default(cuid())
+  inboundShipmentId String
+  productId         String?
+  sku               String
+  quantityExpected  Int
+  quantityReceived  Int     @default(0)
+  qcStatus          String? // PASS | FAIL | HOLD
+  qcNotes           String?
+
+  inboundShipment InboundShipment @relation(fields: [inboundShipmentId], references: [id], onDelete: Cascade)
+
+  @@index([inboundShipmentId])
+  @@index([productId])
+}
+
+model WorkOrder {
+  id          String          @id @default(cuid())
+  productId   String
+  quantity    Int
+  status      WorkOrderStatus @default(PLANNED)
+  startedAt   DateTime?
+  completedAt DateTime?
+  costCents   Int?
+  notes       String?
+
+  inboundShipments InboundShipment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+  @@index([status])
+}
+
+model Return {
+  id                 String                @id @default(cuid())
+  orderId            String?
+  channel            String // AMAZON | EBAY | SHOPIFY | WOOCOMMERCE | ETSY
+  marketplace        String?
+  channelReturnId    String?
+  rmaNumber          String?               @unique
+  status             ReturnStatusFlow      @default(REQUESTED)
+  reason             String?
+  conditionGrade     ReturnConditionGrade?
+  refundStatus       String                @default("PENDING") // PENDING | APPROVED | REFUNDED | REJECTED
+  refundCents        Int?
+  currencyCode       String                @default("EUR")
+  // FBA returns are managed by Amazon — we mirror them read-only.
+  isFbaReturn        Boolean               @default(false)
+  // Restock policy snapshot at receipt time
+  restockChannel     String?
+  restockWarehouseId String?
+  // Lifecycle
+  receivedAt         DateTime?
+  inspectedAt        DateTime?
+  refundedAt         DateTime?
+  restockedAt        DateTime?
+  notes              String?
+  version            Int                   @default(1)
+
+  items ReturnItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([status])
+  @@index([channel])
+  @@index([isFbaReturn])
+}
+
+model ReturnItem {
+  id             String                @id @default(cuid())
+  returnId       String
+  orderItemId    String?
+  productId      String?
+  sku            String
+  quantity       Int
+  conditionGrade ReturnConditionGrade?
+  notes          String?
+
+  return Return @relation(fields: [returnId], references: [id], onDelete: Cascade)
+
+  @@index([returnId])
+  @@index([productId])
+}
+
+model ReplenishmentRule {
+  id                  String  @id @default(cuid())
+  productId           String  @unique
+  // Manual overrides (otherwise computed from velocity)
+  minStock            Int? // floor — alert fires below this
+  reorderPoint        Int? // override the auto reorder point
+  reorderQuantity     Int? // override the auto reorder quantity
+  safetyStockDays     Int     @default(7)
+  // Where to reorder from
+  preferredSupplierId String?
+  isManufactured      Boolean @default(false) // if true, generate WorkOrder instead of PO
+  isActive            Boolean @default(true)
+  notes               String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([preferredSupplierId])
 }
