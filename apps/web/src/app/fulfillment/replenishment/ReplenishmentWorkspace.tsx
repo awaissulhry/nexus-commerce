@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Factory,
+  FileText,
   FileWarning,
   Loader2,
   RefreshCw,
@@ -1106,6 +1107,17 @@ function BulkPoModal({
   )
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // F.6 — After successful submit, hold the created POs locally so we can
+  // render a results screen with per-PO "Download factory PDF" links
+  // instead of the previous alert+close flow.
+  const [createdPos, setCreatedPos] = useState<
+    Array<{
+      id: string
+      poNumber: string
+      supplierId: string | null
+      itemCount: number
+    }> | null
+  >(null)
 
   // Group by supplier so the user sees how many POs will get created.
   const grouped = useMemo(() => {
@@ -1141,19 +1153,16 @@ function BulkPoModal({
         throw new Error(err?.error ?? `HTTP ${res.status}`)
       }
       const json = await res.json()
-      const message =
-        `Created ${json.createdPos.length} draft PO${json.createdPos.length === 1 ? '' : 's'} ` +
-        `(${json.createdPos.map((p: any) => p.poNumber).join(', ')}). ` +
-        `${json.itemsAccepted} items accepted` +
-        (json.skipped.length ? `, ${json.skipped.length} skipped` : '') +
-        '.'
-      alert(message)
-      onSuccess()
+      setCreatedPos(json.createdPos)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const finishAndClose = () => {
+    onSuccess()
   }
 
   return (
@@ -1167,23 +1176,65 @@ function BulkPoModal({
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
           <div>
             <div className="text-[14px] font-semibold text-slate-900">
-              Bulk-create draft POs
+              {createdPos
+                ? `Created ${createdPos.length} draft PO${createdPos.length === 1 ? '' : 's'}`
+                : 'Bulk-create draft POs'}
             </div>
             <div className="text-[12px] text-slate-500 mt-0.5">
-              {suggestions.length} item
-              {suggestions.length === 1 ? '' : 's'} ·{' '}
-              {grouped.size} supplier{grouped.size === 1 ? '' : 's'} → one PO
-              per supplier
+              {createdPos
+                ? 'Review each PO and download the factory-ready PDF.'
+                : `${suggestions.length} item${suggestions.length === 1 ? '' : 's'} · ${grouped.size} supplier${grouped.size === 1 ? '' : 's'} → one PO per supplier`}
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={createdPos ? finishAndClose : onClose}
             className="p-1 rounded hover:bg-slate-100 text-slate-500"
             aria-label="Close"
           >
             <X size={18} />
           </button>
         </div>
+
+        {/* F.6 — Success state with download links per PO */}
+        {createdPos ? (
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
+            <div className="text-[12px] text-emerald-700 inline-flex items-center gap-1.5 mb-2">
+              <CheckCircle2 size={14} />
+              <span>
+                All POs land as DRAFT. Open each PDF, review with the factory,
+                and submit when you're ready.
+              </span>
+            </div>
+            {createdPos.map((po) => (
+              <div
+                key={po.id}
+                className="border border-slate-200 rounded px-3 py-2 flex items-center justify-between gap-3"
+              >
+                <div className="min-w-0">
+                  <div className="text-[13px] font-mono font-medium text-slate-900">
+                    {po.poNumber}
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    {po.itemCount} item{po.itemCount === 1 ? '' : 's'}
+                    {po.supplierId ? (
+                      <> · supplier {po.supplierId.slice(-8)}</>
+                    ) : (
+                      <span className="text-amber-700"> · no supplier assigned</span>
+                    )}
+                  </div>
+                </div>
+                <a
+                  href={`${getBackendUrl()}/api/fulfillment/purchase-orders/${po.id}/factory.pdf`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-7 px-3 text-[12px] bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5"
+                >
+                  <FileText size={12} /> Factory PDF
+                </a>
+              </div>
+            ))}
+          </div>
+        ) : (
         <div className="flex-1 overflow-y-auto px-5 py-3">
           {Array.from(grouped.entries()).map(([supplierKey, items]) => (
             <div key={supplierKey} className="mb-3 last:mb-0">
@@ -1235,10 +1286,16 @@ function BulkPoModal({
             </div>
           ))}
         </div>
+        )}
+
         <div className="px-5 py-3 border-t border-slate-200 flex items-center justify-between">
           {error ? (
             <span className="text-[12px] text-rose-700 inline-flex items-center gap-1">
               <AlertCircle size={12} /> {error}
+            </span>
+          ) : createdPos ? (
+            <span className="text-[12px] text-slate-500 inline-flex items-center gap-1">
+              <CheckCircle2 size={12} /> Done — close to refresh the workspace
             </span>
           ) : (
             <span className="text-[12px] text-slate-500 inline-flex items-center gap-1">
@@ -1247,29 +1304,40 @@ function BulkPoModal({
             </span>
           )}
           <div className="flex items-center gap-2">
-            <button
-              onClick={onClose}
-              disabled={submitting}
-              className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={submit}
-              disabled={submitting}
-              className="h-8 px-3 text-[12px] bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="w-3 h-3 animate-spin" /> Creating…
-                </>
-              ) : (
-                <>
-                  <ShoppingCart size={12} /> Create {grouped.size} draft PO
-                  {grouped.size === 1 ? '' : 's'}
-                </>
-              )}
-            </button>
+            {createdPos ? (
+              <button
+                onClick={finishAndClose}
+                className="h-8 px-3 text-[12px] bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5"
+              >
+                <CheckCircle2 size={12} /> Close
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={onClose}
+                  disabled={submitting}
+                  className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={submit}
+                  disabled={submitting}
+                  className="h-8 px-3 text-[12px] bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-3 h-3 animate-spin" /> Creating…
+                    </>
+                  ) : (
+                    <>
+                      <ShoppingCart size={12} /> Create {grouped.size} draft PO
+                      {grouped.size === 1 ? '' : 's'}
+                    </>
+                  )}
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

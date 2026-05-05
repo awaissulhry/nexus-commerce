@@ -1417,6 +1417,48 @@ model ReplenishmentForecast {
 // add to it as they hear about category-specific events. UI surfaces
 // the next 3 events as banners on /fulfillment/replenishment with prep
 // deadline = event_date - max(supplier_lead_times).
+// ── F.6: Brand / company settings ─────────────────────────────────────────
+// Single-row table for the seller's brand identity used on outbound
+// artifacts: factory POs, packing slips, GTIN exemption letters, etc.
+// Edited via /settings/company; rendered into PDF letterheads by the
+// factory-po-pdf service. Seeded as a single empty row on first read so
+// the GET endpoint never has to handle the missing-row case.
+model BrandSettings {
+  id String @id @default(cuid())
+
+  // ── Company identity ────────────────────────────────────────────
+  companyName        String?
+  // Multi-line address rendered on the letterhead. JSON array of strings.
+  // ["Via Aurelia 123", "00165 Roma RM", "Italia"] for Xavia.
+  addressLines       String[] @default([])
+  // VAT / partita IVA / tax ID — varies by jurisdiction; free-form.
+  taxId              String?
+  // Public-facing contact info on the PO header.
+  contactEmail       String?
+  contactPhone       String?
+  websiteUrl         String?
+
+  // ── Letterhead assets ───────────────────────────────────────────
+  // Cloudinary or other hosted URL — pdfkit downloads + embeds at
+  // render time. ~600×200 transparent PNG works best at letter size.
+  logoUrl            String?
+
+  // ── PDF defaults ────────────────────────────────────────────────
+  // Free-form signature block, e.g. "Per: Awais Sulhry / Procurement".
+  // Rendered above the signature line on factory POs.
+  signatureBlockText String?
+  // Default PO notes appended to every factory PO body. Sellers
+  // override per-PO via the bulk-PO modal's notes field.
+  defaultPoNotes     String?
+  // Default sender line for emails to suppliers (display + email).
+  // Future: when SES is wired this drives the From: header. v0
+  // surfaces it for the user to copy into their mail client.
+  factoryEmailFrom   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model RetailEvent {
   id String @id @default(cuid())
 

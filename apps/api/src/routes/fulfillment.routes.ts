@@ -11,6 +11,12 @@ import {
   generateForecastForSeries,
   generateForecastsForAll,
 } from '../services/forecast.service.js'
+import {
+  renderFactoryPoPdf,
+  type FactoryPoInput,
+  type FactoryPoProductGroup,
+  type FactoryPoVariantLine,
+} from '../services/factory-po-pdf.service.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // FULFILLMENT B.3–B.9 — full domain API surface
@@ -851,6 +857,217 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     })
     if (!po) return reply.code(404).send({ error: 'PO not found' })
     return po
+  })
+
+  // F.6 — Factory-ready PDF for a PO. Renders letterhead with company
+  // branding (BrandSettings), per-product groups with images and Size×
+  // Color matrix when applicable, totals, and a signature block.
+  // Streams the PDF as application/pdf so the browser can preview or
+  // download. Filename: factory-po-<poNumber>.pdf.
+  fastify.get('/fulfillment/purchase-orders/:id/factory.pdf', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const po = await prisma.purchaseOrder.findUnique({
+        where: { id },
+        include: {
+          supplier: true,
+          items: true,
+        },
+      })
+      if (!po) return reply.code(404).send({ error: 'PO not found' })
+
+      // Fetch products + their parent's variation attributes + main image.
+      // Group items by parent (or by self when standalone) so the matrix
+      // builder has the full set of variants per product family.
+      const productIds = po.items.map((it) => it.productId).filter((id): id is string => !!id)
+      const products = await prisma.product.findMany({
+        where: { id: { in: productIds } },
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          productType: true,
+          brand: true,
+          parentId: true,
+          isParent: true,
+          images: {
+            where: { type: 'MAIN' },
+            select: { url: true },
+            take: 1,
+          },
+        },
+      })
+      const productById = new Map(products.map((p) => [p.id, p]))
+
+      // For each item, resolve its variation attrs from ProductVariation
+      // (where the SKU lives at the variant level). For Phase-31 Hub-and-
+      // Spoke products (where children are themselves Products), we walk
+      // up via parentId. For ProductVariation children, we look up by SKU.
+      const itemSkus = po.items.map((it) => it.sku)
+      const variants = await prisma.productVariation.findMany({
+        where: { sku: { in: itemSkus } },
+        select: {
+          sku: true,
+          productId: true,
+          variationAttributes: true,
+          product: {
+            select: {
+              id: true,
+              name: true,
+              brand: true,
+              productType: true,
+              images: {
+                where: { type: 'MAIN' },
+                select: { url: true },
+                take: 1,
+              },
+            },
+          },
+        },
+      })
+      const variantBySku = new Map(variants.map((v) => [v.sku, v]))
+
+      // Group by "parent" — either ProductVariation.productId (variant case)
+      // or Product.parentId / Product.id (Hub-and-Spoke case) or Product.id
+      // (standalone). Each group becomes one section in the PDF.
+      const groupMap = new Map<string, FactoryPoProductGroup>()
+      const upsertGroup = (
+        key: string,
+        seed: () => FactoryPoProductGroup,
+        line: FactoryPoVariantLine,
+      ) => {
+        const existing = groupMap.get(key)
+        if (existing) {
+          existing.lines.push(line)
+        } else {
+          const g = seed()
+          g.lines.push(line)
+          groupMap.set(key, g)
+        }
+      }
+
+      for (const item of po.items) {
+        const variant = variantBySku.get(item.sku)
+        const line: FactoryPoVariantLine = {
+          sku: item.sku,
+          quantity: item.quantityOrdered,
+          variationAttributes: variant
+            ? (variant.variationAttributes as Record<string, string> | null)
+            : null,
+        }
+
+        if (variant) {
+          // Variant — group by parent product (the ProductVariation's product)
+          const parent = variant.product
+          upsertGroup(
+            parent.id,
+            () => ({
+              productId: parent.id,
+              productName: parent.name,
+              productType: parent.productType,
+              brand: parent.brand,
+              imageUrl: parent.images[0]?.url ?? null,
+              lines: [],
+            }),
+            line,
+          )
+          continue
+        }
+
+        // No matching ProductVariation — fall back to Product lookup.
+        const product = item.productId ? productById.get(item.productId) : null
+        if (product) {
+          // Hub-and-spoke: children are Products with parentId. Resolve
+          // the parent for grouping if present; otherwise the product
+          // itself is the group.
+          const parentKey = product.parentId ?? product.id
+          const parent = product.parentId
+            ? productById.get(product.parentId) ?? product
+            : product
+          upsertGroup(
+            parentKey,
+            () => ({
+              productId: parent.id,
+              productName: parent.name,
+              productType: parent.productType,
+              brand: parent.brand,
+              imageUrl: parent.images[0]?.url ?? null,
+              lines: [],
+            }),
+            line,
+          )
+        } else {
+          // Orphan SKU (item.productId null or product deleted) — render
+          // as its own group so the PDF is at least complete.
+          upsertGroup(
+            `__orphan_${item.sku}`,
+            () => ({
+              productId: `__orphan_${item.sku}`,
+              productName: `Unknown product (SKU: ${item.sku})`,
+              productType: null,
+              brand: null,
+              imageUrl: null,
+              lines: [],
+            }),
+            line,
+          )
+        }
+      }
+
+      const groups = Array.from(groupMap.values())
+      const totalUnits = po.items.reduce(
+        (acc, it) => acc + it.quantityOrdered,
+        0,
+      )
+
+      // BrandSettings — single-row pattern; create empty default if none.
+      let brand = await prisma.brandSettings.findFirst()
+      if (!brand) brand = await prisma.brandSettings.create({ data: {} })
+
+      const input: FactoryPoInput = {
+        poNumber: po.poNumber,
+        status: po.status,
+        expectedDeliveryDate: po.expectedDeliveryDate,
+        notes: po.notes,
+        createdAt: po.createdAt,
+        brand: {
+          companyName: brand.companyName,
+          addressLines: brand.addressLines,
+          taxId: brand.taxId,
+          contactEmail: brand.contactEmail,
+          contactPhone: brand.contactPhone,
+          websiteUrl: brand.websiteUrl,
+          logoUrl: brand.logoUrl,
+          signatureBlockText: brand.signatureBlockText,
+          defaultPoNotes: brand.defaultPoNotes,
+        },
+        supplier: po.supplier
+          ? {
+              id: po.supplier.id,
+              name: po.supplier.name,
+              contactName: po.supplier.contactName,
+              email: po.supplier.email,
+              phone: po.supplier.phone,
+            }
+          : null,
+        groups,
+        totalUnits,
+      }
+
+      const buffer = await renderFactoryPoPdf(input)
+
+      reply
+        .header('Content-Type', 'application/pdf')
+        .header(
+          'Content-Disposition',
+          `inline; filename="factory-po-${po.poNumber}.pdf"`,
+        )
+        .header('Cache-Control', 'no-store')
+      return reply.send(buffer)
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[purchase-orders/factory.pdf] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
   })
 
   fastify.post('/fulfillment/purchase-orders', async (request, reply) => {
