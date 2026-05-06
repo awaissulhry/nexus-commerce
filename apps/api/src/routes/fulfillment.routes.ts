@@ -17,6 +17,17 @@ import {
   type FactoryPoProductGroup,
   type FactoryPoVariantLine,
 } from '../services/factory-po-pdf.service.js'
+import {
+  receiveItems as inboundReceiveItems,
+  releaseQcHold as inboundReleaseQcHold,
+  recordDiscrepancy as inboundRecordDiscrepancy,
+  updateDiscrepancyStatus as inboundUpdateDiscrepancyStatus,
+  addAttachment as inboundAddAttachment,
+  appendItemPhoto as inboundAppendItemPhoto,
+  transitionShipmentStatus as inboundTransitionStatus,
+  InvalidTransitionError,
+  NotFoundError,
+} from '../services/inbound.service.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // FULFILLMENT B.3–B.9 — full domain API surface
@@ -674,21 +685,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  // Receive inbound items. H.0b — event-log idempotent flow.
-  //
-  // Body shape (unchanged for backwards compat):
-  //   items[].quantityReceived    — cumulative target. Server computes
-  //                                  delta = target - currentReceived.
-  //                                  delta=0 ⇒ no-op (handles double-click).
-  //   items[].idempotencyKey?     — optional explicit retry token. If a
-  //                                  receipt with the same (itemId, key)
-  //                                  already exists, no-op.
-  //   items[].qcStatus?, qcNotes?, notes?
-  //
-  // Each non-zero delta writes one InboundReceipt event + applies a
-  // StockMovement (when QC pass/unset) + bumps the cached
-  // quantityReceived. The event log is source of truth; the cached
-  // column is the SUM(quantity) over events for fast reads.
+  // Receive inbound items. H.0b — event-log idempotent flow,
+  // refactored in H.2 to delegate to inbound.service. Body shape
+  // unchanged for backwards compat; new optional photoUrls per item
+  // appends to the cached InboundShipmentItem.photoUrls array.
   fastify.post('/fulfillment/inbound/:id/receive', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
@@ -700,144 +700,174 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           qcNotes?: string
           idempotencyKey?: string
           notes?: string
+          photoUrls?: string[]
         }>
+        actor?: string
+        receivedById?: string
       }
-      const itemUpdates = Array.isArray(body.items) ? body.items : []
-
-      const shipment = await prisma.inboundShipment.findUnique({
-        where: { id },
-        include: { items: true },
+      const items = Array.isArray(body.items) ? body.items : []
+      const updated = await inboundReceiveItems({
+        shipmentId: id,
+        items,
+        actor: body.actor ?? 'inbound-receive',
+        receivedById: body.receivedById,
       })
-      if (!shipment) return reply.code(404).send({ error: 'Inbound shipment not found' })
-
-      const reasonMap: Record<string, any> = {
-        SUPPLIER: 'SUPPLIER_DELIVERY',
-        MANUFACTURING: 'MANUFACTURING_OUTPUT',
-        FBA: 'FBA_TRANSFER_OUT', // sending TO Amazon = stock leaves
-        TRANSFER: 'INBOUND_RECEIVED',
-      }
-      const reason = reasonMap[shipment.type] ?? 'INBOUND_RECEIVED'
-      const sign = shipment.type === 'FBA' ? -1 : 1
-
-      for (const upd of itemUpdates) {
-        const orig = shipment.items.find((it) => it.id === upd.itemId)
-        if (!orig) continue
-
-        const target = Number(upd.quantityReceived)
-        if (!Number.isFinite(target) || target < 0) continue
-        const delta = target - orig.quantityReceived
-
-        if (delta === 0) {
-          // Allow QC-only updates without stock churn (operator
-          // adding a note hours after the receive event).
-          if (upd.qcStatus !== undefined || upd.qcNotes !== undefined) {
-            await prisma.inboundShipmentItem.update({
-              where: { id: orig.id },
-              data: { qcStatus: upd.qcStatus ?? null, qcNotes: upd.qcNotes ?? null },
-            })
-          }
-          continue
-        }
-
-        // Idempotency dedupe: explicit-key callers get a hard guarantee.
-        // Cumulative-target callers without a key are already protected
-        // by the delta=0 short-circuit above.
-        if (upd.idempotencyKey) {
-          const existing = await prisma.inboundReceipt.findFirst({
-            where: { inboundShipmentItemId: orig.id, idempotencyKey: upd.idempotencyKey },
-            select: { id: true },
-          })
-          if (existing) continue
-        }
-
-        // QC PASS or unset ⇒ stock the units. FAIL/HOLD ⇒ event logged
-        // but no stock added (until released). applyStockMovement opens
-        // its own transaction; running it before the event-log write
-        // keeps the failure mode recoverable (retry with same target
-        // ⇒ delta=0 ⇒ no-op).
-        let stockMovementId: string | null = null
-        if ((!upd.qcStatus || upd.qcStatus === 'PASS') && orig.productId) {
-          const mv = await applyStockMovement({
-            productId: orig.productId,
-            warehouseId: shipment.warehouseId ?? undefined,
-            change: sign * delta,
-            reason,
-            referenceType: 'InboundShipment',
-            referenceId: shipment.id,
-            actor: 'inbound-receive',
-          })
-          stockMovementId = mv.id
-        }
-
-        // Atomic: write the event + bump the cached quantityReceived
-        // + persist QC state, all in one transaction.
-        await prisma.$transaction([
-          prisma.inboundReceipt.create({
-            data: {
-              inboundShipmentItemId: orig.id,
-              quantity: delta,
-              qcStatus: upd.qcStatus ?? null,
-              qcNotes: upd.qcNotes ?? null,
-              notes: upd.notes ?? null,
-              idempotencyKey: upd.idempotencyKey ?? null,
-              stockMovementId,
-              receivedBy: 'inbound-receive',
-            },
-          }),
-          prisma.inboundShipmentItem.update({
-            where: { id: orig.id },
-            data: {
-              quantityReceived: target,
-              qcStatus: upd.qcStatus ?? null,
-              qcNotes: upd.qcNotes ?? null,
-            },
-          }),
-        ])
-      }
-
-      const updated = await prisma.inboundShipment.update({
-        where: { id },
-        data: { status: 'RECEIVING', arrivedAt: shipment.arrivedAt ?? new Date(), version: { increment: 1 } },
-        include: { items: true },
-      })
-
-      // H.0a — propagate received quantities back to the PO line +
-      // transition PO status if applicable. Idempotent: derived from
-      // SUM(InboundShipmentItem.quantityReceived) per PO line, so
-      // re-runs converge. No-op for items without a PO link.
-      const touchedPoiIds = new Set<string>()
-      for (const upd of itemUpdates) {
-        const orig = shipment.items.find((it) => it.id === upd.itemId)
-        if (orig?.purchaseOrderItemId) touchedPoiIds.add(orig.purchaseOrderItemId)
-      }
-      for (const poiId of touchedPoiIds) {
-        await syncPoiQuantityReceived(poiId)
-      }
-      if (touchedPoiIds.size > 0) {
-        const pois = await prisma.purchaseOrderItem.findMany({
-          where: { id: { in: Array.from(touchedPoiIds) } },
-          select: { purchaseOrderId: true },
-        })
-        const touchedPoIds = new Set(pois.map((r) => r.purchaseOrderId))
-        for (const poId of touchedPoIds) {
-          await maybeTransitionPoStatus(poId)
-        }
-      }
-
       return updated
     } catch (error: any) {
+      if (error instanceof NotFoundError) return reply.code(404).send({ error: error.message })
       fastify.log.error({ err: error }, '[inbound/:id/receive] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })
 
+  // H.2 — explicit state machine transition. Auto-transitions still
+  // happen on receive + discrepancy resolution; this endpoint is for
+  // operator-driven moves (DRAFT→SUBMITTED, SUBMITTED→IN_TRANSIT, etc.).
+  fastify.post('/fulfillment/inbound/:id/transition', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = request.body as { status?: string; actor?: string }
+      if (!body.status) return reply.code(400).send({ error: 'status required' })
+      const updated = await inboundTransitionStatus({
+        shipmentId: id,
+        newStatus: body.status as any,
+        actor: body.actor,
+      })
+      return updated
+    } catch (error: any) {
+      if (error instanceof NotFoundError) return reply.code(404).send({ error: error.message })
+      if (error instanceof InvalidTransitionError) return reply.code(409).send({ error: error.message })
+      fastify.log.error({ err: error }, '[inbound/:id/transition] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // H.2 — release QC HOLD/FAIL units to stock. Default releases the
+  // full held quantity; pass `quantity` for a partial release (rest
+  // stays excluded from inventory).
+  fastify.post('/fulfillment/inbound/:id/items/:itemId/release-hold', async (request, reply) => {
+    try {
+      const { id, itemId } = request.params as { id: string; itemId: string }
+      const body = request.body as { quantity?: number; actor?: string }
+      const mv = await inboundReleaseQcHold({
+        shipmentId: id,
+        itemId,
+        quantity: body.quantity,
+        actor: body.actor,
+      })
+      return { ok: true, movement: mv }
+    } catch (error: any) {
+      if (error instanceof NotFoundError) return reply.code(404).send({ error: error.message })
+      fastify.log.error({ err: error }, '[inbound/:id/items/:id/release-hold] failed')
+      return reply.code(400).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // H.2 — append a photo URL to an item's proof gallery. Cloudinary
+  // direct-uploads from the frontend POST the resulting URL here.
+  fastify.post('/fulfillment/inbound/:id/items/:itemId/photos', async (request, reply) => {
+    try {
+      const { itemId } = request.params as { id: string; itemId: string }
+      const body = request.body as { url?: string }
+      if (!body.url) return reply.code(400).send({ error: 'url required' })
+      const item = await inboundAppendItemPhoto({ shipmentItemId: itemId, url: body.url })
+      return item
+    } catch (error: any) {
+      if (error instanceof NotFoundError) return reply.code(404).send({ error: error.message })
+      fastify.log.error({ err: error }, '[inbound/:id/items/:id/photos] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // H.2 — register an attachment uploaded to Cloudinary. Body:
+  //   { kind, url, filename?, contentType?, sizeBytes?, uploadedBy? }
+  // kind is one of PHOTO|INVOICE|PACKING|CUSTOMS|ASN|OTHER.
+  fastify.post('/fulfillment/inbound/:id/attachments', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = request.body as any
+      if (!body.kind || !body.url) return reply.code(400).send({ error: 'kind + url required' })
+      const att = await inboundAddAttachment({
+        shipmentId: id,
+        kind: body.kind,
+        url: body.url,
+        filename: body.filename,
+        contentType: body.contentType,
+        sizeBytes: body.sizeBytes,
+        uploadedBy: body.uploadedBy,
+      })
+      return att
+    } catch (error: any) {
+      if (error instanceof NotFoundError) return reply.code(404).send({ error: error.message })
+      fastify.log.error({ err: error }, '[inbound/:id/attachments] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // H.2 — record a discrepancy (ship-level or line-level).
+  fastify.post('/fulfillment/inbound/:id/discrepancies', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = request.body as any
+      if (!body.reasonCode) return reply.code(400).send({ error: 'reasonCode required' })
+      const d = await inboundRecordDiscrepancy({
+        shipmentId: id,
+        itemId: body.itemId,
+        reasonCode: body.reasonCode,
+        expectedValue: body.expectedValue,
+        actualValue: body.actualValue,
+        quantityImpact: body.quantityImpact,
+        costImpactCents: body.costImpactCents,
+        description: body.description,
+        photoUrls: body.photoUrls,
+        reportedBy: body.reportedBy,
+      })
+      return d
+    } catch (error: any) {
+      if (error instanceof NotFoundError) return reply.code(404).send({ error: error.message })
+      fastify.log.error({ err: error }, '[inbound/:id/discrepancies] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // H.2 — update discrepancy status. Triggers maybeAutoTransition so
+  // RECEIVED → RECONCILED happens once everything's resolved.
+  fastify.patch('/fulfillment/inbound/discrepancies/:did', async (request, reply) => {
+    try {
+      const { did } = request.params as { did: string }
+      const body = request.body as { status?: string; resolutionNotes?: string; actor?: string }
+      if (!body.status) return reply.code(400).send({ error: 'status required' })
+      const valid = ['REPORTED', 'ACKNOWLEDGED', 'RESOLVED', 'DISPUTED', 'WAIVED']
+      if (!valid.includes(body.status)) return reply.code(400).send({ error: `status must be one of ${valid.join(', ')}` })
+      const updated = await inboundUpdateDiscrepancyStatus({
+        discrepancyId: did,
+        status: body.status as any,
+        resolutionNotes: body.resolutionNotes,
+        actor: body.actor,
+      })
+      return updated
+    } catch (error: any) {
+      if (error instanceof NotFoundError) return reply.code(404).send({ error: error.message })
+      fastify.log.error({ err: error }, '[inbound/discrepancies/:id PATCH] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // /close kept as a convenience alias for transition→CLOSED.
   fastify.post('/fulfillment/inbound/:id/close', async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const updated = await prisma.inboundShipment.update({
-      where: { id },
-      data: { status: 'CLOSED', closedAt: new Date(), version: { increment: 1 } },
-    })
-    return updated
+    try {
+      const { id } = request.params as { id: string }
+      const updated = await inboundTransitionStatus({
+        shipmentId: id,
+        newStatus: 'CLOSED' as any,
+      })
+      return updated
+    } catch (error: any) {
+      if (error instanceof NotFoundError) return reply.code(404).send({ error: error.message })
+      if (error instanceof InvalidTransitionError) return reply.code(409).send({ error: error.message })
+      fastify.log.error({ err: error }, '[inbound/:id/close] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
   })
 
   // ═══════════════════════════════════════════════════════════════════
