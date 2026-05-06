@@ -180,9 +180,6 @@ export default function ProductEditClient({
             <Button variant="ghost" size="sm" onClick={() => router.refresh()}>
               Discard
             </Button>
-            <Button variant="primary" size="sm" disabled={!unsavedChanges}>
-              Save Changes
-            </Button>
           </div>
         </div>
 
