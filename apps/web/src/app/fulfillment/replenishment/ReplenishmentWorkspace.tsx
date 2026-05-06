@@ -13,14 +13,18 @@
 //   - multi-select → bulk-draft-PO flow (one POST creates one PO per
 //     supplier, grouped automatically)
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   AlertCircle,
+  ArrowDown,
+  ArrowUp,
   CalendarClock,
   CheckCircle2,
   ChevronRight,
   Copy,
+  Download,
   Factory,
   FileText,
   FileWarning,
@@ -151,19 +155,84 @@ const URGENCY_TONE: Record<string, string> = {
   LOW: 'bg-slate-50 text-slate-600 border-slate-200',
 }
 
+// R.5 — sort keys for the table column headers. 'urgency' falls
+// through to backend ordering (CRITICAL → HIGH → MEDIUM → LOW with
+// daysOfStockLeft asc as tiebreaker); other keys re-sort the
+// already-fetched array in JS.
+type SortKey = 'urgency' | 'daysOfCover' | 'velocity' | 'qty' | 'stock' | 'sku' | 'name'
+
 export default function ReplenishmentWorkspace() {
+  // R.5 — URL-driven state. Filters / search / sort are bookmarkable
+  // and shareable. Selection + bulk modal stay local (ephemeral).
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  const filter = (searchParams.get('filter') ??
+    'NEEDS_REORDER') as 'ALL' | 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'NEEDS_REORDER'
+  const channelFilter = searchParams.get('channel') ?? ''
+  const marketplaceFilter = searchParams.get('marketplace') ?? ''
+  const urlSearch = searchParams.get('search') ?? ''
+  const sortBy = (searchParams.get('sortBy') ?? 'urgency') as SortKey
+  const sortDir = (searchParams.get('sortDir') ?? 'desc') as 'asc' | 'desc'
+  const drawerProductId = searchParams.get('drawer')
+
   const [data, setData] = useState<ReplenishmentResponse | null>(null)
   const [events, setEvents] = useState<UpcomingEvent[] | null>(null)
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<
-    'ALL' | 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'NEEDS_REORDER'
-  >('NEEDS_REORDER')
-  const [search, setSearch] = useState('')
-  const [marketplaceFilter, setMarketplaceFilter] = useState<string>('')
-  const [channelFilter, setChannelFilter] = useState<string>('')
+  // searchInput is local + debounced; the URL param is the persisted value.
+  const [searchInput, setSearchInput] = useState(urlSearch)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [drawerProductId, setDrawerProductId] = useState<string | null>(null)
   const [bulkOpen, setBulkOpen] = useState(false)
+  // R.5 — auto-refresh interval persisted per-device via localStorage.
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
+  // R.5 — toast queue (~30 lines, no library).
+  const [toasts, setToasts] = useState<Array<{ id: number; tone: 'ok' | 'error'; msg: string }>>([])
+  const toastIdRef = useRef(0)
+  const pushToast = useCallback((tone: 'ok' | 'error', msg: string) => {
+    const id = ++toastIdRef.current
+    setToasts((t) => [...t, { id, tone, msg }])
+    window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4500)
+  }, [])
+
+  const updateUrl = useCallback((patch: Record<string, string | undefined>) => {
+    const next = new URLSearchParams(searchParams.toString())
+    for (const [k, v] of Object.entries(patch)) {
+      if (v == null || v === '') next.delete(k)
+      else next.set(k, v)
+    }
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false })
+  }, [searchParams, pathname, router])
+
+  const setFilter = (f: typeof filter) => updateUrl({ filter: f === 'NEEDS_REORDER' ? undefined : f })
+  const setChannelFilter = (c: string) => updateUrl({ channel: c || undefined })
+  const setMarketplaceFilter = (m: string) => updateUrl({ marketplace: m || undefined })
+  const setDrawerProductId = (id: string | null) => updateUrl({ drawer: id ?? undefined })
+  const setSort = (key: SortKey) => {
+    if (key === sortBy) {
+      updateUrl({ sortDir: sortDir === 'asc' ? 'desc' : 'asc' })
+    } else {
+      updateUrl({ sortBy: key === 'urgency' ? undefined : key, sortDir: undefined })
+    }
+  }
+
+  // Debounced search input → URL
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      if (searchInput !== urlSearch) updateUrl({ search: searchInput || undefined })
+    }, 250)
+    return () => window.clearTimeout(t)
+  }, [searchInput, urlSearch, updateUrl])
+
+  // Restore auto-refresh preference
+  useEffect(() => {
+    const stored = window.localStorage.getItem('nexus-replenishment-autorefresh')
+    const n = Number(stored)
+    if (n === 5 || n === 15) setAutoRefreshMin(n)
+  }, [])
+  useEffect(() => {
+    window.localStorage.setItem('nexus-replenishment-autorefresh', String(autoRefreshMin))
+  }, [autoRefreshMin])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -210,15 +279,47 @@ export default function ReplenishmentWorkspace() {
       rows = rows.filter((s) => s.urgency === 'HIGH' || s.urgency === 'CRITICAL')
     else if (filter === 'MEDIUM') rows = rows.filter((s) => s.urgency === 'MEDIUM')
     else if (filter === 'NEEDS_REORDER') rows = rows.filter((s) => s.needsReorder)
-    if (search.trim()) {
-      const q = search.trim().toLowerCase()
+    if (urlSearch.trim()) {
+      const q = urlSearch.trim().toLowerCase()
       rows = rows.filter(
         (r) =>
           r.sku.toLowerCase().includes(q) || r.name.toLowerCase().includes(q),
       )
     }
+    // R.5 — client-side sort. urgency mode = backend ordering; other
+    // keys re-sort the already-fetched array.
+    const dir = sortDir === 'asc' ? 1 : -1
+    if (sortBy !== 'urgency') {
+      rows = [...rows].sort((a, b) => {
+        let av: number | string
+        let bv: number | string
+        switch (sortBy) {
+          case 'daysOfCover':
+            av = a.daysOfStockLeft ?? Number.MAX_SAFE_INTEGER
+            bv = b.daysOfStockLeft ?? Number.MAX_SAFE_INTEGER
+            return (av - (bv as number)) * dir
+          case 'velocity': return ((a.velocity ?? 0) - (b.velocity ?? 0)) * dir
+          case 'qty':      return ((a.reorderQuantity ?? 0) - (b.reorderQuantity ?? 0)) * dir
+          case 'stock':    return ((a.effectiveStock ?? 0) - (b.effectiveStock ?? 0)) * dir
+          case 'sku':      return a.sku.localeCompare(b.sku) * dir
+          case 'name':     return a.name.localeCompare(b.name) * dir
+          default:         return 0
+        }
+      })
+    }
     return rows
-  }, [data, filter, search])
+  }, [data, filter, urlSearch, sortBy, sortDir])
+
+  // R.5 — auto-refresh. Pause when document is hidden so a backgrounded
+  // tab doesn't burn requests.
+  useEffect(() => {
+    if (autoRefreshMin === 0) return
+    const ms = autoRefreshMin * 60_000
+    const id = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void fetchData()
+    }, ms)
+    return () => window.clearInterval(id)
+  }, [autoRefreshMin, fetchData])
 
   const toggleSelected = (id: string) => {
     setSelectedIds((prev) => {
@@ -249,9 +350,9 @@ export default function ReplenishmentWorkspace() {
         }),
       })
       if (res.ok) {
-        alert(`Work order created for ${s.reorderQuantity} × ${s.sku}`)
+        pushToast('ok', `Work order created for ${s.reorderQuantity} × ${s.sku}`)
         fetchData()
-      } else alert('Work order create failed')
+      } else pushToast('error', 'Work order create failed')
       return
     }
     const res = await fetch(
@@ -269,10 +370,10 @@ export default function ReplenishmentWorkspace() {
     )
     if (res.ok) {
       const po = await res.json()
-      alert(`Draft PO ${po.poNumber} created`)
+      pushToast('ok', `Draft PO ${po.poNumber} created`)
       fetchData()
     } else {
-      alert('Draft PO failed')
+      pushToast('error', 'Draft PO failed')
     }
   }
 
@@ -378,18 +479,38 @@ export default function ReplenishmentWorkspace() {
             </option>
           ))}
         </select>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-2 flex-wrap">
           <Input
             placeholder="Search SKU…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-56"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="w-44 sm:w-56"
           />
+          {/* R.5 — auto-refresh dropdown. Pauses when tab is hidden. */}
+          <select
+            value={autoRefreshMin}
+            onChange={(e) => setAutoRefreshMin(Number(e.target.value) as 0 | 5 | 15)}
+            className="h-8 px-2 text-[11px] border border-slate-200 rounded-md bg-white"
+            title="Auto-refresh interval (paused when tab hidden)"
+          >
+            <option value={0}>Auto-refresh: Off</option>
+            <option value={5}>Auto-refresh: 5 min</option>
+            <option value={15}>Auto-refresh: 15 min</option>
+          </select>
           <button
             onClick={fetchData}
             className="h-8 px-3 text-[12px] border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
           >
             <RefreshCw size={12} /> Refresh
+          </button>
+          {/* R.5 — CSV export of currently filtered + sorted suggestions */}
+          <button
+            onClick={() => exportSuggestionsCsv(filtered)}
+            className="h-8 px-3 text-[12px] border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+            title="Export the currently filtered + sorted suggestions to CSV"
+            disabled={filtered.length === 0}
+          >
+            <Download size={12} /> Export CSV
           </button>
         </div>
       </div>
@@ -435,7 +556,23 @@ export default function ReplenishmentWorkspace() {
           description="All products in this view have plenty of runway."
         />
       ) : (
-        <Card noPadding>
+        <>
+        {/* R.5 — mobile: render each suggestion as a card. Desktop
+            (lg+) keeps the dense table. The 13-column layout was an
+            unusable horizontal scroll below ~1100px. */}
+        <div className="lg:hidden space-y-2">
+          {filtered.map((s) => (
+            <MobileSuggestionCard
+              key={s.productId}
+              s={s}
+              selected={selectedIds.has(s.productId)}
+              onToggleSelect={() => toggleSelected(s.productId)}
+              onOpenDrawer={() => setDrawerProductId(s.productId)}
+              onDraftPo={() => draftSinglePo(s)}
+            />
+          ))}
+        </div>
+        <Card noPadding className="hidden lg:block">
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
               <thead className="border-b border-slate-200 bg-slate-50">
@@ -451,16 +588,16 @@ export default function ReplenishmentWorkspace() {
                       aria-label="Select all"
                     />
                   </th>
-                  <th className={th()}>Product</th>
-                  <th className={th()}>Urgency</th>
-                  <th className={thRight()}>On-hand</th>
+                  <SortableTh sortKey="name" current={sortBy} dir={sortDir} onSort={setSort} className={th()}>Product</SortableTh>
+                  <SortableTh sortKey="urgency" current={sortBy} dir={sortDir} onSort={setSort} className={th()}>Urgency</SortableTh>
+                  <SortableTh sortKey="stock" current={sortBy} dir={sortDir} onSort={setSort} className={thRight()}>On-hand</SortableTh>
                   <th className={thRight()}>Inbound (LT)</th>
                   <th className={thRight()}>ATP</th>
-                  <th className={thRight()}>Velocity</th>
-                  <th className={thRight()}>Days left</th>
+                  <SortableTh sortKey="velocity" current={sortBy} dir={sortDir} onSort={setSort} className={thRight()}>Velocity</SortableTh>
+                  <SortableTh sortKey="daysOfCover" current={sortBy} dir={sortDir} onSort={setSort} className={thRight()}>Days left</SortableTh>
                   <th className={thRight()}>Lead time</th>
                   <th className={thRight()}>Forecast (LT)</th>
-                  <th className={thRight()}>Suggested qty</th>
+                  <SortableTh sortKey="qty" current={sortBy} dir={sortDir} onSort={setSort} className={thRight()}>Suggested qty</SortableTh>
                   <th className={thRight()}></th>
                   <th className={th()}></th>
                 </tr>
@@ -480,6 +617,30 @@ export default function ReplenishmentWorkspace() {
             </table>
           </div>
         </Card>
+        </>
+      )}
+
+      {/* R.5 — toast tray (top-right). Auto-dismisses after 4.5s. */}
+      {toasts.length > 0 && (
+        <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
+          {toasts.map((t) => (
+            <div
+              key={t.id}
+              className={cn(
+                'border rounded-lg shadow-md px-3 py-2 text-[12px] flex items-start gap-2',
+                t.tone === 'ok'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  : 'bg-rose-50 border-rose-200 text-rose-800',
+              )}
+            >
+              {t.tone === 'ok' ? <CheckCircle2 size={14} className="flex-shrink-0 mt-0.5" /> : <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />}
+              <span className="flex-1">{t.msg}</span>
+              <button onClick={() => setToasts((ts) => ts.filter((x) => x.id !== t.id))} className="opacity-60 hover:opacity-100">
+                <X size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Detail drawer */}
@@ -608,6 +769,160 @@ function UpcomingEventsBanner({ events }: { events: UpcomingEvent[] }) {
       </div>
     </div>
   )
+}
+
+// R.5 — sortable column header. Click to set sort; click again to
+// flip direction. Renders a small chevron next to the active column.
+function SortableTh({
+  sortKey,
+  current,
+  dir,
+  onSort,
+  className,
+  children,
+}: {
+  sortKey: SortKey
+  current: SortKey
+  dir: 'asc' | 'desc'
+  onSort: (k: SortKey) => void
+  className: string
+  children: React.ReactNode
+}) {
+  const active = current === sortKey
+  return (
+    <th className={className}>
+      <button
+        onClick={() => onSort(sortKey)}
+        className="inline-flex items-center gap-1 hover:text-slate-900"
+      >
+        {children}
+        {active && (dir === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
+      </button>
+    </th>
+  )
+}
+
+// R.5 — mobile-card alternative to the 13-column table. Shows the
+// most important fields stacked, with the row's actions accessible
+// via tap. Renders below `lg:` breakpoint.
+function MobileSuggestionCard({
+  s,
+  selected,
+  onToggleSelect,
+  onOpenDrawer,
+  onDraftPo,
+}: {
+  s: Suggestion
+  selected: boolean
+  onToggleSelect: () => void
+  onOpenDrawer: () => void
+  onDraftPo: () => void
+}) {
+  const tone = URGENCY_TONE[s.urgency] ?? URGENCY_TONE.LOW
+  return (
+    <div className="border border-slate-200 rounded-lg bg-white p-3 space-y-2">
+      <div className="flex items-start gap-2">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggleSelect}
+          className="mt-0.5"
+          aria-label={`Select ${s.sku}`}
+        />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-mono text-[11px] text-slate-700">{s.sku}</span>
+            <span className={cn('text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border', tone)}>
+              {s.urgency}
+            </span>
+          </div>
+          <div className="text-[12px] text-slate-900 truncate mt-0.5">{s.name}</div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 text-[11px]">
+        <div>
+          <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">Stock</div>
+          <div className="tabular-nums font-semibold text-slate-900">{s.effectiveStock}</div>
+        </div>
+        <div>
+          <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">Days left</div>
+          <div className="tabular-nums font-semibold text-slate-900">
+            {s.daysOfStockLeft == null ? '—' : `${s.daysOfStockLeft}d`}
+          </div>
+        </div>
+        <div>
+          <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">Reorder</div>
+          <div className="tabular-nums font-semibold text-slate-900">{s.reorderQuantity}</div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+        <button
+          onClick={onDraftPo}
+          className="flex-1 h-8 text-[11px] bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center justify-center gap-1"
+        >
+          {s.isManufactured ? <><Factory size={11} /> WO</> : <><ShoppingCart size={11} /> PO</>}
+        </button>
+        <button
+          onClick={onOpenDrawer}
+          className="h-8 px-3 text-[11px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1"
+        >
+          Details <ChevronRight size={11} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// R.5 — CSV export of currently filtered + sorted suggestions.
+// Pure client-side: build the CSV string, trigger a download via
+// <a download>. No new endpoint.
+function exportSuggestionsCsv(suggestions: Suggestion[]): void {
+  const rows: string[][] = [
+    [
+      'SKU', 'Name', 'Urgency', 'On-hand', 'Inbound (LT)', 'Effective stock',
+      'Velocity (units/day)', 'Forecast 30d', 'Days of cover', 'Reorder point',
+      'Reorder qty', 'Safety stock', 'EOQ', 'Constraints', 'Lead time (days)',
+      'Supplier', 'Recommendation ID',
+    ],
+  ]
+  for (const s of suggestions) {
+    rows.push([
+      s.sku,
+      s.name,
+      s.urgency,
+      String(s.currentStock),
+      String(s.inboundWithinLeadTime),
+      String(s.effectiveStock),
+      String(s.velocity),
+      s.forecastedDemand30d != null ? String(s.forecastedDemand30d) : '',
+      s.daysOfStockLeft != null ? String(s.daysOfStockLeft) : '',
+      String(s.reorderPoint),
+      String(s.reorderQuantity),
+      s.safetyStockUnits != null ? String(s.safetyStockUnits) : '',
+      s.eoqUnits != null ? String(s.eoqUnits) : '',
+      (s.constraintsApplied ?? []).join('|'),
+      String(s.leadTimeDays),
+      s.preferredSupplierId ?? '',
+      s.recommendationId ?? '',
+    ])
+  }
+  const csv = rows
+    .map((r) => r.map((cell) => {
+      const needsQuote = /[",\n]/.test(cell)
+      return needsQuote ? `"${cell.replace(/"/g, '""')}"` : cell
+    }).join(','))
+    .join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `replenishment-${new Date().toISOString().slice(0, 10)}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
 
 function SuggestionRow({
@@ -824,10 +1139,15 @@ function ForecastDetailDrawer({
 }) {
   const [detail, setDetail] = useState<DetailResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  // R.5 — error state. Pre-R.5 a fetch failure left the spinner
+  // running indefinitely; now we render an error panel with retry.
+  const [error, setError] = useState<string | null>(null)
+  const [retryTick, setRetryTick] = useState(0)
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
+    setError(null)
     const params = new URLSearchParams()
     if (channel) params.set('channel', channel)
     if (marketplace) params.set('marketplace', marketplace)
@@ -837,10 +1157,17 @@ function ForecastDetailDrawer({
       }`,
       { cache: 'no-store' },
     )
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`Failed to load (${r.status})`)
+        return r.json()
+      })
       .then((j) => {
         if (cancelled) return
         setDetail(j)
+      })
+      .catch((e: Error) => {
+        if (cancelled) return
+        setError(e.message)
       })
       .finally(() => {
         if (cancelled) return
@@ -849,7 +1176,7 @@ function ForecastDetailDrawer({
     return () => {
       cancelled = true
     }
-  }, [productId, channel, marketplace])
+  }, [productId, channel, marketplace, retryTick])
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -884,12 +1211,31 @@ function ForecastDetailDrawer({
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          {loading && (
+          {loading && !error && (
             <div className="text-[13px] text-slate-500 inline-flex items-center gap-2 py-6">
               <Loader2 className="w-4 h-4 animate-spin" /> Loading forecast…
             </div>
           )}
-          {!loading && detail && (
+          {/* R.5 — error UI with retry. Pre-R.5 a fetch failure left
+              the spinner running indefinitely. */}
+          {!loading && error && (
+            <div className="bg-rose-50 border border-rose-200 rounded p-4 text-[13px] text-rose-800">
+              <div className="flex items-start gap-2">
+                <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold mb-1">Couldn't load forecast detail</div>
+                  <div className="text-[12px] mb-3">{error}</div>
+                  <button
+                    onClick={() => setRetryTick((n) => n + 1)}
+                    className="h-7 px-2.5 text-[11px] bg-rose-600 text-white rounded hover:bg-rose-700 inline-flex items-center gap-1"
+                  >
+                    <RefreshCw size={11} /> Retry
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          {!loading && !error && detail && (
             <>
               {/* 90-day chart */}
               <div>
