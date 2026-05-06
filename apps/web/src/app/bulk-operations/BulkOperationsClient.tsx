@@ -2330,6 +2330,7 @@ export default function BulkOperationsClient() {
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
       document.removeEventListener('keydown', onKey)
+      document.removeEventListener('contextmenu', onContext)
     }
     const onMove = (e: MouseEvent) => {
       local.x = e.clientX
@@ -2355,9 +2356,19 @@ export default function BulkOperationsClient() {
         setFillState(null)
       }
     }
+    // TECH_DEBT #26 — right-click cancels mid-drag. Same effect as Esc;
+    // mouse-driven users get an affordance that doesn't require their
+    // other hand on the keyboard. preventDefault suppresses the
+    // browser context menu so the cancel feels intentional.
+    const onContext = (e: MouseEvent) => {
+      e.preventDefault()
+      teardown()
+      setFillState(null)
+    }
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
     document.addEventListener('keydown', onKey)
+    document.addEventListener('contextmenu', onContext)
   }, [commitFill])
   selectCtxRef.current.beginFill = beginFill
   useEffect(() => {

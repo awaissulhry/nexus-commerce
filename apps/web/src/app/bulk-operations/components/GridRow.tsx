@@ -164,10 +164,25 @@ export function SelectionOverlays({
         />
       )}
       {fillRect && (
-        <div
-          className="absolute pointer-events-none border-2 border-dashed border-blue-500 bg-blue-100/30 z-20"
-          style={fillRect}
-        />
+        <>
+          <div
+            className="absolute pointer-events-none border-2 border-dashed border-blue-500 bg-blue-100/30 z-20"
+            style={fillRect}
+          />
+          {/* TECH_DEBT #26 — affordance hint while drag-fill is in
+              flight. Anchored to the top-right of the extension rect so
+              it follows the dashed preview as it grows. Two cancel
+              paths, both surfaced. */}
+          <div
+            className="absolute pointer-events-none z-30 bg-slate-900 text-white text-[10px] font-medium px-1.5 py-0.5 rounded shadow"
+            style={{
+              top: Math.max(0, fillRect.top - 22),
+              left: fillRect.left + fillRect.width - 110,
+            }}
+          >
+            <kbd className="font-mono">Esc</kbd> or right-click to cancel
+          </div>
+        </>
       )}
       {/* Fill handle — a 8×8 blue square at the bottom-right of the
        *  selection range. Hidden while a fill drag is in progress so
