@@ -218,6 +218,7 @@ model Product {
   syncLogs             SyncLog[]
   orderItems           OrderItem[] // Phase 2: Orders & Financials
   outboundSyncQueue    OutboundSyncQueue[] // Phase 8: Outbound Sync Engine
+  stockLevels          StockLevel[] // H.1: per-location stock ledger
 
   // NN.1 — optimistic concurrency. Bumped on every PATCH/PUT.
   // Clients send the version they read; server rejects with 409 if
@@ -327,6 +328,9 @@ model ProductVariation {
 
   // ── Pricing Rules (Phase 1 Enhancement) ──────────────────────────
   pricingRules PricingRuleVariation[]
+
+  // H.1: per-location stock ledger
+  stockLevels StockLevel[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -598,7 +602,7 @@ model Marketplace {
   // Different programs have different fee structures: Pan-EU shares a
   // single inventory pool (cheapest), MCI replicates per-FC, EFN ships
   // cross-border from one origin (highest fees).
-  fbaProgram String? // 'PAN_EU' | 'MCI' | 'EFN' | null (non-Amazon)
+  fbaProgram   String? // 'PAN_EU' | 'MCI' | 'EFN' | null (non-Amazon)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -771,13 +775,15 @@ model MarketplaceSync {
 }
 
 model Channel {
-  id          String    @id @default(cuid())
-  type        String
-  name        String
-  credentials String // AES-256-GCM encrypted API key (see packages/shared/vault.ts)
-  listings    Listing[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id        String    @id @default(cuid())
+  type      String
+  name      String
+  // (was: credentials TEXT — dropped in 20260506_h2_unify_channel_connection
+  //  because nothing in code referenced it and the table itself is empty.
+  //  All connection credentials now live on ChannelConnection.)
+  listings  Listing[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
 model Listing {
@@ -1343,7 +1349,7 @@ model DailySalesAggregate {
   // Sum of OrderItem.price * quantity in the order's currency. For
   // multi-currency setups, the currency is tracked per source channel;
   // analytics that compare across marketplaces should normalize separately.
-  grossRevenue Decimal @db.Decimal(14, 2) @default(0)
+  grossRevenue Decimal @default(0) @db.Decimal(14, 2)
   // Distinct order count contributing to this row (units / orders =
   // average basket size for this SKU on this day).
   ordersCount  Int     @default(0)
@@ -1407,18 +1413,18 @@ model ReplenishmentForecast {
   forecastUnits Decimal @db.Decimal(12, 2)
   // 80% prediction interval. Lower can be 0 (clamped); upper bounds the
   // headroom the user might want to hold for tail demand.
-  lower80       Decimal @db.Decimal(12, 2) @default(0)
-  upper80       Decimal @db.Decimal(12, 2) @default(0)
+  lower80       Decimal @default(0) @db.Decimal(12, 2)
+  upper80       Decimal @default(0) @db.Decimal(12, 2)
 
   // ── Provenance / signals ────────────────────────────────────────
   // Which model generated this row. Lets future versions of the worker
   // (e.g. LightGBM v2) coexist with v1 baselines and lets the UI tag
   // forecasts with their generation. 'HOLT_WINTERS_V1' for v0.
-  model       String @default("HOLT_WINTERS_V1")
+  model         String  @default("HOLT_WINTERS_V1")
   // Multiplicative factors that shaped the point forecast, kept for
   // transparency in the UI: { weather: 1.1, holiday: 1.5, retail: 2.0 }.
   // Default {} for forecasts with no external adjustment.
-  signals     Json   @default("{}")
+  signals       Json    @default("{}")
   // Free-form note; rows with sparse history get tagged 'COLD_START',
   // rows that fell back from Holt-Winters → trailing-mean get tagged
   // 'TRAILING_MEAN_FALLBACK', etc.
@@ -1455,21 +1461,21 @@ model BrandSettings {
   id String @id @default(cuid())
 
   // ── Company identity ────────────────────────────────────────────
-  companyName        String?
+  companyName  String?
   // Multi-line address rendered on the letterhead. JSON array of strings.
   // ["Via Aurelia 123", "00165 Roma RM", "Italia"] for Xavia.
-  addressLines       String[] @default([])
+  addressLines String[] @default([])
   // VAT / partita IVA / tax ID — varies by jurisdiction; free-form.
-  taxId              String?
+  taxId        String?
   // Public-facing contact info on the PO header.
-  contactEmail       String?
-  contactPhone       String?
-  websiteUrl         String?
+  contactEmail String?
+  contactPhone String?
+  websiteUrl   String?
 
   // ── Letterhead assets ───────────────────────────────────────────
   // Cloudinary or other hosted URL — pdfkit downloads + embeds at
   // render time. ~600×200 transparent PNG works best at letter size.
-  logoUrl            String?
+  logoUrl String?
 
   // ── PDF defaults ────────────────────────────────────────────────
   // Free-form signature block, e.g. "Per: Awais Sulhry / Procurement".
@@ -1491,10 +1497,10 @@ model RetailEvent {
   id String @id @default(cuid())
 
   // ── Identity ────────────────────────────────────────────────────
-  name        String
+  name      String
   // Inclusive event window. Single-day events have startDate == endDate.
-  startDate   DateTime @db.Date
-  endDate     DateTime @db.Date
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
 
   // ── Scope (any/all may be null = applies broadly) ───────────────
   // null => applies to every channel
@@ -1508,7 +1514,7 @@ model RetailEvent {
   // Expected demand lift on event days. 1.0 = no lift; 4.0 = 4x typical.
   // Conservative defaults: Prime Day 3.0, Black Friday 4.0, Cyber
   // Monday 2.5, Italian saldi 1.4, EICMA 1.3. Sellers tune from data.
-  expectedLift Decimal @db.Decimal(4, 2) @default(1)
+  expectedLift Decimal @default(1) @db.Decimal(4, 2)
 
   // Lead-time-aware reminder offset. UI uses this to surface
   // "Black Friday in 47 days — last day to PO: Oct 13". Optional;
@@ -1564,7 +1570,7 @@ model PricingSnapshot {
 
   // Constraint clamping flag — true when the resolver had to floor or
   // ceiling-cap. Pre-clamp value preserved for debugging.
-  isClamped   Boolean @default(false)
+  isClamped   Boolean  @default(false)
   clampedFrom Decimal? @db.Decimal(12, 2)
 
   // Soft warnings the UI surfaces as cell badges ("FX stale", "MAP
@@ -1586,12 +1592,12 @@ model PricingSnapshot {
 // `source = 'manual'` rows let the seller override (e.g. lock UK at a fixed
 // rate while EUR/GBP shifts).
 model FxRate {
-  id           String  @id @default(cuid())
+  id           String   @id @default(cuid())
   fromCurrency String // 'EUR'
   toCurrency   String // 'GBP'
-  rate         Decimal @db.Decimal(14, 8)
+  rate         Decimal  @db.Decimal(14, 8)
   asOf         DateTime @db.Date
-  source       String  @default("frankfurter") // 'frankfurter' | 'manual'
+  source       String   @default("frankfurter") // 'frankfurter' | 'manual'
 
   createdAt DateTime @default(now())
 
@@ -2146,6 +2152,14 @@ enum StockMovementReason {
   INVENTORY_COUNT
   WRITE_OFF
   RESERVATION_RELEASED
+  // H.1 additions for multi-location model
+  SYNC_RECONCILIATION
+  RESERVATION_CREATED
+  RESERVATION_CONSUMED
+  TRANSFER_OUT
+  TRANSFER_IN
+  PARENT_PRODUCT_CLEANUP
+  STOCKLEVEL_BACKFILL
 }
 
 enum ShipmentStatusFBM {
@@ -2245,14 +2259,123 @@ model Warehouse {
   shipments        Shipment[]
   inboundShipments InboundShipment[]
   purchaseOrders   PurchaseOrder[]
+  // H.1: optional 1-1 link to inventory-side StockLocation
+  stockLocation    StockLocation?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
+// H.1 — Multi-location inventory model.
+//
+// StockLocation is the inventory-side abstraction. The legacy Warehouse
+// model stays for shipping/Sendcloud sender concerns; physical
+// warehouses (type=WAREHOUSE) link via warehouseId. Amazon FBA pools
+// (type=AMAZON_FBA) and per-channel reservation buckets
+// (type=CHANNEL_RESERVED) have warehouseId=NULL.
+model StockLocation {
+  id                 String   @id @default(cuid())
+  type               String // 'WAREHOUSE' | 'AMAZON_FBA' | 'CHANNEL_RESERVED'
+  code               String   @unique // 'IT-MAIN', 'AMAZON-EU-FBA', ...
+  name               String
+  address            Json?
+  isActive           Boolean  @default(true)
+  // Marketplaces this location can fulfil (capability, not commitment)
+  servesMarketplaces String[] @default([])
+
+  // Optional join to legacy Warehouse for type=WAREHOUSE rows
+  warehouseId String?    @unique
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+
+  stockLevels   StockLevel[]
+  movements     StockMovement[] @relation("StockLocationMovements")
+  movementsFrom StockMovement[] @relation("StockMovementFromLocation")
+  movementsTo   StockMovement[] @relation("StockMovementToLocation")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+  @@index([isActive])
+}
+
+// Per-location, per-product (or per-variation) quantity ledger.
+// `available = quantity - reserved` is enforced by a CHECK constraint
+// at the DB level so the cached column cannot drift. Product.totalStock
+// becomes a cached SUM(StockLevel.quantity) maintained by the
+// stock-movement service.
+model StockLevel {
+  id          String  @id @default(cuid())
+  locationId  String
+  productId   String
+  variationId String?
+
+  quantity  Int @default(0)
+  reserved  Int @default(0)
+  available Int @default(0) // = quantity - reserved (CHECK enforced)
+
+  reorderThreshold Int?
+  reorderQuantity  Int?
+
+  lastUpdatedAt DateTime  @updatedAt
+  lastSyncedAt  DateTime?
+  syncStatus    String    @default("SYNCED") // SYNCED | PENDING | FAILED
+  syncError     String?
+
+  location  StockLocation     @relation(fields: [locationId], references: [id])
+  product   Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variation ProductVariation? @relation(fields: [variationId], references: [id], onDelete: Cascade)
+
+  reservations StockReservation[]
+
+  createdAt DateTime @default(now())
+
+  // The DB-level UNIQUE is enforced by two partial indexes (variationId
+  // IS NULL / IS NOT NULL) created in the migration SQL. We keep this
+  // simple @@unique here so the Prisma client can target it; the
+  // partials provide correctness when variationId is NULL.
+  @@unique([locationId, productId, variationId])
+  @@index([productId])
+  @@index([locationId])
+  @@index([quantity])
+  @@index([syncStatus])
+}
+
+// Time-bounded holds against StockLevel.reserved. PENDING_ORDER
+// reservations expire after 24h unless consumed (order shipped) or
+// released (order cancelled).
+model StockReservation {
+  id           String @id @default(cuid())
+  stockLevelId String
+
+  quantity Int
+
+  orderId String?
+  reason  String // 'PENDING_ORDER' | 'MANUAL_HOLD' | 'PROMOTION'
+
+  expiresAt  DateTime
+  releasedAt DateTime?
+  consumedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  stockLevel StockLevel @relation(fields: [stockLevelId], references: [id], onDelete: Cascade)
+
+  @@index([stockLevelId])
+  @@index([orderId])
+  @@index([expiresAt])
+  @@index([releasedAt, consumedAt])
+}
+
 // Append-only audit trail for every stock change. Parent product totalStock
 // is the running sum; balanceAfter is captured on each row for fast
 // "what was stock at time T" queries without replaying.
+//
+// H.1: extended with locationId + transfer (from/to) + source FKs
+// (orderId, shipmentId, returnId, reservationId) + quantityBefore.
+// The legacy columns (change, balanceAfter, reason, actor, createdAt,
+// warehouseId, referenceType, referenceId, notes) are preserved for
+// backward compatibility.
 model StockMovement {
   id            String              @id @default(cuid())
   productId     String
@@ -2268,13 +2391,30 @@ model StockMovement {
   actor         String? // userId or "system"
   createdAt     DateTime            @default(now())
 
-  warehouse Warehouse? @relation(fields: [warehouseId], references: [id])
+  // H.1 additions
+  locationId     String?
+  fromLocationId String?
+  toLocationId   String?
+  quantityBefore Int?
+  orderId        String?
+  shipmentId     String?
+  returnId       String?
+  reservationId  String?
+
+  warehouse    Warehouse?     @relation(fields: [warehouseId], references: [id])
+  location     StockLocation? @relation("StockLocationMovements", fields: [locationId], references: [id])
+  fromLocation StockLocation? @relation("StockMovementFromLocation", fields: [fromLocationId], references: [id])
+  toLocation   StockLocation? @relation("StockMovementToLocation", fields: [toLocationId], references: [id])
 
   @@index([productId, createdAt])
   @@index([variationId, createdAt])
   @@index([warehouseId, createdAt])
+  @@index([locationId, createdAt])
   @@index([reason])
   @@index([referenceType, referenceId])
+  @@index([orderId])
+  @@index([shipmentId])
+  @@index([returnId])
 }
 
 model Carrier {

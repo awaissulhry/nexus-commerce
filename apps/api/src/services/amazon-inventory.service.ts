@@ -21,7 +21,10 @@
 
 import prisma from '../db.js'
 import { AmazonService, FBAInventoryRow } from './marketplaces/amazon.service.js'
+import { applyStockMovement } from './stock-movement.service.js'
 import { logger } from '../utils/logger.js'
+
+const FBA_LOCATION_CODE = 'AMAZON-EU-FBA'
 
 const amazonService = new AmazonService()
 
@@ -156,22 +159,45 @@ export class AmazonInventoryService {
 
   // ── internals ────────────────────────────────────────────────────────
 
-  /** Look up local Product by SKU first, ASIN as fallback for the case
-   *  where Amazon's SKU drifted from ours but the ASIN matches. Update
-   *  totalStock only if it actually changed (saves a write + an updatedAt
-   *  bump that would invalidate the 30s grid poll cache for nothing). */
+  /** H.1 — write FBA fulfillableQuantity into the AMAZON-EU-FBA
+   *  StockLevel ledger via the canonical stock-movement service. The
+   *  service handles audit-row insertion, totalStock recompute as
+   *  SUM(StockLevel), and OutboundSyncQueue fan-out. SKUs absent from
+   *  the SP-API response are NOT zeroed (we only iterate `rows` —
+   *  StockLevel rows for missing SKUs are untouched), preserving the
+   *  pre-H.1 safety contract.
+   *
+   *  Lookup remains SKU-first with ASIN fallback for the case where
+   *  Amazon's SKU drifted from ours but the ASIN matches. Delta=0
+   *  short-circuit avoids no-op writes (saves a transaction + an
+   *  updatedAt bump that would invalidate the 30s grid poll cache for
+   *  nothing). */
   private async applyRows(rows: FBAInventoryRow[], summary: SyncSummary): Promise<void> {
+    // Resolve the AMAZON-EU-FBA location once per sweep. Created by the
+    // H.1 backfill — a missing row is a configuration error worth
+    // surfacing loudly rather than silently lazy-creating.
+    const fbaLocation = await prisma.stockLocation.findUnique({
+      where: { code: FBA_LOCATION_CODE },
+      select: { id: true },
+    })
+    if (!fbaLocation) {
+      const msg = `StockLocation ${FBA_LOCATION_CODE} not found — run H.1 backfill before re-enabling FBA cron`
+      summary.errors.push({ sku: 'CONFIG', error: msg })
+      logger.error(`amazon-inventory: ${msg}`)
+      return
+    }
+
     for (const row of rows) {
       try {
         let product = await prisma.product.findUnique({
           where: { sku: row.sku },
-          select: { id: true, totalStock: true },
+          select: { id: true },
         })
 
         if (!product && row.asin) {
           const byAsin = await prisma.product.findFirst({
             where: { amazonAsin: row.asin },
-            select: { id: true, totalStock: true },
+            select: { id: true },
           })
           product = byAsin
         }
@@ -184,14 +210,33 @@ export class AmazonInventoryService {
           continue
         }
 
-        if (product.totalStock === row.fulfillableQuantity) {
+        // Read current FBA quantity for delta calculation.
+        const existing = await prisma.stockLevel.findFirst({
+          where: {
+            productId: product.id,
+            locationId: fbaLocation.id,
+            variationId: null,
+          },
+          select: { quantity: true },
+        })
+        const previousQty = existing?.quantity ?? 0
+        const newQty = row.fulfillableQuantity
+        const delta = newQty - previousQty
+
+        if (delta === 0) {
           summary.productsUnchanged++
           continue
         }
 
-        await prisma.product.update({
-          where: { id: product.id },
-          data: { totalStock: row.fulfillableQuantity },
+        await applyStockMovement({
+          productId: product.id,
+          locationId: fbaLocation.id,
+          change: delta,
+          reason: 'SYNC_RECONCILIATION',
+          referenceType: 'AmazonFBASync',
+          referenceId: row.sku,
+          notes: `FBA sweep: fulfillableQuantity ${previousQty} → ${newQty}`,
+          actor: 'system:amazon-inventory-cron',
         })
         summary.productsUpdated++
       } catch (err) {
