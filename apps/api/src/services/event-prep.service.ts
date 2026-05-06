@@ -15,7 +15,14 @@
  *   shouldPromoteForPrep() — within lead-time window?
  *
  * Scope cuts for v1:
- *   - Product-type scope only (channel/marketplace deferred)
+ *   - Product-type scope enforced here in eventAppliesToProduct
+ *   - Channel/marketplace scope enforced upstream at the route level
+ *     (fulfillment.routes.ts narrows the RetailEvent query to events
+ *     that match the request's `?channel=` / `?marketplace=` filters,
+ *     using the same null-OR-equal pattern as forecast-signals.service).
+ *     Per-product channel awareness still deferred — when no request
+ *     filter is set, a channel-tagged event applies broadly because we
+ *     don't load each product's channel-listing set on the hot path.
  *   - Earliest-deadline event wins per SKU
  *   - One-tier urgency bump max (LOW→MEDIUM, MEDIUM→HIGH, HIGH→CRITICAL)
  *   - Lift ≤ 1.0 events filtered out (no incremental demand to prep for)
@@ -63,10 +70,10 @@ export interface PrepRecommendation {
 /**
  * Pure function: does this event apply to a product?
  *
- * v1 scope: productType match (or event has null productType =
- * applies to all). Channel/marketplace scope is loaded into the
- * RetailEvent shape but not yet enforced — adds query complexity
- * without clear v1 win for Xavia.
+ * Productype scope is enforced here. Channel/marketplace scope is
+ * pre-filtered upstream at the route level when the request narrows
+ * to a specific scope (so the events list arriving here has already
+ * been pruned). This function therefore only checks productType.
  */
 export function eventAppliesToProduct(args: {
   event: RetailEventLite

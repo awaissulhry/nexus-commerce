@@ -3686,14 +3686,34 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       // Cap at 90-day horizon (matches the existing upcoming-events
       // banner). Filtered to active + lift > 1 (events with no
       // incremental demand never need prep).
+      //
+      // R.13 channel/marketplace scope: when the request narrows the
+      // view to a specific channel or marketplace, drop events that
+      // don't apply there. Mirrors the forecast-signals service's
+      // (null OR equal) match shape — events with channel/marketplace
+      // = null apply broadly. Without this filter, an Amazon IT
+      // promo would surface on the eBay DE filtered view.
       const eventHorizon = new Date()
       eventHorizon.setUTCDate(eventHorizon.getUTCDate() + 90)
+      const eventWhere: Prisma.RetailEventWhereInput = {
+        isActive: true,
+        startDate: { gte: new Date(), lte: eventHorizon },
+        expectedLift: { gt: 1 },
+      }
+      const eventScopeAnd: Prisma.RetailEventWhereInput[] = []
+      if (channelFilter) {
+        eventScopeAnd.push({
+          OR: [{ channel: null }, { channel: channelFilter }],
+        })
+      }
+      if (marketplaceFilter) {
+        eventScopeAnd.push({
+          OR: [{ marketplace: null }, { marketplace: marketplaceFilter }],
+        })
+      }
+      if (eventScopeAnd.length > 0) eventWhere.AND = eventScopeAnd
       const retailEvents = await prisma.retailEvent.findMany({
-        where: {
-          isActive: true,
-          startDate: { gte: new Date(), lte: eventHorizon },
-          expectedLift: { gt: 1 },
-        },
+        where: eventWhere,
         select: {
           id: true, name: true, startDate: true, endDate: true,
           productType: true, channel: true, marketplace: true,
