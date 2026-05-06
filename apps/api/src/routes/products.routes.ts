@@ -140,6 +140,13 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       // Lazy-load children of this parent. Pass the parent's ID
       // verbatim. Disables the default parentId=null filter.
       parentId?: string
+      // P.10 — products that are NOT listed on any of these channels.
+      // Comma-separated channel names (AMAZON, EBAY, ...). Used by
+      // the "Missing on..." filter chips to surface coverage gaps.
+      // Distinct from the positive `channels` filter, which uses
+      // syncChannels intent rather than actual ChannelListing
+      // presence.
+      missingChannels?: string
     }
   }>('/products', async (request, reply) => {
     try {
@@ -163,6 +170,8 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       const tagIdList = (q.tags ?? '').split(',').map((s) => s.trim()).filter(Boolean)
       const fulfillmentList = (q.fulfillment ?? '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
       const marketplaceList = (q.marketplaces ?? '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
+      // P.10 — channels we want products NOT to be listed on. Coverage-gap surface.
+      const missingChannelList = (q.missingChannels ?? '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
       const stockLevel = (q.stockLevel ?? 'all').toLowerCase()
       const sort = q.sort ?? 'updated'
       const includeCoverage = q.includeCoverage === 'true' || q.includeCoverage === '1'
@@ -191,6 +200,25 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       if (fulfillmentList.length > 0) where.fulfillmentMethod = { in: fulfillmentList }
       if (marketplaceList.length > 0) {
         where.channelListings = { some: { marketplace: { in: marketplaceList } } }
+      }
+      // P.10 — products NOT listed on the given channels. Cleanly
+      // composes with the existing marketplace filter via Prisma's
+      // implicit AND on `where` keys, except both target the same
+      // relation, so we use AND[] when both are set.
+      if (missingChannelList.length > 0) {
+        const missingClause = {
+          channelListings: { none: { channel: { in: missingChannelList } } },
+        } as const
+        if (where.channelListings) {
+          where.AND = [
+            ...((where.AND as any[]) ?? []),
+            { channelListings: where.channelListings },
+            missingClause,
+          ]
+          delete where.channelListings
+        } else {
+          where.channelListings = missingClause.channelListings
+        }
       }
       if (tagIdList.length > 0) {
         // Filter products that have AT LEAST ONE of the selected tags

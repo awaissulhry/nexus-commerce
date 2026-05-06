@@ -205,6 +205,8 @@ export default function ProductsWorkspace() {
   const tagFilters = searchParams.get('tags')?.split(',').filter(Boolean) ?? []
   const fulfillmentFilters = searchParams.get('fulfillment')?.split(',').filter(Boolean) ?? []
   const stockLevel = searchParams.get('stockLevel') ?? 'all'
+  // P.10 — coverage-gap filter. Products NOT listed on these channels.
+  const missingChannelFilters = searchParams.get('missingChannels')?.split(',').filter(Boolean) ?? []
 
   // F1 — drawer state lives in the URL so back/forward + bookmarks +
   // shared links all work. Open: ?drawer=<productId>. Close: drop the
@@ -329,13 +331,14 @@ export default function ProductsWorkspace() {
     if (brandFilters.length) qs.set('brands', brandFilters.join(','))
     if (tagFilters.length) qs.set('tags', tagFilters.join(','))
     if (fulfillmentFilters.length) qs.set('fulfillment', fulfillmentFilters.join(','))
+    if (missingChannelFilters.length) qs.set('missingChannels', missingChannelFilters.join(','))
     if (stockLevel !== 'all') qs.set('stockLevel', stockLevel)
     if (hasPhotos) qs.set('hasPhotos', hasPhotos)
     qs.set('sort', sortBy)
     qs.set('includeCoverage', 'true')
     qs.set('includeTags', 'true')
     return `/api/products?${qs.toString()}`
-  }, [lens, page, pageSize, search, statusFilters, channelFilters, marketplaceFilters, productTypeFilters, brandFilters, tagFilters, fulfillmentFilters, stockLevel, hasPhotos, sortBy])
+  }, [lens, page, pageSize, search, statusFilters, channelFilters, marketplaceFilters, productTypeFilters, brandFilters, tagFilters, fulfillmentFilters, missingChannelFilters, stockLevel, hasPhotos, sortBy])
 
   const {
     data: productsData,
@@ -524,7 +527,7 @@ export default function ProductsWorkspace() {
   )
 
   // Reset selection when filters change
-  useEffect(() => { setSelected(new Set()) }, [page, search, statusFilters.join(','), channelFilters.join(','), marketplaceFilters.join(','), productTypeFilters.join(','), brandFilters.join(','), tagFilters.join(','), fulfillmentFilters.join(','), stockLevel, hasPhotos])
+  useEffect(() => { setSelected(new Set()) }, [page, search, statusFilters.join(','), channelFilters.join(','), marketplaceFilters.join(','), productTypeFilters.join(','), brandFilters.join(','), tagFilters.join(','), fulfillmentFilters.join(','), missingChannelFilters.join(','), stockLevel, hasPhotos])
 
   // Auto-load default saved view on first mount if URL has no filter state
   const appliedDefaultRef = useRef(false)
@@ -549,7 +552,8 @@ export default function ProductsWorkspace() {
   const filterCount =
     statusFilters.length + channelFilters.length + marketplaceFilters.length +
     productTypeFilters.length + brandFilters.length + tagFilters.length +
-    fulfillmentFilters.length + (stockLevel !== 'all' ? 1 : 0) + (hasPhotos ? 1 : 0)
+    fulfillmentFilters.length + missingChannelFilters.length +
+    (stockLevel !== 'all' ? 1 : 0) + (hasPhotos ? 1 : 0)
 
   return (
     <div className="space-y-5">
@@ -677,6 +681,7 @@ export default function ProductsWorkspace() {
         brandFilters={brandFilters}
         tagFilters={tagFilters}
         fulfillmentFilters={fulfillmentFilters}
+        missingChannelFilters={missingChannelFilters}
         stockLevel={stockLevel}
         hasPhotos={hasPhotos}
         filterCount={filterCount}
@@ -814,6 +819,7 @@ function FilterBar(props: any) {
   const {
     searchInput, setSearchInput,
     statusFilters, channelFilters, marketplaceFilters, productTypeFilters, brandFilters, tagFilters, fulfillmentFilters,
+    missingChannelFilters,
     stockLevel, hasPhotos, filterCount, filtersOpen, setFiltersOpen, facets, tags, updateUrl,
   } = props
 
@@ -860,7 +866,7 @@ function FilterBar(props: any) {
           </button>
           {filterCount > 0 && (
             <button
-              onClick={() => updateUrl({ status: '', channels: '', marketplaces: '', productTypes: '', brands: '', tags: '', fulfillment: '', stockLevel: undefined, hasPhotos: undefined, page: undefined })}
+              onClick={() => updateUrl({ status: '', channels: '', marketplaces: '', productTypes: '', brands: '', tags: '', fulfillment: '', missingChannels: '', stockLevel: undefined, hasPhotos: undefined, page: undefined })}
               className="h-8 px-2 text-[12px] text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
             >
               <X size={12} /> Clear
@@ -882,6 +888,18 @@ function FilterBar(props: any) {
               options={['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY']}
               selected={channelFilters}
               onToggle={(v: string) => updateUrl({ channels: toggleArr(channelFilters, v).join(',') || undefined, page: undefined })}
+            />
+            {/* P.10 — coverage-gap filter. Surfaces products NOT
+                listed on the chosen channels so operators can quickly
+                jump to "what should be on Amazon but isn't." Backend
+                applies it via channelListings: { none: ... } so the
+                set is true coverage absence, not just `syncChannels`
+                intent. */}
+            <FilterGroup
+              label="Missing on…"
+              options={['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY']}
+              selected={missingChannelFilters}
+              onToggle={(v: string) => updateUrl({ missingChannels: toggleArr(missingChannelFilters, v).join(',') || undefined, page: undefined })}
             />
             {facets?.marketplaces && facets.marketplaces.length > 0 && (() => {
               // E.5b — Marketplace filter is channel-agnostic (the backend
@@ -3409,8 +3427,61 @@ function CoverageLens({ products, loading }: { products: ProductRow[]; loading: 
   if (products.length === 0) return <EmptyState icon={Network} title="Nothing to show" description="No products in current filter" />
 
   const channels = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY']
+
+  // P.10 — top-line per-channel coverage. Counted across the visible
+  // slice (products.slice(0, 100) below) so the header's percentage
+  // matches what the operator can see + scroll. Three buckets per
+  // channel: live (any ChannelListing in ACTIVE+isPublished),
+  // listed-but-not-live (DRAFT or ERROR), and missing entirely.
+  const visible = products.slice(0, 100)
+  const channelStats = channels.map((ch) => {
+    let live = 0, listed = 0
+    for (const p of visible) {
+      const c = p.coverage?.[ch]
+      if (!c) continue
+      listed++
+      if (c.live > 0) live++
+    }
+    const missing = visible.length - listed
+    const pct = visible.length === 0 ? 0 : Math.round((live / visible.length) * 100)
+    return { channel: ch, live, listed, missing, pct }
+  })
+
   return (
-    <Card noPadding>
+    <div className="space-y-3">
+      <Card>
+        <div className="flex items-center gap-3 flex-wrap text-[12px]">
+          <span className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+            Coverage across {visible.length} product{visible.length === 1 ? '' : 's'}
+          </span>
+          <div className="flex items-center gap-2 flex-wrap ml-auto">
+            {channelStats.map((s) => {
+              const pctTone =
+                s.pct >= 80
+                  ? 'text-emerald-700'
+                  : s.pct >= 40
+                  ? 'text-amber-700'
+                  : 'text-rose-700'
+              return (
+                <span
+                  key={s.channel}
+                  className={`inline-flex items-center gap-1.5 px-2 py-1 border rounded ${CHANNEL_TONE[s.channel]}`}
+                  title={`${s.live} live, ${s.listed - s.live} listed but not live, ${s.missing} missing`}
+                >
+                  <span className="font-semibold text-[10px]">{s.channel.slice(0, 3)}</span>
+                  <span className={`tabular-nums font-semibold ${pctTone}`}>
+                    {s.pct}%
+                  </span>
+                  <span className="text-[10px] opacity-70 tabular-nums">
+                    {s.live}/{visible.length}
+                  </span>
+                </span>
+              )
+            })}
+          </div>
+        </div>
+      </Card>
+      <Card noPadding>
       <div className="overflow-x-auto">
         <table className="w-full text-[12px]">
           <thead className="bg-slate-50 border-b border-slate-200">
@@ -3452,6 +3523,7 @@ function CoverageLens({ products, loading }: { products: ProductRow[]; loading: 
         </table>
       </div>
     </Card>
+    </div>
   )
 }
 
