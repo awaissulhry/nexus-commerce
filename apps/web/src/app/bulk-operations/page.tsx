@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { History as HistoryIcon } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
+import ActiveJobsStrip from './ActiveJobsStrip'
 import BulkOperationsClient from './BulkOperationsClient'
 
 export const dynamic = 'force-dynamic'
@@ -32,6 +33,7 @@ export default function BulkOperationsPage() {
           }
         />
       </div>
+      <ActiveJobsStrip />
       <BulkOperationsClient />
     </div>
   )
