@@ -6,7 +6,7 @@
  * trivially when imported.
  */
 
-import { recommendationChanged } from './replenishment-recommendation.service.js'
+import { clampStockInputs, recommendationChanged } from './replenishment-recommendation.service.js'
 
 const tests: Array<{ name: string; fn: () => void }> = []
 function test(name: string, fn: () => void) { tests.push({ name, fn }) }
@@ -112,6 +112,45 @@ test('ignores non-tracked fields (velocity, daysOfStockLeft) for diff', () => {
     }),
     false,
   )
+})
+
+// ─── clampStockInputs ───
+
+test('clampStockInputs leaves non-negative inputs untouched', () => {
+  const out = clampStockInputs(baseInput)
+  eq(out.totalAvailable, 50)
+  eq(out.inboundWithinLeadTime, 0)
+  eq(out.effectiveStock, 50)
+})
+
+test('clampStockInputs floors negative totalAvailable to 0', () => {
+  const out = clampStockInputs({ ...baseInput, totalAvailable: -7 })
+  eq(out.totalAvailable, 0)
+})
+
+test('clampStockInputs floors negative inboundWithinLeadTime to 0', () => {
+  const out = clampStockInputs({ ...baseInput, inboundWithinLeadTime: -3 })
+  eq(out.inboundWithinLeadTime, 0)
+})
+
+test('clampStockInputs floors negative effectiveStock to 0', () => {
+  const out = clampStockInputs({ ...baseInput, effectiveStock: -42 })
+  eq(out.effectiveStock, 0)
+})
+
+test('clampStockInputs preserves non-stock fields verbatim', () => {
+  const out = clampStockInputs({
+    ...baseInput,
+    effectiveStock: -10,
+    reorderPoint: 30,
+    reorderQuantity: 100,
+    urgency: 'CRITICAL' as const,
+  })
+  eq(out.reorderPoint, 30)
+  eq(out.reorderQuantity, 100)
+  eq(out.urgency, 'CRITICAL')
+  // and the clamp still applied
+  eq(out.effectiveStock, 0)
 })
 
 let passed = 0

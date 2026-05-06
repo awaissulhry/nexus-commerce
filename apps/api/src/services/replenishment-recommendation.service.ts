@@ -83,6 +83,34 @@ export interface ActiveRecommendationLite {
 }
 
 /**
+ * Pure function: defensively clamp the three stock-related fields
+ * to ≥0 before persistence. The math service receives effectiveStock
+ * downstream (via the route handler that builds a RecommendationInput);
+ * if a large order clears stock between recommendation generation and
+ * persistence, those fields could land negative, causing the math
+ * service to compute incorrect reorder points / EOQs.
+ *
+ * The clamp is safe because every downstream consumer treats stock
+ * as a non-negative quantity by convention:
+ *   - effectiveStock = totalAvailable + inboundWithinLeadTime
+ *   - reorderPoint / EOQ assume stock ≥ 0
+ *   - daysOfStockLeft = effectiveStock / velocity (negative meaningless)
+ *
+ * Intentionally NOT clamped: reorderPoint, reorderQuantity,
+ * daysOfStockLeft — these are downstream computations that the route
+ * handler has already finalised; clamping them here would silently
+ * mask handler bugs.
+ */
+export function clampStockInputs<T extends RecommendationInput>(input: T): T {
+  return {
+    ...input,
+    totalAvailable: Math.max(0, input.totalAvailable),
+    inboundWithinLeadTime: Math.max(0, input.inboundWithinLeadTime),
+    effectiveStock: Math.max(0, input.effectiveStock),
+  }
+}
+
+/**
  * Pure function: did the recommendation change vs the current
  * ACTIVE row? Returns false (no write needed) when prev exists and
  * the operationally meaningful fields all match. effectiveStock
@@ -132,9 +160,13 @@ export async function getActiveRecommendations(
  * we left alone).
  */
 export async function persistRecommendationIfChanged(
-  input: RecommendationInput,
+  rawInput: RecommendationInput,
   prev?: ActiveRecommendationLite | null,
 ): Promise<{ recommendationId: string; persisted: boolean }> {
+  // Defensive clamp before any downstream comparison or persistence.
+  // See clampStockInputs() for rationale.
+  const input = clampStockInputs(rawInput)
+
   const current =
     prev !== undefined
       ? prev
