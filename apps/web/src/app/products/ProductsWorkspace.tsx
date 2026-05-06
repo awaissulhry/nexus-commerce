@@ -1275,24 +1275,18 @@ function AiBulkGenerateModal({
     for (const p of productLookup) m.set(p.id, p)
     return m
   }, [productLookup])
-  void lookupById // F4 v2 preview UI will surface per-product names from this map
   const [phase, setPhase] = useState<AiPhase>('configure')
   const [marketplace, setMarketplace] = useState('IT')
   const [fields, setFields] = useState<Set<string>>(
     new Set(['description', 'bullets']),
   )
-  // F4 follow-through — preview-first is the safe default. Toggle to
-  // off for the v1 flow (write immediately, no review). Setter is
-  // not yet wired to UI; v1 hardcodes previewFirst=true.
-  const [previewFirst] = useState(true)
+  // F4 follow-through — preview-first is the safe default. Toggle off
+  // for the v1 flow (write immediately, no review).
+  const [previewFirst, setPreviewFirst] = useState(true)
   const [busy, setBusy] = useState(false)
   const [previewResults, setPreviewResults] = useState<AiPreviewResult[]>([])
-  // Reference unused-by-current-render values so TS noUnusedLocals
-  // accepts them. F4 v2 will wire these into the preview UI.
-  void phase
-  void previewResults
   // Per-product accept set — only checked products' generated content
-  // gets applied.
+  // gets applied in the second-pass write.
   const [acceptedIds, setAcceptedIds] = useState<Set<string>>(new Set())
   const [results, setResults] = useState<
     Array<{ productId: string; ok: boolean; error?: string }> | null
@@ -1314,7 +1308,6 @@ function AiBulkGenerateModal({
       else next.add(id)
       return next
     })
-  void toggleAccept // F4 v2 preview UI will surface this on per-row checkbox
 
   const callBackend = async (ids: string[], dryRun: boolean) => {
     const res = await fetch(
@@ -1453,7 +1446,7 @@ function AiBulkGenerateModal({
           </button>
         </div>
 
-        {!results && (
+        {phase === 'configure' && (
           <div className="p-5 space-y-4">
             <div>
               <label className="text-[11px] font-semibold text-slate-700 uppercase tracking-wider block mb-1">
@@ -1497,6 +1490,22 @@ function AiBulkGenerateModal({
               </div>
             </div>
 
+            <label className="flex items-start gap-2 text-[12px] text-slate-700 cursor-pointer pt-1 border-t border-slate-100">
+              <input
+                type="checkbox"
+                checked={previewFirst}
+                onChange={() => setPreviewFirst((v) => !v)}
+                className="mt-0.5"
+              />
+              <div>
+                <div>Preview before applying (recommended)</div>
+                <div className="text-[11px] text-slate-500">
+                  Show the AI output for every product first; you pick which
+                  ones to write. Off = write immediately, no review.
+                </div>
+              </div>
+            </label>
+
             {error && (
               <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-[12px] text-rose-800 flex items-start gap-2">
                 <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
@@ -1506,8 +1515,9 @@ function AiBulkGenerateModal({
 
             <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-100">
               <span className="text-[11px] text-slate-500">
-                Writes immediately — overwrites any existing content in the
-                selected fields.
+                {previewFirst
+                  ? `Will generate previews for ${productIds.length} product${productIds.length === 1 ? '' : 's'} — no writes yet.`
+                  : 'Writes immediately — overwrites any existing content in the selected fields.'}
               </span>
               <button
                 type="button"
@@ -1520,13 +1530,206 @@ function AiBulkGenerateModal({
                 ) : (
                   <Sparkles className="w-3 h-3" />
                 )}
-                {busy ? 'Generating…' : 'Generate'}
+                {busy
+                  ? previewFirst
+                    ? 'Generating preview…'
+                    : 'Generating…'
+                  : previewFirst
+                    ? 'Generate preview'
+                    : 'Generate & apply'}
               </button>
             </div>
           </div>
         )}
 
-        {results && (
+        {phase === 'preview' && (
+          <div className="flex flex-col max-h-[70vh]">
+            <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
+              <div className="text-[12px] text-slate-700">
+                <span className="font-medium">
+                  {previewResults.filter((r) => r.ok).length} preview
+                  {previewResults.filter((r) => r.ok).length === 1 ? '' : 's'}
+                </span>{' '}
+                generated
+                {previewResults.filter((r) => !r.ok).length > 0 && (
+                  <>
+                    ,{' '}
+                    <span className="text-rose-700">
+                      {previewResults.filter((r) => !r.ok).length} failed
+                    </span>
+                  </>
+                )}
+                . Pick what to apply.
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setAcceptedIds(
+                      new Set(
+                        previewResults
+                          .filter((r) => r.ok)
+                          .map((r) => r.productId),
+                      ),
+                    )
+                  }
+                  className="h-7 px-2 text-[11px] text-slate-700 hover:bg-slate-100 rounded-md"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAcceptedIds(new Set())}
+                  className="h-7 px-2 text-[11px] text-slate-700 hover:bg-slate-100 rounded-md"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 space-y-3">
+              {previewResults.map((r) => {
+                const product = lookupById.get(r.productId)
+                const label = product
+                  ? `${product.name ?? '—'} · ${product.sku ?? r.productId.slice(0, 8)}`
+                  : r.productId.slice(0, 12)
+                if (!r.ok) {
+                  return (
+                    <div
+                      key={r.productId}
+                      className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-[12px] text-rose-800 flex items-start gap-2"
+                    >
+                      <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{label}</div>
+                        <div className="text-[11px]">{r.error}</div>
+                      </div>
+                    </div>
+                  )
+                }
+                const accepted = acceptedIds.has(r.productId)
+                const g = r.generated
+                return (
+                  <div
+                    key={r.productId}
+                    className={`border rounded-md ${
+                      accepted
+                        ? 'border-purple-300 bg-purple-50/40'
+                        : 'border-slate-200 bg-white'
+                    }`}
+                  >
+                    <label className="flex items-start gap-2 px-3 py-2 cursor-pointer border-b border-slate-100">
+                      <input
+                        type="checkbox"
+                        checked={accepted}
+                        onChange={() => toggleAccept(r.productId)}
+                        className="mt-0.5"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[12px] font-medium text-slate-900 truncate">
+                          {label}
+                        </div>
+                        {g?.metadata?.language && (
+                          <div className="text-[10px] text-slate-500">
+                            {g.metadata.language}
+                            {g.metadata.model ? ` · ${g.metadata.model}` : ''}
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                    <div className="px-3 py-2 space-y-2 text-[12px] text-slate-700">
+                      {g?.title && (
+                        <div>
+                          <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
+                            Title
+                          </div>
+                          <div className="whitespace-pre-wrap">
+                            {g.title.content}
+                          </div>
+                        </div>
+                      )}
+                      {g?.description && (
+                        <div>
+                          <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
+                            Description
+                          </div>
+                          <div className="whitespace-pre-wrap line-clamp-6">
+                            {g.description.content}
+                          </div>
+                        </div>
+                      )}
+                      {g?.bullets && g.bullets.content.length > 0 && (
+                        <div>
+                          <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
+                            Bullets
+                          </div>
+                          <ul className="list-disc pl-4 space-y-0.5">
+                            {g.bullets.content.map((b, i) => (
+                              <li key={i}>{b}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {g?.keywords && (
+                        <div>
+                          <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
+                            Keywords
+                          </div>
+                          <div className="text-slate-600">
+                            {g.keywords.content}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {error && (
+              <div className="mx-5 mb-3 border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-[12px] text-rose-800 flex items-start gap-2 flex-shrink-0">
+                <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setPhase('configure')
+                  setPreviewResults([])
+                  setAcceptedIds(new Set())
+                  setError(null)
+                }}
+                className="h-8 px-3 text-[12px] text-slate-700 hover:bg-slate-100 rounded-md"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={apply}
+                disabled={busy || acceptedIds.size === 0}
+                className="h-8 px-3 text-[12px] bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+              >
+                <Sparkles className="w-3 h-3" />
+                Apply {acceptedIds.size} selected
+              </button>
+            </div>
+          </div>
+        )}
+
+        {phase === 'applying' && (
+          <div className="p-8 flex flex-col items-center justify-center gap-2 text-[12px] text-slate-700">
+            <Loader2 className="w-5 h-5 animate-spin text-purple-600" />
+            <div>
+              Writing {acceptedIds.size} product
+              {acceptedIds.size === 1 ? '' : 's'}…
+            </div>
+          </div>
+        )}
+
+        {phase === 'done' && results && (
           <div className="p-5 space-y-3">
             <div className="text-[12px] text-slate-700">
               {succeededCount} succeeded
