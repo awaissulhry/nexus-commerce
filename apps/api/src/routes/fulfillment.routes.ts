@@ -562,7 +562,40 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const q = request.query as any
       const where: any = {}
       if (q.type && q.type !== 'ALL') where.type = q.type
-      if (q.status && q.status !== 'ALL') where.status = q.status
+      // H.3: status accepts comma-separated multi-select.
+      if (q.status && q.status !== 'ALL') {
+        const statuses = String(q.status).split(',').map((s) => s.trim()).filter(Boolean)
+        if (statuses.length === 1) where.status = statuses[0]
+        else if (statuses.length > 1) where.status = { in: statuses }
+      }
+      // H.3: search across reference / trackingNumber / carrierCode +
+      // any item.sku containing the term.
+      if (q.search?.trim()) {
+        const s = q.search.trim()
+        where.OR = [
+          { reference: { contains: s, mode: 'insensitive' } },
+          { trackingNumber: { contains: s, mode: 'insensitive' } },
+          { carrierCode: { contains: s, mode: 'insensitive' } },
+          { fbaShipmentId: { contains: s, mode: 'insensitive' } },
+          { asnNumber: { contains: s, mode: 'insensitive' } },
+          { purchaseOrder: { poNumber: { contains: s, mode: 'insensitive' } } },
+          { items: { some: { sku: { contains: s, mode: 'insensitive' } } } },
+        ]
+      }
+
+      // H.3: pagination + sort.
+      const page = Math.max(1, Math.floor(safeNum(q.page, 1) ?? 1))
+      const pageSize = Math.min(200, Math.max(1, Math.floor(safeNum(q.pageSize, 50) ?? 50)))
+      const skip = (page - 1) * pageSize
+      const sortBy = (q.sortBy ?? 'createdAt') as string
+      const sortDir = (q.sortDir === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc'
+      const orderBy =
+        sortBy === 'expectedAt' ? { expectedAt: sortDir } :
+        sortBy === 'status'     ? { status: sortDir } :
+        sortBy === 'type'       ? { type: sortDir } :
+        sortBy === 'updatedAt'  ? { updatedAt: sortDir } :
+        { createdAt: sortDir }
+
       const [total, items] = await Promise.all([
         prisma.inboundShipment.count({ where }),
         prisma.inboundShipment.findMany({
@@ -572,16 +605,72 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             warehouse: { select: { code: true, name: true } },
             purchaseOrder: { select: { poNumber: true, supplierId: true } },
             workOrder: { select: { id: true, productId: true, quantity: true } },
-            // H.1 additions — list view shows discrepancy + attachment counts.
             _count: { select: { attachments: true, discrepancies: true } },
           },
-          orderBy: { createdAt: 'desc' },
-          take: 200,
+          orderBy,
+          skip,
+          take: pageSize,
         }),
       ])
-      return { items, total }
+      return {
+        items,
+        total,
+        page,
+        pageSize,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[fulfillment/inbound] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // H.3 — KPI strip for /fulfillment/inbound. Counts driven by the
+  // post-H.2 status taxonomy + open discrepancies. Computed in one
+  // groupBy round-trip + two scalar counts.
+  fastify.get('/fulfillment/inbound/kpis', async (_request, reply) => {
+    try {
+      const now = Date.now()
+      const weekFromNow = new Date(now + 7 * 86400_000)
+
+      const [byStatus, byType, openDiscCount, arrivingThisWeek] = await Promise.all([
+        prisma.inboundShipment.groupBy({
+          by: ['status'],
+          _count: { status: true },
+        }),
+        prisma.inboundShipment.groupBy({
+          by: ['type'],
+          _count: { type: true },
+        }),
+        prisma.inboundDiscrepancy.count({
+          where: { status: { in: ['REPORTED', 'ACKNOWLEDGED'] } },
+        }),
+        prisma.inboundShipment.count({
+          where: {
+            expectedAt: { gte: new Date(), lte: weekFromNow },
+            status: { in: ['SUBMITTED', 'IN_TRANSIT'] },
+          },
+        }),
+      ])
+
+      const statusCounts: Record<string, number> = {}
+      for (const r of byStatus) statusCounts[r.status] = r._count.status
+      const typeCounts: Record<string, number> = {}
+      for (const r of byType) typeCounts[r.type] = r._count.type
+
+      const openStatuses = ['DRAFT', 'SUBMITTED', 'IN_TRANSIT', 'ARRIVED', 'RECEIVING', 'PARTIALLY_RECEIVED', 'RECEIVED']
+      const openShipments = openStatuses.reduce((a, s) => a + (statusCounts[s] ?? 0), 0)
+
+      return {
+        openShipments,
+        inTransit: statusCounts.IN_TRANSIT ?? 0,
+        arrivingThisWeek,
+        openDiscrepancies: openDiscCount,
+        statusCounts,
+        typeCounts,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[fulfillment/inbound/kpis] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })
