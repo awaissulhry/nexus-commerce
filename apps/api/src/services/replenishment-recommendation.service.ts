@@ -361,6 +361,47 @@ export async function dismissRecommendation(args: {
   }
 }
 
+/**
+ * Bulk-dismiss N recommendations in one call. Sequentially applies
+ * dismissRecommendation() to each id. Returns per-id results so the
+ * caller can render a success-N / failed-M summary toast.
+ *
+ * Each id is independent — one failed row doesn't abort the rest.
+ * Idempotent: dismissing an already-dismissed row returns its
+ * current state (matches single-id behavior).
+ */
+export async function bulkDismissRecommendations(args: {
+  recommendationIds: string[]
+  userId?: string | null
+  reason?: string | null
+}): Promise<{
+  succeeded: number
+  alreadyTerminal: number
+  failed: Array<{ id: string; error: string }>
+}> {
+  let succeeded = 0
+  let alreadyTerminal = 0
+  const failed: Array<{ id: string; error: string }> = []
+
+  for (const id of args.recommendationIds) {
+    try {
+      const r = await dismissRecommendation({
+        recommendationId: id,
+        userId: args.userId,
+        reason: args.reason,
+      })
+      if (r.previousStatus === 'ACTIVE') succeeded++
+      else alreadyTerminal++
+    } catch (err) {
+      failed.push({
+        id,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+  return { succeeded, alreadyTerminal, failed }
+}
+
 export async function attachPoToRecommendation(args: {
   recommendationId: string
   poId?: string | null

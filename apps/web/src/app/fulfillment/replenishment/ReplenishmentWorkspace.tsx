@@ -420,6 +420,46 @@ export default function ReplenishmentWorkspace() {
     }
   }
 
+  // R.21 — Bulk-dismiss every currently-selected recommendation. The
+  // backend loops single-id dismiss internally; we get back per-id
+  // counts. Toast summarises so operators clearing 200 noisy MEDIUMs
+  // see exactly what landed.
+  const bulkDismissSelected = async (reason: string | null) => {
+    const ids = filtered
+      .filter((s) => selectedIds.has(s.productId) && s.recommendationId)
+      .map((s) => s.recommendationId!)
+    if (ids.length === 0) {
+      pushToast('error', 'No recommendations selected (or selection lacks rec ids)')
+      return
+    }
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/replenishment/recommendations/bulk-dismiss`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recommendationIds: ids, reason }),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      const r = await res.json()
+      const parts = [`${r.succeeded} dismissed`]
+      if (r.alreadyTerminal > 0) parts.push(`${r.alreadyTerminal} already gone`)
+      if (r.failed?.length > 0) parts.push(`${r.failed.length} errored`)
+      pushToast(r.failed?.length > 0 ? 'error' : 'ok', parts.join(' · '))
+      clearSelection()
+      fetchData()
+    } catch (err) {
+      pushToast(
+        'error',
+        `Bulk dismiss failed: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
+  }
+
   // R.21 — Dismiss a recommendation. ACTIVE → DISMISSED in DB; the
   // operator's reason flows to dismissedReason for audit. We refetch
   // after success so the row falls out of the visible list (it's no
@@ -630,6 +670,19 @@ export default function ReplenishmentWorkspace() {
               className="h-7 px-2 text-[12px] border border-slate-200 rounded hover:bg-slate-50"
             >
               Clear
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const reason = window.prompt(
+                  `Dismiss ${selectedIds.size} recommendation(s)? (Reason — optional, helps audit later)`,
+                )
+                if (reason !== null) bulkDismissSelected(reason.trim() || null)
+              }}
+              className="h-7 px-3 text-[12px] bg-white text-red-700 border border-red-200 rounded hover:bg-red-50 inline-flex items-center gap-1.5"
+              title="Dismiss all selected recommendations"
+            >
+              <X size={12} /> Bulk dismiss
             </button>
             <button
               type="button"

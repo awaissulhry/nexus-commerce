@@ -8,6 +8,7 @@ import {
   bulkPersistRecommendationsIfChanged,
   attachPoToRecommendation,
   dismissRecommendation,
+  bulkDismissRecommendations,
   getRecommendationHistory,
   getRecommendationById,
   type RecommendationInput,
@@ -4485,6 +4486,48 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })
+
+  // R.21 — Bulk-dismiss N recommendations in one call. Body:
+  // { recommendationIds: string[], reason?: string, userId?: string }.
+  // Returns { succeeded, alreadyTerminal, failed[] } so the operator
+  // gets a precise summary (e.g. "Dismissed 47 · 3 already gone · 0 errors").
+  fastify.post(
+    '/fulfillment/replenishment/recommendations/bulk-dismiss',
+    async (request, reply) => {
+      try {
+        const body = (request.body ?? {}) as {
+          recommendationIds?: string[]
+          reason?: string
+          userId?: string
+        }
+        if (
+          !Array.isArray(body.recommendationIds) ||
+          body.recommendationIds.length === 0
+        ) {
+          return reply.code(400).send({
+            error: 'recommendationIds must be a non-empty array',
+          })
+        }
+        if (body.recommendationIds.length > 1000) {
+          return reply.code(400).send({
+            error: 'Maximum 1000 recommendations per bulk-dismiss call',
+          })
+        }
+        const result = await bulkDismissRecommendations({
+          recommendationIds: body.recommendationIds,
+          reason: body.reason ?? null,
+          userId: body.userId ?? null,
+        })
+        return result
+      } catch (err: any) {
+        fastify.log.error(
+          { err },
+          '[replenishment/recommendations/bulk-dismiss] failed',
+        )
+        return reply.code(500).send({ error: err?.message ?? String(err) })
+      }
+    },
+  )
 
   // R.21 — Dismiss a recommendation. Status ACTIVE → DISMISSED.
   // Captures dismissal audit (who + when + reason). Idempotent on a
