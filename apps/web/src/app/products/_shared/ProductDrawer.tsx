@@ -502,6 +502,117 @@ function DetailsTab({
           </p>
         </div>
       )}
+
+      {/* H.12 — stock-out projection card. Pulls daysOfCover +
+          stockoutDate + velocity from the F.4 forecast tables. */}
+      <ForecastCard productId={product.id} />
+    </div>
+  )
+}
+
+function ForecastCard({ productId }: { productId: string }) {
+  const [projection, setProjection] = useState<{
+    daysOfCover: number | null
+    stockoutDate: string | null
+    velocity: number | null
+    urgency: string
+    basis: string
+    forecastDays: number
+    totalStock: number
+  } | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    fetch(`${getBackendUrl()}/api/products/${productId}/forecast`, {
+      cache: 'no-store',
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!cancelled) setProjection(j)
+      })
+      .catch(() => {
+        if (!cancelled) setProjection(null)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [productId])
+
+  if (loading) {
+    return (
+      <div className="border border-slate-200 rounded-md p-3 text-[11px] text-slate-400 italic">
+        <Loader2 className="w-3 h-3 animate-spin inline mr-1.5" /> Loading
+        forecast…
+      </div>
+    )
+  }
+  if (!projection) return null
+
+  const tone =
+    projection.urgency === 'critical'
+      ? { ring: 'border-rose-200 bg-rose-50/40', text: 'text-rose-700' }
+      : projection.urgency === 'warn'
+        ? { ring: 'border-amber-200 bg-amber-50/40', text: 'text-amber-700' }
+        : projection.urgency === 'unknown'
+          ? { ring: 'border-slate-200 bg-slate-50/40', text: 'text-slate-600' }
+          : { ring: 'border-emerald-200 bg-emerald-50/40', text: 'text-emerald-700' }
+
+  return (
+    <div className={`border rounded-md p-3 ${tone.ring}`}>
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-700">
+          Forecast
+        </div>
+        <span
+          className={`text-[10px] font-semibold uppercase tracking-wider ${tone.text}`}
+        >
+          {projection.urgency}
+        </span>
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-[11px]">
+        <div>
+          <div className="text-slate-400 uppercase tracking-wider text-[9px]">
+            Days of cover
+          </div>
+          <div className="text-[14px] font-semibold tabular-nums text-slate-900">
+            {projection.daysOfCover != null
+              ? `${projection.daysOfCover}d`
+              : '—'}
+          </div>
+        </div>
+        <div>
+          <div className="text-slate-400 uppercase tracking-wider text-[9px]">
+            Velocity
+          </div>
+          <div className="text-[14px] font-semibold tabular-nums text-slate-900">
+            {projection.velocity != null
+              ? `${projection.velocity.toFixed(1)}/d`
+              : '—'}
+          </div>
+        </div>
+        <div>
+          <div className="text-slate-400 uppercase tracking-wider text-[9px]">
+            Stocks out
+          </div>
+          <div className="text-[12px] font-medium tabular-nums text-slate-900">
+            {projection.stockoutDate
+              ? new Date(projection.stockoutDate).toLocaleDateString()
+              : '—'}
+          </div>
+        </div>
+      </div>
+      <div className="text-[10px] text-slate-500 mt-2 pt-2 border-t border-slate-200/50">
+        {projection.basis === 'forecast'
+          ? `Based on ${projection.forecastDays} days of demand data.`
+          : projection.basis === 'threshold'
+            ? 'No demand signal yet — using stock threshold.'
+            : 'No demand signal yet. Generate sales history to project a stockout date.'}
+      </div>
     </div>
   )
 }
