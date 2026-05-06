@@ -66,6 +66,7 @@ type Kpis = {
   openShipments: number
   inTransit: number
   arrivingThisWeek: number
+  delayed: number
   openDiscrepancies: number
   statusCounts: Record<string, number>
   typeCounts: Record<string, number>
@@ -130,6 +131,7 @@ export default function InboundWorkspace() {
 
   const tab = (searchParams.get('type') as 'ALL' | InboundType) ?? 'ALL'
   const status = searchParams.get('status') ?? ''
+  const delayed = searchParams.get('delayed') === 'true'
   const search = searchParams.get('search') ?? ''
   const page = parseInt(searchParams.get('page') ?? '1', 10) || 1
   const sortBy = searchParams.get('sortBy') ?? 'createdAt'
@@ -172,6 +174,7 @@ export default function InboundWorkspace() {
       // 'OPEN' expands to the multi-select of all in-flight statuses
       if (status === 'OPEN') qs.set('status', OPEN_STATUSES)
       else if (status) qs.set('status', status)
+      if (delayed) qs.set('delayed', 'true')
       if (search) qs.set('search', search)
       qs.set('page', String(page))
       qs.set('pageSize', '50')
@@ -188,7 +191,7 @@ export default function InboundWorkspace() {
     } finally {
       setLoading(false)
     }
-  }, [tab, status, search, page, sortBy, sortDir])
+  }, [tab, status, delayed, search, page, sortBy, sortDir])
 
   const fetchKpis = useCallback(async () => {
     try {
@@ -213,8 +216,8 @@ export default function InboundWorkspace() {
   }, [fetchAll, fetchKpis])
 
   const filterCount = useMemo(
-    () => [tab !== 'ALL', status, search].filter(Boolean).length,
-    [tab, status, search],
+    () => [tab !== 'ALL', status, delayed, search].filter(Boolean).length,
+    [tab, status, delayed, search],
   )
 
   const toggleSort = (key: string) => {
@@ -302,9 +305,25 @@ export default function InboundWorkspace() {
                 <option key={s.value} value={s.value}>{s.label}</option>
               ))}
             </select>
+            <button
+              onClick={() => updateUrl({ delayed: delayed ? undefined : 'true', page: undefined })}
+              className={`h-7 px-3 text-[11px] rounded-full font-medium border inline-flex items-center gap-1 ${
+                delayed ? 'bg-rose-50 text-rose-700 border-rose-300'
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+              }`}
+              title="Past expected arrival in non-terminal status"
+            >
+              <CalendarClock size={11} />
+              Delayed
+              {kpis?.delayed != null && kpis.delayed > 0 && (
+                <span className={`ml-0.5 text-[10px] tabular-nums ${delayed ? 'text-rose-500' : 'text-slate-400'}`}>
+                  {kpis.delayed}
+                </span>
+              )}
+            </button>
             {filterCount > 0 && (
               <button
-                onClick={() => updateUrl({ type: undefined, status: undefined, search: undefined, page: undefined })}
+                onClick={() => updateUrl({ type: undefined, status: undefined, delayed: undefined, search: undefined, page: undefined })}
                 className="h-7 px-2 text-[12px] text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
               >
                 <X size={12} /> Clear
@@ -330,7 +349,7 @@ export default function InboundWorkspace() {
             tab === 'FBA' ? 'Use "Send to Amazon FBA" to plan a shipment.' :
             'Receipts from suppliers or manufacturing show up here.'}
           action={filterCount > 0
-            ? { label: 'Clear filters', onClick: () => updateUrl({ type: undefined, status: undefined, search: undefined, page: undefined }) }
+            ? { label: 'Clear filters', onClick: () => updateUrl({ type: undefined, status: undefined, delayed: undefined, search: undefined, page: undefined }) }
             : { label: 'New inbound', onClick: () => setCreateOpen(true) }}
         />
       ) : (
@@ -404,10 +423,19 @@ export default function InboundWorkspace() {
                       </td>
                       <td className="px-3 py-2 text-right text-[11px]">
                         {eta ? (
-                          <span className={isLate ? 'text-rose-700 font-semibold' : 'text-slate-600'}>
-                            {eta.toLocaleDateString('en-GB')}
-                            {isLate && <span className="ml-1 text-[10px]">late</span>}
-                          </span>
+                          <div className="inline-flex items-center gap-1.5 justify-end">
+                            <span className={isLate ? 'text-rose-700 font-semibold' : 'text-slate-600'}>
+                              {eta.toLocaleDateString('en-GB')}
+                            </span>
+                            {isLate && (() => {
+                              const daysLate = Math.floor((Date.now() - eta.getTime()) / 86400_000)
+                              return (
+                                <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-rose-100 text-rose-800">
+                                  {daysLate}d late
+                                </span>
+                              )
+                            })()}
+                          </div>
                         ) : <span className="text-slate-400">—</span>}
                       </td>
                       <td className="px-3 py-2 text-right">
@@ -500,10 +528,10 @@ function KpiStrip({ kpis }: { kpis: Kpis | null }) {
     },
     {
       icon: CalendarClock,
-      label: 'Arriving (7d)',
-      value: kpis.arrivingThisWeek.toLocaleString(),
-      detail: `Within next week`,
-      tone: kpis.arrivingThisWeek > 0 ? 'bg-violet-50 text-violet-600' : 'bg-slate-50 text-slate-600',
+      label: 'Delayed',
+      value: kpis.delayed.toLocaleString(),
+      detail: kpis.delayed > 0 ? 'Past expected arrival' : `${kpis.arrivingThisWeek} arriving in 7d`,
+      tone: kpis.delayed > 0 ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 text-slate-600',
     },
     {
       icon: AlertTriangle,

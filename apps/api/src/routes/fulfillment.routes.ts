@@ -583,6 +583,19 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         ]
       }
 
+      // H.5: delayed filter — shipments past expectedAt in non-terminal
+      // status. Compounds with type/status/search filters.
+      if (q.delayed === 'true') {
+        where.expectedAt = { lt: new Date() }
+        const nonTerminal = ['DRAFT', 'SUBMITTED', 'IN_TRANSIT', 'ARRIVED', 'RECEIVING', 'PARTIALLY_RECEIVED']
+        if (where.status) {
+          // Caller already filtered by status — intersect rather than overwrite.
+          // (Most common case: q.delayed=true alone, no status filter.)
+        } else {
+          where.status = { in: nonTerminal as any }
+        }
+      }
+
       // H.3: pagination + sort.
       const page = Math.max(1, Math.floor(safeNum(q.page, 1) ?? 1))
       const pageSize = Math.min(200, Math.max(1, Math.floor(safeNum(q.pageSize, 50) ?? 50)))
@@ -633,7 +646,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const now = Date.now()
       const weekFromNow = new Date(now + 7 * 86400_000)
 
-      const [byStatus, byType, openDiscCount, arrivingThisWeek] = await Promise.all([
+      const [byStatus, byType, openDiscCount, arrivingThisWeek, delayedCount] = await Promise.all([
         prisma.inboundShipment.groupBy({
           by: ['status'],
           _count: { status: true },
@@ -651,6 +664,13 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             status: { in: ['SUBMITTED', 'IN_TRANSIT'] },
           },
         }),
+        // H.5 — shipments past expected arrival in non-terminal status.
+        prisma.inboundShipment.count({
+          where: {
+            expectedAt: { lt: new Date() },
+            status: { in: ['DRAFT', 'SUBMITTED', 'IN_TRANSIT', 'ARRIVED', 'RECEIVING', 'PARTIALLY_RECEIVED'] },
+          },
+        }),
       ])
 
       const statusCounts: Record<string, number> = {}
@@ -665,6 +685,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         openShipments,
         inTransit: statusCounts.IN_TRANSIT ?? 0,
         arrivingThisWeek,
+        delayed: delayedCount,
         openDiscrepancies: openDiscCount,
         statusCounts,
         typeCounts,
