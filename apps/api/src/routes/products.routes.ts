@@ -417,7 +417,16 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
   // matching ChannelListing row (or null if none exists). Used by the
   // bulk-ops table to render amazon_*/ebay_* cell values.
   fastify.get<{
-    Querystring: { channel?: string; marketplace?: string }
+    Querystring: {
+      channel?: string
+      marketplace?: string
+      // P.9 — narrow the bulk-fetch to a specific id set so deep
+      // links from /products' bulk-action bar ("Power edit") land
+      // on a filtered grid instead of the full catalog. CSV of
+      // Product.id values; capped at BULK_FETCH_IDS_MAX so a
+      // bookmarked URL can't cause an OOM. Empty = all products.
+      productIds?: string
+    }
   }>('/products/bulk-fetch', async (request, reply) => {
     try {
       const channelParam = request.query.channel?.toUpperCase()
@@ -425,13 +434,36 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       const includeChannelListing =
         !!channelParam && !!marketplaceParam
 
+      // P.9 — productIds filter. CSV → trimmed unique id list. Cap
+      // ensures a runaway URL can't blow up the SELECT or the
+      // ETag context.
+      const BULK_FETCH_IDS_MAX = 1000
+      const productIdsRaw = (request.query.productIds ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+      const productIds = Array.from(new Set(productIdsRaw)).slice(
+        0,
+        BULK_FETCH_IDS_MAX,
+      )
+      const hasIdFilter = productIds.length > 0
+
       // Phase 10b — ETag short-circuit. Bulk-ops grid is the heaviest
       // single read in the app (no pagination — fetches every product
       // every poll); ETag turns repeat polls without changes into
       // 304s instead of multi-MB findMany + relation fans.
+      // P.9 — id-list folded into the ETag context so the cache key
+      // differentiates "all products" vs "these N products".
       const { etag } = await listEtag(prisma, {
         model: 'product',
-        filterContext: { channel: channelParam ?? null, marketplace: marketplaceParam ?? null },
+        ...(hasIdFilter ? { where: { id: { in: productIds } } } : {}),
+        filterContext: {
+          channel: channelParam ?? null,
+          marketplace: marketplaceParam ?? null,
+          productIdsHash: hasIdFilter
+            ? productIds.slice().sort().join(',')
+            : null,
+        },
       })
       reply.header('ETag', etag)
       reply.header('Cache-Control', 'private, max-age=0, must-revalidate')
@@ -440,6 +472,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const rows = await prisma.product.findMany({
+        ...(hasIdFilter ? { where: { id: { in: productIds } } } : {}),
         select: {
           id: true,
           sku: true,

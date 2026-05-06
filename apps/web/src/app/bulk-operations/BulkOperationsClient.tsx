@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import {
   flexRender,
   getCoreRowModel,
@@ -1463,6 +1464,31 @@ export default function BulkOperationsClient() {
     }
   }, [])
 
+  // P.9 — read productIds from the URL so the /products page's
+  // bulk-action bar ("Power edit") can deep-link with a pre-selected
+  // scope. Empty / missing param = full catalog (existing behaviour).
+  // The list is derived during render (no useState) so a router push
+  // that changes the param re-runs the reload effect immediately.
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+  const scopedProductIds = useMemo(() => {
+    const raw = searchParams.get('productIds') ?? ''
+    return raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  }, [searchParams])
+  const scopedProductIdsKey = scopedProductIds.join(',')
+  const isScoped = scopedProductIds.length > 0
+
+  const clearScope = useCallback(() => {
+    const sp = new URLSearchParams(searchParams.toString())
+    sp.delete('productIds')
+    const qs = sp.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }, [router, pathname, searchParams])
+
   // Refetch products when the primary target changes — bulk-fetch
   // hydrates _channelListing for ONE (channel, marketplace) per row,
   // so the table view always reflects the first selected target.
@@ -1472,6 +1498,9 @@ export default function BulkOperationsClient() {
     if (primaryContext) {
       params.set('channel', primaryContext.channel)
       params.set('marketplace', primaryContext.marketplace)
+    }
+    if (scopedProductIdsKey) {
+      params.set('productIds', scopedProductIdsKey)
     }
     const qs = params.toString()
     return fetch(
@@ -1483,7 +1512,7 @@ export default function BulkOperationsClient() {
         setProducts(Array.isArray(data.products) ? data.products : [])
       })
       .catch(() => {})
-  }, [primaryContext?.channel, primaryContext?.marketplace])
+  }, [primaryContext?.channel, primaryContext?.marketplace, scopedProductIdsKey])
   useEffect(() => {
     reloadProducts()
   }, [reloadProducts])
@@ -2969,6 +2998,42 @@ export default function BulkOperationsClient() {
         <div className="flex-shrink-0 mb-3 flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-[12px] text-amber-800">
           <WifiOff className="w-3.5 h-3.5 flex-shrink-0" />
           <span>You're offline. Changes are kept locally and will save when you reconnect.</span>
+        </div>
+      )}
+
+      {/* P.9 — scope banner. Visible when /products' bulk-action bar
+          deep-linked here with ?productIds=... so the operator
+          knows they're in a filtered slice rather than the full
+          catalog, and can drop back to the full view in one click. */}
+      {isScoped && (
+        <div className="flex-shrink-0 mb-3 flex items-center justify-between gap-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded-md text-[12px] text-blue-900">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="inline-block w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+            <span className="truncate">
+              Editing{' '}
+              <span className="font-semibold tabular-nums">
+                {scopedProductIds.length}
+              </span>{' '}
+              product{scopedProductIds.length === 1 ? '' : 's'} from your
+              /products selection.
+              {products.length > 0 && products.length !== scopedProductIds.length && (
+                <span className="text-slate-600">
+                  {' '}({products.length} loaded
+                  {products.length < scopedProductIds.length
+                    ? ` — ${scopedProductIds.length - products.length} not found`
+                    : ''})
+                </span>
+              )}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={clearScope}
+            className="flex-shrink-0 h-7 px-2 text-[11px] text-blue-700 hover:text-blue-900 hover:bg-blue-100 rounded inline-flex items-center gap-1"
+          >
+            <X className="w-3 h-3" />
+            Show all products
+          </button>
         </div>
       )}
 
