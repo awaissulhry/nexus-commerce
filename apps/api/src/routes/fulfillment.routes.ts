@@ -2890,12 +2890,33 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
               supplierId: { in: supplierIds },
               productId: { in: products.map((p) => p.id) },
             },
-            select: { productId: true, supplierId: true, costCents: true, moq: true, casePack: true },
+            select: { productId: true, supplierId: true, costCents: true, currencyCode: true, moq: true, casePack: true },
           })
         : []
       const supplierProductByKey = new Map(
         supplierProducts.map((sp) => [`${sp.supplierId}:${sp.productId}`, sp]),
       )
+
+      // R.15 — load FX rates for any non-EUR supplier currency in
+      // this cohort. One indexed query per currency, small N.
+      const cohortCurrencies = [
+        ...new Set(
+          supplierProducts
+            .map((sp) => (sp.currencyCode ?? 'EUR').toUpperCase())
+            .filter((c) => c !== 'EUR'),
+        ),
+      ]
+      const fxRates = new Map<string, number>()
+      if (cohortCurrencies.length > 0) {
+        for (const ccy of cohortCurrencies) {
+          const row = await prisma.fxRate.findFirst({
+            where: { fromCurrency: 'EUR', toCurrency: ccy },
+            orderBy: { asOf: 'desc' },
+            select: { rate: true },
+          })
+          if (row) fxRates.set(ccy, Number(row.rate))
+        }
+      }
 
       // R.11 — supplier σ_LT for the safety-stock formula's LT-variance
       // term. Computed nightly by lead-time-stats.job; null when the
@@ -3036,11 +3057,19 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         const supplierSigmaLt = rule?.preferredSupplierId
           ? supplierSigmaLtById.get(rule.preferredSupplierId) ?? null
           : null
+        // R.15 — supplier-currency cost path. SupplierProduct.currencyCode
+        // is authoritative when present; fall back to "EUR" for legacy
+        // products that only have Product.costPrice.
+        const supplierCurrency = (sp?.currencyCode ?? 'EUR').toUpperCase()
+        const fxRateUsed =
+          supplierCurrency !== 'EUR' ? fxRates.get(supplierCurrency) ?? null : null
         const math = computeRecommendation({
           velocity,
           demandStdDev,
           leadTimeDays,
           unitCostCents,
+          unitCostCurrency: supplierCurrency,
+          fxRate: fxRateUsed,
           servicePercent: p.serviceLevelPercent != null ? Number(p.serviceLevelPercent) : null,
           orderingCostCents: p.orderingCostCents,
           carryingCostPctYear: p.carryingCostPctYear != null ? Number(p.carryingCostPctYear) : null,
@@ -3210,6 +3239,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           prepEvent,
           prepEventId: prepEvent?.eventId ?? null,
           prepExtraUnits: prepEvent?.extraUnitsRecommended ?? null,
+          // R.15 — FX context for the EOQ. UI shows native currency
+          // total + EUR conversion. Rec audit captures both.
+          unitCostCurrency: supplierCurrency,
+          fxRateUsed,
           needsReorder,
           // F.2 — surface lead-time provenance so the UI can show
           // "from supplier override" vs "from supplier default" vs "fallback".
@@ -3262,6 +3295,9 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         // R.13 — event prep
         prepEventId: s.prepEventId,
         prepExtraUnits: s.prepExtraUnits,
+        // R.15 — FX
+        unitCostCurrency: s.unitCostCurrency,
+        fxRateUsed: s.fxRateUsed,
       }))
       const recIdsByProduct = await bulkPersistRecommendationsIfChanged(
         recommendationInputs,
@@ -3709,6 +3745,9 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             worstChannelDaysOfCover: true,
             // R.11 — σ_LT
             leadTimeStdDevDays: true,
+            // R.15 — FX audit
+            unitCostCurrency: true,
+            fxRateUsed: true,
           },
         })
 

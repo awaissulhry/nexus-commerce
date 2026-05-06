@@ -3160,6 +3160,12 @@ model ReplenishmentRecommendation {
   // an "order extra now" recommendation, and how many extra units.
   prepEventId             String?
   prepExtraUnits          Int?
+  // R.15 — FX context for the EOQ calc. unitCostCurrency = supplier's
+  // quoted currency (null = EUR / legacy). fxRateUsed = the EUR-base
+  // rate snapshot applied at generation, so audit can answer "did
+  // FX shift cause the qty change?".
+  unitCostCurrency        String?
+  fxRateUsed              Decimal? @db.Decimal(14, 6)
 
   preferredSupplierId String?
   isManufactured      Boolean @default(false)

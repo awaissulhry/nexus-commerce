@@ -138,6 +138,9 @@ interface Suggestion {
   } | null
   prepEventId?: string | null
   prepExtraUnits?: number | null
+  // R.15 — FX context for cost basis
+  unitCostCurrency?: string
+  fxRateUsed?: number | null
   // R.4 — math snapshot for the drawer's "Reorder math" panel.
   safetyStockUnits?: number
   eoqUnits?: number
@@ -1175,6 +1178,9 @@ interface DetailResponse {
     worstChannelDaysOfCover?: number | null
     // R.11 — σ_LT applied
     leadTimeStdDevDays?: number | string | null
+    // R.15 — FX context
+    unitCostCurrency?: string | null
+    fxRateUsed?: number | string | null
   } | null
   model: string | null
   generationTag: string | null
@@ -1840,9 +1846,25 @@ function ReorderMathPanel({ rec }: { rec: NonNullable<DetailResponse['recommenda
       )}
       {rec.unitCostCents != null && (
         <div className="mt-2 pt-2 border-t border-slate-200 text-[10px] text-slate-500">
-          Cost basis: <span className="font-mono">
-            {(rec.unitCostCents / 100).toFixed(2)} EUR/unit
-          </span>
+          {/* R.15 — show native currency + EUR conversion when supplier
+              quotes in something other than EUR. */}
+          {rec.unitCostCurrency && rec.unitCostCurrency !== 'EUR' && rec.fxRateUsed ? (
+            <>
+              Cost basis: <span className="font-mono">
+                {(rec.unitCostCents / 100).toFixed(2)} {rec.unitCostCurrency}/unit
+              </span>
+              <span className="text-slate-400 ml-1">
+                (≈{(rec.unitCostCents / 100 / Number(rec.fxRateUsed)).toFixed(2)} EUR
+                @ 1 EUR = {Number(rec.fxRateUsed).toFixed(4)} {rec.unitCostCurrency})
+              </span>
+            </>
+          ) : (
+            <>
+              Cost basis: <span className="font-mono">
+                {(rec.unitCostCents / 100).toFixed(2)} EUR/unit
+              </span>
+            </>
+          )}
         </div>
       )}
       {/* R.11 — supplier lead-time variance applied. Renders only when

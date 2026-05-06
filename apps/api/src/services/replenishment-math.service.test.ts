@@ -15,6 +15,7 @@ import {
   dailyDemandStdDev,
   computeRecommendation,
   computeLeadTimeStats,
+  convertCostToEur,
 } from './replenishment-math.service.js'
 
 const tests: Array<{ name: string; fn: () => void }> = []
@@ -116,6 +117,72 @@ test('R.11: stats [14,16] → count=2, stdDev≈1.41', () => {
   const r = computeLeadTimeStats([14, 16])
   eq(r.count, 2)
   near(r.stdDev, 1.4142, 0.01)
+})
+
+// ─── R.15: FX conversion ───
+test('R.15: EUR currency returns input as-is', () => {
+  eq(convertCostToEur({ amountCents: 1000, currency: 'EUR', fxRate: null }), 1000)
+})
+test('R.15: null currency treated as EUR', () => {
+  eq(convertCostToEur({ amountCents: 1000, currency: null, fxRate: null }), 1000)
+})
+test('R.15: CNY 7800c at rate 7.78 → 1003 EUR-cents', () => {
+  // 7800 / 7.78 = 1002.57 → 1003
+  eq(convertCostToEur({ amountCents: 7800, currency: 'CNY', fxRate: 7.78 }), 1003)
+})
+test('R.15: missing rate for non-EUR → null (degrade gracefully)', () => {
+  eq(convertCostToEur({ amountCents: 7800, currency: 'CNY', fxRate: null }), null)
+})
+test('R.15: zero rate → null (defensive against bad data)', () => {
+  eq(convertCostToEur({ amountCents: 7800, currency: 'CNY', fxRate: 0 }), null)
+})
+test('R.15: negative rate → null', () => {
+  eq(convertCostToEur({ amountCents: 7800, currency: 'CNY', fxRate: -1 }), null)
+})
+test('R.15: amountCents=null → null', () => {
+  eq(convertCostToEur({ amountCents: null, currency: 'CNY', fxRate: 7.78 }), null)
+})
+test('R.15: case-insensitive currency match', () => {
+  eq(convertCostToEur({ amountCents: 1000, currency: 'eur', fxRate: null }), 1000)
+})
+
+// ─── R.15: composer applies FX ───
+test('R.15 composer: CNY supplier cost runs through FX before EOQ', () => {
+  // CNY 8000c (≈€10.28 at 7.78), velocity 10/d → 3650/yr,
+  // K=1500c, h=25%. EUR cost = round(8000/7.78) = 1028.
+  // EOQ = sqrt(2 × 3650 × 1500 / (0.25 × 1028)) = sqrt(42592) ≈ 206
+  const r = computeRecommendation({
+    velocity: 10,
+    demandStdDev: 2,
+    leadTimeDays: 14,
+    unitCostCents: 8000,
+    unitCostCurrency: 'CNY',
+    fxRate: 7.78,
+    servicePercent: 95,
+    orderingCostCents: 1500,
+    carryingCostPctYear: 25,
+    moq: 1,
+    casePack: null,
+  })
+  near(r.eoqUnits, 206, 5)  // small rounding tolerance
+})
+test('R.15 composer: missing FX for non-EUR → fallback (velocity × 30)', () => {
+  // CNY supplier with no rate → eurCost = 0 → EOQ degenerates to fallback
+  const r = computeRecommendation({
+    velocity: 5,
+    demandStdDev: 0,
+    leadTimeDays: 14,
+    unitCostCents: 8000,
+    unitCostCurrency: 'CNY',
+    fxRate: null,
+    servicePercent: 95,
+    orderingCostCents: 1500,
+    carryingCostPctYear: 25,
+    moq: 1,
+    casePack: null,
+  })
+  // Falls back to velocity × 30 = 150
+  eq(r.reorderQuantity, 150)
 })
 
 // ─── eoq (Wilson) ───

@@ -58,6 +58,9 @@ export interface RecommendationInput {
   // R.13 — event-prep audit
   prepEventId?: string | null
   prepExtraUnits?: number | null
+  // R.15 — FX audit
+  unitCostCurrency?: string | null
+  fxRateUsed?: number | null
 }
 
 export interface ActiveRecommendationLite {
@@ -176,6 +179,9 @@ export async function persistRecommendationIfChanged(
           // R.13 — event prep
           prepEventId: input.prepEventId ?? null,
           prepExtraUnits: input.prepExtraUnits ?? null,
+          // R.15 — FX audit
+          unitCostCurrency: input.unitCostCurrency ?? null,
+          fxRateUsed: input.fxRateUsed ?? null,
         },
       })
       if (current) {

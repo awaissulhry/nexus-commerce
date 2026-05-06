@@ -181,6 +181,11 @@ export interface ComputeRecommendationInput {
   demandStdDev: number
   leadTimeDays: number
   unitCostCents: number | null
+  /** R.15 — supplier's quoted currency (null/'EUR' = no conversion) */
+  unitCostCurrency?: string | null
+  /** R.15 — EUR→quote rate snapshot. 1 EUR = N currency. null = degrade
+   *  gracefully (treat unitCost as unknown when currency != EUR). */
+  fxRate?: number | null
   servicePercent: number | null
   orderingCostCents: number | null
   carryingCostPctYear: number | null
@@ -191,6 +196,26 @@ export interface ComputeRecommendationInput {
   /** Operator overrides from ReplenishmentRule */
   ruleReorderPoint?: number | null
   ruleReorderQuantity?: number | null
+}
+
+/**
+ * R.15 — convert any supplier-currency cost to EUR-cents using a
+ * cached rate. EUR/null currency returns the input unchanged.
+ * Returns null when conversion isn't possible (rate missing or zero)
+ * so the EOQ pipeline can degrade gracefully.
+ */
+export function convertCostToEur(args: {
+  amountCents: number | null
+  currency: string | null | undefined
+  fxRate: number | null | undefined
+}): number | null {
+  if (args.amountCents == null) return null
+  const ccy = (args.currency ?? 'EUR').toUpperCase()
+  if (ccy === 'EUR') return Math.round(args.amountCents)
+  if (args.fxRate == null || !Number.isFinite(args.fxRate) || args.fxRate <= 0) {
+    return null
+  }
+  return Math.round(args.amountCents / args.fxRate)
 }
 
 export interface ComputeRecommendationResult {
@@ -227,12 +252,19 @@ export function computeRecommendation(input: ComputeRecommendationInput): Comput
 
   // EOQ — only meaningful with cost basis; otherwise fall back to
   // 30 days of velocity (the legacy behavior) so we never recommend
-  // 0 when there's real demand.
+  // 0 when there's real demand. R.15: convert supplier-currency
+  // cost to EUR before applying the formula so non-EUR suppliers
+  // are handled correctly (CNY supplier cost × FX → EUR-equivalent).
+  const eurCostCents = convertCostToEur({
+    amountCents: input.unitCostCents,
+    currency: input.unitCostCurrency,
+    fxRate: input.fxRate,
+  }) ?? 0
   const annualDemand = Math.max(0, input.velocity * 365)
   const eoqValue = eoq({
     annualDemand,
     orderingCostCents,
-    unitCostCents: input.unitCostCents ?? 0,
+    unitCostCents: eurCostCents,
     carryingCostPctYear,
   })
   const fallbackQty = Math.max(1, Math.ceil(input.velocity * 30))
