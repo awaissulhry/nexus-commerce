@@ -1010,28 +1010,34 @@ Then retarget `processStatusUpdate` to delegate to it.
 
 ---
 
-## 54. 🔴 BullMQ post-commit `outboundSyncQueue.add()` hangs from bulk-action's fire-and-forget context
+## 54. 🔴 BullMQ `Queue.add()` hangs from bulk-action context (both detached AND request-scoped)
 
-**Symptom:** When `BulkActionService.processJob` (running detached after the route returns 202) calls `MasterPriceService.update`, the in-transaction work completes correctly (AuditLog row written, ChannelListing cascaded, OutboundSyncQueue row inserted), but the post-commit `await outboundSyncQueue.add(...)` never resolves. The bulk-action loop never advances past `processedItems++`. Within ~60–120s the Railway API box becomes unresponsive to /api/health and Railway restarts it. Same hypothesis applies to `applyStockMovement`'s post-commit BullMQ enqueue.
+**Symptom (Commit 1, detached):** When `BulkActionService.processJob` (running detached after the route returns 202) calls `MasterPriceService.update`, the in-transaction work completes correctly (AuditLog row written, ChannelListing cascaded, OutboundSyncQueue row inserted), but the post-commit `await outboundSyncQueue.add(...)` never resolves. The bulk-action loop never advances past `processedItems++`. Within ~60–120s the Railway API box becomes unresponsive to /api/health and Railway restarts it.
 
-**Surfaced at:** Commit 1 of the bulk-operations rebuild (2026-05-06). Reproduced twice on Railway (commit `9705299`, reverted in `5d9617a`).
+**Symptom (Commit 3, request-scoped):** New `bulkActionQueue.add(...)` from `enqueueBulkActionJob(jobId)` called inside the `POST /:id/process` route handler ALSO hangs (curl times out after 20s waiting for response). Same hang shape as the detached path. **This invalidated the original "only detached fire-and-forget hangs" hypothesis.**
 
-**Workaround applied (Commit 1 retry):** Added `skipBullMQEnqueue?: boolean` flag to `MasterPriceUpdateContext` and `StockMovementInput`. Bulk-action passes `true`. The OutboundSyncQueue *DB rows* still land inside the transaction; the per-minute cron worker (`apps/api/src/workers/sync.worker.ts` → `OutboundSyncService.processPendingSyncs`) drains them on the next tick. So bulk operations are correct and eventually-consistent — the BullMQ enqueue is an optimization for immediate worker pickup, deliberately skipped here.
+**Surfaced at:**
+- Commit 1 first attempt (commit `9705299`, reverted `5d9617a`) — detached path
+- Commit 3 (commit `914525c`, reverted `d675a50`, 2026-05-06) — request-scoped path
+
+**Workaround applied:** Added `skipBullMQEnqueue?: boolean` flag to `MasterPriceUpdateContext` and `StockMovementInput`. Bulk-action passes `true` so the post-commit BullMQ enqueue is skipped. The OutboundSyncQueue *DB rows* still land inside the transaction; the per-minute cron worker (`apps/api/src/workers/sync.worker.ts` → `OutboundSyncService.processPendingSyncs`) drains them on the next tick. Bulk operations are correct and eventually-consistent.
 
 **What we know:**
-- The same `outboundSyncQueue.add(...)` works fine when called from request-scoped contexts (`PATCH /api/products/:id` etc.) — the inline grid edits and Phase 13 master cascade have been live for days without issue.
-- The hang is reliably reproducible from bulk-action's fire-and-forget detached `processJob`.
-- The transaction commits *before* the hang — DB-side state is correct. Only the post-commit BullMQ Redis call hangs.
-- The hang is severe enough that it makes the API box unhealthy (502s for ~4 min until Railway restart). Single hung promise on Node shouldn't block the event loop; something downstream is wedging the process.
+- The same BullMQ `Queue.add(...)` pattern works fine in `bulk-list.routes.ts` (`enqueueBulkList(...)` from a route handler) — has been in production for some time without hang reports.
+- The hang is reproducible from BOTH bulk-action's detached `processJob` AND its request-scoped `POST /:id/process` route handler. So the discriminator is NOT request vs. detached context.
+- Both call paths import `BulkActionService` at module top, which imports `MasterPriceService` at module top, which imports `outboundSyncQueue` from `lib/queue.ts`. The `bulkListQueue` is constructed differently — directly at module load via `new Queue(...)`, not via the lazy proxy in `lib/queue.ts`. **This may be the relevant difference.**
+- The transaction commits *before* the hang (Commit 1 detached) — DB-side state is correct.
+- The hang is severe enough to make the API box unhealthy (502s for ~4 min until Railway restart). Single hung promise on Node shouldn't block the event loop; something downstream is wedging the process.
 
-**Hypotheses to investigate:**
-1. Connection pool / ioredis client lifecycle tied to a request scope that the detached promise has lost
-2. BullMQ idempotency (`{ jobId: queueId }`) interaction with leftover Redis state from a prior unfinished job
-3. Something Fastify cleans up after `reply.send` that the detached promise still references
+**Updated hypotheses (after Commit 3 evidence):**
+1. The lazy `Queue` proxy in `lib/queue.ts` (`makeQueueProxy(getOutboundSyncQueue)`) interacts badly when the bulk-action service module-load chain triggers initialization in a way that bulk-list's eager `new Queue(...)` does not.
+2. ioredis connection options: bulk-action's `redis.connection` getter resolves at every property access; bulk-list captures the resolved client at module load. Maybe there's a stale connection reference.
+3. Something specific to the `bulkActionQueue` queue name / metadata in Redis (orphan job state from an earlier failed attempt) — but Commit 3 was the first to use that queue name, so unlikely.
+4. `Queue.add()`'s `{ jobId: <our id> }` option doing something problematic when our id matches an existing BullMQ job in `completed` / `failed` state still in Redis. Unlikely first time.
 
-**Proper fix:** instrument the bulk-action codepath with logging around the BullMQ enqueue, deploy on a feature branch, reproduce, identify the exact line that hangs, fix root cause. Once fixed, remove `skipBullMQEnqueue: true` from the bulk handlers (or keep it for the eventual-consistency property — TBD).
+**Proper fix:** instrument with logging *inside* the BullMQ `Queue.add` call (or use BullMQ's debug logging) to see exactly where it stalls. Test on a feature branch with the lazy-proxy queue replaced by an eager one (mirror bulk-list's pattern) — if that fixes it, the root cause is in the proxy.
 
-**Risk if left as-is:** marketplace push lags by up to 60s relative to inline edits. Acceptable for bulk operations (sellers expect "applied in a moment"). Not acceptable as a general pattern; other detached/background callers will hit the same hang and need the same workaround.
+**Risk if left as-is:** Bulk operations work via fire-and-forget in-process execution (skipBullMQEnqueue: true) — eventually-consistent through the cron worker. We cannot move bulk-action to its own BullMQ queue (Commit 3 of the rebuild) until this is fixed, which means we lose the crash-recovery property (if Railway restarts the API mid-job, BulkActionJob row stays IN_PROGRESS forever) and mid-run cancel.
 
 ---
 
