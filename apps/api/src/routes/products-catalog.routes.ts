@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { masterPriceService } from '../services/master-price.service.js'
 import { applyStockMovement } from '../services/stock-movement.service.js'
+import { listEtag, matches } from '../utils/list-etag.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // PRODUCTS REBUILD C.2 — catalog browse extensions
@@ -39,9 +40,24 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
   // ═══════════════════════════════════════════════════════════════════
   // FACETS
   // ═══════════════════════════════════════════════════════════════════
-  fastify.get('/products/facets', async (_request, reply) => {
+  fastify.get('/products/facets', async (request, reply) => {
     try {
+      // Phase 10b ETag — facets are read by every page load + every
+      // filter sidebar mount. The aggregate counts move slowly; the
+      // 304 collapses repeat polls to ~50 bytes. Use Product as the
+      // dominant freshness signal (most facets come from Product
+      // table); ChannelListing-derived `marketplaces` accept up to
+      // a Product write of staleness, which the existing 60s
+      // Cache-Control already permits.
+      const { etag } = await listEtag(prisma, {
+        model: 'product',
+        filterContext: { kind: 'facets' },
+      })
+      reply.header('ETag', etag)
       reply.header('Cache-Control', 'private, max-age=60')
+      if (matches(request, etag)) {
+        return reply.code(304).send()
+      }
       const [productTypes, brands, fulfillment, statusCounts, marketplaceCounts, marketplaceLookup] = await Promise.all([
         prisma.product.groupBy({
           by: ['productType'],
@@ -123,6 +139,20 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/products/:id/health', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
+      // Phase 10b ETag — health is polled aggressively (drawer + edit
+      // page + status badges all read it). The score depends on the
+      // product row + its image / listing counts, so the freshness key
+      // tracks the product's updatedAt scoped by id.
+      const { etag } = await listEtag(prisma, {
+        model: 'product',
+        where: { id },
+        filterContext: { kind: 'health', id },
+      })
+      reply.header('ETag', etag)
+      reply.header('Cache-Control', 'private, max-age=0, must-revalidate')
+      if (matches(request, etag)) {
+        return reply.code(304).send()
+      }
       const p = await prisma.product.findUnique({
         where: { id },
         select: {

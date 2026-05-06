@@ -553,6 +553,20 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { id: string } }>('/products/:id/children', async (request, reply) => {
     try {
       const { id } = request.params
+      // Phase 10b — ETag short-circuit. Grid expand-on-chevron is
+      // chatty (every parent click) and the children change rarely,
+      // so 304s collapse the round-trip to ~50 bytes.
+      const { etag } = await listEtag(prisma, {
+        model: 'product',
+        where: { parentId: id },
+        filterContext: { parentId: id },
+      })
+      reply.header('ETag', etag)
+      reply.header('Cache-Control', 'private, max-age=0, must-revalidate')
+      if (matches(request, etag)) {
+        return reply.code(304).send()
+      }
+
       const children = await prisma.product.findMany({
         where: { parentId: id },
         orderBy: { sku: 'asc' },
@@ -1505,6 +1519,13 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
   // Idempotent via skipDuplicates on SKU unique.
   fastify.post<{ Body: { target?: number } }>(
     '/admin/seed-bulk-test',
+    {
+      // Phase 10/A2 — admin endpoint inserts up to 20k Product rows
+      // per call. Single-digit/min cap so this can never be triggered
+      // accidentally from a runaway script. NOTE: still no auth gate;
+      // tracked separately in TECH_DEBT once auth lands.
+      config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+    },
     async (request, reply) => {
       const target = Math.min(
         Math.max(parseInt(String(request.body?.target ?? 10000), 10) || 10000, 0),
@@ -1640,7 +1661,14 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
   // DELETE /api/admin/cleanup-bulk-test
   // Removes every Product row marked importSource = 'PERFORMANCE_TEST'.
   // Cascades manually to dependents that don't FK-cascade.
-  fastify.delete('/admin/cleanup-bulk-test', async (_request, reply) => {
+  fastify.delete(
+    '/admin/cleanup-bulk-test',
+    {
+      // Phase 10/A2 — destructive admin endpoint. Same 5/min cap as
+      // its sibling seed endpoint to keep accidental re-runs cheap.
+      config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+    },
+    async (_request, reply) => {
     try {
       const result = await cascadeDeleteProducts({
         importSource: 'PERFORMANCE_TEST',
@@ -1872,7 +1900,14 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
   //   the field registry, writes a BulkOperation row with status
   //   PENDING_APPLY holding the validated plan, returns
   //   { uploadId, preview }.
-  fastify.post('/products/bulk-upload', async (request, reply) => {
+  fastify.post(
+    '/products/bulk-upload',
+    {
+      // Phase 10/A2 — file upload + parse is heavy; cap to 30/min so
+      // a stuck client retry loop can't pin parse threads.
+      config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
     try {
       const part = await (request as any).file?.()
       if (!part) {
@@ -1934,7 +1969,14 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
   //   carry a data.json (field updates) and/or description.html.
   //   Images/ subfolders + other files are surfaced as warnings; the
   //   apply path is the same as CSV uploads.
-  fastify.post('/products/bulk-upload-zip', async (request, reply) => {
+  fastify.post(
+    '/products/bulk-upload-zip',
+    {
+      // Phase 10/A2 — ZIP parse is even heavier than CSV (zlib +
+      // image stream + per-row validation); cap at 10/min.
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
     try {
       const part = await (request as any).file?.()
       if (!part) {
@@ -1993,6 +2035,13 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
   //   status to SUCCESS / PARTIAL / FAILED with completedAt.
   fastify.post<{ Body: { uploadId?: string } }>(
     '/products/bulk-apply',
+    {
+      // Phase 10/A2 — the apply phase chunks 500 rows at a time but
+      // the whole import is still heavy. 30/min keeps it usable for
+      // legitimate bulk-import sessions while preventing runaway
+      // retry loops.
+      config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+    },
     async (request, reply) => {
       const uploadId = request.body?.uploadId
       if (!uploadId) {
