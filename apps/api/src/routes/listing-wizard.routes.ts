@@ -17,6 +17,7 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import { listEtag, matches } from '../utils/list-etag.js'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import { CategorySchemaService } from '../services/categories/schema-sync.service.js'
 import {
@@ -359,8 +360,27 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      // Phase 10b — short-circuit with 304 Not Modified when nothing
+      // has changed since the client's last fetch. /products/drafts
+      // polls every ~30s and on focus; without ETag every poll
+      // reruns the count + findMany even when no draft was touched.
+      const { etag, count: etagCount } = await listEtag(prisma, {
+        model: 'listingWizard',
+        where,
+        filterContext: { limit, offset, onlyStale, search },
+      })
+      reply.header('ETag', etag)
+      reply.header('Cache-Control', 'private, max-age=0, must-revalidate')
+      if (matches(request, etag)) {
+        return reply.code(304).send()
+      }
+
       const [total, rows] = await Promise.all([
-        prisma.listingWizard.count({ where }),
+        // We already have the count from listEtag; the count() call here
+        // costs an extra trivial query but keeps the existing typed
+        // contract clear and avoids a refactor at this layer. Future
+        // optimisation: thread etagCount through.
+        Promise.resolve(etagCount),
         prisma.listingWizard.findMany({
           where,
           orderBy: { updatedAt: 'desc' },

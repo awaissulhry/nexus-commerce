@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
 import { randomUUID } from 'node:crypto'
+import { listEtag, matches } from '../utils/list-etag.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // SYNDICATION — universal /listings workspace endpoints
@@ -167,8 +168,26 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         default: orderBy = { updatedAt: sortDir }
       }
 
+      // Phase 10b — short-circuit with 304 when nothing changed since
+      // the client's last fetch. Frontends poll the listings list on
+      // visibility-change and bulk-action completion; without ETag
+      // every poll re-runs the count + findMany + marketplace meta
+      // join even when nothing about the filtered set has shifted.
+      const { etag, count: etagCount } = await listEtag(prisma, {
+        model: 'channelListing',
+        where,
+        filterContext: { page, pageSize, sortBy, sortDir },
+      })
+      reply.header('ETag', etag)
+      reply.header('Cache-Control', 'private, max-age=0, must-revalidate')
+      if (matches(request, etag)) {
+        return reply.code(304).send()
+      }
+
       const [total, listings, marketplacesMeta] = await Promise.all([
-        prisma.channelListing.count({ where }),
+        // listEtag already counted; reuse it instead of issuing a
+        // duplicate count() against the same where clause.
+        Promise.resolve(etagCount),
         prisma.channelListing.findMany({
           where,
           include: {
