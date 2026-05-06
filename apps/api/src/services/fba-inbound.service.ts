@@ -306,3 +306,115 @@ export async function getInboundShipmentLabels(args: GetLabelsArgs): Promise<Get
   }
   return { downloadUrl }
 }
+
+// ─── H.8c — putTransportDetails ────────────────────────────────────
+
+export type FbaShipmentType = 'SP' | 'LTL'
+
+export interface NonPartneredSmallParcelInput {
+  carrierName: string
+  /** One trackingId per box. Length defines the carton count for SP-API. */
+  trackingIds: string[]
+}
+
+export interface NonPartneredLtlInput {
+  carrierName: string
+  proNumber: string
+}
+
+export interface PutTransportArgs {
+  shipmentId: string
+  shipmentType: FbaShipmentType
+  /** Exactly one of these matching shipmentType. */
+  smallParcel?: NonPartneredSmallParcelInput
+  ltl?: NonPartneredLtlInput
+}
+
+export interface PutTransportResult {
+  transportStatus: string
+}
+
+/**
+ * H.8c — Call SP-API v0 putTransportDetails for a non-partnered
+ * carrier. Partnered (UPS etc.) is US/UK-centric and not on Xavia's
+ * happy path, so we ship non-partnered first and add partnered later
+ * if needed.
+ *
+ * Endpoint: PUT /fba/inbound/v0/shipments/{shipmentId}/transport
+ *
+ * Body shape mirrors Amazon's spec exactly. After putTransport, the
+ * shipment's TransportStatus moves to WORKING; operator confirms
+ * (or it auto-confirms for non-partnered) and the shipment is
+ * cleared to ship.
+ */
+export async function putInboundShipmentTransport(args: PutTransportArgs): Promise<PutTransportResult> {
+  if (!isFbaInboundConfigured()) {
+    throw new Error('SP-API not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)')
+  }
+  if (!args.shipmentId) throw new Error('shipmentId required')
+  if (args.shipmentType === 'SP') {
+    if (!args.smallParcel) throw new Error('smallParcel required for shipmentType=SP')
+    if (!args.smallParcel.carrierName) throw new Error('smallParcel.carrierName required')
+    if (!args.smallParcel.trackingIds || args.smallParcel.trackingIds.length === 0) {
+      throw new Error('smallParcel.trackingIds[] required (one per box)')
+    }
+  } else if (args.shipmentType === 'LTL') {
+    if (!args.ltl) throw new Error('ltl required for shipmentType=LTL')
+    if (!args.ltl.carrierName) throw new Error('ltl.carrierName required')
+    if (!args.ltl.proNumber) throw new Error('ltl.proNumber required')
+  } else {
+    throw new Error(`Unsupported shipmentType: ${args.shipmentType}`)
+  }
+
+  const token = await getLwaAccessToken()
+
+  const transportDetails: Record<string, unknown> =
+    args.shipmentType === 'SP'
+      ? {
+          NonPartneredSmallParcelData: {
+            CarrierName: args.smallParcel!.carrierName,
+            PackageList: args.smallParcel!.trackingIds.map((t) => ({ TrackingId: t })),
+          },
+        }
+      : {
+          NonPartneredLtlData: {
+            CarrierName: args.ltl!.carrierName,
+            ProNumber: args.ltl!.proNumber,
+          },
+        }
+
+  const body = {
+    IsPartnered: false,
+    ShipmentType: args.shipmentType,
+    TransportDetails: transportDetails,
+  }
+
+  const url = `${REGION_ENDPOINTS[SP_REGION]}/fba/inbound/v0/shipments/${encodeURIComponent(args.shipmentId)}/transport`
+
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-amz-access-token': token,
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+
+  const text = await res.text()
+  let data: any = null
+  try { data = text ? JSON.parse(text) : null } catch { data = text }
+
+  if (!res.ok) {
+    const errMsg = data?.errors?.[0]?.message ?? data?.message ?? text.slice(0, 300)
+    logger.warn('fba-inbound: putTransportDetails failed', {
+      status: res.status,
+      shipmentId: args.shipmentId,
+      err: errMsg,
+    })
+    throw new Error(`SP-API putTransportDetails ${res.status}: ${errMsg}`)
+  }
+
+  const transportStatus = data?.payload?.TransportResult?.TransportStatus ?? 'WORKING'
+  return { transportStatus }
+}

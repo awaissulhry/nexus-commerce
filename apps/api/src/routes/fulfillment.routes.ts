@@ -35,7 +35,9 @@ import {
 import {
   createInboundShipmentPlan as fbaCreateInboundShipmentPlan,
   getInboundShipmentLabels as fbaGetLabels,
+  putInboundShipmentTransport as fbaPutTransport,
   isFbaInboundConfigured,
+  type FbaShipmentType,
 } from '../services/fba-inbound.service.js'
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1224,17 +1226,56 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post('/fulfillment/fba/shipments/:id/transport', async (request, reply) => {
     try {
+      if (!isFbaInboundConfigured()) {
+        return reply.code(503).send({
+          error: 'SP-API not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)',
+        })
+      }
       const { id } = request.params as { id: string }
-      const body = request.body as { isPartnered?: boolean; cartonCount?: number; estimatedShipDate?: string }
-      const shipment = await prisma.fBAShipment.findUnique({ where: { id } })
-      if (!shipment) return reply.code(404).send({ error: 'FBA shipment not found' })
-      // SP-API: PUT /fba/inbound/v0/shipments/{shipmentId}/transport
-      // Records transport details. We scaffold the state transition.
-      const updated = await prisma.fBAShipment.update({
-        where: { id },
-        data: { status: 'SHIPPED' },
+      const body = request.body as {
+        shipmentType?: FbaShipmentType
+        carrierName?: string
+        trackingIds?: string[]
+        proNumber?: string
+      }
+
+      // :id may be FBAShipment.id (cuid) or the Amazon shipmentId
+      // directly. Resolve to Amazon shipmentId for the SP-API call.
+      const local = await prisma.fBAShipment.findUnique({ where: { id } }).catch(() => null)
+      const amazonShipmentId = local?.shipmentId ?? id
+      if (!amazonShipmentId) {
+        return reply.code(400).send({ error: 'shipmentId required' })
+      }
+
+      const shipmentType: FbaShipmentType = body.shipmentType ?? 'SP'
+
+      const result = await fbaPutTransport({
+        shipmentId: amazonShipmentId,
+        shipmentType,
+        ...(shipmentType === 'SP'
+          ? {
+              smallParcel: {
+                carrierName: body.carrierName ?? 'OTHER',
+                trackingIds: body.trackingIds ?? [],
+              },
+            }
+          : {
+              ltl: {
+                carrierName: body.carrierName ?? 'OTHER',
+                proNumber: body.proNumber ?? '',
+              },
+            }),
       })
-      return { ok: true, shipment: updated, partnered: !!body.isPartnered }
+
+      // No local persistence yet — FBAShipment lacks transport fields.
+      // H.8d (status polling) will reconcile state from Amazon as
+      // source of truth, which avoids drift between two writers.
+
+      return {
+        ok: true,
+        transportStatus: result.transportStatus,
+        shipmentId: amazonShipmentId,
+      }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[fba/shipments/:id/transport] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })

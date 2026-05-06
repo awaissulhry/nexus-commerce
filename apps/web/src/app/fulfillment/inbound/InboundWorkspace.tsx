@@ -2078,6 +2078,104 @@ function FbaLabelDownload({ shipmentId }: { shipmentId: string }) {
   )
 }
 
+// H.8c — putTransportDetails. Operator picks SP (small parcel) or LTL
+// (truck), enters carrier name + tracking IDs (one per box for SP) or
+// PRO# (for LTL). Calls non-partnered endpoint — partnered (UPS via
+// Amazon) is US/UK-centric and not on Xavia's path.
+function FbaTransportBooking({ shipmentId }: { shipmentId: string }) {
+  const [shipmentType, setShipmentType] = useState<'SP' | 'LTL'>('SP')
+  const [carrierName, setCarrierName] = useState('OTHER')
+  const [trackingInput, setTrackingInput] = useState('')
+  const [proNumber, setProNumber] = useState('')
+  const [transportStatus, setTransportStatus] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const submit = async () => {
+    setBusy(true)
+    setError(null)
+    setTransportStatus(null)
+    try {
+      const trackingIds = trackingInput.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean)
+      if (shipmentType === 'SP' && trackingIds.length === 0) {
+        throw new Error('Enter at least one tracking ID (one per box).')
+      }
+      if (shipmentType === 'LTL' && !proNumber.trim()) {
+        throw new Error('PRO# is required for LTL shipments.')
+      }
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/fba/shipments/${encodeURIComponent(shipmentId)}/transport`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shipmentType,
+          carrierName: carrierName.trim() || 'OTHER',
+          ...(shipmentType === 'SP' ? { trackingIds } : { proNumber: proNumber.trim() }),
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error ?? `Failed (${res.status})`)
+      setTransportStatus(data?.transportStatus ?? 'WORKING')
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Transport</div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <select
+          value={shipmentType}
+          onChange={(e) => setShipmentType(e.target.value as 'SP' | 'LTL')}
+          className="h-7 text-[11px] px-2 border border-slate-200 rounded"
+        >
+          <option value="SP">Small parcel</option>
+          <option value="LTL">LTL (truck)</option>
+        </select>
+        <input
+          type="text"
+          value={carrierName}
+          onChange={(e) => setCarrierName(e.target.value)}
+          placeholder="Carrier (e.g. DHL, UPS, OTHER)"
+          className="h-7 text-[11px] px-2 border border-slate-200 rounded w-40"
+        />
+        {shipmentType === 'SP' ? (
+          <input
+            type="text"
+            value={trackingInput}
+            onChange={(e) => setTrackingInput(e.target.value)}
+            placeholder="Tracking IDs (comma-separated, one per box)"
+            className="h-7 text-[11px] px-2 border border-slate-200 rounded flex-1 min-w-[180px] font-mono"
+          />
+        ) : (
+          <input
+            type="text"
+            value={proNumber}
+            onChange={(e) => setProNumber(e.target.value)}
+            placeholder="PRO#"
+            className="h-7 text-[11px] px-2 border border-slate-200 rounded w-32 font-mono"
+          />
+        )}
+        <button
+          onClick={submit}
+          disabled={busy}
+          className="h-7 px-2.5 text-[11px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50"
+        >
+          {busy ? 'Booking…' : transportStatus ? 'Re-book' : 'Book transport →'}
+        </button>
+        {transportStatus && (
+          <span className="text-[10px] font-mono bg-emerald-50 text-emerald-700 border border-emerald-200 rounded px-1.5 py-0.5">
+            {transportStatus}
+          </span>
+        )}
+      </div>
+      {error && <div className="text-[10px] text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-1">{error}</div>}
+    </div>
+  )
+}
+
 function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [step, setStep] = useState<'plan' | 'commit'>('plan')
   const [items, setItems] = useState<Array<{ sku: string; quantity: number; productId?: string }>>([{ sku: '', quantity: 1 }])
@@ -2129,16 +2227,17 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
           <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
         </header>
 
-        {/* H.8b status banner — plan + labels are real, transport
-            still stubbed. */}
+        {/* H.8c status banner — plan, labels, and transport are real;
+            status polling still ahead. */}
         <div className="mx-5 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-md text-[12px] text-amber-900">
           <div className="font-semibold mb-1 inline-flex items-center gap-1.5">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
-            Plan + Labels live · Transport still scaffolded
+            Plan + Labels + Transport live · Status polling next
           </div>
           <div className="text-amber-800 leading-snug">
-            Plan-shipment + getLabels (FNSKU/carton/pallet) submit to Amazon SP-API for real.
-            Transport booking (8c) and status polling (8d) still need real SP-API.
+            Plan-shipment, getLabels (FNSKU/carton/pallet), and putTransportDetails
+            (non-partnered SP/LTL) submit to Amazon SP-API for real. Status polling
+            (8d) reconciles Amazon's authoritative state back into local rows.
           </div>
         </div>
 
@@ -2179,8 +2278,9 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
                     </li>
                   ))}
                 </ul>
-                <div className="mt-2 pt-2 border-t border-slate-100">
+                <div className="mt-2 pt-2 border-t border-slate-100 space-y-3">
                   <FbaLabelDownload shipmentId={sp.shipmentId} />
+                  <FbaTransportBooking shipmentId={sp.shipmentId} />
                 </div>
               </div>
             ))}
