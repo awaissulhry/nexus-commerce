@@ -3442,6 +3442,51 @@ model OrderRoutingRule {
   @@index([warehouseId])
 }
 
+// ── Replenishment saved views ──────────────────────────────────────
+//
+// Operator-saved filter + sort presets for /fulfillment/replenishment.
+// The page already URL-encodes its state (R.5); these saved views are
+// named bookmarks with full state captured server-side so they
+// persist across browsers and survive URL renames.
+//
+// Pattern mirrors BulkOpsTemplate but scoped tighter — replenishment
+// doesn't have configurable columns / channel-enable toggles, just
+// filter state + sort.
+
+model ReplenishmentSavedView {
+  id String @id @default(cuid())
+
+  /** Operator-friendly name shown in the dropdown ("Critical AMAZON IT"). */
+  name String
+
+  /** Optional longer description. */
+  description String?
+
+  /**
+   * Captured page state. Shape:
+   *   filter: 'NEEDS_REORDER' | 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'ALL'
+   *   channelFilter: string  (empty = all)
+   *   marketplaceFilter: string
+   *   search?: string
+   *   sortBy: 'urgency' | 'daysOfCover' | 'velocity' | 'qty' | 'stock' | 'sku' | 'name'
+   *   sortDir: 'asc' | 'desc'
+   * Stored as JSON so additive future params (e.g. supplier filter)
+   * don't require a migration.
+   */
+  filterState Json
+
+  /** Marks the view auto-loaded on first visit. At most one row should
+   *  be true; UI enforces this on save. */
+  isDefault Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  @@index([isDefault])
+  @@index([createdAt])
+}
+
 // ── Cron observability ─────────────────────────────────────────────
 //
 // One row per cron invocation. Lets operators answer "when did this

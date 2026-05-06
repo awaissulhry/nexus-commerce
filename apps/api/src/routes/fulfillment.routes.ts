@@ -5319,6 +5319,116 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── Replenishment saved views — named filter+sort presets ───────────
+  fastify.get('/fulfillment/replenishment-views', async (_request, reply) => {
+    try {
+      const rows = await prisma.replenishmentSavedView.findMany({
+        orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
+      })
+      return reply.send({ success: true, views: rows })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[replenishment-views GET] failed')
+      return reply.code(500).send({ success: false, error: msg })
+    }
+  })
+
+  fastify.post<{
+    Body: {
+      name?: string
+      description?: string | null
+      filterState?: Record<string, unknown>
+      isDefault?: boolean
+      createdBy?: string
+    }
+  }>('/fulfillment/replenishment-views', async (request, reply) => {
+    try {
+      const b = request.body ?? {}
+      if (!b.name?.trim()) {
+        return reply.code(400).send({ error: 'name required' })
+      }
+      if (!b.filterState || typeof b.filterState !== 'object') {
+        return reply.code(400).send({ error: 'filterState required' })
+      }
+      // Only one default at a time; clear others if this one is default.
+      if (b.isDefault === true) {
+        await prisma.replenishmentSavedView.updateMany({
+          where: { isDefault: true },
+          data: { isDefault: false },
+        })
+      }
+      const view = await prisma.replenishmentSavedView.create({
+        data: {
+          name: b.name.trim(),
+          description: b.description ?? null,
+          filterState: b.filterState as any,
+          isDefault: b.isDefault ?? false,
+          createdBy: b.createdBy ?? null,
+        },
+      })
+      return reply.code(201).send({ success: true, view })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[replenishment-views POST] failed')
+      return reply.code(500).send({ success: false, error: msg })
+    }
+  })
+
+  fastify.patch<{
+    Params: { id: string }
+    Body: {
+      name?: string
+      description?: string | null
+      filterState?: Record<string, unknown>
+      isDefault?: boolean
+    }
+  }>('/fulfillment/replenishment-views/:id', async (request, reply) => {
+    try {
+      const { id } = request.params
+      const b = request.body ?? {}
+      if (b.isDefault === true) {
+        await prisma.replenishmentSavedView.updateMany({
+          where: { isDefault: true, id: { not: id } },
+          data: { isDefault: false },
+        })
+      }
+      const data: any = {}
+      if (typeof b.name === 'string') data.name = b.name.trim()
+      if ('description' in b) data.description = b.description ?? null
+      if (b.filterState && typeof b.filterState === 'object') data.filterState = b.filterState
+      if (typeof b.isDefault === 'boolean') data.isDefault = b.isDefault
+      const updated = await prisma.replenishmentSavedView.update({
+        where: { id },
+        data,
+      })
+      return reply.send({ success: true, view: updated })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('Record to update not found')) {
+        return reply.code(404).send({ error: 'View not found' })
+      }
+      fastify.log.error({ err }, '[replenishment-views PATCH] failed')
+      return reply.code(500).send({ success: false, error: msg })
+    }
+  })
+
+  fastify.delete<{ Params: { id: string } }>(
+    '/fulfillment/replenishment-views/:id',
+    async (request, reply) => {
+      try {
+        const { id } = request.params
+        await prisma.replenishmentSavedView.delete({ where: { id } })
+        return reply.send({ success: true })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (msg.includes('Record to delete does not exist')) {
+          return reply.code(404).send({ error: 'View not found' })
+        }
+        return reply.code(500).send({ success: false, error: msg })
+      }
+    },
+  )
+
   // R.21 — Bulk-dismiss N recommendations in one call. Body:
   // { recommendationIds: string[], reason?: string, userId?: string }.
   // Returns { succeeded, alreadyTerminal, failed[] } so the operator
