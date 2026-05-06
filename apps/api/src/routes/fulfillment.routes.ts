@@ -2824,7 +2824,15 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         const leadTimeDays = atp?.leadTimeDays ?? DEFAULT_LEAD_TIME_DAYS
         const inboundWithinLeadTime = atp?.inboundWithinLeadTime ?? 0
         const totalOpenInbound = atp?.totalOpenInbound ?? 0
-        const effectiveStock = p.totalStock + inboundWithinLeadTime
+        // R.18 — reservation-aware ATP. Pre-R.18 the math used
+        // p.totalStock (Product-level cached total from FBA sync)
+        // which did NOT subtract StockLevel.reserved; pending orders
+        // ate stock invisibly. R.2 plumbed atp.totalAvailable which
+        // sums StockLevel.available (= q - reserved per schema
+        // CHECK constraint). Switching here makes urgency,
+        // daysOfStockLeft, and needsReorder all reservation-aware.
+        // Falls back to p.totalStock if ATP couldn't resolve.
+        const effectiveStock = (atp?.totalAvailable ?? p.totalStock) + inboundWithinLeadTime
 
         // F.4 — Sum forecast over the relevant horizon. Falls back to
         // trailing velocity × days when no forecast row exists yet
