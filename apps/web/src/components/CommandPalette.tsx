@@ -42,6 +42,7 @@ const COMMANDS: Command[] = [
   { id: 'goto-stock', label: 'Go to Stock', icon: Warehouse, href: '/fulfillment/stock', group: 'Navigation', chord: 'g s' },
   { id: 'goto-pos', label: 'Go to Purchase Orders (approval workflow)', icon: FileEdit, href: '/fulfillment/purchase-orders', group: 'Navigation', chord: 'g u' },
   { id: 'goto-activity', label: 'Go to Activity Log', icon: Activity, href: '/sync-logs', group: 'Navigation' },
+  { id: 'goto-audit-log', label: 'Go to Audit Log (every mutation)', icon: History, href: '/audit-log', group: 'Navigation', chord: 'g a' },
   { id: 'goto-health', label: 'Go to Sync Health', icon: HeartPulse, href: '/dashboard/health', group: 'Navigation', chord: 'g h' },
   // Catalog actions
   { id: 'catalog-organize', label: 'Organize catalog (group orphans, promote standalones)', icon: Layers, href: '/catalog/organize', group: 'Catalog', chord: 'g c' },
