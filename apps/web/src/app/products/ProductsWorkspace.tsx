@@ -108,6 +108,16 @@ const ALL_COLUMNS: Array<{ key: string; label: string; width: number; locked?: b
 
 const DEFAULT_VISIBLE = ['thumb', 'sku', 'name', 'status', 'price', 'stock', 'coverage', 'tags', 'photos', 'updated', 'actions']
 
+// F7 — density modes for the grid. Affects row padding + cell font
+// size. Compact gets a power-user up to ~50 rows on a laptop screen;
+// spacious is the comfortable default for browsing.
+type Density = 'compact' | 'comfortable' | 'spacious'
+const DENSITY_CELL_CLASS: Record<Density, string> = {
+  compact: 'px-3 py-1 text-[11px]',
+  comfortable: 'px-3 py-2',
+  spacious: 'px-3 py-3 text-[13px]',
+}
+
 const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'danger' | 'default' | 'info'> = {
   ACTIVE: 'success',
   DRAFT: 'default',
@@ -229,6 +239,27 @@ export default function ProductsWorkspace() {
   useEffect(() => {
     try { window.localStorage.setItem('products.visibleColumns', JSON.stringify(visibleColumns)) } catch {}
   }, [visibleColumns])
+
+  // F7 — density mode. Three settings affect row padding + cell font
+  // size; persisted per-user via localStorage. Plumbing matches
+  // visibleColumns / pageSize so the user's preferences survive
+  // reload + cross-device with the same login.
+  const [density, setDensity] = useState<Density>(() => {
+    if (typeof window === 'undefined') return 'comfortable'
+    try {
+      const saved = window.localStorage.getItem('products.density') as Density | null
+      return saved && (saved === 'compact' || saved === 'comfortable' || saved === 'spacious')
+        ? saved
+        : 'comfortable'
+    } catch {
+      return 'comfortable'
+    }
+  })
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('products.density', density)
+    } catch {}
+  }, [density])
 
   // Debounced search → URL
   useEffect(() => {
@@ -611,6 +642,8 @@ export default function ProductsWorkspace() {
           childrenByParent={childrenByParent}
           loadingChildren={loadingChildren}
           onToggleExpand={toggleExpand}
+          density={density}
+          onDensityChange={setDensity}
         />
       )}
 
@@ -1426,6 +1459,9 @@ function GridLens(props: any) {
     childrenByParent,
     loadingChildren,
     onToggleExpand,
+    // F7 — density driven from workspace state, persisted to localStorage.
+    density,
+    onDensityChange,
   } = props as {
     products: ProductRow[]
     loading: boolean
@@ -1450,9 +1486,41 @@ function GridLens(props: any) {
     childrenByParent: Record<string, ProductRow[]>
     loadingChildren: Set<string>
     onToggleExpand: (parentId: string) => void
+    density: Density
+    onDensityChange: (d: Density) => void
   }
+  const cellPad = DENSITY_CELL_CLASS[density] ?? DENSITY_CELL_CLASS.comfortable
 
-  const visible = useMemo(() => ALL_COLUMNS.filter((c) => visibleColumns.includes(c.key) || c.locked), [visibleColumns])
+  // F7 — render columns in user-defined order (not ALL_COLUMNS order).
+  // Locked columns are auto-prepended/appended if missing from the
+  // saved order (defensive: a partial localStorage state could omit
+  // them). Locked-leading vs locked-trailing distinguished by their
+  // position in ALL_COLUMNS — leading locks (thumb/sku/name) prepend,
+  // trailing locks (actions) append.
+  const visible = useMemo(() => {
+    const byKey = new Map(ALL_COLUMNS.map((c) => [c.key, c]))
+    const ordered = visibleColumns
+      .map((k) => byKey.get(k))
+      .filter((c): c is (typeof ALL_COLUMNS)[number] => !!c)
+    // Re-add any locked columns missing from the saved order, preserving
+    // their original leading/trailing position.
+    const orderedKeys = new Set(ordered.map((c) => c.key))
+    const missingLeading: typeof ALL_COLUMNS = []
+    const missingTrailing: typeof ALL_COLUMNS = []
+    let seenUnlocked = false
+    for (const c of ALL_COLUMNS) {
+      if (orderedKeys.has(c.key)) {
+        if (!c.locked) seenUnlocked = true
+        continue
+      }
+      if (c.locked) {
+        if (seenUnlocked) missingTrailing.push(c)
+        else missingLeading.push(c)
+      }
+      // Non-locked missing columns stay hidden — that's the user's choice.
+    }
+    return [...missingLeading, ...ordered, ...missingTrailing]
+  }, [visibleColumns])
 
   const allSelected = products.length > 0 && products.every((p: ProductRow) => selected.has(p.id))
   const toggleSelectAll = () => {
@@ -1491,6 +1559,25 @@ function GridLens(props: any) {
           >
             {[50, 100, 200, 500].map((n) => <option key={n} value={n}>{n}/page</option>)}
           </select>
+        </div>
+        {/* F7 — density picker. Three-segment toggle adjacent to the
+            columns picker. Persisted per-user via localStorage. */}
+        <div className="inline-flex items-center border border-slate-200 rounded overflow-hidden h-7 text-[11px]">
+          {(['compact', 'comfortable', 'spacious'] as const).map((d) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => onDensityChange(d)}
+              title={`${d.charAt(0).toUpperCase()}${d.slice(1)} row density`}
+              className={`px-2 h-full ${
+                density === d
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-white text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {d === 'compact' ? '≡' : d === 'comfortable' ? '☰' : '☲'}
+            </button>
+          ))}
         </div>
         <div className="relative">
           <button
@@ -1572,7 +1659,7 @@ function GridLens(props: any) {
                       ) : null}
                     </td>
                     {visible.map((col) => (
-                      <td key={col.key} className="px-3 py-2 align-middle" style={{ width: col.width, minWidth: col.width }}>
+                      <td key={col.key} className={`${cellPad} align-middle`} style={{ width: col.width, minWidth: col.width }}>
                         <ProductCell col={col.key} product={p} onTagEdit={onTagEdit} onChanged={onChanged} />
                       </td>
                     ))}
@@ -1620,7 +1707,7 @@ function GridLens(props: any) {
                           <span className="block h-4 w-4 ml-1 border-l-2 border-b-2 border-slate-300 rounded-bl" />
                         </td>
                         {visible.map((col) => (
-                          <td key={col.key} className="px-3 py-2 align-middle" style={{ width: col.width, minWidth: col.width }}>
+                          <td key={col.key} className={`${cellPad} align-middle`} style={{ width: col.width, minWidth: col.width }}>
                             <ProductCell col={col.key} product={child} onTagEdit={onTagEdit} onChanged={onChanged} />
                           </td>
                         ))}
@@ -1947,30 +2034,98 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
 
 function ColumnPickerMenu({ visible, setVisible, onClose }: { visible: string[]; setVisible: (v: string[]) => void; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null)
+  // F7 — drag-drop column reorder. Native HTML5 dragstart/dragover/drop
+  // (no library). Tracks the drag source key in state; on drop, splices
+  // the array. Only togglable columns participate — locked columns
+  // (thumb/sku/name/actions) keep their positions in the rendered
+  // table via the visible useMemo's missingLeading/missingTrailing
+  // logic.
+  const [dragKey, setDragKey] = useState<string | null>(null)
   useEffect(() => {
     const onClick = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose() }
     document.addEventListener('mousedown', onClick)
     return () => document.removeEventListener('mousedown', onClick)
   }, [onClose])
   const togglable = ALL_COLUMNS.filter((c) => !c.locked && c.label)
+
+  // The picker shows columns in the user's current order (visible[])
+  // for togglable rows that ARE visible, then non-visible togglable
+  // rows at the end. So drag-reorder only happens within visible.
+  const visibleTogglable = visible
+    .map((k) => togglable.find((c) => c.key === k))
+    .filter((c): c is (typeof togglable)[number] => !!c)
+  const hiddenTogglable = togglable.filter((c) => !visible.includes(c.key))
+
+  const onDragStart = (key: string) => (e: React.DragEvent) => {
+    setDragKey(key)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }
+  const onDrop = (targetKey: string) => (e: React.DragEvent) => {
+    e.preventDefault()
+    if (!dragKey || dragKey === targetKey) {
+      setDragKey(null)
+      return
+    }
+    const next = [...visible]
+    const fromIdx = next.indexOf(dragKey)
+    const toIdx = next.indexOf(targetKey)
+    if (fromIdx === -1 || toIdx === -1) {
+      setDragKey(null)
+      return
+    }
+    next.splice(fromIdx, 1)
+    next.splice(toIdx, 0, dragKey)
+    setVisible(next)
+    setDragKey(null)
+  }
+
   return (
-    <div ref={ref} className="absolute right-0 top-full mt-1 w-56 bg-white border border-slate-200 rounded-md shadow-lg z-20 p-1.5 max-h-96 overflow-y-auto">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 px-2 py-1.5">Visible columns</div>
-      {togglable.map((c) => (
-        <label key={c.key} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-[12px] cursor-pointer">
+    <div ref={ref} className="absolute right-0 top-full mt-1 w-64 bg-white border border-slate-200 rounded-md shadow-lg z-20 p-1.5 max-h-[480px] overflow-y-auto">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 px-2 py-1.5 flex items-center justify-between">
+        <span>Visible (drag to reorder)</span>
+      </div>
+      {visibleTogglable.map((c) => (
+        <div
+          key={c.key}
+          draggable
+          onDragStart={onDragStart(c.key)}
+          onDragOver={onDragOver}
+          onDrop={onDrop(c.key)}
+          className={`flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-[12px] cursor-move ${dragKey === c.key ? 'opacity-40' : ''}`}
+        >
+          <span className="text-slate-300 font-mono select-none">⠿</span>
           <input
             type="checkbox"
-            checked={visible.includes(c.key)}
-            onChange={() => {
-              if (visible.includes(c.key)) setVisible(visible.filter((k) => k !== c.key))
-              else setVisible([...visible, c.key])
-            }}
+            checked
+            onChange={() => setVisible(visible.filter((k) => k !== c.key))}
           />
           <span className="text-slate-700">{c.label}</span>
-        </label>
+        </div>
       ))}
+      {hiddenTogglable.length > 0 && (
+        <>
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 px-2 py-1.5 mt-1">
+            Hidden
+          </div>
+          {hiddenTogglable.map((c) => (
+            <label key={c.key} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-[12px] cursor-pointer">
+              <span className="text-transparent select-none">⠿</span>
+              <input
+                type="checkbox"
+                checked={false}
+                onChange={() => setVisible([...visible, c.key])}
+              />
+              <span className="text-slate-700">{c.label}</span>
+            </label>
+          ))}
+        </>
+      )}
       <div className="border-t border-slate-100 mt-1.5 pt-1.5 px-2 py-1 flex items-center justify-between">
-        <button onClick={() => setVisible(DEFAULT_VISIBLE)} className="text-[11px] text-slate-500 hover:text-slate-900">Reset</button>
+        <button onClick={() => setVisible(DEFAULT_VISIBLE)} className="text-[11px] text-slate-500 hover:text-slate-900">Reset order</button>
         <button onClick={onClose} className="text-[11px] text-slate-500 hover:text-slate-900">Close</button>
       </div>
     </div>
