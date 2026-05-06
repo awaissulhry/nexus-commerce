@@ -644,6 +644,19 @@ function FilterBar(props: any) {
     stockLevel, hasPhotos, filterCount, filtersOpen, setFiltersOpen, facets, tags, updateUrl,
   } = props
 
+  // F2 — listen for the global "/" focus-search event dispatched by
+  // CommandPalette and focus the search input here. Same pattern any
+  // page can adopt: attach a ref + listen for nexus:focus-search.
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+  useEffect(() => {
+    const onFocusSearch = () => {
+      searchInputRef.current?.focus()
+      searchInputRef.current?.select()
+    }
+    window.addEventListener('nexus:focus-search', onFocusSearch)
+    return () => window.removeEventListener('nexus:focus-search', onFocusSearch)
+  }, [])
+
   const toggleArr = (current: string[], val: string) =>
     current.includes(val) ? current.filter((v: string) => v !== val) : [...current, val]
 
@@ -654,6 +667,7 @@ function FilterBar(props: any) {
           <div className="flex-1 min-w-[240px] max-w-md relative">
             <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <Input
+              ref={searchInputRef}
               placeholder="Search SKU, name, brand, GTIN…"
               value={searchInput}
               onChange={(e: any) => setSearchInput(e.target.value)}
