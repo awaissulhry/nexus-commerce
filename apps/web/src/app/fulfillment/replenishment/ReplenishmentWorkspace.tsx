@@ -30,6 +30,7 @@ import {
   Factory,
   FileText,
   FileWarning,
+  Keyboard,
   Loader2,
   Mail,
   Plus,
@@ -235,6 +236,10 @@ export default function ReplenishmentWorkspace() {
   const [bulkOpen, setBulkOpen] = useState(false)
   // R.5 — auto-refresh interval persisted per-device via localStorage.
   const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
+  // Keyboard shortcuts. focusedIndex is -1 when no row has keyboard
+  // focus; helpOpen toggles the "?" overlay.
+  const [focusedIndex, setFocusedIndex] = useState(-1)
+  const [helpOpen, setHelpOpen] = useState(false)
   // Migrated from the inline 30-line toast queue to the app-wide
   // ToastProvider (components/ui/Toast.tsx). Same pushToast(tone, msg)
   // call signature so existing call-sites keep working unchanged;
@@ -509,6 +514,176 @@ export default function ReplenishmentWorkspace() {
     [filtered, drawerProductId],
   )
 
+  // Reset focused index when filtered list changes and current focus
+  // is out of bounds (e.g. user changed filter and the focused row
+  // disappeared).
+  useEffect(() => {
+    if (focusedIndex >= filtered.length) {
+      setFocusedIndex(filtered.length > 0 ? filtered.length - 1 : -1)
+    }
+  }, [filtered, focusedIndex])
+
+  // Scroll the focused row into view. `block: 'nearest'` keeps the
+  // page from scrolling when the row is already visible.
+  useEffect(() => {
+    if (focusedIndex < 0 || focusedIndex >= filtered.length) return
+    const id = filtered[focusedIndex].productId
+    const el = document.querySelector<HTMLElement>(`[data-suggestion-id="${id}"]`)
+    el?.scrollIntoView({ block: 'nearest' })
+  }, [focusedIndex, filtered])
+
+  // Global keyboard handler. Skips when the user is typing in an
+  // input/textarea (except Esc, which still routes through to close
+  // the drawer / blur the input). Help overlay (?) toggles a modal
+  // listing all shortcuts.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      const tag = target?.tagName
+      const inInput =
+        tag === 'INPUT' ||
+        tag === 'TEXTAREA' ||
+        tag === 'SELECT' ||
+        target?.isContentEditable === true
+
+      if (e.key === 'Escape') {
+        if (helpOpen) {
+          setHelpOpen(false)
+          return
+        }
+        if (inInput) {
+          ;(target as HTMLElement).blur()
+          return
+        }
+        if (drawerProductId) {
+          setDrawerProductId(null)
+          return
+        }
+        if (selectedIds.size > 0) {
+          clearSelection()
+          return
+        }
+        if (focusedIndex >= 0) {
+          setFocusedIndex(-1)
+          return
+        }
+      }
+
+      if (inInput) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+
+      if (e.key === '?') {
+        e.preventDefault()
+        setHelpOpen((v) => !v)
+        return
+      }
+      if (helpOpen) return
+
+      if (e.key === 'j' || e.key === 'ArrowDown') {
+        if (filtered.length === 0) return
+        e.preventDefault()
+        setFocusedIndex((i) => {
+          if (i < 0) return 0
+          return Math.min(filtered.length - 1, i + 1)
+        })
+        return
+      }
+      if (e.key === 'k' || e.key === 'ArrowUp') {
+        if (filtered.length === 0) return
+        e.preventDefault()
+        setFocusedIndex((i) => Math.max(0, i - 1))
+        return
+      }
+
+      const focused =
+        focusedIndex >= 0 && focusedIndex < filtered.length
+          ? filtered[focusedIndex]
+          : null
+
+      if (focused) {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          setDrawerProductId(focused.productId)
+          return
+        }
+        if (e.key === 'x' || e.key === ' ') {
+          e.preventDefault()
+          toggleSelected(focused.productId)
+          return
+        }
+        if (e.key === 'p') {
+          e.preventDefault()
+          draftSinglePo(focused)
+          return
+        }
+        if (e.key === 'd') {
+          e.preventDefault()
+          const reason = window.prompt(
+            `Dismiss ${focused.sku}? (Reason — optional, helps audit later)`,
+          )
+          if (reason !== null) dismissRow(focused, reason.trim() || null)
+          return
+        }
+      }
+
+      if (e.key === '1') {
+        e.preventDefault()
+        setFilter('CRITICAL')
+        return
+      }
+      if (e.key === '2') {
+        e.preventDefault()
+        setFilter('HIGH')
+        return
+      }
+      if (e.key === '3') {
+        e.preventDefault()
+        setFilter('MEDIUM')
+        return
+      }
+      if (e.key === '0') {
+        e.preventDefault()
+        setFilter('ALL')
+        return
+      }
+      if (e.key === '/') {
+        e.preventDefault()
+        const input = document.querySelector<HTMLInputElement>(
+          'input[placeholder="Search SKU…"]',
+        )
+        input?.focus()
+        input?.select()
+        return
+      }
+      if (e.key === 'r') {
+        e.preventDefault()
+        fetchData()
+        return
+      }
+      if (e.key === 'g') {
+        if (filtered.length === 0) return
+        e.preventDefault()
+        setFocusedIndex(0)
+        return
+      }
+      if (e.key === 'G') {
+        if (filtered.length === 0) return
+        e.preventDefault()
+        setFocusedIndex(filtered.length - 1)
+        return
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    filtered,
+    focusedIndex,
+    helpOpen,
+    selectedIds,
+    drawerProductId,
+  ])
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -684,6 +859,14 @@ export default function ReplenishmentWorkspace() {
           >
             <Download size={12} /> Export CSV
           </button>
+          <button
+            onClick={() => setHelpOpen(true)}
+            className="h-8 w-8 grid place-items-center text-[12px] border border-slate-200 rounded-md hover:bg-slate-50 text-slate-500"
+            title="Keyboard shortcuts (?)"
+            aria-label="Keyboard shortcuts"
+          >
+            <Keyboard size={12} />
+          </button>
         </div>
       </div>
 
@@ -746,11 +929,12 @@ export default function ReplenishmentWorkspace() {
             (lg+) keeps the dense table. The 13-column layout was an
             unusable horizontal scroll below ~1100px. */}
         <div className="lg:hidden space-y-2">
-          {filtered.map((s) => (
+          {filtered.map((s, idx) => (
             <MobileSuggestionCard
               key={s.productId}
               s={s}
               selected={selectedIds.has(s.productId)}
+              focused={idx === focusedIndex}
               onToggleSelect={() => toggleSelected(s.productId)}
               onOpenDrawer={() => setDrawerProductId(s.productId)}
               onDraftPo={() => draftSinglePo(s)}
@@ -789,11 +973,12 @@ export default function ReplenishmentWorkspace() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((s) => (
+                {filtered.map((s, idx) => (
                   <SuggestionRow
                     key={s.productId}
                     suggestion={s}
                     selected={selectedIds.has(s.productId)}
+                    focused={idx === focusedIndex}
                     onToggle={() => toggleSelected(s.productId)}
                     onOpenDrawer={() => setDrawerProductId(s.productId)}
                     onDraftPo={() => draftSinglePo(s)}
@@ -820,6 +1005,9 @@ export default function ReplenishmentWorkspace() {
           onClose={() => setDrawerProductId(null)}
         />
       )}
+
+      {/* Keyboard shortcuts overlay (?) */}
+      {helpOpen && <KeyboardHelpOverlay onClose={() => setHelpOpen(false)} />}
 
       {/* Bulk-PO modal */}
       {bulkOpen && (
@@ -976,6 +1164,7 @@ function SortableTh({
 function MobileSuggestionCard({
   s,
   selected,
+  focused,
   onToggleSelect,
   onOpenDrawer,
   onDraftPo,
@@ -983,6 +1172,8 @@ function MobileSuggestionCard({
 }: {
   s: Suggestion
   selected: boolean
+  /** Keyboard-focused row. Renders a left-edge indicator. */
+  focused: boolean
   onToggleSelect: () => void
   onOpenDrawer: () => void
   onDraftPo: () => void
@@ -992,7 +1183,13 @@ function MobileSuggestionCard({
 }) {
   const tone = URGENCY_TONE[s.urgency] ?? URGENCY_TONE.LOW
   return (
-    <div className="border border-slate-200 rounded-lg bg-white p-3 space-y-2">
+    <div
+      data-suggestion-id={s.productId}
+      className={cn(
+        'border border-slate-200 rounded-lg bg-white p-3 space-y-2',
+        focused && 'ring-1 ring-blue-300 bg-blue-50/40',
+      )}
+    >
       <div className="flex items-start gap-2">
         <input
           type="checkbox"
@@ -1118,6 +1315,7 @@ function exportSuggestionsCsv(suggestions: Suggestion[]): void {
 function SuggestionRow({
   suggestion: s,
   selected,
+  focused,
   onToggle,
   onOpenDrawer,
   onDraftPo,
@@ -1125,6 +1323,8 @@ function SuggestionRow({
 }: {
   suggestion: Suggestion
   selected: boolean
+  /** Keyboard-focused row. Renders a left-edge indicator. */
+  focused: boolean
   onToggle: () => void
   onOpenDrawer: () => void
   onDraftPo: () => void
@@ -1147,7 +1347,13 @@ function SuggestionRow({
         )}–${Math.round(s.forecastedDemandUpper80)})`
       : null
   return (
-    <tr className="border-b border-slate-100 hover:bg-slate-50">
+    <tr
+      data-suggestion-id={s.productId}
+      className={cn(
+        'border-b border-slate-100 hover:bg-slate-50',
+        focused && 'bg-blue-50/40 ring-1 ring-inset ring-blue-300',
+      )}
+    >
       <td className="px-3 py-2">
         <input
           type="checkbox"
@@ -4048,6 +4254,109 @@ function SavedViewsButton({
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+// Keyboard shortcuts overlay. Shown when the user presses ? or
+// clicks the keyboard hint button. Modal-style with click-backdrop
+// to dismiss; Esc handling lives in the parent's global keydown.
+function KeyboardHelpOverlay({ onClose }: { onClose: () => void }) {
+  const groups: { title: string; rows: { keys: string[]; label: string }[] }[] = [
+    {
+      title: 'Navigation',
+      rows: [
+        { keys: ['j', '↓'], label: 'Move focus down' },
+        { keys: ['k', '↑'], label: 'Move focus up' },
+        { keys: ['g'], label: 'Jump to top' },
+        { keys: ['G'], label: 'Jump to bottom' },
+        { keys: ['Esc'], label: 'Close drawer · clear selection · clear focus' },
+      ],
+    },
+    {
+      title: 'On focused row',
+      rows: [
+        { keys: ['Enter'], label: 'Open detail drawer' },
+        { keys: ['x', 'Space'], label: 'Toggle selection' },
+        { keys: ['p'], label: 'Draft single PO' },
+        { keys: ['d'], label: 'Dismiss recommendation' },
+      ],
+    },
+    {
+      title: 'Filter / search',
+      rows: [
+        { keys: ['1'], label: 'Filter: Critical' },
+        { keys: ['2'], label: 'Filter: High' },
+        { keys: ['3'], label: 'Filter: Medium' },
+        { keys: ['0'], label: 'Filter: All' },
+        { keys: ['/'], label: 'Focus search' },
+        { keys: ['r'], label: 'Refresh data' },
+      ],
+    },
+    {
+      title: 'Help',
+      rows: [{ keys: ['?'], label: 'Toggle this overlay' }],
+    },
+  ]
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm grid place-items-center p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Keyboard shortcuts"
+    >
+      <div
+        className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="border-b border-slate-200 px-5 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-[14px] font-semibold text-slate-900">
+            <Keyboard size={16} className="text-slate-500" />
+            Keyboard shortcuts
+          </div>
+          <button
+            onClick={onClose}
+            className="h-7 w-7 grid place-items-center text-slate-400 hover:text-slate-700 rounded hover:bg-slate-100"
+            aria-label="Close"
+          >
+            <X size={14} />
+          </button>
+        </div>
+        <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
+          {groups.map((g) => (
+            <div key={g.title} className="space-y-2">
+              <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+                {g.title}
+              </div>
+              <div className="space-y-1.5">
+                {g.rows.map((r, i) => (
+                  <div key={i} className="flex items-center justify-between gap-3 text-[12px]">
+                    <span className="text-slate-700">{r.label}</span>
+                    <span className="flex items-center gap-1">
+                      {r.keys.map((k, j) => (
+                        <kbd
+                          key={j}
+                          className="font-mono text-[10px] px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded shadow-[0_1px_0_0_rgb(226_232_240)] min-w-[20px] text-center text-slate-700"
+                        >
+                          {k}
+                        </kbd>
+                      ))}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="border-t border-slate-200 px-5 py-3 text-[11px] text-slate-500">
+          Tip: shortcuts pause while typing in inputs. Press{' '}
+          <kbd className="font-mono px-1 py-0.5 bg-slate-50 border border-slate-200 rounded">
+            Esc
+          </kbd>{' '}
+          to leave a search/filter field, then keys work again.
+        </div>
+      </div>
     </div>
   )
 }
