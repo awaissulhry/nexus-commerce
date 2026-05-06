@@ -796,19 +796,106 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // POST /api/products/bulk-set-stock — set absolute totalStock for N
+  // products (and/or update lowStockThreshold).
+  //
+  // P0/B3 — totalStock writes route through applyStockMovement so the
+  // StockLevel ledger, ChannelListing cascade (Phase 13b), and audit
+  // trail all fire. Previous direct prisma.product.updateMany() left
+  // every channel listing's masterQuantity stale, never enqueued an
+  // outbound sync, and never wrote a StockMovement audit row. At
+  // scale that's silent inventory drift.
+  //
+  // lowStockThreshold has no cascade — direct updateMany is correct.
+  // We separate the two paths so each takes the right route.
+  //
+  // Per-product partial failures (e.g. negative-stock guard rejecting
+  // a single product) are surfaced via the errors[] array rather than
+  // collapsing the whole request — the bulk-edit grid relies on this
+  // to render per-cell error highlighting.
   fastify.post('/products/bulk-set-stock', async (request, reply) => {
     try {
-      const body = request.body as { productIds?: string[]; totalStock?: number; lowStockThreshold?: number }
+      const body = request.body as {
+        productIds?: string[]
+        totalStock?: number
+        lowStockThreshold?: number
+      }
       const productIds = Array.isArray(body.productIds) ? body.productIds : []
-      if (productIds.length === 0) return reply.code(400).send({ error: 'productIds[] required' })
-      const data: any = { version: { increment: 1 } }
-      if (typeof body.totalStock === 'number') data.totalStock = body.totalStock
-      if (typeof body.lowStockThreshold === 'number') data.lowStockThreshold = body.lowStockThreshold
-      const result = await prisma.product.updateMany({
-        where: { id: { in: productIds } },
-        data,
-      })
-      return { ok: true, updated: result.count }
+      if (productIds.length === 0) {
+        return reply.code(400).send({ error: 'productIds[] required' })
+      }
+      const actor = userIdFor(request)
+      const reason = 'bulk-set-stock'
+
+      const errors: Array<{ id: string; field: string; error: string }> = []
+      let stockUpdated = 0
+      let thresholdUpdated = 0
+
+      // Threshold path — atomic, cheap, no cascade.
+      if (typeof body.lowStockThreshold === 'number') {
+        const newThreshold = Math.max(0, Math.floor(body.lowStockThreshold))
+        const r = await prisma.product.updateMany({
+          where: { id: { in: productIds } },
+          data: {
+            lowStockThreshold: newThreshold,
+            version: { increment: 1 },
+          },
+        })
+        thresholdUpdated = r.count
+      }
+
+      // Stock path — one applyStockMovement per product so each gets a
+      // StockMovement row + ChannelListing cascade. Read current totals
+      // in one findMany; loop computes delta = newTotal - current and
+      // skips no-ops. Fails per-product without aborting the batch.
+      if (typeof body.totalStock === 'number') {
+        const newTotal = Math.max(0, Math.floor(body.totalStock))
+        const currentRows = await prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, totalStock: true },
+        })
+        const currentByid = new Map(currentRows.map((r) => [r.id, r.totalStock ?? 0]))
+        // Pre-flight: surface ids that don't exist as errors so callers
+        // can highlight them rather than silently dropping.
+        for (const id of productIds) {
+          if (!currentByid.has(id)) {
+            errors.push({ id, field: 'totalStock', error: 'Product not found' })
+          }
+        }
+        for (const id of currentByid.keys()) {
+          const current = currentByid.get(id) ?? 0
+          const delta = newTotal - current
+          if (delta === 0) {
+            stockUpdated++ // count as "applied" — caller asked for newTotal, it already matches
+            continue
+          }
+          try {
+            await applyStockMovement({
+              productId: id,
+              change: delta,
+              reason: 'MANUAL_ADJUSTMENT',
+              notes: 'bulk-set-stock',
+              actor,
+            })
+            stockUpdated++
+          } catch (err) {
+            errors.push({
+              id,
+              field: 'totalStock',
+              error: err instanceof Error ? err.message : String(err),
+            })
+          }
+        }
+      }
+
+      return {
+        ok: errors.length === 0,
+        updated: Math.max(stockUpdated, thresholdUpdated),
+        stockUpdated,
+        thresholdUpdated,
+        errors: errors.length > 0 ? errors : undefined,
+        reason,
+      }
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
