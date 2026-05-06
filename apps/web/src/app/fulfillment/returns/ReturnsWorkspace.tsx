@@ -6,12 +6,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   Undo2, Plus, RefreshCw, X, CheckCircle2, Package,
-  ChevronRight, ArrowDownToLine,
+  ChevronRight, ArrowDownToLine, Copy, Mail, Tag, Trash2, Truck,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 
 type ReturnRow = {
@@ -30,6 +31,13 @@ type ReturnRow = {
   inspectedAt: string | null
   refundedAt: string | null
   restockedAt: string | null
+  // Return label tracking (operator-attached for v0; native carrier
+  // integration in a follow-up).
+  returnLabelUrl: string | null
+  returnLabelCarrier: string | null
+  returnTrackingNumber: string | null
+  returnLabelGeneratedAt: string | null
+  returnLabelEmailedAt: string | null
   notes: string | null
   items: Array<{ id: string; sku: string; productId: string | null; quantity: number; conditionGrade: string | null }>
   createdAt: string
@@ -323,6 +331,17 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
                 </table>
               </div>
 
+              {/* Return label tracking — only relevant for non-FBA returns
+                  (FBA managed by Amazon). v0 stores carrier-generated
+                  URL + tracking + email timestamp. Real Sendcloud return-
+                  label generation = v1 follow-up. */}
+              {!ret.isFbaReturn && (
+                <ReturnLabelPanel
+                  returnRow={ret}
+                  onUpdated={async () => { await fetchOne(); onChanged() }}
+                />
+              )}
+
               {!ret.isFbaReturn && (
                 <div className="pt-3 border-t border-slate-100 space-y-2">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -509,6 +528,307 @@ function CreateReturnModal({ onClose, onCreated }: { onClose: () => void; onCrea
           <button onClick={submit} disabled={busy} className="h-8 px-3 text-[12px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">Create return</button>
         </footer>
       </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Return Label Panel
+// Operator-driven label tracking. Shipping in v0 with the assumption
+// that operators generate the actual label in their carrier's UI
+// (Sendcloud / DHL portal / etc.) and paste the URL + tracking back.
+// Native carrier integration → v1.
+// ─────────────────────────────────────────────────────────────────────
+
+const CARRIER_OPTIONS = [
+  { value: 'SENDCLOUD', label: 'Sendcloud' },
+  { value: 'DHL', label: 'DHL' },
+  { value: 'GLS', label: 'GLS' },
+  { value: 'POSTE', label: 'Poste Italiane' },
+  { value: 'BRT', label: 'BRT' },
+  { value: 'UPS', label: 'UPS' },
+  { value: 'FEDEX', label: 'FedEx' },
+  { value: 'MANUAL', label: 'Manual / Other' },
+]
+
+function ReturnLabelPanel({
+  returnRow,
+  onUpdated,
+}: {
+  returnRow: ReturnRow
+  onUpdated: () => void | Promise<void>
+}) {
+  const { toast } = useToast()
+  const [editing, setEditing] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [url, setUrl] = useState(returnRow.returnLabelUrl ?? '')
+  const [carrier, setCarrier] = useState(returnRow.returnLabelCarrier ?? 'SENDCLOUD')
+  const [tracking, setTracking] = useState(returnRow.returnTrackingNumber ?? '')
+
+  const hasLabel = !!returnRow.returnLabelUrl
+  const isEmailed = !!returnRow.returnLabelEmailedAt
+
+  const handleAttach = async () => {
+    if (!url.trim()) {
+      toast.error('Label URL required')
+      return
+    }
+    setBusy(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/returns/${returnRow.id}/label`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: url.trim(),
+            carrier: carrier || null,
+            trackingNumber: tracking.trim() || null,
+          }),
+        },
+      )
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`)
+      toast.success('Return label attached')
+      setEditing(false)
+      await onUpdated()
+    } catch (err) {
+      toast.error(`Attach failed: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleMarkEmailed = async () => {
+    setBusy(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/returns/${returnRow.id}/label/mark-emailed`,
+        { method: 'POST' },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      toast.success('Marked as emailed to customer')
+      await onUpdated()
+    } catch (err) {
+      toast.error(`Failed: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleRemove = async () => {
+    if (!confirm('Remove the attached return label? Tracking + email status will also be cleared.')) return
+    setBusy(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/returns/${returnRow.id}/label`,
+        { method: 'DELETE' },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      toast.success('Label removed')
+      setUrl('')
+      setTracking('')
+      setEditing(false)
+      await onUpdated()
+    } catch (err) {
+      toast.error(`Failed: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleCopy = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success(`${label} copied`)
+    } catch {
+      toast.error('Copy failed — your browser blocked clipboard access')
+    }
+  }
+
+  return (
+    <div className="pt-3 border-t border-slate-100">
+      <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-2 inline-flex items-center gap-1.5">
+        <Tag size={11} /> Return label
+        {hasLabel && !isEmailed && (
+          <Badge variant="warning" size="sm">Not emailed yet</Badge>
+        )}
+        {isEmailed && (
+          <Badge variant="success" size="sm">Emailed</Badge>
+        )}
+      </div>
+
+      {!hasLabel && !editing && (
+        <div className="bg-slate-50 border border-slate-200 rounded p-3">
+          <p className="text-[12px] text-slate-600 mb-2">
+            No label attached. Generate one in your carrier dashboard, then paste the URL + tracking here so the customer can be emailed and the workflow stays auditable.
+          </p>
+          <button
+            onClick={() => setEditing(true)}
+            className="h-8 px-3 text-[12px] bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5"
+          >
+            <Plus size={12} /> Attach label
+          </button>
+        </div>
+      )}
+
+      {editing && (
+        <div className="bg-white border border-slate-200 rounded p-3 space-y-2">
+          <div>
+            <label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+              Label URL <span className="text-red-600">*</span>
+            </label>
+            <input
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://app.sendcloud.com/labels/..."
+              className="mt-1 w-full h-8 px-2 text-[12px] border border-slate-200 rounded font-mono"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+                Carrier
+              </label>
+              <select
+                value={carrier}
+                onChange={(e) => setCarrier(e.target.value)}
+                className="mt-1 w-full h-8 px-2 text-[12px] border border-slate-200 rounded bg-white"
+              >
+                {CARRIER_OPTIONS.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+                Tracking number
+              </label>
+              <input
+                type="text"
+                value={tracking}
+                onChange={(e) => setTracking(e.target.value)}
+                placeholder="Optional"
+                className="mt-1 w-full h-8 px-2 text-[12px] border border-slate-200 rounded font-mono"
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              onClick={handleAttach}
+              disabled={busy}
+              className="h-8 px-3 text-[12px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
+            >
+              <CheckCircle2 size={12} /> {busy ? 'Saving…' : 'Save'}
+            </button>
+            <button
+              onClick={() => {
+                setEditing(false)
+                setUrl(returnRow.returnLabelUrl ?? '')
+                setCarrier(returnRow.returnLabelCarrier ?? 'SENDCLOUD')
+                setTracking(returnRow.returnTrackingNumber ?? '')
+              }}
+              className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {hasLabel && !editing && (
+        <div className="bg-slate-50 border border-slate-200 rounded p-3 space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-[12px]">
+            <div className="md:col-span-2">
+              <div className="text-[10px] text-slate-500 mb-0.5">URL</div>
+              <a
+                href={returnRow.returnLabelUrl!}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-blue-700 hover:text-blue-900 break-all text-[11px]"
+              >
+                {returnRow.returnLabelUrl}
+              </a>
+            </div>
+            <div className="space-y-1">
+              {returnRow.returnLabelCarrier && (
+                <div>
+                  <div className="text-[10px] text-slate-500">Carrier</div>
+                  <div className="text-[12px] text-slate-900 inline-flex items-center gap-1">
+                    <Truck size={11} /> {returnRow.returnLabelCarrier}
+                  </div>
+                </div>
+              )}
+              {returnRow.returnTrackingNumber && (
+                <div>
+                  <div className="text-[10px] text-slate-500">Tracking</div>
+                  <div className="text-[12px] font-mono text-slate-900">
+                    {returnRow.returnTrackingNumber}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-slate-200">
+            <button
+              onClick={() => handleCopy(returnRow.returnLabelUrl!, 'URL')}
+              className="h-7 px-2 text-[11px] border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1"
+            >
+              <Copy size={11} /> Copy URL
+            </button>
+            {returnRow.returnTrackingNumber && (
+              <button
+                onClick={() => handleCopy(returnRow.returnTrackingNumber!, 'Tracking number')}
+                className="h-7 px-2 text-[11px] border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1"
+              >
+                <Copy size={11} /> Copy tracking
+              </button>
+            )}
+            {!isEmailed && (
+              <button
+                onClick={handleMarkEmailed}
+                disabled={busy}
+                className="h-7 px-2 text-[11px] bg-emerald-600 text-white border border-emerald-600 rounded hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1"
+                title="Stamp the timestamp after you've emailed the URL to the customer"
+              >
+                <Mail size={11} /> Mark emailed
+              </button>
+            )}
+            <button
+              onClick={() => setEditing(true)}
+              className="h-7 px-2 text-[11px] border border-slate-200 rounded hover:bg-white"
+            >
+              Edit
+            </button>
+            <button
+              onClick={handleRemove}
+              disabled={busy}
+              className="h-7 px-2 text-[11px] text-red-700 border border-red-200 rounded hover:bg-red-50 disabled:opacity-50 inline-flex items-center gap-1 ml-auto"
+            >
+              <Trash2 size={11} /> Remove
+            </button>
+          </div>
+
+          <div className="text-[10px] text-slate-500 flex items-center gap-3 flex-wrap">
+            {returnRow.returnLabelGeneratedAt && (
+              <span>Generated {new Date(returnRow.returnLabelGeneratedAt).toLocaleString()}</span>
+            )}
+            {returnRow.returnLabelEmailedAt && (
+              <span>· Emailed {new Date(returnRow.returnLabelEmailedAt).toLocaleString()}</span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

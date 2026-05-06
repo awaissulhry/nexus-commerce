@@ -3281,6 +3281,101 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // Return label workflow — operator-driven for v0. The carrier
+  // generates the actual label (Sendcloud dashboard, DHL portal,
+  // etc.); operator pastes URL + tracking back here so the label
+  // is auditable + customer-shareable + the "did we email it?"
+  // status is tracked. Native Sendcloud return-label API
+  // integration is the v1 follow-up — same data shape.
+  //
+  // POST /fulfillment/returns/:id/label
+  //   Body: { url, carrier, trackingNumber }
+  //   Stamps returnLabelGeneratedAt; does NOT mark emailed.
+  //
+  // POST /fulfillment/returns/:id/label/mark-emailed
+  //   Records returnLabelEmailedAt without sending — assumes the
+  //   operator emailed via their own channel (operator's own mail
+  //   client). Real send-label-to-customer email is also v1.
+  fastify.post<{
+    Params: { id: string }
+    Body: {
+      url?: string
+      carrier?: string
+      trackingNumber?: string
+    }
+  }>('/fulfillment/returns/:id/label', async (request, reply) => {
+    try {
+      const { id } = request.params
+      const body = request.body ?? {}
+      if (!body.url?.trim()) {
+        return reply.code(400).send({ error: 'url required' })
+      }
+      const updated = await prisma.return.update({
+        where: { id },
+        data: {
+          returnLabelUrl: body.url.trim(),
+          returnLabelCarrier: body.carrier?.trim() ?? null,
+          returnTrackingNumber: body.trackingNumber?.trim() ?? null,
+          returnLabelGeneratedAt: new Date(),
+        },
+      })
+      return reply.send({ success: true, return: updated })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('Record to update not found')) {
+        return reply.code(404).send({ error: 'Return not found' })
+      }
+      fastify.log.error({ err }, '[returns/:id/label] failed')
+      return reply.code(500).send({ error: msg })
+    }
+  })
+
+  fastify.post<{ Params: { id: string } }>(
+    '/fulfillment/returns/:id/label/mark-emailed',
+    async (request, reply) => {
+      try {
+        const { id } = request.params
+        const updated = await prisma.return.update({
+          where: { id },
+          data: { returnLabelEmailedAt: new Date() },
+        })
+        return reply.send({ success: true, return: updated })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (msg.includes('Record to update not found')) {
+          return reply.code(404).send({ error: 'Return not found' })
+        }
+        return reply.code(500).send({ error: msg })
+      }
+    },
+  )
+
+  fastify.delete<{ Params: { id: string } }>(
+    '/fulfillment/returns/:id/label',
+    async (request, reply) => {
+      try {
+        const { id } = request.params
+        const updated = await prisma.return.update({
+          where: { id },
+          data: {
+            returnLabelUrl: null,
+            returnLabelCarrier: null,
+            returnTrackingNumber: null,
+            returnLabelGeneratedAt: null,
+            returnLabelEmailedAt: null,
+          },
+        })
+        return reply.send({ success: true, return: updated })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (msg.includes('Record to update not found')) {
+          return reply.code(404).send({ error: 'Return not found' })
+        }
+        return reply.code(500).send({ error: msg })
+      }
+    },
+  )
+
   fastify.post('/fulfillment/returns/:id/scrap', async (request, reply) => {
     const { id } = request.params as { id: string }
     const updated = await prisma.return.update({

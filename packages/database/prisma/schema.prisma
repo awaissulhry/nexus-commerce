@@ -3119,6 +3119,19 @@ model Return {
   inspectedAt        DateTime?
   refundedAt         DateTime?
   restockedAt        DateTime?
+
+  // Return label tracking. Pre-this, operators generated labels in
+  // their carrier's dashboard (Sendcloud / DHL / etc.) and emailed
+  // them by hand — no audit, no copy-shareable link, no "did we
+  // send the label?" visibility. v0 stores the carrier-generated
+  // URL + tracking + email timestamp so the workflow is auditable
+  // even before native carrier integration lands.
+  returnLabelUrl        String?
+  returnLabelCarrier    String?  // 'SENDCLOUD' | 'DHL' | 'GLS' | 'POSTE' | 'MANUAL' | etc.
+  returnTrackingNumber  String?
+  returnLabelGeneratedAt DateTime?
+  returnLabelEmailedAt  DateTime?
+
   notes              String?
   version            Int                   @default(1)
 
@@ -3131,6 +3144,7 @@ model Return {
   @@index([status])
   @@index([channel])
   @@index([isFbaReturn])
+  @@index([returnTrackingNumber])
 }
 
 model ReturnItem {
