@@ -1039,12 +1039,24 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
                 title={`Discrepancies (${shipment.discrepancies?.length ?? 0})`}
                 icon={AlertTriangle}
                 right={
-                  <button
-                    onClick={() => setComposerOpen({ kind: 'discrepancy' })}
-                    className="text-[10px] text-blue-700 hover:underline inline-flex items-center gap-1"
-                  >
-                    <Plus size={10} /> Add discrepancy
-                  </button>
+                  <div className="inline-flex items-center gap-3">
+                    {/* H.17 — discrepancy report PDF download */}
+                    <a
+                      href={`${getBackendUrl()}/api/fulfillment/inbound/${shipment.id}/discrepancies/report.pdf`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-blue-700 hover:underline inline-flex items-center gap-1"
+                      title="Download a PDF report of all discrepancies on this shipment to forward to the supplier"
+                    >
+                      <FileText size={10} /> Report (PDF)
+                    </a>
+                    <button
+                      onClick={() => setComposerOpen({ kind: 'discrepancy' })}
+                      className="text-[10px] text-blue-700 hover:underline inline-flex items-center gap-1"
+                    >
+                      <Plus size={10} /> Add discrepancy
+                    </button>
+                  </div>
                 }
               >
                 {shipment.discrepancies?.length === 0 ? (

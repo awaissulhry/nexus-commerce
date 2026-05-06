@@ -922,6 +922,24 @@ Promote to 🔴 when a regression slips past the build gates and into production
 
 ---
 
+## 51. 🟡 No transactional email infrastructure
+
+**Symptom:** Multiple surfaces want to email PDFs / notifications to suppliers and operators, but Nexus has no email sending infrastructure. The `sendEmailAlert` function in `apps/api/src/services/monitoring/alert.service.ts` is a TODO. The H.17 inbound discrepancy report (2026-05-06) ships as a PDF download only — operator forwards to supplier via their own mail client.
+
+**Surfaced at:** H.17 discrepancy report shipped 2026-05-06.
+
+**Workaround:** Operator downloads PDF, attaches to mail client manually. Works but adds friction for the "ship the report on every receive close-out" use case.
+
+**Proper fix:** Pick an email provider (Resend has a clean API + good deliverability for transactional; SendGrid for higher volume; SES if AWS-aligned). Wire one service: `apps/api/src/services/email.service.ts` with `sendTransactionalEmail({ to, subject, body, attachments })`. Then:
+- Replace the H.17 download-only flow with a "Send to supplier" button that emails the PDF.
+- Wire `sendEmailAlert` in alert.service.ts.
+- Wire low-stock + sync-failure notifications via the same service.
+- Domain auth (SPF + DKIM + DMARC for the brand domain) is required to land in supplier inboxes — coordinate with whoever owns DNS for `xaviaracing.com`.
+
+**Estimated effort:** 1–2 commits. The email service itself is small; the surface area of "what should be emailed" is the time sink.
+
+---
+
 ## 50. 🔴 FBA Inbound v0 putTransportDetails is deprecated
 
 **Symptom:** H.8c verification (2026-05-06) hit Amazon's real SP-API and got back HTTP 400 with body: *"This API is deprecated. Please migrate to the new Fulfillment Inbound v2024-03-20 APIs."* The route runs end-to-end (test passed because the call landed at Amazon), but operationally the endpoint will not book transport for real shipments.

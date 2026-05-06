@@ -52,6 +52,7 @@ import {
   listCarriers as listInboundCarriers,
   validateTrackingFormat,
 } from '../services/carriers.service.js'
+import { renderInboundDiscrepancyPdf } from '../services/inbound-discrepancy-pdf.service.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // FULFILLMENT B.3–B.9 — full domain API surface
@@ -982,6 +983,93 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       return { ok: true }
     } catch (err: any) {
       fastify.log.error({ err }, '[inbound/:id/compliance] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // H.17 — inbound discrepancy report PDF. Generates a one-page
+  // report of every discrepancy on the shipment for the operator
+  // to forward to the supplier. Email automation isn't wired yet
+  // (no email infra — TECH_DEBT entry); operator downloads + sends
+  // via their own mail client.
+  fastify.get('/fulfillment/inbound/:id/discrepancies/report.pdf', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const shipment = await prisma.inboundShipment.findUnique({
+        where: { id },
+        include: {
+          items: { select: { id: true, sku: true, productId: true } },
+          discrepancies: { orderBy: { reportedAt: 'asc' } },
+          purchaseOrder: { include: { supplier: { select: { name: true } } } },
+        },
+      })
+      if (!shipment) return reply.code(404).send({ error: 'Inbound shipment not found' })
+
+      // Pull line-level discrepancies separately so we can resolve
+      // SKU + product name per row.
+      const lineDiscs = await prisma.inboundDiscrepancy.findMany({
+        where: { inboundShipmentItemId: { in: shipment.items.map((i) => i.id) } },
+        orderBy: { reportedAt: 'asc' },
+      })
+      const allDiscs = [...shipment.discrepancies, ...lineDiscs].sort((a, b) => a.reportedAt.getTime() - b.reportedAt.getTime())
+
+      const itemById = new Map(shipment.items.map((i) => [i.id, i]))
+      const productIds = Array.from(new Set(shipment.items.map((i) => i.productId).filter((x): x is string => !!x)))
+      const products = productIds.length > 0
+        ? await prisma.product.findMany({
+            where: { id: { in: productIds } },
+            select: { id: true, name: true },
+          })
+        : []
+      const productNameById = new Map(products.map((p) => [p.id, p.name]))
+
+      const brandSettings = await prisma.brandSettings.findFirst().catch(() => null)
+      const brand = {
+        name: brandSettings?.brandName ?? 'Nexus Commerce',
+        addressLines: [
+          brandSettings?.addressLine1,
+          [brandSettings?.postalCode, brandSettings?.city].filter(Boolean).join(' '),
+          brandSettings?.country,
+        ].filter((s): s is string => !!s && s.trim().length > 0),
+        logoUrl: brandSettings?.logoUrl ?? null,
+      }
+
+      const pdf = await renderInboundDiscrepancyPdf({
+        brand,
+        shipment: {
+          id: shipment.id,
+          reference: shipment.reference,
+          type: shipment.type,
+          status: shipment.status,
+          expectedAt: shipment.expectedAt,
+          arrivedAt: shipment.arrivedAt,
+          supplierName: shipment.purchaseOrder?.supplier?.name ?? null,
+        },
+        discrepancies: allDiscs.map((d) => {
+          const item = d.inboundShipmentItemId ? itemById.get(d.inboundShipmentItemId) : null
+          return {
+            reasonCode: d.reasonCode,
+            status: d.status,
+            reportedAt: d.reportedAt,
+            reportedBy: d.reportedBy,
+            description: d.description,
+            expectedValue: d.expectedValue,
+            actualValue: d.actualValue,
+            quantityImpact: d.quantityImpact,
+            costImpactCents: d.costImpactCents,
+            sku: item?.sku ?? null,
+            productName: item?.productId ? (productNameById.get(item.productId) ?? null) : null,
+          }
+        }),
+        currencyCode: shipment.currencyCode ?? 'EUR',
+      })
+
+      reply
+        .header('Content-Type', 'application/pdf')
+        .header('Content-Disposition', `attachment; filename="discrepancy-report-${shipment.reference ?? shipment.id}.pdf"`)
+        .send(pdf)
+    } catch (err: any) {
+      fastify.log.error({ err }, '[inbound/:id/discrepancies/report.pdf] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })
