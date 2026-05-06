@@ -47,6 +47,14 @@ import {
   getModelsActive,
 } from '../services/forecast-routing.service.js'
 import {
+  adjustDemandForSubstitution,
+  loadSubstitutionLinks,
+  listSubstitutionsForProduct,
+  createSubstitution,
+  updateSubstitution,
+  deleteSubstitution,
+} from '../services/substitution.service.js'
+import {
   runAutoPoSweep,
   getAutoPoStatus,
 } from '../services/auto-po.service.js'
@@ -2881,11 +2889,40 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         _sum: { unitsSold: true },
       })
       const dailyBySku = new Map<string, number[]>()
+      // R.17 — also build a dated series keyed by SKU. The substitution
+      // adjuster needs (day, units) pairs because windows are date-
+      // ranged. dailyBySku stays a numbers-only series for the σ calc.
+      const dailySeriesBySku = new Map<string, { day: string; units: number }[]>()
       for (const r of dailyRows) {
         const arr = dailyBySku.get(r.sku) ?? []
         arr.push(r._sum.unitsSold ?? 0)
         dailyBySku.set(r.sku, arr)
+        const dateArr = dailySeriesBySku.get(r.sku) ?? []
+        dateArr.push({ day: r.day.toISOString().slice(0, 10), units: r._sum.unitsSold ?? 0 })
+        dailySeriesBySku.set(r.sku, dateArr)
       }
+
+      // R.17 — substitution links for the cohort + stockout windows
+      // for the affected primaries. Loaded once per request; each
+      // suggestion's adjuster call is in-memory only.
+      const productIdsAll = products.map((p) => p.id)
+      const subLinks = await loadSubstitutionLinks(productIdsAll)
+      // Need stockout windows for any product that's a primary for
+      // someone in our cohort, since their substitutes might be ours.
+      const primaryIdsForStockouts = subLinks.affectedPrimaryIds
+      const stockoutWindows = primaryIdsForStockouts.length > 0
+        ? await prisma.stockoutEvent.findMany({
+            where: {
+              productId: { in: primaryIdsForStockouts },
+              startedAt: { gte: since },
+            },
+            select: { productId: true, startedAt: true, endedAt: true },
+          })
+        : []
+      // Map primary product → SKU so the substitute-side calc can
+      // resolve substitute series via SKU. Both ends of every link
+      // need a SKU lookup since dailySeriesBySku is keyed by SKU.
+      const productIdToSku = new Map(products.map((p) => [p.id, p.sku]))
 
       // R.4 — supplier-product rows for the preferred suppliers.
       // Provides MOQ + case pack + a tighter unit cost than
@@ -3050,8 +3087,51 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         // service. demandStdDev computed from per-day rows; cost
         // basis prefers SupplierProduct.costCents (more accurate)
         // and falls back to Product.costPrice (cents = €*100).
-        const dailySeries = dailyBySku.get(p.sku) ?? []
+        // R.17 — apply substitution-aware demand adjustment to the
+        // dated daily series before σ_d. Cold-start SKUs (no forecast)
+        // also get the adjustment applied to trailing velocity.
+        const datedSeriesRaw = dailySeriesBySku.get(p.sku) ?? []
+        const linksForThisProduct = [
+          ...(subLinks.byPrimary.get(p.id) ?? []),
+          ...(subLinks.bySubstitute.get(p.id) ?? []),
+        ]
+        const datedSeriesAdjusted =
+          linksForThisProduct.length > 0
+            ? adjustDemandForSubstitution({
+                productId: p.id,
+                ownSeries: datedSeriesRaw,
+                links: linksForThisProduct,
+                substituteSeries: new Map(
+                  linksForThisProduct
+                    .filter((l) => l.primaryProductId === p.id)
+                    .map((l) => {
+                      const subSku = productIdToSku.get(l.substituteProductId) ?? ''
+                      return [l.substituteProductId, dailySeriesBySku.get(subSku) ?? []] as const
+                    }),
+                ),
+                stockoutWindows: stockoutWindows.map((w) => ({
+                  productId: w.productId,
+                  startedAt: w.startedAt,
+                  endedAt: w.endedAt,
+                })),
+                now: today,
+              })
+            : datedSeriesRaw
+        const dailySeries = datedSeriesAdjusted.map((p) => p.units)
         const demandStdDev = dailyDemandStdDev(dailySeries)
+        // R.17 — capture rawVelocity (pre-substitution trailing) for
+        // the audit drawer + fall-back-to-adjusted velocity if there's
+        // no forecast (forecast keeps raw input by design — see R.17
+        // design defaults).
+        const rawVelocity = trailingVelocity
+        const adjustedTrailingVelocity =
+          datedSeriesAdjusted.length > 0
+            ? datedSeriesAdjusted.reduce((s, p) => s + p.units, 0) / window
+            : trailingVelocity
+        const substitutionAdjustedDelta =
+          linksForThisProduct.length > 0
+            ? Number((adjustedTrailingVelocity - rawVelocity).toFixed(2))
+            : 0
         const sp = rule?.preferredSupplierId
           ? supplierProductByKey.get(`${rule.preferredSupplierId}:${p.id}`)
           : null
@@ -3250,6 +3330,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           // total + EUR conversion. Rec audit captures both.
           unitCostCurrency: supplierCurrency,
           fxRateUsed,
+          // R.17 — substitution audit
+          rawVelocity,
+          substitutionAdjustedDelta,
+          substitutionLinkCount: linksForThisProduct.length,
           needsReorder,
           // F.2 — surface lead-time provenance so the UI can show
           // "from supplier override" vs "from supplier default" vs "fallback".
@@ -3305,6 +3389,9 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         // R.15 — FX
         unitCostCurrency: s.unitCostCurrency,
         fxRateUsed: s.fxRateUsed,
+        // R.17 — substitution audit
+        rawVelocity: s.rawVelocity,
+        substitutionAdjustedDelta: s.substitutionAdjustedDelta,
       }))
       const recIdsByProduct = await bulkPersistRecommendationsIfChanged(
         recommendationInputs,
@@ -3755,8 +3842,35 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             // R.15 — FX audit
             unitCostCurrency: true,
             fxRateUsed: true,
+            // R.17 — substitution audit
+            rawVelocity: true,
+            substitutionAdjustedDelta: true,
           },
         })
+
+        // R.17 — substitution links for this product (drawer panel).
+        // Flatten the dual-side service result into one array; each
+        // row carries primary/substitute objects so the UI can render
+        // either side without re-querying.
+        const subResult = await listSubstitutionsForProduct(product.id)
+        const substitutions = [
+          ...subResult.asPrimary.map((r) => ({
+            id: r.id,
+            primaryProductId: r.primaryProductId,
+            substituteProductId: r.substituteProductId,
+            substitutionFraction: Number(r.substitutionFraction),
+            primary: null,
+            substitute: r.substitute,
+          })),
+          ...subResult.asSubstitute.map((r) => ({
+            id: r.id,
+            primaryProductId: r.primaryProductId,
+            substituteProductId: r.substituteProductId,
+            substitutionFraction: Number(r.substitutionFraction),
+            primary: r.primary,
+            substitute: null,
+          })),
+        ]
 
         return {
           product: {
@@ -3772,6 +3886,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           generationTag: forecastRows[0]?.generationTag ?? null,
           signals: latestSignals,
           series,
+          substitutions,
         }
       } catch (error: any) {
         fastify.log.error({ err: error }, '[replenishment/forecast-detail] failed')
@@ -4312,6 +4427,121 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       return { items: rows }
     } catch (err: any) {
       fastify.log.error({ err }, '[replenishment/auto-po/runs] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // ─── R.17 — substitution links CRUD ───────────────────────────────
+  // List substitutions where this product is either side (primary or
+  // substitute). Drawer panel renders both sides.
+  fastify.get('/fulfillment/replenishment/substitutions/:productId', async (request, reply) => {
+    try {
+      const { productId } = request.params as { productId: string }
+      const r = await listSubstitutionsForProduct(productId)
+      const items = [
+        ...r.asPrimary.map((row) => ({
+          id: row.id,
+          primaryProductId: row.primaryProductId,
+          substituteProductId: row.substituteProductId,
+          substitutionFraction: Number(row.substitutionFraction),
+          primary: null,
+          substitute: row.substitute,
+        })),
+        ...r.asSubstitute.map((row) => ({
+          id: row.id,
+          primaryProductId: row.primaryProductId,
+          substituteProductId: row.substituteProductId,
+          substitutionFraction: Number(row.substitutionFraction),
+          primary: row.primary,
+          substitute: null,
+        })),
+      ]
+      return { items }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[substitutions:list] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // Create. Body accepts either {primaryProductId | primarySku} +
+  // {substituteProductId | substituteSku}. SKU paths resolve via
+  // Product.sku lookup.
+  fastify.post('/fulfillment/replenishment/substitutions', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as {
+        primaryProductId?: string
+        substituteProductId?: string
+        primarySku?: string
+        substituteSku?: string
+        substitutionFraction?: number
+      }
+      const skusToResolve: string[] = []
+      if (!body.primaryProductId && body.primarySku) skusToResolve.push(body.primarySku)
+      if (!body.substituteProductId && body.substituteSku) skusToResolve.push(body.substituteSku)
+      const skuToId = new Map<string, string>()
+      if (skusToResolve.length > 0) {
+        const found = await prisma.product.findMany({
+          where: { sku: { in: skusToResolve } },
+          select: { id: true, sku: true },
+        })
+        for (const p of found) skuToId.set(p.sku, p.id)
+      }
+      const primaryProductId = body.primaryProductId ?? (body.primarySku ? skuToId.get(body.primarySku) : undefined)
+      const substituteProductId = body.substituteProductId ?? (body.substituteSku ? skuToId.get(body.substituteSku) : undefined)
+      if (!primaryProductId || !substituteProductId) {
+        return reply.code(400).send({ error: 'primary + substitute (id or sku) required and must resolve' })
+      }
+      if (primaryProductId === substituteProductId) {
+        return reply.code(400).send({ error: 'primary and substitute must differ' })
+      }
+      const fraction = body.substitutionFraction ?? 0.5
+      if (!(fraction > 0 && fraction <= 1)) {
+        return reply.code(400).send({ error: 'substitutionFraction must be in (0, 1]' })
+      }
+      const created = await createSubstitution({
+        primaryProductId,
+        substituteProductId,
+        substitutionFraction: fraction,
+      })
+      return { ok: true, item: created }
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        return reply.code(409).send({ error: 'substitution already exists' })
+      }
+      fastify.log.error({ err }, '[substitutions:create] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // Update fraction.
+  fastify.patch('/fulfillment/replenishment/substitutions/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as { substitutionFraction?: number }
+      if (body.substitutionFraction == null) {
+        return reply.code(400).send({ error: 'substitutionFraction required' })
+      }
+      if (!(body.substitutionFraction > 0 && body.substitutionFraction <= 1)) {
+        return reply.code(400).send({ error: 'substitutionFraction must be in (0, 1]' })
+      }
+      const updated = await updateSubstitution(id, { substitutionFraction: body.substitutionFraction })
+      return { ok: true, item: updated }
+    } catch (err: any) {
+      if (err?.code === 'P2025') return reply.code(404).send({ error: 'not found' })
+      fastify.log.error({ err }, '[substitutions:update] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // Delete.
+  fastify.delete('/fulfillment/replenishment/substitutions/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      await deleteSubstitution(id)
+      return { ok: true }
+    } catch (err: any) {
+      if (err?.code === 'P2025') return reply.code(404).send({ error: 'not found' })
+      fastify.log.error({ err }, '[substitutions:delete] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })

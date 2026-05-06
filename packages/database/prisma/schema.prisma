@@ -224,6 +224,8 @@ model Product {
   relationsTo          ProductRelation[] @relation("ProductRelationTo") // H.11
   recommendations      ReplenishmentRecommendation[] // R.3
   stockoutEvents       StockoutEvent[] // R.12
+  substitutionsAsPrimary    ProductSubstitution[] @relation("SubstitutionPrimary") // R.17
+  substitutionsAsSubstitute ProductSubstitution[] @relation("SubstitutionSubstitute") // R.17
 
   // H.16 — Compliance master data. HS code = customs classification,
   // mostly 6-digit (HS) or 8-10 digit (CN/HTS); stored as text since
@@ -3189,6 +3191,13 @@ model ReplenishmentRecommendation {
   // FX shift cause the qty change?".
   unitCostCurrency        String?
   fxRateUsed              Decimal? @db.Decimal(14, 6)
+  // R.17 — substitution-aware velocity audit. rawVelocity = trailing
+  // 30-day mean before substitution adjustments; substitutionAdjusted-
+  // Delta = velocity - rawVelocity (positive when this SKU was a
+  // primary that "lost" demand to substitutes during its stockouts;
+  // negative when this SKU was a substitute whose spike got removed).
+  rawVelocity                  Decimal? @db.Decimal(10, 2)
+  substitutionAdjustedDelta    Decimal? @db.Decimal(10, 2)
 
   preferredSupplierId String?
   isManufactured      Boolean @default(false)
@@ -3213,6 +3222,33 @@ model ReplenishmentRecommendation {
   @@index([generatedAt])
   @@index([urgency, status])
   @@index([resultingPoId])
+}
+
+// ── R.17: Substitution-aware demand ───────────────────────────────
+// One-way link: when `primary` is out of stock, customers buy
+// `substitute`. substitutionFraction (0-1) is what portion of
+// `substitute`'s sales during `primary`'s stockout windows are
+// considered "stolen demand" — credited back to primary, removed
+// from substitute. Operators tune the fraction per pair.
+//
+// Symmetric A↔B substitution = two rows (A as primary→B, B as
+// primary→A). Keeping it explicit lets operators model
+// asymmetric cases (e.g. "Red is the popular color, Blue is the
+// fallback when Red is out — but not the reverse").
+model ProductSubstitution {
+  id                   String   @id @default(cuid())
+  primaryProductId     String
+  substituteProductId  String
+  substitutionFraction Decimal  @db.Decimal(3, 2) @default(0.50)
+  notes                String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  primary    Product @relation("SubstitutionPrimary", fields: [primaryProductId], references: [id], onDelete: Cascade)
+  substitute Product @relation("SubstitutionSubstitute", fields: [substituteProductId], references: [id], onDelete: Cascade)
+
+  @@unique([primaryProductId, substituteProductId])
+  @@index([substituteProductId])
 }
 
 // ── R.12: Stockout ledger + lost-margin tracking ──────────────────
