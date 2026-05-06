@@ -5,6 +5,8 @@ import prisma from "../db.js";
 import { importEbayCatalog, getEbayImportStats } from "../services/ebay-import.service.js";
 import { channelSyncQueue } from "../lib/queue.js";
 import { logger } from "../utils/logger.js";
+import { masterPriceService } from "../services/master-price.service.js";
+import { applyStockMovement } from "../services/stock-movement.service.js";
 
 // ── Request/Response Types ───────────────────────────────────────────────
 
@@ -823,19 +825,68 @@ export async function catalogRoutes(app: FastifyInstance) {
         });
       }
 
-      // Track what changed
-      const changes: Record<string, any> = {};
-      if (basePrice !== undefined) changes.basePrice = basePrice;
-      if (totalStock !== undefined) changes.totalStock = totalStock;
-      if (categoryAttributes !== undefined)
-        changes.categoryAttributes = categoryAttributes;
-      if (name !== undefined) changes.name = name;
+      // P0/B5 — basePrice + totalStock route through services so the
+      // ChannelListing cascade (Phase 13) + StockMovement audit
+      // (H.1/H.2) all fire. Other fields (categoryAttributes, name)
+      // don't propagate to listings, so they keep the direct write.
+      // Atomicity: one outer transaction so a request like
+      // { basePrice, totalStock, name } either commits everything or
+      // rolls back everything (mirrors PATCH /api/products/:id at the
+      // products-catalog router; same B4 fix shape).
+      let newBasePrice: number | undefined
+      if (basePrice !== undefined) {
+        const v = Number(basePrice)
+        if (!Number.isFinite(v) || v < 0) {
+          return reply.status(400).send({
+            success: false,
+            error: {
+              code: "INVALID_BASE_PRICE",
+              message: "basePrice must be a non-negative finite number",
+            },
+          })
+        }
+        newBasePrice = v
+      }
+      let stockDelta = 0
+      if (totalStock !== undefined) {
+        const newTotal = Math.max(0, Math.floor(Number(totalStock) || 0))
+        stockDelta = newTotal - (product.totalStock ?? 0)
+      }
+      const directData: Record<string, any> = {}
+      let directDirty = false
+      if (categoryAttributes !== undefined) {
+        directData.categoryAttributes = categoryAttributes
+        directDirty = true
+      }
+      if (name !== undefined) {
+        directData.name = name
+        directDirty = true
+      }
 
-      // Update product
-      const updatedProduct = await prisma.product.update({
-        where: { id },
-        data: changes,
-      });
+      const updatedProduct = await prisma.$transaction(async (tx) => {
+        if (newBasePrice !== undefined) {
+          await masterPriceService.update(id, newBasePrice, {
+            actor: "default-user",
+            reason: "catalog-products-patch",
+            tx,
+          })
+        }
+        if (stockDelta !== 0) {
+          await applyStockMovement({
+            productId: id,
+            change: stockDelta,
+            reason: "MANUAL_ADJUSTMENT",
+            notes: "catalog products PATCH",
+            actor: "default-user",
+            tx,
+          })
+        }
+        if (directDirty) {
+          await tx.product.update({ where: { id }, data: directData })
+        }
+        // Return the post-tx state for the response.
+        return tx.product.findUnique({ where: { id } })
+      })
 
       // Queue syncs for changed fields
       const syncPayload: Record<string, any> = {};
@@ -1521,16 +1572,41 @@ export async function catalogRoutes(app: FastifyInstance) {
         });
       }
 
-      // Update child product
-      const updatedChild = await prisma.product.update({
-        where: { id: childId },
-        data: {
-          ...(sku && { sku }),
-          ...(parsedBasePrice !== undefined && { basePrice: parsedBasePrice }),
-          ...(parsedTotalStock !== undefined && { totalStock: parsedTotalStock }),
-          ...(name && { name }),
-        },
-      });
+      // P0/B5 — same atomic-tx pattern as PATCH /api/catalog/products/:id
+      // and PATCH /api/products/:id. basePrice / totalStock through the
+      // services so the cascade fires; sku / name as direct writes.
+      const stockDelta =
+        parsedTotalStock !== undefined
+          ? parsedTotalStock - (child.totalStock ?? 0)
+          : 0
+      const directData: Record<string, any> = {}
+      if (sku) directData.sku = sku
+      if (name) directData.name = name
+      const directDirty = Object.keys(directData).length > 0
+
+      const updatedChild = await prisma.$transaction(async (tx) => {
+        if (parsedBasePrice !== undefined) {
+          await masterPriceService.update(childId, parsedBasePrice, {
+            actor: "default-user",
+            reason: "catalog-children-patch",
+            tx,
+          })
+        }
+        if (stockDelta !== 0) {
+          await applyStockMovement({
+            productId: childId,
+            change: stockDelta,
+            reason: "MANUAL_ADJUSTMENT",
+            notes: "catalog children PATCH",
+            actor: "default-user",
+            tx,
+          })
+        }
+        if (directDirty) {
+          await tx.product.update({ where: { id: childId }, data: directData })
+        }
+        return tx.product.findUnique({ where: { id: childId } })
+      })
 
       return reply.status(200).send({
         success: true,
