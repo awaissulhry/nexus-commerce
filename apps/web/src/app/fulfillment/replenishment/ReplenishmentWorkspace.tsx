@@ -293,6 +293,12 @@ export default function ReplenishmentWorkspace() {
         </div>
       )}
 
+      {/* R.1 — forecast health (aggregate MAPE + per-regime + trend).
+          Renders only when accuracy data exists (post-cron / post-
+          backfill); silent before the first run so the page doesn't
+          show a noisy empty card. */}
+      <ForecastHealthCard />
+
       {/* Filter bar */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="inline-flex items-center bg-slate-100 rounded-md p-0.5">
@@ -978,6 +984,14 @@ function ForecastDetailDrawer({
                 <SignalsPanel signals={detail.signals} />
               )}
 
+              {/* R.1 — Forecast accuracy. Below signals so the reading
+                  flow is prediction → causal → retrospective. */}
+              <ForecastAccuracyCard
+                sku={detail.product?.sku ?? null}
+                channel={null}
+                marketplace={null}
+              />
+
               {/* Model */}
               {detail.model && (
                 <div className="text-[11px] text-slate-500">
@@ -1090,6 +1104,196 @@ function SignalChip({ label, factor }: { label: string; factor: number }) {
         ×{Number(factor).toFixed(2)}
       </div>
     </div>
+  )
+}
+
+// R.1 — Forecast accuracy mini-card for the drawer. Shows rolling
+// 30-day MAPE / MAE / 80%-band calibration plus a per-regime split
+// (so we can see whether HOLT_WINTERS is actually beating the
+// fallbacks for this SKU). Suppresses noisy numbers when sample
+// count is too low to be statistically meaningful.
+function ForecastAccuracyCard({
+  sku,
+  channel,
+  marketplace,
+}: {
+  sku: string | null
+  channel: string | null
+  marketplace: string | null
+}) {
+  const [data, setData] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    if (!sku) return
+    setLoading(true)
+    const qs = new URLSearchParams({ sku, windowDays: '30' })
+    if (channel) qs.set('channel', channel)
+    if (marketplace) qs.set('marketplace', marketplace)
+    fetch(`${getBackendUrl()}/api/fulfillment/replenishment/forecast-accuracy?${qs.toString()}`, { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then(setData)
+      .catch(() => setData(null))
+      .finally(() => setLoading(false))
+  }, [sku, channel, marketplace])
+
+  if (!sku) return null
+  if (loading) {
+    return (
+      <div>
+        <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Forecast accuracy (last 30d)</div>
+        <div className="text-[12px] text-slate-400">Loading…</div>
+      </div>
+    )
+  }
+  if (!data) return null
+
+  const sampleCount = data.sampleCount ?? 0
+  if (sampleCount < 7) {
+    return (
+      <div>
+        <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Forecast accuracy (last 30d)</div>
+        <div className="text-[12px] text-slate-500 italic">
+          Not enough history yet (n={sampleCount}). Need ≥7 days.
+        </div>
+      </div>
+    )
+  }
+
+  const mape = data.mape == null ? '—' : `${Number(data.mape).toFixed(1)}%`
+  const mae = data.mae == null ? '—' : `${Number(data.mae).toFixed(2)}`
+  const cal = data.bandCalibration == null ? '—' : `${Number(data.bandCalibration).toFixed(0)}%`
+  const regimes = Object.entries((data.byRegime ?? {}) as Record<string, any>)
+    .filter(([, s]) => (s as any).sampleCount >= 3)
+    .sort((a: any, b: any) => b[1].sampleCount - a[1].sampleCount)
+
+  return (
+    <div>
+      <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">
+        Forecast accuracy (last 30d)
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-[12px] mb-2">
+        <div className="border border-slate-200 rounded px-2 py-1 bg-slate-50">
+          <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">MAPE</div>
+          <div className="tabular-nums font-semibold text-slate-900">{mape}</div>
+        </div>
+        <div className="border border-slate-200 rounded px-2 py-1 bg-slate-50">
+          <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">MAE</div>
+          <div className="tabular-nums font-semibold text-slate-900">{mae}</div>
+        </div>
+        <div className="border border-slate-200 rounded px-2 py-1 bg-slate-50">
+          <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">Calibration</div>
+          <div className="tabular-nums font-semibold text-slate-900">{cal} <span className="text-[9px] text-slate-500 font-normal">/ 80%</span></div>
+        </div>
+      </div>
+      <div className="text-[10px] text-slate-500">n = {sampleCount} days</div>
+      {regimes.length > 1 && (
+        <div className="mt-2">
+          <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold mb-1">By regime</div>
+          <ul className="space-y-0.5">
+            {regimes.map(([key, s]: any) => (
+              <li key={key} className="flex items-center justify-between text-[11px]">
+                <span className="font-mono text-slate-700">{key}</span>
+                <span className="tabular-nums text-slate-700">
+                  {s.mape == null ? '—' : `${Number(s.mape).toFixed(1)}%`} <span className="text-slate-400">(n={s.sampleCount})</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// R.1 — workspace-level "Forecast health" card. Aggregate MAPE +
+// per-regime breakdown + a tiny daily-MAPE trend sparkline. Sits
+// alongside the urgency tiles so operators can spot model drift at
+// a glance. Suppresses entirely when there's no data yet (cron
+// hasn't run or pre-deploy state).
+function ForecastHealthCard() {
+  const [data, setData] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [refreshTick, setRefreshTick] = useState(0)
+  useEffect(() => {
+    setLoading(true)
+    fetch(`${getBackendUrl()}/api/fulfillment/replenishment/forecast-accuracy/aggregate?windowDays=30&groupBy=regime`, { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then(setData)
+      .catch(() => setData(null))
+      .finally(() => setLoading(false))
+  }, [refreshTick])
+
+  if (loading || !data?.overall) return null
+  const sampleCount = data.overall.sampleCount ?? 0
+  if (sampleCount === 0) return null
+
+  const mape = data.overall.mape == null ? '—' : `${Number(data.overall.mape).toFixed(1)}%`
+  const cal = data.overall.bandCalibration == null ? '—' : `${Number(data.overall.bandCalibration).toFixed(0)}%`
+  const groups: Array<{ key: string; mape: number | null; sampleCount: number }> = data.groups ?? []
+  const trend: Array<{ day: string; mape: number | null }> = data.trend ?? []
+  const sparkPoints = trend.filter((t) => t.mape != null).map((t) => Number(t.mape))
+  const sparkMax = sparkPoints.length > 0 ? Math.max(...sparkPoints, 1) : 1
+
+  return (
+    <Card>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+            Forecast health (last 30d)
+          </div>
+          <div className="mt-1 flex items-baseline gap-3">
+            <span className="text-[20px] font-semibold tabular-nums text-slate-900">{mape}</span>
+            <span className="text-[11px] text-slate-500">MAPE · n={sampleCount}</span>
+            <span className="text-[11px] text-slate-500">Calibration {cal} / 80%</span>
+          </div>
+          {data.worstSku && (
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              Worst: <span className="font-mono">{data.worstSku.sku}</span> ({Number(data.worstSku.mape).toFixed(1)}% MAPE, n={data.worstSku.sampleCount})
+            </div>
+          )}
+        </div>
+        <button
+          onClick={() => setRefreshTick((n) => n + 1)}
+          className="h-7 px-2 text-[11px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1"
+          title="Refresh"
+        >
+          <RefreshCw size={11} /> Refresh
+        </button>
+      </div>
+      {groups.length > 0 && (
+        <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+          {groups.map((g) => (
+            <div key={g.key} className="border border-slate-200 rounded px-2 py-1.5">
+              <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">
+                {g.key}
+              </div>
+              <div className="tabular-nums font-semibold text-slate-900 mt-0.5">
+                {g.mape == null ? '—' : `${Number(g.mape).toFixed(1)}%`}
+              </div>
+              <div className="text-[10px] text-slate-500">n={g.sampleCount}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {sparkPoints.length > 1 && (
+        <div className="mt-3">
+          <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold mb-1">
+            Daily MAPE trend
+          </div>
+          <svg viewBox={`0 0 ${sparkPoints.length * 8} 24`} className="w-full h-6">
+            <polyline
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              className="text-blue-600"
+              points={sparkPoints
+                .map((p, i) => `${i * 8},${24 - (p / sparkMax) * 20}`)
+                .join(' ')}
+            />
+          </svg>
+        </div>
+      )}
+    </Card>
   )
 }
 

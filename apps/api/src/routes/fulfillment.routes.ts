@@ -12,6 +12,11 @@ import {
   generateForecastsForAll,
 } from '../services/forecast.service.js'
 import {
+  getAccuracyForSku,
+  getAccuracyAggregate,
+  backfillForecastAccuracy,
+} from '../services/forecast-accuracy.service.js'
+import {
   renderFactoryPoPdf,
   type FactoryPoInput,
   type FactoryPoProductGroup,
@@ -2947,6 +2952,66 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (error: any) {
       fastify.log.error({ err: error }, '[replenishment/upcoming-events] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // R.1 — Per-SKU forecast accuracy. Drawer card + per-product
+  // dashboards. Returns rolling MAPE, MAE, band calibration, plus a
+  // by-regime breakdown so we can compare HOLT_WINTERS vs
+  // TRAILING_MEAN_FALLBACK head-to-head on the same SKU.
+  fastify.get('/fulfillment/replenishment/forecast-accuracy', async (request, reply) => {
+    try {
+      const q = request.query as { sku?: string; channel?: string; marketplace?: string; windowDays?: string }
+      if (!q.sku) return reply.code(400).send({ error: 'sku required' })
+      const windowDays = Math.max(1, Math.min(365, Number(q.windowDays) || 30))
+      const result = await getAccuracyForSku({
+        sku: q.sku,
+        channel: q.channel,
+        marketplace: q.marketplace,
+        windowDays,
+      })
+      return result
+    } catch (err: any) {
+      fastify.log.error({ err }, '[replenishment/forecast-accuracy] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // R.1 — aggregate accuracy. Powers the workspace "Forecast health"
+  // card. groupBy=regime is the head-to-head model comparison; channel
+  // / marketplace are also available for future drilldowns.
+  fastify.get('/fulfillment/replenishment/forecast-accuracy/aggregate', async (request, reply) => {
+    try {
+      const q = request.query as { windowDays?: string; groupBy?: string }
+      const windowDays = Math.max(1, Math.min(365, Number(q.windowDays) || 30))
+      const groupBy = (q.groupBy === 'regime' || q.groupBy === 'channel' || q.groupBy === 'marketplace')
+        ? q.groupBy
+        : 'none'
+      const result = await getAccuracyAggregate({ windowDays, groupBy })
+      return result
+    } catch (err: any) {
+      fastify.log.error({ err }, '[replenishment/forecast-accuracy/aggregate] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // R.1 — manual backfill. One-shot at deploy time so dashboards have
+  // numbers from day one (cron only populates yesterday onward).
+  // POST body: { fromDay: 'YYYY-MM-DD', toDay: 'YYYY-MM-DD' }.
+  fastify.post('/fulfillment/replenishment/forecast-accuracy/backfill', async (request, reply) => {
+    try {
+      const body = request.body as { fromDay?: string; toDay?: string }
+      if (!body.fromDay || !body.toDay) return reply.code(400).send({ error: 'fromDay + toDay required (YYYY-MM-DD)' })
+      const fromDay = new Date(body.fromDay + 'T00:00:00Z')
+      const toDay = new Date(body.toDay + 'T00:00:00Z')
+      if (Number.isNaN(fromDay.getTime()) || Number.isNaN(toDay.getTime())) {
+        return reply.code(400).send({ error: 'fromDay/toDay must be ISO YYYY-MM-DD' })
+      }
+      const r = await backfillForecastAccuracy({ fromDay, toDay })
+      return { ok: true, ...r }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[replenishment/forecast-accuracy/backfill] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })
 

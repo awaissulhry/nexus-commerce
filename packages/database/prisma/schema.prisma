@@ -1439,6 +1439,56 @@ model ReplenishmentForecast {
   @@index([horizonDay])
 }
 
+// ── R.1: Forecast accuracy (MAPE) ─────────────────────────────────────────
+// One row per (sku, channel, marketplace, day) where (a) we had a
+// prediction in advance (forecast.generatedAt < day_start_UTC) and
+// (b) the actual is now known (DailySalesAggregate exists for day).
+// Populated by a daily cron at 04:00 UTC (after sales-ingest 02:00
+// + forecast 03:30). Idempotent — re-runs UPSERT on the unique key.
+//
+// Why denormalize absoluteError + percentError + withinBand at insert:
+// dashboards roll up MAPE / MAE / calibration over date ranges with
+// AVG() — pre-computing those per row is much cheaper than re-deriving
+// from forecastUnits + actualUnits each query.
+//
+// percentError is NULL when actualUnits=0 (MAPE is undefined). MAE
+// rolls up from absoluteError which is always defined; MAPE rolls up
+// from percentError WHERE NOT NULL. withinBand is independent of
+// either error metric.
+model ForecastAccuracy {
+  id String @id @default(cuid())
+
+  // Identity (matches ReplenishmentForecast + DailySalesAggregate)
+  sku         String
+  channel     String
+  marketplace String
+  day         DateTime @db.Date
+
+  // What we predicted (snapshot from ReplenishmentForecast)
+  forecastUnits   Decimal  @db.Decimal(12, 2)
+  forecastLower80 Decimal? @db.Decimal(12, 2)
+  forecastUpper80 Decimal? @db.Decimal(12, 2)
+
+  // What actually happened (from DailySalesAggregate.unitsSold)
+  actualUnits Int
+
+  // Pre-computed error metrics
+  absoluteError Decimal  @db.Decimal(12, 2) // |forecast - actual|
+  percentError  Decimal? @db.Decimal(7, 2)  // NULL when actualUnits=0
+  withinBand    Boolean
+
+  // Provenance (snapshot from ReplenishmentForecast)
+  modelRegime         String   // COLD_START | TRAILING_MEAN_FALLBACK | HOLT_LINEAR | HOLT_WINTERS
+  model               String
+  forecastGeneratedAt DateTime
+  evaluatedAt         DateTime @default(now())
+
+  @@unique([sku, channel, marketplace, day])
+  @@index([day])
+  @@index([modelRegime])
+  @@index([sku, day])
+}
+
 // ── F.4: Retail event calendar ──────────────────────────────────────────────
 // Pre-known sales events that drive demand spikes (Prime Day, Black
 // Friday, Italian saldi, EICMA, etc.). The forecast worker reads this
