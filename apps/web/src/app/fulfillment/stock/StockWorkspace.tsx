@@ -18,6 +18,7 @@ import {
   Lock as LockIcon, Table as TableIcon, Grid, LayoutGrid,
   Check, Download, Sliders, Undo2, CheckCircle2,
   Lightbulb, Zap, AlertCircle,
+  Columns, Maximize2, Minimize2, Keyboard,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -57,6 +58,26 @@ type LocationSummary = {
   totalQuantity: number
   totalReserved: number
   totalAvailable: number
+}
+
+type Density = 'compact' | 'comfortable' | 'spacious'
+type ColumnKey = 'thumb' | 'product' | 'location' | 'onHand' | 'reserved' | 'available' | 'threshold' | 'cost' | 'updated'
+const ALL_COLUMNS: Array<{ key: ColumnKey; label: string; alwaysOn?: boolean }> = [
+  { key: 'thumb',     label: 'Thumb',     alwaysOn: true },
+  { key: 'product',   label: 'Product',   alwaysOn: true },
+  { key: 'location',  label: 'Location' },
+  { key: 'onHand',    label: 'On hand' },
+  { key: 'reserved',  label: 'Reserved' },
+  { key: 'available', label: 'Available' },
+  { key: 'threshold', label: 'Threshold' },
+  { key: 'cost',      label: 'Cost' },
+  { key: 'updated',   label: 'Updated' },
+]
+const DEFAULT_VISIBLE_COLUMNS: ColumnKey[] = ['thumb', 'product', 'location', 'onHand', 'reserved', 'available', 'threshold', 'cost', 'updated']
+const DENSITY_PADDING: Record<Density, string> = {
+  compact:     'py-1',
+  comfortable: 'py-2',
+  spacious:    'py-3',
 }
 
 type SyncStatus = {
@@ -213,6 +234,30 @@ export default function StockWorkspace() {
   const [insights, setInsights] = useState<Insights | null>(null)
   const [insightsCollapsed, setInsightsCollapsed] = useState(false)
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null)
+  // Persisted UI prefs (localStorage). Initialised lazily so SSR
+  // doesn't crash on a missing window.
+  const [density, setDensity] = useState<Density>('comfortable')
+  const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>(DEFAULT_VISIBLE_COLUMNS)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  useEffect(() => {
+    try {
+      const d = localStorage.getItem('stock.density')
+      if (d === 'compact' || d === 'comfortable' || d === 'spacious') setDensity(d)
+      const c = localStorage.getItem('stock.columns')
+      if (c) {
+        const parsed = JSON.parse(c) as ColumnKey[]
+        if (Array.isArray(parsed) && parsed.every((k) => ALL_COLUMNS.some((col) => col.key === k))) {
+          setVisibleColumns(parsed)
+        }
+      }
+    } catch { /* ignore */ }
+  }, [])
+  useEffect(() => {
+    try { localStorage.setItem('stock.density', density) } catch { /* ignore */ }
+  }, [density])
+  useEffect(() => {
+    try { localStorage.setItem('stock.columns', JSON.stringify(visibleColumns)) } catch { /* ignore */ }
+  }, [visibleColumns])
   // Bulk-selection state. Set of StockLevel ids. Only used in table view —
   // matrix and cards address products directly so per-row selection is
   // less natural there. `lastSelectedIdx` powers shift-click range select.
@@ -338,6 +383,59 @@ export default function StockWorkspace() {
     setSelected(new Set())
     setLastSelectedIdx(null)
   }, [view, locationCode, status, search, page])
+
+  // Keyboard shortcuts. Skipped when focus is in an input/textarea/select
+  // (so typing isn't hijacked) unless the key is Escape.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      const inField =
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+
+      // Escape always wins — closes drawer / cancels action / closes
+      // shortcuts help.
+      if (e.key === 'Escape') {
+        if (shortcutsOpen) { setShortcutsOpen(false); return }
+        if (bulkAction) { setBulkAction(null); return }
+        if (drawerProductId) { setDrawerProductId(null); return }
+        if (selected.size > 0) { setSelected(new Set()); return }
+      }
+      if (inField) return
+
+      // Ignore mod+key — let browser defaults run, only handle bare keys.
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+
+      switch (e.key) {
+        case '/':
+          e.preventDefault()
+          ;(document.querySelector('input[placeholder^="Search"]') as HTMLInputElement | null)?.focus()
+          break
+        case '?':
+          e.preventDefault()
+          setShortcutsOpen(true)
+          break
+        case '1':
+          updateUrl({ view: undefined, page: undefined })
+          break
+        case '2':
+          updateUrl({ view: 'matrix', page: undefined })
+          break
+        case '3':
+          updateUrl({ view: 'cards', page: undefined })
+          break
+        case 'r':
+          fetchStock()
+          fetchSidecar()
+          break
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [shortcutsOpen, bulkAction, drawerProductId, selected, updateUrl, fetchStock, fetchSidecar])
 
   // Tick the undo bundle's expiry every second so the toast disappears.
   useEffect(() => {
@@ -489,9 +587,23 @@ export default function StockWorkspace() {
         description="Multi-location inventory ledger across Riccione, Amazon FBA, and per-channel allocations."
         breadcrumbs={[{ label: 'Fulfillment', href: '/fulfillment' }, { label: 'Stock' }]}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             {syncStatus && <SyncIndicator status={syncStatus} />}
             <ViewToggle view={view} onChange={(v) => updateUrl({ view: v === 'table' ? undefined : v, page: undefined })} />
+            {view === 'table' && (
+              <>
+                <DensityToggle density={density} onChange={setDensity} />
+                <ColumnPicker visible={visibleColumns} onChange={setVisibleColumns} />
+              </>
+            )}
+            <button
+              onClick={() => setShortcutsOpen(true)}
+              className="h-8 w-8 inline-flex items-center justify-center border border-slate-200 rounded-md hover:bg-slate-50 text-slate-600"
+              title="Keyboard shortcuts (?)"
+              aria-label="Keyboard shortcuts"
+            >
+              <Keyboard size={12} />
+            </button>
             <button
               onClick={() => { fetchStock(); fetchSidecar() }}
               className="h-8 px-3 text-[12px] border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
@@ -633,6 +745,8 @@ export default function StockWorkspace() {
             selected={selected}
             onToggleSelect={toggleSelect}
             onToggleSelectAll={toggleSelectAll}
+            density={density}
+            visibleColumns={visibleColumns}
           />
         )
       })()}
@@ -702,6 +816,8 @@ export default function StockWorkspace() {
           onChanged={() => { fetchStock(); fetchSidecar() }}
         />
       )}
+
+      {shortcutsOpen && <ShortcutsHelp onClose={() => setShortcutsOpen(false)} />}
     </div>
   )
 }
@@ -1609,6 +1725,114 @@ function ReservePanel({
 // View toggle + view components
 // ─────────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────
+// Polish (H.9) — density toggle, column picker, shortcuts help
+// ─────────────────────────────────────────────────────────────────────
+function DensityToggle({ density, onChange }: { density: Density; onChange: (d: Density) => void }) {
+  const order: Density[] = ['compact', 'comfortable', 'spacious']
+  const next = () => onChange(order[(order.indexOf(density) + 1) % order.length])
+  const icon = density === 'compact' ? Minimize2 : density === 'spacious' ? Maximize2 : Sliders
+  const Icon = icon
+  return (
+    <button
+      onClick={next}
+      className="h-8 w-8 inline-flex items-center justify-center border border-slate-200 rounded-md hover:bg-slate-50 text-slate-600"
+      title={`Density: ${density}`}
+      aria-label={`Density: ${density}`}
+    >
+      <Icon size={12} />
+    </button>
+  )
+}
+
+function ColumnPicker({ visible, onChange }: { visible: ColumnKey[]; onChange: (next: ColumnKey[]) => void }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="h-8 px-2.5 text-[12px] inline-flex items-center gap-1.5 border border-slate-200 rounded-md hover:bg-slate-50 text-slate-600"
+        title="Show / hide columns"
+      >
+        <Columns size={12} /> Columns
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div
+            className="absolute right-0 top-full mt-1 w-56 z-20 bg-white border border-slate-200 rounded-md shadow-lg p-2 text-[12px]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold px-1.5 pb-1.5">Columns</div>
+            {ALL_COLUMNS.map((col) => {
+              const checked = visible.includes(col.key)
+              return (
+                <label
+                  key={col.key}
+                  className={`flex items-center justify-between gap-2 px-1.5 py-1 rounded cursor-pointer ${col.alwaysOn ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50'}`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={col.alwaysOn}
+                      onChange={() => {
+                        if (col.alwaysOn) return
+                        onChange(
+                          checked
+                            ? visible.filter((k) => k !== col.key)
+                            : [...visible, col.key],
+                        )
+                      }}
+                      className="cursor-pointer"
+                    />
+                    {col.label}
+                  </span>
+                  {col.alwaysOn && <span className="text-[10px] text-slate-400">always on</span>}
+                </label>
+              )
+            })}
+            <button
+              onClick={() => onChange(DEFAULT_VISIBLE_COLUMNS)}
+              className="w-full mt-1.5 pt-1.5 border-t border-slate-100 text-[11px] text-slate-500 hover:text-slate-900 text-left px-1.5 py-1"
+            >
+              Reset to default
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function ShortcutsHelp({ onClose }: { onClose: () => void }) {
+  const rows: Array<[string, string]> = [
+    ['/', 'Focus search'],
+    ['1', 'Switch to Table view'],
+    ['2', 'Switch to Matrix view'],
+    ['3', 'Switch to Cards view'],
+    ['r', 'Refresh data'],
+    ['?', 'Show this help'],
+    ['Esc', 'Close drawer / cancel action / clear selection'],
+    ['Shift + Click', 'Range-select rows in table'],
+  ]
+  return (
+    <Modal title="Keyboard shortcuts" onClose={onClose}>
+      <div className="space-y-1">
+        {rows.map(([key, desc]) => (
+          <div key={key} className="flex items-center justify-between gap-3 py-1 border-b border-slate-100 last:border-0">
+            <span className="text-[12px] text-slate-700">{desc}</span>
+            <kbd className="px-2 py-0.5 text-[11px] font-mono bg-slate-100 border border-slate-200 rounded text-slate-700">{key}</kbd>
+          </div>
+        ))}
+      </div>
+      <div className="text-[11px] text-slate-400 mt-3 pt-3 border-t border-slate-100">
+        Shortcuts skipped when focus is in an input — type freely without hijacking.
+      </div>
+    </Modal>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Sync engine status indicator (H.8)
 // ─────────────────────────────────────────────────────────────────────
 function SyncIndicator({ status }: { status: SyncStatus }) {
@@ -1751,22 +1975,28 @@ function ViewToggle({ view, onChange }: { view: ViewMode; onChange: (v: ViewMode
 
 function TableView({
   items, onOpenProduct, selected, onToggleSelect, onToggleSelectAll,
+  density, visibleColumns,
 }: {
   items: StockRow[]
   onOpenProduct: (id: string) => void
   selected: Set<string>
   onToggleSelect: (id: string, idx: number, ev: React.MouseEvent) => void
   onToggleSelectAll: () => void
+  density: Density
+  visibleColumns: ColumnKey[]
 }) {
   const allSelected = items.length > 0 && items.every((it) => selected.has(it.id))
   const someSelected = !allSelected && items.some((it) => selected.has(it.id))
+  const padY = DENSITY_PADDING[density]
+  const visible = (k: ColumnKey) => visibleColumns.includes(k)
+
   return (
     <Card noPadding>
       <div className="overflow-x-auto">
         <table className="w-full text-[13px]">
           <thead className="border-b border-slate-200 bg-slate-50">
             <tr>
-              <th className="px-3 py-2 w-10">
+              <th className={`px-3 ${padY} w-10`}>
                 <input
                   type="checkbox"
                   aria-label="Select all rows"
@@ -1776,16 +2006,16 @@ function TableView({
                   className="cursor-pointer"
                 />
               </th>
-              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700 w-10"></th>
-              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">Product</th>
-              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">Location</th>
-              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">On hand</th>
-              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">Reserved</th>
-              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">Available</th>
-              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">Threshold</th>
-              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">Cost</th>
-              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">Updated</th>
-              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700"></th>
+              {visible('thumb')     && <th className={`px-3 ${padY} text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700 w-10`}></th>}
+              {visible('product')   && <th className={`px-3 ${padY} text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700`}>Product</th>}
+              {visible('location')  && <th className={`px-3 ${padY} text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700`}>Location</th>}
+              {visible('onHand')    && <th className={`px-3 ${padY} text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700`}>On hand</th>}
+              {visible('reserved')  && <th className={`px-3 ${padY} text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700`}>Reserved</th>}
+              {visible('available') && <th className={`px-3 ${padY} text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700`}>Available</th>}
+              {visible('threshold') && <th className={`px-3 ${padY} text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700`}>Threshold</th>}
+              {visible('cost')      && <th className={`px-3 ${padY} text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700`}>Cost</th>}
+              {visible('updated')   && <th className={`px-3 ${padY} text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700`}>Updated</th>}
+              <th className={`px-3 ${padY} text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700`}></th>
             </tr>
           </thead>
           <tbody>
@@ -1802,7 +2032,7 @@ function TableView({
                   onClick={() => onOpenProduct(it.product.id)}
                   className={`border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors ${isSelected ? 'bg-blue-50/40' : ''}`}
                 >
-                  <td className="px-3 py-2" onClick={(e) => { e.stopPropagation(); onToggleSelect(it.id, idx, e) }}>
+                  <td className={`px-3 ${padY}`} onClick={(e) => { e.stopPropagation(); onToggleSelect(it.id, idx, e) }}>
                     <input
                       type="checkbox"
                       aria-label={`Select ${it.product.sku}`}
@@ -1811,41 +2041,51 @@ function TableView({
                       className="cursor-pointer"
                     />
                   </td>
-                  <td className="px-3 py-2">
-                    {it.product.thumbnailUrl ? (
-                      <img src={it.product.thumbnailUrl} alt="" className="w-8 h-8 rounded object-cover bg-slate-100" />
-                    ) : (
-                      <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-slate-400">
-                        <Package size={14} />
+                  {visible('thumb') && (
+                    <td className={`px-3 ${padY}`}>
+                      {it.product.thumbnailUrl ? (
+                        <img src={it.product.thumbnailUrl} alt="" className={`${density === 'compact' ? 'w-6 h-6' : 'w-8 h-8'} rounded object-cover bg-slate-100`} />
+                      ) : (
+                        <div className={`${density === 'compact' ? 'w-6 h-6' : 'w-8 h-8'} rounded bg-slate-100 flex items-center justify-center text-slate-400`}>
+                          <Package size={density === 'compact' ? 12 : 14} />
+                        </div>
+                      )}
+                    </td>
+                  )}
+                  {visible('product') && (
+                    <td className={`px-3 ${padY}`}>
+                      <div className="text-[13px] font-medium text-slate-900 truncate max-w-md">{it.product.name}</div>
+                      <div className="text-[11px] text-slate-500 font-mono">
+                        {it.product.sku}
+                        {it.variation && <span> · {it.variation.sku}</span>}
+                        {it.product.amazonAsin && <span> · {it.product.amazonAsin}</span>}
                       </div>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="text-[13px] font-medium text-slate-900 truncate max-w-md">{it.product.name}</div>
-                    <div className="text-[11px] text-slate-500 font-mono">
-                      {it.product.sku}
-                      {it.variation && <span> · {it.variation.sku}</span>}
-                      {it.product.amazonAsin && <span> · {it.product.amazonAsin}</span>}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2">
-                    <span className={`inline-block text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${
-                      LOCATION_TONE[it.location.type] ?? 'bg-slate-50 text-slate-600 border-slate-200'
-                    }`} title={it.location.name}>
-                      {it.location.code}
-                    </span>
-                  </td>
-                  <td className={`px-3 py-2 text-right tabular-nums font-semibold ${stockTone}`}>{it.quantity}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-500">{it.reserved}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-700">{it.available}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-500">{threshold}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-600">
-                    {it.product.costPrice != null ? `€${it.product.costPrice.toFixed(2)}` : <span className="text-slate-400">—</span>}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-400 text-[11px]">
-                    {formatRelative(it.lastUpdatedAt)}
-                  </td>
-                  <td className="px-3 py-2 text-right">
+                    </td>
+                  )}
+                  {visible('location') && (
+                    <td className={`px-3 ${padY}`}>
+                      <span className={`inline-block text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${
+                        LOCATION_TONE[it.location.type] ?? 'bg-slate-50 text-slate-600 border-slate-200'
+                      }`} title={it.location.name}>
+                        {it.location.code}
+                      </span>
+                    </td>
+                  )}
+                  {visible('onHand')    && <td className={`px-3 ${padY} text-right tabular-nums font-semibold ${stockTone}`}>{it.quantity}</td>}
+                  {visible('reserved')  && <td className={`px-3 ${padY} text-right tabular-nums text-slate-500`}>{it.reserved}</td>}
+                  {visible('available') && <td className={`px-3 ${padY} text-right tabular-nums text-slate-700`}>{it.available}</td>}
+                  {visible('threshold') && <td className={`px-3 ${padY} text-right tabular-nums text-slate-500`}>{threshold}</td>}
+                  {visible('cost') && (
+                    <td className={`px-3 ${padY} text-right tabular-nums text-slate-600`}>
+                      {it.product.costPrice != null ? `€${it.product.costPrice.toFixed(2)}` : <span className="text-slate-400">—</span>}
+                    </td>
+                  )}
+                  {visible('updated') && (
+                    <td className={`px-3 ${padY} text-right tabular-nums text-slate-400 text-[11px]`}>
+                      {formatRelative(it.lastUpdatedAt)}
+                    </td>
+                  )}
+                  <td className={`px-3 ${padY} text-right`}>
                     <ChevronRight size={14} className="text-slate-400 inline" />
                   </td>
                 </tr>
