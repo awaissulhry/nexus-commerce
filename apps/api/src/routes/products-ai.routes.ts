@@ -37,6 +37,10 @@ import {
 } from '../services/ai/listing-content.service.js'
 import { auditLogService } from '../services/audit-log.service.js'
 import { logUsage } from '../services/ai/usage-logger.service.js'
+import {
+  isPrimaryLanguage,
+  languageForMarketplace,
+} from '../services/products/translation-resolver.service.js'
 
 const ALLOWED_FIELDS = new Set<ContentField>([
   'title',
@@ -235,41 +239,81 @@ const productsAiRoutes: FastifyPluginAsync = async (fastify) => {
 
           let written: ContentField[] = []
           if (!dryRun) {
-            // Write back to Product columns. Title goes to name only
-            // if explicitly requested (most users want AI to refresh
-            // description/bullets/keywords without also rewriting
-            // their canonical name). description, bullets, keywords
-            // map cleanly to Product columns.
-            const updateData: Record<string, unknown> = {
-              version: { increment: 1 },
-            }
-            if (generated.title && requestedFields.includes('title')) {
-              updateData.name = generated.title.content
-              written.push('title')
-            }
-            if (generated.description) {
-              updateData.description = generated.description.content
-              written.push('description')
-            }
-            if (generated.bullets) {
-              updateData.bulletPoints = generated.bullets.content
-              written.push('bullets')
-            }
-            if (generated.keywords) {
-              // keywords come back as a comma-separated string from
-              // Gemini per the prompt; Product.keywords is String[]
-              // so we split and trim.
-              updateData.keywords = generated.keywords.content
-                .split(',')
-                .map((k) => k.trim())
-                .filter(Boolean)
-              written.push('keywords')
-            }
-            if (Object.keys(updateData).length > 1) {
-              await prisma.product.update({
-                where: { id },
-                data: updateData,
+            // H.10 — route the write based on language. If the marketplace
+            // resolves to the primary language (Italian for Xavia), write
+            // to the Product master row (existing behaviour). Otherwise
+            // upsert a ProductTranslation row keyed on (productId,
+            // language) so the master keeps its primary-language content.
+            const targetLang = languageForMarketplace(marketplace)
+            const writeToMaster = isPrimaryLanguage(targetLang)
+
+            const titleVal =
+              generated.title && requestedFields.includes('title')
+                ? generated.title.content
+                : undefined
+            const descVal = generated.description?.content
+            const bulletsVal = generated.bullets?.content
+            const keywordsVal = generated.keywords
+              ? generated.keywords.content
+                  .split(',')
+                  .map((k) => k.trim())
+                  .filter(Boolean)
+              : undefined
+
+            if (titleVal !== undefined) written.push('title')
+            if (descVal !== undefined) written.push('description')
+            if (bulletsVal !== undefined) written.push('bullets')
+            if (keywordsVal !== undefined) written.push('keywords')
+
+            if (writeToMaster) {
+              const updateData: Record<string, unknown> = {
+                version: { increment: 1 },
+              }
+              if (titleVal !== undefined) updateData.name = titleVal
+              if (descVal !== undefined) updateData.description = descVal
+              if (bulletsVal !== undefined) updateData.bulletPoints = bulletsVal
+              if (keywordsVal !== undefined) updateData.keywords = keywordsVal
+              if (Object.keys(updateData).length > 1) {
+                await prisma.product.update({ where: { id }, data: updateData })
+              }
+            } else if (written.length > 0) {
+              // Non-primary language → upsert ProductTranslation. Each
+              // requested field overrides; unrequested fields leave the
+              // existing translation row untouched.
+              const data: Record<string, unknown> = {}
+              if (titleVal !== undefined) data.name = titleVal
+              if (descVal !== undefined) data.description = descVal
+              if (bulletsVal !== undefined) data.bulletPoints = bulletsVal
+              if (keywordsVal !== undefined) data.keywords = keywordsVal
+              const aiSource =
+                generated.metadata.provider === 'anthropic'
+                  ? 'ai-anthropic'
+                  : 'ai-gemini'
+              await prisma.productTranslation.upsert({
+                where: {
+                  productId_language: { productId: id, language: targetLang },
+                },
+                create: {
+                  productId: id,
+                  language: targetLang,
+                  name: typeof titleVal === 'string' ? titleVal : null,
+                  description: typeof descVal === 'string' ? descVal : null,
+                  bulletPoints: Array.isArray(bulletsVal) ? bulletsVal : [],
+                  keywords: Array.isArray(keywordsVal) ? keywordsVal : [],
+                  source: aiSource,
+                  sourceModel: generated.metadata.model,
+                  reviewedAt: null, // AI-generated; needs operator review
+                },
+                update: {
+                  ...data,
+                  source: aiSource,
+                  sourceModel: generated.metadata.model,
+                  reviewedAt: null, // re-AIing wipes prior review
+                },
               })
+            }
+
+            if (written.length > 0) {
               // Audit row so the activity tab (F3) shows the AI write
               // attributed to the source.
               auditLogService.write({
@@ -277,13 +321,15 @@ const productsAiRoutes: FastifyPluginAsync = async (fastify) => {
                 entityType: 'Product',
                 entityId: id,
                 action: 'update',
-                after: { fields: written, marketplace },
+                after: { fields: written, marketplace, language: targetLang },
                 metadata: {
                   source: 'products-ai-bulk',
                   marketplace,
+                  language: targetLang,
+                  target: writeToMaster ? 'master' : 'translation',
                   fields: written,
                   model: generated.metadata.model,
-                  language: generated.metadata.language,
+                  provider: generated.metadata.provider,
                 },
               })
             }

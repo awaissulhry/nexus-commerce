@@ -219,6 +219,7 @@ model Product {
   orderItems           OrderItem[] // Phase 2: Orders & Financials
   outboundSyncQueue    OutboundSyncQueue[] // Phase 8: Outbound Sync Engine
   stockLevels          StockLevel[] // H.1: per-location stock ledger
+  translations         ProductTranslation[] // H.10: per-language master content
 
   // NN.1 — optimistic concurrency. Bumped on every PATCH/PUT.
   // Clients send the version they read; server rejects with 409 if
@@ -3229,4 +3230,49 @@ model SavedViewAlert {
   @@index([userId, isActive])
   @@index([savedViewId])
   @@index([isActive, lastCheckedAt])
+}
+
+// ── Per-language master content (H.10) ────────────────────────────────
+// Holds non-primary-language translations of the product master fields
+// (name, description, bullets, keywords). The primary language values
+// stay on Product itself — for Xavia that's Italian, set via env
+// `NEXUS_PRIMARY_LANGUAGE`. Querying for "the IT name of product X"
+// reads Product.name; "the DE name" reads ProductTranslation where
+// language='de', falling back to Product.name when the row is absent.
+//
+// Why a side table over JSON column:
+//   - lets us query "products without a German description" cheaply
+//     (left join + IS NULL on PT.description)
+//   - lets the AI bulk-generate write per-language updatedAt for
+//     freshness UX without rewriting the whole product row
+//   - cascade delete keeps cleanup mechanical
+//
+// `source` records provenance so the UI can flag AI-generated copy
+// the operator hasn't reviewed yet (sourceModel pinned to whichever
+// LLM produced the row — see providers/types.ts for names).
+model ProductTranslation {
+  id           String  @id @default(cuid())
+  product      Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId    String
+  // ISO 639-1 lower-case (it, de, fr, es, en, nl, sv, pl, ...). We
+  // normalise to lowercase before write so case mismatches don't
+  // create duplicate rows for the same language.
+  language     String
+  name         String?
+  description  String?
+  bulletPoints String[] @default([])
+  keywords     String[] @default([])
+  // Provenance.
+  source       String? // 'manual' | 'ai-gemini' | 'ai-anthropic' | 'translated'
+  sourceModel  String? // model id when source is AI ('gemini-2.0-flash', ...)
+  // Flag set when an operator has reviewed AI-generated copy. The
+  // drawer surfaces an "AI · unreviewed" pill until reviewedAt is set.
+  reviewedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([productId, language])
+  @@index([language])
+  @@index([productId])
+  @@index([source])
 }

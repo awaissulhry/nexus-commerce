@@ -47,6 +47,7 @@ import { listingsSyndicationRoutes } from "./routes/listings-syndication.routes.
 import productsCatalogRoutes from "./routes/products-catalog.routes.js";
 import productsAiRoutes from "./routes/products-ai.routes.js";
 import productsImagesRoutes from "./routes/products-images.routes.js";
+import productTranslationsRoutes from "./routes/product-translations.routes.js";
 import aiUsageRoutes from "./routes/ai-usage.routes.js";
 import savedViewAlertsRoutes from "./routes/saved-view-alerts.routes.js";
 import notificationsRoutes from "./routes/notifications.routes.js";
@@ -307,6 +308,7 @@ app.register(listingsSyndicationRoutes, { prefix: '/api' });
 app.register(productsCatalogRoutes, { prefix: '/api' });
 app.register(productsAiRoutes, { prefix: '/api' });
 app.register(productsImagesRoutes, { prefix: '/api' });
+app.register(productTranslationsRoutes, { prefix: '/api' });
 app.register(aiUsageRoutes, { prefix: '/api' });
 app.register(savedViewAlertsRoutes, { prefix: '/api' });
 app.register(notificationsRoutes, { prefix: '/api' });
