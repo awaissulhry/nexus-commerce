@@ -13,7 +13,7 @@
 //   - multi-select → bulk-draft-PO flow (one POST creates one PO per
 //     supplier, grouped automatically)
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
@@ -50,6 +50,7 @@ import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -229,14 +230,18 @@ export default function ReplenishmentWorkspace() {
   const [bulkOpen, setBulkOpen] = useState(false)
   // R.5 — auto-refresh interval persisted per-device via localStorage.
   const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
-  // R.5 — toast queue (~30 lines, no library).
-  const [toasts, setToasts] = useState<Array<{ id: number; tone: 'ok' | 'error'; msg: string }>>([])
-  const toastIdRef = useRef(0)
-  const pushToast = useCallback((tone: 'ok' | 'error', msg: string) => {
-    const id = ++toastIdRef.current
-    setToasts((t) => [...t, { id, tone, msg }])
-    window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4500)
-  }, [])
+  // Migrated from the inline 30-line toast queue to the app-wide
+  // ToastProvider (components/ui/Toast.tsx). Same pushToast(tone, msg)
+  // call signature so existing call-sites keep working unchanged;
+  // tone 'ok' maps to 'success', 'error' stays.
+  const { toast } = useToast()
+  const pushToast = useCallback(
+    (tone: 'ok' | 'error', msg: string) => {
+      if (tone === 'ok') toast.success(msg)
+      else toast.error(msg)
+    },
+    [toast],
+  )
 
   const updateUrl = useCallback((patch: Record<string, string | undefined>) => {
     const next = new URLSearchParams(searchParams.toString())
@@ -776,28 +781,9 @@ export default function ReplenishmentWorkspace() {
         </>
       )}
 
-      {/* R.5 — toast tray (top-right). Auto-dismisses after 4.5s. */}
-      {toasts.length > 0 && (
-        <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
-          {toasts.map((t) => (
-            <div
-              key={t.id}
-              className={cn(
-                'border rounded-lg shadow-md px-3 py-2 text-[12px] flex items-start gap-2',
-                t.tone === 'ok'
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                  : 'bg-rose-50 border-rose-200 text-rose-800',
-              )}
-            >
-              {t.tone === 'ok' ? <CheckCircle2 size={14} className="flex-shrink-0 mt-0.5" /> : <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />}
-              <span className="flex-1">{t.msg}</span>
-              <button onClick={() => setToasts((ts) => ts.filter((x) => x.id !== t.id))} className="opacity-60 hover:opacity-100">
-                <X size={12} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Toast tray now lives at the app layout level (ToastProvider in
+          /app/layout.tsx → /components/ui/Toast.tsx). pushToast above
+          calls into the shared useToast() hook. */}
 
       {/* Detail drawer */}
       {drawerProduct && (

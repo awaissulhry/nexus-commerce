@@ -15,3 +15,16 @@ html {
 body {
   background-color: #f9fafb;
 }
+
+/* Toast slide-in animation. Used by /components/ui/Toast.tsx via the
+   Tailwind animate-[name_duration_easing] arbitrary class. */
+@keyframes slide-in-right {
+  from {
+    transform: translateX(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}

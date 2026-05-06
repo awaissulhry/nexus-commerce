@@ -4,6 +4,7 @@ import AppSidebar from "@/components/layout/AppSidebar";
 import CommandPalette from "@/components/CommandPalette";
 import NotificationsBell from "@/components/NotificationsBell";
 import MobileTopBar from "@/components/MobileTopBar";
+import { ToastProvider } from "@/components/ui/Toast";
 
 export const metadata: Metadata = {
   title: "Nexus Commerce",
@@ -18,17 +19,19 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <div className="flex h-screen bg-slate-50 overflow-hidden">
-          <AppSidebar />
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <MobileTopBar />
-            <main className="flex-1 overflow-auto">
-              <div className="p-3 md:p-6">{children}</div>
-            </main>
+        <ToastProvider>
+          <div className="flex h-screen bg-slate-50 overflow-hidden">
+            <AppSidebar />
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <MobileTopBar />
+              <main className="flex-1 overflow-auto">
+                <div className="p-3 md:p-6">{children}</div>
+              </main>
+            </div>
           </div>
-        </div>
-        <CommandPalette />
-        <NotificationsBell />
+          <CommandPalette />
+          <NotificationsBell />
+        </ToastProvider>
       </body>
     </html>
   );
