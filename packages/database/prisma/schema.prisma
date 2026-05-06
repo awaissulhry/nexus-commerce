@@ -1589,6 +1589,11 @@ model BrandSettings {
   // surfaces it for the user to copy into their mail client.
   factoryEmailFrom   String?
 
+  // R.7 — approval workflow gate. False (default for Xavia) auto-
+  // advances DRAFT → REVIEW → APPROVED on a single submit-for-review
+  // call; true requires a separate human APPROVE action.
+  requireApprovalForPo Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -2324,8 +2329,11 @@ enum ReturnConditionGrade {
 
 enum PurchaseOrderStatus {
   DRAFT
-  SUBMITTED
-  CONFIRMED
+  REVIEW          // R.7 — submitted for approval; auto-skipped when requireApprovalForPo=false
+  APPROVED        // R.7 — green-lit by approver; ready to send
+  SUBMITTED       // sent to supplier
+  ACKNOWLEDGED    // R.7 — supplier confirmed receipt
+  CONFIRMED       // legacy alias; kept for back-compat
   PARTIAL
   RECEIVED
   CANCELLED
@@ -2706,6 +2714,19 @@ model PurchaseOrder {
   notes                String?
   createdBy            String?
   version              Int                 @default(1)
+
+  // R.7 — workflow audit. Captured by po-workflow.service when the
+  // state machine fires. Each timestamp pairs with the user who
+  // triggered that transition.
+  reviewedAt        DateTime?
+  reviewedByUserId  String?
+  approvedAt        DateTime?
+  approvedByUserId  String?
+  submittedAt       DateTime?
+  submittedByUserId String?
+  acknowledgedAt    DateTime?
+  cancelledAt       DateTime?
+  cancelledReason   String?
 
   supplier         Supplier?           @relation(fields: [supplierId], references: [id])
   warehouse        Warehouse?          @relation(fields: [warehouseId], references: [id])

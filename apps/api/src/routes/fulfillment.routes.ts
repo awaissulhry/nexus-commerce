@@ -24,6 +24,11 @@ import {
 } from '../services/auto-po.service.js'
 import { getAutoPoCronStatus } from '../jobs/auto-po-replenishment.job.js'
 import {
+  transitionPo,
+  getPoAuditTrail,
+  type WorkflowTransition,
+} from '../services/po-workflow.service.js'
+import {
   ingestSalesTrafficForDay,
   ingestAllAmazonMarketplaces,
 } from '../services/sales-report-ingest.service.js'
@@ -2006,6 +2011,50 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     })
     if (!po) return reply.code(404).send({ error: 'PO not found' })
     return po
+  })
+
+  // R.7 — workflow state machine. submit-for-review / approve / send /
+  // acknowledge / cancel. Auto-advance through REVIEW when
+  // BrandSettings.requireApprovalForPo=false (Xavia default).
+  fastify.post('/fulfillment/purchase-orders/:id/transition', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as {
+        transition?: WorkflowTransition
+        userId?: string
+        reason?: string
+      }
+      if (!body.transition) {
+        return reply.code(400).send({ error: 'transition required' })
+      }
+      const r = await transitionPo({
+        poId: id,
+        transition: body.transition,
+        userId: body.userId ?? null,
+        cancelReason: body.reason ?? null,
+      })
+      return r
+    } catch (err: any) {
+      const msg = err?.message ?? String(err)
+      if (/not found/i.test(msg)) return reply.code(404).send({ error: msg })
+      if (/not allowed/i.test(msg)) return reply.code(409).send({ error: msg })
+      fastify.log.error({ err }, '[purchase-orders/:id/transition] failed')
+      return reply.code(500).send({ error: msg })
+    }
+  })
+
+  // R.7 — chronological audit trail for a PO. Lists every state
+  // transition with its timestamp + user (when known).
+  fastify.get('/fulfillment/purchase-orders/:id/audit', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const trail = await getPoAuditTrail(id)
+      if (trail.length === 0) return reply.code(404).send({ error: 'PO not found' })
+      return { id, trail }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[purchase-orders/:id/audit] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
   })
 
   // F.6 — Factory-ready PDF for a PO. Renders letterhead with company
