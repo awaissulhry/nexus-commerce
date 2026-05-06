@@ -15,6 +15,7 @@ import {
   ExternalLink, Star, Copy, Trash2, Layers, Image as ImageIcon,
   CheckCircle2, XCircle, AlertCircle, Loader2, Upload,
 } from 'lucide-react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -116,6 +117,16 @@ const DENSITY_CELL_CLASS: Record<Density, string> = {
   compact: 'px-3 py-1 text-[11px]',
   comfortable: 'px-3 py-2',
   spacious: 'px-3 py-3 text-[13px]',
+}
+// Estimated row height per density. Drives the virtualizer's
+// initial sizing; actual heights are measured + corrected by
+// useVirtualizer.measureElement when content (e.g. wrapped tag
+// chips) overflows. Generous estimates skew toward fewer mid-scroll
+// jumps over tighter packing.
+const DENSITY_ROW_HEIGHT: Record<Density, number> = {
+  compact: 44,
+  comfortable: 52,
+  spacious: 64,
 }
 
 const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'danger' | 'default' | 'info'> = {
@@ -2461,6 +2472,378 @@ async function readEntriesRecursive(
 }
 
 // ────────────────────────────────────────────────────────────────────
+// VirtualizedGrid — flat-row TanStack Virtual table for the grid lens
+// ────────────────────────────────────────────────────────────────────
+/**
+ * Virtualization for /products grid. Replaces the prior `<tbody>`
+ * fan-out which rendered every row up-front. Approach:
+ *
+ *   1. Flatten parents + (optionally) their expanded children into a
+ *      single FlatRow[] that the virtualizer treats as a list. Loading
+ *      / empty placeholders for an expanded-but-empty parent are flat
+ *      rows too, so the row count is always exact.
+ *   2. Use display: grid on the table + flex on each row for column
+ *      alignment. Drop the native CSS-table semantics so we can
+ *      absolutely-position rows without breaking column widths.
+ *   3. measureElement on each row so wrapped tag chips or multi-line
+ *      names don't push the next row over their estimated slot.
+ *   4. overscan 12 — enough to keep scrolling smooth without rendering
+ *      a full screenful of off-screen rows.
+ *   5. The viewport is a fixed-height scroll container (75vh) so the
+ *      virtualizer has a defined window. Falls back to overflow:auto
+ *      when the user shrinks the page.
+ *
+ * Selection, sorting, chevron-expand, and inline editing all behave
+ * exactly like the prior render — virtualization is a pure perf
+ * concern, not a UX change.
+ */
+type FlatRow =
+  | { kind: 'parent'; product: ProductRow }
+  | { kind: 'child'; product: ProductRow; parentId: string }
+  | { kind: 'loading'; parentId: string }
+  | { kind: 'empty'; parentId: string; childCount: number }
+
+function VirtualizedGrid({
+  products,
+  visible,
+  density,
+  cellPad,
+  selected,
+  toggleSelect,
+  toggleSelectAll,
+  allSelected,
+  sortBy,
+  onSort,
+  expandedParents,
+  childrenByParent,
+  loadingChildren,
+  onToggleExpand,
+  onTagEdit,
+  onChanged,
+}: {
+  products: ProductRow[]
+  visible: typeof ALL_COLUMNS
+  density: Density
+  cellPad: string
+  selected: Set<string>
+  toggleSelect: (id: string) => void
+  toggleSelectAll: () => void
+  allSelected: boolean
+  sortBy: string
+  onSort: (key: string) => void
+  expandedParents: Set<string>
+  childrenByParent: Record<string, ProductRow[]>
+  loadingChildren: Set<string>
+  onToggleExpand: (parentId: string) => void
+  onTagEdit: (id: string) => void
+  onChanged: () => void
+}) {
+  // Build the flat row list. Order: each parent followed by its
+  // expanded children (or a loading/empty placeholder). Memo deps
+  // cover everything that can change row identity.
+  const flatRows: FlatRow[] = useMemo(() => {
+    const rows: FlatRow[] = []
+    for (const p of products) {
+      rows.push({ kind: 'parent', product: p })
+      if (!expandedParents.has(p.id)) continue
+      if (loadingChildren.has(p.id)) {
+        rows.push({ kind: 'loading', parentId: p.id })
+        continue
+      }
+      const kids = childrenByParent[p.id] ?? []
+      if (kids.length === 0) {
+        rows.push({
+          kind: 'empty',
+          parentId: p.id,
+          childCount: p.childCount ?? 0,
+        })
+        continue
+      }
+      for (const k of kids) {
+        rows.push({ kind: 'child', product: k, parentId: p.id })
+      }
+    }
+    return rows
+  }, [products, expandedParents, childrenByParent, loadingChildren])
+
+  // Total table width = checkbox(32) + chevron(24) + sum(col.width).
+  // Used for both header + body min-width so horizontal overflow
+  // works correctly inside the scroll container.
+  const totalWidth = useMemo(
+    () => 32 + 24 + visible.reduce((acc, c) => acc + (c.width ?? 100), 0),
+    [visible],
+  )
+
+  const containerRef = useRef<HTMLDivElement>(null)
+  const rowVirtualizer = useVirtualizer({
+    count: flatRows.length,
+    getScrollElement: () => containerRef.current,
+    estimateSize: () => DENSITY_ROW_HEIGHT[density],
+    overscan: 12,
+    // Stable keys so toggling expand doesn't re-mount unrelated rows.
+    getItemKey: (index) => {
+      const r = flatRows[index]
+      if (!r) return index
+      if (r.kind === 'parent') return `p:${r.product.id}`
+      if (r.kind === 'child') return `c:${r.product.id}`
+      if (r.kind === 'loading') return `l:${r.parentId}`
+      return `e:${r.parentId}`
+    },
+  })
+
+  const sortKeys: Record<string, string> = {
+    sku: 'sku',
+    name: 'name',
+    price: 'price-asc',
+    stock: 'stock-asc',
+    updated: 'updated',
+  }
+  const totalCols = 2 + visible.length
+
+  return (
+    <Card noPadding>
+      <div
+        ref={containerRef}
+        className="overflow-auto relative"
+        style={{ maxHeight: '75vh' }}
+      >
+        <div style={{ minWidth: totalWidth }}>
+          {/* Header — sticky, flex-aligned to the same column widths
+              as the body rows. */}
+          <div
+            className="flex border-b border-slate-200 bg-slate-50 sticky top-0 z-10"
+            role="row"
+          >
+            <div
+              className="px-3 py-2 flex items-center"
+              style={{ width: 32, minWidth: 32 }}
+              role="columnheader"
+            >
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleSelectAll}
+              />
+            </div>
+            <div
+              className="px-1 py-2"
+              style={{ width: 24, minWidth: 24 }}
+              role="columnheader"
+              aria-label="Expand variants"
+            />
+            {visible.map((col) => {
+              const sortable =
+                col.key !== 'thumb' && col.key !== 'actions' && !!sortKeys[col.key]
+              return (
+                <div
+                  key={col.key}
+                  role="columnheader"
+                  className={`px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-700 text-left flex items-center ${sortable ? 'cursor-pointer hover:bg-slate-100' : ''}`}
+                  style={{ width: col.width, minWidth: col.width }}
+                  onClick={() => {
+                    if (sortable) onSort(sortKeys[col.key])
+                  }}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    {col.label}
+                    {((col.key === 'sku' && sortBy === 'sku') ||
+                      (col.key === 'name' && sortBy === 'name') ||
+                      (col.key === 'price' && sortBy.startsWith('price')) ||
+                      (col.key === 'stock' && sortBy.startsWith('stock')) ||
+                      (col.key === 'updated' && sortBy === 'updated')) && (
+                      <span className="text-slate-400">↓</span>
+                    )}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Body — relative spacer of total height, virtualized rows
+              absolute-positioned within. */}
+          <div
+            role="rowgroup"
+            style={{
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              position: 'relative',
+            }}
+          >
+            {rowVirtualizer.getVirtualItems().map((vRow) => {
+              const row = flatRows[vRow.index]
+              if (!row) return null
+              return (
+                <div
+                  key={vRow.key}
+                  data-index={vRow.index}
+                  ref={rowVirtualizer.measureElement}
+                  role="row"
+                  className="border-b border-slate-100 flex"
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${vRow.start}px)`,
+                  }}
+                >
+                  {row.kind === 'parent' &&
+                    renderProductRow({
+                      product: row.product,
+                      isChild: false,
+                      visible,
+                      cellPad,
+                      selected,
+                      toggleSelect,
+                      expandedParents,
+                      onToggleExpand,
+                      onTagEdit,
+                      onChanged,
+                    })}
+                  {row.kind === 'child' &&
+                    renderProductRow({
+                      product: row.product,
+                      isChild: true,
+                      visible,
+                      cellPad,
+                      selected,
+                      toggleSelect,
+                      expandedParents,
+                      onToggleExpand,
+                      onTagEdit,
+                      onChanged,
+                    })}
+                  {row.kind === 'loading' && (
+                    <div
+                      className="bg-slate-50/60 px-3 py-2 text-[12px] text-slate-500 italic flex-1"
+                      role="cell"
+                      aria-colspan={totalCols}
+                    >
+                      Loading variants…
+                    </div>
+                  )}
+                  {row.kind === 'empty' && (
+                    <div
+                      className="bg-slate-50/60 px-3 py-2 text-[12px] text-slate-500 italic flex-1"
+                      role="cell"
+                      aria-colspan={totalCols}
+                    >
+                      No variants found
+                      {row.childCount > 0
+                        ? ' (fetch failed — try collapsing and re-opening)'
+                        : ''}
+                      .
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+/**
+ * Renders one product row's cells (checkbox + chevron + visible
+ * columns). Used by both parent and child rows; child rows get a
+ * tinted background + tree-line glyph in the chevron column.
+ */
+function renderProductRow({
+  product,
+  isChild,
+  visible,
+  cellPad,
+  selected,
+  toggleSelect,
+  expandedParents,
+  onToggleExpand,
+  onTagEdit,
+  onChanged,
+}: {
+  product: ProductRow
+  isChild: boolean
+  visible: typeof ALL_COLUMNS
+  cellPad: string
+  selected: Set<string>
+  toggleSelect: (id: string) => void
+  expandedParents: Set<string>
+  onToggleExpand: (parentId: string) => void
+  onTagEdit: (id: string) => void
+  onChanged: () => void
+}) {
+  const isSelected = selected.has(product.id)
+  const childCount = product.childCount ?? 0
+  const canExpand = !isChild && product.isParent && childCount > 0
+  const isExpanded = expandedParents.has(product.id)
+  const rowBg = isChild
+    ? isSelected
+      ? 'bg-blue-50/40'
+      : 'bg-slate-50/40 hover:bg-slate-100/60'
+    : isSelected
+      ? 'bg-blue-50/30'
+      : 'hover:bg-slate-50'
+  return (
+    <>
+      <div
+        className={`px-3 py-2 flex items-center ${rowBg}`}
+        style={{ width: 32, minWidth: 32 }}
+        role="cell"
+      >
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => toggleSelect(product.id)}
+        />
+      </div>
+      <div
+        className={`px-1 py-2 flex items-center ${rowBg}`}
+        style={{ width: 24, minWidth: 24 }}
+        role="cell"
+      >
+        {canExpand ? (
+          <button
+            type="button"
+            onClick={() => onToggleExpand(product.id)}
+            aria-expanded={isExpanded}
+            aria-label={
+              isExpanded
+                ? `Collapse variants of ${product.sku}`
+                : `Expand variants of ${product.sku} (${childCount})`
+            }
+            title={`${childCount} variant${childCount === 1 ? '' : 's'}`}
+            className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-slate-200 text-slate-600"
+          >
+            {isExpanded ? (
+              <ChevronDown size={14} />
+            ) : (
+              <ChevronRight size={14} />
+            )}
+          </button>
+        ) : isChild ? (
+          <span className="block h-4 w-4 ml-1 border-l-2 border-b-2 border-slate-300 rounded-bl" />
+        ) : null}
+      </div>
+      {visible.map((col) => (
+        <div
+          key={col.key}
+          role="cell"
+          className={`${cellPad} flex items-center ${rowBg}`}
+          style={{ width: col.width, minWidth: col.width }}
+        >
+          <ProductCell
+            col={col.key}
+            product={product}
+            onTagEdit={onTagEdit}
+            onChanged={onChanged}
+          />
+        </div>
+      ))}
+    </>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────
 // GridLens — virtualized table with column picker + inline quick-edit
 // ────────────────────────────────────────────────────────────────────
 function GridLens(props: any) {
@@ -2606,136 +2989,24 @@ function GridLens(props: any) {
         </div>
       </div>
 
-      <Card noPadding>
-        <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
-            <thead className="border-b border-slate-200 bg-slate-50 sticky top-0 z-10">
-              <tr>
-                <th className="px-3 py-2 w-8">
-                  <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} />
-                </th>
-                {/* Chevron column — narrow, no header label. Renders for
-                    parents only. Standalones and child rows get an empty
-                    cell of the same width so columns line up. */}
-                <th className="px-1 py-2 w-6" aria-label="Expand variants" />
-                {visible.map((col) => (
-                  <th
-                    key={col.key}
-                    className={`px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-700 text-left ${col.key !== 'thumb' && col.key !== 'actions' ? 'cursor-pointer hover:bg-slate-100' : ''}`}
-                    style={{ width: col.width, minWidth: col.width }}
-                    onClick={() => {
-                      const sortKeys: Record<string, string> = {
-                        sku: 'sku', name: 'name', price: 'price-asc', stock: 'stock-asc', updated: 'updated',
-                      }
-                      if (sortKeys[col.key]) onSort(sortKeys[col.key])
-                    }}
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      {col.label}
-                      {((col.key === 'sku' && sortBy === 'sku') ||
-                        (col.key === 'name' && sortBy === 'name') ||
-                        (col.key === 'price' && sortBy.startsWith('price')) ||
-                        (col.key === 'stock' && sortBy.startsWith('stock')) ||
-                        (col.key === 'updated' && sortBy === 'updated')) && (
-                        <span className="text-slate-400">↓</span>
-                      )}
-                    </span>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {products.flatMap((p: ProductRow) => {
-                const isSelected = selected.has(p.id)
-                const childCount = p.childCount ?? 0
-                const canExpand = p.isParent && childCount > 0
-                const isExpanded = expandedParents.has(p.id)
-                const isLoadingChildren = loadingChildren.has(p.id)
-                const children = childrenByParent[p.id] ?? []
-
-                const parentRow = (
-                  <tr key={p.id} className={`border-b border-slate-100 hover:bg-slate-50 ${isSelected ? 'bg-blue-50/30' : ''}`}>
-                    <td className="px-3 py-2">
-                      <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(p.id)} />
-                    </td>
-                    <td className="px-1 py-2 align-middle">
-                      {canExpand ? (
-                        <button
-                          type="button"
-                          onClick={() => onToggleExpand(p.id)}
-                          aria-expanded={isExpanded}
-                          aria-label={isExpanded ? `Collapse variants of ${p.sku}` : `Expand variants of ${p.sku} (${childCount})`}
-                          title={`${childCount} variant${childCount === 1 ? '' : 's'}`}
-                          className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-slate-200 text-slate-600"
-                        >
-                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                        </button>
-                      ) : null}
-                    </td>
-                    {visible.map((col) => (
-                      <td key={col.key} className={`${cellPad} align-middle`} style={{ width: col.width, minWidth: col.width }}>
-                        <ProductCell col={col.key} product={p} onTagEdit={onTagEdit} onChanged={onChanged} />
-                      </td>
-                    ))}
-                  </tr>
-                )
-
-                if (!isExpanded) return [parentRow]
-
-                // Child rows — same shape, indented + tinted to read as nested.
-                // Loading and empty states are inline so the user gets
-                // feedback without a layout jump.
-                const totalCols = 2 + visible.length // checkbox + chevron + visible cells
-                const childRows: JSX.Element[] = []
-
-                if (isLoadingChildren) {
-                  childRows.push(
-                    <tr key={`${p.id}-loading`} className="bg-slate-50/60 border-b border-slate-100">
-                      <td colSpan={totalCols} className="px-3 py-2 text-[12px] text-slate-500 italic">
-                        Loading variants…
-                      </td>
-                    </tr>
-                  )
-                } else if (children.length === 0) {
-                  childRows.push(
-                    <tr key={`${p.id}-empty`} className="bg-slate-50/60 border-b border-slate-100">
-                      <td colSpan={totalCols} className="px-3 py-2 text-[12px] text-slate-500 italic">
-                        No variants found{childCount > 0 ? ' (fetch failed — try collapsing and re-opening)' : ''}.
-                      </td>
-                    </tr>
-                  )
-                } else {
-                  for (const child of children as ProductRow[]) {
-                    const childSelected = selected.has(child.id)
-                    childRows.push(
-                      <tr
-                        key={child.id}
-                        className={`border-b border-slate-100 bg-slate-50/40 hover:bg-slate-100/60 ${childSelected ? 'bg-blue-50/40' : ''}`}
-                      >
-                        <td className="px-3 py-2">
-                          <input type="checkbox" checked={childSelected} onChange={() => toggleSelect(child.id)} />
-                        </td>
-                        <td className="px-1 py-2 align-middle">
-                          {/* Visual tree-line indent — keeps the chevron
-                              column aligned but signals nesting. */}
-                          <span className="block h-4 w-4 ml-1 border-l-2 border-b-2 border-slate-300 rounded-bl" />
-                        </td>
-                        {visible.map((col) => (
-                          <td key={col.key} className={`${cellPad} align-middle`} style={{ width: col.width, minWidth: col.width }}>
-                            <ProductCell col={col.key} product={child} onTagEdit={onTagEdit} onChanged={onChanged} />
-                          </td>
-                        ))}
-                      </tr>
-                    )
-                  }
-                }
-
-                return [parentRow, ...childRows]
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <VirtualizedGrid
+        products={products}
+        visible={visible}
+        density={density}
+        cellPad={cellPad}
+        selected={selected}
+        toggleSelect={toggleSelect}
+        toggleSelectAll={toggleSelectAll}
+        allSelected={allSelected}
+        sortBy={sortBy}
+        onSort={onSort}
+        expandedParents={expandedParents}
+        childrenByParent={childrenByParent}
+        loadingChildren={loadingChildren}
+        onToggleExpand={onToggleExpand}
+        onTagEdit={onTagEdit}
+        onChanged={onChanged}
+      />
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-[12px] text-slate-500">
