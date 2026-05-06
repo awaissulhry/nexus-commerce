@@ -127,6 +127,58 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── GET /api/stock/kpis ──────────────────────────────────────────
+  // Roll-ups for the KPI strip on /fulfillment/stock. All numbers are
+  // product-level (not per-StockLevel) for the "how many SKUs are in
+  // trouble" framing — Riccione + FBA together count once per product.
+  fastify.get('/stock/kpis', async (_request, reply) => {
+    try {
+      const buyables = await prisma.product.findMany({
+        where: { isParent: false },
+        select: { id: true, totalStock: true, lowStockThreshold: true, costPrice: true },
+      })
+
+      let totalStockUnits = 0
+      let totalStockValueCents = 0
+      let stockouts = 0
+      let critical = 0
+      let low = 0
+      let healthy = 0
+      for (const p of buyables) {
+        totalStockUnits += p.totalStock
+        if (p.costPrice != null) {
+          totalStockValueCents += p.totalStock * Math.round(Number(p.costPrice) * 100)
+        }
+        if (p.totalStock === 0) stockouts++
+        else if (p.totalStock <= 5) critical++
+        else if (p.totalStock <= p.lowStockThreshold) low++
+        else healthy++
+      }
+
+      const reservedAgg = await prisma.stockLevel.aggregate({
+        _sum: { reserved: true, available: true },
+      })
+
+      const activeLocations = await prisma.stockLocation.count({ where: { isActive: true } })
+
+      return {
+        totalStockUnits,
+        totalStockValue: Math.round(totalStockValueCents) / 100,
+        totalReserved: reservedAgg._sum.reserved ?? 0,
+        totalAvailable: reservedAgg._sum.available ?? 0,
+        stockouts,
+        critical,
+        low,
+        healthy,
+        totalSkus: buyables.length,
+        activeLocations,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/kpis] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // ── GET /api/stock/locations ────────────────────────────────────
   // Every location + roll-up: total quantity, reserved, available,
   // SKU count. Powers the location selector in the rebuilt page.
