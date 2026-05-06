@@ -7,6 +7,7 @@ import HealthVitalsSection from './HealthVitalsSection';
 import ConflictsSection from './ConflictsSection';
 import SystemLogsSection from './SystemLogsSection';
 import CronStatusPanel from './CronStatusPanel';
+import StockDriftPanel from './StockDriftPanel';
 
 export default function HealthDashboardPage() {
   const [healthScores, setHealthScores] = useState<ChannelHealthScore[]>([]);
@@ -106,6 +107,9 @@ export default function HealthDashboardPage() {
 
           {/* Cron Jobs — observability for scheduled job runs */}
           <CronStatusPanel />
+
+          {/* Stock + Price Drift — listing-level cascade health */}
+          <StockDriftPanel />
 
           {/* Conflicts Section */}
           <ConflictsSection

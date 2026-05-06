@@ -733,6 +733,156 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: message })
     }
   })
+
+  // Stock drift detection — surface ChannelListings where the cached
+  // master snapshot disagrees with the displayed value. The Phase 13
+  // master-cascade should keep these in sync; persistent drift means
+  // a sync queue row failed, the cron worker is stuck, or a manual
+  // override was applied without followMaster being flipped off.
+  //
+  // Two drift classes:
+  //   1. quantityDrift: followMasterQuantity=true AND
+  //      |masterQuantity - quantity| > 0
+  //   2. priceDrift: followMasterPrice=true AND pricingRule=FIXED AND
+  //      |masterPrice - price| > 0.01
+  //
+  // Returns up to 100 of each, sorted by largest absolute drift first.
+  fastify.get<{
+    Querystring: { qtyThreshold?: string; priceThreshold?: string }
+  }>('/dashboard/stock-drift', async (request, reply) => {
+    try {
+      reply.header('Cache-Control', 'private, max-age=30')
+      const qtyThreshold = Math.max(
+        0,
+        Number(request.query.qtyThreshold ?? 0),
+      )
+      const priceThreshold = Math.max(
+        0,
+        Number(request.query.priceThreshold ?? 0.01),
+      )
+
+      type DriftRow = {
+        id: string
+        channel: string
+        marketplace: string | null
+        productId: string
+        sku: string | null
+        productName: string | null
+        masterQuantity: number | null
+        quantity: number | null
+        quantityDelta: number | null
+        masterPrice: string | null
+        price: string | null
+        priceDelta: number | null
+        followMasterQuantity: boolean
+        followMasterPrice: boolean
+        pricingRule: string | null
+        lastSyncStatus: string | null
+        lastSyncedAt: Date | null
+        updatedAt: Date
+      }
+
+      // Quantity drift: cached snapshot vs displayed.
+      const qtyDriftRows = await prisma.$queryRaw<DriftRow[]>`
+        SELECT
+          cl.id,
+          cl.channel,
+          cl.marketplace,
+          cl."productId",
+          p.sku,
+          p.name AS "productName",
+          cl."masterQuantity",
+          cl.quantity,
+          (COALESCE(cl.quantity, 0) - COALESCE(cl."masterQuantity", 0)) AS "quantityDelta",
+          NULL::text AS "masterPrice",
+          NULL::text AS "price",
+          NULL::numeric AS "priceDelta",
+          cl."followMasterQuantity",
+          cl."followMasterPrice",
+          cl."pricingRule",
+          cl."lastSyncStatus",
+          cl."lastSyncedAt",
+          cl."updatedAt"
+        FROM "ChannelListing" cl
+        JOIN "Product" p ON p.id = cl."productId"
+        WHERE cl."followMasterQuantity" = true
+          AND cl."masterQuantity" IS NOT NULL
+          AND cl.quantity IS NOT NULL
+          AND ABS(COALESCE(cl.quantity, 0) - COALESCE(cl."masterQuantity", 0)) > ${qtyThreshold}
+        ORDER BY ABS(COALESCE(cl.quantity, 0) - COALESCE(cl."masterQuantity", 0)) DESC
+        LIMIT 100
+      `
+
+      // Price drift: only relevant when pricingRule=FIXED (the rule
+      // explicitly says "follow master price, no transformation").
+      // PERCENT_OF_MASTER and MATCH_AMAZON intentionally diverge.
+      const priceDriftRows = await prisma.$queryRaw<DriftRow[]>`
+        SELECT
+          cl.id,
+          cl.channel,
+          cl.marketplace,
+          cl."productId",
+          p.sku,
+          p.name AS "productName",
+          NULL::int AS "masterQuantity",
+          NULL::int AS quantity,
+          NULL::int AS "quantityDelta",
+          cl."masterPrice"::text AS "masterPrice",
+          cl.price::text AS price,
+          (COALESCE(cl.price, 0) - COALESCE(cl."masterPrice", 0))::numeric AS "priceDelta",
+          cl."followMasterQuantity",
+          cl."followMasterPrice",
+          cl."pricingRule",
+          cl."lastSyncStatus",
+          cl."lastSyncedAt",
+          cl."updatedAt"
+        FROM "ChannelListing" cl
+        JOIN "Product" p ON p.id = cl."productId"
+        WHERE cl."followMasterPrice" = true
+          AND cl."pricingRule" = 'FIXED'
+          AND cl."masterPrice" IS NOT NULL
+          AND cl.price IS NOT NULL
+          AND ABS(COALESCE(cl.price, 0) - COALESCE(cl."masterPrice", 0)) > ${priceThreshold}
+        ORDER BY ABS(COALESCE(cl.price, 0) - COALESCE(cl."masterPrice", 0)) DESC
+        LIMIT 100
+      `
+
+      // Total counts (unbounded by limit) for the headline KPIs.
+      const [qtyTotalRow] = await prisma.$queryRaw<Array<{ c: bigint }>>`
+        SELECT COUNT(*)::bigint AS c FROM "ChannelListing" cl
+        WHERE cl."followMasterQuantity" = true
+          AND cl."masterQuantity" IS NOT NULL
+          AND cl.quantity IS NOT NULL
+          AND ABS(COALESCE(cl.quantity, 0) - COALESCE(cl."masterQuantity", 0)) > ${qtyThreshold}
+      `
+      const [priceTotalRow] = await prisma.$queryRaw<Array<{ c: bigint }>>`
+        SELECT COUNT(*)::bigint AS c FROM "ChannelListing" cl
+        WHERE cl."followMasterPrice" = true
+          AND cl."pricingRule" = 'FIXED'
+          AND cl."masterPrice" IS NOT NULL
+          AND cl.price IS NOT NULL
+          AND ABS(COALESCE(cl.price, 0) - COALESCE(cl."masterPrice", 0)) > ${priceThreshold}
+      `
+
+      return {
+        quantityDrift: {
+          totalCount: Number(qtyTotalRow?.c ?? 0n),
+          rows: qtyDriftRows,
+          threshold: qtyThreshold,
+        },
+        priceDrift: {
+          totalCount: Number(priceTotalRow?.c ?? 0n),
+          rows: priceDriftRows,
+          threshold: priceThreshold,
+        },
+        generatedAt: new Date().toISOString(),
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[dashboard/stock-drift] failed')
+      return reply.code(500).send({ error: message })
+    }
+  })
 }
 
 export default dashboardRoutes
