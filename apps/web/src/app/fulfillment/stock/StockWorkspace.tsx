@@ -15,7 +15,7 @@ import {
   Warehouse, Search, RefreshCw, Package, ChevronRight,
   X, History, ExternalLink, ArrowRightLeft, Plus, Minus,
   Boxes, AlertTriangle, TrendingDown, Layers, Activity, Truck,
-  Lock as LockIcon,
+  Lock as LockIcon, Table as TableIcon, Grid, LayoutGrid,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -56,6 +56,28 @@ type LocationSummary = {
   totalReserved: number
   totalAvailable: number
 }
+
+type ProductBundle = {
+  id: string
+  sku: string
+  name: string
+  amazonAsin: string | null
+  totalStock: number
+  lowStockThreshold: number
+  costPrice: number | null
+  basePrice: number | null
+  thumbnailUrl: string | null
+  stockLevels: Array<{
+    id: string
+    locationId: string
+    quantity: number
+    reserved: number
+    available: number
+    lastUpdatedAt: string
+  }>
+}
+
+type ViewMode = 'table' | 'matrix' | 'cards'
 
 type Kpis = {
   totalStockUnits: number
@@ -128,6 +150,7 @@ export default function StockWorkspace() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
+  const view = (searchParams.get('view') as ViewMode) ?? 'table'
   const locationCode = searchParams.get('location') ?? ''
   const status = searchParams.get('status') ?? ''
   const search = searchParams.get('search') ?? ''
@@ -135,6 +158,7 @@ export default function StockWorkspace() {
 
   const [searchInput, setSearchInput] = useState(search)
   const [items, setItems] = useState<StockRow[]>([])
+  const [productBundles, setProductBundles] = useState<ProductBundle[]>([])
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -166,16 +190,28 @@ export default function StockWorkspace() {
     try {
       const qs = new URLSearchParams()
       qs.set('page', String(page))
-      qs.set('pageSize', '50')
-      if (locationCode) qs.set('locationCode', locationCode)
+      // Matrix + Cards aggregate by product, so they need a higher
+      // pageSize ceiling to avoid splitting a single product across
+      // pages. Table stays at the dense 50-row default.
+      qs.set('pageSize', view === 'table' ? '50' : '100')
       if (status) qs.set('status', status)
       if (search) qs.set('search', search)
-      const res = await fetch(`${getBackendUrl()}/api/stock?${qs.toString()}`, { cache: 'no-store' })
+      // locationCode only applies to table (filters per-StockLevel rows).
+      // Matrix shows all locations as columns; cards show all in badges.
+      if (view === 'table' && locationCode) qs.set('locationCode', locationCode)
+      const endpoint = view === 'table' ? '/api/stock' : '/api/stock/by-product'
+      const res = await fetch(`${getBackendUrl()}${endpoint}?${qs.toString()}`, { cache: 'no-store' })
       if (!res.ok) {
         throw new Error(`stock list failed: ${res.status}`)
       }
       const data = await res.json()
-      setItems(data.items ?? [])
+      if (view === 'table') {
+        setItems(data.items ?? [])
+        setProductBundles([])
+      } else {
+        setProductBundles(data.products ?? [])
+        setItems([])
+      }
       setTotal(data.total ?? 0)
       setTotalPages(data.totalPages ?? 0)
     } catch (e: any) {
@@ -183,7 +219,7 @@ export default function StockWorkspace() {
     } finally {
       setLoading(false)
     }
-  }, [locationCode, status, search, page])
+  }, [view, locationCode, status, search, page])
 
   const fetchSidecar = useCallback(async () => {
     try {
@@ -239,12 +275,15 @@ export default function StockWorkspace() {
         description="Multi-location inventory ledger across Riccione, Amazon FBA, and per-channel allocations."
         breadcrumbs={[{ label: 'Fulfillment', href: '/fulfillment' }, { label: 'Stock' }]}
         actions={
-          <button
-            onClick={() => { fetchStock(); fetchSidecar() }}
-            className="h-8 px-3 text-[12px] border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
-          >
-            <RefreshCw size={12} /> Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <ViewToggle view={view} onChange={(v) => updateUrl({ view: v === 'table' ? undefined : v, page: undefined })} />
+            <button
+              onClick={() => { fetchStock(); fetchSidecar() }}
+              className="h-8 px-3 text-[12px] border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+            >
+              <RefreshCw size={12} /> Refresh
+            </button>
+          </div>
         }
       />
 
@@ -328,101 +367,42 @@ export default function StockWorkspace() {
         </div>
       </Card>
 
-      {/* Table */}
-      {error ? (
-        <Card>
-          <div className="text-[13px] text-rose-700 py-8 text-center">
-            Failed to load stock: {error}
-          </div>
-        </Card>
-      ) : loading && items.length === 0 ? (
-        <Card><div className="text-[13px] text-slate-500 py-8 text-center">Loading stock…</div></Card>
-      ) : items.length === 0 ? (
-        <EmptyState
-          icon={Warehouse}
-          title="No stock matches these filters"
-          description={filterCount > 0 ? 'Try clearing filters.' : 'Stock levels appear once products are imported and seeded.'}
-          action={filterCount > 0
-            ? { label: 'Clear filters', onClick: () => updateUrl({ location: undefined, status: undefined, search: undefined, page: undefined }) }
-            : { label: 'Go to Catalog', href: '/products' }
-          }
-        />
-      ) : (
-        <Card noPadding>
-          <div className="overflow-x-auto">
-            <table className="w-full text-[13px]">
-              <thead className="border-b border-slate-200 bg-slate-50">
-                <tr>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700 w-10"></th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">Product</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">Location</th>
-                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">On hand</th>
-                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">Reserved</th>
-                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">Available</th>
-                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">Threshold</th>
-                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">Cost</th>
-                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">Updated</th>
-                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((it) => {
-                  const threshold = it.reorderThreshold ?? it.product.lowStockThreshold
-                  const stockTone =
-                    it.quantity === 0 ? 'text-rose-600' :
-                    it.quantity <= 5 ? 'text-orange-600' :
-                    it.quantity <= threshold ? 'text-amber-600' : 'text-slate-900'
-                  return (
-                    <tr
-                      key={it.id}
-                      onClick={() => setDrawerProductId(it.product.id)}
-                      className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors"
-                    >
-                      <td className="px-3 py-2">
-                        {it.product.thumbnailUrl ? (
-                          <img src={it.product.thumbnailUrl} alt="" className="w-8 h-8 rounded object-cover bg-slate-100" />
-                        ) : (
-                          <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-slate-400">
-                            <Package size={14} />
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="text-[13px] font-medium text-slate-900 truncate max-w-md">{it.product.name}</div>
-                        <div className="text-[11px] text-slate-500 font-mono">
-                          {it.product.sku}
-                          {it.variation && <span> · {it.variation.sku}</span>}
-                          {it.product.amazonAsin && <span> · {it.product.amazonAsin}</span>}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className={`inline-block text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${
-                          LOCATION_TONE[it.location.type] ?? 'bg-slate-50 text-slate-600 border-slate-200'
-                        }`} title={it.location.name}>
-                          {it.location.code}
-                        </span>
-                      </td>
-                      <td className={`px-3 py-2 text-right tabular-nums font-semibold ${stockTone}`}>{it.quantity}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-slate-500">{it.reserved}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-slate-700">{it.available}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-slate-500">{threshold}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-slate-600">
-                        {it.product.costPrice != null ? `€${it.product.costPrice.toFixed(2)}` : <span className="text-slate-400">—</span>}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-slate-400 text-[11px]">
-                        {formatRelative(it.lastUpdatedAt)}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <ChevronRight size={14} className="text-slate-400 inline" />
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
+      {/* Body — view-switched */}
+      {(() => {
+        const noResults = view === 'table' ? items.length === 0 : productBundles.length === 0
+        if (error) {
+          return (
+            <Card>
+              <div className="text-[13px] text-rose-700 py-8 text-center">
+                Failed to load stock: {error}
+              </div>
+            </Card>
+          )
+        }
+        if (loading && noResults) {
+          return <Card><div className="text-[13px] text-slate-500 py-8 text-center">Loading stock…</div></Card>
+        }
+        if (noResults) {
+          return (
+            <EmptyState
+              icon={Warehouse}
+              title="No stock matches these filters"
+              description={filterCount > 0 ? 'Try clearing filters.' : 'Stock levels appear once products are imported and seeded.'}
+              action={filterCount > 0
+                ? { label: 'Clear filters', onClick: () => updateUrl({ location: undefined, status: undefined, search: undefined, page: undefined }) }
+                : { label: 'Go to Catalog', href: '/products' }
+              }
+            />
+          )
+        }
+        if (view === 'matrix') {
+          return <MatrixView products={productBundles} locations={locations} onOpenProduct={setDrawerProductId} />
+        }
+        if (view === 'cards') {
+          return <CardsView products={productBundles} locations={locations} onOpenProduct={setDrawerProductId} />
+        }
+        return <TableView items={items} onOpenProduct={setDrawerProductId} />
+      })()}
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-[12px] text-slate-500">
@@ -1126,6 +1106,288 @@ function ReservePanel({
       <div className="text-[10px] text-slate-500">
         PENDING_ORDER reservations expire after 24h. Manual holds and promotions never expire automatically.
       </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// View toggle + view components
+// ─────────────────────────────────────────────────────────────────────
+function ViewToggle({ view, onChange }: { view: ViewMode; onChange: (v: ViewMode) => void }) {
+  const tabs: Array<{ key: ViewMode; label: string; icon: any }> = [
+    { key: 'table', label: 'Table', icon: TableIcon },
+    { key: 'matrix', label: 'Matrix', icon: Grid },
+    { key: 'cards', label: 'Cards', icon: LayoutGrid },
+  ]
+  return (
+    <div className="inline-flex items-center bg-slate-100 rounded-md p-0.5">
+      {tabs.map((t) => (
+        <button
+          key={t.key}
+          onClick={() => onChange(t.key)}
+          className={`h-7 px-2.5 text-[12px] font-medium inline-flex items-center gap-1.5 rounded transition-colors ${
+            view === t.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <t.icon size={12} />
+          {t.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function TableView({ items, onOpenProduct }: { items: StockRow[]; onOpenProduct: (id: string) => void }) {
+  return (
+    <Card noPadding>
+      <div className="overflow-x-auto">
+        <table className="w-full text-[13px]">
+          <thead className="border-b border-slate-200 bg-slate-50">
+            <tr>
+              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700 w-10"></th>
+              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">Product</th>
+              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">Location</th>
+              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">On hand</th>
+              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">Reserved</th>
+              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">Available</th>
+              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">Threshold</th>
+              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">Cost</th>
+              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">Updated</th>
+              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((it) => {
+              const threshold = it.reorderThreshold ?? it.product.lowStockThreshold
+              const stockTone =
+                it.quantity === 0 ? 'text-rose-600' :
+                it.quantity <= 5 ? 'text-orange-600' :
+                it.quantity <= threshold ? 'text-amber-600' : 'text-slate-900'
+              return (
+                <tr
+                  key={it.id}
+                  onClick={() => onOpenProduct(it.product.id)}
+                  className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors"
+                >
+                  <td className="px-3 py-2">
+                    {it.product.thumbnailUrl ? (
+                      <img src={it.product.thumbnailUrl} alt="" className="w-8 h-8 rounded object-cover bg-slate-100" />
+                    ) : (
+                      <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-slate-400">
+                        <Package size={14} />
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="text-[13px] font-medium text-slate-900 truncate max-w-md">{it.product.name}</div>
+                    <div className="text-[11px] text-slate-500 font-mono">
+                      {it.product.sku}
+                      {it.variation && <span> · {it.variation.sku}</span>}
+                      {it.product.amazonAsin && <span> · {it.product.amazonAsin}</span>}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className={`inline-block text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${
+                      LOCATION_TONE[it.location.type] ?? 'bg-slate-50 text-slate-600 border-slate-200'
+                    }`} title={it.location.name}>
+                      {it.location.code}
+                    </span>
+                  </td>
+                  <td className={`px-3 py-2 text-right tabular-nums font-semibold ${stockTone}`}>{it.quantity}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-slate-500">{it.reserved}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-slate-700">{it.available}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-slate-500">{threshold}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-slate-600">
+                    {it.product.costPrice != null ? `€${it.product.costPrice.toFixed(2)}` : <span className="text-slate-400">—</span>}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums text-slate-400 text-[11px]">
+                    {formatRelative(it.lastUpdatedAt)}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <ChevronRight size={14} className="text-slate-400 inline" />
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  )
+}
+
+// Color-coded heatmap. Cells show quantity; tone is a function of
+// quantity (red=zero, orange=critical, amber=low, blue tint scaled
+// by quantity for healthy). Empty cell = no StockLevel row, rendered
+// as a grey dash so allocation gaps are visually obvious.
+function MatrixView({
+  products, locations, onOpenProduct,
+}: { products: ProductBundle[]; locations: LocationSummary[]; onOpenProduct: (id: string) => void }) {
+  // Compute the max quantity across the visible page for color scaling.
+  const maxQty = Math.max(
+    1,
+    ...products.flatMap((p) => p.stockLevels.map((sl) => sl.quantity)),
+  )
+
+  return (
+    <Card noPadding>
+      <div className="overflow-x-auto">
+        <table className="w-full text-[13px]">
+          <thead className="border-b border-slate-200 bg-slate-50 sticky top-0">
+            <tr>
+              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700 sticky left-0 bg-slate-50 z-10 min-w-[280px]">
+                Product
+              </th>
+              {locations.map((loc) => (
+                <th
+                  key={loc.id}
+                  className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700 min-w-[80px]"
+                  title={loc.name}
+                >
+                  {loc.code}
+                </th>
+              ))}
+              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {products.map((p) => {
+              const cellByLoc = new Map(p.stockLevels.map((sl) => [sl.locationId, sl]))
+              return (
+                <tr
+                  key={p.id}
+                  onClick={() => onOpenProduct(p.id)}
+                  className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors"
+                >
+                  <td className="px-3 py-2 sticky left-0 bg-white hover:bg-slate-50 z-10 min-w-[280px]">
+                    <div className="flex items-center gap-2">
+                      {p.thumbnailUrl ? (
+                        <img src={p.thumbnailUrl} alt="" className="w-8 h-8 rounded object-cover bg-slate-100 flex-shrink-0" />
+                      ) : (
+                        <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
+                          <Package size={14} />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-medium text-slate-900 truncate max-w-[220px]">{p.name}</div>
+                        <div className="text-[11px] text-slate-500 font-mono">{p.sku}</div>
+                      </div>
+                    </div>
+                  </td>
+                  {locations.map((loc) => {
+                    const cell = cellByLoc.get(loc.id)
+                    if (!cell) {
+                      return (
+                        <td key={loc.id} className="px-3 py-2 text-right text-slate-300">
+                          —
+                        </td>
+                      )
+                    }
+                    return (
+                      <td key={loc.id} className="px-3 py-2 text-right">
+                        <MatrixCell quantity={cell.quantity} reserved={cell.reserved} maxQty={maxQty} threshold={p.lowStockThreshold} />
+                      </td>
+                    )
+                  })}
+                  <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900">
+                    {p.totalStock}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  )
+}
+
+function MatrixCell({ quantity, reserved, maxQty, threshold }: { quantity: number; reserved: number; maxQty: number; threshold: number }) {
+  const tone =
+    quantity === 0 ? 'bg-rose-100 text-rose-800' :
+    quantity <= 5 ? 'bg-orange-100 text-orange-800' :
+    quantity <= threshold ? 'bg-amber-100 text-amber-800' :
+    // Healthy → blue tint scaled by quantity / maxQty
+    quantity > maxQty * 0.66 ? 'bg-blue-200 text-blue-900' :
+    quantity > maxQty * 0.33 ? 'bg-blue-100 text-blue-800' :
+    'bg-blue-50 text-blue-700'
+  return (
+    <span
+      className={`inline-block min-w-[40px] px-2 py-1 rounded text-center font-semibold tabular-nums ${tone}`}
+      title={reserved > 0 ? `${quantity} on hand (${reserved} reserved)` : `${quantity} on hand`}
+    >
+      {quantity}
+      {reserved > 0 && (
+        <span className="ml-1 text-[9px] opacity-60">({quantity - reserved})</span>
+      )}
+    </span>
+  )
+}
+
+function CardsView({
+  products, locations, onOpenProduct,
+}: { products: ProductBundle[]; locations: LocationSummary[]; onOpenProduct: (id: string) => void }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+      {products.map((p) => {
+        const cellByLoc = new Map(p.stockLevels.map((sl) => [sl.locationId, sl]))
+        const stockTone =
+          p.totalStock === 0 ? 'text-rose-600' :
+          p.totalStock <= 5 ? 'text-orange-600' :
+          p.totalStock <= p.lowStockThreshold ? 'text-amber-600' : 'text-slate-900'
+        return (
+          <Card
+            key={p.id}
+            className="cursor-pointer hover:border-slate-300 transition-colors"
+          >
+            <button onClick={() => onOpenProduct(p.id)} className="block w-full text-left">
+              {p.thumbnailUrl ? (
+                <img src={p.thumbnailUrl} alt="" className="w-full aspect-square rounded object-cover bg-slate-100 mb-3" />
+              ) : (
+                <div className="w-full aspect-square rounded bg-slate-100 flex items-center justify-center text-slate-400 mb-3">
+                  <Package size={28} />
+                </div>
+              )}
+              <div className="text-[13px] font-medium text-slate-900 line-clamp-2 min-h-[36px]">{p.name}</div>
+              <div className="text-[11px] text-slate-500 font-mono mt-0.5 truncate">{p.sku}</div>
+              <div className={`text-[24px] font-semibold tabular-nums mt-2 ${stockTone}`}>
+                {p.totalStock}
+                <span className="text-[11px] text-slate-500 font-normal ml-1.5">total</span>
+              </div>
+              <div className="mt-2 flex items-center gap-1 flex-wrap">
+                {locations.map((loc) => {
+                  const cell = cellByLoc.get(loc.id)
+                  if (!cell) {
+                    return (
+                      <span
+                        key={loc.id}
+                        className="text-[10px] font-mono uppercase px-1.5 py-0.5 border border-slate-200 rounded bg-slate-50 text-slate-300"
+                        title={`No stock at ${loc.code}`}
+                      >
+                        {loc.code} —
+                      </span>
+                    )
+                  }
+                  const tone =
+                    cell.quantity === 0 ? 'border-rose-200 bg-rose-50 text-rose-700' :
+                    cell.quantity <= 5 ? 'border-orange-200 bg-orange-50 text-orange-700' :
+                    cell.quantity <= p.lowStockThreshold ? 'border-amber-200 bg-amber-50 text-amber-700' :
+                    'border-emerald-200 bg-emerald-50 text-emerald-700'
+                  return (
+                    <span
+                      key={loc.id}
+                      className={`text-[10px] font-mono uppercase px-1.5 py-0.5 border rounded ${tone}`}
+                      title={`${loc.name}: ${cell.quantity} on hand, ${cell.available} available`}
+                    >
+                      {loc.code} <span className="font-bold">{cell.quantity}</span>
+                    </span>
+                  )
+                })}
+              </div>
+            </button>
+          </Card>
+        )
+      })}
     </div>
   )
 }

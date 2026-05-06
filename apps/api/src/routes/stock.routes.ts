@@ -128,6 +128,95 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── GET /api/stock/by-product ────────────────────────────────────
+  // Pivoted view: one row per product with stockLevels[] nested for
+  // every location. Powers the matrix + cards views which need the
+  // per-location breakdown alongside each product. Search + status
+  // filters apply at the product level; locationCode is intentionally
+  // ignored here (matrix shows all locations as columns).
+  fastify.get('/stock/by-product', async (request, reply) => {
+    try {
+      const q = request.query as any
+      const page = Math.max(1, Math.floor(safeNum(q.page, 1) ?? 1))
+      const pageSize = Math.min(200, Math.max(1, Math.floor(safeNum(q.pageSize, 50) ?? 50)))
+      const skip = (page - 1) * pageSize
+
+      const where: any = { isParent: false }
+
+      if (q.status === 'OUT_OF_STOCK') where.totalStock = 0
+      else if (q.status === 'CRITICAL') where.totalStock = { gt: 0, lte: 5 }
+      else if (q.status === 'LOW') where.totalStock = { gt: 5, lte: 15 }
+      else if (q.status === 'IN_STOCK') where.totalStock = { gt: 15 }
+
+      if (q.search?.trim()) {
+        const s = q.search.trim()
+        where.OR = [
+          { sku: { contains: s, mode: 'insensitive' } },
+          { name: { contains: s, mode: 'insensitive' } },
+          { amazonAsin: { contains: s, mode: 'insensitive' } },
+        ]
+      }
+
+      const [total, products, locations] = await Promise.all([
+        prisma.product.count({ where }),
+        prisma.product.findMany({
+          where,
+          select: {
+            id: true, sku: true, name: true, amazonAsin: true,
+            totalStock: true, lowStockThreshold: true,
+            costPrice: true, basePrice: true,
+            images: { select: { url: true }, take: 1 },
+            stockLevels: {
+              select: {
+                id: true, locationId: true,
+                quantity: true, reserved: true, available: true,
+                lastUpdatedAt: true,
+              },
+            },
+          },
+          orderBy: [{ totalStock: 'asc' }, { name: 'asc' }],
+          skip,
+          take: pageSize,
+        }),
+        prisma.stockLocation.findMany({
+          where: { isActive: true },
+          select: { id: true, code: true, name: true, type: true },
+          orderBy: [{ type: 'asc' }, { code: 'asc' }],
+        }),
+      ])
+
+      return {
+        locations,
+        products: products.map((p) => ({
+          id: p.id,
+          sku: p.sku,
+          name: p.name,
+          amazonAsin: p.amazonAsin,
+          totalStock: p.totalStock,
+          lowStockThreshold: p.lowStockThreshold,
+          costPrice: p.costPrice == null ? null : Number(p.costPrice),
+          basePrice: p.basePrice == null ? null : Number(p.basePrice),
+          thumbnailUrl: p.images?.[0]?.url ?? null,
+          stockLevels: p.stockLevels.map((sl) => ({
+            id: sl.id,
+            locationId: sl.locationId,
+            quantity: sl.quantity,
+            reserved: sl.reserved,
+            available: sl.available,
+            lastUpdatedAt: sl.lastUpdatedAt,
+          })),
+        })),
+        total,
+        page,
+        pageSize,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/by-product] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // ── GET /api/stock/kpis ──────────────────────────────────────────
   // Roll-ups for the KPI strip on /fulfillment/stock. All numbers are
   // product-level (not per-StockLevel) for the "how many SKUs are in
