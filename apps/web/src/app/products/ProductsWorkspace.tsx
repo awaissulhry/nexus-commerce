@@ -22,6 +22,12 @@ import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import { getBackendUrl } from '@/lib/backend-url'
+import { usePolledList } from '@/lib/sync/use-polled-list'
+import {
+  emitInvalidation,
+  useInvalidationChannel,
+} from '@/lib/sync/invalidation-channel'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 
 // ── Types ───────────────────────────────────────────────────────────
 type Lens = 'grid' | 'hierarchy' | 'coverage' | 'health' | 'drafts'
@@ -222,39 +228,78 @@ export default function ProductsWorkspace() {
     router.replace(`${pathname}?${next.toString()}`, { scroll: false })
   }, [searchParams, pathname, router])
 
-  const fetchProducts = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const qs = new URLSearchParams()
-      qs.set('page', String(page))
-      qs.set('limit', String(pageSize))
-      if (search) qs.set('search', search)
-      if (statusFilters.length) qs.set('status', statusFilters.join(','))
-      if (channelFilters.length) qs.set('channels', channelFilters.join(','))
-      if (marketplaceFilters.length) qs.set('marketplaces', marketplaceFilters.join(','))
-      if (productTypeFilters.length) qs.set('productTypes', productTypeFilters.join(','))
-      if (brandFilters.length) qs.set('brands', brandFilters.join(','))
-      if (tagFilters.length) qs.set('tags', tagFilters.join(','))
-      if (fulfillmentFilters.length) qs.set('fulfillment', fulfillmentFilters.join(','))
-      if (stockLevel !== 'all') qs.set('stockLevel', stockLevel)
-      if (hasPhotos) qs.set('hasPhotos', hasPhotos)
-      qs.set('sort', sortBy)
-      qs.set('includeCoverage', 'true')
-      qs.set('includeTags', 'true')
+  // Phase 10 — usePolledList replaces the fetchProducts useCallback +
+  // manual setInterval(30s) + visibilitychange listener that lived
+  // here previously. Same 30s polling cadence; same visibility-on-
+  // focus refetch; the URL still reflects every filter so back/forward
+  // and bookmarks work as before. The `channels` / `marketplaces`
+  // CSV params stay on the URL for backwards compat — the backend's
+  // csvParam() accepts both forms — but the canonical Phase 10 contract
+  // now uses repeated keys, which 10a's parseFilters auto-translates
+  // for any external link that arrives in the legacy form.
+  const productsUrl = useMemo(() => {
+    if (lens !== 'grid') return null
+    const qs = new URLSearchParams()
+    qs.set('page', String(page))
+    qs.set('limit', String(pageSize))
+    if (search) qs.set('search', search)
+    if (statusFilters.length) qs.set('status', statusFilters.join(','))
+    if (channelFilters.length) qs.set('channels', channelFilters.join(','))
+    if (marketplaceFilters.length) qs.set('marketplaces', marketplaceFilters.join(','))
+    if (productTypeFilters.length) qs.set('productTypes', productTypeFilters.join(','))
+    if (brandFilters.length) qs.set('brands', brandFilters.join(','))
+    if (tagFilters.length) qs.set('tags', tagFilters.join(','))
+    if (fulfillmentFilters.length) qs.set('fulfillment', fulfillmentFilters.join(','))
+    if (stockLevel !== 'all') qs.set('stockLevel', stockLevel)
+    if (hasPhotos) qs.set('hasPhotos', hasPhotos)
+    qs.set('sort', sortBy)
+    qs.set('includeCoverage', 'true')
+    qs.set('includeTags', 'true')
+    return `/api/products?${qs.toString()}`
+  }, [lens, page, pageSize, search, statusFilters, channelFilters, marketplaceFilters, productTypeFilters, brandFilters, tagFilters, fulfillmentFilters, stockLevel, hasPhotos, sortBy])
 
-      const res = await fetch(`${getBackendUrl()}/api/products?${qs.toString()}`, { cache: 'no-store' })
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-      const data = await res.json()
-      setProducts(data.products ?? [])
-      setStats(data.stats ?? { total: 0, active: 0, draft: 0, inStock: 0, outOfStock: 0 })
-      setTotal(data.total ?? 0)
-      setTotalPages(data.totalPages ?? 0)
-    } catch (e: any) {
-      setError(e?.message ?? 'Failed to load')
-      setProducts([])
-    } finally { setLoading(false) }
-  }, [page, pageSize, search, statusFilters.join(','), channelFilters.join(','), marketplaceFilters.join(','), productTypeFilters.join(','), brandFilters.join(','), tagFilters.join(','), fulfillmentFilters.join(','), stockLevel, hasPhotos, sortBy])
+  const {
+    data: productsData,
+    loading: productsLoading,
+    error: productsError,
+    lastFetchedAt: productsFetchedAt,
+    refetch: refetchProducts,
+  } = usePolledList<{
+    products: ProductRow[]
+    stats: { total: number; active: number; draft: number; inStock: number; outOfStock: number }
+    total: number
+    totalPages: number
+  }>({
+    url: productsUrl,
+    intervalMs: 30_000,
+    invalidationTypes: [
+      'product.updated',
+      'product.created',
+      'product.deleted',
+      'listing.updated',
+      'wizard.submitted',
+      'pim.changed',
+      'bulk-job.completed',
+    ],
+  })
+
+  // Sync hook output into the page's existing state slots so the rest
+  // of the file (renderers, drawer, bulk-action bar) keeps reading from
+  // products / stats / total / totalPages without changes.
+  useEffect(() => {
+    if (productsData) {
+      setProducts(productsData.products ?? [])
+      setStats(productsData.stats ?? { total: 0, active: 0, draft: 0, inStock: 0, outOfStock: 0 })
+      setTotal(productsData.total ?? 0)
+      setTotalPages(productsData.totalPages ?? 0)
+    }
+  }, [productsData])
+  useEffect(() => { setLoading(productsLoading) }, [productsLoading])
+  useEffect(() => { setError(productsError) }, [productsError])
+
+  // Backwards-compat: existing call sites (refresh button, drawer
+  // onChanged, bulk-action onComplete) keep calling fetchProducts.
+  const fetchProducts = refetchProducts
 
   const fetchTags = useCallback(async () => {
     try {
@@ -337,17 +382,32 @@ export default function ProductsWorkspace() {
     setChildrenByParent({})
   }, [])
 
-  useEffect(() => { if (lens === 'grid') fetchProducts() }, [lens, fetchProducts])
+  // Phase 10 — usePolledList above owns the 30s poll + visibility
+  // refresh + invalidation-driven refetch for the Grid lens. The
+  // hook only fires when productsUrl !== null, which depends on
+  // lens === 'grid'.
+
   useEffect(() => { fetchTags(); fetchFacets(); fetchSavedViews() }, [fetchTags, fetchFacets, fetchSavedViews])
 
-  // 30s poll + visibilitychange refresh on Grid lens
-  useEffect(() => {
-    if (lens !== 'grid') return
-    const onVis = () => { if (document.visibilityState === 'visible') fetchProducts() }
-    document.addEventListener('visibilitychange', onVis)
-    const id = setInterval(() => { if (document.visibilityState === 'visible') fetchProducts() }, 30000)
-    return () => { document.removeEventListener('visibilitychange', onVis); clearInterval(id) }
-  }, [lens, fetchProducts])
+  // Phase 10 — when other pages mutate data, refresh the sidecar
+  // queries (tags, facets) in tandem with the grid. usePolledList
+  // already handles the grid via invalidationTypes.
+  useInvalidationChannel(
+    [
+      'product.updated',
+      'product.created',
+      'product.deleted',
+      'listing.updated',
+      'wizard.submitted',
+      'pim.changed',
+      'bulk-job.completed',
+    ],
+    () => {
+      fetchTags()
+      fetchFacets()
+      onTopLevelRefresh()
+    },
+  )
 
   // Reset selection when filters change
   useEffect(() => { setSelected(new Set()) }, [page, search, statusFilters.join(','), channelFilters.join(','), marketplaceFilters.join(','), productTypeFilters.join(','), brandFilters.join(','), tagFilters.join(','), fulfillmentFilters.join(','), stockLevel, hasPhotos])
@@ -387,9 +447,18 @@ export default function ProductsWorkspace() {
             <Link href="/products/new" className="h-8 px-3 text-[12px] bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
               <Plus size={12} /> New product
             </Link>
-            <button onClick={() => fetchProducts()} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5">
-              <RefreshCw size={12} /> Refresh
-            </button>
+            {lens === 'grid' ? (
+              <FreshnessIndicator
+                lastFetchedAt={productsFetchedAt}
+                onRefresh={() => fetchProducts()}
+                loading={productsLoading}
+                error={!!productsError}
+              />
+            ) : (
+              <button onClick={() => fetchProducts()} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5">
+                <RefreshCw size={12} /> Refresh
+              </button>
+            )}
           </div>
         }
       />
@@ -872,6 +941,11 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete }: { selected
         body: JSON.stringify({ productIds: selectedIds, status: s }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
+      // Phase 10 — broadcast so other open pages refresh.
+      emitInvalidation({
+        type: 'product.updated',
+        meta: { productIds: selectedIds, source: 'bulk-status', status: s },
+      })
     },
   )
 
@@ -884,6 +958,10 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete }: { selected
         body: JSON.stringify({ productIds: selectedIds }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
+      emitInvalidation({
+        type: 'product.created',
+        meta: { sourceProductIds: selectedIds, source: 'bulk-duplicate' },
+      })
     },
   )
 
@@ -896,6 +974,10 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete }: { selected
         body: JSON.stringify({ productIds: selectedIds, tagIds, mode }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
+      emitInvalidation({
+        type: 'product.updated',
+        meta: { productIds: selectedIds, source: 'bulk-tag', mode },
+      })
     },
   )
 
@@ -921,6 +1003,14 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete }: { selected
         body: JSON.stringify({ action: 'publish', listingIds: ids }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
+      emitInvalidation({
+        type: 'listing.updated',
+        meta: { listingIds: ids, source: 'products-publish', channel, marketplace },
+      })
+      emitInvalidation({
+        type: 'bulk-job.completed',
+        meta: { action: 'publish', listingIds: ids },
+      })
     },
   )
 
@@ -1284,6 +1374,24 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
         body: JSON.stringify(body),
       })
       if (!res.ok) throw new Error((await res.json()).error ?? 'Update failed')
+      // Phase 10 — broadcast so /listings, /bulk-operations,
+      // /catalog/organize all refresh within ~200ms. The PATCH routes
+      // basePrice / totalStock through the master services in 13c
+      // which cascade to ChannelListing — so this also ought to
+      // emit listing.updated for those two fields.
+      const cascadesToListings = field === 'price' || field === 'stock'
+      emitInvalidation({
+        type: 'product.updated',
+        id: p.id,
+        fields: [field],
+        meta: { source: 'products-inline-edit' },
+      })
+      if (cascadesToListings) {
+        emitInvalidation({
+          type: 'listing.updated',
+          meta: { productIds: [p.id], source: 'products-inline-edit', field },
+        })
+      }
       onChanged()
     } catch (e: any) {
       alert(e.message)
