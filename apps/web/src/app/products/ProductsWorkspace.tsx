@@ -14,6 +14,7 @@ import {
   Package, Plus, FolderTree, Network, Bookmark, BookmarkPlus,
   ExternalLink, Star, Copy, Trash2, Layers, Image as ImageIcon,
   CheckCircle2, XCircle, AlertCircle, Loader2, Upload, Bell,
+  DollarSign,
 } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import PageHeader from '@/components/layout/PageHeader'
@@ -43,7 +44,7 @@ import AiBulkGenerateModal from './_modals/AiBulkGenerateModal'
 import ManageAlertsModal from './_modals/ManageAlertsModal'
 
 // ── Types ───────────────────────────────────────────────────────────
-type Lens = 'grid' | 'hierarchy' | 'coverage' | 'health' | 'drafts'
+type Lens = 'grid' | 'hierarchy' | 'coverage' | 'health' | 'drafts' | 'pricing'
 
 type ProductRow = {
   id: string
@@ -730,6 +731,7 @@ export default function ProductsWorkspace() {
 
       {lens === 'hierarchy' && <HierarchyLens search={search} />}
       {lens === 'coverage' && <CoverageLens products={products} loading={loading} />}
+      {lens === 'pricing' && <PricingLens products={products} loading={loading} />}
       {lens === 'health' && <HealthLens />}
       {lens === 'drafts' && <DraftsLens />}
 
@@ -785,6 +787,7 @@ function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) =>
     { key: 'grid', label: 'Grid', icon: LayoutGrid },
     { key: 'hierarchy', label: 'Hierarchy', icon: FolderTree },
     { key: 'coverage', label: 'Coverage', icon: Network },
+    { key: 'pricing', label: 'Pricing', icon: DollarSign },
     { key: 'health', label: 'Health', icon: AlertTriangle },
     { key: 'drafts', label: 'Drafts', icon: Sparkles },
   ]
@@ -3453,21 +3456,288 @@ function CoverageLens({ products, loading }: { products: ProductRow[]; loading: 
 }
 
 // ────────────────────────────────────────────────────────────────────
+// PricingLens (P.5) — products × marketplaces matrix of resolved prices
+// ────────────────────────────────────────────────────────────────────
+/**
+ * Reads PricingSnapshot rows from /api/pricing/matrix, indexes by
+ * (sku, marketplace), and renders the in-scope products as rows
+ * with one cell per top marketplace. Each cell shows the resolved
+ * price + currency code; tone signals issues:
+ *
+ *   amber  isClamped (price was hit a floor/ceiling rule)
+ *   rose   warnings non-empty (cost > price, etc.)
+ *   slate  no snapshot (rule didn't compute or hasn't run yet)
+ *   text   normal
+ *
+ * Click a cell → /pricing?search=<sku> for the full-fat matrix
+ * with explain / push / per-cell drawer. This lens is the
+ * birds-eye scan; the dedicated /pricing page is where you act.
+ *
+ * Marketplaces are fixed to the canonical Xavia set (IT, DE, UK,
+ * FR, ES). Adding a marketplace later is a one-line change here.
+ */
+function PricingLens({
+  products,
+  loading,
+}: {
+  products: ProductRow[]
+  loading: boolean
+}) {
+  const MARKETPLACES = ['IT', 'DE', 'UK', 'FR', 'ES'] as const
+  const [snapshots, setSnapshots] = useState<Record<string, Record<string, {
+    price: string
+    currency: string
+    isClamped: boolean
+    warnings: string[]
+  }>>>({})
+  const [snapLoading, setSnapLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const refresh = useCallback(async () => {
+    setSnapLoading(true)
+    setError(null)
+    try {
+      // Fetch one big page of recent snapshots scoped to the
+      // marketplaces we're rendering. Server-side filter on
+      // marketplace would require list-of-values support; for now
+      // we pull a wider set (limit=500) and filter client-side. At
+      // 5 marketplaces × ~3,200 SKUs = ~16k snapshots max in
+      // theory; in practice the snapshot table is much smaller.
+      const res = await fetch(
+        `${getBackendUrl()}/api/pricing/matrix?limit=500`,
+        { cache: 'no-store' },
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const json = await res.json()
+      const indexed: Record<string, Record<string, any>> = {}
+      for (const r of (json.rows ?? []) as Array<{
+        sku: string
+        marketplace: string
+        computedPrice: string
+        currency: string
+        isClamped: boolean
+        warnings: string[]
+      }>) {
+        if (!indexed[r.sku]) indexed[r.sku] = {}
+        indexed[r.sku][r.marketplace] = {
+          price: r.computedPrice,
+          currency: r.currency,
+          isClamped: r.isClamped,
+          warnings: r.warnings ?? [],
+        }
+      }
+      setSnapshots(indexed)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSnapLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { void refresh() }, [refresh])
+
+  // Refresh when prices change in any tab — bulk-price-override,
+  // inline edit on /products, or a per-row push from /pricing all
+  // emit product.updated; we re-pull the snapshots so the lens
+  // reflects current state.
+  useInvalidationChannel(
+    ['product.updated', 'bulk-job.completed'],
+    () => { void refresh() },
+  )
+
+  if (loading || snapLoading) {
+    return (
+      <Card>
+        <div className="text-[13px] text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading pricing matrix…
+        </div>
+      </Card>
+    )
+  }
+  if (error) {
+    return (
+      <Card>
+        <div className="text-[13px] text-rose-600 py-8 text-center">
+          Failed to load pricing matrix: {error}
+        </div>
+      </Card>
+    )
+  }
+  if (products.length === 0) {
+    return (
+      <EmptyState
+        icon={DollarSign}
+        title="Nothing to price"
+        description="No products match the current filter."
+      />
+    )
+  }
+
+  // Summary header — count of cells with each tone, so the
+  // operator scanning the lens sees "12 clamped, 3 warnings"
+  // before reading the table.
+  let cellCount = 0, clampedCount = 0, warningCount = 0, missingCount = 0
+  for (const p of products.slice(0, 100)) {
+    for (const mp of MARKETPLACES) {
+      cellCount++
+      const cell = snapshots[p.sku]?.[mp]
+      if (!cell) missingCount++
+      else if (cell.warnings.length > 0) warningCount++
+      else if (cell.isClamped) clampedCount++
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <Card>
+        <div className="flex items-center gap-4 text-[12px]">
+          <span className="text-slate-700">
+            <span className="font-semibold tabular-nums">{cellCount}</span> cells
+          </span>
+          {clampedCount > 0 && (
+            <span className="text-amber-700 inline-flex items-center gap-1">
+              <span className="inline-block w-2 h-2 bg-amber-500 rounded-full" />
+              <span className="tabular-nums">{clampedCount}</span> clamped
+            </span>
+          )}
+          {warningCount > 0 && (
+            <span className="text-rose-700 inline-flex items-center gap-1">
+              <span className="inline-block w-2 h-2 bg-rose-500 rounded-full" />
+              <span className="tabular-nums">{warningCount}</span> with warnings
+            </span>
+          )}
+          {missingCount > 0 && (
+            <span className="text-slate-500 inline-flex items-center gap-1">
+              <span className="inline-block w-2 h-2 bg-slate-300 rounded-full" />
+              <span className="tabular-nums">{missingCount}</span> missing snapshots
+            </span>
+          )}
+          <Link
+            href="/pricing"
+            className="ml-auto text-[12px] text-blue-700 hover:underline inline-flex items-center gap-1"
+          >
+            Open full pricing matrix <ChevronRight size={12} />
+          </Link>
+        </div>
+      </Card>
+      <Card noPadding>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[12px]">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase text-slate-700 sticky left-0 bg-slate-50 z-10 min-w-[260px]">
+                  Product
+                </th>
+                {MARKETPLACES.map((mp) => (
+                  <th
+                    key={mp}
+                    className="px-3 py-2 text-center text-[10px] font-semibold uppercase text-slate-500"
+                  >
+                    {mp}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {products.slice(0, 100).map((p) => (
+                <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50/50">
+                  <td className="px-3 py-2 sticky left-0 bg-white border-r border-slate-100">
+                    <Link href={`/products/${p.id}/edit`} className="block hover:text-blue-600">
+                      <div className="text-[13px] font-medium text-slate-900 truncate max-w-xs">
+                        {p.name}
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-mono">{p.sku}</div>
+                    </Link>
+                  </td>
+                  {MARKETPLACES.map((mp) => {
+                    const cell = snapshots[p.sku]?.[mp]
+                    if (!cell) {
+                      return (
+                        <td
+                          key={mp}
+                          className="px-2 py-2 text-center text-slate-300 text-[11px]"
+                          title="No pricing snapshot — rule may not have run yet"
+                        >
+                          —
+                        </td>
+                      )
+                    }
+                    const tone =
+                      cell.warnings.length > 0
+                        ? 'bg-rose-50 text-rose-700 border-rose-200'
+                        : cell.isClamped
+                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                        : 'bg-white text-slate-900 border-slate-200'
+                    const titleParts: string[] = []
+                    if (cell.isClamped) titleParts.push('clamped to floor/ceiling')
+                    if (cell.warnings.length > 0) titleParts.push(...cell.warnings)
+                    return (
+                      <td key={mp} className="px-2 py-2 text-center">
+                        <Link
+                          href={`/pricing?search=${encodeURIComponent(p.sku)}&marketplace=${mp}`}
+                          title={titleParts.join(' · ') || 'Open in pricing matrix'}
+                          className={`inline-flex items-center px-2 py-1 border rounded text-[11px] tabular-nums hover:opacity-80 ${tone}`}
+                        >
+                          {Number(cell.price).toFixed(2)} {cell.currency}
+                        </Link>
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+      {products.length > 100 && (
+        <div className="text-[11px] text-slate-500 text-center">
+          Showing first 100 products. Open the full pricing matrix or
+          narrow filters to see more.
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────
 // HealthLens — pulls from /api/listings/health and /api/fulfillment overview
 // ────────────────────────────────────────────────────────────────────
 function HealthLens() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  useEffect(() => {
+  // P.5 — split state for the error case so the previous failure
+  // doesn't get masked by a stale `data` from the last successful
+  // load. Was: 5xx responses were parsed as JSON and stored as
+  // `data`, which then rendered as "—" everywhere instead of an
+  // honest failure banner.
+  const [error, setError] = useState<string | null>(null)
+
+  const refresh = useCallback(async () => {
     setLoading(true)
-    fetch(`${getBackendUrl()}/api/listings/health`, { cache: 'no-store' })
-      .then((r) => r.json())
-      .then(setData)
-      .finally(() => setLoading(false))
+    setError(null)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/listings/health`, { cache: 'no-store' })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setData(await res.json())
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  if (loading) return <Card><div className="text-[13px] text-slate-500 py-8 text-center">Loading health…</div></Card>
-  if (!data) return <Card><div className="text-[13px] text-rose-600 py-8 text-center">Failed to load health</div></Card>
+  useEffect(() => { void refresh() }, [refresh])
+
+  // P.5 — refresh when listings change in any tab so the lens
+  // reflects the latest sync status without manual reload.
+  useInvalidationChannel(
+    ['listing.updated', 'listing.created', 'listing.deleted', 'bulk-job.completed'],
+    () => { void refresh() },
+  )
+
+  if (loading && !data) return <Card><div className="text-[13px] text-slate-500 py-8 text-center">Loading health…</div></Card>
+  if (error) return <Card><div className="text-[13px] text-rose-600 py-8 text-center">Failed to load health: {error}</div></Card>
+  if (!data) return null
 
   return (
     <div className="space-y-4">
