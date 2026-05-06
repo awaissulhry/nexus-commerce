@@ -306,6 +306,61 @@ export async function bulkPersistRecommendationsIfChanged(
  * PO or WorkOrder from it. Idempotent: re-acting an already-ACTED
  * row updates the override fields but doesn't move state again.
  */
+/**
+ * Dismiss a recommendation. Status ACTIVE → DISMISSED. Captures
+ * dismissal audit (who + when + reason). Idempotent on a non-ACTIVE
+ * row — returns the row's current status without mutating.
+ *
+ * Use cases:
+ *   - Operator reviews a CRITICAL rec and decides "we have alternates,
+ *     don't need to reorder this one"
+ *   - Forecast spike was a one-off (clearance event), shouldn't trigger
+ *     standing reorder
+ *   - Substitute product covers the demand
+ *
+ * Snooze (optional R.5b — TBD): a similar status with a deadline at
+ * which DISMISSED → ACTIVE auto-revives. Not implemented yet; for now
+ * dismiss is permanent until the next forecast pass generates a new rec.
+ */
+export async function dismissRecommendation(args: {
+  recommendationId: string
+  userId?: string | null
+  reason?: string | null
+}): Promise<{ id: string; status: string; previousStatus: string }> {
+  const existing = await prisma.replenishmentRecommendation.findUnique({
+    where: { id: args.recommendationId },
+    select: { id: true, status: true },
+  })
+  if (!existing) {
+    throw new Error(`Recommendation not found: ${args.recommendationId}`)
+  }
+  if (existing.status !== 'ACTIVE') {
+    // Idempotent: already in a terminal state. Return current state
+    // without raising — operators clicking dismiss twice shouldn't see
+    // an error.
+    return {
+      id: existing.id,
+      status: existing.status,
+      previousStatus: existing.status,
+    }
+  }
+  const updated = await prisma.replenishmentRecommendation.update({
+    where: { id: args.recommendationId },
+    data: {
+      status: 'DISMISSED',
+      dismissedAt: new Date(),
+      dismissedByUserId: args.userId ?? null,
+      dismissedReason: args.reason ?? null,
+    },
+    select: { id: true, status: true },
+  })
+  return {
+    id: updated.id,
+    status: updated.status,
+    previousStatus: 'ACTIVE',
+  }
+}
+
 export async function attachPoToRecommendation(args: {
   recommendationId: string
   poId?: string | null

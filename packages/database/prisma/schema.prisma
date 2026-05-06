@@ -3272,6 +3272,14 @@ model ReplenishmentRecommendation {
   overrideNotes    String?
   overrideByUserId String?
 
+  // R.21 — Dismiss audit. Operator-driven status ACTIVE → DISMISSED.
+  // Captures who + when + why so we can answer "why didn't we reorder
+  // this?" later. Distinct from ACTED (where we did reorder) and
+  // SUPERSEDED (where the engine replaced the rec with a fresh one).
+  dismissedAt       DateTime?
+  dismissedByUserId String?
+  dismissedReason   String?
+
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId, status])

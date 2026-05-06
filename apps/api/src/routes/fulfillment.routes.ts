@@ -7,6 +7,7 @@ import { resolveStockForChannel, type ChannelLocationSource } from '../services/
 import {
   bulkPersistRecommendationsIfChanged,
   attachPoToRecommendation,
+  dismissRecommendation,
   getRecommendationHistory,
   getRecommendationById,
   type RecommendationInput,
@@ -4484,6 +4485,37 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })
+
+  // R.21 — Dismiss a recommendation. Status ACTIVE → DISMISSED.
+  // Captures dismissal audit (who + when + reason). Idempotent on a
+  // non-ACTIVE row — returns the current state without raising so
+  // double-clicks don't error. Body: { reason?: string, userId?: string }.
+  fastify.post(
+    '/fulfillment/replenishment/recommendations/:id/dismiss',
+    async (request, reply) => {
+      try {
+        const { id } = request.params as { id: string }
+        const body = (request.body ?? {}) as {
+          reason?: string
+          userId?: string
+        }
+        const result = await dismissRecommendation({
+          recommendationId: id,
+          reason: body.reason ?? null,
+          userId: body.userId ?? null,
+        })
+        return result
+      } catch (err: any) {
+        const msg = err?.message ?? String(err)
+        if (/not found/i.test(msg)) return reply.code(404).send({ error: msg })
+        fastify.log.error(
+          { err },
+          '[replenishment/recommendations/:id/dismiss] failed',
+        )
+        return reply.code(500).send({ error: msg })
+      }
+    },
+  )
 
   // R.6 — auto-PO manual trigger. POST runs the sweep + writes a real
   // run-log row. Body { dryRun: true } previews without creating POs.

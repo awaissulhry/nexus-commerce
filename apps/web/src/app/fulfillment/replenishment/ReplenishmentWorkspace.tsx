@@ -420,6 +420,40 @@ export default function ReplenishmentWorkspace() {
     }
   }
 
+  // R.21 — Dismiss a recommendation. ACTIVE → DISMISSED in DB; the
+  // operator's reason flows to dismissedReason for audit. We refetch
+  // after success so the row falls out of the visible list (it's no
+  // longer ACTIVE on the next forecast pass either, until the engine
+  // generates a fresh rec — which it will when the underlying signal
+  // changes).
+  const dismissRow = async (s: Suggestion, reason: string | null) => {
+    if (!s.recommendationId) {
+      pushToast('error', 'No recommendation id on this row')
+      return
+    }
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/replenishment/recommendations/${s.recommendationId}/dismiss`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason }),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      pushToast('ok', `Dismissed: ${s.sku}`)
+      fetchData()
+    } catch (err) {
+      pushToast(
+        'error',
+        `Dismiss failed: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
+  }
+
   const drawerProduct = useMemo(
     () => filtered.find((s) => s.productId === drawerProductId) ?? null,
     [filtered, drawerProductId],
@@ -636,6 +670,7 @@ export default function ReplenishmentWorkspace() {
               onToggleSelect={() => toggleSelected(s.productId)}
               onOpenDrawer={() => setDrawerProductId(s.productId)}
               onDraftPo={() => draftSinglePo(s)}
+              onDismiss={(reason) => dismissRow(s, reason)}
             />
           ))}
         </div>
@@ -678,6 +713,7 @@ export default function ReplenishmentWorkspace() {
                     onToggle={() => toggleSelected(s.productId)}
                     onOpenDrawer={() => setDrawerProductId(s.productId)}
                     onDraftPo={() => draftSinglePo(s)}
+                    onDismiss={(reason) => dismissRow(s, reason)}
                   />
                 ))}
               </tbody>
@@ -878,12 +914,16 @@ function MobileSuggestionCard({
   onToggleSelect,
   onOpenDrawer,
   onDraftPo,
+  onDismiss,
 }: {
   s: Suggestion
   selected: boolean
   onToggleSelect: () => void
   onOpenDrawer: () => void
   onDraftPo: () => void
+  /** R.21 — dismiss this rec. Receives a reason string (or null when
+   *  user declined to provide one). Caller pushes a toast on result. */
+  onDismiss: (reason: string | null) => void
 }) {
   const tone = URGENCY_TONE[s.urgency] ?? URGENCY_TONE.LOW
   return (
@@ -936,6 +976,18 @@ function MobileSuggestionCard({
           className="flex-1 h-8 text-[11px] bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center justify-center gap-1"
         >
           {s.isManufactured ? <><Factory size={11} /> WO</> : <><ShoppingCart size={11} /> PO</>}
+        </button>
+        <button
+          onClick={() => {
+            const reason = window.prompt(
+              `Dismiss "${s.sku}"? (Reason — optional, helps audit later)`,
+            )
+            if (reason !== null) onDismiss(reason.trim() || null)
+          }}
+          className="h-8 px-2 text-[11px] border border-red-200 text-red-700 rounded hover:bg-red-50 inline-flex items-center gap-1"
+          title="Dismiss this recommendation"
+        >
+          <X size={11} />
         </button>
         <button
           onClick={onOpenDrawer}
@@ -1004,12 +1056,15 @@ function SuggestionRow({
   onToggle,
   onOpenDrawer,
   onDraftPo,
+  onDismiss,
 }: {
   suggestion: Suggestion
   selected: boolean
   onToggle: () => void
   onOpenDrawer: () => void
   onDraftPo: () => void
+  /** R.21 — dismiss this rec. Reason is optional but encouraged. */
+  onDismiss: (reason: string | null) => void
 }) {
   const stockTone =
     s.effectiveStock === 0
@@ -1133,24 +1188,40 @@ function SuggestionRow({
         {s.reorderQuantity}
       </td>
       <td className="px-3 py-2 text-right">
-        {s.needsReorder ? (
+        <div className="inline-flex items-center gap-1">
+          {s.needsReorder ? (
+            <button
+              onClick={onDraftPo}
+              className="h-7 px-2 text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1"
+              title={s.isManufactured ? 'Create work order' : 'Create draft PO'}
+            >
+              {s.isManufactured ? (
+                <>
+                  <Factory size={11} /> WO
+                </>
+              ) : (
+                <>
+                  <ShoppingCart size={11} /> PO
+                </>
+              )}
+            </button>
+          ) : (
+            <span className="text-[10px] text-slate-400">OK</span>
+          )}
           <button
-            onClick={onDraftPo}
-            className="h-7 px-2 text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1"
+            onClick={() => {
+              const reason = window.prompt(
+                `Dismiss "${s.sku}"? (Reason — optional, helps audit later)`,
+              )
+              if (reason !== null) onDismiss(reason.trim() || null)
+            }}
+            className="h-7 w-7 flex items-center justify-center text-[11px] text-slate-400 hover:text-red-700 hover:bg-red-50 border border-transparent hover:border-red-200 rounded"
+            title="Dismiss this recommendation"
+            aria-label="Dismiss recommendation"
           >
-            {s.isManufactured ? (
-              <>
-                <Factory size={11} /> WO
-              </>
-            ) : (
-              <>
-                <ShoppingCart size={11} /> PO
-              </>
-            )}
+            <X size={12} />
           </button>
-        ) : (
-          <span className="text-[10px] text-slate-400">OK</span>
-        )}
+        </div>
       </td>
       <td className="px-3 py-2">
         <button
