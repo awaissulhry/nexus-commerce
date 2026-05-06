@@ -881,6 +881,43 @@ The CLI in `packages/database` (v6) generates a client compatible with `@prisma/
 
 ---
 
+## 42. 🟡 No test framework
+
+**Symptom:** Repo has zero `*.test.ts` / `*.spec.ts` files and no Vitest/Jest setup. Every commit ships on the strength of manual smoke testing + the pre-push `next build` + `tsc --noEmit` gates.
+
+**Surfaced at:** H.10 final commit of the stock rebuild — couldn't write proper unit tests for `applyStockMovement` / reservation logic / cascade fan-out without first scaffolding a test runner. End-to-end smoke ships at `scripts/verify-stock.mjs` instead, which exercises the live API and asserts `Product.totalStock = SUM(StockLevel.quantity)` after each operation.
+
+**Workaround:** The smoke script catches regressions for the stock surface specifically. Other surfaces have no equivalent.
+
+**Proper fix:**
+1. Add Vitest at the repo root with workspace-aware config (apps/api, apps/web, packages/database).
+2. Stand up a single integration test against the existing Prisma client + a throwaway test database (or DATABASE_URL pointing at a Neon branch).
+3. Cover the highest-leverage flows first: stock-movement audit-trail integrity, reservation no-double-allocation, OutboundSyncQueue cascade after a write.
+
+Promote to 🔴 when a regression slips past the build gates and into production.
+
+---
+
+## 43. 🟢 eBay/Shopify/etc. inbound stock sync
+
+**Symptom:** Only Amazon FBA has an inbound (channel → Nexus) stock sync. Other channels' stock is purely outbound (Phase 13 cascade pushes Nexus → channel). If eBay's inventory drifts vs. Nexus's expectation (e.g., a customer cancels via eBay direct without webhook), Nexus has no way to detect or reconcile.
+
+**Surfaced at:** H.8 sync engine wiring — flagged as out-of-scope because no eBay/Shopify orders flow today.
+
+**Proper fix:** Mirror `amazon-inventory.service.ts` for each channel. Each adapter calls the channel's "get inventory" API on a 15–30 min cadence, finds drift, applies via `applyStockMovement(reason='SYNC_RECONCILIATION', locationId=<channel-allocation-location>)`. Will need a `CHANNEL_RESERVED` location per channel for inventory that's allocated to (but not necessarily held by) the channel.
+
+---
+
+## 44. 🟢 Saved views + column reorder/resize on /fulfillment/stock
+
+**Symptom:** H.9 polish landed density modes, column show/hide, and keyboard shortcuts. Saved views (named filter snapshots) and drag-to-reorder/resize for table columns were deferred — both are substantial scope (saved views needs persistence + a UI flow; reorder/resize needs dnd-kit machinery).
+
+**Workaround:** URL state (`view`, `location`, `status`, `search`, `page`) survives reload + share, which covers the most common "remember this filter" use case.
+
+**Proper fix:** When a user explicitly asks. Saved views: add a `UserView` model keyed by user + page + name, store the URL query, surface in a dropdown next to the filter bar. Column reorder: dnd-kit on the column picker dropdown.
+
+---
+
 ## Triage summary
 
 **🔴 P0 — tackle next:**
@@ -929,5 +966,8 @@ The CLI in `packages/database` (v6) generates a client compatible with `@prisma/
 - **39** Per-seller primary marketplace setting — replaces hardcoded `'IT'` in E.9 backfill + future resolver fallbacks; needed once Nexus serves a second tenant
 - **40** SP-API variation attribute mapping seed — auto-populate `ChannelListing.variationMapping` from `getProductTypeDefinitions` once a real publish lands; tied to #35
 - **41** Order-driven stock decrement — fulfillment-method-aware location routing (FBA → `AMAZON-EU-FBA`, rest → `IT-MAIN`); promote to 🔴 once real orders flow
+- **42** No test framework — Vitest + integration tests for stock-movement audit / reservations / cascade; smoke at `scripts/verify-stock.mjs` covers stock surface only
+- **43** eBay/Shopify inbound stock sync — only Amazon FBA has inbound today; outbound cascade covers writes from Nexus → channel
+- **44** Saved views + column reorder/resize on /fulfillment/stock — URL state covers the common case; dnd-kit + UserView model when explicitly asked
 - **46** `Channel` table empty + `ChannelListing.channel` is a string — implicit FK contract; populate + migrate to real FK, or delete the table to make the contract explicit. Tied to multi-tenant readiness.
 - **47** ✅ Resolved 2026-05-06 — Vercel auto-deploy gap was a routing confusion; production URL is `nexus-commerce-three.vercel.app` not `nexus-commerce.vercel.app`. Documented for future audits.

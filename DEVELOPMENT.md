@@ -136,3 +136,102 @@ await prisma.product.create({
 A test fixture written without `importSource` is invisible to the cleanup script and ends up surviving as fake "real" data — exactly the mess the 2026-05-05 cleanup undid.
 
 See `packages/database/AUDIT.md` for the post-cleanup state of record.
+
+## Stock — multi-location architecture (H.1–H.10)
+
+`/fulfillment/stock` is backed by a per-location ledger introduced in
+the H.1–H.9 series. The model + flow:
+
+```
+   Product.totalStock  ←  cached SUM(StockLevel.quantity)  (recomputed
+                                                            on every write)
+        │
+        └─► StockLevel  (locationId, productId, variationId)
+                │           quantity / reserved / available
+                │           CHECK: available = quantity - reserved
+                │
+                ├─► StockMovement  (audit trail; every change writes one)
+                ├─► StockReservation (24h TTL on PENDING_ORDER)
+                └─► OutboundSyncQueue (Phase 13 cascade fan-out per
+                                       ChannelListing → BullMQ worker
+                                       → channel API)
+```
+
+**Source of truth**: `StockLevel`. `Product.totalStock` is a cached sum
+maintained in the same transaction as every write. **All stock writes
+go through `applyStockMovement`** (`apps/api/src/services/stock-movement.service.ts`),
+which resolves a location for every call: explicit `locationId` →
+`warehouseId` → IT-MAIN fallback.
+
+### Locations seeded
+
+- `IT-MAIN` (Riccione, type=WAREHOUSE) — physical inventory, links to
+  legacy `Warehouse` row for shipping/Sendcloud sender mapping.
+- `AMAZON-EU-FBA` (type=AMAZON_FBA) — Amazon's pool. Written by the
+  FBA inventory cron (`amazonInventoryService.applyRows`).
+
+### Endpoints
+
+| Endpoint                              | Purpose                                                    |
+| ------------------------------------- | ---------------------------------------------------------- |
+| `GET /api/stock`                      | per-StockLevel rows, paginated (table view)                |
+| `GET /api/stock/by-product`           | per-product with stockLevels nested (matrix + cards views) |
+| `GET /api/stock/locations`            | all locations + roll-up totals                             |
+| `GET /api/stock/kpis`                 | total value, stockouts, critical, available                |
+| `GET /api/stock/insights`             | stockout risk + allocation gaps + sync conflicts (24h)     |
+| `GET /api/stock/sync-status`          | derived health for the SyncIndicator badge                 |
+| `GET /api/stock/movements`            | audit log with filters                                     |
+| `GET /api/stock/product/:productId`   | drawer bundle (levels + listings + velocity + ATP + …)     |
+| `PATCH /api/stock/:id`                | adjust quantity (signed `change`) OR set `reorderThreshold`|
+| `POST /api/stock/transfer`            | atomic OUT + IN between locations                          |
+| `POST /api/stock/reserve`             | hold N units against a StockLevel                          |
+| `POST /api/stock/release/:rid`        | release a reservation (also expires via 5-min sweep)       |
+| `POST /api/stock/sync`                | manually trigger FBA cron sweep                            |
+
+The legacy `/api/fulfillment/stock` endpoints stay live alongside —
+they aggregate across locations and are still consumed by other pages.
+
+### Crons
+
+| Cron                          | Cadence  | Default | Env flag                                  |
+| ----------------------------- | -------- | ------- | ----------------------------------------- |
+| Amazon FBA inventory sweep    | 15 min   | OFF     | `NEXUS_ENABLE_AMAZON_INVENTORY_CRON=1`    |
+| Amazon orders polling         | 15 min   | OFF     | `NEXUS_ENABLE_AMAZON_ORDERS_CRON=1`       |
+| Reservation TTL sweep         | 5 min    | ON      | `NEXUS_ENABLE_RESERVATION_SWEEP_CRON=0` to opt out |
+| eBay token refresh            | hourly   | ON      | `NEXUS_ENABLE_EBAY_TOKEN_REFRESH_CRON=0` to opt out|
+
+Override schedules via the `*_SCHEDULE` env vars (cron syntax).
+
+### Operational scripts
+
+```bash
+# Pre-flight + post-migration verification (read-only)
+node scripts/h1-preflight.mjs
+node scripts/h1-postcheck.mjs
+
+# Drift repair (run if SUM(StockLevel) != Product.totalStock)
+node packages/database/scripts/reconcile-stocklevel.mjs --dry-run
+node packages/database/scripts/reconcile-stocklevel.mjs
+
+# End-to-end smoke (idempotent — uses MANUAL_HOLD reservations + reverses)
+node scripts/verify-stock.mjs
+```
+
+### Coordination playbook (next migration)
+
+If a future stock migration needs a window like H.1 did:
+
+1. Disable FBA cron: `NEXUS_ENABLE_AMAZON_INVENTORY_CRON=0` on Railway, redeploy.
+2. Wait for any running `prisma migrate deploy` lock to release. The
+   Neon pooler endpoint doesn't reliably support `pg_advisory_lock` —
+   strip `-pooler` from `DATABASE_URL` for migrate-deploy commands.
+   If the lock is stuck, see `scripts/h1-lock-diag.mjs` and
+   `h1-lock-release.mjs`.
+3. Apply migration via `prisma migrate deploy`.
+4. Run any data backfill (with `--dry-run` first).
+5. Verify drift = 0 with the postcheck script.
+6. Push code with the new schema.
+7. Re-enable cron.
+
+See `packages/database/prisma/migrations/20260506_h1_stock_locations/`
+for the H.1 migration + rollback as a reference pattern.
