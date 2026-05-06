@@ -59,6 +59,28 @@ type LocationSummary = {
   totalAvailable: number
 }
 
+type SyncStatus = {
+  amazonFbaCron: {
+    configured: boolean
+    enabled: boolean
+    lastReconciliationAt: string | null
+    lastReconciliationDelta: number | null
+  }
+  reservationSweep: {
+    scheduled: boolean
+    lastRunAt: string | null
+    lastReleasedCount: number
+  }
+  outboundQueue: {
+    pending: number
+    syncing: number
+    failed: number
+    synced: number
+    oldestPendingAt: string | null
+  }
+  recentReconciliationCount: number
+}
+
 type Insights = {
   stockoutRisk: Array<{
     id: string; sku: string; name: string; amazonAsin: string | null
@@ -190,6 +212,7 @@ export default function StockWorkspace() {
   const [kpis, setKpis] = useState<Kpis | null>(null)
   const [insights, setInsights] = useState<Insights | null>(null)
   const [insightsCollapsed, setInsightsCollapsed] = useState(false)
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null)
   // Bulk-selection state. Set of StockLevel ids. Only used in table view —
   // matrix and cards address products directly so per-row selection is
   // less natural there. `lastSelectedIdx` powers shift-click range select.
@@ -256,10 +279,11 @@ export default function StockWorkspace() {
 
   const fetchSidecar = useCallback(async () => {
     try {
-      const [locRes, kpiRes, insightsRes] = await Promise.all([
+      const [locRes, kpiRes, insightsRes, syncRes] = await Promise.all([
         fetch(`${getBackendUrl()}/api/stock/locations`, { cache: 'no-store' }),
         fetch(`${getBackendUrl()}/api/stock/kpis`, { cache: 'no-store' }),
         fetch(`${getBackendUrl()}/api/stock/insights`, { cache: 'no-store' }),
+        fetch(`${getBackendUrl()}/api/stock/sync-status`, { cache: 'no-store' }),
       ])
       if (locRes.ok) {
         const data = await locRes.json()
@@ -270,6 +294,9 @@ export default function StockWorkspace() {
       }
       if (insightsRes.ok) {
         setInsights(await insightsRes.json())
+      }
+      if (syncRes.ok) {
+        setSyncStatus(await syncRes.json())
       }
     } catch {
       // Sidecar is best-effort — the table still works without it.
@@ -463,6 +490,7 @@ export default function StockWorkspace() {
         breadcrumbs={[{ label: 'Fulfillment', href: '/fulfillment' }, { label: 'Stock' }]}
         actions={
           <div className="flex items-center gap-2">
+            {syncStatus && <SyncIndicator status={syncStatus} />}
             <ViewToggle view={view} onChange={(v) => updateUrl({ view: v === 'table' ? undefined : v, page: undefined })} />
             <button
               onClick={() => { fetchStock(); fetchSidecar() }}
@@ -1580,6 +1608,123 @@ function ReservePanel({
 // ─────────────────────────────────────────────────────────────────────
 // View toggle + view components
 // ─────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────
+// Sync engine status indicator (H.8)
+// ─────────────────────────────────────────────────────────────────────
+function SyncIndicator({ status }: { status: SyncStatus }) {
+  const [open, setOpen] = useState(false)
+
+  // Health rollup. Failed > stale > healthy.
+  const failed = status.outboundQueue.failed > 0
+  const fbaConfiguredButDisabled = status.amazonFbaCron.configured && !status.amazonFbaCron.enabled
+  const stalePendingMs = status.outboundQueue.oldestPendingAt
+    ? Date.now() - new Date(status.outboundQueue.oldestPendingAt).getTime()
+    : 0
+  const stale = stalePendingMs > 30 * 60 * 1000 // >30 min queued
+
+  const tone =
+    failed ? 'bg-rose-50 text-rose-700 border-rose-200' :
+    stale ? 'bg-amber-50 text-amber-700 border-amber-200' :
+    fbaConfiguredButDisabled ? 'bg-slate-50 text-slate-500 border-slate-200' :
+    'bg-emerald-50 text-emerald-700 border-emerald-200'
+
+  const label =
+    failed ? `${status.outboundQueue.failed} failed` :
+    stale ? `${status.outboundQueue.pending} pending` :
+    fbaConfiguredButDisabled ? 'FBA cron off' :
+    'Synced'
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={`h-8 px-2.5 text-[11px] border rounded inline-flex items-center gap-1.5 font-medium ${tone}`}
+        title="Sync engine status"
+      >
+        <span className={`w-1.5 h-1.5 rounded-full ${
+          failed ? 'bg-rose-500' :
+          stale ? 'bg-amber-500' :
+          fbaConfiguredButDisabled ? 'bg-slate-400' :
+          'bg-emerald-500 animate-pulse'
+        }`} />
+        {label}
+      </button>
+      {open && (
+        <div
+          className="absolute right-0 top-full mt-1 w-80 z-20 bg-white border border-slate-200 rounded-md shadow-lg p-3 text-[12px] space-y-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Amazon FBA cron</div>
+            <div className="text-slate-700 mt-0.5">
+              {status.amazonFbaCron.enabled
+                ? <span className="text-emerald-700">Enabled · 15-min cadence</span>
+                : status.amazonFbaCron.configured
+                  ? <span className="text-amber-700">Configured but disabled</span>
+                  : <span className="text-slate-500">Not configured</span>}
+            </div>
+            {status.amazonFbaCron.lastReconciliationAt && (
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                Last reconciliation {formatRelative(status.amazonFbaCron.lastReconciliationAt)}
+                {status.amazonFbaCron.lastReconciliationDelta != null && (
+                  <span className={status.amazonFbaCron.lastReconciliationDelta > 0 ? ' text-emerald-700' : status.amazonFbaCron.lastReconciliationDelta < 0 ? ' text-rose-700' : ''}>
+                    {' '}({status.amazonFbaCron.lastReconciliationDelta > 0 ? '+' : ''}{status.amazonFbaCron.lastReconciliationDelta})
+                  </span>
+                )}
+              </div>
+            )}
+            <div className="text-[11px] text-slate-500">
+              {status.recentReconciliationCount} reconciliation{status.recentReconciliationCount === 1 ? '' : 's'} in last 24h
+            </div>
+          </div>
+          <div className="border-t border-slate-100 pt-2">
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Outbound queue</div>
+            <div className="grid grid-cols-3 gap-2 mt-1 text-center">
+              <div>
+                <div className={`text-[14px] font-semibold tabular-nums ${status.outboundQueue.pending > 0 ? 'text-amber-700' : 'text-slate-900'}`}>
+                  {status.outboundQueue.pending}
+                </div>
+                <div className="text-[10px] text-slate-500">pending</div>
+              </div>
+              <div>
+                <div className={`text-[14px] font-semibold tabular-nums ${status.outboundQueue.failed > 0 ? 'text-rose-700' : 'text-slate-900'}`}>
+                  {status.outboundQueue.failed}
+                </div>
+                <div className="text-[10px] text-slate-500">failed</div>
+              </div>
+              <div>
+                <div className="text-[14px] font-semibold tabular-nums text-slate-700">{status.outboundQueue.synced}</div>
+                <div className="text-[10px] text-slate-500">synced</div>
+              </div>
+            </div>
+            {status.outboundQueue.oldestPendingAt && (
+              <div className="text-[10px] text-slate-500 mt-1">
+                Oldest pending {formatRelative(status.outboundQueue.oldestPendingAt)}
+              </div>
+            )}
+          </div>
+          <div className="border-t border-slate-100 pt-2">
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Reservation sweep</div>
+            <div className="text-slate-700 mt-0.5">
+              {status.reservationSweep.scheduled
+                ? <span className="text-emerald-700">Scheduled · 5-min cadence</span>
+                : <span className="text-slate-500">Not scheduled</span>}
+            </div>
+            {status.reservationSweep.lastRunAt && (
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                Last run {formatRelative(status.reservationSweep.lastRunAt)}
+                {status.reservationSweep.lastReleasedCount > 0 && (
+                  <span> · {status.reservationSweep.lastReleasedCount} released</span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ViewToggle({ view, onChange }: { view: ViewMode; onChange: (v: ViewMode) => void }) {
   const tabs: Array<{ key: ViewMode; label: string; icon: any }> = [
     { key: 'table', label: 'Table', icon: TableIcon },

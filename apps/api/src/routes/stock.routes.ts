@@ -8,6 +8,7 @@ import {
 } from '../services/stock-level.service.js'
 import { amazonInventoryService } from '../services/amazon-inventory.service.js'
 import { resolveAtp } from '../services/atp.service.js'
+import { getReservationSweepStatus } from '../jobs/reservation-sweep.job.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // H.2 — Stock API surface for /fulfillment/stock rebuild.
@@ -124,6 +125,75 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock] list failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── GET /api/stock/sync-status ───────────────────────────────────
+  // Sync engine health, derived from observable signals — no separate
+  // tracking table. Powers the sync indicator badge in the page header.
+  //
+  //   amazonFbaCron   — last successful reconciliation (any delta) +
+  //                     whether the cron is currently configured
+  //   reservationSweep — in-process state from the sweep job
+  //   outboundQueue   — counts of QUANTITY_UPDATE rows by syncStatus
+  //                     (PENDING / SYNCING / FAILED) — proves the
+  //                     Phase 13 cascade fan-out is draining
+  //   recentReconciliations — last 24h count for trend signal
+  fastify.get('/stock/sync-status', async (_request, reply) => {
+    try {
+      const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000)
+
+      const [
+        lastFbaReconciliation,
+        recentReconciliationCount,
+        outboundQueueByStatus,
+        oldestPendingOutbound,
+      ] = await Promise.all([
+        prisma.stockMovement.findFirst({
+          where: { reason: 'SYNC_RECONCILIATION', actor: 'system:amazon-inventory-cron' },
+          orderBy: { createdAt: 'desc' },
+          select: { createdAt: true, change: true },
+        }),
+        prisma.stockMovement.count({
+          where: { reason: 'SYNC_RECONCILIATION', createdAt: { gte: since24h } },
+        }),
+        prisma.outboundSyncQueue.groupBy({
+          by: ['syncStatus'],
+          where: { syncType: 'QUANTITY_UPDATE' },
+          _count: { syncStatus: true },
+        }),
+        prisma.outboundSyncQueue.findFirst({
+          where: { syncType: 'QUANTITY_UPDATE', syncStatus: 'PENDING' },
+          orderBy: { createdAt: 'asc' },
+          select: { createdAt: true },
+        }),
+      ])
+
+      const outboundCounts: Record<string, number> = {}
+      for (const r of outboundQueueByStatus) {
+        outboundCounts[r.syncStatus] = r._count.syncStatus
+      }
+
+      return {
+        amazonFbaCron: {
+          configured: amazonInventoryService.isConfigured(),
+          enabled: process.env.NEXUS_ENABLE_AMAZON_INVENTORY_CRON === '1',
+          lastReconciliationAt: lastFbaReconciliation?.createdAt ?? null,
+          lastReconciliationDelta: lastFbaReconciliation?.change ?? null,
+        },
+        reservationSweep: getReservationSweepStatus(),
+        outboundQueue: {
+          pending: outboundCounts.PENDING ?? 0,
+          syncing: outboundCounts.SYNCING ?? 0,
+          failed: outboundCounts.FAILED ?? 0,
+          synced: outboundCounts.SYNCED ?? 0,
+          oldestPendingAt: oldestPendingOutbound?.createdAt ?? null,
+        },
+        recentReconciliationCount,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/sync-status] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })

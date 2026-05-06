@@ -55,6 +55,7 @@ import { startCatalogRefreshCron } from "./jobs/catalog-refresh.job.js";
 import { startEbayTokenRefreshCron } from "./jobs/ebay-token-refresh.job.js";
 import { startAmazonOrdersCron } from "./jobs/amazon-orders-sync.job.js";
 import { startAmazonInventoryCron } from "./jobs/amazon-inventory-sync.job.js";
+import { startReservationSweepCron } from "./jobs/reservation-sweep.job.js";
 import pricingRoutes from "./routes/pricing.routes.js";
 // BullMQ worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS=1.
 // initializeQueue pings Redis and throws on failure; tryStartQueueWorkers
@@ -293,6 +294,14 @@ async function start() {
     // Gated behind NEXUS_ENABLE_AMAZON_INVENTORY_CRON=1.
     if (process.env.NEXUS_ENABLE_AMAZON_INVENTORY_CRON === '1') {
       startAmazonInventoryCron();
+    }
+
+    // Reservation TTL sweep — every 5 min, releases expired
+    // PENDING_ORDER reservations so available = quantity - reserved
+    // doesn't stay locked after a cancelled order. Default-ON; opt out
+    // via NEXUS_ENABLE_RESERVATION_SWEEP_CRON=0.
+    if (process.env.NEXUS_ENABLE_RESERVATION_SWEEP_CRON !== '0') {
+      startReservationSweepCron();
     }
 
     logger.info('✅ API server initialized', {
