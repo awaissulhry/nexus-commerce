@@ -616,6 +616,84 @@ export async function catalogRoutes(app: FastifyInstance) {
   );
 
   /**
+   * GET /api/catalog/products/:id
+   *
+   * Returns the product plus its existing children mapped into a
+   * `variations[]` array that the AttachModal in /catalog/organize
+   * consumes to pre-populate axis suggestions.
+   *
+   * Field rename in the response: each child's stored `variantAttributes`
+   * (Product schema, line 188) surfaces as `variationAttributes` because
+   * that is the key the modal already reads. Renaming the storage field
+   * is out of scope for this fix.
+   *
+   * The endpoint also returns `variationAxes` (String[]) and
+   * `variationTheme` (String?) so the modal can fall back to the theme
+   * string when the axes array is empty.
+   *
+   * 404 instead of 200-with-empty so the caller can distinguish "parent
+   * removed" from "parent has no children yet."
+   */
+  app.get<{ Params: { id: string } }>(
+    "/products/:id",
+    async (request, reply) => {
+      try {
+        const { id } = request.params;
+        const product = await prisma.product.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            sku: true,
+            name: true,
+            isParent: true,
+            parentId: true,
+            variationTheme: true,
+            variationAxes: true,
+            variantAttributes: true,
+            children: {
+              orderBy: { sku: "asc" },
+              select: {
+                id: true,
+                sku: true,
+                name: true,
+                variantAttributes: true,
+              },
+            },
+          },
+        });
+        if (!product) {
+          return reply.status(404).send({
+            success: false,
+            error: {
+              code: "PRODUCT_NOT_FOUND",
+              message: `Product with ID "${id}" not found`,
+            },
+          });
+        }
+        const { children, ...rest } = product;
+        const variations = children.map((c) => ({
+          id: c.id,
+          sku: c.sku,
+          name: c.name,
+          variationAttributes: c.variantAttributes,
+        }));
+        return { success: true, data: { ...rest, variations } };
+      } catch (error) {
+        return reply.status(500).send({
+          success: false,
+          error: {
+            code: "INTERNAL_ERROR",
+            message:
+              error instanceof Error
+                ? error.message
+                : "Failed to fetch product",
+          },
+        });
+      }
+    },
+  );
+
+  /**
    * PATCH /api/products/:id
    * Update product and queue syncs to marketplaces
    */
