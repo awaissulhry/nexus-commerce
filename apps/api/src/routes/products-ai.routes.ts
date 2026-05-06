@@ -30,13 +30,13 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
-import { GeminiService } from '../services/ai/gemini.service.js'
 import {
   ListingContentService,
   type ContentField,
   type GenerationResult,
 } from '../services/ai/listing-content.service.js'
 import { auditLogService } from '../services/audit-log.service.js'
+import { logUsage } from '../services/ai/usage-logger.service.js'
 
 const ALLOWED_FIELDS = new Set<ContentField>([
   'title',
@@ -46,8 +46,7 @@ const ALLOWED_FIELDS = new Set<ContentField>([
 ])
 const MAX_PRODUCTS_PER_CALL = 50
 
-const gemini = new GeminiService()
-const service = new ListingContentService(gemini)
+const service = new ListingContentService()
 
 interface BulkGenerateBody {
   productIds?: string[]
@@ -55,6 +54,9 @@ interface BulkGenerateBody {
   marketplace?: string
   /** When true, return generated content but skip the write. */
   dryRun?: boolean
+  /** H.7 — provider override. 'gemini' | 'anthropic'. Falls back to
+   *  AI_PROVIDER env or first configured provider. */
+  provider?: string
 }
 
 interface BulkGenerateResult {
@@ -88,6 +90,7 @@ const productsAiRoutes: FastifyPluginAsync = async (fastify) => {
       const marketplace = (body.marketplace ?? '').trim().toUpperCase()
       const requestedFieldsRaw = Array.isArray(body.fields) ? body.fields : []
       const dryRun = body.dryRun === true
+      const providerName = body.provider
 
       if (productIds.length === 0) {
         return reply.code(400).send({ error: 'productIds[] required' })
@@ -203,7 +206,32 @@ const productsAiRoutes: FastifyPluginAsync = async (fastify) => {
             marketplace,
             fields: requestedFields,
             terminology,
+            provider: providerName,
           })
+
+          // H.7 — flush per-field cost telemetry. Failures don't bubble
+          // (logUsage swallows DB errors); the user already paid the
+          // round-trip and we don't want to fail their write to record
+          // accounting.
+          for (const u of generated.usage) {
+            logUsage({
+              provider: u.provider,
+              model: u.model,
+              feature: 'products-ai-bulk',
+              entityType: 'Product',
+              entityId: id,
+              inputTokens: u.inputTokens,
+              outputTokens: u.outputTokens,
+              costUSD: u.costUSD,
+              latencyMs: generated.metadata.elapsedMs,
+              ok: true,
+              metadata: {
+                marketplace,
+                fields: requestedFields,
+                dryRun,
+              },
+            })
+          }
 
           let written: ContentField[] = []
           if (!dryRun) {

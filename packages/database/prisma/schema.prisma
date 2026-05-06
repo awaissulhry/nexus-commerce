@@ -3093,3 +3093,53 @@ model OrderTag {
   @@index([orderId])
   @@index([tagId])
 }
+
+// ── AI provider usage + cost ledger ───────────────────────────────────
+// Every server-side LLM call writes one row here so the settings page
+// can show per-provider 7-day token + spend totals, and so we have a
+// correlation log when a user reports "my AI fill returned garbage".
+//
+// `cost` is computed at write time against the provider's rate card
+// (see providers/{gemini,anthropic}.provider.ts → RATE_CARD). We do NOT
+// recompute historical rows when prices change — the value here is
+// what we recorded as billable at the moment of the call.
+//
+// `feature` is a free-form caller tag ("products-ai-bulk",
+// "listing-content", "ebay-listing", ...) so analytics can group
+// spend by user-facing surface, not just by provider.
+//
+// Soft-link to entity (entityType + entityId, no FK) so the cost of
+// "AI fill on product X" is queryable even if X is later deleted.
+model AiUsageLog {
+  id          String  @id @default(cuid())
+  provider    String  // "gemini" | "anthropic"
+  model       String  // "gemini-2.0-flash" | "claude-haiku-4-5-20251001" ...
+  feature     String? // caller surface tag — e.g. "products-ai-bulk"
+  // What it ran against (optional). entityType="Product", entityId=<cuid>.
+  entityType  String?
+  entityId    String?
+  // Token + cost telemetry. cost is USD at four decimals; rounding
+  // up to 4dp keeps small Haiku calls (sub-cent) visible.
+  inputTokens Int     @default(0)
+  outputTokens Int    @default(0)
+  costUSD     Decimal @default(0) @db.Decimal(12, 6)
+  // Free-form metadata the caller wants to surface in analytics.
+  metadata    Json?
+  // Latency for the API call itself (excluding parse / DB writes).
+  latencyMs   Int?
+  // Whether the call succeeded; failures still get logged for cost
+  // visibility (most failures only burn input tokens, but Anthropic
+  // bills for a partial completion).
+  ok          Boolean @default(true)
+  errorCode   String?
+  errorMessage String?
+  // Who ran it. Default-user pre-auth, real userId post-auth retrofit.
+  userId      String?
+  createdAt   DateTime @default(now())
+
+  @@index([provider, createdAt])
+  @@index([feature, createdAt])
+  @@index([entityType, entityId])
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}

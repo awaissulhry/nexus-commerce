@@ -11,11 +11,11 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
-import { GeminiService } from '../services/ai/gemini.service.js'
 import {
   ListingContentService,
   type ContentField,
 } from '../services/ai/listing-content.service.js'
+import { logUsage } from '../services/ai/usage-logger.service.js'
 
 const ALLOWED_FIELDS = new Set<ContentField>([
   'title',
@@ -24,14 +24,15 @@ const ALLOWED_FIELDS = new Set<ContentField>([
   'keywords',
 ])
 
-const gemini = new GeminiService()
-const service = new ListingContentService(gemini)
+const service = new ListingContentService()
 
 interface Body {
   productId?: string
   marketplace?: string
   fields?: string[]
   variant?: number
+  /** H.7 — provider override. */
+  provider?: string
 }
 
 const listingContentRoutes: FastifyPluginAsync = async (fastify) => {
@@ -44,7 +45,8 @@ const listingContentRoutes: FastifyPluginAsync = async (fastify) => {
             'Gemini API not configured — set GEMINI_API_KEY on the API server.',
         })
       }
-      const { productId, marketplace, fields, variant } = request.body ?? {}
+      const { productId, marketplace, fields, variant, provider } =
+        request.body ?? {}
       if (!productId || !marketplace || !Array.isArray(fields)) {
         return reply.code(400).send({
           error: 'productId, marketplace, fields[] are all required',
@@ -122,7 +124,25 @@ const listingContentRoutes: FastifyPluginAsync = async (fastify) => {
           fields: requested,
           variant: typeof variant === 'number' ? variant : 0,
           terminology,
+          provider,
         })
+        // H.7 — flush per-field cost telemetry. Logged async; errors
+        // swallowed by logUsage so the response isn't held up.
+        for (const u of result.usage) {
+          logUsage({
+            provider: u.provider,
+            model: u.model,
+            feature: 'listing-content',
+            entityType: 'Product',
+            entityId: product.id,
+            inputTokens: u.inputTokens,
+            outputTokens: u.outputTokens,
+            costUSD: u.costUSD,
+            latencyMs: result.metadata.elapsedMs,
+            ok: true,
+            metadata: { marketplace, fields: requested },
+          })
+        }
         return result
       } catch (err: any) {
         fastify.log.error({ err }, '[listing-content/generate] failed')

@@ -37,11 +37,11 @@ import {
 } from '../services/listing-wizard/channel-publish.service.js'
 import { ImageResolutionService } from '../services/listing-images/image-resolution.service.js'
 import { validateForPlatform } from '../services/listing-images/validation.service.js'
-import { GeminiService } from '../services/ai/gemini.service.js'
 import {
   ListingContentService,
   type ContentField,
 } from '../services/ai/listing-content.service.js'
+import { logUsage } from '../services/ai/usage-logger.service.js'
 import {
   channelsHash,
   legacyFirstChannel,
@@ -66,7 +66,7 @@ const schemaParserService = new SchemaParserService(
 const variationsService = new VariationsService(prisma as any)
 const submissionService = new SubmissionService(prisma as any)
 const imageResolutionService = new ImageResolutionService(prisma as any)
-const listingContentService = new ListingContentService(new GeminiService())
+const listingContentService = new ListingContentService()
 const channelPublishService = new ChannelPublishService()
 const ebayCategoryService = new EbayCategoryService()
 
@@ -1499,6 +1499,28 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
             variant,
             terminology,
           })
+          // H.7 — log per-field cost telemetry. Wizard groups are the
+          // most expensive AI surface (one call per channel-language
+          // group), so attributing them is high-leverage.
+          for (const u of result.usage) {
+            logUsage({
+              provider: u.provider,
+              model: u.model,
+              feature: 'listing-wizard',
+              entityType: 'Product',
+              entityId: product.id,
+              inputTokens: u.inputTokens,
+              outputTokens: u.outputTokens,
+              costUSD: u.costUSD,
+              latencyMs: result.metadata.elapsedMs,
+              ok: true,
+              metadata: {
+                marketplace: representativeMarketplace,
+                fields: requested,
+                groupKey,
+              },
+            })
+          }
           groupResults.push({
             groupKey,
             platform: g.platform,

@@ -1,20 +1,24 @@
 /**
- * Phase 5.5: Amazon-listing content generation via Gemini Flash.
+ * Phase 5.5: Amazon-listing content generation.
  *
  * Single entry point — `generate({ product, marketplace, fields, variant })`.
  * Each requested field has its own prompt builder + JSON-shape contract;
  * we run the requested generators in parallel and return a partial
  * response keyed by field name. Temperature is bumped per `variant`
  * so repeated regenerations produce noticeably different output.
+ *
+ * H.7 — provider-agnostic. The service holds an LLMProvider (Gemini
+ * by default; Anthropic + future providers via the registry) instead
+ * of the Google SDK directly. Cost + token telemetry comes back per
+ * call so the route can persist AiUsageLog rows.
  */
 
-import type { GenerativeModel } from '@google/generative-ai'
-import { GeminiService } from './gemini.service.js'
-
-// Google deprecated gemini-1.5-flash on the v1beta endpoint in
-// late 2025; calls 404. gemini-2.0-flash is the current stable
-// successor.
-const FLASH_MODEL = 'gemini-2.0-flash'
+import { getProvider } from './providers/index.js'
+import type {
+  LLMProvider,
+  ProviderName,
+  ProviderUsage,
+} from './providers/types.js'
 
 const LANGUAGE_FOR_MARKETPLACE: Record<string, string> = {
   IT: 'Italian',
@@ -67,6 +71,9 @@ export interface GenerationParams {
   /** Per-brand / per-marketplace terminology to inject into every
    *  prompt. Fetched by the route from TerminologyPreference. */
   terminology?: TerminologyEntry[]
+  /** H.7 — caller-chosen provider. Falls back to AI_PROVIDER env or
+   *  the first configured provider. */
+  provider?: string | null
 }
 
 export interface TitleResult {
@@ -98,76 +105,108 @@ export interface GenerationResult {
   bullets?: BulletsResult
   description?: DescriptionResult
   keywords?: KeywordsResult
+  /** H.7 — per-field token + cost ledger. The route flushes these to
+   *  AiUsageLog so the settings page can render 7-day rollups. */
+  usage: ProviderUsage[]
   metadata: {
     productSku: string
     marketplace: string
     language: string
     model: string
+    provider: ProviderName
     elapsedMs: number
     generatedAt: string
   }
 }
 
 export class ListingContentService {
-  constructor(private gemini: GeminiService) {}
-
   isConfigured(): boolean {
-    return this.gemini.isConfigured()
+    return getProvider() != null
   }
 
   async generate(params: GenerationParams): Promise<GenerationResult> {
     const language =
       LANGUAGE_FOR_MARKETPLACE[params.marketplace.toUpperCase()] ?? 'English'
 
-    const start = Date.now()
-    const model = (this.gemini as any)
-      .getClient()
-      .getGenerativeModel({ model: FLASH_MODEL })
+    const provider = getProvider(params.provider)
+    if (!provider) {
+      throw new Error(
+        'No AI provider configured — set GEMINI_API_KEY or ANTHROPIC_API_KEY',
+      )
+    }
 
-    const tasks: Array<Promise<[ContentField, unknown]>> = []
+    const start = Date.now()
+
+    const tasks: Array<Promise<{
+      field: ContentField
+      result: unknown
+      usage: ProviderUsage
+    }>> = []
     for (const f of params.fields) {
       if (f === 'title') {
         tasks.push(
-          this.runOne(model, this.titlePrompt(params, language), params.variant).then(
-            (raw) => ['title', this.parseTitle(raw)] as [ContentField, TitleResult],
+          this.runOne(provider, this.titlePrompt(params, language), params.variant).then(
+            (r) => ({ field: 'title', result: this.parseTitle(r.text), usage: r.usage }),
           ),
         )
       } else if (f === 'bullets') {
         tasks.push(
-          this.runOne(model, this.bulletsPrompt(params, language), params.variant, 0.05).then(
-            (raw) =>
-              ['bullets', this.parseBullets(raw)] as [ContentField, BulletsResult],
-          ),
+          this.runOne(
+            provider,
+            this.bulletsPrompt(params, language),
+            params.variant,
+            0.05,
+          ).then((r) => ({
+            field: 'bullets',
+            result: this.parseBullets(r.text),
+            usage: r.usage,
+          })),
         )
       } else if (f === 'description') {
         tasks.push(
-          this.runOne(model, this.descriptionPrompt(params, language), params.variant).then(
-            (raw) =>
-              ['description', this.parseDescription(raw)] as [ContentField, DescriptionResult],
-          ),
+          this.runOne(
+            provider,
+            this.descriptionPrompt(params, language),
+            params.variant,
+          ).then((r) => ({
+            field: 'description',
+            result: this.parseDescription(r.text),
+            usage: r.usage,
+          })),
         )
       } else if (f === 'keywords') {
         tasks.push(
-          this.runOne(model, this.keywordsPrompt(params, language), params.variant).then(
-            (raw) =>
-              ['keywords', this.parseKeywords(raw)] as [ContentField, KeywordsResult],
-          ),
+          this.runOne(
+            provider,
+            this.keywordsPrompt(params, language),
+            params.variant,
+          ).then((r) => ({
+            field: 'keywords',
+            result: this.parseKeywords(r.text),
+            usage: r.usage,
+          })),
         )
       }
     }
 
     const settled = await Promise.all(tasks)
+    const usageList = settled.map((s) => s.usage)
     const result: GenerationResult = {
+      usage: usageList,
       metadata: {
         productSku: params.product.sku,
         marketplace: params.marketplace,
         language,
-        model: FLASH_MODEL,
+        // Report whichever model the provider actually used for the
+        // first generated field — every field shares a provider per
+        // call, so this is unambiguous.
+        model: usageList[0]?.model ?? provider.defaultModel,
+        provider: provider.name,
         elapsedMs: Date.now() - start,
         generatedAt: new Date().toISOString(),
       },
     }
-    for (const [field, value] of settled) {
+    for (const { field, result: value } of settled) {
       ;(result as any)[field] = value
     }
     return result
@@ -353,25 +392,22 @@ Return JSON only:
   // ── Run + parse ────────────────────────────────────────────────
 
   private async runOne(
-    model: GenerativeModel,
+    provider: LLMProvider,
     prompt: string,
     variant: number = 0,
     extraTemperatureBump: number = 0,
-  ): Promise<string> {
+  ): Promise<{ text: string; usage: ProviderUsage }> {
     // Base 0.6 + variant bump; bullets get a slightly higher base so
     // repeats feel meaningfully different.
     const temperature = Math.min(
       1.0,
       0.6 + variant * 0.07 + extraTemperatureBump,
     )
-    const response = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature,
-        responseMimeType: 'application/json',
-      },
+    return provider.generate({
+      prompt,
+      temperature,
+      jsonMode: true,
     })
-    return response.response.text()
   }
 
   private parseJson<T>(raw: string, field: string): T {
