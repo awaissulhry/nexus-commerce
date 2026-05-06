@@ -60,6 +60,14 @@ type ProductRow = {
   parentId: string | null
   productType: string | null
   fulfillmentMethod: string | null
+  /**
+   * P.7 — Product.version for optimistic-concurrency check on inline
+   * edits. Sent as If-Match on PATCH /api/products/:id; server
+   * returns 409 if the row changed since this list was fetched.
+   * Optional because older list responses (and lazy-loaded children
+   * fallback) may not include it.
+   */
+  version?: number
   photoCount: number
   channelCount: number
   variantCount: number
@@ -2824,30 +2832,56 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
   const p = product
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<string>('')
+  // P.7 — inline error string. Replaces the previous alert() flow so
+  // a failed save shows up under the cell instead of a modal popup.
+  // null = no error; non-null = banner visible. Cleared on next edit
+  // attempt or when the user clicks the dismiss x.
+  const [cellError, setCellError] = useState<string | null>(null)
 
   const startEdit = (initial: any) => {
     setDraft(String(initial ?? ''))
     setEditing(true)
+    setCellError(null)
   }
 
   const commit = async (field: string) => {
     const value = draft.trim()
     setEditing(false)
-    if (value === '' && field !== 'name') return
-    let body: any = {}
+    if (value === '' && field !== 'name' && field !== 'brand' && field !== 'productType') return
+    const body: any = {}
     if (field === 'price') body.basePrice = Number(value)
     else if (field === 'stock') body.totalStock = Number(value)
     else if (field === 'threshold') body.lowStockThreshold = Number(value)
     else if (field === 'name') body.name = value
     else if (field === 'status') body.status = value
     else if (field === 'fulfillment') body.fulfillmentMethod = value || null
+    else if (field === 'brand') body.brand = value || null
+    else if (field === 'productType') body.productType = value || null
     try {
+      // P.7 — If-Match optimistic-concurrency. Commit 0 added the
+      // server-side CAS check on PATCH /api/products/:id. We send
+      // version as the matcher; on 409 the server tells us the
+      // current version and we surface it inline + refresh the row.
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (typeof p.version === 'number') headers['If-Match'] = String(p.version)
       const res = await fetch(`${getBackendUrl()}/api/products/${p.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(body),
       })
-      if (!res.ok) throw new Error((await res.json()).error ?? 'Update failed')
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}))
+        if (res.status === 409 && errJson?.code === 'VERSION_CONFLICT') {
+          // Refresh the grid so the operator sees the current value
+          // before retrying. The inline banner stays until cleared.
+          setCellError(
+            `Another change landed first (version ${errJson.currentVersion ?? '?'}) — refreshing.`,
+          )
+          onChanged()
+          return
+        }
+        throw new Error(errJson?.error ?? `Update failed (${res.status})`)
+      }
       // Phase 10 — broadcast so /listings, /bulk-operations,
       // /catalog/organize all refresh within ~200ms. The PATCH routes
       // basePrice / totalStock through the master services in 13c
@@ -2866,11 +2900,30 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
           meta: { productIds: [p.id], source: 'products-inline-edit', field },
         })
       }
+      setCellError(null)
       onChanged()
     } catch (e: any) {
-      alert(e.message)
+      setCellError(e instanceof Error ? e.message : String(e))
     }
   }
+
+  // P.7 — small inline banner shown beneath the editable cell when
+  // the most recent commit failed. Click x to dismiss; opening any
+  // edit clears it automatically. Kept tiny so it doesn't push the
+  // row height meaningfully; long messages truncate.
+  const errorBanner = cellError ? (
+    <div className="mt-0.5 inline-flex items-start gap-1 px-1.5 py-0.5 text-[10px] text-rose-700 bg-rose-50 border border-rose-200 rounded max-w-full">
+      <AlertCircle size={10} className="mt-0.5 flex-shrink-0" />
+      <span className="truncate" title={cellError}>{cellError}</span>
+      <button
+        onClick={() => setCellError(null)}
+        className="hover:bg-rose-100 rounded px-0.5"
+        aria-label="Dismiss error"
+      >
+        <X size={10} />
+      </button>
+    </div>
+  ) : null
 
   switch (col) {
     case 'thumb':
@@ -2888,118 +2941,198 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
         </Link>
       )
     case 'name':
-      return editing ? (
-        <input
-          autoFocus
-          type="text"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => commit('name')}
-          onKeyDown={(e) => { if (e.key === 'Enter') commit('name'); if (e.key === 'Escape') setEditing(false) }}
-          className="w-full h-7 px-1.5 text-[13px] border border-blue-300 rounded"
-        />
-      ) : (
-        <button onClick={() => startEdit(p.name)} className="block text-left max-w-full">
-          <span className="text-[13px] text-slate-900 truncate block">
-            {p.name}
-            {p.isParent && <Layers size={10} className="inline ml-1 text-slate-400" />}
-          </span>
-        </button>
+      return (
+        <>
+          {editing ? (
+            <input
+              autoFocus
+              type="text"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={() => commit('name')}
+              onKeyDown={(e) => { if (e.key === 'Enter') commit('name'); if (e.key === 'Escape') setEditing(false) }}
+              className="w-full h-7 px-1.5 text-[13px] border border-blue-300 rounded"
+            />
+          ) : (
+            <button onClick={() => startEdit(p.name)} className="block text-left max-w-full">
+              <span className="text-[13px] text-slate-900 truncate block">
+                {p.name}
+                {p.isParent && <Layers size={10} className="inline ml-1 text-slate-400" />}
+              </span>
+            </button>
+          )}
+          {errorBanner}
+        </>
       )
     case 'status':
-      return editing ? (
-        <select
-          autoFocus
-          value={draft}
-          onChange={(e) => { setDraft(e.target.value); commit('status') }}
-          onBlur={() => setEditing(false)}
-          className="h-6 px-1 text-[11px] border border-blue-300 rounded"
-        >
-          <option value="ACTIVE">ACTIVE</option>
-          <option value="DRAFT">DRAFT</option>
-          <option value="INACTIVE">INACTIVE</option>
-        </select>
-      ) : (
-        <button onClick={() => startEdit(p.status)}>
-          <Badge variant={STATUS_VARIANT[p.status] ?? 'default'} size="sm">{p.status}</Badge>
-        </button>
+      return (
+        <>
+          {editing ? (
+            <select
+              autoFocus
+              value={draft}
+              onChange={(e) => { setDraft(e.target.value); commit('status') }}
+              onBlur={() => setEditing(false)}
+              className="h-6 px-1 text-[11px] border border-blue-300 rounded"
+            >
+              <option value="ACTIVE">ACTIVE</option>
+              <option value="DRAFT">DRAFT</option>
+              <option value="INACTIVE">INACTIVE</option>
+            </select>
+          ) : (
+            <button onClick={() => startEdit(p.status)}>
+              <Badge variant={STATUS_VARIANT[p.status] ?? 'default'} size="sm">{p.status}</Badge>
+            </button>
+          )}
+          {errorBanner}
+        </>
       )
     case 'price':
-      return editing ? (
-        <input
-          autoFocus
-          type="number"
-          step="0.01"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => commit('price')}
-          onKeyDown={(e) => { if (e.key === 'Enter') commit('price'); if (e.key === 'Escape') setEditing(false) }}
-          className="w-20 h-7 px-1.5 text-[13px] text-right tabular-nums border border-blue-300 rounded"
-        />
-      ) : (
-        <button onClick={() => startEdit(p.basePrice)} className="block text-right tabular-nums w-full">
-          €{p.basePrice.toFixed(2)}
-        </button>
+      return (
+        <>
+          {editing ? (
+            <input
+              autoFocus
+              type="number"
+              step="0.01"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={() => commit('price')}
+              onKeyDown={(e) => { if (e.key === 'Enter') commit('price'); if (e.key === 'Escape') setEditing(false) }}
+              className="w-20 h-7 px-1.5 text-[13px] text-right tabular-nums border border-blue-300 rounded"
+            />
+          ) : (
+            <button onClick={() => startEdit(p.basePrice)} className="block text-right tabular-nums w-full">
+              €{p.basePrice.toFixed(2)}
+            </button>
+          )}
+          {errorBanner}
+        </>
       )
     case 'stock': {
       const tone = p.totalStock === 0 ? 'text-rose-600' : p.totalStock <= p.lowStockThreshold ? 'text-amber-600' : 'text-slate-900'
-      return editing ? (
-        <input
-          autoFocus
-          type="number"
-          min="0"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => commit('stock')}
-          onKeyDown={(e) => { if (e.key === 'Enter') commit('stock'); if (e.key === 'Escape') setEditing(false) }}
-          className="w-16 h-7 px-1.5 text-[13px] text-right tabular-nums border border-blue-300 rounded"
-        />
-      ) : (
-        <button onClick={() => startEdit(p.totalStock)} className={`block text-right tabular-nums font-semibold w-full ${tone}`}>
-          {p.totalStock}
-        </button>
+      return (
+        <>
+          {editing ? (
+            <input
+              autoFocus
+              type="number"
+              min="0"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={() => commit('stock')}
+              onKeyDown={(e) => { if (e.key === 'Enter') commit('stock'); if (e.key === 'Escape') setEditing(false) }}
+              className="w-16 h-7 px-1.5 text-[13px] text-right tabular-nums border border-blue-300 rounded"
+            />
+          ) : (
+            <button onClick={() => startEdit(p.totalStock)} className={`block text-right tabular-nums font-semibold w-full ${tone}`}>
+              {p.totalStock}
+            </button>
+          )}
+          {errorBanner}
+        </>
       )
     }
     case 'threshold':
-      return editing ? (
-        <input
-          autoFocus
-          type="number"
-          min="0"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => commit('threshold')}
-          onKeyDown={(e) => { if (e.key === 'Enter') commit('threshold'); if (e.key === 'Escape') setEditing(false) }}
-          className="w-16 h-7 px-1.5 text-[13px] text-right tabular-nums border border-blue-300 rounded"
-        />
-      ) : (
-        <button onClick={() => startEdit(p.lowStockThreshold)} className="block text-right tabular-nums text-slate-500 w-full">
-          {p.lowStockThreshold}
-        </button>
+      return (
+        <>
+          {editing ? (
+            <input
+              autoFocus
+              type="number"
+              min="0"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={() => commit('threshold')}
+              onKeyDown={(e) => { if (e.key === 'Enter') commit('threshold'); if (e.key === 'Escape') setEditing(false) }}
+              className="w-16 h-7 px-1.5 text-[13px] text-right tabular-nums border border-blue-300 rounded"
+            />
+          ) : (
+            <button onClick={() => startEdit(p.lowStockThreshold)} className="block text-right tabular-nums text-slate-500 w-full">
+              {p.lowStockThreshold}
+            </button>
+          )}
+          {errorBanner}
+        </>
       )
     case 'brand':
-      return <span className="text-[12px] text-slate-700 truncate block">{p.brand ?? <span className="text-slate-400">—</span>}</span>
+      // P.7 — brand is now inline-editable (was read-only). Free-text;
+      // datalist suggestions deferred — the filter sidebar already
+      // shows the existing brand list so operators have visibility
+      // when they want to stay consistent.
+      return (
+        <>
+          {editing ? (
+            <input
+              autoFocus
+              type="text"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={() => commit('brand')}
+              onKeyDown={(e) => { if (e.key === 'Enter') commit('brand'); if (e.key === 'Escape') setEditing(false) }}
+              className="w-full h-7 px-1.5 text-[12px] border border-blue-300 rounded"
+            />
+          ) : (
+            <button onClick={() => startEdit(p.brand ?? '')} className="block text-left max-w-full">
+              <span className="text-[12px] text-slate-700 truncate block">
+                {p.brand ?? <span className="text-slate-400">—</span>}
+              </span>
+            </button>
+          )}
+          {errorBanner}
+        </>
+      )
     case 'productType':
-      return <span className="text-[11px] text-slate-700 truncate block">{p.productType ? (IT_TERMS[p.productType] ?? p.productType) : <span className="text-slate-400">—</span>}</span>
+      // P.7 — productType is now inline-editable (was read-only). The
+      // displayed label uses the IT_TERMS glossary lookup; the input
+      // edits the raw English/canonical key so saves go to the right
+      // value regardless of the displayed translation.
+      return (
+        <>
+          {editing ? (
+            <input
+              autoFocus
+              type="text"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={() => commit('productType')}
+              onKeyDown={(e) => { if (e.key === 'Enter') commit('productType'); if (e.key === 'Escape') setEditing(false) }}
+              className="w-full h-7 px-1.5 text-[11px] border border-blue-300 rounded"
+            />
+          ) : (
+            <button onClick={() => startEdit(p.productType ?? '')} className="block text-left max-w-full">
+              <span className="text-[11px] text-slate-700 truncate block">
+                {p.productType ? (IT_TERMS[p.productType] ?? p.productType) : <span className="text-slate-400">—</span>}
+              </span>
+            </button>
+          )}
+          {errorBanner}
+        </>
+      )
     case 'fulfillment':
-      return editing ? (
-        <select
-          autoFocus
-          value={draft}
-          onChange={(e) => { setDraft(e.target.value); commit('fulfillment') }}
-          onBlur={() => setEditing(false)}
-          className="h-6 px-1 text-[11px] border border-blue-300 rounded"
-        >
-          <option value="">—</option>
-          <option value="FBA">FBA</option>
-          <option value="FBM">FBM</option>
-        </select>
-      ) : (
-        <button onClick={() => startEdit(p.fulfillmentMethod ?? '')}>
-          {p.fulfillmentMethod ? (
-            <Badge variant={p.fulfillmentMethod === 'FBA' ? 'warning' : 'info'} size="sm">{p.fulfillmentMethod}</Badge>
-          ) : <span className="text-slate-400 text-[11px]">—</span>}
-        </button>
+      return (
+        <>
+          {editing ? (
+            <select
+              autoFocus
+              value={draft}
+              onChange={(e) => { setDraft(e.target.value); commit('fulfillment') }}
+              onBlur={() => setEditing(false)}
+              className="h-6 px-1 text-[11px] border border-blue-300 rounded"
+            >
+              <option value="">—</option>
+              <option value="FBA">FBA</option>
+              <option value="FBM">FBM</option>
+            </select>
+          ) : (
+            <button onClick={() => startEdit(p.fulfillmentMethod ?? '')}>
+              {p.fulfillmentMethod ? (
+                <Badge variant={p.fulfillmentMethod === 'FBA' ? 'warning' : 'info'} size="sm">{p.fulfillmentMethod}</Badge>
+              ) : <span className="text-slate-400 text-[11px]">—</span>}
+            </button>
+          )}
+          {errorBanner}
+        </>
       )
     case 'coverage': {
       // F8 — surface ALL canonical channels per row, not just the ones

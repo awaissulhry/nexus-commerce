@@ -277,6 +277,10 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             parentId: true,
             productType: true,
             fulfillmentMethod: true,
+            // P.7 — version for inline-edit optimistic concurrency.
+            // The grid sends it as If-Match on PATCH; on a 409 we
+            // know another change landed first and can prompt.
+            version: true,
             // Use ProductImage (the table that actually exists in
             // Postgres) — the Image model is in schema.prisma but its
             // table was never migrated. Order by createdAt so the
@@ -372,6 +376,8 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           parentId: p.parentId,
           productType: p.productType,
           fulfillmentMethod: p.fulfillmentMethod,
+          // P.7 — version for inline-edit If-Match.
+          version: p.version,
           imageUrl: p.images[0]?.url ?? null,
           photoCount,
           channelCount: p._count?.channelListings ?? 0,
