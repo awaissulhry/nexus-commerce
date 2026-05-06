@@ -26,6 +26,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { auditLogService } from '../services/audit-log.service.js'
 import { idempotencyService } from '../services/idempotency.service.js'
+import { listEtag, matches } from '../utils/list-etag.js'
 
 interface ChannelCoverageRow {
   productId: string
@@ -90,8 +91,21 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
           { brand: { contains: search, mode: 'insensitive' } },
         ]
       }
+      // Phase 10b — ETag short-circuit. /catalog/organize Standalones
+      // tab refetches on search (250ms debounce) + manual refresh; ETag
+      // turns repeat hits without product churn into 304s.
+      const { etag, count: etagCount } = await listEtag(prisma, {
+        model: 'product',
+        where,
+        filterContext: { search, coverage, limit, offset },
+      })
+      reply.header('ETag', etag)
+      reply.header('Cache-Control', 'private, max-age=0, must-revalidate')
+      if (matches(request, etag)) {
+        return reply.code(304).send()
+      }
       const [total, products] = await Promise.all([
-        prisma.product.count({ where }),
+        Promise.resolve(etagCount),
         prisma.product.findMany({
           where,
           orderBy: [{ updatedAt: 'desc' }],
@@ -172,6 +186,7 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
     }
   }>('/pim/parents-overview', async (request, reply) => {
     const search = request.query.search?.trim() ?? ''
+    const incomplete = request.query.incomplete === '1'
     const limit = Math.min(200, Number(request.query.limit ?? 50) || 50)
     const offset = Math.max(0, Number(request.query.offset ?? 0) || 0)
     try {
@@ -183,8 +198,19 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
           { brand: { contains: search, mode: 'insensitive' } },
         ]
       }
+      // Phase 10b — ETag short-circuit. /catalog/organize Parents tab.
+      const { etag, count: etagCount } = await listEtag(prisma, {
+        model: 'product',
+        where,
+        filterContext: { search, incomplete, limit, offset },
+      })
+      reply.header('ETag', etag)
+      reply.header('Cache-Control', 'private, max-age=0, must-revalidate')
+      if (matches(request, etag)) {
+        return reply.code(304).send()
+      }
       const [total, parents] = await Promise.all([
-        prisma.product.count({ where }),
+        Promise.resolve(etagCount),
         prisma.product.findMany({
           where,
           orderBy: [{ updatedAt: 'desc' }],

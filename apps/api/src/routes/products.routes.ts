@@ -16,6 +16,7 @@ import { auditLogService } from '../services/audit-log.service.js'
 import { idempotencyService } from '../services/idempotency.service.js'
 import { masterPriceService } from '../services/master-price.service.js'
 import { applyStockMovement } from '../services/stock-movement.service.js'
+import { listEtag, matches } from '../utils/list-etag.js'
 
 /**
  * Routes for bulk-operations: optimized fetch + atomic patch.
@@ -233,6 +234,27 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         }
       })()
 
+      // Phase 10b — short-circuit with 304 when nothing has changed.
+      // /products grid polls every 30s + on visibility-change; without
+      // ETag every poll re-runs the heavy product list with relations.
+      const { etag, count: etagCount } = await listEtag(prisma, {
+        model: 'product',
+        where,
+        filterContext: {
+          page,
+          limit,
+          sort: q.sort,
+          includeCoverage,
+          includeTags,
+          parentId: q.parentId ?? null,
+        },
+      })
+      reply.header('ETag', etag)
+      reply.header('Cache-Control', 'private, max-age=0, must-revalidate')
+      if (matches(request, etag)) {
+        return reply.code(304).send()
+      }
+
       const [rawProducts, total, statsRows] = await Promise.all([
         prisma.product.findMany({
           where,
@@ -282,7 +304,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
               : {}),
           },
         }),
-        prisma.product.count({ where }),
+        Promise.resolve(etagCount),
         // Stats reflect the FILTERED set so the header counts match
         // what's actually browsable. Five small aggregates.
         Promise.all([
@@ -392,11 +414,24 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     Querystring: { channel?: string; marketplace?: string }
   }>('/products/bulk-fetch', async (request, reply) => {
     try {
-      reply.header('Cache-Control', 'private, max-age=10')
       const channelParam = request.query.channel?.toUpperCase()
       const marketplaceParam = request.query.marketplace?.toUpperCase()
       const includeChannelListing =
         !!channelParam && !!marketplaceParam
+
+      // Phase 10b — ETag short-circuit. Bulk-ops grid is the heaviest
+      // single read in the app (no pagination — fetches every product
+      // every poll); ETag turns repeat polls without changes into
+      // 304s instead of multi-MB findMany + relation fans.
+      const { etag } = await listEtag(prisma, {
+        model: 'product',
+        filterContext: { channel: channelParam ?? null, marketplace: marketplaceParam ?? null },
+      })
+      reply.header('ETag', etag)
+      reply.header('Cache-Control', 'private, max-age=0, must-revalidate')
+      if (matches(request, etag)) {
+        return reply.code(304).send()
+      }
 
       const rows = await prisma.product.findMany({
         select: {
