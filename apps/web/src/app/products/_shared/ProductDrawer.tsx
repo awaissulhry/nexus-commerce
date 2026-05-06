@@ -45,9 +45,13 @@ import {
   Network,
   Search,
 } from 'lucide-react'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
-import { emitInvalidation } from '@/lib/sync/invalidation-channel'
+import {
+  emitInvalidation,
+  useInvalidationChannel,
+} from '@/lib/sync/invalidation-channel'
 
 interface ProductDetail {
   id: string
@@ -75,6 +79,9 @@ interface ProductDetail {
     images: number
     channelListings: number
     variations: number
+    /** P.6 — counts for tab badges (translations + outgoing relations). */
+    translations?: number
+    relationsFrom?: number
   }
   channelListings?: Array<{
     id: string
@@ -119,17 +126,39 @@ export default function ProductDrawer({
   onClose,
   onChanged,
 }: ProductDrawerProps) {
-  const [tab, setTab] = useState<Tab>('details')
+  // P.6 — tab persisted in the URL (?drawerTab=<name>) so a refresh
+  // keeps the user on the tab they were reading. Falls back to
+  // 'details' for any unknown / missing value. Writes are scroll: false
+  // so switching tabs doesn't yank the page.
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const urlTab = searchParams.get('drawerTab') as Tab | null
+  const tab: Tab =
+    urlTab && ['details', 'listings', 'translations', 'related', 'activity'].includes(urlTab)
+      ? urlTab
+      : 'details'
+  const setTab = useCallback(
+    (next: Tab) => {
+      const sp = new URLSearchParams(searchParams.toString())
+      if (next === 'details') sp.delete('drawerTab')
+      else sp.set('drawerTab', next)
+      router.replace(`${pathname}?${sp.toString()}`, { scroll: false })
+    },
+    [router, pathname, searchParams],
+  )
+
   const [data, setData] = useState<ProductDetail | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
 
-  // Reset tab + state when productId changes (e.g. user clicks
-  // a different row while the drawer is open).
+  // Reset state when productId changes (e.g. user clicks a different
+  // row while the drawer is open). We do NOT reset the tab — the user
+  // probably wants to keep their context (e.g. always check Listings
+  // when scanning multiple products).
   useEffect(() => {
     if (!productId) return
-    setTab('details')
     setData(null)
     setError(null)
   }, [productId])
@@ -139,9 +168,11 @@ export default function ProductDrawer({
     setLoading(true)
     setError(null)
     try {
-      // Reuses the existing /api/products/:id/health endpoint which
-      // already returns Product + nested ChannelListings + counts +
-      // images. Single round-trip, ETag-cached (P0/A1).
+      // Reuses /api/products/:id/health which now (P.6) returns the
+      // full master product + nested ChannelListings + images +
+      // counts in one round-trip, ETag-cached. Before P.6 the
+      // endpoint only returned the health-badge fields; the drawer
+      // silently rendered empty Description / Listings cards.
       const res = await fetch(
         `${getBackendUrl()}/api/products/${productId}/health`,
         { cache: 'no-store' },
@@ -159,6 +190,28 @@ export default function ProductDrawer({
   useEffect(() => {
     if (productId) fetchDetail()
   }, [productId, fetchDetail])
+
+  // P.6 — cross-tab refresh. If another tab edits this product (or a
+  // listing belonging to it), refetch so the drawer doesn't show
+  // stale master data. Matches when:
+  //   - event.id === productId (single-subject events)
+  //   - event.meta.productIds includes productId (bulk events)
+  //   - event.meta.productId === productId (some emitters use the
+  //     singular form on listing.updated)
+  useInvalidationChannel(
+    ['product.updated', 'listing.updated'],
+    (event) => {
+      if (!productId) return
+      const meta = event.meta as Record<string, unknown> | undefined
+      const metaIds = meta?.productIds
+      const metaSingleId = meta?.productId
+      const matches =
+        event.id === productId ||
+        metaSingleId === productId ||
+        (Array.isArray(metaIds) && metaIds.includes(productId))
+      if (matches) void fetchDetail()
+    },
+  )
 
   // Esc closes. Click outside the inner panel closes too.
   useEffect(() => {
@@ -257,12 +310,14 @@ export default function ProductDrawer({
           <DrawerTab
             active={tab === 'translations'}
             onClick={() => setTab('translations')}
+            count={data?._count?.translations}
           >
             <Globe className="w-3 h-3" /> Translations
           </DrawerTab>
           <DrawerTab
             active={tab === 'related'}
             onClick={() => setTab('related')}
+            count={data?._count?.relationsFrom}
           >
             <Network className="w-3 h-3" /> Related
           </DrawerTab>

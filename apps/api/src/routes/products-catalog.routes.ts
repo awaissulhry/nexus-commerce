@@ -154,13 +154,47 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       if (matches(request, etag)) {
         return reply.code(304).send()
       }
-      const p = await prisma.product.findUnique({
+      // P.6 — extended select. The /health endpoint is the drawer's only
+      // data source today (it was meant to also serve the per-product
+      // health badge, but the drawer reuses it as its master fetch).
+      // The select below covers BOTH consumers:
+      //   - Health badge: score, photoCount, channel/draft/error counts
+      //   - Drawer: full master fields, channelListings details, images
+      // _count adds translations + relationsFrom (only outgoing — the
+      // RelatedTab counts both directions but the badge is "outgoing
+      // relations from this product" which matches the operator's
+      // mental model of "what does this product link out to").
+      // Cast to any after findUnique because the local Prisma client
+      // type inference doesn't pick up the select shape correctly under
+      // the v6/v7 mismatch (see TECH_DEBT #45). Runtime returns
+      // exactly the selected fields including _count, images, and
+      // channelListings — the cast just unblocks the local typecheck.
+      const p = (await prisma.product.findUnique({
         where: { id },
         select: {
-          id: true, sku: true, name: true, totalStock: true, lowStockThreshold: true,
-          description: true, bulletPoints: true, gtin: true, upc: true, ean: true, brand: true,
-          productType: true,
-          _count: { select: { images: true, channelListings: true, variations: true } },
+          id: true, sku: true, name: true,
+          basePrice: true, costPrice: true,
+          totalStock: true, lowStockThreshold: true,
+          description: true, bulletPoints: true, keywords: true,
+          gtin: true, upc: true, ean: true, brand: true, productType: true,
+          status: true, fulfillmentMethod: true,
+          weightValue: true, weightUnit: true,
+          isParent: true, parentId: true,
+          amazonAsin: true, ebayItemId: true,
+          createdAt: true, updatedAt: true, version: true,
+          _count: {
+            select: {
+              images: true,
+              channelListings: true,
+              variations: true,
+              translations: true,
+              relationsFrom: true,
+            },
+          },
+          images: {
+            select: { url: true, type: true },
+            orderBy: { createdAt: 'asc' },
+          },
           channelListings: {
             select: {
               id: true, channel: true, marketplace: true, listingStatus: true,
@@ -178,7 +212,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
             },
           },
         },
-      })
+      })) as any
       if (!p) return reply.code(404).send({ error: 'Product not found' })
 
       // Build a list of issues with severity
@@ -227,17 +261,65 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
           issues.filter((i) => i.severity === 'info').length * 1,
       )
 
+      // P.6 — return shape extended for the drawer. Original health
+      // badge consumers still get everything they had (productId, sku,
+      // score, *Count fields, issues). Drawer additionally gets the
+      // master product fields it was silently missing before this
+      // commit — name, description, bullets, channelListings, images,
+      // etc. were declared in the drawer's TS type but never returned
+      // by this endpoint, so the drawer rendered empty Description /
+      // Listings cards on every open. Now they populate.
       return {
         productId: p.id,
+        // Backward-compat health-badge fields
         sku: p.sku,
         score,
         photoCount: p._count.images,
         channelCount: p._count.channelListings,
         variantCount: p._count.variations,
+        translationCount: p._count.translations,
+        relationCount: p._count.relationsFrom,
         liveCount,
         draftCount,
         errorCount,
         issues,
+        // Master product fields the drawer needs
+        id: p.id,
+        name: p.name,
+        basePrice: p.basePrice ? p.basePrice.toString() : null,
+        costPrice: p.costPrice ? p.costPrice.toString() : null,
+        totalStock: p.totalStock,
+        lowStockThreshold: p.lowStockThreshold,
+        description: p.description,
+        bulletPoints: p.bulletPoints,
+        keywords: p.keywords,
+        gtin: p.gtin,
+        upc: p.upc,
+        ean: p.ean,
+        brand: p.brand,
+        productType: p.productType,
+        status: p.status,
+        fulfillmentMethod: p.fulfillmentMethod,
+        weightValue: p.weightValue,
+        weightUnit: p.weightUnit,
+        isParent: p.isParent,
+        parentId: p.parentId,
+        amazonAsin: p.amazonAsin,
+        ebayItemId: p.ebayItemId,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+        version: p.version,
+        // Mirror _count for the frontend's `data._count.X` access
+        // pattern (the drawer's TS type expects this shape).
+        _count: {
+          images: p._count.images,
+          channelListings: p._count.channelListings,
+          variations: p._count.variations,
+          translations: p._count.translations,
+          relationsFrom: p._count.relationsFrom,
+        },
+        images: p.images,
+        channelListings: p.channelListings,
       }
     } catch (err: any) {
       fastify.log.error({ err }, '[products/:id/health] failed')
