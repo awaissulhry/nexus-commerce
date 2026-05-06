@@ -318,6 +318,39 @@ real basePrice edit populates the snapshot correctly).
 
 ---
 
+## Bulk operations — two-table data model
+
+Two separate tables share the "Bulk*" prefix for historical reasons.
+They serve **different surfaces** with no overlap; do not consolidate.
+
+| Table | Surface | Wired by | Lifecycle |
+| --- | --- | --- | --- |
+| `BulkActionJob` | `/bulk-operations` modal-driven jobs (PRICING_UPDATE, INVENTORY_UPDATE, STATUS_UPDATE, ATTRIBUTE_UPDATE, MARKETPLACE_OVERRIDE_UPDATE) | `apps/api/src/services/bulk-action.service.ts` + `apps/api/src/routes/bulk-operations.routes.ts` | Created → IN_PROGRESS → COMPLETED / PARTIALLY_COMPLETED / FAILED / CANCELLED |
+| `BulkOperation` | `/products` CSV/XLSX bulk-upload import flow (preview → confirm → apply) | `apps/api/src/services/products/bulk-upload.service.ts` + `apps/api/src/routes/products.routes.ts` (writes the row) + `apps/api/src/routes/dashboard.routes.ts` (reads for activity feed) + `apps/web/src/app/dashboard/overview/OverviewClient.tsx` | Preview row written with parsed plan in `changes` JSON; confirmed by user → applied; expires via `expiresAt` |
+
+**When to write to which:**
+
+- New job initiated from the **/bulk-operations modal** → `BulkActionJob`
+  via `BulkActionService.createJob()`.
+- New job initiated from a **/products CSV/XLSX upload** → `BulkOperation`
+  via `bulk-upload.service.ts`.
+
+**Do not:**
+- Write `BulkOperation` rows from the `/bulk-operations` flow — the
+  dashboard activity feed parses its `changes` payload assuming the
+  CSV/XLSX schema and will mis-render.
+- Drop `BulkOperation` (it has live data and active callers — see grep
+  for `BulkOperation\b`).
+- Rename either table without coordinating the migration with all
+  callers listed above.
+
+**Future consideration:** the names are confusing. A future engagement
+could rename `BulkOperation` → `BulkUploadJob` to disambiguate, but
+that is a deliberate rename, not a side-effect of bulk-operations
+work.
+
+---
+
 ## Cross-page sync infrastructure (Phase 10)
 
 Five pages — `/products`, `/listings`, `/catalog/organize`,
