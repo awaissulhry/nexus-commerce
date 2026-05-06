@@ -114,6 +114,7 @@ export default function AppSidebar() {
     new Set(['AMAZON']),
   )
   const [ebayConnected, setEbayConnected] = useState(false)
+  const [amazonConnected, setAmazonConnected] = useState(false)
   const recent = useRecentlyViewed()
 
   // Hydrate expand state from localStorage on mount.
@@ -129,18 +130,27 @@ export default function AppSidebar() {
     }
   }, [])
 
-  // Fetch eBay connection status once. The /api/ebay/auth/connections
-  // endpoint returns all rows; ANY active row means the user can
-  // publish to any eBay marketplace they're registered for (eBay
-  // OAuth is single-token / multi-marketplace, unlike Amazon SP-API).
+  // Fetch the unified connection list once. The /api/connections
+  // endpoint returns one row per supported channel — Amazon
+  // synthesised from env vars (isManagedBy='env'), eBay from the
+  // OAuth-backed table, the rest as 'pending' placeholders. We only
+  // render the dot for AMAZON and EBAY today; Shopify/Woo are
+  // hardcoded as `indicator="disconnected"` until their adapters
+  // ship.
   useEffect(() => {
     let cancelled = false
-    fetch(`${getBackendUrl()}/api/ebay/auth/connections`, { cache: 'no-store' })
+    fetch(`${getBackendUrl()}/api/connections`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (cancelled || !data) return
-        const list = (data.connections ?? []) as Array<{ isActive?: boolean }>
-        setEbayConnected(list.some((c) => c.isActive === true))
+        const list = (data.connections ?? []) as Array<{
+          channel: string
+          isActive: boolean
+        }>
+        setEbayConnected(list.some((c) => c.channel === 'EBAY' && c.isActive))
+        setAmazonConnected(
+          list.some((c) => c.channel === 'AMAZON' && c.isActive),
+        )
       })
       .catch(() => {
         /* swallow — sidebar must never crash the shell */
@@ -288,6 +298,7 @@ export default function AppSidebar() {
             priorityMarkets={PRIORITY_MARKETS.AMAZON}
             supportedMarkets={SUPPORTED_MARKETS.AMAZON}
             countryNames={COUNTRY_NAMES}
+            connectionStatus={amazonConnected ? 'connected' : 'not-connected'}
             expanded={expandedChannels.has('AMAZON')}
             onToggle={() => toggleChannel('AMAZON')}
             pathname={pathname}

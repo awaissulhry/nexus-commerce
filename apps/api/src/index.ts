@@ -45,6 +45,7 @@ import pimRoutes from "./routes/pim.routes.js";
 import { listingsSyndicationRoutes } from "./routes/listings-syndication.routes.js";
 import productsCatalogRoutes from "./routes/products-catalog.routes.js";
 import ordersReviewsRoutes from "./routes/orders-reviews.routes.js";
+import connectionsRoutes from "./routes/connections.routes.js";
 import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
 import { startSalesReportIngestCron } from "./jobs/sales-report-ingest.job.js";
 import { startForecastCron } from "./jobs/forecast.job.js";
@@ -202,6 +203,7 @@ app.register(pimRoutes, { prefix: '/api' });
 app.register(listingsSyndicationRoutes, { prefix: '/api' });
 app.register(productsCatalogRoutes, { prefix: '/api' });
 app.register(ordersReviewsRoutes, { prefix: '/api' });
+app.register(connectionsRoutes, { prefix: '/api' });
 
 const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 8080;
 

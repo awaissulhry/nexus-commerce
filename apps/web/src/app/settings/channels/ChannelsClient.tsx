@@ -10,15 +10,19 @@ import { getBackendUrl } from '@/lib/backend-url'
 
 interface ChannelConnection {
   id: string
-  channelType: string
+  channel: 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'WOOCOMMERCE' | 'ETSY'
   isActive: boolean
-  sellerName?: string
-  storeName?: string
-  storeFrontUrl?: string
-  tokenExpiresAt?: string
-  lastSyncAt?: string
-  lastSyncStatus?: string
-  lastSyncError?: string
+  // 'oauth'   = real OAuth grant in ChannelConnection table (eBay today, more later)
+  // 'env'     = synthesised from env vars (Amazon today, deprecated by P2-2 LWA OAuth)
+  // 'pending' = adapter not yet shipped (Shopify/Woo/Etsy)
+  isManagedBy: 'oauth' | 'env' | 'pending'
+  sellerName: string | null
+  storeName: string | null
+  storeFrontUrl: string | null
+  tokenExpiresAt: string | null
+  lastSyncAt: string | null
+  lastSyncStatus: string | null
+  lastSyncError: string | null
 }
 
 interface ChannelDef {
@@ -117,12 +121,13 @@ export function ChannelsClient() {
     try {
       setLoading(true)
       setStatusMsg(null)
-      // Fetch all eBay channel connections from the API. Backend
-      // returns them sorted updatedAt desc; we iterate in REVERSE so
-      // the most recent wins the Map.set on duplicate channelType.
-      // Active connections also win over inactive ones.
+      // The unified /api/connections endpoint returns one row per
+      // supported channel — eBay from the OAuth-backed table, Amazon
+      // synthesised from env vars, Shopify/Woo/Etsy as 'pending'
+      // placeholders. Server already deduplicates active-vs-inactive
+      // and most-recent so we just key the Map on `channel`.
       const res = await fetch(
-        `${getBackendUrl()}/api/ebay/auth/connections`,
+        `${getBackendUrl()}/api/connections`,
         { cache: 'no-store' },
       )
       if (!res.ok) {
@@ -134,16 +139,8 @@ export function ChannelsClient() {
       }
       const list = data.connections ?? []
       const newConnections = new Map<string, ChannelConnection>()
-      // Sort: active first, then most recent. Last write wins, so
-      // iterate in REVERSE preference order — least preferred first.
-      const sorted = [...list].sort((a, b) => {
-        if (a.isActive !== b.isActive) return a.isActive ? -1 : 1
-        return 0 // backend already sorted by updatedAt desc within isActive group
-      })
-      // Iterate reverse so the first (highest priority) item lands
-      // last in Map.set and wins.
-      for (let i = sorted.length - 1; i >= 0; i--) {
-        newConnections.set(sorted[i].channelType, sorted[i])
+      for (const conn of list) {
+        newConnections.set(conn.channel, conn)
       }
       setConnections(newConnections)
     } catch (err) {
@@ -350,9 +347,21 @@ export function ChannelsClient() {
                     </p>
                   </div>
                 </div>
-                {isConnected ? (
+                {isConnected && connection?.isManagedBy === 'env' ? (
+                  <Badge variant="info" size="md">
+                    Env-managed
+                  </Badge>
+                ) : isConnected ? (
                   <Badge variant="success" size="md">
                     Connected
+                  </Badge>
+                ) : connection?.isManagedBy === 'pending' ? (
+                  <Badge variant="default" size="md">
+                    Coming soon
+                  </Badge>
+                ) : connection?.isManagedBy === 'env' ? (
+                  <Badge variant="danger" size="md">
+                    Misconfigured
                   </Badge>
                 ) : (
                   <Badge variant="default" size="md">
@@ -423,8 +432,32 @@ export function ChannelsClient() {
                 </div>
               )}
 
+              {/* Env-managed connections (currently Amazon) are
+                  read-only from the UI: there's nothing to revoke and
+                  no per-tenant auth flow yet. The lastSyncError row
+                  above already surfaces "credentials missing" when
+                  isActive is false. */}
               <div className="flex gap-2 flex-wrap">
-                {isConnected && connection ? (
+                {connection?.isManagedBy === 'env' ? (
+                  isConnected ? (
+                    <p className="text-[11px] text-slate-500 italic">
+                      Managed via API server env vars. Disconnect by removing creds in Railway.
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-red-600">
+                      {connection.lastSyncError ?? 'Credentials missing — set env vars in Railway.'}
+                    </p>
+                  )
+                ) : connection?.isManagedBy === 'pending' ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled
+                    className="flex-1"
+                  >
+                    Connector deferred
+                  </Button>
+                ) : isConnected && connection ? (
                   <>
                     <Button
                       variant="secondary"
@@ -467,7 +500,7 @@ export function ChannelsClient() {
                       } else {
                         setStatusMsg({
                           kind: 'info',
-                          text: `${channel.name} OAuth flow ships in Phase 5.`,
+                          text: `${channel.name} connector is deferred.`,
                         })
                       }
                     }}
