@@ -4,6 +4,7 @@ const SETTINGS_TABS = [
   { label: 'Account', href: '/settings/account', icon: '🏢' },
   { label: 'Notifications', href: '/settings/notifications', icon: '🔔' },
   { label: 'API Keys', href: '/settings/api-keys', icon: '🔑' },
+  { label: 'AI', href: '/settings/ai', icon: '✨' },
   { label: 'Profile', href: '/settings/profile', icon: '👤' },
   { label: 'Terminology', href: '/settings/terminology', icon: '🌐' },
 ]
