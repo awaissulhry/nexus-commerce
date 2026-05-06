@@ -492,6 +492,11 @@ export default function ReplenishmentWorkspace() {
         <ContainerFillCard entries={data.containerFill} />
       )}
 
+      {/* R.20 — 13-week cash flow projection. Always renders; prompts
+          the operator to set cashOnHandCents when null. */}
+      <CashFlowCard />
+
+
       {/* Filter bar */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="inline-flex items-center bg-slate-100 rounded-md p-0.5">
@@ -1899,6 +1904,218 @@ function StockoutImpactCard() {
         >
           <RefreshCw size={11} /> Refresh
         </button>
+      </div>
+    </Card>
+  )
+}
+
+// R.20 — 13-week cash-flow projection. Pulls open POs + active recs
+// + trailing-30d daily revenue × 7 per week. Health flags a week
+// red when running balance < 0 and amber when < 20% of cash floor.
+interface CashFlowResponse {
+  cashOnHandCents: number | null
+  dailyRevenueCents: number
+  openPoCount: number
+  speculativeRecCount: number
+  buckets: Array<{
+    weekStart: string
+    outflowCents: number
+    inflowCents: number
+    netCents: number
+    startingBalanceCents: number
+    endingBalanceCents: number
+    health: 'OK' | 'AMBER' | 'RED'
+    items: Array<{
+      kind: 'PO_DUE' | 'REC_DUE' | 'WO_DUE' | 'SALES_FORECAST'
+      label: string
+      cents: number
+      payableDate: string
+    }>
+  }>
+}
+
+function CashFlowCard() {
+  const [data, setData] = useState<CashFlowResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [editingCash, setEditingCash] = useState(false)
+  const [cashInput, setCashInput] = useState('')
+  const [savingCash, setSavingCash] = useState(false)
+
+  async function load() {
+    setLoading(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/replenishment/cash-flow/projection`,
+        { cache: 'no-store' },
+      )
+      if (res.ok) setData(await res.json())
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function saveCashOnHand() {
+    setSavingCash(true)
+    try {
+      const cents = Math.round(Number(cashInput) * 100)
+      await fetch(`${getBackendUrl()}/api/fulfillment/replenishment/cash-flow/cash-on-hand`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cashOnHandCents: Number.isFinite(cents) ? cents : null }),
+      })
+      setEditingCash(false)
+      setCashInput('')
+      await load()
+    } finally {
+      setSavingCash(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <Card className="p-4 mb-3">
+        <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+          Cash flow projection
+        </div>
+        <div className="text-[12px] text-slate-400 mt-2">Loading…</div>
+      </Card>
+    )
+  }
+  if (!data) return null
+
+  const buckets = data.buckets
+  const maxFlow = Math.max(
+    1,
+    ...buckets.map((b) => Math.max(b.outflowCents, b.inflowCents)),
+  )
+
+  return (
+    <Card className="p-4 mb-3">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+            Cash flow projection
+          </span>
+          <span className="text-[10px] text-slate-400">
+            {buckets.length} weeks · {data.openPoCount} open POs · {data.speculativeRecCount} recs
+          </span>
+        </div>
+        <div className="flex items-center gap-2 text-[11px]">
+          {data.cashOnHandCents != null && !editingCash && (
+            <button
+              type="button"
+              onClick={() => {
+                setCashInput((data.cashOnHandCents! / 100).toFixed(2))
+                setEditingCash(true)
+              }}
+              className="text-indigo-600 hover:underline"
+              title="Edit cash on hand"
+            >
+              €{(data.cashOnHandCents / 100).toLocaleString('en-IE', { maximumFractionDigits: 0 })} on hand
+            </button>
+          )}
+          {data.cashOnHandCents == null && !editingCash && (
+            <button
+              type="button"
+              onClick={() => setEditingCash(true)}
+              className="text-indigo-600 hover:underline"
+            >
+              Set cash on hand
+            </button>
+          )}
+          {editingCash && (
+            <span className="inline-flex items-center gap-1">
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="EUR"
+                value={cashInput}
+                onChange={(e) => setCashInput(e.target.value)}
+                className="w-24 rounded border border-slate-300 px-1 py-0.5 text-right font-mono"
+                disabled={savingCash}
+              />
+              <button
+                type="button"
+                onClick={saveCashOnHand}
+                disabled={savingCash}
+                className="rounded bg-indigo-600 px-2 py-0.5 text-white disabled:opacity-50"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => { setEditingCash(false); setCashInput('') }}
+                className="text-slate-400 hover:underline"
+              >
+                cancel
+              </button>
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${buckets.length}, minmax(0, 1fr))` }}>
+        {buckets.map((b) => {
+          const outFrac = b.outflowCents / maxFlow
+          const inFrac = b.inflowCents / maxFlow
+          const tint =
+            b.health === 'RED'
+              ? 'bg-rose-50 border-rose-300'
+              : b.health === 'AMBER'
+                ? 'bg-amber-50 border-amber-300'
+                : 'bg-slate-50 border-slate-200'
+          return (
+            <div
+              key={b.weekStart}
+              className={cn('relative rounded border p-1 flex flex-col items-center', tint)}
+              title={`${b.weekStart}\nout: €${(b.outflowCents / 100).toFixed(0)} · in: €${(b.inflowCents / 100).toFixed(0)}\nbalance: €${(b.endingBalanceCents / 100).toFixed(0)}`}
+            >
+              <div className="h-12 w-full flex items-end justify-center gap-0.5">
+                <div
+                  className="w-1.5 bg-rose-400"
+                  style={{ height: `${Math.max(2, outFrac * 100)}%` }}
+                  aria-label="outflow"
+                />
+                <div
+                  className="w-1.5 bg-emerald-400"
+                  style={{ height: `${Math.max(2, inFrac * 100)}%` }}
+                  aria-label="inflow"
+                />
+              </div>
+              <div className="text-[9px] text-slate-500 mt-0.5 font-mono">
+                {b.weekStart.slice(5)}
+              </div>
+              {data.cashOnHandCents != null && (
+                <div
+                  className={cn(
+                    'text-[9px] font-mono',
+                    b.endingBalanceCents < 0
+                      ? 'text-rose-700'
+                      : b.health === 'AMBER'
+                        ? 'text-amber-700'
+                        : 'text-slate-600',
+                  )}
+                >
+                  €{(b.endingBalanceCents / 100).toFixed(0)}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      <div className="mt-2 text-[10px] text-slate-500 flex items-center gap-3">
+        <span className="inline-flex items-center gap-1">
+          <span className="inline-block w-2 h-2 bg-rose-400 rounded-sm" /> outflow
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="inline-block w-2 h-2 bg-emerald-400 rounded-sm" /> inflow
+        </span>
+        <span className="ml-auto">
+          Sales: €{(data.dailyRevenueCents / 100).toFixed(0)}/day trailing
+        </span>
       </div>
     </Card>
   )

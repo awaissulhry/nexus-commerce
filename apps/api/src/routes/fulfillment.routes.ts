@@ -67,6 +67,11 @@ import {
   type ShippingMode,
 } from '../services/container-pack.service.js'
 import {
+  projectWeeklyCashFlow,
+  type OpenPo,
+  type SpeculativeRec,
+} from '../services/cash-flow.service.js'
+import {
   runAutoPoSweep,
   getAutoPoStatus,
 } from '../services/auto-po.service.js'
@@ -4666,6 +4671,184 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (err: any) {
       if (err?.code === 'P2025') return reply.code(404).send({ error: 'not found' })
       fastify.log.error({ err }, '[substitutions:delete] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // ─── R.20 — cash-flow projection ─────────────────────────────────
+  // Returns 13 weekly buckets with outflow (committed POs becoming
+  // due + speculative needsReorder recs) and inflow (trailing-30d
+  // daily revenue × 7). Settings.cashOnHandCents seeds the running
+  // balance; null = projection still runs but won't render the
+  // running-balance line.
+  fastify.get('/fulfillment/replenishment/cash-flow/projection', async (request, reply) => {
+    try {
+      const q = request.query as { horizonWeeks?: string }
+      const horizonWeeks = Math.max(4, Math.min(26, Number(q.horizonWeeks) || 13))
+      const today = new Date()
+      today.setUTCHours(0, 0, 0, 0)
+
+      // Cash on hand from BrandSettings (single-row).
+      const settings = await prisma.brandSettings.findFirst({
+        select: { cashOnHandCents: true },
+      })
+      const cashOnHandCents = settings?.cashOnHandCents ?? null
+
+      // Trailing-30d daily revenue (EUR cents). Pulls from
+      // DailySalesAggregate sum × ASP. For v1 we approximate "revenue"
+      // as `unitsSold × p.basePrice`; orders table has true revenue
+      // but is wider per-row. Trailing mean is robust enough.
+      const since = new Date(today)
+      since.setUTCDate(since.getUTCDate() - 30)
+      const dailyAgg = await prisma.dailySalesAggregate.groupBy({
+        by: ['sku'],
+        where: { day: { gte: since } },
+        _sum: { unitsSold: true },
+      })
+      const skus = dailyAgg.map((r) => r.sku)
+      const productsForRevenue =
+        skus.length > 0
+          ? await prisma.product.findMany({
+              where: { sku: { in: skus } },
+              select: { sku: true, basePrice: true },
+            })
+          : []
+      const priceBySku = new Map(productsForRevenue.map((p) => [p.sku, Number(p.basePrice)]))
+      let revenueCents30d = 0
+      for (const r of dailyAgg) {
+        const units = r._sum.unitsSold ?? 0
+        const price = priceBySku.get(r.sku) ?? 0
+        revenueCents30d += Math.round(units * price * 100)
+      }
+      const dailyRevenueCents = Math.round(revenueCents30d / 30)
+
+      // Open POs we expect to pay during the horizon.
+      const horizonEnd = new Date(today)
+      horizonEnd.setUTCDate(horizonEnd.getUTCDate() + horizonWeeks * 7 + 60) // pad for terms
+      const openPosRaw = await prisma.purchaseOrder.findMany({
+        where: {
+          status: { in: ['DRAFT', 'REVIEW', 'APPROVED', 'SUBMITTED', 'ACKNOWLEDGED'] as any },
+        },
+        select: {
+          id: true,
+          poNumber: true,
+          supplierId: true,
+          totalCents: true,
+          currencyCode: true,
+          expectedDeliveryDate: true,
+          createdAt: true,
+          supplier: { select: { name: true, paymentTerms: true } },
+        },
+      })
+
+      // FX-normalize to EUR cents using the latest fx rates per
+      // currency (reuses R.15 path).
+      const poCurrencies = [...new Set(openPosRaw.map((p) => p.currencyCode).filter((c) => c !== 'EUR'))]
+      const poFxRates = new Map<string, number>()
+      for (const ccy of poCurrencies) {
+        const row = await prisma.fxRate.findFirst({
+          where: { fromCurrency: 'EUR', toCurrency: ccy },
+          orderBy: { asOf: 'desc' },
+          select: { rate: true },
+        })
+        if (row) poFxRates.set(ccy, Number(row.rate))
+      }
+      const openPos: OpenPo[] = openPosRaw.map((p) => {
+        const fx = p.currencyCode === 'EUR' ? 1 : poFxRates.get(p.currencyCode) ?? 1
+        return {
+          id: p.id,
+          poNumber: p.poNumber,
+          supplierId: p.supplierId,
+          supplierName: p.supplier?.name ?? null,
+          totalCentsEur: Math.round(p.totalCents / fx),
+          expectedDeliveryDate: p.expectedDeliveryDate,
+          createdAt: p.createdAt,
+          paymentTerms: p.supplier?.paymentTerms ?? null,
+        }
+      })
+
+      // Speculative recs: every active recommendation flagged needsReorder.
+      const activeRecs = await prisma.replenishmentRecommendation.findMany({
+        where: { status: 'ACTIVE', needsReorder: true },
+        select: {
+          productId: true,
+          sku: true,
+          reorderQuantity: true,
+          unitCostCents: true,
+          landedCostPerUnitCents: true,
+          preferredSupplierId: true,
+          isManufactured: true,
+          leadTimeDays: true,
+        },
+      })
+      const supplierIdsForRecs = [
+        ...new Set(activeRecs.map((r) => r.preferredSupplierId).filter(Boolean) as string[]),
+      ]
+      const supplierMeta =
+        supplierIdsForRecs.length > 0
+          ? await prisma.supplier.findMany({
+              where: { id: { in: supplierIdsForRecs } },
+              select: { id: true, name: true, paymentTerms: true },
+            })
+          : []
+      const supplierMetaById = new Map(supplierMeta.map((s) => [s.id, s]))
+      const speculativeRecs: SpeculativeRec[] = activeRecs.map((r) => {
+        const meta = r.preferredSupplierId ? supplierMetaById.get(r.preferredSupplierId) : null
+        return {
+          productId: r.productId,
+          sku: r.sku,
+          unitsRecommended: r.reorderQuantity,
+          landedCostPerUnitCentsEur: r.landedCostPerUnitCents ?? r.unitCostCents ?? 0,
+          preferredSupplierId: r.preferredSupplierId,
+          supplierName: meta?.name ?? null,
+          paymentTerms: meta?.paymentTerms ?? null,
+          isManufactured: r.isManufactured,
+          leadTimeDays: r.leadTimeDays,
+        }
+      })
+
+      const buckets = projectWeeklyCashFlow({
+        today,
+        horizonWeeks,
+        cashOnHandCents,
+        dailyRevenueCents,
+        openPos,
+        speculativeRecs,
+      })
+      return {
+        cashOnHandCents,
+        dailyRevenueCents,
+        openPoCount: openPos.length,
+        speculativeRecCount: speculativeRecs.length,
+        buckets,
+      }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[cash-flow/projection] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // PUT cash on hand. Single-row BrandSettings convention.
+  fastify.put('/fulfillment/replenishment/cash-flow/cash-on-hand', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as { cashOnHandCents?: number | null }
+      if (body.cashOnHandCents != null && (!Number.isFinite(body.cashOnHandCents) || body.cashOnHandCents < 0)) {
+        return reply.code(400).send({ error: 'cashOnHandCents must be a non-negative integer or null' })
+      }
+      const existing = await prisma.brandSettings.findFirst()
+      if (existing) {
+        await prisma.brandSettings.update({
+          where: { id: existing.id },
+          data: { cashOnHandCents: body.cashOnHandCents ?? null },
+        })
+      } else {
+        await prisma.brandSettings.create({
+          data: { cashOnHandCents: body.cashOnHandCents ?? null },
+        })
+      }
+      return { ok: true, cashOnHandCents: body.cashOnHandCents ?? null }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[cash-flow/cash-on-hand:put] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })

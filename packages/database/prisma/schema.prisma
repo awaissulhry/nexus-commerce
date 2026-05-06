@@ -1620,6 +1620,12 @@ model BrandSettings {
   // call; true requires a separate human APPROVE action.
   requireApprovalForPo Boolean @default(false)
 
+  // R.20 — operator-entered cash position in EUR cents. Powers the
+  // 13-week cash-flow projection card on the replenishment page.
+  // Null = card hidden + projection still computes without a starting
+  // balance (useful for quick what-if).
+  cashOnHandCents Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
