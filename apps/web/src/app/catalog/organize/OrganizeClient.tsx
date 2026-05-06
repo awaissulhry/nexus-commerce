@@ -1,5 +1,7 @@
-// AAA — rebuilt /pim/review as a 3-tab catalog organization
-// workspace.
+// /catalog/organize — 3-tab catalog organization workspace.
+// (Renamed from /pim/review on 2026-05-06; old path 301s here. The
+// page does catalog organization, not a review queue, so the URL
+// now matches the behaviour.)
 //
 // Tabs:
 //   1. Suggested Groups   — auto-detected variation clusters
@@ -130,7 +132,7 @@ const TABS: Array<{ id: Tab; label: string; description: string }> = [
   },
 ]
 
-export default function PimReviewClient() {
+export default function OrganizeClient() {
   const [tab, setTab] = useState<Tab>('groups')
   const [statusMsg, setStatusMsg] = useState<{
     kind: 'success' | 'error'

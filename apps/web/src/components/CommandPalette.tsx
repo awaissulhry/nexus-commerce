@@ -35,7 +35,7 @@ const COMMANDS: Command[] = [
   { id: 'goto-activity', label: 'Go to Activity Log', icon: Activity, href: '/sync-logs', group: 'Navigation' },
   { id: 'goto-health', label: 'Go to Sync Health', icon: HeartPulse, href: '/dashboard/health', group: 'Navigation' },
   // Catalog actions
-  { id: 'pim-review', label: 'Review detected PIM groups', icon: Layers, href: '/pim/review', group: 'Catalog' },
+  { id: 'catalog-organize', label: 'Organize catalog (group orphans, promote standalones)', icon: Layers, href: '/catalog/organize', group: 'Catalog' },
   { id: 'bulk-upload', label: 'Bulk upload products', icon: Upload, href: '/bulk-operations', group: 'Catalog' },
   // System
   { id: 'connections', label: 'Manage channel connections', icon: Plug, href: '/settings/channels', group: 'System' },

@@ -1,5 +1,8 @@
 /**
- * AAA — PIM organization endpoints for the rebuilt /pim/review.
+ * Catalog organization endpoints — backs /catalog/organize (renamed
+ * from /pim/review on 2026-05-06). API path stays under /api/pim/* to
+ * avoid a coordinated frontend+backend rename; the user-facing URL is
+ * what matters and the API path is implementation detail.
  *
  * Layout:
  *   GET  /pim/standalones        — paginated non-parented products

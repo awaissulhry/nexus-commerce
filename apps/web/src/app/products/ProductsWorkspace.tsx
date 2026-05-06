@@ -1550,7 +1550,7 @@ function HierarchyLens({ search }: { search: string }) {
                   <div className="text-[13px] text-slate-900 truncate">{p.name}</div>
                   <div className="text-[11px] text-slate-500 font-mono">{p.sku}</div>
                 </div>
-                <Link href="/pim/review" className="text-[11px] text-blue-600 hover:underline">Group →</Link>
+                <Link href="/catalog/organize" className="text-[11px] text-blue-600 hover:underline">Group →</Link>
               </li>
             ))}
           </ul>

@@ -262,14 +262,14 @@ export default function AppSidebar() {
             }
           />
           <NavItem
-            href="/pim/review"
+            href="/catalog/organize"
             icon={Layers}
-            label="PIM Review"
+            label="Organize"
             count={counts.catalog?.pimPending}
             indicator={
               (counts.catalog?.pimPending ?? 0) > 0 ? 'warning' : undefined
             }
-            active={pathname.startsWith('/pim')}
+            active={pathname.startsWith('/catalog/organize')}
           />
           <NavItem
             href="/bulk-operations"
