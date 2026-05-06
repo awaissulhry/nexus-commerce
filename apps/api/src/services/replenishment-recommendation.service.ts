@@ -53,6 +53,8 @@ export interface RecommendationInput {
   urgencySource?: 'GLOBAL' | 'CHANNEL' | null
   worstChannelKey?: string | null
   worstChannelDaysOfCover?: number | null
+  // R.11 — σ_LT applied at generation
+  leadTimeStdDevDays?: number | null
 }
 
 export interface ActiveRecommendationLite {
@@ -166,6 +168,8 @@ export async function persistRecommendationIfChanged(
           urgencySource: input.urgencySource ?? null,
           worstChannelKey: input.worstChannelKey ?? null,
           worstChannelDaysOfCover: input.worstChannelDaysOfCover ?? null,
+          // R.11 — σ_LT snapshot
+          leadTimeStdDevDays: input.leadTimeStdDevDays ?? null,
         },
       })
       if (current) {

@@ -14,6 +14,7 @@ import {
   reorderPoint,
   dailyDemandStdDev,
   computeRecommendation,
+  computeLeadTimeStats,
 } from './replenishment-math.service.js'
 
 const tests: Array<{ name: string; fn: () => void }> = []
@@ -49,6 +50,72 @@ test('safetyStock σ=0 → 0 (no demand variance, no buffer)', () => {
 })
 test('safetyStock leadTime=0 → 0 (instant lead time)', () => {
   eq(safetyStock({ velocity: 5, demandStdDev: 2, leadTimeDays: 0, servicePercent: 95 }), 0)
+})
+
+// ─── R.11: lead-time variance in safety stock ───
+test('R.11: leadTimeStdDevDays=null collapses to old formula', () => {
+  // z=1.645, σ_d=2, LT=14 → ceil(1.645 × 2 × √14) = ceil(12.31) = 13
+  eq(safetyStock({ velocity: 5, demandStdDev: 2, leadTimeDays: 14, servicePercent: 95, leadTimeStdDevDays: null }), 13)
+})
+test('R.11: leadTimeStdDevDays=0 collapses to old formula', () => {
+  eq(safetyStock({ velocity: 5, demandStdDev: 2, leadTimeDays: 14, servicePercent: 95, leadTimeStdDevDays: 0 }), 13)
+})
+test('R.11: σ_LT > 0 inflates the buffer', () => {
+  // z=1.645, σ_d=2, LT=14, d=5, σ_LT=3 →
+  //   dVarTerm = 4 × 14 = 56
+  //   ltVarTerm = 25 × 9 = 225
+  //   sum = 281; sqrt(281) ≈ 16.76; × 1.645 = 27.57; ceil = 28
+  eq(
+    safetyStock({ velocity: 5, demandStdDev: 2, leadTimeDays: 14, servicePercent: 95, leadTimeStdDevDays: 3 }),
+    28,
+  )
+})
+test('R.11: σ_d=0 + σ_LT > 0 still produces buffer (LT-driven)', () => {
+  // No demand variance but LT chaos still warrants buffer
+  // z=1.645, d=10, σ_LT=2 → ltVarTerm = 100 × 4 = 400; sqrt = 20; ×1.645 = 32.9; ceil 33
+  eq(
+    safetyStock({ velocity: 10, demandStdDev: 0, leadTimeDays: 14, servicePercent: 95, leadTimeStdDevDays: 2 }),
+    33,
+  )
+})
+test('R.11: σ_d=0 + σ_LT=0 → 0 (deterministic, no buffer)', () => {
+  eq(
+    safetyStock({ velocity: 5, demandStdDev: 0, leadTimeDays: 14, servicePercent: 95, leadTimeStdDevDays: 0 }),
+    0,
+  )
+})
+test('R.11: negative σ_LT clamps to 0 (graceful)', () => {
+  eq(
+    safetyStock({ velocity: 5, demandStdDev: 2, leadTimeDays: 14, servicePercent: 95, leadTimeStdDevDays: -3 }),
+    13, // collapses to old formula
+  )
+})
+
+// ─── R.11: computeLeadTimeStats ───
+test('R.11: stats [10,12,14] → mean=12, stdDev≈2', () => {
+  const r = computeLeadTimeStats([10, 12, 14])
+  eq(r.count, 3)
+  eq(r.mean, 12)
+  near(r.stdDev, 2.0, 0.001)
+})
+test('R.11: stats [14,14,14] → stdDev=0 (no variance)', () => {
+  const r = computeLeadTimeStats([14, 14, 14])
+  eq(r.stdDev, 0)
+})
+test('R.11: stats [] → all zero', () => {
+  const r = computeLeadTimeStats([])
+  eq(r, { mean: 0, stdDev: 0, count: 0 })
+})
+test('R.11: stats single point → count=1, stdDev=0 (n<2 = no signal)', () => {
+  const r = computeLeadTimeStats([14])
+  eq(r.count, 1)
+  eq(r.stdDev, 0)
+  eq(r.mean, 14)
+})
+test('R.11: stats [14,16] → count=2, stdDev≈1.41', () => {
+  const r = computeLeadTimeStats([14, 16])
+  eq(r.count, 2)
+  near(r.stdDev, 1.4142, 0.01)
 })
 
 // ─── eoq (Wilson) ───

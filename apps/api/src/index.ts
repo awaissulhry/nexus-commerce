@@ -69,6 +69,7 @@ import { startSavedViewAlertsCron } from "./jobs/saved-view-alerts.job.js";
 import { startFbaStatusPollCron } from "./jobs/fba-status-poll.job.js";
 import { startForecastAccuracyCron } from "./jobs/forecast-accuracy.job.js";
 import { startAutoPoCron } from "./jobs/auto-po-replenishment.job.js";
+import { startLeadTimeStatsCron } from "./jobs/lead-time-stats.job.js";
 import pricingRoutes from "./routes/pricing.routes.js";
 // BullMQ worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS=1.
 // initializeQueue pings Redis and throws on failure; tryStartQueueWorkers
@@ -470,6 +471,15 @@ async function start() {
     // NEXUS_ENABLE_AUTO_PO_CRON=0.
     if (process.env.NEXUS_ENABLE_AUTO_PO_CRON !== '0') {
       startAutoPoCron();
+    }
+
+    // R.11 — lead-time variance recompute. Daily 06:00 UTC. For each
+    // active supplier with ≥3 PO receives in the last 365 days, writes
+    // observed σ_LT to Supplier.leadTimeStdDevDays so the safety-stock
+    // formula picks it up. Default-ON; opt out via
+    // NEXUS_ENABLE_LEAD_TIME_STATS_CRON=0.
+    if (process.env.NEXUS_ENABLE_LEAD_TIME_STATS_CRON !== '0') {
+      startLeadTimeStatsCron();
     }
 
     logger.info('✅ API server initialized', {

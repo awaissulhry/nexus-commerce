@@ -57,17 +57,50 @@ export function zForServiceLevel(servicePercent: number): number {
 }
 
 // ─── Safety stock ──────────────────────────────────────────────────
+// Textbook (Greene / Silver-Pyke-Peterson) formula:
+//   SS = z × √( σ_d² × LT_avg  +  d_avg² × σ_LT² )
+// Pre-R.11 we ignored the σ_LT² term (assumed deterministic LT). When
+// leadTimeStdDevDays is null/0/undefined the formula collapses to the
+// old expression, so suppliers without enough PO history degrade
+// gracefully to R.4 behavior.
 export function safetyStock(args: {
   velocity: number
   demandStdDev: number
   leadTimeDays: number
   servicePercent: number
+  leadTimeStdDevDays?: number | null  // R.11
 }): number {
-  if (!Number.isFinite(args.demandStdDev) || args.demandStdDev <= 0) return 0
   if (!Number.isFinite(args.leadTimeDays) || args.leadTimeDays <= 0) return 0
+  const sigD = Math.max(0, args.demandStdDev)
+  const sigLT = Math.max(0, args.leadTimeStdDevDays ?? 0)
+  // No demand variance AND no LT variance → no buffer (deterministic).
+  if (sigD === 0 && sigLT === 0) return 0
   const z = zForServiceLevel(args.servicePercent)
-  const ss = z * args.demandStdDev * Math.sqrt(args.leadTimeDays)
+  const dVarTerm = sigD * sigD * args.leadTimeDays
+  const ltVarTerm = sigLT > 0 ? args.velocity * args.velocity * sigLT * sigLT : 0
+  const ss = z * Math.sqrt(dVarTerm + ltVarTerm)
   return Math.ceil(ss)
+}
+
+// ─── Lead-time stats ──────────────────────────────────────────────
+// Pure function: given an array of observed lead-time days from PO
+// receives, return the sample mean + sample std dev. Returns
+// stdDev=0 for n<2 (statistically meaningless variance) so the
+// safety-stock formula naturally degrades when history is thin.
+export function computeLeadTimeStats(observedDays: number[]): {
+  mean: number
+  stdDev: number
+  count: number
+} {
+  if (!Array.isArray(observedDays) || observedDays.length === 0) {
+    return { mean: 0, stdDev: 0, count: 0 }
+  }
+  const n = observedDays.length
+  const mean = observedDays.reduce((s, x) => s + x, 0) / n
+  if (n < 2) return { mean, stdDev: 0, count: n }
+  const sumSq = observedDays.reduce((s, x) => s + (x - mean) * (x - mean), 0)
+  const variance = sumSq / (n - 1)
+  return { mean, stdDev: Math.sqrt(variance), count: n }
 }
 
 // ─── Economic Order Quantity (Wilson) ─────────────────────────────
@@ -153,6 +186,8 @@ export interface ComputeRecommendationInput {
   carryingCostPctYear: number | null
   moq: number
   casePack: number | null
+  /** R.11 — supplier-level σ_LT in days; null = use deterministic LT */
+  leadTimeStdDevDays?: number | null
   /** Operator overrides from ReplenishmentRule */
   ruleReorderPoint?: number | null
   ruleReorderQuantity?: number | null
@@ -179,6 +214,7 @@ export function computeRecommendation(input: ComputeRecommendationInput): Comput
     velocity: input.velocity,
     demandStdDev: input.demandStdDev,
     leadTimeDays: input.leadTimeDays,
+    leadTimeStdDevDays: input.leadTimeStdDevDays,
     servicePercent,
   })
 

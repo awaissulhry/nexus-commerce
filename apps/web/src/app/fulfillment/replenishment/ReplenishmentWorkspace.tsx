@@ -1143,6 +1143,8 @@ interface DetailResponse {
     urgencySource?: string | null
     worstChannelKey?: string | null
     worstChannelDaysOfCover?: number | null
+    // R.11 — σ_LT applied
+    leadTimeStdDevDays?: number | string | null
   } | null
   model: string | null
   generationTag: string | null
@@ -1743,6 +1745,16 @@ function ReorderMathPanel({ rec }: { rec: NonNullable<DetailResponse['recommenda
           Cost basis: <span className="font-mono">
             {(rec.unitCostCents / 100).toFixed(2)} EUR/unit
           </span>
+        </div>
+      )}
+      {/* R.11 — supplier lead-time variance applied. Renders only when
+          σ_LT > 0 (the supplier has ≥3 PO observations); otherwise the
+          formula collapses to deterministic-LT and there's nothing to
+          show. */}
+      {rec.leadTimeStdDevDays != null && Number(rec.leadTimeStdDevDays) > 0 && (
+        <div className="mt-1 text-[10px] text-slate-500">
+          Lead-time variance: <span className="font-mono">σ_LT = {Number(rec.leadTimeStdDevDays).toFixed(2)}d</span>
+          <span className="text-slate-400"> · safety stock includes σ_LT term</span>
         </div>
       )}
     </div>
