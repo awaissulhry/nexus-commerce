@@ -48,6 +48,8 @@ import productsCatalogRoutes from "./routes/products-catalog.routes.js";
 import productsAiRoutes from "./routes/products-ai.routes.js";
 import productsImagesRoutes from "./routes/products-images.routes.js";
 import aiUsageRoutes from "./routes/ai-usage.routes.js";
+import savedViewAlertsRoutes from "./routes/saved-view-alerts.routes.js";
+import notificationsRoutes from "./routes/notifications.routes.js";
 import ordersReviewsRoutes from "./routes/orders-reviews.routes.js";
 import connectionsRoutes from "./routes/connections.routes.js";
 import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
@@ -60,6 +62,7 @@ import { startAmazonOrdersCron } from "./jobs/amazon-orders-sync.job.js";
 import { startAmazonInventoryCron } from "./jobs/amazon-inventory-sync.job.js";
 import { startReservationSweepCron } from "./jobs/reservation-sweep.job.js";
 import { startLateShipmentFlagCron } from "./jobs/late-shipment-flag.job.js";
+import { startSavedViewAlertsCron } from "./jobs/saved-view-alerts.job.js";
 import pricingRoutes from "./routes/pricing.routes.js";
 // BullMQ worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS=1.
 // initializeQueue pings Redis and throws on failure; tryStartQueueWorkers
@@ -305,6 +308,8 @@ app.register(productsCatalogRoutes, { prefix: '/api' });
 app.register(productsAiRoutes, { prefix: '/api' });
 app.register(productsImagesRoutes, { prefix: '/api' });
 app.register(aiUsageRoutes, { prefix: '/api' });
+app.register(savedViewAlertsRoutes, { prefix: '/api' });
+app.register(notificationsRoutes, { prefix: '/api' });
 app.register(ordersReviewsRoutes, { prefix: '/api' });
 app.register(connectionsRoutes, { prefix: '/api' });
 
@@ -419,6 +424,14 @@ async function start() {
     // Default-ON; opt out via NEXUS_ENABLE_LATE_SHIPMENT_FLAG_CRON=0.
     if (process.env.NEXUS_ENABLE_LATE_SHIPMENT_FLAG_CRON !== '0') {
       startLateShipmentFlagCron();
+    }
+
+    // H.8 — saved-view alerts cron. Every 5 minutes, evaluate every
+    // active SavedViewAlert against its filter and fire an in-app
+    // Notification when the threshold + cooldown say so. Default-ON;
+    // opt out via NEXUS_ENABLE_SAVED_VIEW_ALERTS_CRON=0.
+    if (process.env.NEXUS_ENABLE_SAVED_VIEW_ALERTS_CRON !== '0') {
+      startSavedViewAlertsCron();
     }
 
     logger.info('✅ API server initialized', {

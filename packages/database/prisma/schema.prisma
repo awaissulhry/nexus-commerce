@@ -2991,6 +2991,10 @@ model SavedView {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // H.8 — saved-view alerts. Cascade delete so deleting a view also
+  // tears down its alerts.
+  alerts SavedViewAlert[]
+
   @@unique([userId, surface, name])
   @@index([userId, surface])
 }
@@ -3142,4 +3146,87 @@ model AiUsageLog {
   @@index([entityType, entityId])
   @@index([userId, createdAt])
   @@index([createdAt])
+}
+
+// ── In-app notifications (H.8) ────────────────────────────────────────
+// Generic per-user notification inbox. Saved-view alerts write here
+// today; future surfaces (sync failures, low-stock, AI-job-complete)
+// will write through the same shape so the topnav bell renders one
+// unified feed.
+//
+// `severity` drives the colour treatment: info / success / warn /
+// danger. `entityType + entityId` link back to a target row so the
+// notification can deep-link (e.g. saved-view → /products?<filters>).
+model Notification {
+  id         String    @id @default(cuid())
+  userId     String
+  // Programmatic discriminator. Examples:
+  //   'saved-view-alert' | 'sync-failure' | 'low-stock' | 'ai-job'
+  type       String
+  severity   String    @default("info") // info | success | warn | danger
+  title      String
+  body       String?
+  // Soft-link to entity. saved-view-alert sets entityType="SavedView"
+  // and entityId=<savedViewId>.
+  entityType String?
+  entityId   String?
+  // Free-form payload for the renderer (filters, threshold, count, ...).
+  meta       Json?
+  // Click-through href; nullable for purely informational rows.
+  href       String?
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+  @@index([entityType, entityId])
+}
+
+// ── Saved-view alerts (H.8) ──────────────────────────────────────────
+// Hangs off SavedView. Periodically the alerts cron (every 5 min)
+// re-runs each active alert's saved-view filter, gets a current
+// count, compares to the configured threshold, and fires a
+// Notification if the condition is met (and the cooldown has
+// elapsed).
+//
+// `comparison` semantics:
+//   GT          — current > threshold (e.g. "more than 10 stranded")
+//   LT          — current < threshold (e.g. "fewer than 5 in stock")
+//   CHANGE_ABS  — |current - baseline| >= threshold
+//   CHANGE_PCT  — |current - baseline| / max(1, baseline) >= threshold
+//                 (threshold expressed as a fraction; 0.2 = 20%)
+//
+// `baselineCount` is the value of the count at the moment the alert
+// was created or last manually rebaselined. Updated to current after
+// every fire so a flapping condition doesn't notify on every check.
+model SavedViewAlert {
+  id              String    @id @default(cuid())
+  savedView       SavedView @relation(fields: [savedViewId], references: [id], onDelete: Cascade)
+  savedViewId     String
+  // Denormalised so the cron can run without joining SavedView for
+  // ownership lookups.
+  userId          String
+  // Display label; defaults to the saved view's name on creation.
+  name            String
+  isActive        Boolean   @default(true)
+  comparison      String // 'GT' | 'LT' | 'CHANGE_ABS' | 'CHANGE_PCT'
+  threshold       Decimal   @db.Decimal(14, 4)
+  baselineCount   Int       @default(0)
+  lastCheckedAt   DateTime?
+  // Last count observed at lastCheckedAt; used by the topnav badge so
+  // the user sees state without a manual eval click.
+  lastCount       Int       @default(0)
+  lastFiredAt     DateTime?
+  // Don't refire within this many minutes after the last fire. The
+  // baselineCount is bumped to lastCount on every fire so flapping
+  // doesn't repeatedly notify.
+  cooldownMinutes Int       @default(60)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, isActive])
+  @@index([savedViewId])
+  @@index([isActive, lastCheckedAt])
 }
