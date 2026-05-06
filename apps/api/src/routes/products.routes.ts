@@ -14,6 +14,8 @@ import {
 import { parseZipUpload } from '../services/products/bulk-zip-upload.service.js'
 import { auditLogService } from '../services/audit-log.service.js'
 import { idempotencyService } from '../services/idempotency.service.js'
+import { masterPriceService } from '../services/master-price.service.js'
+import { applyStockMovement } from '../services/stock-movement.service.js'
 
 /**
  * Routes for bulk-operations: optimized fetch + atomic patch.
@@ -1086,6 +1088,20 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       const attrCascadeByProduct = new Map<string, Record<string, any>>()
       const attrCascadeFieldNames = new Map<string, string[]>() // for cascadedFields tracking
 
+      // Phase 13d — basePrice and totalStock changes route through
+      // dedicated services (MasterPriceService / applyStockMovement)
+      // AFTER the bulk transaction commits, so the cascade to
+      // ChannelListing fires atomically per product. We collect them
+      // here, skip the direct prisma.product.update inside the bulk
+      // transaction, and process them post-commit. Cascade fan-out to
+      // children + cascadedFields markers stay inside the bulk
+      // transaction (same place as other field cascades).
+      type MasterDataDelta = { productId: string; newValue: number }
+      const priceDeltas: MasterDataDelta[] = []
+      const stockDeltas: MasterDataDelta[] = []
+      const isMasterDataField = (f: string) =>
+        f === 'basePrice' || f === 'totalStock'
+
       for (const v of validated) {
         if (!isCategoryAttrField(v.field)) continue
         const stripped = v.field.replace(/^attr_/, '')
@@ -1123,6 +1139,61 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         // Skip individual attr_* loop iterations — handled in batched
         // writes below the main loop.
         if (isAttr) continue
+
+        // Phase 13d — master-data fields (basePrice, totalStock) get
+        // collected for post-commit service dispatch instead of being
+        // pushed straight into the bulk transaction. The cascadedFields
+        // bookkeeping for children stays in the bulk transaction; only
+        // the actual master-data write is hoisted out so the service
+        // can run its cascade as a single atomic transaction per
+        // product.
+        if (isMasterDataField(v.field)) {
+          const collector = v.field === 'basePrice' ? priceDeltas : stockDeltas
+          const numericValue =
+            v.field === 'basePrice'
+              ? Number(v.value)
+              : Math.max(0, Math.floor(Number(v.value) || 0))
+          if (v.field === 'basePrice' && (!Number.isFinite(numericValue) || numericValue < 0)) {
+            errors.push({
+              id: v.id,
+              field: v.field,
+              error: 'basePrice must be a non-negative number',
+            })
+            continue
+          }
+          if (v.cascade) {
+            collector.push({ productId: v.id, newValue: numericValue })
+            const kids = childrenByParent.get(v.id) ?? []
+            for (const childId of kids) {
+              collector.push({ productId: childId, newValue: numericValue })
+              // cascadedFields marker for the child stays in the bulk
+              // transaction so the visual "inheriting" state lands
+              // atomically with the rest of the patch.
+              updates.push(
+                prisma.product.update({
+                  where: { id: childId },
+                  data: { cascadedFields: { push: v.field } } as any,
+                }),
+              )
+            }
+          } else if (childIdSet.has(v.id)) {
+            // Direct edit on a child — service handles the value
+            // write; cascadedFields removal stays here so the
+            // "inherited" badge clears atomically.
+            collector.push({ productId: v.id, newValue: numericValue })
+            updates.push(
+              prisma.$executeRaw`
+                UPDATE "Product"
+                SET "cascadedFields" = array_remove("cascadedFields", ${v.field})
+                WHERE id = ${v.id}
+              `,
+            )
+          } else {
+            // Direct edit on a parent or standalone.
+            collector.push({ productId: v.id, newValue: numericValue })
+          }
+          continue
+        }
 
         if (v.cascade) {
           // Cascade applies to the parent itself + all its children.
@@ -1245,6 +1316,80 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       await prisma.$transaction(updates, {
         isolationLevel: 'ReadCommitted',
       })
+
+      // Phase 13d — process master-data cascades after the bulk
+      // transaction commits. Each call is its own transaction
+      // (price service / stock movement) and runs the
+      // ChannelListing fan-out + outbound queue + audit log
+      // atomically per product. Failures here don't roll back the
+      // bulk transaction (which already committed); they're
+      // surfaced via the errors array so the client can highlight
+      // the affected cells. ChannelListing and listings cascade
+      // are still atomic per-product — the partial-failure window
+      // is per-row, not per-listing.
+      if (priceDeltas.length > 0) {
+        // Pre-deduplicate: a product appearing twice in the same PATCH
+        // (say cascade=true and a separate direct edit on the same
+        // child) collapses to the last value, since the master-data
+        // write is idempotent and we want the no-op short-circuit in
+        // the service to do its job rather than enqueueing the same
+        // sync twice.
+        const dedup = new Map<string, number>()
+        for (const d of priceDeltas) dedup.set(d.productId, d.newValue)
+        for (const [productId, newValue] of dedup) {
+          try {
+            await masterPriceService.update(productId, newValue, {
+              actor: null,
+              reason: 'bulk-grid-patch',
+              idempotencyKey: `bulk:${startTs}:${productId}:basePrice`,
+            })
+          } catch (err) {
+            errors.push({
+              id: productId,
+              field: 'basePrice',
+              error: err instanceof Error ? err.message : String(err),
+            })
+          }
+        }
+      }
+      if (stockDeltas.length > 0) {
+        const dedup = new Map<string, number>()
+        for (const d of stockDeltas) dedup.set(d.productId, d.newValue)
+        // Read all current totals in one query so we can compute deltas
+        // without N round-trips. The values may have shifted between
+        // the bulk commit and now (concurrent stock movement), but
+        // applyStockMovement reads its own current value transactionally
+        // before applying the delta, so this is just a starting point.
+        const productIds = Array.from(dedup.keys())
+        const currentRows = await prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, totalStock: true },
+        })
+        const currentTotalById = new Map<string, number>(
+          currentRows.map((r) => [r.id, r.totalStock ?? 0]),
+        )
+        for (const [productId, newValue] of dedup) {
+          const current = currentTotalById.get(productId) ?? 0
+          const delta = newValue - current
+          if (delta === 0) continue
+          try {
+            await applyStockMovement({
+              productId,
+              change: delta,
+              reason: 'MANUAL_ADJUSTMENT',
+              notes: 'bulk grid edit',
+              actor: undefined,
+            })
+          } catch (err) {
+            errors.push({
+              id: productId,
+              field: 'totalStock',
+              error: err instanceof Error ? err.message : String(err),
+            })
+          }
+        }
+      }
+
       const elapsedMs = Date.now() - startTs
 
       const overallStatus =
