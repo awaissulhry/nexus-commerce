@@ -1,6 +1,10 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
+import {
+  resolveWarehouseForOrder,
+  previewRouting,
+} from '../services/order-routing.service.js'
 import { applyStockMovement, listStockMovements } from '../services/stock-movement.service.js'
 import { refreshSalesAggregates } from '../services/sales-aggregate.service.js'
 import { resolveAtp, DEFAULT_LEAD_TIME_DAYS } from '../services/atp.service.js'
@@ -654,20 +658,46 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       if (orderIds.length === 0) return reply.code(400).send({ error: 'orderIds[] required' })
       if (orderIds.length > 200) return reply.code(400).send({ error: 'Max 200 orders per bulk create' })
 
-      const warehouseId = body.warehouseId ?? (await prisma.warehouse.findFirst({ where: { isDefault: true } }))?.id
+      // Caller-supplied warehouse wins; otherwise the routing engine
+      // (OrderRoutingRule rules) decides per-order.
+      const explicitWarehouseId = body.warehouseId ?? null
 
       let created = 0
       const errors: Array<{ orderId: string; reason: string }> = []
+      const routingByOrder: Record<string, { warehouseId: string | null; source: string; ruleName: string | null }> = {}
       for (const oid of orderIds) {
         try {
           const existing = await prisma.shipment.findFirst({ where: { orderId: oid, status: { not: 'CANCELLED' } } })
           if (existing) { errors.push({ orderId: oid, reason: 'shipment already exists' }); continue }
           const order = await prisma.order.findUnique({ where: { id: oid }, include: { items: true } })
           if (!order) { errors.push({ orderId: oid, reason: 'order not found' }); continue }
+
+          // Per-order routing: explicit override > rule match > default.
+          let resolvedWarehouseId: string | null = explicitWarehouseId
+          let routingSource = 'EXPLICIT_OVERRIDE'
+          let routingRuleName: string | null = null
+          if (!explicitWarehouseId) {
+            const shippingCountry =
+              (order.shippingAddress as any)?.country ?? null
+            const routing = await resolveWarehouseForOrder({
+              channel: order.channel,
+              marketplace: order.marketplace,
+              shippingCountry,
+            })
+            resolvedWarehouseId = routing.warehouseId
+            routingSource = routing.source
+            routingRuleName = routing.ruleName
+          }
+          routingByOrder[oid] = {
+            warehouseId: resolvedWarehouseId,
+            source: routingSource,
+            ruleName: routingRuleName,
+          }
+
           await prisma.shipment.create({
             data: {
               orderId: oid,
-              warehouseId,
+              warehouseId: resolvedWarehouseId,
               carrierCode: (body.carrierCode as any) ?? 'SENDCLOUD',
               status: 'DRAFT',
               items: {
@@ -682,10 +712,154 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           errors.push({ orderId: oid, reason: e?.message ?? String(e) })
         }
       }
-      return { created, errors }
+      return { created, errors, routing: routingByOrder }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[bulk-create shipments] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // Order routing rules — CRUD for OrderRoutingRule. Powers the
+  // /fulfillment/routing-rules admin page and is consumed by
+  // resolveWarehouseForOrder() when bulk-create-shipments runs.
+  fastify.get('/fulfillment/routing-rules', async (_request, reply) => {
+    try {
+      const rules = await prisma.orderRoutingRule.findMany({
+        orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+        include: {
+          warehouse: { select: { id: true, code: true, name: true } },
+        },
+      })
+      const warehouses = await prisma.warehouse.findMany({
+        where: { isActive: true },
+        select: { id: true, code: true, name: true, isDefault: true },
+        orderBy: [{ isDefault: 'desc' }, { code: 'asc' }],
+      })
+      return reply.send({ success: true, rules, warehouses })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[routing-rules GET] failed')
+      return reply.code(500).send({ success: false, error: msg })
+    }
+  })
+
+  fastify.post<{
+    Body: {
+      name?: string
+      priority?: number
+      channel?: string | null
+      marketplace?: string | null
+      shippingCountry?: string | null
+      warehouseId?: string
+      isActive?: boolean
+      notes?: string | null
+    }
+  }>('/fulfillment/routing-rules', async (request, reply) => {
+    try {
+      const b = request.body ?? {}
+      if (!b.name?.trim()) {
+        return reply.code(400).send({ error: 'name required' })
+      }
+      if (!b.warehouseId) {
+        return reply.code(400).send({ error: 'warehouseId required' })
+      }
+      const rule = await prisma.orderRoutingRule.create({
+        data: {
+          name: b.name.trim(),
+          priority: b.priority ?? 100,
+          channel: b.channel ?? null,
+          marketplace: b.marketplace ?? null,
+          shippingCountry: b.shippingCountry ?? null,
+          warehouseId: b.warehouseId,
+          isActive: b.isActive ?? true,
+          notes: b.notes ?? null,
+        },
+      })
+      return reply.code(201).send({ success: true, rule })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[routing-rules POST] failed')
+      return reply.code(500).send({ success: false, error: msg })
+    }
+  })
+
+  fastify.patch<{
+    Params: { id: string }
+    Body: {
+      name?: string
+      priority?: number
+      channel?: string | null
+      marketplace?: string | null
+      shippingCountry?: string | null
+      warehouseId?: string
+      isActive?: boolean
+      notes?: string | null
+    }
+  }>('/fulfillment/routing-rules/:id', async (request, reply) => {
+    try {
+      const { id } = request.params
+      const b = request.body ?? {}
+      const data: any = {}
+      if (typeof b.name === 'string') data.name = b.name.trim()
+      if (typeof b.priority === 'number') data.priority = b.priority
+      if ('channel' in b) data.channel = b.channel ?? null
+      if ('marketplace' in b) data.marketplace = b.marketplace ?? null
+      if ('shippingCountry' in b) data.shippingCountry = b.shippingCountry ?? null
+      if (typeof b.warehouseId === 'string') data.warehouseId = b.warehouseId
+      if (typeof b.isActive === 'boolean') data.isActive = b.isActive
+      if ('notes' in b) data.notes = b.notes ?? null
+      const updated = await prisma.orderRoutingRule.update({
+        where: { id },
+        data,
+      })
+      return reply.send({ success: true, rule: updated })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('Record to update not found')) {
+        return reply.code(404).send({ error: 'Rule not found' })
+      }
+      fastify.log.error({ err }, '[routing-rules PATCH] failed')
+      return reply.code(500).send({ success: false, error: msg })
+    }
+  })
+
+  fastify.delete<{ Params: { id: string } }>(
+    '/fulfillment/routing-rules/:id',
+    async (request, reply) => {
+      try {
+        const { id } = request.params
+        await prisma.orderRoutingRule.delete({ where: { id } })
+        return reply.send({ success: true })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (msg.includes('Record to delete does not exist')) {
+          return reply.code(404).send({ error: 'Rule not found' })
+        }
+        return reply.code(500).send({ success: false, error: msg })
+      }
+    },
+  )
+
+  // Routing dry-run — operator types in match criteria, server returns
+  // which rule (if any) would assign the warehouse.
+  fastify.post<{
+    Body: {
+      channel?: string | null
+      marketplace?: string | null
+      shippingCountry?: string | null
+    }
+  }>('/fulfillment/routing-rules/preview', async (request, reply) => {
+    try {
+      const b = request.body ?? {}
+      const result = await previewRouting({
+        channel: b.channel ?? null,
+        marketplace: b.marketplace ?? null,
+        shippingCountry: b.shippingCountry ?? null,
+      })
+      return reply.send({ success: true, ...result })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.code(500).send({ success: false, error: msg })
     }
   })
 

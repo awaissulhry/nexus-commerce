@@ -2433,6 +2433,8 @@ model Warehouse {
   purchaseOrders   PurchaseOrder[]
   // H.1: optional 1-1 link to inventory-side StockLocation
   stockLocation    StockLocation?
+  // Order routing rules that target this warehouse
+  orderRoutingRules OrderRoutingRule[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3286,6 +3288,62 @@ model ReplenishmentRecommendation {
   @@index([generatedAt])
   @@index([urgency, status])
   @@index([resultingPoId])
+}
+
+// ── Order routing rules ────────────────────────────────────────────
+//
+// Rule-based warehouse assignment for inbound orders. Pre-this,
+// shipments were always created against a fixed default warehouse
+// — fine for single-warehouse setups, broken for multi-warehouse
+// (which is the audit's #1 critical operations gap).
+//
+// Match logic in fulfillment.routes.ts → resolveWarehouseForOrder():
+// rules are evaluated in priority order (ascending). The first rule
+// whose match criteria all satisfy the order wins; its warehouseId
+// is assigned. If no rule matches, the fallback default warehouse
+// is used.
+//
+// Match criteria (all optional — null/empty = wildcard on that
+// dimension):
+//   - channel        e.g. 'AMAZON'
+//   - marketplace    e.g. 'IT', 'DE'
+//   - shippingCountry e.g. 'IT', 'DE' (matched against
+//                     order.shippingAddress.country)
+// Future: orderValueMin, orderValueMax, weightGramsMax, customer
+// VIP flag, etc. — additive on this table.
+
+model OrderRoutingRule {
+  id String @id @default(cuid())
+
+  /** Operator-friendly identifier shown in the rules list. */
+  name String
+
+  /** Lower number = higher priority. Default 100 lets early
+   *  hand-tuned rules (priority 1, 10, …) win without renumbering
+   *  the rest. */
+  priority Int @default(100)
+
+  // ── Match criteria (all nullable; null = wildcard) ────────────
+  channel         String?
+  marketplace     String?
+  shippingCountry String?
+
+  // ── Assignment ────────────────────────────────────────────────
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+
+  /** Disable a rule without deleting (preserves history). */
+  isActive Boolean @default(true)
+
+  /** Free-form note explaining the rule's intent. */
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  @@index([priority, isActive])
+  @@index([warehouseId])
 }
 
 // ── Cron observability ─────────────────────────────────────────────
