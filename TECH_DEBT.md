@@ -733,6 +733,128 @@ Tied to: production order ingestion at scale (currently pre-launch). Bump to �
 
 ---
 
+## 42. 🔴 Master-price + master-stock cascade architecture
+
+**Symptom:** When `Product.basePrice` or `Product.totalStock` changes, ChannelListing rows tied to that product are not updated. The marketplace continues to show the pre-edit value until something else triggers a sync. Equivalent issue for variant edits — `ProductVariation.price` writes don't flag the parent's listings for re-publish. This is silent data drift between master + per-channel state.
+
+**Surfaced at:** Phase 1 audit (2026-05-06) of /bulk-operations + /products grid + /products/:id/edit. Three active write paths affected:
+- `PATCH /api/products/:id` (`products-catalog.routes.ts:628`) — inline grid quick-edit. Updates `Product.basePrice`, no listing cascade.
+- `PATCH /api/products/bulk` (`products.routes.ts:553`) — bulk-ops grid Cmd+S commit. Updates `Product.basePrice` in a transaction, no listing cascade for master fields (only channel-prefixed fields like `amazon_title` reach ChannelListing).
+- `BulkActionService.processPricingUpdate` / `processInventoryUpdate` — targets `ProductVariation` which is currently empty (#43), so inert today; will silently drift the moment that table gets populated.
+
+**Workaround applied:** None active. A tactical 45-line cascade flag (`cdf6251 fix(bulk): flag ChannelListings for re-sync after variant price/stock edits`) was reverted in `2674c05` — wrong scope for the problem and would have to be ripped out by the proper fix.
+
+**Why it matters at scale:** 3,200 SKUs × 7 marketplaces = ~22k listings to keep in sync. A synchronous cascade in the request path adds N×listing latency per edit, doesn't survive crashes mid-loop, and gives no per-marketplace push tracking, rate-limit awareness, or dead-letter recovery. At scale, "silent drift" means inventory oversells, prices wrong on Amazon EU, and no audit trail for who changed what when.
+
+**Proper fix:** Transactional outbox + worker fan-out, symmetric to the H.1/H.2 stock-movement service that already exists.
+
+```
+HTTP / job / import / scheduled price service
+       │
+       ▼
+MasterPriceService.update(productId, newPrice)
+   one Prisma $transaction:
+     ├─ Product.update(basePrice)
+     ├─ ChannelListing.updateMany(masterPrice + computed price + version+1)
+     ├─ OutboxEvent.create({type:'price.changed', payload, idempotencyKey})
+     └─ AuditLog.create(actor, before, after)
+       │
+       ▼
+BullMQ worker (already exists at apps/api/src/lib/queue.ts)
+       │ batches by marketplace, respects SP-API rate limits, retry+DLQ
+       ▼
+Marketplace API (Amazon, eBay, Shopify, ...)
+```
+
+Properties: atomic master+listing+outbox write (crash-safe), bounded request latency, idempotency via outbox event ID, centralized cascade logic so no caller can forget, per-marketplace rate limiting, observable (outbox lag, push success/fail, drift detection).
+
+**Codebase already has:** `OutboundSyncQueue` table (`schema.prisma:1738`), BullMQ queues, `outbound-sync.service.ts`, `pricing-outbound.service.ts` (Amazon SP-API push wired), `unified-sync-orchestrator.ts`. Missing piece is the upstream service that takes mutations and feeds them into the existing infrastructure.
+
+**Estimate:** 2–3 focused days, one cohesive PR with co-located code + tests + migration. Plus a backfill for existing ChannelListings to populate `masterPrice` snapshot from current `Product.basePrice` so drift baseline is correct.
+
+**Promote to dedicated phase** (Phase 13 in the current P0 sweep). Don't ship a tactical patch — the architectural work would have to undo it.
+
+---
+
+## 43. 🟡 Variant mechanism duplication: `Product.parentId` vs unused `ProductVariation`
+
+**Symptom:** Two parallel variant mechanisms exist in the schema. Real catalog uses `Product.parentId` self-reference (244 children + 15 parents in DB as of 2026-05-06, including all 244 Xavia variants). The `ProductVariation` table is defined but never populated (0 rows).
+
+**Surfaced at:** Phase 1 audit + Phase 3 scout (2026-05-06). Found while constructing a smoke test for the bulk-pricing cascade — bulk action targets `ProductVariation`, which was empty, so the action had no work to do.
+
+**Other code paths affected:**
+- `BulkActionService` declares `ACTION_ENTITY.PRICING_UPDATE = 'variation'`, `INVENTORY_UPDATE = 'variation'`, `ATTRIBUTE_UPDATE = 'variation'`, `LISTING_SYNC = 'variation'` (`bulk-action.service.ts:42-47`). All silently process 0 items in current production.
+- Frontend (Phase 2 fix `3488be8`) reads variants via `/api/products/:id/children` which queries `Product.parentId`. So the user-visible path uses the *active* mechanism.
+- Schema relations on `PricingRuleVariation`, `StockLevel`, etc. point at `ProductVariation` — these features are also inert until the duplication is resolved.
+
+**Decision needed:** Either (a) deprecate `ProductVariation` schema and migrate any features that depend on it to `Product.parentId`, or (b) backfill `ProductVariation` from `Product.parentId` rows and migrate every `Product.parentId` consumer (frontend, audit logs, bulk-ops, /catalog/organize) to query `ProductVariation`.
+
+**Recommended:** (a). The active mechanism is the simpler one (single table self-reference). `ProductVariation` was likely an aspirational schema that didn't ship. Removing it removes ambiguity about which is canonical.
+
+**Tied to #42 and #44.** Resolving the bulk-ops data-shape mismatch (#44) and shipping the master-price cascade (#42) both need this answered first.
+
+---
+
+## 44. 🟡 Bulk operations target unused data shape
+
+**Symptom:** Every `BulkActionJob` of type 'variation' (PRICING_UPDATE, INVENTORY_UPDATE, ATTRIBUTE_UPDATE, LISTING_SYNC) processes 0 items on real catalogs because `ProductVariation` is empty (#43). Users running bulk price updates from the BulkOperationModal see "completed, 0 processed" with no failure indicator.
+
+**Surfaced at:** Phase 3 scout (2026-05-06).
+
+**Workaround applied:** None — feature is silently broken. Two BulkActionJob rows exist in DB from 2026-05-03, both `COMPLETED` with no items processed.
+
+**Proper fix:** Depends on #43 resolution. If we deprecate `ProductVariation`, bulk-action handlers + `getItemsForJob` switch to querying `Product` filtered by `parentId IS NOT NULL`. If we adopt `ProductVariation`, backfill it from existing `Product` children, then leave bulk-action as-is.
+
+**Note:** The PATCH `/api/products/bulk` path (used by the BulkOperationsClient grid for inline cell edits, Cmd+S) targets `Product` directly and does work today — that's a separate code path. Only the BulkActionJob/modal flow is affected.
+
+---
+
+## 45. 🟡 Local apps/api Prisma client version mismatch (`@prisma/client` v6 vs v7)
+
+**Symptom:** Local dev API server (`apps/api`) returns 500 on every Prisma query with `Invalid prisma.X invocation in ...` (truncated error). Same Prisma client works fine when invoked from a fresh Node script using `@nexus/database`.
+
+**Surfaced at:** Phase 2 smoke test (2026-05-06). Couldn't verify variant endpoint locally; production unaffected (Railway builds dependencies fresh and aligns versions).
+
+**Root cause:** Dependency split.
+- `apps/api/package.json`: `"@prisma/client": "^7.7.0"` + `"@prisma/adapter-pg": "^7.7.0"`
+- `packages/database/package.json`: `"prisma": "^6.19.3"` + `"@prisma/client": "^6.19.3"`
+
+The CLI in `packages/database` (v6) generates a client compatible with `@prisma/client` v6, but `apps/api` loads `@prisma/client` v7 from its own `node_modules`. Same package, incompatible major versions.
+
+**Workaround:** None for local dev. Verify against deployed Railway API instead, which builds dependencies fresh and ends up consistent.
+
+**Proper fix:** Align versions. Either bump `packages/database` to `prisma@^7` (preferred — v7 is the current series) or pin `apps/api` to `^6.19.3`. Then `npm install` from repo root and `prisma generate` to confirm clean.
+
+**Risk if left:** New developers can't run the API locally for any Prisma-touching path. Slows onboarding + makes integration testing impossible without a deployed environment.
+
+---
+
+## 46. 🟢 `Channel` table empty but `ChannelListing.channel` references it as a string
+
+**Symptom:** `ChannelListing.channel` is a `String` column with values like `"AMAZON"`, `"EBAY"`. The `Channel` table exists in the schema but has 0 rows. There's no foreign-key constraint between them — the relationship is implicit via string equality.
+
+**Surfaced at:** Phase 1 audit DB queries (2026-05-06).
+
+**Why it matters:** Adding a new channel today requires editing UI hardcoded lists in N places (e.g., `bulk-operations/components/FilterDropdown.tsx:25` hardcodes `['AMAZON','EBAY','SHOPIFY','WOOCOMMERCE']`). With a populated `Channel` table + FK, channel options would be data-driven.
+
+**Decision needed:** Either populate `Channel` and refactor `ChannelListing.channel` as an FK, or delete the unused `Channel` table to make the implicit-string contract explicit. The current half-state is the worst of both worlds.
+
+**Tied to multi-tenant readiness** — when Nexus serves a second seller, channel availability may differ per tenant, which is much cleaner with an FK + per-tenant `Channel` rows than with hardcoded strings everywhere.
+
+---
+
+## 47. 🟢 Vercel auto-deploy from `main` was disconnected for ~5 days
+
+**Symptom:** Vercel stopped deploying commits to `main` somewhere around 2026-05-01. Multiple H.1/H.2/H.3 stock-ledger commits + the Phase 4 catalog rename appeared on `nexus-commerce.vercel.app` as 404s; the actual production deployment lived at `nexus-commerce-three.vercel.app`.
+
+**Surfaced at:** Phase 4 deploy verification (2026-05-06). Re-pointed to correct URL after user identified it; pipeline subsequently green.
+
+**Resolution:** User confirmed Vercel pipeline is now active (2026-05-06). All pending commits (Phase 4, 6, 7) deployed cleanly to `nexus-commerce-three.vercel.app`.
+
+**Process note for future audits:** Production URL is `nexus-commerce-three.vercel.app` (custom Vercel project name; the predictable `nexus-commerce.vercel.app` alias does not auto-update). If a deploy verification 404s on the predictable URL, check the actual project deployment URL before assuming a build failure.
+
+---
+
 ## Triage summary
 
 **🔴 P0 — tackle next:**
@@ -741,6 +863,7 @@ Tied to: production order ingestion at scale (currently pre-launch). Bump to �
 - **8** ✅ Resolved 2026-05-02 — verified GTIN wizard validator was already on the correct ProductImage relation; deleted the orphan `Image` model + dead Express service & route (~1,213 lines). Demoted to P2 for the remaining UX polish.
 - **27** ✅ Resolved 2026-05-02 — TerminologyPreference table + CRUD API + AI prompt injection + admin UI at `/settings/terminology`. Seeded with 7 Xavia/IT entries (Giacca, Pantaloni, Casco, Stivali, Protezioni, Pelle, Rete). Verify post-deploy that "Giacca" wins consistently in regenerations; add new preferences inline as drift surfaces.
 - **31** ✅ Resolved 2026-05-03 — migration `20260503_p0_31_channel_connection` adds the table + fixes substantial column-level drift on `VariantChannelListing` surfaced by the audit. eBay auth + listing flows are now operational; orders flow has separate refactor work tracked at #33.
+- **42** Master price + master stock cascade architecture — silent drift between Product.basePrice/totalStock and ChannelListing.{masterPrice,masterQuantity,price,quantity}. Tactical patch reverted (cdf6251 → 2674c05); needs the proper transactional outbox + worker fan-out (~2-3 days). Surfaced by Phase 1 audit 2026-05-06.
 
 **🟡 P1 — backlog (informed by real usage):**
 - **1** `@fastify/compress` empty body on `/api/orders` (workaround in place)
@@ -759,6 +882,9 @@ Tied to: production order ingestion at scale (currently pre-launch). Bump to �
 - **35** Listing wizard — channel publish adapters all NOT_IMPLEMENTED (Phase J orchestrator + `/submit` + `/poll` + `/retry` are real; only `ChannelPublishService.publishToChannel()` per-platform branches need real implementations: Amazon `putListingsItem`, Shopify wiring of existing `createProduct`, WooCommerce create, eBay Phase 2A)
 - **36** Dedicated image-manager page at `/products/:id/images`
 - **38** Audit `IF NOT EXISTS` patterns in migrations — silent-on-collision is what hid the Return table drift; sweep + tighten policy — Phase F shipped the wizard step as a quick-reorder + per-channel validation summary only, with the full multi-scope (GLOBAL/PLATFORM/MARKETPLACE) + variation-aware ListingImage editing deferred to a standalone page. The schema, resolution cascade, and validation service are already in place; the page itself + upload service + dnd-kit drag-to-reorder are the remaining work.
+- **43** Variant mechanism duplication — `Product.parentId` vs unused `ProductVariation`. 244 active children via parentId, 0 in ProductVariation. Decision needed before bulk-ops can be fixed at scale.
+- **44** Bulk operations target unused data shape — depends on #43. Bulk PRICING/INVENTORY jobs currently process 0 items silently.
+- **45** Local apps/api Prisma client v6 vs v7 mismatch — local dev API can't serve Prisma queries; production unaffected. Onboarding blocker.
 
 **🟢 P2 — when in the area:**
 - **4** CategorySchema "unknown" rows
@@ -775,3 +901,5 @@ Tied to: production order ingestion at scale (currently pre-launch). Bump to �
 - **39** Per-seller primary marketplace setting — replaces hardcoded `'IT'` in E.9 backfill + future resolver fallbacks; needed once Nexus serves a second tenant
 - **40** SP-API variation attribute mapping seed — auto-populate `ChannelListing.variationMapping` from `getProductTypeDefinitions` once a real publish lands; tied to #35
 - **41** Order-driven stock decrement — fulfillment-method-aware location routing (FBA → `AMAZON-EU-FBA`, rest → `IT-MAIN`); promote to 🔴 once real orders flow
+- **46** `Channel` table empty + `ChannelListing.channel` is a string — implicit FK contract; populate + migrate to real FK, or delete the table to make the contract explicit. Tied to multi-tenant readiness.
+- **47** ✅ Resolved 2026-05-06 — Vercel auto-deploy gap was a routing confusion; production URL is `nexus-commerce-three.vercel.app` not `nexus-commerce.vercel.app`. Documented for future audits.
