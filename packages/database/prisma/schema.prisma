@@ -230,6 +230,13 @@ model Product {
   hsCode          String?
   countryOfOrigin String?
 
+  // R.4 — Replenishment economics. Per-product overrides for the
+  // global defaults (95% service / 25% carrying cost / €15 ordering
+  // cost). All nullable; code applies defaults when null.
+  serviceLevelPercent Decimal? @db.Decimal(5, 2)
+  orderingCostCents   Int?
+  carryingCostPctYear Decimal? @db.Decimal(5, 2)
+
   // NN.1 — optimistic concurrency. Bumped on every PATCH/PUT.
   // Clients send the version they read; server rejects with 409 if
   // it advanced (someone else edited concurrently).
@@ -2620,6 +2627,7 @@ model SupplierProduct {
   costCents            Int? // cost per unit in supplier's default currency
   currencyCode         String? @default("EUR")
   moq                  Int     @default(1) // minimum order quantity
+  casePack             Int?    // R.4 — units per carton (orders rounded up to multiples)
   leadTimeDaysOverride Int?
   isPrimary            Boolean @default(false)
 
@@ -3029,6 +3037,12 @@ model ReplenishmentRecommendation {
   daysOfStockLeft Int?
   urgency         String // CRITICAL | HIGH | MEDIUM | LOW
   needsReorder    Boolean
+
+  // R.4 — math snapshot for audit
+  safetyStockUnits   Int?     // σ-derived buffer
+  eoqUnits           Int?     // Wilson EOQ before MOQ/case clamp
+  constraintsApplied String[] @default([]) // ['MOQ_APPLIED','CASE_PACK_ROUNDED_UP','EOQ_BELOW_MOQ']
+  unitCostCents      Int?     // cost basis at generation
 
   preferredSupplierId String?
   isManufactured      Boolean @default(false)

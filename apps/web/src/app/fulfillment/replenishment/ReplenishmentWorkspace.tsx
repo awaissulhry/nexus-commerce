@@ -113,6 +113,12 @@ interface Suggestion {
   // produced this suggestion. Sent back in PO creation so the audit
   // trail links rec → PO.
   recommendationId?: string | null
+  // R.4 — math snapshot for the drawer's "Reorder math" panel.
+  safetyStockUnits?: number
+  eoqUnits?: number
+  constraintsApplied?: string[]
+  unitCostCents?: number | null
+  servicePercentEffective?: number
 }
 
 interface ReplenishmentResponse {
@@ -780,6 +786,19 @@ interface DetailResponse {
     source: string
     daysOfCover: number | null
   }>
+  // R.4 — math snapshot from the latest ACTIVE recommendation
+  recommendation?: {
+    id: string
+    urgency: string
+    reorderPoint: number
+    reorderQuantity: number
+    safetyStockUnits: number | null
+    eoqUnits: number | null
+    constraintsApplied: string[]
+    unitCostCents: number | null
+    velocity: number | string
+    generatedAt: string
+  } | null
   model: string | null
   generationTag: string | null
   signals: any
@@ -969,6 +988,13 @@ function ForecastDetailDrawer({
                   channelCover={detail.channelCover}
                   leadTimeDays={detail.atp?.leadTimeDays ?? 14}
                 />
+              )}
+
+              {/* R.4 — reorder math snapshot. Shows EOQ, safety stock,
+                  reorder point, and any MOQ/case-pack constraints
+                  that bumped the final qty up. */}
+              {detail.recommendation && (
+                <ReorderMathPanel rec={detail.recommendation} />
               )}
 
               {/* Open shipments */}
@@ -1264,6 +1290,67 @@ function ChannelCoverPanel({
           )
         })}
       </ul>
+    </div>
+  )
+}
+
+// R.4 — Reorder math snapshot panel. Shows the four primitives
+// (EOQ, safety stock, reorder point, recommended qty) plus the
+// constraint annotations explaining why the final qty is what it
+// is. Pulled from the latest ACTIVE ReplenishmentRecommendation.
+function ReorderMathPanel({ rec }: { rec: NonNullable<DetailResponse['recommendation']> }) {
+  const constraints = rec.constraintsApplied ?? []
+  const hasMoq = constraints.includes('MOQ_APPLIED')
+  const hasCasePack = constraints.includes('CASE_PACK_ROUNDED_UP')
+  const hasEoqBelowMoq = constraints.includes('EOQ_BELOW_MOQ')
+
+  return (
+    <div className="border border-slate-200 rounded p-3 bg-slate-50/50">
+      <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-2">
+        Reorder math
+      </div>
+      <div className="grid grid-cols-2 gap-y-1.5 gap-x-4 text-[12px]">
+        <div className="flex items-center justify-between">
+          <span className="text-slate-500">EOQ</span>
+          <span className="tabular-nums font-semibold text-slate-900">
+            {rec.eoqUnits != null ? rec.eoqUnits : '—'}
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-slate-500">Safety stock</span>
+          <span className="tabular-nums font-semibold text-slate-900">
+            {rec.safetyStockUnits != null ? rec.safetyStockUnits : '—'}
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-slate-500">Reorder point</span>
+          <span className="tabular-nums font-semibold text-slate-900">
+            {rec.reorderPoint}
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-slate-500">Recommended qty</span>
+          <span className="tabular-nums font-bold text-slate-900">
+            {rec.reorderQuantity}
+          </span>
+        </div>
+      </div>
+      {(hasMoq || hasCasePack || hasEoqBelowMoq) && (
+        <ul className="mt-2 pt-2 border-t border-slate-200 space-y-0.5 text-[11px] text-slate-600">
+          {hasEoqBelowMoq && (
+            <li>↑ EOQ was below supplier MOQ — ordering more than the math optimum</li>
+          )}
+          {hasMoq && <li>↑ rounded up to supplier MOQ</li>}
+          {hasCasePack && <li>↑ rounded up to case-pack multiple</li>}
+        </ul>
+      )}
+      {rec.unitCostCents != null && (
+        <div className="mt-2 pt-2 border-t border-slate-200 text-[10px] text-slate-500">
+          Cost basis: <span className="font-mono">
+            {(rec.unitCostCents / 100).toFixed(2)} EUR/unit
+          </span>
+        </div>
+      )}
     </div>
   )
 }

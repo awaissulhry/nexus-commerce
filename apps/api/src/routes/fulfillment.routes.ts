@@ -14,6 +14,11 @@ import {
   type VelocitySource,
 } from '../services/replenishment-recommendation.service.js'
 import {
+  computeRecommendation,
+  dailyDemandStdDev,
+  type ConstraintCode,
+} from '../services/replenishment-math.service.js'
+import {
   ingestSalesTrafficForDay,
   ingestAllAmazonMarketplaces,
 } from '../services/sales-report-ingest.service.js'
@@ -2601,12 +2606,14 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           ? q.channel.toUpperCase()
           : null
 
-      // Pull all non-parent products
+      // Pull all non-parent products. R.4 adds the per-product
+      // economics overrides (servicLevel / orderingCost / carryingCost).
       const products = await prisma.product.findMany({
         where: { isParent: false, status: { not: 'INACTIVE' } },
         select: {
           id: true, sku: true, name: true, totalStock: true, lowStockThreshold: true,
           fulfillmentChannel: true, basePrice: true, costPrice: true,
+          serviceLevelPercent: true, orderingCostCents: true, carryingCostPctYear: true,
         },
         take: 1000,
       })
@@ -2659,6 +2666,43 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         where: { productId: { in: products.map((p) => p.id) } },
       })
       const rulesByProduct = new Map(rules.map((r) => [r.productId, r]))
+
+      // R.4 — daily-resolution sales rows for σ calculation. Same
+      // window as soldBySku above. Group by (sku, day) and stash so
+      // per-product σ is one in-memory pass per SKU.
+      const dailyRows = await prisma.dailySalesAggregate.groupBy({
+        by: ['sku', 'day'],
+        where: {
+          sku: { in: skus },
+          day: { gte: since },
+          ...(channelFilter ? { channel: channelFilter } : {}),
+          ...(marketplaceFilter ? { marketplace: marketplaceFilter } : {}),
+        },
+        _sum: { unitsSold: true },
+      })
+      const dailyBySku = new Map<string, number[]>()
+      for (const r of dailyRows) {
+        const arr = dailyBySku.get(r.sku) ?? []
+        arr.push(r._sum.unitsSold ?? 0)
+        dailyBySku.set(r.sku, arr)
+      }
+
+      // R.4 — supplier-product rows for the preferred suppliers.
+      // Provides MOQ + case pack + a tighter unit cost than
+      // Product.costPrice for the EOQ formula.
+      const supplierIds = [...new Set(rules.map((r) => r.preferredSupplierId).filter(Boolean) as string[])]
+      const supplierProducts = supplierIds.length > 0
+        ? await prisma.supplierProduct.findMany({
+            where: {
+              supplierId: { in: supplierIds },
+              productId: { in: products.map((p) => p.id) },
+            },
+            select: { productId: true, supplierId: true, costCents: true, moq: true, casePack: true },
+          })
+        : []
+      const supplierProductByKey = new Map(
+        supplierProducts.map((sp) => [`${sp.supplierId}:${sp.productId}`, sp]),
+      )
 
       // F.2 — Resolve per-product lead time + open inbound stock in two
       // batched queries (see atp.service.ts). The urgency formula now
@@ -2759,8 +2803,36 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         // forecast-derived value, fall back to trailing.
         const velocity = forecastVelocity
 
-        const reorderPoint = rule?.reorderPoint ?? Math.ceil(velocity * (leadTimeDays + safetyDays))
-        const reorderQuantity = rule?.reorderQuantity ?? Math.max(1, Math.ceil(velocity * 30))
+        // R.4 — replace the simple inline math with the composed
+        // service. demandStdDev computed from per-day rows; cost
+        // basis prefers SupplierProduct.costCents (more accurate)
+        // and falls back to Product.costPrice (cents = €*100).
+        const dailySeries = dailyBySku.get(p.sku) ?? []
+        const demandStdDev = dailyDemandStdDev(dailySeries)
+        const sp = rule?.preferredSupplierId
+          ? supplierProductByKey.get(`${rule.preferredSupplierId}:${p.id}`)
+          : null
+        const unitCostCents =
+          sp?.costCents ??
+          (p.costPrice != null ? Math.round(Number(p.costPrice) * 100) : null)
+        const moq = sp?.moq ?? 1
+        const casePack = sp?.casePack ?? null
+
+        const math = computeRecommendation({
+          velocity,
+          demandStdDev,
+          leadTimeDays,
+          unitCostCents,
+          servicePercent: p.serviceLevelPercent != null ? Number(p.serviceLevelPercent) : null,
+          orderingCostCents: p.orderingCostCents,
+          carryingCostPctYear: p.carryingCostPctYear != null ? Number(p.carryingCostPctYear) : null,
+          moq,
+          casePack,
+          ruleReorderPoint: rule?.reorderPoint,
+          ruleReorderQuantity: rule?.reorderQuantity,
+        })
+        const reorderPoint = math.reorderPoint
+        const reorderQuantity = math.reorderQuantity
         const daysOfStockLeft =
           velocity > 0 ? Math.floor(effectiveStock / velocity) : Infinity
 
@@ -2850,6 +2922,14 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           daysOfStockLeft: daysOfStockLeft === Infinity ? null : daysOfStockLeft,
           reorderPoint,
           reorderQuantity,
+          // R.4 — math snapshot fields for the drawer's "Reorder math"
+          // panel. Audit-trail-friendly; carries through to the
+          // ReplenishmentRecommendation row.
+          safetyStockUnits: math.safetyStockUnits,
+          eoqUnits: math.eoqUnits,
+          constraintsApplied: math.constraintsApplied,
+          unitCostCents,
+          servicePercentEffective: math.servicePercent,
           urgency,
           needsReorder,
           // F.2 — surface lead-time provenance so the UI can show
@@ -2889,6 +2969,11 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         needsReorder: s.needsReorder,
         preferredSupplierId: s.preferredSupplierId,
         isManufactured: s.isManufactured,
+        // R.4 — math snapshot
+        safetyStockUnits: s.safetyStockUnits,
+        eoqUnits: s.eoqUnits,
+        constraintsApplied: s.constraintsApplied,
+        unitCostCents: s.unitCostCents,
       }))
       const recIdsByProduct = await bulkPersistRecommendationsIfChanged(
         recommendationInputs,
@@ -3314,6 +3399,25 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             a.channel.localeCompare(b.channel),
           )
 
+        // R.4 — pull the latest ACTIVE recommendation so the drawer
+        // can show the math snapshot (EOQ, safety stock, constraints)
+        // without re-running the math here.
+        const latestRec = await prisma.replenishmentRecommendation.findFirst({
+          where: { productId: product.id, status: 'ACTIVE' },
+          select: {
+            id: true,
+            urgency: true,
+            reorderPoint: true,
+            reorderQuantity: true,
+            safetyStockUnits: true,
+            eoqUnits: true,
+            constraintsApplied: true,
+            unitCostCents: true,
+            velocity: true,
+            generatedAt: true,
+          },
+        })
+
         return {
           product: {
             id: product.id,
@@ -3323,6 +3427,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           },
           atp: atpEntry,
           channelCover,
+          recommendation: latestRec,
           model: forecastRows[0]?.model ?? null,
           generationTag: forecastRows[0]?.generationTag ?? null,
           signals: latestSignals,
@@ -3687,6 +3792,11 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           resultingWorkOrderId: r.resultingWorkOrderId,
           overrideQuantity: r.overrideQuantity,
           overrideNotes: r.overrideNotes,
+          // R.4 — math snapshot fields
+          safetyStockUnits: r.safetyStockUnits,
+          eoqUnits: r.eoqUnits,
+          constraintsApplied: r.constraintsApplied,
+          unitCostCents: r.unitCostCents,
         })),
       }
     } catch (err: any) {

@@ -44,6 +44,11 @@ export interface RecommendationInput {
   needsReorder: boolean
   preferredSupplierId: string | null
   isManufactured: boolean
+  // R.4 — math snapshot (audit trail)
+  safetyStockUnits?: number | null
+  eoqUnits?: number | null
+  constraintsApplied?: string[]
+  unitCostCents?: number | null
 }
 
 export interface ActiveRecommendationLite {
@@ -148,6 +153,11 @@ export async function persistRecommendationIfChanged(
           preferredSupplierId: input.preferredSupplierId,
           isManufactured: input.isManufactured,
           status: 'ACTIVE',
+          // R.4 — math snapshot
+          safetyStockUnits: input.safetyStockUnits ?? null,
+          eoqUnits: input.eoqUnits ?? null,
+          constraintsApplied: input.constraintsApplied ?? [],
+          unitCostCents: input.unitCostCents ?? null,
         },
       })
       if (current) {
