@@ -20,6 +20,12 @@ import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import { getBackendUrl } from '@/lib/backend-url'
+import { usePolledList } from '@/lib/sync/use-polled-list'
+import {
+  emitInvalidation,
+  useInvalidationChannel,
+} from '@/lib/sync/invalidation-channel'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 
 // ── Types ───────────────────────────────────────────────────────────
 type Lens = 'grid' | 'health' | 'matrix' | 'drafts'
@@ -224,37 +230,65 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
   }, [searchParams, pathname, router])
 
   // ── Data fetching ──────────────────────────────────────────────────
-  const [grid, setGrid] = useState<{ listings: Listing[]; total: number; totalPages: number; loading: boolean; error: string | null }>({
-    listings: [], total: 0, totalPages: 0, loading: true, error: null,
+  // Phase 10 — Grid lens uses usePolledList. The hook owns the fetch
+  // + 30s interval + ETag round-trip + visibility refresh +
+  // invalidation listening, so we only build the URL here. Other
+  // lenses (Health, Matrix, Drafts) keep their bespoke fetches —
+  // they're one-shot views without aggressive polling needs.
+  const gridUrl = useMemo(() => {
+    if (lens !== 'grid') return null
+    const qs = new URLSearchParams()
+    qs.set('page', String(page))
+    qs.set('pageSize', '50')
+    qs.set('sortBy', sortBy)
+    qs.set('sortDir', sortDir)
+    if (search) qs.set('search', search)
+    // Repeated-key URL params per Phase 10a canonical form. The
+    // /api/listings handler accepts both repeated and CSV via
+    // csvParam(); switching to repeated here matches the contract
+    // every other Phase 10 page now follows.
+    for (const c of channelFilters) qs.append('channel', c)
+    for (const m of marketplaceFilters) qs.append('marketplace', m)
+    for (const s of statusFilters) qs.append('listingStatus', s)
+    for (const s of syncStatusFilters) qs.append('syncStatus', s)
+    if (hasError) qs.set('hasError', 'true')
+    if (lowStock) qs.set('lowStock', 'true')
+    if (publishedOnly) qs.set('published', 'true')
+    return `/api/listings?${qs.toString()}`
+  }, [lens, page, search, sortBy, sortDir, channelFilters, marketplaceFilters, statusFilters, syncStatusFilters, hasError, lowStock, publishedOnly])
+
+  const {
+    data: gridData,
+    loading: gridLoading,
+    error: gridError,
+    lastFetchedAt: gridFetchedAt,
+    refetch: refetchGrid,
+  } = usePolledList<{ listings: Listing[]; total: number; totalPages: number }>({
+    url: gridUrl,
+    intervalMs: 30_000,
+    invalidationTypes: [
+      'product.updated',
+      'product.deleted',
+      'listing.updated',
+      'listing.created',
+      'listing.deleted',
+      'wizard.submitted',
+      'bulk-job.completed',
+    ],
   })
+  const grid = useMemo(() => ({
+    listings: gridData?.listings ?? [],
+    total: gridData?.total ?? 0,
+    totalPages: gridData?.totalPages ?? 0,
+    loading: gridLoading,
+    error: gridError,
+  }), [gridData, gridLoading, gridError])
+  // Backwards-compat alias so the rest of the file (refresh button +
+  // bulk action complete) keeps calling `fetchGrid`.
+  const fetchGrid = refetchGrid
+
   const [facets, setFacets] = useState<Facets | null>(null)
   const [marketplaces, setMarketplaces] = useState<Marketplace[]>([])
-
-  const fetchGrid = useCallback(async () => {
-    setGrid((g) => ({ ...g, loading: true, error: null }))
-    try {
-      const qs = new URLSearchParams()
-      qs.set('page', String(page))
-      qs.set('pageSize', '50')
-      qs.set('sortBy', sortBy)
-      qs.set('sortDir', sortDir)
-      if (search) qs.set('search', search)
-      if (channelFilters.length) qs.set('channel', channelFilters.join(','))
-      if (marketplaceFilters.length) qs.set('marketplace', marketplaceFilters.join(','))
-      if (statusFilters.length) qs.set('listingStatus', statusFilters.join(','))
-      if (syncStatusFilters.length) qs.set('syncStatus', syncStatusFilters.join(','))
-      if (hasError) qs.set('hasError', 'true')
-      if (lowStock) qs.set('lowStock', 'true')
-      if (publishedOnly) qs.set('published', 'true')
-
-      const res = await fetch(`${getBackendUrl()}/api/listings?${qs.toString()}`, { cache: 'no-store' })
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-      const data = await res.json()
-      setGrid({ listings: data.listings ?? [], total: data.total ?? 0, totalPages: data.totalPages ?? 0, loading: false, error: null })
-    } catch (e: any) {
-      setGrid({ listings: [], total: 0, totalPages: 0, loading: false, error: e?.message ?? 'Failed to load' })
-    }
-  }, [page, search, sortBy, sortDir, channelFilters, marketplaceFilters, statusFilters, syncStatusFilters, hasError, lowStock, publishedOnly])
 
   const fetchFacets = useCallback(async () => {
     try {
@@ -271,20 +305,26 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
   }, [])
 
   useEffect(() => {
-    if (lens === 'grid') fetchGrid()
-  }, [lens, fetchGrid])
-
-  useEffect(() => {
     fetchFacets()
     fetchMarketplaces()
   }, [fetchFacets, fetchMarketplaces])
 
-  // Visibility-change refresh (same pattern as dashboard/overview)
-  useEffect(() => {
-    const onVis = () => { if (document.visibilityState === 'visible' && lens === 'grid') fetchGrid() }
-    document.addEventListener('visibilitychange', onVis)
-    return () => document.removeEventListener('visibilitychange', onVis)
-  }, [fetchGrid, lens])
+  // Phase 10 — when something else changes data we render (a product
+  // edit on /products, a bulk-action on /bulk-operations, a wizard
+  // submit), refresh the facets in tandem with the grid. usePolledList
+  // already handles the grid; we just hook facets in here.
+  useInvalidationChannel(
+    [
+      'product.updated',
+      'product.deleted',
+      'listing.updated',
+      'listing.created',
+      'listing.deleted',
+      'wizard.submitted',
+      'bulk-job.completed',
+    ],
+    () => fetchFacets(),
+  )
 
   // Reset selection when filters change
   useEffect(() => { setSelected(new Set()) }, [page, search, channelFilters.join(','), marketplaceFilters.join(','), statusFilters.join(','), syncStatusFilters.join(','), hasError, lowStock, publishedOnly])
@@ -326,12 +366,22 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
               </span>
             </div>
           )}
-          <button
-            onClick={() => { fetchGrid(); fetchFacets() }}
-            className="h-8 px-3 text-[12px] border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
-          >
-            <RefreshCw size={12} /> Refresh
-          </button>
+          {lens === 'grid' && (
+            <FreshnessIndicator
+              lastFetchedAt={gridFetchedAt}
+              onRefresh={() => { fetchGrid(); fetchFacets() }}
+              loading={gridLoading}
+              error={!!gridError}
+            />
+          )}
+          {lens !== 'grid' && (
+            <button
+              onClick={() => { fetchGrid(); fetchFacets() }}
+              className="h-8 px-3 text-[12px] border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+            >
+              <RefreshCw size={12} /> Refresh
+            </button>
+          )}
         </div>
       </div>
 
@@ -1041,6 +1091,24 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
           break
         }
       }
+      // Phase 10 — broadcast so other open pages refresh. Bulk listing
+      // actions (publish, unpublish, resync, set-price, follow-master)
+      // change ChannelListing rows; emit listing.updated + bulk-job.completed
+      // so /products, /catalog/organize, and /bulk-operations all
+      // refetch within ~200ms.
+      emitInvalidation({
+        type: 'listing.updated',
+        meta: {
+          action,
+          count: selectedIds.length,
+          listingIds: selectedIds,
+          source: 'listings-bulk',
+        },
+      })
+      emitInvalidation({
+        type: 'bulk-job.completed',
+        meta: { action, listingIds: selectedIds },
+      })
       onComplete()
       setTimeout(() => setJobStatus(null), 2500)
     } catch (e: any) {
