@@ -196,9 +196,13 @@ export default function ProductDrawer({
                 {data?.name ?? (loading ? 'Loading…' : 'Product')}
               </h2>
               {data?.isParent && (
-                <span className="inline-flex items-center h-5 px-1.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700">
+                <a
+                  href={`/products/${data.id}/matrix`}
+                  className="inline-flex items-center h-5 px-1.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 hover:bg-blue-100"
+                  title="Open the variant matrix editor"
+                >
                   Parent · {data._count?.variations ?? 0} variants
-                </span>
+                </a>
               )}
               {data?.status && (
                 <StatusBadge status={data.status} />
