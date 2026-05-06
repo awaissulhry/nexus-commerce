@@ -223,6 +223,12 @@ model Product {
   relationsFrom        ProductRelation[] @relation("ProductRelationFrom") // H.11
   relationsTo          ProductRelation[] @relation("ProductRelationTo") // H.11
 
+  // H.16 — Compliance master data. HS code = customs classification,
+  // mostly 6-digit (HS) or 8-10 digit (CN/HTS); stored as text since
+  // formats vary by destination. Country of origin is ISO-2.
+  hsCode          String?
+  countryOfOrigin String?
+
   // NN.1 — optimistic concurrency. Bumped on every PATCH/PUT.
   // Clients send the version they read; server rejects with 409 if
   // it advanced (someone else edited concurrently).
@@ -2797,9 +2803,16 @@ model InboundShipmentItem {
   // ── H.1: Per-item discrepancies (line-level) ───────────────────────
   discrepancies InboundDiscrepancy[]
 
+  // ── H.16: Lot tracking for safety-recall lookups. Different
+  // shipments of the same SKU can carry different lots, so this is
+  // per-line not per-product. Both nullable.
+  lotNumber  String?
+  expiryDate DateTime?
+
   @@index([inboundShipmentId])
   @@index([productId])
   @@index([purchaseOrderItemId])
+  @@index([lotNumber])
 }
 
 // H.0b — InboundReceipt: append-only log of receive events per

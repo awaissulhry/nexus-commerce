@@ -941,9 +941,101 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      publishInboundEvent({ type: 'inbound.updated', shipmentId: id, reason: 'costs', ts: Date.now() })
       return { ok: true }
     } catch (err: any) {
       fastify.log.error({ err }, '[inbound/:id/costs] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // H.16 — compliance update. Per-line lot/expiry on
+  // InboundShipmentItem; HS code + countryOfOrigin live on Product
+  // and are updated via the existing /api/products PATCH.
+  fastify.patch('/fulfillment/inbound/:id/compliance', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = request.body as {
+        items?: Array<{
+          id: string
+          lotNumber?: string | null
+          expiryDate?: string | null
+        }>
+      }
+      const existing = await prisma.inboundShipment.findUnique({ where: { id } })
+      if (!existing) return reply.code(404).send({ error: 'Inbound shipment not found' })
+
+      if (body.items && body.items.length > 0) {
+        for (const it of body.items) {
+          const data: any = {}
+          if (it.lotNumber !== undefined) data.lotNumber = it.lotNumber
+          if (it.expiryDate !== undefined) {
+            data.expiryDate = it.expiryDate ? new Date(it.expiryDate) : null
+          }
+          if (Object.keys(data).length > 0) {
+            await prisma.inboundShipmentItem.update({ where: { id: it.id }, data })
+          }
+        }
+      }
+
+      publishInboundEvent({ type: 'inbound.updated', shipmentId: id, reason: 'compliance', ts: Date.now() })
+      return { ok: true }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[inbound/:id/compliance] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // H.16 — recall lookup. Given a lot number, return every
+  // InboundShipmentItem that received it, with shipment + product
+  // context. Critical for safety-recall responses on motorcycle gear
+  // (helmets, body armor) where the recall scope is "this lot".
+  fastify.get('/fulfillment/inbound/lots/:lotNumber', async (request, reply) => {
+    try {
+      const { lotNumber } = request.params as { lotNumber: string }
+      if (!lotNumber.trim()) return reply.code(400).send({ error: 'lotNumber required' })
+
+      const items = await prisma.inboundShipmentItem.findMany({
+        where: { lotNumber: lotNumber.trim() },
+        include: {
+          inboundShipment: {
+            select: {
+              id: true,
+              type: true,
+              status: true,
+              reference: true,
+              expectedAt: true,
+              arrivedAt: true,
+            },
+          },
+        },
+        orderBy: { id: 'asc' },
+      })
+
+      const productIds = Array.from(new Set(items.map((i) => i.productId).filter((x): x is string => !!x)))
+      const products = productIds.length > 0
+        ? await prisma.product.findMany({
+            where: { id: { in: productIds } },
+            select: { id: true, name: true, sku: true },
+          })
+        : []
+      const byId = new Map(products.map((p) => [p.id, p]))
+
+      return {
+        lotNumber: lotNumber.trim(),
+        count: items.length,
+        items: items.map((it) => ({
+          itemId: it.id,
+          sku: it.sku,
+          productName: it.productId ? (byId.get(it.productId)?.name ?? null) : null,
+          quantityExpected: it.quantityExpected,
+          quantityReceived: it.quantityReceived,
+          expiryDate: it.expiryDate,
+          shipment: it.inboundShipment,
+        })),
+      }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[inbound/lots/:lotNumber] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })
