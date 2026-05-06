@@ -41,6 +41,17 @@ interface SubmissionEntry {
   /** Audit-fix #7 — Per-child ASIN map: master SKU → child ASIN. Persisted
    *  to VariantChannelListing.channelProductId scoped to (channel, marketplace). */
   childAsinsByMasterSku?: Record<string, string>
+  /** SP-API non-blocking issues — surfaced even on successful publishes
+   *  (image dimension hints, attribute shape suggestions, etc.). Each
+   *  entry carries severity + the SKU that triggered it (parent vs
+   *  specific child) so the UI can group them sensibly. */
+  warnings?: Array<{
+    code: string
+    message: string
+    severity: 'WARNING' | 'INFO'
+    sku?: string
+    attributeNames?: string[]
+  }>
 }
 
 interface SubmitResponse {
@@ -569,6 +580,110 @@ function SubmissionRow({
         <div className="mt-2 text-[11px] text-slate-600 italic">
           {entry.notImplementedReason}
         </div>
+      )}
+      {entry.warnings && entry.warnings.length > 0 && (
+        <SubmissionWarnings warnings={entry.warnings} />
+      )}
+    </div>
+  )
+}
+
+/**
+ * SP-API issues panel for a successful (or partially successful)
+ * publish. Amazon returns recommendations like "image should be at
+ * least 1000×1000 px" or "main_product_image_locator format" as
+ * WARNING severity — they don't block the listing going live but
+ * they do affect Amazon's catalog rendering / ranking. Tiered
+ * visually so the operator can triage WARNING-level fixes without
+ * mistaking them for errors.
+ *
+ * Collapses past 3 entries by default — listings can return 10+
+ * recommendations and we don't want the row to dominate the page.
+ */
+function SubmissionWarnings({
+  warnings,
+}: {
+  warnings: NonNullable<SubmissionEntry['warnings']>
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const VISIBLE_COLLAPSED = 3
+  const grouped = warnings.reduce(
+    (acc, w) => {
+      acc[w.severity] = (acc[w.severity] ?? 0) + 1
+      return acc
+    },
+    {} as Record<string, number>,
+  )
+  const visible = expanded ? warnings : warnings.slice(0, VISIBLE_COLLAPSED)
+  const hidden = warnings.length - visible.length
+
+  return (
+    <div className="mt-2 border border-amber-200 bg-amber-50/60 rounded-md px-3 py-2">
+      <div className="flex items-center gap-2 mb-1">
+        <AlertCircle className="w-3 h-3 text-amber-600 flex-shrink-0" />
+        <span className="text-[11px] font-medium text-amber-900">
+          {(grouped.WARNING ?? 0) > 0 && (
+            <>
+              {grouped.WARNING} warning{grouped.WARNING === 1 ? '' : 's'}
+            </>
+          )}
+          {grouped.WARNING && grouped.INFO ? ' · ' : ''}
+          {(grouped.INFO ?? 0) > 0 && (
+            <>
+              {grouped.INFO} hint{grouped.INFO === 1 ? '' : 's'}
+            </>
+          )}
+        </span>
+        <span className="text-[10px] text-amber-700">
+          (publish succeeded; review for catalog quality)
+        </span>
+      </div>
+      <ul className="space-y-1">
+        {visible.map((w, i) => (
+          <li
+            key={i}
+            className="text-[11px] text-slate-800 leading-snug flex items-start gap-1.5"
+          >
+            <span
+              className={cn(
+                'mt-0.5 inline-block w-1.5 h-1.5 rounded-full flex-shrink-0',
+                w.severity === 'WARNING' ? 'bg-amber-500' : 'bg-sky-500',
+              )}
+            />
+            <div className="min-w-0 flex-1">
+              <span className="font-medium text-slate-900">{w.code}</span>
+              {w.sku && (
+                <span className="ml-1 font-mono text-[10px] text-slate-500">
+                  · {w.sku}
+                </span>
+              )}
+              {w.attributeNames && w.attributeNames.length > 0 && (
+                <span className="ml-1 font-mono text-[10px] text-amber-700">
+                  · {w.attributeNames.join(', ')}
+                </span>
+              )}
+              <div className="text-slate-700">{w.message}</div>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="mt-1 text-[10px] text-amber-700 hover:text-amber-900 hover:underline"
+        >
+          Show {hidden} more
+        </button>
+      )}
+      {expanded && warnings.length > VISIBLE_COLLAPSED && (
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          className="mt-1 text-[10px] text-amber-700 hover:text-amber-900 hover:underline"
+        >
+          Show fewer
+        </button>
       )}
     </div>
   )
