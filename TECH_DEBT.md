@@ -799,17 +799,17 @@ Properties: atomic master+listing+outbox write (crash-safe), bounded request lat
 
 ---
 
-## 44. 🟡 Bulk operations target unused data shape — partially resolved 2026-05-06
+## 44. 🟡 Bulk operations target unused data shape
 
-**Symptom (original):** Every `BulkActionJob` of type 'variation' (PRICING_UPDATE, INVENTORY_UPDATE, ATTRIBUTE_UPDATE, LISTING_SYNC) processed 0 items on real catalogs because `ProductVariation` is empty (#43).
+**Symptom:** Every `BulkActionJob` of type 'variation' (PRICING_UPDATE, INVENTORY_UPDATE, ATTRIBUTE_UPDATE, LISTING_SYNC) processes 0 items on real catalogs because `ProductVariation` is empty (#43). Users running bulk price updates from the BulkOperationModal see "completed, 0 processed" with no failure indicator.
 
-**Resolved in Commit 1 of the bulk-operations rebuild:** PRICING_UPDATE + INVENTORY_UPDATE now target `Product` and delegate to `MasterPriceService.update` / `applyStockMovement` for the full cascade (Product + ChannelListing + OutboundSyncQueue + AuditLog/StockMovement). STATUS_UPDATE was already correctly targeting Product. See `bulk-action.service.ts:ACTION_ENTITY` and DEVELOPMENT.md "Bulk operations — two-table data model" → "Master-cascade routing per actionType".
+**Surfaced at:** Phase 3 scout (2026-05-06).
 
-**Still open:**
-- `ATTRIBUTE_UPDATE` still targets `ProductVariation.variationAttributes`. PV is empty so this is a silent no-op against current data. Retargeting requires a schema decision: which Product column holds variant-level attributes? See entry #52.
-- `LISTING_SYNC` still throws "deferred to v2" — separate concern tracked in #34.
+**Workaround applied:** None — feature is silently broken. Two BulkActionJob rows exist in DB from 2026-05-03, both `COMPLETED` with no items processed.
 
-**Note:** The PATCH `/api/products/bulk` path (used by the BulkOperationsClient grid for inline cell edits, Cmd+S) targets `Product` directly and was unaffected — that's a separate code path that has always worked.
+**Proper fix:** Depends on #43 resolution. If we deprecate `ProductVariation`, bulk-action handlers + `getItemsForJob` switch to querying `Product` filtered by `parentId IS NOT NULL`. If we adopt `ProductVariation`, backfill it from existing `Product` children, then leave bulk-action as-is.
+
+**Note:** The PATCH `/api/products/bulk` path (used by the BulkOperationsClient grid for inline cell edits, Cmd+S) targets `Product` directly and does work today — that's a separate code path. Only the BulkActionJob/modal flow is affected.
 
 ---
 
@@ -974,41 +974,6 @@ The flow is asynchronous — each step polls an `operationId` until the operatio
 
 ---
 
-## 52. 🟡 Bulk ATTRIBUTE_UPDATE still targets empty ProductVariation table
-
-**Symptom:** `BulkActionJob` of type `ATTRIBUTE_UPDATE` shallow-merges into `ProductVariation.variationAttributes`. PV is empty in production, so jobs run silently with 0 items processed. Same shape as the old #44 PRICING/INVENTORY bug, scoped down to the one remaining handler.
-
-**Surfaced at:** Phase 1 audit + Commit 1 of the bulk-operations rebuild (2026-05-06). PRICING + INVENTORY were retargeted to Product in Commit 1; ATTRIBUTE_UPDATE was deferred because there's no obvious target column on Product.
-
-**Decision needed:** which Product column holds the equivalent of `variationAttributes`? Candidates:
-- `Product.attributes` (if it exists — verify in schema)
-- A new `Product.variantAttributes` JSON column added by migration
-- Continue routing through PV but require callers to also create PV rows when they create Product children (large structural change to the catalog import flow)
-
-**Proper fix:** Once decided, change `ACTION_ENTITY.ATTRIBUTE_UPDATE` from `'variation'` to `'product'`, retarget `processAttributeUpdate` to write the chosen Product column, and remove the deprecation comment in DEVELOPMENT.md.
-
-**Risk if left:** Bulk attribute updates from `/bulk-operations` modal silently no-op. Users see "completed, 0 processed" with no error. Low blast-radius (no one has run this op in production per Phase 1 audit), but a real bug.
-
----
-
-## 53. 🟡 Bulk STATUS_UPDATE doesn't propagate to channels
-
-**Symptom:** Bulk STATUS_UPDATE writes `Product.status` directly (`bulk-action.service.ts:processStatusUpdate`). No fan-out to ChannelListing, no OutboundSyncQueue enqueue, no AuditLog row. Marketplaces are not informed when a SKU goes ACTIVE → INACTIVE → DRAFT, even though many marketplaces (Amazon, eBay) treat status as a listing-level concept that should be reflected in their UI.
-
-**Surfaced at:** Phase 1 audit + Commit 1 of the bulk-operations rebuild (2026-05-06). PRICING and INVENTORY now route through master-cascade entrypoints (`MasterPriceService.update`, `applyStockMovement`); STATUS has no equivalent service to delegate to.
-
-**Proper fix:** Build a `MasterStatusService.update` (or extend `MasterPriceService` to handle status as a paired concern, since they often change together) that:
-1. Updates `Product.status` atomically
-2. Cascades to ChannelListing (whatever the marketplace-status equivalent is — likely a `listingStatus` column)
-3. Enqueues OutboundSyncQueue with `syncType='STATUS_UPDATE'`
-4. Writes an AuditLog row
-
-Then retarget `processStatusUpdate` to delegate to it.
-
-**Risk if left:** A user marks 50 SKUs INACTIVE in bulk; Amazon and eBay continue showing them as ACTIVE until the next manual sync. Buyers can place orders on items that should be off the shelf.
-
----
-
 ## Triage summary
 
 **🔴 P0 — tackle next:**
@@ -1038,9 +1003,7 @@ Then retarget `processStatusUpdate` to delegate to it.
 - **36** Dedicated image-manager page at `/products/:id/images`
 - **38** Audit `IF NOT EXISTS` patterns in migrations — silent-on-collision is what hid the Return table drift; sweep + tighten policy — Phase F shipped the wizard step as a quick-reorder + per-channel validation summary only, with the full multi-scope (GLOBAL/PLATFORM/MARKETPLACE) + variation-aware ListingImage editing deferred to a standalone page. The schema, resolution cascade, and validation service are already in place; the page itself + upload service + dnd-kit drag-to-reorder are the remaining work.
 - **43** Variant mechanism duplication — `Product.parentId` vs unused `ProductVariation`. 244 active children via parentId, 0 in ProductVariation. Decision needed before bulk-ops can be fixed at scale.
-- **44** Bulk operations target unused data shape — partially resolved 2026-05-06 in Commit 1 of bulk-ops rebuild (PRICING + INVENTORY retargeted to Product via master-cascade). ATTRIBUTE_UPDATE remaining → see #52.
-- **52** Bulk ATTRIBUTE_UPDATE still targets empty ProductVariation — silent no-op against current data; needs schema decision on where variant attributes live on Product.
-- **53** Bulk STATUS_UPDATE doesn't propagate to channels — `Product.status` updates locally but Amazon/eBay continue showing the old status; needs `MasterStatusService` cascade.
+- **44** Bulk operations target unused data shape — depends on #43. Bulk PRICING/INVENTORY jobs currently process 0 items silently.
 - **45** Local apps/api Prisma client v6 vs v7 mismatch — local dev API can't serve Prisma queries; production unaffected. Onboarding blocker.
 - **48** ✅ Resolved 2026-05-06 in `e55ed37` — Phase 28 recompute now honours `followMasterPrice`.
 - **49** ✅ Resolved 2026-05-06 in `e55ed37` — `processPendingSyncs` now filters by `holdUntil`.

@@ -349,29 +349,6 @@ could rename `BulkOperation` → `BulkUploadJob` to disambiguate, but
 that is a deliberate rename, not a side-effect of bulk-operations
 work.
 
-### Master-cascade routing per actionType
-
-Every `BulkActionJob` runs through `BulkActionService.processItem`,
-which dispatches to a per-actionType handler. The handlers route
-through master-cascade entrypoints (where applicable) so a bulk
-write triggers the same atomic Product → ChannelListing →
-OutboundSyncQueue → AuditLog cascade as a single-product edit.
-
-| actionType | Targets | Cascade entrypoint |
-| --- | --- | --- |
-| `PRICING_UPDATE` | `Product` | `MasterPriceService.update` (full cascade) |
-| `INVENTORY_UPDATE` | `Product` | `applyStockMovement` with `reason='MANUAL_ADJUSTMENT'`, `referenceType='BulkActionJob'` (full cascade) |
-| `STATUS_UPDATE` | `Product` | None — direct `product.update` (no master-cascade entrypoint exists yet for status; tracked in `TECH_DEBT.md`) |
-| `ATTRIBUTE_UPDATE` | `ProductVariation` | None — direct `productVariation.update`; PV is currently empty in production (variants live as Product children); retargeting tracked in `TECH_DEBT.md` |
-| `LISTING_SYNC` | `ProductVariation` | Throws "deferred to v2" |
-| `MARKETPLACE_OVERRIDE_UPDATE` | `ChannelListing` | Direct `channelListing.update` (per-listing override is the lowest-level write — no further cascade) |
-
-**Implication:** bulk PRICING_UPDATE / INVENTORY_UPDATE jobs now
-honor the 5-minute push-grace window, the followMaster* contract,
-and the `version` increment that the rest of the cascade machinery
-relies on. Re-running the same job is a no-op via the
-`MasterPriceService` short-circuit (no audit / queue noise).
-
 ---
 
 ## Cross-page sync infrastructure (Phase 10)
