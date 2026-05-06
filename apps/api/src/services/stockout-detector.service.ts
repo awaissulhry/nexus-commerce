@@ -91,18 +91,20 @@ interface Snapshot {
 
 async function resolveSnapshot(args: SnapshotInput): Promise<Snapshot> {
   const since = new Date(Date.now() - 30 * 86400_000)
-  const [agg, product] = await Promise.all([
+  // Product has no back-relation to ReplenishmentRule (one-way: rule
+  // points at product). Query rule separately when costPrice is null.
+  const [agg, product, rule] = await Promise.all([
     prisma.dailySalesAggregate.aggregate({
       where: { sku: args.sku, day: { gte: since } },
       _sum: { unitsSold: true },
     }),
     prisma.product.findUnique({
       where: { id: args.productId },
-      select: {
-        basePrice: true,
-        costPrice: true,
-        replenishmentRule: { select: { preferredSupplierId: true } },
-      } as any,
+      select: { basePrice: true, costPrice: true },
+    }),
+    prisma.replenishmentRule.findUnique({
+      where: { productId: args.productId },
+      select: { preferredSupplierId: true },
     }),
   ])
 
@@ -112,15 +114,12 @@ async function resolveSnapshot(args: SnapshotInput): Promise<Snapshot> {
   let unitCostCents: number | null = null
   if (product?.costPrice != null) {
     unitCostCents = Math.round(Number(product.costPrice) * 100)
-  } else {
-    const supplierId = (product as any)?.replenishmentRule?.preferredSupplierId
-    if (supplierId) {
-      const sp = await prisma.supplierProduct.findFirst({
-        where: { supplierId, productId: args.productId },
-        select: { costCents: true },
-      })
-      if (sp?.costCents != null) unitCostCents = sp.costCents
-    }
+  } else if (rule?.preferredSupplierId) {
+    const sp = await prisma.supplierProduct.findFirst({
+      where: { supplierId: rule.preferredSupplierId, productId: args.productId },
+      select: { costCents: true },
+    })
+    if (sp?.costCents != null) unitCostCents = sp.costCents
   }
 
   const sellingPriceCents = product?.basePrice != null
