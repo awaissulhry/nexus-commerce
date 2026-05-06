@@ -23,6 +23,10 @@ import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { getBackendUrl } from '@/lib/backend-url'
+import {
+  emitInvalidation,
+  useInvalidationChannel,
+} from '@/lib/sync/invalidation-channel'
 
 type InboundType = 'FBA' | 'SUPPLIER' | 'MANUFACTURING' | 'TRANSFER'
 type InboundStatus =
@@ -2509,6 +2513,11 @@ function SavedViewsBar({
 
   useEffect(() => { void fetchViews() }, [fetchViews])
 
+  // P.3 — refresh on cross-tab saved-view changes (other tabs, or the
+  // /products surface editing inbound-scoped views via the unified
+  // /api/saved-views endpoint).
+  useInvalidationChannel(['saved-view.changed'], () => { void fetchViews() })
+
   // Auto-apply the user's default view ONCE on first load — but only
   // if the URL is at "everything blank" so we don't override a user
   // who came in via a deep link.
@@ -2553,6 +2562,10 @@ function SavedViewsBar({
       setNewDefault(false)
       setSavingOpen(false)
       await fetchViews()
+      emitInvalidation({
+        type: 'saved-view.changed',
+        meta: { surface: 'inbound', action: 'created' },
+      })
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -2566,6 +2579,11 @@ function SavedViewsBar({
       const res = await fetch(`${getBackendUrl()}/api/saved-views/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error(`Delete failed (${res.status})`)
       await fetchViews()
+      emitInvalidation({
+        type: 'saved-view.changed',
+        id,
+        meta: { surface: 'inbound', action: 'deleted' },
+      })
     } catch (e: any) {
       alert(e.message)
     }
@@ -2580,6 +2598,11 @@ function SavedViewsBar({
       })
       if (!res.ok) throw new Error(`Update failed (${res.status})`)
       await fetchViews()
+      emitInvalidation({
+        type: 'saved-view.changed',
+        id,
+        meta: { surface: 'inbound', action: 'set-default' },
+      })
     } catch (e: any) {
       alert(e.message)
     }

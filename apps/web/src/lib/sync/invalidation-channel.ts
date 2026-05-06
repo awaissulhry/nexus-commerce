@@ -58,6 +58,11 @@ export type InvalidationType =
   | 'bulk-job.completed'
   | 'pim.changed'
   | 'channel-connection.changed'
+  // P.3 — saved-view + alert events. Cross-tab visibility for the
+  // saved-views dropdown and the ManageAlertsModal so a user editing
+  // alerts in one tab doesn't see stale state in another.
+  | 'saved-view.changed'
+  | 'saved-view-alert.changed'
 
 export interface InvalidationEvent {
   type: InvalidationType

@@ -86,6 +86,12 @@ type SavedView = {
   filters: any
   isDefault: boolean
   surface: string
+  /** P.3 — alert summary attached server-side. */
+  alertSummary?: {
+    active: number
+    total: number
+    firedRecently: number
+  }
 }
 
 const ALL_COLUMNS: Array<{ key: string; label: string; width: number; locked?: boolean }> = [
@@ -512,6 +518,18 @@ export default function ProductsWorkspace() {
     },
   )
 
+  // P.3 — saved-view + alert changes refresh the dropdown so a user
+  // editing in one tab (or the alert builder modal) sees the new
+  // state without needing a manual reload. The summary fields
+  // (alertSummary.firedRecently in particular) need to be fresh
+  // because they drive the bell icon highlight.
+  useInvalidationChannel(
+    ['saved-view.changed', 'saved-view-alert.changed'],
+    () => {
+      fetchSavedViews()
+    },
+  )
+
   // Reset selection when filters change
   useEffect(() => { setSelected(new Set()) }, [page, search, statusFilters.join(','), channelFilters.join(','), marketplaceFilters.join(','), productTypeFilters.join(','), brandFilters.join(','), tagFilters.join(','), fulfillmentFilters.join(','), stockLevel, hasPhotos])
 
@@ -610,7 +628,14 @@ export default function ProductsWorkspace() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, surface: 'products', filters, isDefault }),
               })
-              if (res.ok) { fetchSavedViews(); return true }
+              if (res.ok) {
+                fetchSavedViews()
+                emitInvalidation({
+                  type: 'saved-view.changed',
+                  meta: { surface: 'products', action: 'created' },
+                })
+                return true
+              }
               const err = await res.json().catch(() => ({}))
               alert(err.error ?? 'Save failed')
               return false
@@ -618,6 +643,11 @@ export default function ProductsWorkspace() {
             onDelete={async (id: string) => {
               await fetch(`${getBackendUrl()}/api/saved-views/${id}`, { method: 'DELETE' })
               fetchSavedViews()
+              emitInvalidation({
+                type: 'saved-view.changed',
+                id,
+                meta: { surface: 'products', action: 'deleted' },
+              })
             }}
             onSetDefault={async (id: string) => {
               await fetch(`${getBackendUrl()}/api/saved-views/${id}`, {
@@ -626,6 +656,11 @@ export default function ProductsWorkspace() {
                 body: JSON.stringify({ isDefault: true }),
               })
               fetchSavedViews()
+              emitInvalidation({
+                type: 'saved-view.changed',
+                id,
+                meta: { surface: 'products', action: 'set-default' },
+              })
             }}
             onAlerts={(view: SavedView) => {
               setAlertConfigView(view)
@@ -1006,17 +1041,46 @@ function SavedViewsButton({ open, setOpen, views, onApply, onSaveCurrent, onDele
                 <div className="px-2 py-3 text-[12px] text-slate-400 text-center">No saved views yet</div>
               ) : (
                 <ul className="space-y-0.5">
-                  {views.map((v: SavedView) => (
+                  {views.map((v: SavedView) => {
+                    // P.3 — alert badge. Tone is purple by default,
+                    // amber when an alert fired in the last 24h so
+                    // the operator's eye lands on the views that
+                    // need triage. Count comes from server-side
+                    // group-by attached to the saved-views response.
+                    const alertCount = v.alertSummary?.total ?? 0
+                    const firedRecently = (v.alertSummary?.firedRecently ?? 0) > 0
+                    const bellColor = firedRecently
+                      ? 'text-amber-600 hover:text-amber-700'
+                      : alertCount > 0
+                        ? 'text-purple-600 hover:text-purple-700'
+                        : 'text-slate-400 hover:text-purple-600'
+                    return (
                     <li key={v.id} className="flex items-center justify-between gap-1 px-2 py-1.5 hover:bg-slate-50 rounded">
                       <button onClick={() => onApply(v)} className="flex-1 min-w-0 text-left text-[12px] text-slate-900 inline-flex items-center gap-1.5">
                         {v.isDefault && <Star size={10} className="text-amber-500 fill-amber-500" />}
                         <span className="truncate">{v.name}</span>
                       </button>
-                      <button onClick={() => onAlerts?.(v)} title="Alerts" className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-purple-600"><Bell size={12} /></button>
+                      <button
+                        onClick={() => onAlerts?.(v)}
+                        title={
+                          alertCount === 0
+                            ? 'Add alerts'
+                            : firedRecently
+                              ? `${alertCount} alert${alertCount === 1 ? '' : 's'} — fired in last 24h`
+                              : `${alertCount} alert${alertCount === 1 ? '' : 's'} attached`
+                        }
+                        className={`h-6 px-1 inline-flex items-center justify-center gap-0.5 ${bellColor}`}
+                      >
+                        <Bell size={12} />
+                        {alertCount > 0 && (
+                          <span className="text-[10px] font-semibold tabular-nums">{alertCount}</span>
+                        )}
+                      </button>
                       <button onClick={() => onSetDefault(v.id)} title="Set as default" className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-amber-500"><Star size={12} /></button>
                       <button onClick={() => { if (confirm(`Delete view "${v.name}"?`)) onDelete(v.id) }} title="Delete" className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-rose-600"><Trash2 size={12} /></button>
                     </li>
-                  ))}
+                    )
+                  })}
                 </ul>
               )}
               <button onClick={() => setSaveMode(true)} className="w-full mt-1 h-8 px-2 text-[12px] bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center justify-center gap-1.5">
@@ -1934,6 +1998,15 @@ function ManageAlertsModal({
     void refresh()
   }, [refresh])
 
+  // P.3 — keep this open modal's alert list fresh when a sibling tab
+  // (or the saved-view alerts cron via webhook in the future) edits
+  // an alert attached to this view.
+  useInvalidationChannel(['saved-view-alert.changed'], (event) => {
+    if (event.meta?.savedViewId === view.id) {
+      void refresh()
+    }
+  })
+
   const create = async () => {
     setBusy(true)
     setError(null)
@@ -1960,6 +2033,13 @@ function ManageAlertsModal({
       setDraftThreshold('10')
       setDraftCooldown('60')
       void refresh()
+      // P.3 — broadcast so the SavedViewsButton in this and other tabs
+      // refreshes its alert badge counts. The view's own list is also
+      // refreshed via refresh() above.
+      emitInvalidation({
+        type: 'saved-view-alert.changed',
+        meta: { savedViewId: view.id, action: 'created' },
+      })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -1977,6 +2057,11 @@ function ManageAlertsModal({
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       void refresh()
+      emitInvalidation({
+        type: 'saved-view-alert.changed',
+        id,
+        meta: { savedViewId: view.id, action: 'updated' },
+      })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -1992,6 +2077,11 @@ function ManageAlertsModal({
         method: 'DELETE',
       })
       void refresh()
+      emitInvalidation({
+        type: 'saved-view-alert.changed',
+        id,
+        meta: { savedViewId: view.id, action: 'deleted' },
+      })
     } finally {
       setBusy(false)
     }
@@ -2006,6 +2096,13 @@ function ManageAlertsModal({
         { method: 'POST' },
       )
       void refresh()
+      // Eval may flip lastFiredAt → drives the firedRecently dot in
+      // the dropdown badge, so emit so other views see it too.
+      emitInvalidation({
+        type: 'saved-view-alert.changed',
+        id,
+        meta: { savedViewId: view.id, action: 'evaluated' },
+      })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -2021,6 +2118,11 @@ function ManageAlertsModal({
         { method: 'POST' },
       )
       void refresh()
+      emitInvalidation({
+        type: 'saved-view-alert.changed',
+        id,
+        meta: { savedViewId: view.id, action: 'rebaselined' },
+      })
     } finally {
       setBusy(false)
     }

@@ -532,7 +532,45 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         where: { userId, surface: q.surface ?? 'products' },
         orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
       })
-      return { items: views }
+      // P.3 — attach an alert summary per view so the SavedViewsButton
+      // can show "Stockouts (2 alerts)" + a fired-recently dot. One
+      // groupBy keeps it cheap (single round-trip, indexed by
+      // savedViewId). No N+1.
+      let alertSummary = new Map<
+        string,
+        { active: number; total: number; firedRecently: number }
+      >()
+      if (views.length > 0) {
+        const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000)
+        const rows = await prisma.savedViewAlert.findMany({
+          where: { savedViewId: { in: views.map((v) => v.id) } },
+          select: {
+            savedViewId: true,
+            isActive: true,
+            lastFiredAt: true,
+          },
+        })
+        for (const r of rows) {
+          const cur = alertSummary.get(r.savedViewId) ?? {
+            active: 0,
+            total: 0,
+            firedRecently: 0,
+          }
+          cur.total++
+          if (r.isActive) cur.active++
+          if (r.lastFiredAt && r.lastFiredAt >= since24h) cur.firedRecently++
+          alertSummary.set(r.savedViewId, cur)
+        }
+      }
+      const items = views.map((v) => ({
+        ...v,
+        alertSummary: alertSummary.get(v.id) ?? {
+          active: 0,
+          total: 0,
+          firedRecently: 0,
+        },
+      }))
+      return { items }
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
