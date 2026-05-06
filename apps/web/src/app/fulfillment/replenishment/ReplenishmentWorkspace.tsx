@@ -1493,6 +1493,26 @@ function ForecastDetailDrawer({
                 <FbaRestockSignalPanel rec={detail.recommendation} />
               )}
 
+              {/* R.9 — supplier alternatives. Lazy-loaded panel that
+                  ranks every supplier with a SupplierProduct row for
+                  this product. */}
+              <SupplierAlternativesPanel
+                productId={productId}
+                urgency={detail.recommendation?.urgency ?? 'MEDIUM'}
+                onChanged={async () => {
+                  const params = new URLSearchParams()
+                  if (marketplace) params.set('marketplace', marketplace)
+                  if (channel) params.set('channel', channel)
+                  const r = await fetch(
+                    `${getBackendUrl()}/api/fulfillment/replenishment/${productId}/forecast-detail${
+                      params.toString() ? `?${params.toString()}` : ''
+                    }`,
+                  )
+                  if (r.ok) setDetail(await r.json())
+                }}
+              />
+
+
               {/* R.17 — substitution links + raw-vs-adjusted velocity. */}
               <SubstitutionPanel
                 productId={productId}
@@ -1921,6 +1941,171 @@ function StockoutImpactCard() {
         </button>
       </div>
     </Card>
+  )
+}
+
+// R.9 — drawer: ranked alternative suppliers for this product. Lazy
+// loads on first expand to avoid firing the request for every drawer
+// open. Allows one-click switch of the preferred supplier — calls
+// the rec engine to re-derive on next page render.
+function SupplierAlternativesPanel({
+  productId,
+  urgency,
+  onChanged,
+}: {
+  productId: string
+  urgency: string
+  onChanged: () => void | Promise<void>
+}) {
+  const [open, setOpen] = useState(false)
+  const [data, setData] = useState<{
+    candidates: Array<{
+      supplierId: string
+      supplierName: string
+      unitCostCentsEur: number | null
+      leadTimeDays: number
+      moq: number
+      casePack: number | null
+      currencyCode: string
+      compositeScore: number
+      costScore: number
+      speedScore: number
+      flexScore: number
+      reliabilityScore: number
+      rank: number
+      isCurrentlyPreferred: boolean
+      paymentTerms: string | null
+      notes: string[]
+    }>
+  } | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [switching, setSwitching] = useState<string | null>(null)
+
+  async function load() {
+    setLoading(true)
+    try {
+      const url = new URL(
+        `${getBackendUrl()}/api/fulfillment/replenishment/products/${productId}/supplier-comparison`,
+      )
+      url.searchParams.set('urgency', urgency)
+      const res = await fetch(url.toString())
+      if (res.ok) setData(await res.json())
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function switchPreferred(supplierId: string) {
+    setSwitching(supplierId)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/replenishment/products/${productId}/preferred-supplier`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ supplierId }),
+        },
+      )
+      if (res.ok) {
+        await load()
+        await onChanged()
+      }
+    } finally {
+      setSwitching(null)
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4">
+      <button
+        type="button"
+        onClick={() => {
+          if (!open && !data) load()
+          setOpen((v) => !v)
+        }}
+        className="flex items-center gap-2 text-sm font-semibold text-slate-900 w-full"
+      >
+        <span>Supplier alternatives</span>
+        <span className="text-[10px] text-slate-400">
+          {open ? '▼' : '▶'} {data ? `${data.candidates.length} suppliers` : ''}
+        </span>
+      </button>
+      {open && loading && (
+        <div className="mt-2 text-[12px] text-slate-400">Loading…</div>
+      )}
+      {open && !loading && data && data.candidates.length === 0 && (
+        <p className="mt-2 text-[12px] text-slate-500">
+          No supplier rows for this product. Add a SupplierProduct entry to enable comparison.
+        </p>
+      )}
+      {open && !loading && data && data.candidates.length > 0 && (
+        <ul className="mt-3 space-y-1.5">
+          {data.candidates.map((c) => (
+            <li
+              key={c.supplierId}
+              className={cn(
+                'rounded border p-2 text-[12px]',
+                c.isCurrentlyPreferred
+                  ? 'border-indigo-300 bg-indigo-50/40'
+                  : 'border-slate-200',
+              )}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[10px] text-slate-400">#{c.rank}</span>
+                  <span className="font-semibold text-slate-900">{c.supplierName}</span>
+                  {c.isCurrentlyPreferred && (
+                    <span className="text-[10px] uppercase tracking-wider text-indigo-700">
+                      preferred
+                    </span>
+                  )}
+                </div>
+                <div className="font-mono text-[11px] text-slate-700">
+                  score {(c.compositeScore * 100).toFixed(0)}
+                </div>
+              </div>
+              <div className="grid grid-cols-4 gap-2 text-[11px] text-slate-600">
+                <div>
+                  <div className="text-slate-400">Cost</div>
+                  <div className="font-mono">
+                    {c.unitCostCentsEur != null
+                      ? `€${(c.unitCostCentsEur / 100).toFixed(2)}`
+                      : '—'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-slate-400">Lead</div>
+                  <div className="font-mono">{c.leadTimeDays}d</div>
+                </div>
+                <div>
+                  <div className="text-slate-400">MOQ</div>
+                  <div className="font-mono">{c.moq}</div>
+                </div>
+                <div>
+                  <div className="text-slate-400">Terms</div>
+                  <div className="font-mono truncate">{c.paymentTerms ?? '—'}</div>
+                </div>
+              </div>
+              {c.notes.length > 0 && (
+                <p className="mt-1 text-[10px] text-slate-500 leading-snug">
+                  {c.notes.join(' · ')}
+                </p>
+              )}
+              {!c.isCurrentlyPreferred && (
+                <button
+                  type="button"
+                  onClick={() => switchPreferred(c.supplierId)}
+                  disabled={switching === c.supplierId}
+                  className="mt-1 text-[11px] text-indigo-600 hover:underline disabled:opacity-50"
+                >
+                  {switching === c.supplierId ? 'switching…' : 'set as preferred'}
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 

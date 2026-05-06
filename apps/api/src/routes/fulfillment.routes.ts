@@ -81,6 +81,11 @@ import {
   DEFAULT_STALE_DAYS as FBA_RESTOCK_STALE_DAYS,
   eligibleMarketplaceCodes,
 } from '../services/fba-restock.service.js'
+import {
+  rankSuppliers,
+  loadCandidatesForProduct,
+  setPreferredSupplier,
+} from '../services/supplier-comparison.service.js'
 import { amazonMarketplaceId } from '../services/categories/marketplace-ids.js'
 import { getFbaRestockCronStatus } from '../jobs/fba-restock-ingestion.job.js'
 import {
@@ -4740,6 +4745,64 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (err: any) {
       if (err?.code === 'P2025') return reply.code(404).send({ error: 'not found' })
       fastify.log.error({ err }, '[substitutions:delete] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // ─── R.9 — multi-supplier comparison ─────────────────────────────
+  // Returns ranked alternatives for the product (drawer alternates panel).
+  fastify.get('/fulfillment/replenishment/products/:productId/supplier-comparison', async (request, reply) => {
+    try {
+      const { productId } = request.params as { productId: string }
+      const q = request.query as { urgency?: string }
+      const urgency = (q.urgency ?? 'MEDIUM').toUpperCase() as
+        | 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
+
+      // Load candidates with FX rates (reuse R.15 path).
+      const supplierProductsRaw = await prisma.supplierProduct.findMany({
+        where: { productId },
+        select: { currencyCode: true },
+      })
+      const fxCurrencies = [
+        ...new Set(
+          supplierProductsRaw
+            .map((sp) => (sp.currencyCode ?? 'EUR').toUpperCase())
+            .filter((c) => c !== 'EUR'),
+        ),
+      ]
+      const fxRates = new Map<string, number>()
+      for (const ccy of fxCurrencies) {
+        const row = await prisma.fxRate.findFirst({
+          where: { fromCurrency: 'EUR', toCurrency: ccy },
+          orderBy: { asOf: 'desc' },
+          select: { rate: true },
+        })
+        if (row) fxRates.set(ccy, Number(row.rate))
+      }
+      const candidates = await loadCandidatesForProduct({ productId, fxRates })
+      const ranked = rankSuppliers({ candidates, urgency })
+      return { productId, urgency, candidates: ranked }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[supplier-comparison:get] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // Switch the preferred supplier on a product's ReplenishmentRule.
+  fastify.post('/fulfillment/replenishment/products/:productId/preferred-supplier', async (request, reply) => {
+    try {
+      const { productId } = request.params as { productId: string }
+      const body = (request.body ?? {}) as { supplierId?: string }
+      if (!body.supplierId) {
+        return reply.code(400).send({ error: 'supplierId required' })
+      }
+      await setPreferredSupplier({ productId, supplierId: body.supplierId })
+      return { ok: true }
+    } catch (err: any) {
+      if (err?.message?.includes('No SupplierProduct row')) {
+        return reply.code(400).send({ error: err.message })
+      }
+      fastify.log.error({ err }, '[supplier-comparison:set-preferred] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })
