@@ -561,6 +561,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             warehouse: { select: { code: true, name: true } },
             purchaseOrder: { select: { poNumber: true, supplierId: true } },
             workOrder: { select: { id: true, productId: true, quantity: true } },
+            // H.1 additions — list view shows discrepancy + attachment counts.
+            _count: { select: { attachments: true, discrepancies: true } },
           },
           orderBy: { createdAt: 'desc' },
           take: 200,
@@ -577,7 +579,15 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string }
     const shipment = await prisma.inboundShipment.findUnique({
       where: { id },
-      include: { items: true, warehouse: true, purchaseOrder: true, workOrder: true },
+      include: {
+        items: { include: { discrepancies: true, receipts: { orderBy: { receivedAt: 'desc' } } } },
+        warehouse: true,
+        purchaseOrder: true,
+        workOrder: true,
+        // H.1 additions — full bundle for the detail surface.
+        attachments: { orderBy: { uploadedAt: 'desc' } },
+        discrepancies: { where: { inboundShipmentItemId: null }, orderBy: { reportedAt: 'desc' } },
+      },
     })
     if (!shipment) return reply.code(404).send({ error: 'Inbound shipment not found' })
     return shipment
@@ -593,13 +603,27 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         fbaShipmentId?: string
         reference?: string
         expectedAt?: string
+        notes?: string
+        // H.1 additions
+        asnNumber?: string
+        asnFileUrl?: string
+        carrierCode?: string
+        trackingNumber?: string
+        trackingUrl?: string
+        currencyCode?: string
+        exchangeRate?: number
+        shippingCostCents?: number
+        customsCostCents?: number
+        dutiesCostCents?: number
+        insuranceCostCents?: number
+        createdById?: string
         items?: Array<{
           productId?: string
           sku: string
           quantityExpected: number
-          // H.0a — optional manual link to a PO line for ad-hoc inbounds
-          // that nevertheless want PO-level reconciliation.
           purchaseOrderItemId?: string
+          // H.1
+          unitCostCents?: number
         }>
       }
       if (!body.type) return reply.code(400).send({ error: 'type is required' })
@@ -617,12 +641,27 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           fbaShipmentId: body.fbaShipmentId ?? null,
           reference: body.reference ?? null,
           expectedAt: body.expectedAt ? new Date(body.expectedAt) : null,
+          notes: body.notes ?? null,
+          // H.1 — pass-through. defaults handle currencyCode + photoUrls.
+          asnNumber: body.asnNumber ?? null,
+          asnFileUrl: body.asnFileUrl ?? null,
+          carrierCode: body.carrierCode ?? null,
+          trackingNumber: body.trackingNumber ?? null,
+          trackingUrl: body.trackingUrl ?? null,
+          ...(body.currencyCode ? { currencyCode: body.currencyCode } : {}),
+          exchangeRate: body.exchangeRate != null ? body.exchangeRate : null,
+          shippingCostCents: body.shippingCostCents ?? null,
+          customsCostCents: body.customsCostCents ?? null,
+          dutiesCostCents: body.dutiesCostCents ?? null,
+          insuranceCostCents: body.insuranceCostCents ?? null,
+          createdById: body.createdById ?? null,
           items: {
             create: items.map((it) => ({
               productId: it.productId ?? null,
               sku: it.sku,
               quantityExpected: it.quantityExpected,
               purchaseOrderItemId: it.purchaseOrderItemId ?? null,
+              unitCostCents: it.unitCostCents ?? null,
             })),
           },
         },
@@ -1344,8 +1383,15 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
               sku: it.sku,
               quantityExpected: it.quantityOrdered - (it.quantityReceived ?? 0),
               purchaseOrderItemId: it.id,
+              // H.1 — thread expected per-unit cost from the PO line so
+              // landed-cost variance can be computed at receive time.
+              unitCostCents: it.unitCostCents ?? null,
             })),
           },
+          // H.1 — propagate the PO's currency to the inbound. PO defaults
+          // to EUR; if the operator set USD/GBP/CNY there, the inbound
+          // mirrors so cost columns are interpreted consistently.
+          currencyCode: po.currencyCode ?? 'EUR',
         },
         include: { items: true },
       })

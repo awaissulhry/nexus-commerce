@@ -2241,6 +2241,11 @@ enum InboundStatus {
   RECEIVING
   CLOSED
   CANCELLED
+  // H.1 additions — state machine that uses these lands in Commit 6.
+  SUBMITTED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  RECONCILED
 }
 
 enum CarrierCode {
@@ -2622,17 +2627,58 @@ model InboundShipment {
   workOrderId     String?
   asnNumber       String?
 
+  // expectedAt = estimated arrival (semantic alias preserved across H.1
+  // for caller compatibility — atp.service + several routes already
+  // read this column).
   expectedAt DateTime?
+  // arrivedAt = actual arrival.
   arrivedAt  DateTime?
   closedAt   DateTime?
 
   notes   String?
   version Int     @default(1)
 
+  // ── H.1: ASN file URL (asnNumber column existed pre-H.1 but unused) ─
+  asnFileUrl String?
+
+  // ── H.1: Carrier + tracking ─────────────────────────────────────────
+  // Free-form carrier code; frontend lookup table renders the tracking
+  // URL template. Common: BRT, POSTE, GLS, SDA, TNT, DHL, UPS, FEDEX,
+  // DSV, MAERSK_LINE, CARGOLUX, OTHER. trackingUrl is a denormalized
+  // override for legacy carriers without a known template.
+  carrierCode    String?
+  trackingNumber String?
+  trackingUrl    String?
+
+  // ── H.1: Multi-currency cost ────────────────────────────────────────
+  // currencyCode is the currency of every cost on this shipment AND
+  // of unitCostCents on each line. exchangeRate snapshots FX at
+  // create-time to base EUR; landed-cost math (Commit 11) uses it.
+  currencyCode String   @default("EUR")
+  exchangeRate Decimal? @db.Decimal(12, 6)
+
+  // ── H.1: Shipping / customs / duties / insurance ────────────────────
+  // Cents in `currencyCode`. Captured at create or update; flow into
+  // landed-cost calc per unit in Commit 11.
+  shippingCostCents  Int?
+  customsCostCents   Int?
+  dutiesCostCents    Int?
+  insuranceCostCents Int?
+
+  // ── H.1: Operator audit hints ───────────────────────────────────────
+  // No auth wired yet (TECH_DEBT will track). Currently set by the
+  // route handlers as best-effort identifiers.
+  createdById  String?
+  receivedById String?
+
   warehouse     Warehouse?            @relation(fields: [warehouseId], references: [id])
   purchaseOrder PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id])
   workOrder     WorkOrder?            @relation(fields: [workOrderId], references: [id])
   items         InboundShipmentItem[]
+
+  // ── H.1: Side relations ─────────────────────────────────────────────
+  attachments   InboundShipmentAttachment[]
+  discrepancies InboundDiscrepancy[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2640,6 +2686,72 @@ model InboundShipment {
   @@index([type])
   @@index([status])
   @@index([fbaShipmentId])
+  @@index([purchaseOrderId])
+  @@index([carrierCode])
+  @@index([trackingNumber])
+  @@index([expectedAt])
+}
+
+// H.1 — Attachments at the shipment level (invoices, packing lists,
+// customs docs, ASN files, photos of the truck/delivery). Per-item
+// proof photos live in InboundShipmentItem.photoUrls[]; that's
+// scalar enough not to warrant a join.
+model InboundShipmentAttachment {
+  id                String   @id @default(cuid())
+  inboundShipmentId String
+  // PHOTO    | INVOICE | PACKING | CUSTOMS | ASN | OTHER
+  kind              String
+  url               String
+  filename          String?
+  contentType       String?
+  sizeBytes         Int?
+  uploadedBy        String?
+  uploadedAt        DateTime @default(now())
+
+  inboundShipment InboundShipment @relation(fields: [inboundShipmentId], references: [id], onDelete: Cascade)
+
+  @@index([inboundShipmentId])
+  @@index([kind])
+}
+
+// H.1 — Per-shipment or per-line discrepancies with status lifecycle.
+// REPORTED → ACKNOWLEDGED → RESOLVED|DISPUTED|WAIVED. Resolution
+// workflow + supplier email is Commit 17.
+model InboundDiscrepancy {
+  id                    String  @id @default(cuid())
+  inboundShipmentId     String
+  // null = ship-level (e.g., late arrival, total cost variance)
+  // set  = line-level (e.g., this SKU short-shipped)
+  inboundShipmentItemId String?
+
+  // SHORT_SHIP | OVER_SHIP | WRONG_ITEM | DAMAGED | QUALITY_ISSUE
+  // | LATE_ARRIVAL | COST_VARIANCE | OTHER
+  reasonCode String
+
+  expectedValue   String?
+  actualValue     String?
+  quantityImpact  Int? // signed (5 = 5 short, -5 = 5 over)
+  costImpactCents Int? // signed
+
+  description String?
+  photoUrls   String[] @default([])
+
+  // REPORTED | ACKNOWLEDGED | RESOLVED | DISPUTED | WAIVED
+  status String @default("REPORTED")
+
+  reportedAt      DateTime  @default(now())
+  reportedBy      String?
+  acknowledgedAt  DateTime?
+  resolvedAt      DateTime?
+  resolutionNotes String?
+
+  inboundShipment     InboundShipment      @relation(fields: [inboundShipmentId], references: [id], onDelete: Cascade)
+  inboundShipmentItem InboundShipmentItem? @relation(fields: [inboundShipmentItemId], references: [id], onDelete: SetNull)
+
+  @@index([inboundShipmentId])
+  @@index([inboundShipmentItemId])
+  @@index([status])
+  @@index([reasonCode])
 }
 
 model InboundShipmentItem {
@@ -2665,6 +2777,22 @@ model InboundShipmentItem {
   // H.0b — append-only event log. quantityReceived above is a cached
   // SUM(receipts.quantity); receipts are source of truth.
   receipts InboundReceipt[]
+
+  // ── H.1: Per-item cost (in shipment currency) ──────────────────────
+  // unitCostCents overrides PurchaseOrderItem.unitCostCents when set;
+  // useful for ad-hoc supplier inbounds without a PO. costVarianceCents
+  // is computed at receive time as (actual - expected) × qtyReceived.
+  // Both null when no PO + no override (most common case today).
+  unitCostCents     Int?
+  costVarianceCents Int?
+
+  // ── H.1: Per-item proof photos ─────────────────────────────────────
+  // Cloudinary URLs in the inbound/{shipmentId}/items/{itemId}/ folder.
+  // Captured during the mobile receive flow (Commit 7).
+  photoUrls String[] @default([])
+
+  // ── H.1: Per-item discrepancies (line-level) ───────────────────────
+  discrepancies InboundDiscrepancy[]
 
   @@index([inboundShipmentId])
   @@index([productId])
