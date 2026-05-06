@@ -42,6 +42,9 @@ const baseActive = {
   reorderQuantity: 100,
   effectiveStock: 50,
   needsReorder: false,
+  urgencySource: null,
+  worstChannelKey: null,
+  worstChannelDaysOfCover: null,
 }
 
 test('returns true when prev is null (first recommendation)', () => {
@@ -136,6 +139,48 @@ test('clampStockInputs floors negative inboundWithinLeadTime to 0', () => {
 test('clampStockInputs floors negative effectiveStock to 0', () => {
   const out = clampStockInputs({ ...baseInput, effectiveStock: -42 })
   eq(out.effectiveStock, 0)
+})
+
+// ─── R.14 channel-urgency diff ───
+
+test('returns true when urgencySource appears (null → GLOBAL)', () => {
+  eq(
+    recommendationChanged(baseActive, {
+      ...baseInput,
+      urgencySource: 'GLOBAL',
+    }),
+    true,
+  )
+})
+
+test('returns true when urgencySource flips GLOBAL → CHANNEL', () => {
+  eq(
+    recommendationChanged(
+      { ...baseActive, urgencySource: 'GLOBAL' },
+      { ...baseInput, urgencySource: 'CHANNEL', worstChannelKey: 'AMAZON:IT' },
+    ),
+    true,
+  )
+})
+
+test('returns true when worstChannelKey appears (null → AMAZON:IT)', () => {
+  eq(
+    recommendationChanged(baseActive, {
+      ...baseInput,
+      worstChannelKey: 'AMAZON:IT',
+    }),
+    true,
+  )
+})
+
+test('returns false when only worstChannelDaysOfCover shifts (no spam on cover drift)', () => {
+  eq(
+    recommendationChanged(
+      { ...baseActive, worstChannelKey: 'AMAZON:IT', worstChannelDaysOfCover: 28 },
+      { ...baseInput, worstChannelKey: 'AMAZON:IT', worstChannelDaysOfCover: 27 },
+    ),
+    false,
+  )
 })
 
 test('clampStockInputs preserves non-stock fields verbatim', () => {

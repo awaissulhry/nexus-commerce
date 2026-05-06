@@ -10,9 +10,14 @@
  *   dailyDemandStdDev()   — sample standard deviation of a series
  *   computeRecommendation() — orchestrates all of the above
  *
- * Lead-time variance: deferred. Real Greene formula adds
- *   σ_LT² × velocity²
- * inside the sqrt; we'll add when Supplier.leadTimeVariance lands.
+ * Lead-time variance: shipped in R.11 — Supplier.leadTimeStdDevDays is
+ * computed nightly by lead-time-stats.cron from PO history (PO.createdAt
+ * → InboundShipment.arrivedAt). The full Greene formula is implemented
+ * in safetyStock() below:
+ *   SS = z × √( σ_d² × LT + d² × σ_LT² )
+ * Suppliers without enough PO history have leadTimeStdDevDays = null/0,
+ * which collapses the formula back to the d-only behavior — graceful
+ * degradation, not breakage.
  *
  * No DB. No imports beyond standard math. Tested deterministically.
  */

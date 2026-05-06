@@ -80,6 +80,12 @@ export interface ActiveRecommendationLite {
   reorderQuantity: number
   effectiveStock: number
   needsReorder: boolean
+  // R.14 — included in the diff so a per-channel crisis appearing
+  // (or its provenance flipping GLOBAL ↔ CHANNEL) forces a rewrite
+  // even when urgency/qty/stock/needsReorder are unchanged.
+  urgencySource: string | null
+  worstChannelKey: string | null
+  worstChannelDaysOfCover: number | null
 }
 
 /**
@@ -126,6 +132,18 @@ export function recommendationChanged(
   if (prev.reorderQuantity !== next.reorderQuantity) return true
   if (Math.abs(prev.effectiveStock - next.effectiveStock) >= 1) return true
   if (prev.needsReorder !== next.needsReorder) return true
+  // R.14 — channel-urgency provenance is a meaningful signal change.
+  // Without these, pre-R.14 ACTIVE rows never got rewritten when the
+  // engine started populating these fields (DB audit found 1/266 with
+  // urgencySource set; rest stayed null because urgency/qty/stock/
+  // needsReorder didn't change). Including them in the diff means any
+  // worstChannelKey appearance/disappearance/flip forces a rewrite.
+  if ((prev.urgencySource ?? null) !== (next.urgencySource ?? null)) return true
+  if ((prev.worstChannelKey ?? null) !== (next.worstChannelKey ?? null)) return true
+  // Don't compare worstChannelDaysOfCover with strict equality — small
+  // shifts (28d → 27d) shouldn't generate spam. Only the presence of
+  // a worst channel matters for the diff; the cover value flows along
+  // as a snapshot.
   return false
 }
 
@@ -147,6 +165,11 @@ export async function getActiveRecommendations(
       reorderQuantity: true,
       effectiveStock: true,
       needsReorder: true,
+      // R.14 — needed by recommendationChanged() so worstChannelKey
+      // / urgencySource appearing or flipping forces a rewrite.
+      urgencySource: true,
+      worstChannelKey: true,
+      worstChannelDaysOfCover: true,
     },
   })
   for (const r of rows) out.set(r.productId, r)
