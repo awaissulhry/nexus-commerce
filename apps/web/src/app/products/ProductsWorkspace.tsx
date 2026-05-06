@@ -13,7 +13,7 @@ import {
   Filter, Settings2, X, ChevronDown, ChevronRight, Eye, EyeOff, Tag as TagIcon,
   Package, Plus, FolderTree, Network, Bookmark, BookmarkPlus,
   ExternalLink, Star, Copy, Trash2, Layers, Image as ImageIcon,
-  CheckCircle2, XCircle, AlertCircle, Loader2, Upload,
+  CheckCircle2, XCircle, AlertCircle, Loader2, Upload, Bell,
 } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import PageHeader from '@/components/layout/PageHeader'
@@ -225,6 +225,9 @@ export default function ProductsWorkspace() {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [columnPickerOpen, setColumnPickerOpen] = useState(false)
   const [savedViewMenuOpen, setSavedViewMenuOpen] = useState(false)
+  // H.8 — saved-view alert config modal. When set to a view, the
+  // ManageAlertsModal opens scoped to that view.
+  const [alertConfigView, setAlertConfigView] = useState<SavedView | null>(null)
   const [tagEditorProductId, setTagEditorProductId] = useState<string | null>(null)
   const [bundleEditorOpen, setBundleEditorOpen] = useState(false)
   // F5 — bulk image upload modal. Opens from header "Upload photos"
@@ -601,6 +604,10 @@ export default function ProductsWorkspace() {
               })
               fetchSavedViews()
             }}
+            onAlerts={(view: SavedView) => {
+              setAlertConfigView(view)
+              setSavedViewMenuOpen(false)
+            }}
           />
           <button onClick={() => setBundleEditorOpen(true)} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5">
             <Package size={12} /> Bundles
@@ -700,6 +707,13 @@ export default function ProductsWorkspace() {
             fetchProducts()
           }}
         />
+      )}
+
+      {/* H.8 saved-view alerts: ManageAlertsModal component is not yet
+          implemented in this file (backend landed in ee0544b but the
+          frontend modal is pending). Gated out so the build is green. */}
+      {false && alertConfigView && (
+        <div onClick={() => setAlertConfigView(null)} />
       )}
 
       {/* F1 — product drawer. Mounted at workspace level so it sits
@@ -944,7 +958,7 @@ function FilterGroup({ label, options, selected, onToggle, counts, renderLabel }
 // ────────────────────────────────────────────────────────────────────
 // SavedViewsButton — load / save / delete / set-default
 // ────────────────────────────────────────────────────────────────────
-function SavedViewsButton({ open, setOpen, views, onApply, onSaveCurrent, onDelete, onSetDefault }: any) {
+function SavedViewsButton({ open, setOpen, views, onApply, onSaveCurrent, onDelete, onSetDefault, onAlerts }: any) {
   const [saveMode, setSaveMode] = useState(false)
   const [name, setName] = useState('')
   const [isDefault, setIsDefault] = useState(false)
@@ -975,6 +989,7 @@ function SavedViewsButton({ open, setOpen, views, onApply, onSaveCurrent, onDele
                         {v.isDefault && <Star size={10} className="text-amber-500 fill-amber-500" />}
                         <span className="truncate">{v.name}</span>
                       </button>
+                      <button onClick={() => onAlerts?.(v)} title="Alerts" className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-purple-600"><Bell size={12} /></button>
                       <button onClick={() => onSetDefault(v.id)} title="Set as default" className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-amber-500"><Star size={12} /></button>
                       <button onClick={() => { if (confirm(`Delete view "${v.name}"?`)) onDelete(v.id) }} title="Delete" className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-rose-600"><Trash2 size={12} /></button>
                     </li>
