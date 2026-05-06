@@ -500,3 +500,113 @@ shape: read-only list (`/products/drafts`), tabbed read-write
 (`/catalog/organize`), heavy grid + bulk (`/bulk-operations`),
 multi-lens (`/listings`), and complex filter + multi-mutation
 (`/products`).
+
+---
+
+## /products foundation rebuild (P.0–P.21, 2026-05-06 → 2026-05-07)
+
+Twenty-two-commit engagement that hardened the /products surface
+end-to-end after a full audit. Each commit was scope-calibrated
+against the audit's claims — most audit findings were either
+already-shipped or wrong about the data, so commit bodies document
+the calibration along with what landed.
+
+### Verifier
+
+```sh
+node scripts/verify-products-rebuild.mjs            # against Railway
+node scripts/verify-products-rebuild.mjs --local    # against localhost:4000
+```
+
+Walks every commit's contract: bulk-status validation, drift cron,
+saved-views alert summary, extended /health, list returns version,
+bulk-fetch productIds filter, missingChannels filter, per-listing
+resync route, AI provider registry. Exits non-zero on any failure.
+Designed for post-deploy gates and tagging releases.
+
+### Backend surface added
+
+- `POST /api/products/bulk-status` — routes through MasterStatusService
+  (Commit 0); cascades to ChannelListing + enqueues OutboundSyncQueue
+- `PATCH /api/products/:id` — supports `If-Match: <version>` for
+  optimistic concurrency (Commit 0 server, P.7 client integration)
+- `GET /api/products/:id/health` — extended with full master fields +
+  `_count.{translations,relationsFrom,children}` so the drawer no
+  longer renders empty cards (P.6, P.8)
+- `GET /api/saved-views?surface=…` — items now include
+  `alertSummary: { active, total, firedRecently }` (P.3)
+- `GET /api/products` — list returns `Product.version` per row (P.7);
+  accepts `?missingChannels=<csv>` for coverage-gap filtering (P.10)
+- `GET /api/products/bulk-fetch` — accepts `?productIds=<csv>` for
+  scoped /bulk-operations deep-link (P.9)
+- `POST /api/sync/detect-drift` + `GET /api/sync/detect-drift/status` —
+  manual trigger + status for the drift detector cron (P.2)
+- `POST /api/products/:id/ai/suggest-fields` — LLM brand/productType
+  suggestion (P.14)
+- `apps/api/src/jobs/sync-drift-detection.job.ts` — 30-min cron,
+  default-ON, gated by `NEXUS_ENABLE_SYNC_DRIFT_DETECTION_CRON`
+
+### Frontend surface added
+
+- `apps/web/src/lib/products/theme.ts` — design tokens (Density,
+  CHANNEL_TONE, STATUS_VARIANT) extracted from the workspace (P.4)
+- `apps/web/src/app/products/_modals/{AiBulkGenerateModal,
+  ManageAlertsModal,BundleEditor,CompareProductsModal}.tsx` — modal
+  extractions (P.4, P.17). `ProductsWorkspace.tsx` shrank from 4806
+  to ~3700 lines through these
+- Drawer: `Variations` tab for parents, `Health` card surfacing
+  server-side score + issues, per-listing Sync now / Snap to master,
+  inline AI suggest for empty brand/productType (P.8, P.18, P.11,
+  P.12, P.14)
+- `PricingLens` (P.5) and "Missing on…" filter + CoverageLens header
+  stats (P.10) on the workspace
+- Cross-tab invalidation for saved-view + saved-view-alert events
+  with badge in the dropdown (P.3)
+- Per-cell `If-Match` PATCH + 409 inline error + `brand` /
+  `productType` inline edit (P.7)
+- Page-level shortcuts (`n` / `f` / `r`) + ShortcutHelp `On /products`
+  section (P.15)
+- CSV export of the loaded grid view (P.19)
+- a11y wins: aria-sort, aria-pressed, live region, named icon
+  buttons (P.20a)
+
+### Schema unchanged
+
+The rebuild touched zero migrations. ProductVariation deprecation
+(P.1) reduced to disabling the dormant write in
+stock-movement.service.ts; the active write paths are load-bearing
+for the listing wizard's variations.service / submission.service /
+schema-parser.service which read children via the PV relation. Full
+removal is sequenced in `TECH_DEBT.md` entry #43.
+
+### What's deferred (future commits)
+
+- P.4b: extract `BulkImageUploadModal` (671 lines incl. FS walker)
+- Toast service to replace `alert()` / `confirm()` calls
+- ErrorBoundary at workspace root
+- Lazy-load (dynamic import) for the heavy modals
+- Trash lens — needs `Product.deletedAt` + `MasterStatusService`
+  support + restore UX (~3 days)
+- Marketplace-side post-push verification (re-fetch from Amazon
+  SP-API after push) — needs SP-API client extension
+- AI result caching, per-feature spend caps, per-feature provider
+  override policy
+- Schedule changes (`ScheduledMutation` + cron worker + UI)
+- Multi-cursor edit, formula columns, advanced filter rule builder
+- Compare 5+ products (current modal scales to 4)
+- Excel / JSON / XML / PDF export, custom export templates,
+  scheduled / email reports, full-set export across pages
+- P.20b mobile polish, P.20c dark mode, P.20d i18n (next-intl
+  install + key extraction + Italian locale)
+- Per-issue quick-fix buttons in the drawer's HealthCard
+- Health score as sortable grid column
+
+### Outstanding data correctness
+
+- `AIRMESH-JACKET-YELLOW-MEN`: `Product.basePrice = 0` and
+  `Product.totalStock = 0` while AMAZON IT/DE listings have valid
+  `42.50/44.95` prices and `50/30` stock. The 2026-05-06 reconcile
+  unfollowed master on those 2 listings to preserve live
+  marketplace values; restoring the master values + re-enabling
+  follow flags is a manual operator decision (see
+  `scripts/reconcile-master-drift.mjs` dry-run for current state).
