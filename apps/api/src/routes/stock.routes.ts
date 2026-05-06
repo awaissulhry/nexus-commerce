@@ -7,6 +7,7 @@ import {
   transferStock,
 } from '../services/stock-level.service.js'
 import { amazonInventoryService } from '../services/amazon-inventory.service.js'
+import { resolveAtp } from '../services/atp.service.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // H.2 — Stock API surface for /fulfillment/stock rebuild.
@@ -217,6 +218,147 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       return { locations: summaries }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/locations] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── GET /api/stock/product/:productId ────────────────────────────
+  // One-shot bundle for the multi-location drawer. Returns:
+  //   - product header
+  //   - per-location StockLevel breakdown
+  //   - per-channel listing sync status
+  //   - recent movements (last 50)
+  //   - sales velocity (last 30d totals + 90d daily history)
+  //   - ATP (lead time + open inbound)
+  //   - active reservations
+  fastify.get('/stock/product/:productId', async (request, reply) => {
+    try {
+      const { productId } = request.params as { productId: string }
+
+      const product = await prisma.product.findUnique({
+        where: { id: productId },
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          amazonAsin: true,
+          totalStock: true,
+          lowStockThreshold: true,
+          basePrice: true,
+          costPrice: true,
+          images: { select: { url: true }, take: 1 },
+        },
+      })
+      if (!product) return reply.code(404).send({ error: 'Product not found' })
+
+      const [stockLevels, channelListings, movements, atpMap] = await Promise.all([
+        prisma.stockLevel.findMany({
+          where: { productId },
+          include: {
+            location: { select: { id: true, code: true, name: true, type: true, isActive: true } },
+            reservations: {
+              where: { releasedAt: null, consumedAt: null },
+              orderBy: { createdAt: 'desc' },
+            },
+          },
+          orderBy: { quantity: 'desc' },
+        }),
+        prisma.channelListing.findMany({
+          where: { productId },
+          select: {
+            id: true, channel: true, marketplace: true, listingStatus: true,
+            syncStatus: true, lastSyncedAt: true, lastSyncStatus: true, lastSyncError: true,
+            quantity: true, stockBuffer: true, externalListingId: true,
+          },
+          orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }],
+        }),
+        listStockMovements({ productId, limit: 50 }),
+        resolveAtp({ products: [{ id: product.id, sku: product.sku }] }),
+      ])
+
+      // Sales velocity: aggregate DailySalesAggregate for the last 90 days.
+      const ninetyDaysAgo = new Date()
+      ninetyDaysAgo.setUTCDate(ninetyDaysAgo.getUTCDate() - 90)
+      ninetyDaysAgo.setUTCHours(0, 0, 0, 0)
+      const sales = await prisma.dailySalesAggregate.findMany({
+        where: { sku: product.sku, day: { gte: ninetyDaysAgo } },
+        select: { day: true, unitsSold: true, grossRevenue: true, ordersCount: true, channel: true },
+        orderBy: { day: 'asc' },
+      })
+
+      // Roll up by day across channels
+      const dailyMap = new Map<string, { units: number; revenueCents: number; orders: number }>()
+      for (const s of sales) {
+        const key = s.day.toISOString().slice(0, 10)
+        const cur = dailyMap.get(key) ?? { units: 0, revenueCents: 0, orders: 0 }
+        cur.units += s.unitsSold
+        cur.revenueCents += Math.round(Number(s.grossRevenue) * 100)
+        cur.orders += s.ordersCount
+        dailyMap.set(key, cur)
+      }
+      const dailyHistory = Array.from(dailyMap.entries())
+        .sort(([a], [b]) => (a < b ? -1 : 1))
+        .map(([day, v]) => ({
+          day,
+          units: v.units,
+          revenue: v.revenueCents / 100,
+          orders: v.orders,
+        }))
+
+      const last30Cutoff = new Date()
+      last30Cutoff.setUTCDate(last30Cutoff.getUTCDate() - 30)
+      const last30 = sales.filter((s) => s.day >= last30Cutoff)
+      const last30Units = last30.reduce((acc, s) => acc + s.unitsSold, 0)
+      const last30Revenue = last30.reduce((acc, s) => acc + Number(s.grossRevenue), 0)
+      const avgDailyUnits = last30Units / 30
+      const totalAvailable = stockLevels.reduce((acc, sl) => acc + sl.available, 0)
+      const daysOfStock =
+        avgDailyUnits > 0
+          ? Math.floor(totalAvailable / avgDailyUnits)
+          : null
+
+      const atp = atpMap.get(product.id)
+
+      return {
+        product: {
+          ...product,
+          basePrice: product.basePrice == null ? null : Number(product.basePrice),
+          costPrice: product.costPrice == null ? null : Number(product.costPrice),
+          thumbnailUrl: product.images?.[0]?.url ?? null,
+        },
+        stockLevels: stockLevels.map((sl) => ({
+          id: sl.id,
+          location: sl.location,
+          quantity: sl.quantity,
+          reserved: sl.reserved,
+          available: sl.available,
+          reorderThreshold: sl.reorderThreshold,
+          lastUpdatedAt: sl.lastUpdatedAt,
+          lastSyncedAt: sl.lastSyncedAt,
+          syncStatus: sl.syncStatus,
+          activeReservations: sl.reservations.length,
+        })),
+        channelListings,
+        movements,
+        salesVelocity: {
+          last30Units,
+          last30Revenue,
+          avgDailyUnits: Math.round(avgDailyUnits * 100) / 100,
+          daysOfStock,
+          totalAvailable,
+          dailyHistory,
+        },
+        atp: atp ?? null,
+        reservations: stockLevels.flatMap((sl) =>
+          sl.reservations.map((r) => ({
+            ...r,
+            quantity: r.quantity,
+            location: { id: sl.location.id, code: sl.location.code },
+          })),
+        ),
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/product/:id] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })

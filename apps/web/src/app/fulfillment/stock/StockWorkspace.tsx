@@ -13,8 +13,9 @@ import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   Warehouse, Search, RefreshCw, Package, ChevronRight,
-  X, History, ExternalLink,
-  Boxes, AlertTriangle, TrendingDown, Layers,
+  X, History, ExternalLink, ArrowRightLeft, Plus, Minus,
+  Boxes, AlertTriangle, TrendingDown, Layers, Activity, Truck,
+  Lock as LockIcon,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -520,163 +521,611 @@ function KpiStrip({ kpis }: { kpis: Kpis | null }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// StockDrawer (carried over from B.3 — full multi-location rebuild
-// lands in Commit 4. Still talks to the legacy endpoints which remain
-// live alongside /api/stock).
+// StockDrawer — H.4 multi-location rebuild.
+// One bundle fetch (/api/stock/product/:id) drives every section.
 // ─────────────────────────────────────────────────────────────────────
-function StockDrawer({ productId, onClose, onChanged }: { productId: string; onClose: () => void; onChanged: () => void }) {
-  const [movements, setMovements] = useState<Movement[]>([])
-  const [loading, setLoading] = useState(true)
-  const [adjustValue, setAdjustValue] = useState<string>('')
-  const [adjustNotes, setAdjustNotes] = useState<string>('')
-  const [submitting, setSubmitting] = useState(false)
-  const [product, setProduct] = useState<{ sku: string; name: string; totalStock: number } | null>(null)
+type DrawerBundle = {
+  product: {
+    id: string; sku: string; name: string; amazonAsin: string | null
+    totalStock: number; lowStockThreshold: number
+    basePrice: number | null; costPrice: number | null
+    thumbnailUrl: string | null
+  }
+  stockLevels: Array<{
+    id: string
+    location: { id: string; code: string; name: string; type: string; isActive: boolean }
+    quantity: number; reserved: number; available: number
+    reorderThreshold: number | null
+    lastUpdatedAt: string; lastSyncedAt: string | null; syncStatus: string
+    activeReservations: number
+  }>
+  channelListings: Array<{
+    id: string; channel: string; marketplace: string
+    listingStatus: string; syncStatus: string
+    lastSyncedAt: string | null; lastSyncStatus: string | null; lastSyncError: string | null
+    quantity: number | null; stockBuffer: number; externalListingId: string | null
+  }>
+  movements: Movement[]
+  salesVelocity: {
+    last30Units: number; last30Revenue: number
+    avgDailyUnits: number; daysOfStock: number | null
+    totalAvailable: number
+    dailyHistory: Array<{ day: string; units: number; revenue: number; orders: number }>
+  }
+  atp: {
+    leadTimeDays: number; leadTimeSource: string
+    inboundWithinLeadTime: number; totalOpenInbound: number
+    openShipments: Array<{ shipmentId: string; type: string; status: string; expectedAt: string | null; remainingUnits: number; reference: string | null }>
+  } | null
+  reservations: Array<{
+    id: string; quantity: number; reason: string; orderId: string | null
+    expiresAt: string; createdAt: string
+    location: { id: string; code: string }
+  }>
+}
 
-  const fetchMovements = useCallback(async () => {
+type ActionMode = null | { kind: 'adjust'; stockLevelId: string; locationCode: string } | { kind: 'transfer' } | { kind: 'reserve' }
+
+function StockDrawer({ productId, onClose, onChanged }: { productId: string; onClose: () => void; onChanged: () => void }) {
+  const [bundle, setBundle] = useState<DrawerBundle | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [action, setAction] = useState<ActionMode>(null)
+
+  const fetchBundle = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
-      const [mvRes, prodRes] = await Promise.all([
-        fetch(`${getBackendUrl()}/api/fulfillment/stock/${productId}/movements?limit=200`, { cache: 'no-store' }),
-        fetch(`${getBackendUrl()}/api/inventory/${productId}`, { cache: 'no-store' }),
-      ])
-      if (mvRes.ok) {
-        const data = await mvRes.json()
-        setMovements(data.movements ?? [])
-      }
-      if (prodRes.ok) {
-        const data = await prodRes.json()
-        setProduct({ sku: data.sku, name: data.name, totalStock: data.totalStock ?? 0 })
-      }
-    } finally { setLoading(false) }
+      const res = await fetch(`${getBackendUrl()}/api/stock/product/${productId}`, { cache: 'no-store' })
+      if (!res.ok) throw new Error(`drawer load failed: ${res.status}`)
+      setBundle(await res.json())
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to load drawer')
+    } finally {
+      setLoading(false)
+    }
   }, [productId])
 
-  useEffect(() => { fetchMovements() }, [fetchMovements])
+  useEffect(() => { fetchBundle() }, [fetchBundle])
 
-  const submitAdjust = async () => {
-    const change = Number(adjustValue)
-    if (!Number.isFinite(change) || change === 0) {
-      alert('Enter a non-zero number (positive to add, negative to remove)')
-      return
-    }
-    setSubmitting(true)
-    try {
-      const res = await fetch(`${getBackendUrl()}/api/fulfillment/stock/${productId}/adjust`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ change, notes: adjustNotes || null }),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error ?? 'Adjust failed')
-      }
-      setAdjustValue('')
-      setAdjustNotes('')
-      await fetchMovements()
-      onChanged()
-    } catch (e: any) {
-      alert(e.message)
-    } finally { setSubmitting(false) }
-  }
+  const handleActionDone = useCallback(() => {
+    setAction(null)
+    fetchBundle()
+    onChanged()
+  }, [fetchBundle, onChanged])
 
   return (
     <div className="fixed inset-0 z-30 flex justify-end" onClick={onClose}>
       <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px]" />
       <aside
         onClick={(e) => e.stopPropagation()}
-        className="relative h-full w-full max-w-xl bg-white shadow-2xl overflow-y-auto"
+        className="relative h-full w-full max-w-2xl bg-white shadow-2xl overflow-y-auto"
       >
         <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
           <div className="text-[13px] font-semibold text-slate-900 inline-flex items-center gap-2">
-            <History size={14} /> Stock Movement
+            <Boxes size={14} /> Stock detail
           </div>
-          <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100">
-            <X size={16} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={fetchBundle} className="h-7 px-2 text-[11px] text-slate-500 hover:text-slate-900 inline-flex items-center gap-1">
+              <RefreshCw size={11} /> Refresh
+            </button>
+            <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100">
+              <X size={16} />
+            </button>
+          </div>
         </header>
-        <div className="p-5 space-y-4">
-          {product && (
-            <div>
-              <div className="text-[14px] font-semibold text-slate-900">{product.name}</div>
-              <div className="text-[11px] text-slate-500 font-mono">{product.sku}</div>
-              <div className="mt-2 inline-flex items-center gap-2">
-                <span className="text-[11px] uppercase tracking-wider text-slate-500">Current stock (all locations)</span>
-                <span className="text-[20px] font-semibold tabular-nums text-slate-900">{product.totalStock}</span>
-              </div>
+
+        <div className="p-5 space-y-5">
+          {error && (
+            <div className="text-[13px] text-rose-700 py-3 px-3 bg-rose-50 border border-rose-200 rounded">
+              {error}
             </div>
           )}
 
-          {/* Manual adjust */}
-          <div className="border border-slate-200 rounded-md p-3 bg-slate-50/50">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-2">Manual adjustment (IT-MAIN)</div>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                value={adjustValue}
-                onChange={(e) => setAdjustValue(e.target.value)}
-                placeholder="±n"
-                className="h-8 w-24 px-2 text-[13px] border border-slate-200 rounded font-mono tabular-nums"
-              />
-              <input
-                type="text"
-                value={adjustNotes}
-                onChange={(e) => setAdjustNotes(e.target.value)}
-                placeholder="Reason (optional)"
-                className="flex-1 h-8 px-2 text-[12px] border border-slate-200 rounded"
-              />
-              <button
-                onClick={submitAdjust}
-                disabled={submitting}
-                className="h-8 px-3 text-[12px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50"
-              >Apply</button>
-            </div>
-            <div className="text-[10px] text-slate-500 mt-1.5">Positive adds, negative removes. Routed to IT-MAIN; per-location adjust lands in Commit 4.</div>
-          </div>
+          {loading && !bundle ? (
+            <div className="text-[13px] text-slate-500 py-8 text-center">Loading…</div>
+          ) : bundle ? (
+            <>
+              {/* Product header */}
+              <div className="flex items-start gap-3">
+                {bundle.product.thumbnailUrl ? (
+                  <img src={bundle.product.thumbnailUrl} alt="" className="w-14 h-14 rounded object-cover bg-slate-100 flex-shrink-0" />
+                ) : (
+                  <div className="w-14 h-14 rounded bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
+                    <Package size={20} />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="text-[15px] font-semibold text-slate-900">{bundle.product.name}</div>
+                  <div className="text-[11px] text-slate-500 font-mono">
+                    {bundle.product.sku}
+                    {bundle.product.amazonAsin && <span> · {bundle.product.amazonAsin}</span>}
+                  </div>
+                  <div className="mt-1 flex items-center gap-3 text-[12px] text-slate-600">
+                    <span className="inline-flex items-center gap-1">
+                      <Boxes size={11} className="text-slate-400" />
+                      <span className="font-semibold tabular-nums">{bundle.product.totalStock}</span> total
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <LockIcon size={11} className="text-slate-400" />
+                      <span className="tabular-nums">{bundle.salesVelocity.totalAvailable}</span> available
+                    </span>
+                  </div>
+                </div>
+              </div>
 
-          {/* Movement log */}
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-2">History</div>
-            {loading ? (
-              <div className="text-[12px] text-slate-500">Loading…</div>
-            ) : movements.length === 0 ? (
-              <div className="text-[12px] text-slate-400 text-center py-6">No movements yet.</div>
-            ) : (
-              <ul className="space-y-1">
-                {movements.map((m) => (
-                  <li key={m.id} className="flex items-start justify-between gap-3 py-1.5 px-2 -mx-2 border-b border-slate-100 last:border-0">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded ${REASON_TONE[m.reason] ?? 'bg-slate-100 text-slate-600'}`}>
-                          {m.reason.replace(/_/g, ' ')}
-                        </span>
-                        {m.referenceType && (
-                          <span className="text-[10px] text-slate-400 font-mono">{m.referenceType}</span>
+              {/* Quick actions */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => setAction({ kind: 'transfer' })}
+                  disabled={bundle.stockLevels.length < 1}
+                  className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-40"
+                ><ArrowRightLeft size={12} /> Transfer</button>
+                <button
+                  onClick={() => setAction({ kind: 'reserve' })}
+                  disabled={bundle.stockLevels.length < 1}
+                  className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-40"
+                ><LockIcon size={12} /> Reserve</button>
+                <Link
+                  href={`/products/${productId}/edit`}
+                  className="h-8 px-3 text-[12px] bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+                ><ExternalLink size={12} /> Open in editor</Link>
+              </div>
+
+              {/* Inline action panel */}
+              {action?.kind === 'adjust' && (
+                <AdjustPanel
+                  stockLevelId={action.stockLevelId}
+                  locationCode={action.locationCode}
+                  onCancel={() => setAction(null)}
+                  onDone={handleActionDone}
+                />
+              )}
+              {action?.kind === 'transfer' && (
+                <TransferPanel
+                  productId={productId}
+                  stockLevels={bundle.stockLevels}
+                  onCancel={() => setAction(null)}
+                  onDone={handleActionDone}
+                />
+              )}
+              {action?.kind === 'reserve' && (
+                <ReservePanel
+                  productId={productId}
+                  stockLevels={bundle.stockLevels}
+                  onCancel={() => setAction(null)}
+                  onDone={handleActionDone}
+                />
+              )}
+
+              {/* Multi-location breakdown */}
+              <Section title="Stock by location" icon={Warehouse}>
+                {bundle.stockLevels.length === 0 ? (
+                  <div className="text-[12px] text-slate-400 text-center py-3">No StockLevel rows yet.</div>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {bundle.stockLevels.map((sl) => (
+                      <li key={sl.id} className="flex items-center justify-between gap-3 py-2 px-3 border border-slate-200 rounded">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-block text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${LOCATION_TONE[sl.location.type] ?? 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                              {sl.location.code}
+                            </span>
+                            <span className="text-[12px] text-slate-700">{sl.location.name}</span>
+                            {sl.activeReservations > 0 && (
+                              <span className="text-[10px] text-violet-700 bg-violet-50 px-1.5 py-0.5 rounded">
+                                {sl.activeReservations} active reservation{sl.activeReservations === 1 ? '' : 's'}
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-1 text-[11px] text-slate-500 inline-flex items-center gap-3">
+                            <span><span className="font-semibold tabular-nums text-slate-700">{sl.quantity}</span> on hand</span>
+                            <span><span className="tabular-nums">{sl.reserved}</span> reserved</span>
+                            <span><span className="tabular-nums">{sl.available}</span> available</span>
+                            <span className="text-slate-400">· {formatRelative(sl.lastUpdatedAt)}</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setAction({ kind: 'adjust', stockLevelId: sl.id, locationCode: sl.location.code })}
+                          className="h-7 px-2 text-[11px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1"
+                        >
+                          <Plus size={11} className="-mr-0.5" /><Minus size={11} /> Adjust
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Section>
+
+              {/* Channel listing status */}
+              {bundle.channelListings.length > 0 && (
+                <Section title="Channel listings" icon={Activity}>
+                  <ul className="space-y-1">
+                    {bundle.channelListings.map((cl) => {
+                      const tone =
+                        cl.lastSyncStatus === 'FAILED' || cl.syncStatus === 'FAILED' ? 'rose' :
+                        cl.syncStatus === 'PENDING' || cl.syncStatus === 'SYNCING' ? 'amber' :
+                        cl.listingStatus === 'ACTIVE' ? 'emerald' : 'slate'
+                      const toneCls: Record<string, string> = {
+                        emerald: 'bg-emerald-50 text-emerald-700',
+                        amber: 'bg-amber-50 text-amber-700',
+                        rose: 'bg-rose-50 text-rose-700',
+                        slate: 'bg-slate-100 text-slate-600',
+                      }
+                      return (
+                        <li key={cl.id} className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 border-b border-slate-100 last:border-0">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] font-semibold text-slate-700">{cl.channel} · {cl.marketplace}</span>
+                              <span className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded ${toneCls[tone]}`}>
+                                {cl.listingStatus}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 mt-0.5">
+                              {cl.lastSyncedAt ? `Synced ${formatRelative(cl.lastSyncedAt)}` : 'Never synced'}
+                              {cl.lastSyncError && <span className="text-rose-600"> · {cl.lastSyncError.slice(0, 60)}</span>}
+                            </div>
+                          </div>
+                          <div className="text-right flex-shrink-0 text-[11px] text-slate-500 tabular-nums">
+                            {cl.quantity == null ? <span className="text-slate-400">follows master</span> : <><span className="font-semibold text-slate-700">{cl.quantity}</span> shown</>}
+                            {cl.stockBuffer > 0 && <span className="text-slate-400"> · −{cl.stockBuffer} buffer</span>}
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </Section>
+              )}
+
+              {/* Sales velocity */}
+              <Section
+                title="Sales velocity (last 30d)"
+                icon={TrendingDown}
+                right={
+                  bundle.salesVelocity.last30Units > 0 ? (
+                    <span className="text-[11px] text-slate-500">
+                      {bundle.salesVelocity.avgDailyUnits.toFixed(2)}/day avg
+                    </span>
+                  ) : null
+                }
+              >
+                {bundle.salesVelocity.last30Units === 0 ? (
+                  <div className="text-[12px] text-slate-400 py-2">No sales in the last 30 days.</div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-4 text-[12px] text-slate-700">
+                      <div>
+                        <span className="font-semibold tabular-nums">{bundle.salesVelocity.last30Units}</span>
+                        <span className="text-slate-500 text-[11px]"> units</span>
+                      </div>
+                      <div>
+                        <span className="font-semibold tabular-nums">€{bundle.salesVelocity.last30Revenue.toFixed(2)}</span>
+                        <span className="text-slate-500 text-[11px]"> revenue</span>
+                      </div>
+                      {bundle.salesVelocity.daysOfStock != null && (
+                        <div className={bundle.salesVelocity.daysOfStock <= 7 ? 'text-rose-700' : bundle.salesVelocity.daysOfStock <= 21 ? 'text-amber-700' : 'text-slate-700'}>
+                          <span className="font-semibold tabular-nums">{bundle.salesVelocity.daysOfStock}</span>
+                          <span className="text-[11px]"> days of stock</span>
+                        </div>
+                      )}
+                    </div>
+                    <Sparkline points={bundle.salesVelocity.dailyHistory.slice(-30).map((d) => d.units)} />
+                  </div>
+                )}
+              </Section>
+
+              {/* ATP / reorder */}
+              {bundle.atp && (bundle.atp.totalOpenInbound > 0 || bundle.atp.leadTimeSource !== 'FALLBACK') && (
+                <Section title="Replenishment" icon={Truck}>
+                  <div className="text-[12px] text-slate-700 space-y-1">
+                    <div>
+                      Lead time:{' '}
+                      <span className="font-semibold tabular-nums">{bundle.atp.leadTimeDays} days</span>
+                      <span className="text-slate-400 text-[11px]"> · {bundle.atp.leadTimeSource.toLowerCase().replace(/_/g, ' ')}</span>
+                    </div>
+                    {bundle.atp.totalOpenInbound > 0 && (
+                      <div>
+                        Inbound:{' '}
+                        <span className="font-semibold tabular-nums">{bundle.atp.totalOpenInbound}</span>
+                        <span className="text-slate-500 text-[11px]"> units</span>
+                        {bundle.atp.inboundWithinLeadTime !== bundle.atp.totalOpenInbound && (
+                          <span className="text-slate-400 text-[11px]"> ({bundle.atp.inboundWithinLeadTime} within lead time)</span>
                         )}
                       </div>
-                      {m.notes && <div className="text-[11px] text-slate-600 mt-0.5">{m.notes}</div>}
-                      <div className="text-[10px] text-slate-400 mt-0.5">
-                        {new Date(m.createdAt).toLocaleString()} {m.actor && `· ${m.actor}`}
-                      </div>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <div className={`text-[14px] font-semibold tabular-nums ${m.change > 0 ? 'text-emerald-600' : m.change < 0 ? 'text-rose-600' : 'text-slate-500'}`}>
-                        {m.change > 0 ? '+' : ''}{m.change}
-                      </div>
-                      <div className="text-[10px] text-slate-400 tabular-nums">→ {m.balanceAfter}</div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+                    )}
+                    {bundle.atp.openShipments.length > 0 && (
+                      <ul className="mt-1 space-y-0.5">
+                        {bundle.atp.openShipments.slice(0, 5).map((s) => (
+                          <li key={s.shipmentId} className="text-[11px] text-slate-500 inline-flex items-center gap-2">
+                            <span className="font-mono">{s.reference ?? s.shipmentId.slice(0, 8)}</span>
+                            <span>·</span>
+                            <span>{s.type} {s.status.toLowerCase()}</span>
+                            <span>·</span>
+                            <span className="tabular-nums">{s.remainingUnits} units</span>
+                            {s.expectedAt && <span className="text-slate-400">· ETA {new Date(s.expectedAt).toLocaleDateString()}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </Section>
+              )}
 
-          <div className="pt-3 border-t border-slate-100 flex items-center gap-2">
-            <Link
-              href={`/products/${productId}/edit`}
-              className="h-8 px-3 text-[12px] bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
-            ><ExternalLink size={12} /> Open in editor</Link>
-          </div>
+              {/* Active reservations */}
+              {bundle.reservations.length > 0 && (
+                <Section title="Active reservations" icon={LockIcon}>
+                  <ul className="space-y-1">
+                    {bundle.reservations.map((r) => (
+                      <li key={r.id} className="flex items-center justify-between gap-2 py-1.5 px-2 -mx-2 border-b border-slate-100 last:border-0">
+                        <div className="min-w-0">
+                          <div className="text-[12px] text-slate-700">
+                            <span className="font-semibold tabular-nums">{r.quantity}</span> at{' '}
+                            <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">{r.location.code}</span>
+                            <span className="text-slate-400 text-[11px]"> · {r.reason}</span>
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            {r.orderId && <span>order {r.orderId.slice(0, 8)} · </span>}
+                            expires {formatRelative(r.expiresAt)}
+                          </div>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (!confirm(`Release ${r.quantity} units?`)) return
+                            try {
+                              const res = await fetch(`${getBackendUrl()}/api/stock/release/${r.id}`, { method: 'POST' })
+                              if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Release failed')
+                              handleActionDone()
+                            } catch (e: any) { alert(e.message) }
+                          }}
+                          className="h-6 px-2 text-[10px] text-slate-500 hover:text-slate-900 border border-slate-200 rounded"
+                        >Release</button>
+                      </li>
+                    ))}
+                  </ul>
+                </Section>
+              )}
+
+              {/* Movement history */}
+              <Section title={`Movement history (${bundle.movements.length})`} icon={History}>
+                {bundle.movements.length === 0 ? (
+                  <div className="text-[12px] text-slate-400 text-center py-2">No movements yet.</div>
+                ) : (
+                  <ul className="space-y-1">
+                    {bundle.movements.map((m) => (
+                      <li key={m.id} className="flex items-start justify-between gap-3 py-1.5 px-2 -mx-2 border-b border-slate-100 last:border-0">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded ${REASON_TONE[m.reason] ?? 'bg-slate-100 text-slate-600'}`}>
+                              {m.reason.replace(/_/g, ' ')}
+                            </span>
+                            {m.referenceType && (
+                              <span className="text-[10px] text-slate-400 font-mono">{m.referenceType}</span>
+                            )}
+                          </div>
+                          {m.notes && <div className="text-[11px] text-slate-600 mt-0.5">{m.notes}</div>}
+                          <div className="text-[10px] text-slate-400 mt-0.5">
+                            {new Date(m.createdAt).toLocaleString()} {m.actor && `· ${m.actor}`}
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <div className={`text-[14px] font-semibold tabular-nums ${m.change > 0 ? 'text-emerald-600' : m.change < 0 ? 'text-rose-600' : 'text-slate-500'}`}>
+                            {m.change > 0 ? '+' : ''}{m.change}
+                          </div>
+                          <div className="text-[10px] text-slate-400 tabular-nums">→ {m.balanceAfter}</div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Section>
+            </>
+          ) : null}
         </div>
       </aside>
+    </div>
+  )
+}
+
+function Section({ title, icon: Icon, right, children }: { title: string; icon: any; right?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 inline-flex items-center gap-1.5">
+          <Icon size={11} className="text-slate-400" />
+          {title}
+        </div>
+        {right}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function Sparkline({ points }: { points: number[] }) {
+  if (points.length === 0) return null
+  const max = Math.max(...points, 1)
+  return (
+    <div className="flex items-end gap-px h-10 mt-1">
+      {points.map((v, i) => (
+        <div
+          key={i}
+          className="flex-1 bg-blue-200 rounded-sm min-h-[1px]"
+          style={{ height: `${Math.max(2, (v / max) * 100)}%` }}
+          title={`${v} units`}
+        />
+      ))}
+    </div>
+  )
+}
+
+function AdjustPanel({ stockLevelId, locationCode, onCancel, onDone }: { stockLevelId: string; locationCode: string; onCancel: () => void; onDone: () => void }) {
+  const [change, setChange] = useState('')
+  const [notes, setNotes] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  const submit = async () => {
+    const n = Number(change)
+    if (!Number.isFinite(n) || n === 0) {
+      alert('Enter a non-zero number (positive to add, negative to remove)')
+      return
+    }
+    setSubmitting(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/stock/${stockLevelId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ change: n, notes: notes || null }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Adjust failed')
+      onDone()
+    } catch (e: any) {
+      alert(e.message)
+    } finally { setSubmitting(false) }
+  }
+
+  return (
+    <div className="border border-slate-300 rounded-md p-3 bg-slate-50">
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-2 inline-flex items-center gap-1.5">
+        Adjust at <span className="text-slate-700">{locationCode}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          type="number" value={change} onChange={(e) => setChange(e.target.value)}
+          placeholder="±n" autoFocus
+          className="h-8 w-24 px-2 text-[13px] border border-slate-200 rounded font-mono tabular-nums"
+        />
+        <input
+          type="text" value={notes} onChange={(e) => setNotes(e.target.value)}
+          placeholder="Reason (optional)"
+          className="flex-1 h-8 px-2 text-[12px] border border-slate-200 rounded"
+        />
+        <button onClick={submit} disabled={submitting} className="h-8 px-3 text-[12px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">Apply</button>
+        <button onClick={onCancel} className="h-8 px-2 text-[12px] text-slate-500 hover:text-slate-900">Cancel</button>
+      </div>
+    </div>
+  )
+}
+
+function TransferPanel({
+  productId, stockLevels, onCancel, onDone,
+}: { productId: string; stockLevels: DrawerBundle['stockLevels']; onCancel: () => void; onDone: () => void }) {
+  const [fromId, setFromId] = useState<string>(stockLevels[0]?.location.id ?? '')
+  const [toId, setToId] = useState<string>(stockLevels[1]?.location.id ?? stockLevels[0]?.location.id ?? '')
+  const [qty, setQty] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  const submit = async () => {
+    const n = Number(qty)
+    if (!Number.isFinite(n) || n <= 0) { alert('Quantity must be > 0'); return }
+    if (fromId === toId) { alert('From and to locations must differ'); return }
+    setSubmitting(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/stock/transfer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId, fromLocationId: fromId, toLocationId: toId, quantity: n }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Transfer failed')
+      onDone()
+    } catch (e: any) {
+      alert(e.message)
+    } finally { setSubmitting(false) }
+  }
+
+  return (
+    <div className="border border-slate-300 rounded-md p-3 bg-slate-50 space-y-2">
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 inline-flex items-center gap-1.5">
+        <ArrowRightLeft size={11} /> Transfer between locations
+      </div>
+      <div className="flex items-center gap-2">
+        <select value={fromId} onChange={(e) => setFromId(e.target.value)} className="h-8 flex-1 px-2 text-[12px] border border-slate-200 rounded">
+          {stockLevels.map((sl) => (
+            <option key={sl.id} value={sl.location.id}>From {sl.location.code} ({sl.available} avail)</option>
+          ))}
+        </select>
+        <ArrowRightLeft size={12} className="text-slate-400" />
+        <select value={toId} onChange={(e) => setToId(e.target.value)} className="h-8 flex-1 px-2 text-[12px] border border-slate-200 rounded">
+          {stockLevels.map((sl) => (
+            <option key={sl.id} value={sl.location.id}>To {sl.location.code}</option>
+          ))}
+        </select>
+        <input
+          type="number" value={qty} onChange={(e) => setQty(e.target.value)}
+          placeholder="qty"
+          className="h-8 w-20 px-2 text-[13px] border border-slate-200 rounded font-mono tabular-nums"
+        />
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <button onClick={onCancel} className="h-8 px-2 text-[12px] text-slate-500 hover:text-slate-900">Cancel</button>
+        <button onClick={submit} disabled={submitting} className="h-8 px-3 text-[12px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">Transfer</button>
+      </div>
+      <div className="text-[10px] text-slate-500">
+        If the target location has no StockLevel row, one is created with the transferred quantity.
+      </div>
+    </div>
+  )
+}
+
+function ReservePanel({
+  productId, stockLevels, onCancel, onDone,
+}: { productId: string; stockLevels: DrawerBundle['stockLevels']; onCancel: () => void; onDone: () => void }) {
+  const [locId, setLocId] = useState<string>(stockLevels[0]?.location.id ?? '')
+  const [qty, setQty] = useState('')
+  const [orderId, setOrderId] = useState('')
+  const [reason, setReason] = useState<'PENDING_ORDER' | 'MANUAL_HOLD' | 'PROMOTION'>('MANUAL_HOLD')
+  const [submitting, setSubmitting] = useState(false)
+
+  const submit = async () => {
+    const n = Number(qty)
+    if (!Number.isFinite(n) || n <= 0) { alert('Quantity must be > 0'); return }
+    setSubmitting(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/stock/reserve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId, locationId: locId, quantity: n, orderId: orderId || undefined, reason }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Reserve failed')
+      onDone()
+    } catch (e: any) {
+      alert(e.message)
+    } finally { setSubmitting(false) }
+  }
+
+  return (
+    <div className="border border-slate-300 rounded-md p-3 bg-slate-50 space-y-2">
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 inline-flex items-center gap-1.5">
+        <LockIcon size={11} /> Reserve stock
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <select value={locId} onChange={(e) => setLocId(e.target.value)} className="h-8 px-2 text-[12px] border border-slate-200 rounded">
+          {stockLevels.map((sl) => (
+            <option key={sl.id} value={sl.location.id}>{sl.location.code} ({sl.available} avail)</option>
+          ))}
+        </select>
+        <select value={reason} onChange={(e) => setReason(e.target.value as any)} className="h-8 px-2 text-[12px] border border-slate-200 rounded">
+          <option value="MANUAL_HOLD">Manual hold</option>
+          <option value="PENDING_ORDER">Pending order</option>
+          <option value="PROMOTION">Promotion</option>
+        </select>
+        <input
+          type="number" value={qty} onChange={(e) => setQty(e.target.value)}
+          placeholder="quantity"
+          className="h-8 px-2 text-[13px] border border-slate-200 rounded font-mono tabular-nums"
+        />
+        <input
+          type="text" value={orderId} onChange={(e) => setOrderId(e.target.value)}
+          placeholder="Order ID (optional)"
+          className="h-8 px-2 text-[12px] border border-slate-200 rounded"
+        />
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <button onClick={onCancel} className="h-8 px-2 text-[12px] text-slate-500 hover:text-slate-900">Cancel</button>
+        <button onClick={submit} disabled={submitting} className="h-8 px-3 text-[12px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">Reserve</button>
+      </div>
+      <div className="text-[10px] text-slate-500">
+        PENDING_ORDER reservations expire after 24h. Manual holds and promotions never expire automatically.
+      </div>
     </div>
   )
 }
