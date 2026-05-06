@@ -128,6 +128,167 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── GET /api/stock/insights ──────────────────────────────────────
+  // Three smart-feature roll-ups consumed by the Insights panel on
+  // /fulfillment/stock. Each category caps results to a small N so the
+  // panel stays scannable; the user clicks through to the drawer or
+  // /fulfillment/replenishment for the full list.
+  //
+  //   stockoutRisk    — products at zero, plus products with
+  //                     daysOfStock < leadTime + 7 (when sales data exists)
+  //   allocationGaps  — one location has a healthy surplus while another
+  //                     is at zero or critical (transfer candidate)
+  //   syncConflicts   — recent SYNC_RECONCILIATION movements (last 24h)
+  //                     where the FBA cron found a delta vs Nexus
+  fastify.get('/stock/insights', async (_request, reply) => {
+    try {
+      const STOCKOUT_LIMIT = 10
+      const ALLOC_LIMIT = 8
+      const CONFLICT_LIMIT = 10
+      const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000)
+
+      // ── Stockout risk ───────────────────────────────────────────
+      // Pull buyables at risk: totalStock=0 OR totalStock <= threshold.
+      // When DailySalesAggregate has signal we'd refine to days-of-stock
+      // < leadTime+7, but with zero rows in the aggregate today the
+      // threshold-based heuristic carries the load.
+      const atRisk = await prisma.product.findMany({
+        where: {
+          isParent: false,
+          status: { not: 'INACTIVE' },
+          OR: [
+            { totalStock: 0 },
+            { totalStock: { gt: 0, lte: 5 } },
+          ],
+        },
+        select: {
+          id: true, sku: true, name: true, amazonAsin: true,
+          totalStock: true, lowStockThreshold: true, costPrice: true,
+          images: { select: { url: true }, take: 1 },
+        },
+        orderBy: [{ totalStock: 'asc' }, { name: 'asc' }],
+        take: STOCKOUT_LIMIT,
+      })
+
+      // ── Allocation gaps ─────────────────────────────────────────
+      // Find products with ≥2 locations where one is at ≤ 5 units and
+      // another has > 4× the threshold. Strong signal that a transfer
+      // would rebalance without touching reorder cadence.
+      const productsWithMultipleLocations = await prisma.stockLevel.groupBy({
+        by: ['productId'],
+        having: { productId: { _count: { gt: 1 } } },
+        _count: { productId: true },
+      })
+      const candidateProductIds = productsWithMultipleLocations.map((p) => p.productId)
+
+      const allocationGaps: Array<{
+        productId: string; sku: string; name: string; thumbnailUrl: string | null
+        surplusLocation: { id: string; code: string; quantity: number }
+        deficitLocation: { id: string; code: string; quantity: number }
+        suggestedTransfer: number
+      }> = []
+
+      if (candidateProductIds.length > 0) {
+        const productsWithLevels = await prisma.product.findMany({
+          where: { id: { in: candidateProductIds } },
+          select: {
+            id: true, sku: true, name: true, lowStockThreshold: true,
+            images: { select: { url: true }, take: 1 },
+            stockLevels: {
+              include: { location: { select: { id: true, code: true } } },
+            },
+          },
+          take: 200,
+        })
+
+        for (const p of productsWithLevels) {
+          if (p.stockLevels.length < 2) continue
+          const sorted = [...p.stockLevels].sort((a, b) => b.quantity - a.quantity)
+          const surplus = sorted[0]
+          const deficit = sorted[sorted.length - 1]
+          if (deficit.quantity > 5) continue
+          if (surplus.quantity <= 4 * p.lowStockThreshold) continue
+          // Suggest a transfer that brings deficit up to threshold
+          // without dropping surplus below 2× threshold (cap to half
+          // the surplus when in doubt).
+          const targetLift = p.lowStockThreshold - deficit.quantity
+          const safeSurplusGive = Math.max(0, surplus.quantity - 2 * p.lowStockThreshold)
+          const suggested = Math.min(targetLift, safeSurplusGive, Math.floor(surplus.quantity / 2))
+          if (suggested <= 0) continue
+          allocationGaps.push({
+            productId: p.id,
+            sku: p.sku,
+            name: p.name,
+            thumbnailUrl: p.images?.[0]?.url ?? null,
+            surplusLocation: { id: surplus.location.id, code: surplus.location.code, quantity: surplus.quantity },
+            deficitLocation: { id: deficit.location.id, code: deficit.location.code, quantity: deficit.quantity },
+            suggestedTransfer: suggested,
+          })
+          if (allocationGaps.length >= ALLOC_LIMIT) break
+        }
+      }
+
+      // ── Sync conflicts ──────────────────────────────────────────
+      // Recent SYNC_RECONCILIATION rows from the FBA cron — these mean
+      // Amazon's getInventorySummaries returned a fulfillableQuantity
+      // that disagreed with our cached StockLevel. The change column
+      // is the delta (positive = Amazon had more units than we knew).
+      const conflicts = await prisma.stockMovement.findMany({
+        where: {
+          reason: 'SYNC_RECONCILIATION',
+          createdAt: { gte: since24h },
+        },
+        select: {
+          id: true, productId: true, change: true,
+          quantityBefore: true, balanceAfter: true,
+          notes: true, createdAt: true, locationId: true,
+          location: { select: { code: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: CONFLICT_LIMIT,
+      })
+
+      // Resolve product info for the conflict rows in one batched query
+      // (StockMovement has productId but no Prisma `product` relation).
+      const conflictProductIds = Array.from(new Set(conflicts.map((c) => c.productId)))
+      const productsForConflicts = conflictProductIds.length === 0
+        ? []
+        : await prisma.product.findMany({
+            where: { id: { in: conflictProductIds } },
+            select: { id: true, sku: true, name: true, amazonAsin: true },
+          })
+      const productById = new Map(productsForConflicts.map((p) => [p.id, p]))
+
+      return {
+        stockoutRisk: atRisk.map((p) => ({
+          ...p,
+          costPrice: p.costPrice == null ? null : Number(p.costPrice),
+          thumbnailUrl: p.images?.[0]?.url ?? null,
+        })),
+        allocationGaps,
+        syncConflicts: conflicts.map((c) => {
+          const p = productById.get(c.productId)
+          return {
+            id: c.id,
+            productId: c.productId,
+            sku: p?.sku ?? null,
+            name: p?.name ?? null,
+            asin: p?.amazonAsin ?? null,
+            locationCode: c.location?.code ?? null,
+            change: c.change,
+            quantityBefore: c.quantityBefore,
+            balanceAfter: c.balanceAfter,
+            notes: c.notes,
+            createdAt: c.createdAt,
+          }
+        }),
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/insights] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // ── GET /api/stock/by-product ────────────────────────────────────
   // Pivoted view: one row per product with stockLevels[] nested for
   // every location. Powers the matrix + cards views which need the

@@ -17,6 +17,7 @@ import {
   Boxes, AlertTriangle, TrendingDown, Layers, Activity, Truck,
   Lock as LockIcon, Table as TableIcon, Grid, LayoutGrid,
   Check, Download, Sliders, Undo2, CheckCircle2,
+  Lightbulb, Zap, AlertCircle,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -56,6 +57,26 @@ type LocationSummary = {
   totalQuantity: number
   totalReserved: number
   totalAvailable: number
+}
+
+type Insights = {
+  stockoutRisk: Array<{
+    id: string; sku: string; name: string; amazonAsin: string | null
+    totalStock: number; lowStockThreshold: number
+    costPrice: number | null; thumbnailUrl: string | null
+  }>
+  allocationGaps: Array<{
+    productId: string; sku: string; name: string; thumbnailUrl: string | null
+    surplusLocation: { id: string; code: string; quantity: number }
+    deficitLocation: { id: string; code: string; quantity: number }
+    suggestedTransfer: number
+  }>
+  syncConflicts: Array<{
+    id: string; productId: string; sku: string | null; name: string | null
+    asin: string | null; locationCode: string | null
+    change: number; quantityBefore: number | null; balanceAfter: number
+    notes: string | null; createdAt: string
+  }>
 }
 
 type ProductBundle = {
@@ -167,6 +188,8 @@ export default function StockWorkspace() {
   const [drawerProductId, setDrawerProductId] = useState<string | null>(null)
   const [locations, setLocations] = useState<LocationSummary[]>([])
   const [kpis, setKpis] = useState<Kpis | null>(null)
+  const [insights, setInsights] = useState<Insights | null>(null)
+  const [insightsCollapsed, setInsightsCollapsed] = useState(false)
   // Bulk-selection state. Set of StockLevel ids. Only used in table view —
   // matrix and cards address products directly so per-row selection is
   // less natural there. `lastSelectedIdx` powers shift-click range select.
@@ -233,9 +256,10 @@ export default function StockWorkspace() {
 
   const fetchSidecar = useCallback(async () => {
     try {
-      const [locRes, kpiRes] = await Promise.all([
+      const [locRes, kpiRes, insightsRes] = await Promise.all([
         fetch(`${getBackendUrl()}/api/stock/locations`, { cache: 'no-store' }),
         fetch(`${getBackendUrl()}/api/stock/kpis`, { cache: 'no-store' }),
+        fetch(`${getBackendUrl()}/api/stock/insights`, { cache: 'no-store' }),
       ])
       if (locRes.ok) {
         const data = await locRes.json()
@@ -243,6 +267,9 @@ export default function StockWorkspace() {
       }
       if (kpiRes.ok) {
         setKpis(await kpiRes.json())
+      }
+      if (insightsRes.ok) {
+        setInsights(await insightsRes.json())
       }
     } catch {
       // Sidecar is best-effort — the table still works without it.
@@ -449,6 +476,16 @@ export default function StockWorkspace() {
 
       {/* KPI strip */}
       <KpiStrip kpis={kpis} />
+
+      {/* Insights panel — only renders when there's signal */}
+      {insights && (
+        <InsightsPanel
+          insights={insights}
+          collapsed={insightsCollapsed}
+          onToggle={() => setInsightsCollapsed((c) => !c)}
+          onOpenProduct={setDrawerProductId}
+        />
+      )}
 
       {/* Filter bar */}
       <Card>
@@ -704,6 +741,228 @@ function KpiStrip({ kpis }: { kpis: Kpis | null }) {
           </div>
         </Card>
       ))}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Insights panel — H.7 smart features
+// ─────────────────────────────────────────────────────────────────────
+function InsightsPanel({
+  insights, collapsed, onToggle, onOpenProduct,
+}: {
+  insights: Insights
+  collapsed: boolean
+  onToggle: () => void
+  onOpenProduct: (id: string) => void
+}) {
+  const totalSignal =
+    insights.stockoutRisk.length + insights.allocationGaps.length + insights.syncConflicts.length
+  if (totalSignal === 0) return null
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <div className="inline-flex items-center gap-2">
+          <Lightbulb size={14} className="text-amber-500" />
+          <span className="text-[13px] font-semibold text-slate-900">Insights</span>
+          <span className="text-[11px] text-slate-500">
+            {insights.stockoutRisk.length > 0 && (
+              <span className="inline-flex items-center gap-1 mr-3">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                {insights.stockoutRisk.length} at-risk
+              </span>
+            )}
+            {insights.allocationGaps.length > 0 && (
+              <span className="inline-flex items-center gap-1 mr-3">
+                <span className="w-1.5 h-1.5 rounded-full bg-violet-500" />
+                {insights.allocationGaps.length} allocation gap{insights.allocationGaps.length === 1 ? '' : 's'}
+              </span>
+            )}
+            {insights.syncConflicts.length > 0 && (
+              <span className="inline-flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                {insights.syncConflicts.length} sync diff{insights.syncConflicts.length === 1 ? '' : 's'} (24h)
+              </span>
+            )}
+          </span>
+        </div>
+        <button
+          onClick={onToggle}
+          className="h-7 px-2 text-[11px] text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
+        >
+          {collapsed ? 'Show' : 'Hide'}
+          <ChevronRight
+            size={12}
+            className={`transition-transform ${collapsed ? '' : 'rotate-90'}`}
+          />
+        </button>
+      </div>
+
+      {!collapsed && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-3 pt-3 border-t border-slate-100">
+          {/* Stockout risk */}
+          <InsightCategory
+            icon={AlertCircle}
+            iconTone="text-rose-500"
+            title="Stockout risk"
+            description="Products at zero or critically low. Reorder before a customer hits a 'unavailable' page."
+            cta={{ label: 'Open replenishment', href: '/fulfillment/replenishment' }}
+            empty="No SKUs at risk"
+          >
+            {insights.stockoutRisk.slice(0, 5).map((p) => (
+              <button
+                key={p.id}
+                onClick={() => onOpenProduct(p.id)}
+                className="w-full text-left flex items-center gap-2 py-1 px-1.5 -mx-1.5 rounded hover:bg-slate-50"
+              >
+                {p.thumbnailUrl ? (
+                  <img src={p.thumbnailUrl} alt="" className="w-7 h-7 rounded object-cover bg-slate-100 flex-shrink-0" />
+                ) : (
+                  <div className="w-7 h-7 rounded bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
+                    <Package size={12} />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="text-[12px] font-medium text-slate-900 truncate">{p.name}</div>
+                  <div className="text-[10px] text-slate-500 font-mono truncate">{p.sku}</div>
+                </div>
+                <div className={`text-[12px] font-semibold tabular-nums ${
+                  p.totalStock === 0 ? 'text-rose-600' : 'text-orange-600'
+                }`}>
+                  {p.totalStock}
+                </div>
+              </button>
+            ))}
+            {insights.stockoutRisk.length > 5 && (
+              <div className="text-[11px] text-slate-400 italic pt-1">
+                +{insights.stockoutRisk.length - 5} more
+              </div>
+            )}
+          </InsightCategory>
+
+          {/* Allocation gaps */}
+          <InsightCategory
+            icon={Zap}
+            iconTone="text-violet-500"
+            title="Allocation gaps"
+            description="One location has surplus while another is starving. Transfer rebalances without touching reorder cadence."
+            empty="No transfer candidates"
+          >
+            {insights.allocationGaps.slice(0, 5).map((g) => (
+              <button
+                key={g.productId}
+                onClick={() => onOpenProduct(g.productId)}
+                className="w-full text-left flex items-center gap-2 py-1 px-1.5 -mx-1.5 rounded hover:bg-slate-50"
+              >
+                {g.thumbnailUrl ? (
+                  <img src={g.thumbnailUrl} alt="" className="w-7 h-7 rounded object-cover bg-slate-100 flex-shrink-0" />
+                ) : (
+                  <div className="w-7 h-7 rounded bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
+                    <Package size={12} />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="text-[12px] font-medium text-slate-900 truncate">{g.name}</div>
+                  <div className="text-[10px] text-slate-500 inline-flex items-center gap-1.5">
+                    <span className="font-mono">{g.surplusLocation.code}</span>
+                    <span className="tabular-nums">{g.surplusLocation.quantity}</span>
+                    <ArrowRightLeft size={9} className="text-slate-400" />
+                    <span className="font-mono">{g.deficitLocation.code}</span>
+                    <span className="tabular-nums">{g.deficitLocation.quantity}</span>
+                  </div>
+                </div>
+                <div className="text-[11px] font-semibold text-violet-700 inline-flex items-center gap-0.5 flex-shrink-0">
+                  +{g.suggestedTransfer}
+                  <ChevronRight size={12} className="text-slate-400" />
+                </div>
+              </button>
+            ))}
+            {insights.allocationGaps.length > 5 && (
+              <div className="text-[11px] text-slate-400 italic pt-1">
+                +{insights.allocationGaps.length - 5} more
+              </div>
+            )}
+          </InsightCategory>
+
+          {/* Sync conflicts */}
+          <InsightCategory
+            icon={Activity}
+            iconTone="text-blue-500"
+            title="Sync diffs (24h)"
+            description="Amazon FBA cron found a quantity that didn't match Nexus's cached value. Could mean lost/found units, or a delayed inbound."
+            empty="No sync conflicts"
+          >
+            {insights.syncConflicts.slice(0, 5).map((c) => (
+              <button
+                key={c.id}
+                onClick={() => c.productId && onOpenProduct(c.productId)}
+                className="w-full text-left flex items-center gap-2 py-1 px-1.5 -mx-1.5 rounded hover:bg-slate-50"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-[12px] font-medium text-slate-900 truncate">{c.name ?? c.sku ?? 'Unknown'}</div>
+                  <div className="text-[10px] text-slate-500 font-mono truncate">
+                    {c.locationCode && <span>{c.locationCode} · </span>}
+                    {c.quantityBefore != null ? `${c.quantityBefore}` : '?'}
+                    {' → '}
+                    {c.balanceAfter}
+                  </div>
+                </div>
+                <div className={`text-[11px] font-semibold tabular-nums flex-shrink-0 ${
+                  c.change > 0 ? 'text-emerald-600' : c.change < 0 ? 'text-rose-600' : 'text-slate-500'
+                }`}>
+                  {c.change > 0 ? '+' : ''}{c.change}
+                </div>
+              </button>
+            ))}
+            {insights.syncConflicts.length > 5 && (
+              <div className="text-[11px] text-slate-400 italic pt-1">
+                +{insights.syncConflicts.length - 5} more
+              </div>
+            )}
+          </InsightCategory>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function InsightCategory({
+  icon: Icon, iconTone, title, description, cta, empty, children,
+}: {
+  icon: any
+  iconTone: string
+  title: string
+  description: string
+  cta?: { label: string; href: string }
+  empty: string
+  children: React.ReactNode
+}) {
+  // Detect emptiness — if children is an empty array (no nodes
+  // rendered), show the empty placeholder.
+  const arr = Array.isArray(children) ? children : [children]
+  const isEmpty = arr.flat().filter(Boolean).length === 0
+
+  return (
+    <div className="space-y-1.5">
+      <div className="inline-flex items-center gap-1.5">
+        <Icon size={12} className={iconTone} />
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-700">{title}</span>
+      </div>
+      <div className="text-[10px] text-slate-500 leading-snug">{description}</div>
+      <div className="space-y-0.5 pt-1">
+        {isEmpty ? (
+          <div className="text-[11px] text-slate-400 py-1.5">{empty}</div>
+        ) : children}
+      </div>
+      {cta && !isEmpty && (
+        <Link
+          href={cta.href}
+          className="text-[11px] text-blue-700 hover:text-blue-900 hover:underline inline-flex items-center gap-0.5 mt-1"
+        >
+          {cta.label} <ChevronRight size={10} />
+        </Link>
+      )}
     </div>
   )
 }
