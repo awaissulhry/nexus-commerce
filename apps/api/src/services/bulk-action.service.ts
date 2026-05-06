@@ -17,6 +17,8 @@ import { logger } from '../utils/logger.js';
 import { amazonProvider } from '../providers/amazon.provider.js';
 import { ebayProvider } from '../providers/ebay.provider.js';
 import type { MarketplaceProvider } from '../providers/types.js';
+import { MasterPriceService } from './master-price.service.js';
+import { applyStockMovement } from './stock-movement.service.js';
 
 // (Removed: a stubbed Decimal mock class whose `.plus()` returned
 // `this`, breaking every PRICING_UPDATE math op silently. Phase B-3
@@ -39,9 +41,17 @@ export type BulkActionType =
  * ChannelListing rows.
  */
 const ACTION_ENTITY = {
-  PRICING_UPDATE: 'variation',
-  INVENTORY_UPDATE: 'variation',
+  // PRICING + INVENTORY route through master-cascade entrypoints
+  // (MasterPriceService.update / applyStockMovement) so changes
+  // propagate to ChannelListing + OutboundSyncQueue + AuditLog
+  // atomically. See DEVELOPMENT.md "Master-data cascade".
+  PRICING_UPDATE: 'product',
+  INVENTORY_UPDATE: 'product',
   STATUS_UPDATE: 'product',
+  // ATTRIBUTE + LISTING_SYNC still target ProductVariation. PV is
+  // currently empty in production (variants live as Product children
+  // via Product.parentId); these are deferred to a follow-up commit
+  // (see TECH_DEBT.md). LISTING_SYNC throws "deferred to v2".
   ATTRIBUTE_UPDATE: 'variation',
   LISTING_SYNC: 'variation',
   MARKETPLACE_OVERRIDE_UPDATE: 'channelListing',
@@ -113,7 +123,11 @@ export interface ProcessJobResult {
 }
 
 export class BulkActionService {
-  constructor(private prisma: PrismaClient = prisma) {}
+  private readonly masterPriceService: MasterPriceService;
+
+  constructor(private prisma: PrismaClient = prisma) {
+    this.masterPriceService = new MasterPriceService(prisma);
+  }
 
   /**
    * Create a new bulk action job
@@ -949,15 +963,15 @@ export class BulkActionService {
     switch (job.actionType) {
       case 'PRICING_UPDATE':
         return await this.processPricingUpdate(
-          item as ProductVariation,
+          item as Product,
           payload,
-          channel,
+          job.id,
         );
       case 'INVENTORY_UPDATE':
         return await this.processInventoryUpdate(
-          item as ProductVariation,
+          item as Product,
           payload,
-          channel,
+          job.id,
         );
       case 'STATUS_UPDATE':
         return await this.processStatusUpdate(
@@ -1000,7 +1014,12 @@ export class BulkActionService {
   // updates the local DB.
 
   /**
-   * PRICING_UPDATE — set / adjust per-variation price.
+   * PRICING_UPDATE — set / adjust Product.basePrice with full
+   * channel cascade. Delegates to MasterPriceService.update so the
+   * write atomically updates Product.basePrice, fans out to every
+   * ChannelListing per the followMasterPrice / pricingRule contract,
+   * enqueues OutboundSyncQueue rows, and writes an AuditLog entry.
+   * See DEVELOPMENT.md "Master-data cascade" for the propagation rules.
    *
    * Payload:
    *   adjustmentType: 'ABSOLUTE' | 'PERCENT' | 'DELTA'
@@ -1009,9 +1028,9 @@ export class BulkActionService {
    *   maxPrice?: number          (skip if computed price above ceiling)
    */
   private async processPricingUpdate(
-    item: ProductVariation,
+    item: Product,
     payload: Record<string, any>,
-    _channel?: string,
+    jobId: string,
   ): Promise<{ status: 'processed' | 'skipped' }> {
     const adjustmentType = payload.adjustmentType as
       | 'ABSOLUTE'
@@ -1027,10 +1046,8 @@ export class BulkActionService {
       );
     }
 
-    // Prisma Decimal columns are returned as Decimal instances; coerce
-    // to number for math then write back as a fixed-2 string (Prisma
-    // accepts string for Decimal columns).
-    const currentPrice = Number(item.price);
+    // basePrice is a Decimal column — coerce to number for math.
+    const currentPrice = item.basePrice != null ? Number(item.basePrice) : 0;
     let newPrice: number;
     switch (adjustmentType) {
       case 'ABSOLUTE':
@@ -1060,25 +1077,32 @@ export class BulkActionService {
       return { status: 'skipped' };
     }
 
-    await this.prisma.productVariation.update({
-      where: { id: item.id },
-      data: { price: newPrice.toFixed(2) },
+    await this.masterPriceService.update(item.id, newPrice, {
+      actor: 'bulk-action',
+      reason: 'bulk-pricing-job',
+      idempotencyKey: `${jobId}:${item.id}`,
     });
 
     return { status: 'processed' };
   }
 
   /**
-   * INVENTORY_UPDATE — set / adjust per-variation stock.
+   * INVENTORY_UPDATE — set / adjust Product.totalStock with full
+   * channel cascade. Delegates to applyStockMovement so the write
+   * goes through the StockLevel ledger, recomputes Product.totalStock
+   * = SUM(StockLevel), fans out to every ChannelListing per the
+   * followMasterQuantity / stockBuffer contract, enqueues
+   * OutboundSyncQueue rows, and writes a StockMovement audit row.
+   * See DEVELOPMENT.md "Master-data cascade" for propagation rules.
    *
    * Payload:
    *   adjustmentType: 'ABSOLUTE' | 'DELTA'
    *   value: number              (set-to or delta)
    */
   private async processInventoryUpdate(
-    item: ProductVariation,
+    item: Product,
     payload: Record<string, any>,
-    _channel?: string,
+    jobId: string,
   ): Promise<{ status: 'processed' | 'skipped' }> {
     const adjustmentType = payload.adjustmentType as
       | 'ABSOLUTE'
@@ -1093,22 +1117,30 @@ export class BulkActionService {
       );
     }
 
-    const currentStock = item.stock ?? 0;
-    let newStock: number;
+    const currentStock = item.totalStock ?? 0;
+    let targetStock: number;
     switch (adjustmentType) {
       case 'ABSOLUTE':
-        newStock = value;
+        targetStock = value;
         break;
       case 'DELTA':
-        newStock = currentStock + value;
+        targetStock = currentStock + value;
         break;
     }
-    // Stock is an integer column — clamp ≥ 0 + floor any decimals.
-    newStock = Math.max(0, Math.floor(newStock));
+    targetStock = Math.max(0, Math.floor(targetStock));
 
-    await this.prisma.productVariation.update({
-      where: { id: item.id },
-      data: { stock: newStock },
+    // applyStockMovement requires a non-zero change. Same-value writes
+    // (set-to current, or delta=0) are no-ops — skip.
+    const change = targetStock - currentStock;
+    if (change === 0) return { status: 'skipped' };
+
+    await applyStockMovement({
+      productId: item.id,
+      change,
+      reason: 'MANUAL_ADJUSTMENT',
+      referenceType: 'BulkActionJob',
+      referenceId: jobId,
+      actor: 'bulk-action',
     });
 
     return { status: 'processed' };
