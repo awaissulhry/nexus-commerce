@@ -2656,6 +2656,16 @@ model Supplier {
   isActive        Boolean @default(true)
   notes           String?
 
+  // R.6 — auto-PO opt-in. Both autoTriggerEnabled at the Supplier
+  // AND at the per-product ReplenishmentRule must be true for an
+  // auto-PO to fire (defense in depth). Per-PO ceilings cap blast
+  // radius even when opted in; null = use the global env-var
+  // defaults (NEXUS_AUTO_PO_QTY_CEILING_DEFAULT,
+  // NEXUS_AUTO_PO_COST_CEILING_CENTS_DEFAULT).
+  autoTriggerEnabled           Boolean @default(false)
+  autoTriggerMaxQtyPerPo       Int?
+  autoTriggerMaxCostCentsPerPo Int?
+
   products       SupplierProduct[]
   purchaseOrders PurchaseOrder[]
 
@@ -3037,6 +3047,10 @@ model ReplenishmentRule {
   isManufactured      Boolean @default(false) // if true, generate WorkOrder instead of PO
   isActive            Boolean @default(true)
   notes               String?
+  // R.6 — per-product auto-PO opt-out. Default true so opting in a
+  // supplier covers all their SKUs by default; explicit per-product
+  // opt-out for high-risk items (new SKUs, regulated goods, etc.).
+  autoTriggerEnabled  Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3111,6 +3125,39 @@ model ReplenishmentRecommendation {
   @@index([generatedAt])
   @@index([urgency, status])
   @@index([resultingPoId])
+}
+
+// ── R.6: Auto-PO cron run ledger ──────────────────────────────────
+// Forensic audit of every auto-PO sweep: when ran, what was
+// eligible, what got created, what was declined and why. Powers
+// debugging + a "last run" indicator + future per-run drilldowns.
+//
+// Counts only — full per-recommendation decisions are in the
+// ReplenishmentRecommendation rows that flipped to ACTED. The
+// run log answers "what happened in aggregate at 05:00 UTC?"
+// without forcing operators to grep recommendation logs.
+model AutoPoRunLog {
+  id          String   @id @default(cuid())
+  startedAt   DateTime @default(now())
+  finishedAt  DateTime?
+  triggeredBy String   // 'cron' | 'manual'
+  dryRun      Boolean  @default(false)
+
+  eligibleCount        Int @default(0)
+  posCreated           Int @default(0)
+  totalUnitsCreated    Int @default(0)
+  totalCostCentsCreated Int @default(0)
+  declinedNoOptIn      Int @default(0)
+  declinedQtyCeiling   Int @default(0)
+  declinedCostCeiling  Int @default(0)
+  declinedPerProductOptOut Int @default(0)
+  errorCount           Int @default(0)
+
+  notes        String?
+  createdPoIds String[] @default([])
+
+  @@index([startedAt])
+  @@index([triggeredBy])
 }
 
 // ─────────────────────────────────────────────────────────────────────

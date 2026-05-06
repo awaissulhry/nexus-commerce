@@ -19,6 +19,11 @@ import {
   type ConstraintCode,
 } from '../services/replenishment-math.service.js'
 import {
+  runAutoPoSweep,
+  getAutoPoStatus,
+} from '../services/auto-po.service.js'
+import { getAutoPoCronStatus } from '../jobs/auto-po-replenishment.job.js'
+import {
   ingestSalesTrafficForDay,
   ingestAllAmazonMarketplaces,
 } from '../services/sales-report-ingest.service.js'
@@ -3815,6 +3820,45 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       return row
     } catch (err: any) {
       fastify.log.error({ err }, '[replenishment/recommendations/:id] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // R.6 — auto-PO manual trigger. POST runs the sweep + writes a real
+  // run-log row. Body { dryRun: true } previews without creating POs.
+  fastify.post('/fulfillment/replenishment/auto-po/run', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as { dryRun?: boolean }
+      const r = await runAutoPoSweep({ triggeredBy: 'manual', dryRun: !!body.dryRun })
+      return r
+    } catch (err: any) {
+      fastify.log.error({ err }, '[replenishment/auto-po/run] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // R.6 — auto-PO status. Returns the latest run + the global config
+  // (default ceilings, urgency floor) so the UI can render an "auto-PO
+  // dashboard" without extra calls.
+  fastify.get('/fulfillment/replenishment/auto-po/status', async () => {
+    return {
+      ...await getAutoPoStatus(),
+      cron: getAutoPoCronStatus(),
+    }
+  })
+
+  // R.6 — auto-PO run history. Forensic ledger; latest first.
+  fastify.get('/fulfillment/replenishment/auto-po/runs', async (request, reply) => {
+    try {
+      const q = request.query as { limit?: string }
+      const limit = Math.max(1, Math.min(200, Number(q.limit) || 30))
+      const rows = await prisma.autoPoRunLog.findMany({
+        orderBy: { startedAt: 'desc' },
+        take: limit,
+      })
+      return { items: rows }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[replenishment/auto-po/runs] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })
