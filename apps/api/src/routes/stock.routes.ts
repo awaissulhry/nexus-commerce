@@ -470,23 +470,46 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── PATCH /api/stock/:id ─────────────────────────────────────────
-  // Adjust the quantity of a specific StockLevel row. Body:
-  //   { change: number, notes?: string, reason?: string }
-  // change is signed: +5 to add, -3 to remove. Reason defaults to
-  // MANUAL_ADJUSTMENT.
+  // Two operations on a StockLevel row, exposed via one endpoint:
+  //   { change: number, notes?, reason? }      → quantity adjustment
+  //   { reorderThreshold: number | null }       → threshold update (no audit)
+  // The two are mutually exclusive — pick one. `change` is signed:
+  // +5 to add, -3 to remove. Reason defaults to MANUAL_ADJUSTMENT.
   fastify.patch('/stock/:id', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const body = (request.body ?? {}) as { change?: number; notes?: string; reason?: string }
-      const change = Number(body.change)
-      if (!Number.isFinite(change) || change === 0) {
-        return reply.code(400).send({ error: 'change must be a non-zero number' })
+      const body = (request.body ?? {}) as {
+        change?: number
+        notes?: string
+        reason?: string
+        reorderThreshold?: number | null
       }
+
       const sl = await prisma.stockLevel.findUnique({
         where: { id },
         select: { productId: true, variationId: true, locationId: true },
       })
       if (!sl) return reply.code(404).send({ error: 'StockLevel not found' })
+
+      // Threshold-only update — no audit row, simple field write.
+      if (body.reorderThreshold !== undefined) {
+        const t = body.reorderThreshold
+        if (t !== null && (!Number.isFinite(Number(t)) || Number(t) < 0)) {
+          return reply.code(400).send({ error: 'reorderThreshold must be null or a non-negative integer' })
+        }
+        const updated = await prisma.stockLevel.update({
+          where: { id },
+          data: { reorderThreshold: t === null ? null : Math.floor(Number(t)) },
+          select: { id: true, reorderThreshold: true },
+        })
+        return { ok: true, stockLevel: updated }
+      }
+
+      // Quantity-change path.
+      const change = Number(body.change)
+      if (!Number.isFinite(change) || change === 0) {
+        return reply.code(400).send({ error: 'change must be a non-zero number, or pass reorderThreshold' })
+      }
 
       const movement = await applyStockMovement({
         productId: sl.productId,

@@ -16,6 +16,7 @@ import {
   X, History, ExternalLink, ArrowRightLeft, Plus, Minus,
   Boxes, AlertTriangle, TrendingDown, Layers, Activity, Truck,
   Lock as LockIcon, Table as TableIcon, Grid, LayoutGrid,
+  Check, Download, Sliders, Undo2, CheckCircle2,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -166,6 +167,15 @@ export default function StockWorkspace() {
   const [drawerProductId, setDrawerProductId] = useState<string | null>(null)
   const [locations, setLocations] = useState<LocationSummary[]>([])
   const [kpis, setKpis] = useState<Kpis | null>(null)
+  // Bulk-selection state. Set of StockLevel ids. Only used in table view —
+  // matrix and cards address products directly so per-row selection is
+  // less natural there. `lastSelectedIdx` powers shift-click range select.
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [lastSelectedIdx, setLastSelectedIdx] = useState<number | null>(null)
+  // Bulk action modal + result toast state
+  const [bulkAction, setBulkAction] = useState<null | 'adjust' | 'threshold' | 'export'>(null)
+  const [bulkProgress, setBulkProgress] = useState<null | { total: number; done: number; failed: number }>(null)
+  const [undoBundle, setUndoBundle] = useState<null | { kind: 'adjust'; entries: Array<{ stockLevelId: string; inverseChange: number }>; expiresAt: number }>(null)
 
   const updateUrl = useCallback((patch: Record<string, string | undefined>) => {
     const next = new URLSearchParams(searchParams.toString())
@@ -267,6 +277,156 @@ export default function StockWorkspace() {
     () => [locationCode, status, search].filter(Boolean).length,
     [locationCode, status, search],
   )
+
+  // Clear selection when the data set changes underneath us. Otherwise
+  // `selected` would contain ids that aren't on the current page.
+  useEffect(() => {
+    setSelected(new Set())
+    setLastSelectedIdx(null)
+  }, [view, locationCode, status, search, page])
+
+  // Tick the undo bundle's expiry every second so the toast disappears.
+  useEffect(() => {
+    if (!undoBundle) return
+    const id = setInterval(() => {
+      if (Date.now() > undoBundle.expiresAt) setUndoBundle(null)
+    }, 500)
+    return () => clearInterval(id)
+  }, [undoBundle])
+
+  // Selection helpers — table-view only, shift-click range, cmd-click toggle.
+  const toggleSelect = useCallback((id: string, idx: number, ev: React.MouseEvent) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (ev.shiftKey && lastSelectedIdx != null) {
+        const [lo, hi] = idx < lastSelectedIdx ? [idx, lastSelectedIdx] : [lastSelectedIdx, idx]
+        for (let i = lo; i <= hi; i++) {
+          const sl = items[i]
+          if (sl) next.add(sl.id)
+        }
+      } else {
+        if (next.has(id)) next.delete(id)
+        else next.add(id)
+      }
+      return next
+    })
+    setLastSelectedIdx(idx)
+  }, [items, lastSelectedIdx])
+
+  const toggleSelectAll = useCallback(() => {
+    setSelected((prev) => {
+      if (prev.size === items.length) return new Set()
+      return new Set(items.map((it) => it.id))
+    })
+    setLastSelectedIdx(null)
+  }, [items])
+
+  // Bulk operation runners — sequential calls with progress reporting.
+  // Sequential is intentional: 50 parallel PATCHes would let the cron
+  // race with itself and the cascade fan-out would queue duplicate
+  // OutboundSyncQueue rows. One at a time is honest and observable.
+  const runBulkAdjust = useCallback(async (change: number, notes: string | null) => {
+    const ids = Array.from(selected)
+    setBulkProgress({ total: ids.length, done: 0, failed: 0 })
+    const undoEntries: Array<{ stockLevelId: string; inverseChange: number }> = []
+    for (const id of ids) {
+      try {
+        const res = await fetch(`${getBackendUrl()}/api/stock/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ change, notes }),
+        })
+        if (!res.ok) throw new Error(`${res.status}`)
+        undoEntries.push({ stockLevelId: id, inverseChange: -change })
+        setBulkProgress((p) => p ? { ...p, done: p.done + 1 } : p)
+      } catch {
+        setBulkProgress((p) => p ? { ...p, failed: p.failed + 1 } : p)
+      }
+    }
+    setBulkProgress(null)
+    setBulkAction(null)
+    setSelected(new Set())
+    if (undoEntries.length > 0) {
+      setUndoBundle({ kind: 'adjust', entries: undoEntries, expiresAt: Date.now() + 30000 })
+    }
+    fetchStock()
+    fetchSidecar()
+  }, [selected, fetchStock, fetchSidecar])
+
+  const runBulkThreshold = useCallback(async (threshold: number | null) => {
+    const ids = Array.from(selected)
+    setBulkProgress({ total: ids.length, done: 0, failed: 0 })
+    for (const id of ids) {
+      try {
+        const res = await fetch(`${getBackendUrl()}/api/stock/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reorderThreshold: threshold }),
+        })
+        if (!res.ok) throw new Error(`${res.status}`)
+        setBulkProgress((p) => p ? { ...p, done: p.done + 1 } : p)
+      } catch {
+        setBulkProgress((p) => p ? { ...p, failed: p.failed + 1 } : p)
+      }
+    }
+    setBulkProgress(null)
+    setBulkAction(null)
+    setSelected(new Set())
+    fetchStock()
+  }, [selected, fetchStock])
+
+  const runUndo = useCallback(async () => {
+    if (!undoBundle) return
+    const entries = undoBundle.entries
+    setUndoBundle(null)
+    setBulkProgress({ total: entries.length, done: 0, failed: 0 })
+    for (const e of entries) {
+      try {
+        const res = await fetch(`${getBackendUrl()}/api/stock/${e.stockLevelId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ change: e.inverseChange, notes: 'Undo of bulk adjust', reason: 'MANUAL_ADJUSTMENT' }),
+        })
+        if (!res.ok) throw new Error(`${res.status}`)
+        setBulkProgress((p) => p ? { ...p, done: p.done + 1 } : p)
+      } catch {
+        setBulkProgress((p) => p ? { ...p, failed: p.failed + 1 } : p)
+      }
+    }
+    setBulkProgress(null)
+    fetchStock()
+    fetchSidecar()
+  }, [undoBundle, fetchStock, fetchSidecar])
+
+  const exportSelectedCsv = useCallback(() => {
+    const rows = items.filter((it) => selected.has(it.id))
+    if (rows.length === 0) return
+    const headers = ['sku', 'name', 'asin', 'location', 'quantity', 'reserved', 'available', 'threshold', 'cost', 'updated']
+    const lines = [headers.join(',')]
+    for (const r of rows) {
+      const cells = [
+        r.product.sku,
+        `"${r.product.name.replace(/"/g, '""')}"`,
+        r.product.amazonAsin ?? '',
+        r.location.code,
+        r.quantity,
+        r.reserved,
+        r.available,
+        r.reorderThreshold ?? r.product.lowStockThreshold,
+        r.product.costPrice ?? '',
+        r.lastUpdatedAt,
+      ]
+      lines.push(cells.join(','))
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `stock-export-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    setBulkAction(null)
+  }, [items, selected])
 
   return (
     <div className="space-y-5">
@@ -401,8 +561,56 @@ export default function StockWorkspace() {
         if (view === 'cards') {
           return <CardsView products={productBundles} locations={locations} onOpenProduct={setDrawerProductId} />
         }
-        return <TableView items={items} onOpenProduct={setDrawerProductId} />
+        return (
+          <TableView
+            items={items}
+            onOpenProduct={setDrawerProductId}
+            selected={selected}
+            onToggleSelect={toggleSelect}
+            onToggleSelectAll={toggleSelectAll}
+          />
+        )
       })()}
+
+      {/* Bulk action bar — appears when selection is non-empty in table view */}
+      {view === 'table' && selected.size > 0 && !bulkProgress && (
+        <BulkActionBar
+          count={selected.size}
+          onClear={() => setSelected(new Set())}
+          onAdjust={() => setBulkAction('adjust')}
+          onThreshold={() => setBulkAction('threshold')}
+          onExport={exportSelectedCsv}
+        />
+      )}
+
+      {/* Progress toast — shown during sequential bulk runs */}
+      {bulkProgress && <BulkProgressToast progress={bulkProgress} />}
+
+      {/* Undo toast — 30s window after a successful bulk adjust */}
+      {undoBundle && !bulkProgress && (
+        <UndoToast
+          count={undoBundle.entries.length}
+          expiresAt={undoBundle.expiresAt}
+          onUndo={runUndo}
+          onDismiss={() => setUndoBundle(null)}
+        />
+      )}
+
+      {/* Bulk modals */}
+      {bulkAction === 'adjust' && (
+        <BulkAdjustModal
+          selectedItems={items.filter((it) => selected.has(it.id))}
+          onCancel={() => setBulkAction(null)}
+          onConfirm={runBulkAdjust}
+        />
+      )}
+      {bulkAction === 'threshold' && (
+        <BulkThresholdModal
+          selectedItems={items.filter((it) => selected.has(it.id))}
+          onCancel={() => setBulkAction(null)}
+          onConfirm={runBulkThreshold}
+        />
+      )}
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-[12px] text-slate-500">
@@ -1137,13 +1345,33 @@ function ViewToggle({ view, onChange }: { view: ViewMode; onChange: (v: ViewMode
   )
 }
 
-function TableView({ items, onOpenProduct }: { items: StockRow[]; onOpenProduct: (id: string) => void }) {
+function TableView({
+  items, onOpenProduct, selected, onToggleSelect, onToggleSelectAll,
+}: {
+  items: StockRow[]
+  onOpenProduct: (id: string) => void
+  selected: Set<string>
+  onToggleSelect: (id: string, idx: number, ev: React.MouseEvent) => void
+  onToggleSelectAll: () => void
+}) {
+  const allSelected = items.length > 0 && items.every((it) => selected.has(it.id))
+  const someSelected = !allSelected && items.some((it) => selected.has(it.id))
   return (
     <Card noPadding>
       <div className="overflow-x-auto">
         <table className="w-full text-[13px]">
           <thead className="border-b border-slate-200 bg-slate-50">
             <tr>
+              <th className="px-3 py-2 w-10">
+                <input
+                  type="checkbox"
+                  aria-label="Select all rows"
+                  checked={allSelected}
+                  ref={(el) => { if (el) el.indeterminate = someSelected }}
+                  onChange={onToggleSelectAll}
+                  className="cursor-pointer"
+                />
+              </th>
               <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700 w-10"></th>
               <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">Product</th>
               <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">Location</th>
@@ -1157,18 +1385,28 @@ function TableView({ items, onOpenProduct }: { items: StockRow[]; onOpenProduct:
             </tr>
           </thead>
           <tbody>
-            {items.map((it) => {
+            {items.map((it, idx) => {
               const threshold = it.reorderThreshold ?? it.product.lowStockThreshold
               const stockTone =
                 it.quantity === 0 ? 'text-rose-600' :
                 it.quantity <= 5 ? 'text-orange-600' :
                 it.quantity <= threshold ? 'text-amber-600' : 'text-slate-900'
+              const isSelected = selected.has(it.id)
               return (
                 <tr
                   key={it.id}
                   onClick={() => onOpenProduct(it.product.id)}
-                  className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors"
+                  className={`border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors ${isSelected ? 'bg-blue-50/40' : ''}`}
                 >
+                  <td className="px-3 py-2" onClick={(e) => { e.stopPropagation(); onToggleSelect(it.id, idx, e) }}>
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${it.product.sku}`}
+                      checked={isSelected}
+                      readOnly
+                      className="cursor-pointer"
+                    />
+                  </td>
                   <td className="px-3 py-2">
                     {it.product.thumbnailUrl ? (
                       <img src={it.product.thumbnailUrl} alt="" className="w-8 h-8 rounded object-cover bg-slate-100" />
@@ -1388,6 +1626,284 @@ function CardsView({
           </Card>
         )
       })}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Bulk operations — action bar, progress, undo, modals
+// ─────────────────────────────────────────────────────────────────────
+function BulkActionBar({
+  count, onClear, onAdjust, onThreshold, onExport,
+}: {
+  count: number
+  onClear: () => void
+  onAdjust: () => void
+  onThreshold: () => void
+  onExport: () => void
+}) {
+  return (
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-20 bg-slate-900 text-white rounded-lg shadow-2xl px-4 py-2 flex items-center gap-3 text-[13px]">
+      <span className="font-semibold tabular-nums">
+        {count} <span className="text-slate-300 font-normal">selected</span>
+      </span>
+      <div className="w-px h-5 bg-slate-700" />
+      <button
+        onClick={onAdjust}
+        className="h-7 px-2.5 inline-flex items-center gap-1.5 rounded hover:bg-slate-800 transition-colors"
+      >
+        <Plus size={12} /> Adjust
+      </button>
+      <button
+        onClick={onThreshold}
+        className="h-7 px-2.5 inline-flex items-center gap-1.5 rounded hover:bg-slate-800 transition-colors"
+      >
+        <Sliders size={12} /> Threshold
+      </button>
+      <button
+        onClick={onExport}
+        className="h-7 px-2.5 inline-flex items-center gap-1.5 rounded hover:bg-slate-800 transition-colors"
+      >
+        <Download size={12} /> Export CSV
+      </button>
+      <div className="w-px h-5 bg-slate-700" />
+      <button
+        onClick={onClear}
+        className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-800"
+        aria-label="Clear selection"
+      >
+        <X size={14} />
+      </button>
+    </div>
+  )
+}
+
+function BulkProgressToast({ progress }: { progress: { total: number; done: number; failed: number } }) {
+  const pct = progress.total === 0 ? 0 : Math.round(((progress.done + progress.failed) / progress.total) * 100)
+  return (
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 bg-white border border-slate-200 rounded-lg shadow-2xl px-4 py-3 text-[12px] text-slate-700 min-w-[280px]">
+      <div className="flex items-center gap-2 mb-1.5">
+        <RefreshCw size={12} className="animate-spin text-blue-600" />
+        <span className="font-semibold">Processing…</span>
+        <span className="ml-auto tabular-nums text-slate-500">
+          {progress.done + progress.failed}/{progress.total}
+        </span>
+      </div>
+      <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-blue-500 transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      {progress.failed > 0 && (
+        <div className="text-[11px] text-rose-600 mt-1">
+          {progress.failed} failed
+        </div>
+      )}
+    </div>
+  )
+}
+
+function UndoToast({
+  count, expiresAt, onUndo, onDismiss,
+}: {
+  count: number
+  expiresAt: number
+  onUndo: () => void
+  onDismiss: () => void
+}) {
+  const [secondsLeft, setSecondsLeft] = useState(Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000)))
+  useEffect(() => {
+    const id = setInterval(() => {
+      setSecondsLeft(Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000)))
+    }, 200)
+    return () => clearInterval(id)
+  }, [expiresAt])
+
+  return (
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-20 bg-emerald-600 text-white rounded-lg shadow-2xl px-4 py-2.5 flex items-center gap-3 text-[13px]">
+      <CheckCircle2 size={14} />
+      <span>Adjusted {count} row{count === 1 ? '' : 's'}</span>
+      <button
+        onClick={onUndo}
+        className="h-7 px-2.5 inline-flex items-center gap-1.5 rounded bg-emerald-700 hover:bg-emerald-800 transition-colors font-semibold"
+      >
+        <Undo2 size={12} /> Undo ({secondsLeft}s)
+      </button>
+      <button
+        onClick={onDismiss}
+        className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-emerald-700"
+        aria-label="Dismiss"
+      >
+        <X size={14} />
+      </button>
+    </div>
+  )
+}
+
+function BulkAdjustModal({
+  selectedItems, onCancel, onConfirm,
+}: {
+  selectedItems: StockRow[]
+  onCancel: () => void
+  onConfirm: (change: number, notes: string | null) => void
+}) {
+  const [change, setChange] = useState('')
+  const [notes, setNotes] = useState('')
+  const n = Number(change)
+  const valid = Number.isFinite(n) && n !== 0
+  const wouldGoNegative = valid && selectedItems.some((it) => it.quantity + n < 0)
+
+  return (
+    <Modal title="Bulk adjust quantity" onClose={onCancel}>
+      <div className="space-y-3">
+        <div>
+          <label className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold block mb-1">Change (signed)</label>
+          <input
+            type="number"
+            value={change}
+            onChange={(e) => setChange(e.target.value)}
+            placeholder="±n  (e.g. +5 or -3)"
+            autoFocus
+            className="w-full h-9 px-2 text-[13px] border border-slate-200 rounded font-mono tabular-nums"
+          />
+          <div className="text-[11px] text-slate-500 mt-1">
+            Same delta applied to every selected row. Use negative numbers to remove stock.
+          </div>
+        </div>
+        <div>
+          <label className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold block mb-1">Reason (optional)</label>
+          <input
+            type="text"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="e.g. cycle count adjustment 2026-05-06"
+            className="w-full h-9 px-2 text-[12px] border border-slate-200 rounded"
+          />
+        </div>
+
+        <div className="border border-slate-200 rounded p-2 bg-slate-50/50">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+            Affected rows ({selectedItems.length})
+          </div>
+          <ul className="space-y-0.5 max-h-[160px] overflow-y-auto">
+            {selectedItems.slice(0, 50).map((it) => {
+              const after = valid ? it.quantity + n : it.quantity
+              const negativeBound = after < 0
+              return (
+                <li key={it.id} className="text-[11px] flex items-center justify-between gap-2 py-0.5">
+                  <span className="truncate">
+                    <span className="font-mono text-slate-600">{it.product.sku}</span>
+                    <span className="text-slate-400"> · {it.location.code}</span>
+                  </span>
+                  <span className="tabular-nums flex-shrink-0">
+                    <span className="text-slate-500">{it.quantity}</span>
+                    {valid && (
+                      <>
+                        <span className="text-slate-400 mx-1">→</span>
+                        <span className={negativeBound ? 'text-rose-600 font-semibold' : 'text-slate-700 font-semibold'}>
+                          {after}
+                        </span>
+                      </>
+                    )}
+                  </span>
+                </li>
+              )
+            })}
+            {selectedItems.length > 50 && (
+              <li className="text-[11px] text-slate-400 italic">+{selectedItems.length - 50} more</li>
+            )}
+          </ul>
+        </div>
+
+        {wouldGoNegative && (
+          <div className="text-[12px] text-rose-700 bg-rose-50 border border-rose-200 rounded p-2 inline-flex items-start gap-2">
+            <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
+            <span>One or more rows would be driven negative. The server will reject those; others will succeed.</span>
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button onClick={onCancel} className="h-8 px-3 text-[12px] text-slate-500 hover:text-slate-900">Cancel</button>
+          <button
+            onClick={() => valid && onConfirm(n, notes || null)}
+            disabled={!valid}
+            className="h-8 px-3 text-[12px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
+          >
+            <Check size={12} /> Apply to {selectedItems.length}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function BulkThresholdModal({
+  selectedItems, onCancel, onConfirm,
+}: {
+  selectedItems: StockRow[]
+  onCancel: () => void
+  onConfirm: (threshold: number | null) => void
+}) {
+  const [threshold, setThreshold] = useState('')
+  const [clearMode, setClearMode] = useState(false)
+  const n = Number(threshold)
+  const valid = clearMode || (Number.isFinite(n) && n >= 0)
+
+  return (
+    <Modal title="Bulk update reorder threshold" onClose={onCancel}>
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min={0}
+            value={threshold}
+            disabled={clearMode}
+            onChange={(e) => setThreshold(e.target.value)}
+            placeholder="threshold (≥ 0)"
+            autoFocus
+            className="flex-1 h-9 px-2 text-[13px] border border-slate-200 rounded font-mono tabular-nums disabled:bg-slate-100 disabled:text-slate-400"
+          />
+          <label className="text-[12px] text-slate-600 inline-flex items-center gap-1.5">
+            <input type="checkbox" checked={clearMode} onChange={(e) => setClearMode(e.target.checked)} />
+            Clear (use master)
+          </label>
+        </div>
+        <div className="text-[11px] text-slate-500">
+          The reorder threshold per StockLevel overrides Product.lowStockThreshold for that location only.
+          Clearing reverts to the product master.
+        </div>
+        <div className="text-[12px] text-slate-700 border border-slate-200 rounded p-2 bg-slate-50/50">
+          Will update <span className="font-semibold tabular-nums">{selectedItems.length}</span> row{selectedItems.length === 1 ? '' : 's'}.
+        </div>
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button onClick={onCancel} className="h-8 px-3 text-[12px] text-slate-500 hover:text-slate-900">Cancel</button>
+          <button
+            onClick={() => valid && onConfirm(clearMode ? null : Math.floor(n))}
+            disabled={!valid}
+            className="h-8 px-3 text-[12px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
+          >
+            <Check size={12} /> Apply
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" />
+      <div onClick={(e) => e.stopPropagation()} className="relative bg-white rounded-lg shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+        <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
+          <div className="text-[14px] font-semibold text-slate-900">{title}</div>
+          <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100">
+            <X size={16} />
+          </button>
+        </header>
+        <div className="p-5">{children}</div>
+      </div>
     </div>
   )
 }
