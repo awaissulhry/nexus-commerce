@@ -2948,6 +2948,12 @@ function RecommendationHistoryCard({ productId }: { productId: string | null }) 
   const [open, setOpen] = useState(false)
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  // R.5 polish — pagination + status filter for the history list.
+  // Expand from the original 5-row teaser to all rows (we fetch 50
+  // so the upper bound is reasonable; users with very long histories
+  // can use the API directly until we add load-more semantics).
+  const [showAll, setShowAll] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<string>('all')
 
   useEffect(() => {
     if (!open || !productId || data) return
@@ -2960,6 +2966,25 @@ function RecommendationHistoryCard({ productId }: { productId: string | null }) 
   }, [open, productId, data])
 
   if (!productId) return null
+
+  // Apply status filter + slice for show-N. Counts derived from full list.
+  const allHistory: any[] = data?.history ?? []
+  const counts: Record<string, number> = { all: allHistory.length }
+  for (const h of allHistory) counts[h.status] = (counts[h.status] ?? 0) + 1
+  const filtered =
+    statusFilter === 'all'
+      ? allHistory
+      : allHistory.filter((h) => h.status === statusFilter)
+  const visible = showAll ? filtered : filtered.slice(0, 5)
+  const hidden = filtered.length - visible.length
+
+  const HISTORY_FILTERS = [
+    { key: 'all', label: 'All' },
+    { key: 'ACTIVE', label: 'Active' },
+    { key: 'ACTED', label: 'Acted' },
+    { key: 'DISMISSED', label: 'Dismissed' },
+    { key: 'SUPERSEDED', label: 'Super.' },
+  ]
 
   return (
     <div>
@@ -2977,14 +3002,43 @@ function RecommendationHistoryCard({ productId }: { productId: string | null }) 
       {open && (
         <div className="mt-2">
           {loading && <div className="text-[12px] text-slate-400">Loading…</div>}
-          {!loading && data?.history?.length === 0 && (
+          {!loading && allHistory.length === 0 && (
             <div className="text-[11px] text-slate-500 italic">
               No history yet — recommendations are persisted starting from this commit.
             </div>
           )}
-          {!loading && data?.history?.length > 0 && (
-            <ul className="space-y-1 text-[11px]">
-              {data.history.slice(0, 5).map((h: any) => {
+          {!loading && allHistory.length > 0 && (
+            <>
+              {/* Status filter chips — R.5 polish */}
+              {allHistory.length > 1 && (
+                <div className="flex items-center gap-1 mb-2 flex-wrap">
+                  {HISTORY_FILTERS.map((f) => {
+                    const c = counts[f.key] ?? 0
+                    if (f.key !== 'all' && c === 0) return null
+                    return (
+                      <button
+                        key={f.key}
+                        type="button"
+                        onClick={() => {
+                          setStatusFilter(f.key)
+                          setShowAll(false)
+                        }}
+                        className={cn(
+                          'px-2 py-0.5 text-[10px] font-medium rounded border transition-colors',
+                          statusFilter === f.key
+                            ? 'bg-slate-900 text-white border-slate-900'
+                            : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
+                        )}
+                      >
+                        {f.label}
+                        <span className="ml-1 opacity-70">{c}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              <ul className="space-y-1 text-[11px]">
+                {visible.map((h: any) => {
                 const tone =
                   h.status === 'ACTIVE' ? 'bg-blue-50 border-blue-200 text-blue-700'
                   : h.status === 'ACTED' ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
@@ -3012,12 +3066,31 @@ function RecommendationHistoryCard({ productId }: { productId: string | null }) 
                   </li>
                 )
               })}
-              {data.history.length > 5 && (
-                <li className="text-[10px] text-slate-400 italic">
-                  +{data.history.length - 5} more rows · paginated UI coming in R.5
-                </li>
+              </ul>
+              {hidden > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAll(true)}
+                  className="mt-2 text-[11px] text-blue-700 hover:text-blue-900 font-medium"
+                >
+                  Show all {filtered.length}
+                </button>
               )}
-            </ul>
+              {showAll && filtered.length > 5 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAll(false)}
+                  className="mt-2 text-[11px] text-slate-500 hover:text-slate-700 font-medium"
+                >
+                  Show less
+                </button>
+              )}
+              {filtered.length === 0 && statusFilter !== 'all' && (
+                <div className="text-[11px] text-slate-500 italic">
+                  No {statusFilter.toLowerCase()} entries.
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
