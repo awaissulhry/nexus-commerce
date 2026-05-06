@@ -2176,9 +2176,211 @@ function FbaTransportBooking({ shipmentId }: { shipmentId: string }) {
   )
 }
 
+// H.9 — Catalog-aware SKU picker for the FBA wizard. Replaces the
+// hand-typed SKU input with autocomplete against /api/products,
+// inline product preview (thumbnail, name, totalStock as a proxy
+// for current FBA inventory), and click-to-remove. The wizard still
+// works with the same { sku, quantity } shape downstream — the
+// picker just enriches the rows with name/imageUrl/totalStock for
+// display and is a drop-in for the old typed-input flow.
+//
+// Why /api/products and not a dedicated endpoint: the catalog list
+// already supports `search` + `limit` and returns exactly the
+// fields we need (sku, name, imageUrl, totalStock). No reason to
+// fork an FBA-specific search.
+type FbaPickerItem = {
+  sku: string
+  quantity: number
+  productId?: string
+  name?: string
+  imageUrl?: string | null
+  totalStock?: number | null
+}
+
+function FbaSkuPicker({
+  items,
+  onChange,
+}: {
+  items: FbaPickerItem[]
+  onChange: (next: FbaPickerItem[]) => void
+}) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<Array<{
+    id: string; sku: string; name: string; imageUrl: string | null; totalStock: number | null
+  }>>([])
+  const [loading, setLoading] = useState(false)
+  const [open, setOpen] = useState(false)
+
+  // Debounced search. 250ms is the sweet spot for keystroke→results
+  // on a list endpoint; faster floods the API, slower feels laggy.
+  useEffect(() => {
+    const q = query.trim()
+    if (q.length < 2) {
+      setResults([])
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+    const t = window.setTimeout(async () => {
+      try {
+        const res = await fetch(`${getBackendUrl()}/api/products?search=${encodeURIComponent(q)}&limit=8`)
+        const data = await res.json().catch(() => ({}))
+        setResults(
+          (data?.products ?? []).map((p: any) => ({
+            id: p.id,
+            sku: p.sku,
+            name: p.name,
+            imageUrl: p.imageUrl,
+            totalStock: typeof p.totalStock === 'number' ? p.totalStock : null,
+          })),
+        )
+      } catch {
+        setResults([])
+      } finally {
+        setLoading(false)
+      }
+    }, 250)
+    return () => window.clearTimeout(t)
+  }, [query])
+
+  const addProduct = (p: typeof results[number]) => {
+    // Don't add a SKU twice — bump the existing row's quantity instead.
+    const existingIdx = items.findIndex((it) => it.sku === p.sku)
+    if (existingIdx >= 0) {
+      onChange(items.map((it, i) => i === existingIdx ? { ...it, quantity: it.quantity + 1 } : it))
+    } else {
+      onChange([
+        ...items.filter((it) => it.sku.trim()), // drop any blank rows
+        { sku: p.sku, quantity: 1, productId: p.id, name: p.name, imageUrl: p.imageUrl, totalStock: p.totalStock },
+      ])
+    }
+    setQuery('')
+    setResults([])
+    setOpen(false)
+  }
+
+  const updateQty = (idx: number, qty: number) => {
+    onChange(items.map((it, i) => i === idx ? { ...it, quantity: Math.max(1, qty || 1) } : it))
+  }
+
+  const removeRow = (idx: number) => {
+    onChange(items.filter((_, i) => i !== idx))
+  }
+
+  const realRows = items.filter((it) => it.sku.trim())
+
+  return (
+    <div className="space-y-3">
+      {/* Autocomplete search */}
+      <div className="relative">
+        <div className="relative">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setOpen(true) }}
+            onFocus={() => setOpen(true)}
+            onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+            placeholder="Search SKU or product name…"
+            className="w-full h-9 pl-8 pr-3 text-[12px] border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400"
+          />
+        </div>
+        {open && query.trim().length >= 2 && (
+          <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded shadow-lg max-h-72 overflow-y-auto">
+            {loading && <div className="px-3 py-2 text-[11px] text-slate-500">Searching…</div>}
+            {!loading && results.length === 0 && (
+              <div className="px-3 py-2 text-[11px] text-slate-500">No products match "{query.trim()}"</div>
+            )}
+            {!loading && results.map((p) => (
+              <button
+                key={p.id}
+                onMouseDown={(e) => { e.preventDefault(); addProduct(p) }}
+                className="w-full flex items-center gap-2 px-2.5 py-2 text-left hover:bg-orange-50 border-b border-slate-100 last:border-b-0"
+              >
+                {p.imageUrl ? (
+                  <img src={p.imageUrl} alt="" className="h-9 w-9 rounded object-cover bg-slate-100 flex-shrink-0" />
+                ) : (
+                  <div className="h-9 w-9 rounded bg-slate-100 flex items-center justify-center flex-shrink-0">
+                    <Boxes size={14} className="text-slate-400" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] font-mono text-slate-700 truncate">{p.sku}</div>
+                  <div className="text-[12px] text-slate-900 truncate">{p.name}</div>
+                </div>
+                {p.totalStock != null && (
+                  <span className={`text-[10px] tabular-nums px-1.5 py-0.5 rounded ${
+                    p.totalStock <= 0
+                      ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                      : p.totalStock < 10
+                        ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                        : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  }`}>
+                    {p.totalStock} in FBA
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Selected rows */}
+      {realRows.length === 0 ? (
+        <div className="text-[11px] text-slate-500 italic px-2 py-3 border border-dashed border-slate-200 rounded bg-slate-50 text-center">
+          No SKUs added yet. Search above and click a result to add it.
+        </div>
+      ) : (
+        <ul className="space-y-1.5">
+          {items.map((row, i) => row.sku.trim() ? (
+            <li key={`${row.sku}-${i}`} className="flex items-center gap-2 p-2 border border-slate-200 rounded bg-white">
+              {row.imageUrl ? (
+                <img src={row.imageUrl} alt="" className="h-9 w-9 rounded object-cover bg-slate-100 flex-shrink-0" />
+              ) : (
+                <div className="h-9 w-9 rounded bg-slate-100 flex items-center justify-center flex-shrink-0">
+                  <Boxes size={14} className="text-slate-400" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] font-mono text-slate-700 truncate">{row.sku}</div>
+                {row.name && <div className="text-[12px] text-slate-900 truncate">{row.name}</div>}
+              </div>
+              {row.totalStock != null && (
+                <span className={`text-[10px] tabular-nums px-1.5 py-0.5 rounded flex-shrink-0 ${
+                  row.totalStock <= 0
+                    ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                    : row.totalStock < 10
+                      ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                      : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                }`}>
+                  {row.totalStock} in FBA
+                </span>
+              )}
+              <input
+                type="number"
+                min="1"
+                value={row.quantity}
+                onChange={(e) => updateQty(i, Number(e.target.value))}
+                className="h-7 w-16 px-2 text-right tabular-nums text-[12px] border border-slate-200 rounded flex-shrink-0"
+              />
+              <button
+                onClick={() => removeRow(i)}
+                className="h-7 w-7 inline-flex items-center justify-center text-slate-400 hover:text-rose-600 flex-shrink-0"
+                aria-label="Remove"
+              >
+                <X size={14} />
+              </button>
+            </li>
+          ) : null)}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [step, setStep] = useState<'plan' | 'commit'>('plan')
-  const [items, setItems] = useState<Array<{ sku: string; quantity: number; productId?: string }>>([{ sku: '', quantity: 1 }])
+  const [items, setItems] = useState<FbaPickerItem[]>([])
   const [plan, setPlan] = useState<any>(null)
   const [busy, setBusy] = useState(false)
 
@@ -2247,20 +2449,17 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
 
         {step === 'plan' && (
           <div className="p-5 space-y-3">
-            <div className="text-[12px] text-slate-500">Step 1 of 2 — list the SKUs and quantities to ship to Amazon.</div>
-            <div className="space-y-1.5">
-              {items.map((row, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <input type="text" value={row.sku} onChange={(e) => setItems(items.map((s, j) => j === i ? { ...s, sku: e.target.value } : s))} placeholder="SKU" className="flex-1 h-7 px-2 text-[12px] font-mono border border-slate-200 rounded" />
-                  <input type="number" min="1" value={row.quantity} onChange={(e) => setItems(items.map((s, j) => j === i ? { ...s, quantity: Number(e.target.value) || 1 } : s))} className="h-7 w-20 px-2 text-right tabular-nums border border-slate-200 rounded" />
-                  <button onClick={() => setItems(items.filter((_, j) => j !== i))} className="h-7 w-7 inline-flex items-center justify-center text-slate-400 hover:text-rose-600"><X size={14} /></button>
-                </div>
-              ))}
-            </div>
-            <button onClick={() => setItems([...items, { sku: '', quantity: 1 }])} className="text-[11px] text-blue-600 hover:underline">+ Add SKU</button>
+            <div className="text-[12px] text-slate-500">Step 1 of 2 — pick the SKUs and quantities to ship to Amazon. Search by SKU or product name.</div>
+            <FbaSkuPicker items={items} onChange={setItems} />
             <footer className="pt-3 border-t border-slate-200 flex items-center gap-2 justify-end">
               <button onClick={onClose} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Cancel</button>
-              <button onClick={buildPlan} disabled={busy} className="h-8 px-3 text-[12px] bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50">Plan shipment →</button>
+              <button
+                onClick={buildPlan}
+                disabled={busy || items.filter((i) => i.sku.trim()).length === 0}
+                className="h-8 px-3 text-[12px] bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50"
+              >
+                Plan shipment →
+              </button>
             </footer>
           </div>
         )}
