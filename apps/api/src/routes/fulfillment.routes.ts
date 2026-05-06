@@ -4615,6 +4615,41 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // F.5.1 — Facets for /fulfillment/replenishment filter dropdowns.
+  // Replaces the hardcoded ['IT','DE','FR','ES','UK','GLOBAL'] list
+  // with the seller's actual marketplace/channel presence (distinct
+  // values from ACTIVE ChannelListings). Cheap query, cached at the
+  // edge if needed; for now we hit it once per page load.
+  //
+  // Returns sorted unique strings — channel + marketplace separately
+  // because the page exposes them as two dropdowns.
+  fastify.get('/fulfillment/facets', async (_request, reply) => {
+    try {
+      const [mkts, channels] = await Promise.all([
+        prisma.channelListing.findMany({
+          where: { listingStatus: 'ACTIVE' },
+          select: { marketplace: true },
+          distinct: ['marketplace'],
+        }),
+        prisma.channelListing.findMany({
+          where: { listingStatus: 'ACTIVE' },
+          select: { channel: true },
+          distinct: ['channel'],
+        }),
+      ])
+      const marketplaces = Array.from(
+        new Set(mkts.map((r) => r.marketplace).filter(Boolean)),
+      ).sort()
+      const channelList = Array.from(
+        new Set(channels.map((r) => r.channel).filter(Boolean)),
+      ).sort()
+      reply.send({ marketplaces, channels: channelList })
+    } catch (error) {
+      fastify.log.error({ err: error }, '[fulfillment/facets] failed')
+      reply.code(500).send({ error: 'Failed to fetch facets' })
+    }
+  })
+
   // R.1 — Per-SKU forecast accuracy. Drawer card + per-product
   // dashboards. Returns rolling MAPE, MAE, band calibration, plus a
   // by-regime breakdown so we can compare HOLT_WINTERS vs

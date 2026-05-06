@@ -322,12 +322,29 @@ export default function ReplenishmentWorkspace() {
     fetchData()
   }, [fetchData])
 
-  // F.5 — Marketplace dropdown options. Suggestions don't carry
-  // marketplace per row in v0; the active filter is the source of truth
-  // (banner already shows what's filtered). Hardcoded list covers
-  // Xavia's marketplaces; F.5.1 follow-up ships a /fulfillment/facets
-  // endpoint to dynamically populate.
-  const marketplaceOptions = ['IT', 'DE', 'FR', 'ES', 'UK', 'GLOBAL']
+  // F.5.1 — Facets for the marketplace dropdown. Sourced from
+  // /fulfillment/facets (distinct ACTIVE ChannelListing.marketplace
+  // values), with a hardcoded fallback during initial load + on
+  // facets endpoint failure so the dropdown is never empty.
+  const FACETS_FALLBACK = ['IT', 'DE', 'FR', 'ES', 'UK', 'GLOBAL']
+  const [marketplaceOptions, setMarketplaceOptions] =
+    useState<string[]>(FACETS_FALLBACK)
+  useEffect(() => {
+    let cancelled = false
+    fetch(`${getBackendUrl()}/api/fulfillment/facets`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (cancelled || !j) return
+        const list = Array.isArray(j.marketplaces) ? j.marketplaces : []
+        if (list.length > 0) setMarketplaceOptions(list)
+      })
+      .catch(() => {
+        // Keep fallback. Operator can still filter manually via URL.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const filtered = useMemo(() => {
     if (!data) return []
