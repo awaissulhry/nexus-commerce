@@ -814,6 +814,80 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   // refactored in H.2 to delegate to inbound.service. Body shape
   // unchanged for backwards compat; new optional photoUrls per item
   // appends to the cached InboundShipmentItem.photoUrls array.
+  // H.10a — cross-shipment scan-receive. Returns every open
+  // InboundShipmentItem matching a SKU so the bulk-receive UI can
+  // route the scan to the right shipment without the operator
+  // having to look it up. "Open" = parent shipment not in
+  // RECEIVED/RECONCILED/CLOSED/CANCELLED, AND quantityReceived <
+  // quantityExpected. Sorted by (expectedAt asc, createdAt asc) so
+  // the oldest open shipment ranks first — that's almost always
+  // what the operator wants when there's ambiguity.
+  fastify.get('/fulfillment/inbound/receive-candidates', async (request, reply) => {
+    const q = request.query as { sku?: string }
+    const sku = (q.sku ?? '').trim()
+    if (!sku) return reply.code(400).send({ error: 'sku query param required' })
+
+    const TERMINAL = ['RECEIVED', 'RECONCILED', 'CLOSED', 'CANCELLED']
+
+    const candidates = await prisma.inboundShipmentItem.findMany({
+      where: {
+        sku,
+        inboundShipment: { status: { notIn: TERMINAL as any } },
+      },
+      include: {
+        inboundShipment: {
+          select: {
+            id: true,
+            reference: true,
+            type: true,
+            status: true,
+            expectedAt: true,
+            createdAt: true,
+            warehouseId: true,
+          },
+        },
+      },
+      orderBy: [
+        { inboundShipment: { expectedAt: 'asc' } },
+        { inboundShipment: { createdAt: 'asc' } },
+      ],
+    })
+
+    const open = candidates.filter((c) => c.quantityReceived < c.quantityExpected)
+
+    // Resolve product names in one extra query so the UI can show
+    // "SKU + product name" without a second roundtrip per row.
+    const productIds = Array.from(new Set(open.map((c) => c.productId).filter((x): x is string => !!x)))
+    const products = productIds.length > 0
+      ? await prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, name: true },
+        })
+      : []
+    const nameById = new Map(products.map((p) => [p.id, p.name]))
+
+    return {
+      sku,
+      count: open.length,
+      candidates: open.map((c) => ({
+        itemId: c.id,
+        sku: c.sku,
+        productName: c.productId ? (nameById.get(c.productId) ?? null) : null,
+        productId: c.productId,
+        quantityExpected: c.quantityExpected,
+        quantityReceived: c.quantityReceived,
+        remaining: c.quantityExpected - c.quantityReceived,
+        shipment: {
+          id: c.inboundShipment.id,
+          reference: c.inboundShipment.reference,
+          type: c.inboundShipment.type,
+          status: c.inboundShipment.status,
+          expectedAt: c.inboundShipment.expectedAt,
+        },
+      })),
+    }
+  })
+
   fastify.post('/fulfillment/inbound/:id/receive', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }

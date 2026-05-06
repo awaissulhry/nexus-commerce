@@ -149,6 +149,7 @@ export default function InboundWorkspace() {
   const [drawerId, setDrawerId] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [fbaWizardOpen, setFbaWizardOpen] = useState(false)
+  const [bulkReceiveOpen, setBulkReceiveOpen] = useState(false)
 
   const updateUrl = useCallback((patch: Record<string, string | undefined>) => {
     const next = new URLSearchParams(searchParams.toString())
@@ -238,6 +239,9 @@ export default function InboundWorkspace() {
         breadcrumbs={[{ label: 'Fulfillment', href: '/fulfillment' }, { label: 'Inbound' }]}
         actions={
           <div className="flex items-center gap-2 flex-wrap justify-end">
+            <button onClick={() => setBulkReceiveOpen(true)} className="h-8 px-3 text-[12px] bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5" title="Scan SKUs across any open shipment">
+              <ArrowDownToLine size={12} /> Bulk receive
+            </button>
             <button onClick={() => setFbaWizardOpen(true)} className="h-8 px-3 text-[12px] bg-orange-50 text-orange-700 border border-orange-200 rounded hover:bg-orange-100 inline-flex items-center gap-1.5">
               <Truck size={12} /> Send to Amazon FBA
             </button>
@@ -495,6 +499,12 @@ export default function InboundWorkspace() {
       )}
       {fbaWizardOpen && (
         <FBAWizardModal onClose={() => setFbaWizardOpen(false)} onCreated={() => { setFbaWizardOpen(false); fetchAll(); fetchKpis() }} />
+      )}
+      {bulkReceiveOpen && (
+        <BulkReceiveModal
+          onClose={() => setBulkReceiveOpen(false)}
+          onReceived={() => { fetchAll(); fetchKpis() }}
+        />
       )}
     </div>
   )
@@ -2004,6 +2014,231 @@ function PoPicker({
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// H.10a — BulkReceiveModal. Cross-shipment scan-receive. Operator
+// scans/types a SKU; backend returns every open InboundShipmentItem
+// for that SKU; if exactly one matches, auto-applies +1; if many,
+// shows a picker. Last-N-receives log persists in modal state so
+// the operator can watch their own throughput. Auto-refocuses the
+// SKU input after each receive so a Bluetooth scanner can rip
+// through cartons without the operator touching the page.
+// ─────────────────────────────────────────────────────────────────────
+
+type ReceiveCandidate = {
+  itemId: string
+  sku: string
+  productName: string | null
+  quantityExpected: number
+  quantityReceived: number
+  remaining: number
+  shipment: {
+    id: string
+    reference: string | null
+    type: string
+    status: string
+    expectedAt: string | null
+  }
+}
+
+type ReceiveLogEntry = {
+  ts: number
+  sku: string
+  shipmentRef: string | null
+  applied: number
+  ok: boolean
+  message?: string
+}
+
+function BulkReceiveModal({ onClose, onReceived }: { onClose: () => void; onReceived: () => void }) {
+  const [sku, setSku] = useState('')
+  const [qty, setQty] = useState(1)
+  const [busy, setBusy] = useState(false)
+  const [candidates, setCandidates] = useState<ReceiveCandidate[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [log, setLog] = useState<ReceiveLogEntry[]>([])
+  const inputRef = useCallback((el: HTMLInputElement | null) => { el?.focus() }, [])
+
+  const reset = () => {
+    setSku('')
+    setQty(1)
+    setCandidates(null)
+    setError(null)
+  }
+
+  const lookupSku = async (skuValue: string, qtyValue: number) => {
+    setBusy(true)
+    setError(null)
+    setCandidates(null)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/inbound/receive-candidates?sku=${encodeURIComponent(skuValue)}`)
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error ?? `Lookup failed (${res.status})`)
+      const list: ReceiveCandidate[] = data?.candidates ?? []
+      if (list.length === 0) {
+        setError(`No open shipment expects SKU "${skuValue}".`)
+        setLog((prev) => [{ ts: Date.now(), sku: skuValue, shipmentRef: null, applied: 0, ok: false, message: 'No match' }, ...prev].slice(0, 10))
+        setBusy(false)
+        return
+      }
+      if (list.length === 1) {
+        await applyReceive(list[0], qtyValue)
+      } else {
+        setCandidates(list)
+        setBusy(false)
+      }
+    } catch (e: any) {
+      setError(e.message)
+      setBusy(false)
+    }
+  }
+
+  const applyReceive = async (cand: ReceiveCandidate, qtyValue: number) => {
+    setBusy(true)
+    try {
+      const target = Math.min(cand.quantityExpected, cand.quantityReceived + qtyValue)
+      const idempotencyKey = `bulk-${cand.itemId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/inbound/${cand.shipment.id}/receive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actor: 'bulk-receive',
+          items: [{ itemId: cand.itemId, quantityReceived: target, idempotencyKey }],
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error ?? `Receive failed (${res.status})`)
+      const applied = target - cand.quantityReceived
+      setLog((prev) => [
+        { ts: Date.now(), sku: cand.sku, shipmentRef: cand.shipment.reference, applied, ok: true },
+        ...prev,
+      ].slice(0, 10))
+      onReceived()
+      reset()
+    } catch (e: any) {
+      setError(e.message)
+      setLog((prev) => [{ ts: Date.now(), sku: cand.sku, shipmentRef: cand.shipment.reference, applied: 0, ok: false, message: e.message }, ...prev].slice(0, 10))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const s = sku.trim()
+    if (!s) return
+    void lookupSku(s, Math.max(1, qty || 1))
+  }
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center p-6" onClick={onClose}>
+      <div className="absolute inset-0 bg-slate-900/40" />
+      <div onClick={(e) => e.stopPropagation()} className="relative bg-white rounded-lg shadow-2xl w-full max-w-xl max-h-[85vh] overflow-y-auto">
+        <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
+          <div className="text-[14px] font-semibold text-slate-900 inline-flex items-center gap-2">
+            <ArrowDownToLine size={16} className="text-emerald-600" /> Bulk receive
+          </div>
+          <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
+        </header>
+
+        <div className="p-5 space-y-3">
+          <div className="text-[12px] text-slate-500">Scan or type a SKU. The system finds the right open shipment and applies +qty automatically. Bluetooth scanners work — just keep this input focused.</div>
+
+          <form onSubmit={onSubmit} className="space-y-2">
+            <div className="flex items-center gap-2">
+              <input
+                ref={inputRef}
+                type="text"
+                value={sku}
+                onChange={(e) => setSku(e.target.value)}
+                placeholder="Scan SKU…"
+                disabled={busy}
+                className="flex-1 h-10 px-3 text-[14px] font-mono border-2 border-emerald-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-500"
+              />
+              <input
+                type="number"
+                min="1"
+                value={qty}
+                onChange={(e) => setQty(Number(e.target.value) || 1)}
+                disabled={busy}
+                className="h-10 w-20 px-2 text-right tabular-nums text-[14px] border border-slate-200 rounded"
+              />
+              <button
+                type="submit"
+                disabled={busy || !sku.trim()}
+                className="h-10 px-4 text-[12px] bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+              >
+                <Check size={14} /> Receive
+              </button>
+            </div>
+          </form>
+
+          {error && (
+            <div className="text-[12px] text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2">
+              {error}
+            </div>
+          )}
+
+          {/* Multi-candidate picker */}
+          {candidates && candidates.length > 1 && (
+            <div className="border border-amber-200 bg-amber-50 rounded p-3 space-y-2">
+              <div className="text-[12px] font-semibold text-amber-900 inline-flex items-center gap-1.5">
+                <AlertTriangle size={12} /> {candidates.length} shipments expect this SKU — pick one
+              </div>
+              <ul className="space-y-1.5">
+                {candidates.map((c) => (
+                  <li key={c.itemId}>
+                    <button
+                      onClick={() => applyReceive(c, qty)}
+                      disabled={busy}
+                      className="w-full text-left bg-white border border-slate-200 rounded p-2 hover:bg-emerald-50 hover:border-emerald-300 disabled:opacity-50"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-[12px] font-mono text-slate-900 truncate">
+                            {c.shipment.reference ?? c.shipment.id}
+                            <span className="ml-2 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{c.shipment.type}</span>
+                            <span className="ml-1 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{c.shipment.status}</span>
+                          </div>
+                          {c.productName && <div className="text-[11px] text-slate-500 truncate">{c.productName}</div>}
+                        </div>
+                        <div className="text-[11px] tabular-nums text-slate-600 flex-shrink-0">
+                          {c.quantityReceived}/{c.quantityExpected} · {c.remaining} left
+                        </div>
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Receive log */}
+          {log.length > 0 && (
+            <div className="border-t border-slate-200 pt-3">
+              <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">This session ({log.filter((l) => l.ok).reduce((n, l) => n + l.applied, 0)} units received)</div>
+              <ul className="space-y-1">
+                {log.map((entry, i) => (
+                  <li key={i} className="flex items-center justify-between gap-2 text-[11px]">
+                    <span className={`inline-flex items-center gap-1 ${entry.ok ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {entry.ok ? <Check size={11} /> : <X size={11} />}
+                      <span className="font-mono">{entry.sku}</span>
+                    </span>
+                    <span className="text-slate-500 truncate flex-1 mx-2">
+                      {entry.ok
+                        ? `+${entry.applied} into ${entry.shipmentRef ?? '?'}`
+                        : (entry.message ?? 'Failed')}
+                    </span>
+                    <span className="text-slate-400 tabular-nums">{new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // FBAWizardModal — kept from B.5 with the H.0c "preview" honesty
 // banner. Real SP-API integration lands in commits 8a–8d.
 // ─────────────────────────────────────────────────────────────────────
