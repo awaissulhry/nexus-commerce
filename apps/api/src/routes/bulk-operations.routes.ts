@@ -12,6 +12,7 @@ import {
   BulkActionService,
   type BulkActionType,
 } from '../services/bulk-action.service.js'
+import { enqueueBulkActionJob } from '../services/bulk-action-queue.service.js'
 import prisma from '../db.js'
 import { CreateBulkJobSchema } from './validation.js'
 
@@ -167,13 +168,18 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
 
   /**
    * POST /api/bulk-operations/:id/process
-   * Trigger processing. Fire-and-forget — returns immediately with
-   * "started" and the client polls GET /:id for progress. processJob
-   * runs in-process (no queue worker for v1) and updates the job
-   * row every 10 items.
+   * Enqueue the job onto the bulk-action BullMQ queue. Returns
+   * immediately with status='QUEUED'. The bulk-action worker
+   * (apps/api/src/workers/bulk-action.worker.ts) consumes the
+   * queue, marks the job IN_PROGRESS, and runs processJob.
    *
-   * Hardening for >100-item jobs (BullMQ etc.) is v2 — current code
-   * works fine for Xavia-scale operations (~hundreds of products).
+   * Crash-safe: if Railway restarts the API mid-job, the BullMQ
+   * job stays in Redis and the next worker picks it up. Pre-Commit-3
+   * the job ran inline on the API process and would orphan in
+   * IN_PROGRESS forever on a restart.
+   *
+   * Idempotency: the BullMQ jobId equals the BulkActionJob.id, so
+   * repeated POSTs are deduped at the queue level.
    */
   fastify.post<{ Params: { id: string } }>(
     '/bulk-operations/:id/process',
@@ -197,23 +203,31 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
           error: `Cannot process job with status: ${job.status}`,
         })
       }
-      // Fire-and-forget — log internal failures so they're visible
-      // in Railway logs even though the response already returned.
-      bulkActionService.processJob(id).catch((error) => {
+
+      try {
+        await enqueueBulkActionJob(id)
+        // Reflect QUEUED in the DB so polling clients see the
+        // status transition without waiting for the worker to pick
+        // it up.
+        await prisma.bulkActionJob.update({
+          where: { id },
+          data: { status: 'QUEUED', updatedAt: new Date() },
+        })
+        return reply.send({
+          success: true,
+          jobId: id,
+          status: 'QUEUED',
+          message: 'Job queued for processing',
+        })
+      } catch (error) {
         const message =
           error instanceof Error ? error.message : String(error)
         fastify.log.error(
           { err: error, jobId: id },
-          '[bulk-operations] async processJob failed',
+          '[bulk-operations] enqueue failed',
         )
-        return message
-      })
-      return reply.send({
-        success: true,
-        jobId: id,
-        status: 'IN_PROGRESS',
-        message: 'Job processing started',
-      })
+        return reply.code(500).send({ success: false, error: message })
+      }
     },
   )
 
