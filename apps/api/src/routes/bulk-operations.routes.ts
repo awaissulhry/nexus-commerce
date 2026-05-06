@@ -26,6 +26,14 @@ interface CreateBody {
   filters?: Record<string, unknown>
   actionPayload?: Record<string, unknown>
   createdBy?: string
+  /**
+   * Conflict detection (Commit 18). When false/unset, the create endpoint
+   * pre-flights `findConflictingJobs` and returns 409 with the conflict
+   * list if any active job touches overlapping productIds + same actionType.
+   * Set true to acknowledge the conflict and create the job anyway — the
+   * "force" path is logged for audit.
+   */
+  force?: boolean
 }
 
 const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
@@ -54,12 +62,76 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
       try {
+        const force = request.body?.force === true
+        if (!force) {
+          const conflicts = await bulkActionService.findConflictingJobs(
+            parsed.data,
+          )
+          if (conflicts.length > 0) {
+            return reply.code(409).send({
+              success: false,
+              error: 'Conflicting bulk job(s) in flight on overlapping products',
+              code: 'BULK_CONFLICT',
+              conflicts,
+            })
+          }
+        } else {
+          fastify.log.warn(
+            {
+              actionType: parsed.data.actionType,
+              jobName: parsed.data.jobName,
+            },
+            '[bulk-operations] force=true — bypassing conflict detection',
+          )
+        }
         const job = await bulkActionService.createJob(parsed.data)
         return reply.code(201).send({ success: true, job })
       } catch (error) {
         const message =
           error instanceof Error ? error.message : String(error)
         fastify.log.error({ err: error }, '[bulk-operations] create failed')
+        return reply.code(500).send({ success: false, error: message })
+      }
+    },
+  )
+
+  /**
+   * POST /api/bulk-operations/check-conflicts
+   * Pre-flight conflict check without creating a job. Used by the
+   * Bulk Operation modal to surface overlapping in-flight jobs to
+   * the operator BEFORE they click Execute, so they can wait for
+   * the prior run or explicitly accept the override.
+   *
+   * Body shape mirrors POST /bulk-operations (validated against
+   * CreateBulkJobSchema). Returns `{ conflicts: ConflictingJob[] }`
+   * — empty array when clear to proceed.
+   */
+  fastify.post<{ Body: CreateBody }>(
+    '/bulk-operations/check-conflicts',
+    async (request, reply) => {
+      const parsed = CreateBulkJobSchema.safeParse(request.body)
+      if (!parsed.success) {
+        return reply.code(400).send({
+          success: false,
+          error: 'Invalid request body',
+          details: parsed.error.issues.map((i) => ({
+            path: i.path.join('.'),
+            message: i.message,
+          })),
+        })
+      }
+      try {
+        const conflicts = await bulkActionService.findConflictingJobs(
+          parsed.data,
+        )
+        return reply.send({ success: true, conflicts })
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : String(error)
+        fastify.log.error(
+          { err: error },
+          '[bulk-operations] check-conflicts failed',
+        )
         return reply.code(500).send({ success: false, error: message })
       }
     },

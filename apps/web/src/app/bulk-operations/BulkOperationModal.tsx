@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   Globe,
   Loader2,
@@ -587,6 +588,30 @@ export default function BulkOperationModal({
   const [executing, setExecuting] = useState(false)
   const [executeError, setExecuteError] = useState<string | null>(null)
 
+  // Conflict detection (Commit 18). Surfaces in-flight bulk jobs that
+  // touch overlapping productIds + same actionType so the operator can
+  // wait for the prior run, or explicitly acknowledge and force-run.
+  // Keyed by `previewKey` so it re-fetches whenever scope/payload moves.
+  const [conflicts, setConflicts] = useState<Array<{
+    jobId: string
+    jobName: string
+    actionType: string
+    status: string
+    startedAt: string | null
+    createdAt: string
+    createdBy: string | null
+    totalItems: number
+    progressPercent: number
+    overlapCount: number
+    overlapTruncated: boolean
+  }>>([])
+  // conflictsLoading isn't surfaced in the UI today (the warning just
+  // appears when results land); keeping the setter so the fetch effect
+  // tracks "in flight" cleanly without re-rendering on the boolean.
+  const [, setConflictsLoading] = useState(false)
+  const [conflictsAck, setConflictsAck] = useState(false)
+  const conflictsSeq = useRef(0)
+
   // Reset everything on close.
   useEffect(() => {
     if (!open) {
@@ -605,6 +630,9 @@ export default function BulkOperationModal({
       setSchemaResult(null)
       setSchemaManifest(null)
       setSchemaError(null)
+      setConflicts([])
+      setConflictsLoading(false)
+      setConflictsAck(false)
     }
   }, [open])
 
@@ -675,6 +703,54 @@ export default function BulkOperationModal({
     return () => window.clearTimeout(timer)
   }, [open, payloadValid, previewKey, op?.label, opType, payload, activeFilters, isSchemaOp])
 
+  // Conflict detection — fires alongside the preview, with the same
+  // debounce key. We don't block the preview on it; the warning banner
+  // appears below the preview when results land. Reset acknowledgement
+  // every time scope/payload moves (operator hasn't seen the new
+  // conflict set yet, so a stale ack shouldn't carry forward).
+  useEffect(() => {
+    if (!open || !payloadValid || isSchemaOp) {
+      setConflicts([])
+      return
+    }
+    const seq = ++conflictsSeq.current
+    setConflictsLoading(true)
+    setConflictsAck(false)
+    const timer = window.setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/bulk-operations/check-conflicts`,
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              jobName: `${op?.label ?? opType} (conflict-check)`,
+              actionType: opType,
+              filters: activeFilters,
+              actionPayload: payload,
+            }),
+          },
+        )
+        if (seq !== conflictsSeq.current) return
+        if (!res.ok) {
+          // Don't block the operator on a check-conflicts failure;
+          // the create endpoint will run the same check authoritatively.
+          setConflicts([])
+          return
+        }
+        const data = await res.json()
+        if (seq !== conflictsSeq.current) return
+        setConflicts(Array.isArray(data.conflicts) ? data.conflicts : [])
+      } catch {
+        if (seq !== conflictsSeq.current) return
+        setConflicts([])
+      } finally {
+        if (seq === conflictsSeq.current) setConflictsLoading(false)
+      }
+    }, 350)
+    return () => window.clearTimeout(timer)
+  }, [open, payloadValid, previewKey, op?.label, opType, payload, activeFilters, isSchemaOp])
+
   // Execute: POST /create → POST /:id/process → poll /:id every 2s.
   const handleExecute = async () => {
     if (!preview || preview.affectedCount === 0) return
@@ -691,9 +767,27 @@ export default function BulkOperationModal({
             actionType: opType,
             filters: activeFilters,
             actionPayload: payload,
+            // Conflicts surface in the modal before the operator clicks
+            // Execute; clicking the "Run anyway" button sets conflictsAck
+            // which lets us pass force=true through to the API.
+            force: conflictsAck,
           }),
         },
       )
+      if (createRes.status === 409) {
+        // Race-condition fallback: between the conflict-check and the
+        // execute click, a new job appeared on overlapping products.
+        // Surface the fresh list and let the operator re-acknowledge.
+        const body = await createRes.json().catch(() => ({}))
+        const fresh = Array.isArray(body.conflicts) ? body.conflicts : []
+        setConflicts(fresh)
+        setConflictsAck(false)
+        throw new Error(
+          fresh.length > 0
+            ? `New conflicting job(s) appeared — review the warning above and confirm "Run anyway" to override.`
+            : (body.error ?? 'Job creation conflict'),
+        )
+      }
       if (!createRes.ok) {
         const body = await createRes.json().catch(() => ({}))
         throw new Error(body.error ?? `Create failed (HTTP ${createRes.status})`)
@@ -1186,6 +1280,64 @@ export default function BulkOperationModal({
             </Section>
           )}
 
+          {/* Conflict warning — shown when one or more in-flight jobs
+              touch overlapping products + same actionType. Operator
+              must explicitly check "Run anyway" before Execute unlocks. */}
+          {conflicts.length > 0 && !job && !isSchemaOp && (
+            <div className="text-[12px] bg-amber-50 border border-amber-300 rounded px-3 py-2.5 space-y-2">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-600" />
+                <div className="space-y-1.5 flex-1">
+                  <div className="font-semibold text-amber-900">
+                    {conflicts.length === 1
+                      ? '1 in-flight job overlaps with this scope'
+                      : `${conflicts.length} in-flight jobs overlap with this scope`}
+                  </div>
+                  <div className="text-amber-800">
+                    These jobs are running on the same {opType.replace('_', ' ').toLowerCase()} action
+                    + at least one shared product. Running anyway can race
+                    against them and produce a last-write-wins result. Wait
+                    for the prior run to finish, or check "Run anyway" to
+                    override.
+                  </div>
+                  <ul className="space-y-1 mt-1">
+                    {conflicts.map((c) => (
+                      <li
+                        key={c.jobId}
+                        className="text-[11px] text-amber-900 bg-white/60 border border-amber-200 rounded px-2 py-1.5 flex items-center justify-between gap-3"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium truncate">
+                            {c.jobName}
+                          </div>
+                          <div className="text-amber-700 text-[10px]">
+                            {c.status} · {c.progressPercent}% · {c.totalItems.toLocaleString()} items
+                            {c.createdBy ? ` · by ${c.createdBy}` : ''}
+                          </div>
+                        </div>
+                        <div className="flex-shrink-0 text-[10px] font-mono bg-amber-100 text-amber-900 border border-amber-200 rounded px-1.5 py-0.5">
+                          ~{c.overlapCount.toLocaleString()}
+                          {c.overlapTruncated ? '+' : ''} overlap
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  <label className="flex items-center gap-2 text-amber-900 cursor-pointer pt-1">
+                    <input
+                      type="checkbox"
+                      checked={conflictsAck}
+                      onChange={(e) => setConflictsAck(e.target.checked)}
+                      className="cursor-pointer"
+                    />
+                    <span className="text-[12px]">
+                      Run anyway — I accept that this may overwrite changes from the in-flight run.
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          )}
+
           {executeError && (
             <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-start gap-2">
               <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
@@ -1213,13 +1365,16 @@ export default function BulkOperationModal({
                 !payloadValid ||
                 !preview ||
                 preview.affectedCount === 0 ||
-                executing
+                executing ||
+                (conflicts.length > 0 && !conflictsAck)
               }
               loading={executing}
             >
               {executing
                 ? 'Executing…'
-                : `Apply to ${preview?.affectedCount.toLocaleString() ?? 0}`}
+                : conflicts.length > 0 && conflictsAck
+                  ? `Run anyway on ${preview?.affectedCount.toLocaleString() ?? 0}`
+                  : `Apply to ${preview?.affectedCount.toLocaleString() ?? 0}`}
             </Button>
           )}
           {isSchemaOp && (

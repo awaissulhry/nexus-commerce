@@ -123,6 +123,28 @@ export interface ProcessJobResult {
   }>;
 }
 
+/**
+ * One in-flight job that overlaps with the candidate input.
+ *
+ * `overlapCount` is the number of products both jobs touch; on filter-based
+ * inputs it's a probabilistic estimate (sampled set intersection at the
+ * resolution cap). `overlapTruncated=true` means at least one side hit the
+ * cap during resolution — the real overlap may be larger.
+ */
+export interface ConflictingJob {
+  jobId: string;
+  jobName: string;
+  actionType: BulkActionType;
+  status: string;
+  startedAt: Date | null;
+  createdAt: Date;
+  createdBy: string | null;
+  totalItems: number;
+  progressPercent: number;
+  overlapCount: number;
+  overlapTruncated: boolean;
+}
+
 export class BulkActionService {
   private readonly masterPriceService: MasterPriceService;
   private readonly masterStatusService: MasterStatusService;
@@ -2365,5 +2387,157 @@ export class BulkActionService {
       where.stock = stockClause;
     }
     return where;
+  }
+
+  /**
+   * Resolve a CreateJobInput to the set of distinct productIds it would
+   * touch. Used by `findConflictingJobs` to compute set intersection
+   * across simultaneously-active jobs.
+   *
+   * Resolution caps at `limit` (default 5000) — for the rare mass jobs
+   * we don't want this helper to scan 50k rows on every conflict check.
+   * Truncation is signalled in the return tuple so the caller can
+   * surface "we couldn't be exhaustive — overlap may be larger" to the
+   * operator.
+   *
+   * Channel-targeted ChannelListing actions still resolve to product
+   * IDs; conflict detection is a coarse-grained "two operators editing
+   * the same SKUs" check, not per-listing.
+   */
+  private async resolveTargetProductIdsFromInput(
+    input: { actionType: BulkActionType; channel?: string | null; targetProductIds?: string[]; targetVariationIds?: string[]; filters?: Record<string, any> | null },
+    limit = 5000,
+  ): Promise<{ productIds: string[]; truncated: boolean }> {
+    if (input.targetProductIds && input.targetProductIds.length > 0) {
+      const truncated = input.targetProductIds.length > limit;
+      return {
+        productIds: truncated
+          ? input.targetProductIds.slice(0, limit)
+          : input.targetProductIds,
+        truncated,
+      };
+    }
+    if (input.targetVariationIds && input.targetVariationIds.length > 0) {
+      const variations = await this.prisma.productVariation.findMany({
+        where: { id: { in: input.targetVariationIds } },
+        select: { productId: true },
+        take: limit + 1,
+      });
+      const set = Array.from(new Set(variations.map((v) => v.productId)));
+      const truncated = variations.length > limit;
+      return {
+        productIds: truncated ? set.slice(0, limit) : set,
+        truncated,
+      };
+    }
+    if (input.filters) {
+      const filters = input.filters as ScopeFilters;
+      const target = ACTION_ENTITY[input.actionType];
+      let productIds: string[] = [];
+      let truncated = false;
+      if (target === 'channelListing') {
+        const rows = await this.prisma.channelListing.findMany({
+          where: this.buildChannelListingWhere(
+            { channel: input.channel } as BulkActionJob,
+            { filters },
+          ),
+          select: { productId: true },
+          take: limit + 1,
+        });
+        productIds = Array.from(new Set(rows.map((r) => r.productId)));
+        truncated = rows.length > limit;
+      } else if (target === 'product') {
+        const rows = await this.prisma.product.findMany({
+          where: this.buildProductFilterWhere(filters),
+          select: { id: true },
+          take: limit + 1,
+        });
+        productIds = rows.map((r) => r.id);
+        truncated = rows.length > limit;
+      } else {
+        const rows = await this.prisma.productVariation.findMany({
+          where: this.buildVariationFilterWhere(filters),
+          select: { productId: true },
+          take: limit + 1,
+        });
+        productIds = Array.from(new Set(rows.map((r) => r.productId)));
+        truncated = rows.length > limit;
+      }
+      return {
+        productIds: truncated ? productIds.slice(0, limit) : productIds,
+        truncated,
+      };
+    }
+    return { productIds: [], truncated: false };
+  }
+
+  /**
+   * Conflict detection — find every active job that touches the same
+   * actionType + at least one overlapping productId.
+   *
+   * Active = status in (PENDING, QUEUED, IN_PROGRESS). COMPLETED /
+   * FAILED / CANCELLED jobs are not conflicts (their writes already
+   * committed; new job sees the new state).
+   *
+   * Same-actionType only: a PRICING job and an INVENTORY job on the
+   * same SKUs are NOT a conflict — they touch different fields. A
+   * STATUS_UPDATE and a STATUS_UPDATE on the same SKU IS a conflict.
+   *
+   * The result set is pruned to entries with overlapCount > 0 — jobs
+   * that share an actionType but no overlapping products are not
+   * conflicts. Ordered by createdAt desc so the most recent contender
+   * is first.
+   *
+   * Note: this helper resolves filter-based jobs lazily on each call.
+   * For tight loops (e.g. a UI re-checking on every keystroke) the
+   * caller should debounce.
+   */
+  async findConflictingJobs(
+    input: CreateJobInput,
+  ): Promise<ConflictingJob[]> {
+    const ACTIVE_STATUSES = ['PENDING', 'QUEUED', 'IN_PROGRESS'];
+    const candidate = await this.resolveTargetProductIdsFromInput(input);
+    if (candidate.productIds.length === 0) return [];
+    const candidateSet = new Set(candidate.productIds);
+
+    const activeJobs = await this.prisma.bulkActionJob.findMany({
+      where: {
+        status: { in: ACTIVE_STATUSES },
+        actionType: input.actionType,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+    if (activeJobs.length === 0) return [];
+
+    const conflicts: ConflictingJob[] = [];
+    for (const job of activeJobs) {
+      const other = await this.resolveTargetProductIdsFromInput({
+        actionType: job.actionType as BulkActionType,
+        channel: job.channel,
+        targetProductIds: job.targetProductIds ?? undefined,
+        targetVariationIds: job.targetVariationIds ?? undefined,
+        filters: (job.filters as Record<string, any> | null) ?? undefined,
+      });
+      let overlapCount = 0;
+      for (const id of other.productIds) {
+        if (candidateSet.has(id)) overlapCount++;
+      }
+      if (overlapCount === 0) continue;
+      conflicts.push({
+        jobId: job.id,
+        jobName: job.jobName,
+        actionType: job.actionType as BulkActionType,
+        status: job.status,
+        startedAt: job.startedAt ?? null,
+        createdAt: job.createdAt,
+        createdBy: job.createdBy ?? null,
+        totalItems: job.totalItems,
+        progressPercent: job.progressPercent,
+        overlapCount,
+        overlapTruncated: candidate.truncated || other.truncated,
+      });
+    }
+    return conflicts;
   }
 }
