@@ -1198,8 +1198,8 @@ function SavedViewsButton({ open, setOpen, views, onApply, onSaveCurrent, onDele
                           <span className="text-[10px] font-semibold tabular-nums">{alertCount}</span>
                         )}
                       </button>
-                      <button onClick={() => onSetDefault(v.id)} title="Set as default" className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-amber-500"><Star size={12} /></button>
-                      <button onClick={() => { if (confirm(`Delete view "${v.name}"?`)) onDelete(v.id) }} title="Delete" className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-rose-600"><Trash2 size={12} /></button>
+                      <button onClick={() => onSetDefault(v.id)} title="Set as default" aria-label={`Set "${v.name}" as default view`} className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-amber-500"><Star size={12} /></button>
+                      <button onClick={() => { if (confirm(`Delete view "${v.name}"?`)) onDelete(v.id) }} title="Delete" aria-label={`Delete saved view "${v.name}"`} className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-rose-600"><Trash2 size={12} /></button>
                     </li>
                     )
                   })}
@@ -2578,11 +2578,43 @@ function VirtualizedGrid({
             {visible.map((col) => {
               const sortable =
                 col.key !== 'thumb' && col.key !== 'actions' && !!sortKeys[col.key]
+              // P.20 — aria-sort surfaces the current sort state to
+              // screen readers. We track ascending/descending only
+              // for price + stock (the other sort keys are
+              // direction-implicit per the sortKeys map). Defaults
+              // to 'none' for sortable columns the user hasn't
+              // touched, 'ascending' / 'descending' for the active
+              // one based on sortBy suffix.
+              const isActive =
+                (col.key === 'sku' && sortBy === 'sku') ||
+                (col.key === 'name' && sortBy === 'name') ||
+                (col.key === 'price' && sortBy.startsWith('price')) ||
+                (col.key === 'stock' && sortBy.startsWith('stock')) ||
+                (col.key === 'updated' && sortBy === 'updated')
+              const sortDir: 'ascending' | 'descending' | 'none' = !sortable
+                ? 'none'
+                : !isActive
+                ? 'none'
+                : sortBy.endsWith('-asc')
+                ? 'ascending'
+                : 'descending'
               return (
                 <div
                   key={col.key}
                   role="columnheader"
-                  className={`px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-700 text-left flex items-center ${sortable ? 'cursor-pointer hover:bg-slate-100' : ''}`}
+                  aria-sort={sortable ? sortDir : undefined}
+                  // P.20 — keyboard sortability. tabIndex=0 makes
+                  // the header focusable; Enter / Space trigger the
+                  // sort the same way a click does.
+                  tabIndex={sortable ? 0 : undefined}
+                  onKeyDown={(e) => {
+                    if (!sortable) return
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      onSort(sortKeys[col.key])
+                    }
+                  }}
+                  className={`px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-700 text-left flex items-center ${sortable ? 'cursor-pointer hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:bg-slate-100' : ''}`}
                   style={{ width: col.width, minWidth: col.width }}
                   onClick={() => {
                     if (sortable) onSort(sortKeys[col.key])
@@ -2590,12 +2622,10 @@ function VirtualizedGrid({
                 >
                   <span className="inline-flex items-center gap-1">
                     {col.label}
-                    {((col.key === 'sku' && sortBy === 'sku') ||
-                      (col.key === 'name' && sortBy === 'name') ||
-                      (col.key === 'price' && sortBy.startsWith('price')) ||
-                      (col.key === 'stock' && sortBy.startsWith('stock')) ||
-                      (col.key === 'updated' && sortBy === 'updated')) && (
-                      <span className="text-slate-400">↓</span>
+                    {isActive && (
+                      <span className="text-slate-400" aria-hidden="true">
+                        {sortDir === 'ascending' ? '↑' : '↓'}
+                      </span>
                     )}
                   </span>
                 </div>
@@ -2877,10 +2907,10 @@ function GridLens(props: any) {
   }
 
   if (loading && products.length === 0) {
-    return <Card><div className="text-[13px] text-slate-500 py-8 text-center">Loading products…</div></Card>
+    return <Card><div role="status" aria-live="polite" className="text-[13px] text-slate-500 py-8 text-center">Loading products…</div></Card>
   }
   if (error) {
-    return <Card><div className="text-[13px] text-rose-600 py-8 text-center">Failed to load: {error}</div></Card>
+    return <Card><div role="alert" aria-live="assertive" className="text-[13px] text-rose-600 py-8 text-center">Failed to load: {error}</div></Card>
   }
   if (products.length === 0) {
     return <EmptyState icon={Boxes} title="No products match these filters" description="Adjust filters or import products." action={{ label: 'New product', href: '/products/new' }} />
@@ -2888,6 +2918,13 @@ function GridLens(props: any) {
 
   return (
     <div className="space-y-3">
+      {/* P.20 — visually-hidden live status region. Screen readers
+          announce the row count + page on every load so blind users
+          aren't stuck wondering whether the grid finished loading.
+          Sighted users see the same info in the count strip below. */}
+      <div role="status" aria-live="polite" className="sr-only">
+        Showing {products.length} of {total} products on page {page} of {totalPages}.
+      </div>
       <div className="flex items-center gap-2 justify-between">
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-slate-500">
@@ -2910,13 +2947,17 @@ function GridLens(props: any) {
               type="button"
               onClick={() => onDensityChange(d)}
               title={`${d.charAt(0).toUpperCase()}${d.slice(1)} row density`}
+              aria-label={`${d.charAt(0).toUpperCase()}${d.slice(1)} row density`}
+              aria-pressed={density === d}
               className={`px-2 h-full ${
                 density === d
                   ? 'bg-slate-900 text-white'
                   : 'bg-white text-slate-600 hover:bg-slate-50'
               }`}
             >
-              {d === 'compact' ? '≡' : d === 'comfortable' ? '☰' : '☲'}
+              <span aria-hidden="true">
+                {d === 'compact' ? '≡' : d === 'comfortable' ? '☰' : '☲'}
+              </span>
             </button>
           ))}
         </div>
