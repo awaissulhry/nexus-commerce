@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle,
   ArrowRight,
@@ -438,10 +439,35 @@ function JobCard({ job }: { job: JobRow }) {
 // ── Top-level client ───────────────────────────────────────────────
 
 export default function HistoryClient() {
+  // URL-shareable filter state. The status filter lives in `?status=`
+  // so a power user can bookmark "Failed jobs" or share a link with a
+  // teammate. URL is the source of truth; setStatusFilter pushes a
+  // new URL and the param-derived value flows back through.
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const urlStatus = (searchParams.get('status') ?? 'all') as StatusFilter
+  const validStatuses = useMemo(
+    () => new Set(STATUS_FILTERS.map((f) => f.key as StatusFilter)),
+    [],
+  )
+  const statusFilter: StatusFilter = validStatuses.has(urlStatus)
+    ? urlStatus
+    : 'all'
+  const setStatusFilter = useCallback(
+    (next: StatusFilter) => {
+      const params = new URLSearchParams(searchParams.toString())
+      if (next === 'all') params.delete('status')
+      else params.set('status', next)
+      const qs = params.toString()
+      router.replace(qs ? `${pathname}?${qs}` : pathname)
+    },
+    [pathname, router, searchParams],
+  )
+
   const [jobs, setJobs] = useState<JobRow[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
 
   const fetchJobs = useCallback(async () => {
     setLoading(true)
