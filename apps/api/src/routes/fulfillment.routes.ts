@@ -28,6 +28,10 @@ import {
   InvalidTransitionError,
   NotFoundError,
 } from '../services/inbound.service.js'
+import {
+  isCloudinaryConfigured,
+  uploadBufferToCloudinary,
+} from '../services/cloudinary.service.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // FULFILLMENT B.3–B.9 — full domain API surface
@@ -870,6 +874,47 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       if (error instanceof NotFoundError) return reply.code(404).send({ error: error.message })
       fastify.log.error({ err: error }, '[inbound/:id/items/:id/release-hold] failed')
       return reply.code(400).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // H.7 — multipart upload: receives a binary file (camera capture or
+  // gallery pick), uploads to Cloudinary in inbound/{shipmentId}/items/
+  // {itemId}/, then appends the secure URL to InboundShipmentItem.
+  // photoUrls. Server-mediated (vs client-direct) to keep the
+  // Cloudinary credentials off the wire and to stamp the folder
+  // structure server-side.
+  fastify.post('/fulfillment/inbound/:id/items/:itemId/upload-photo', async (request, reply) => {
+    try {
+      const { id, itemId } = request.params as { id: string; itemId: string }
+      if (!isCloudinaryConfigured()) {
+        return reply.code(503).send({ error: 'Cloudinary not configured (CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET)' })
+      }
+      const data = await (request as any).file?.()
+      if (!data) {
+        return reply.code(400).send({ error: 'multipart file required' })
+      }
+      const buffer = await data.toBuffer()
+      if (buffer.length > 10 * 1024 * 1024) {
+        return reply.code(413).send({ error: 'file too large (max 10MB)' })
+      }
+      // Confirm the item belongs to the shipment before uploading —
+      // saves a wasted Cloudinary upload if the path is wrong.
+      const item = await prisma.inboundShipmentItem.findUnique({
+        where: { id: itemId },
+        select: { id: true, inboundShipmentId: true },
+      })
+      if (!item) return reply.code(404).send({ error: 'item not found' })
+      if (item.inboundShipmentId !== id) {
+        return reply.code(400).send({ error: 'item does not belong to this shipment' })
+      }
+      const result = await uploadBufferToCloudinary(buffer, {
+        folder: `inbound/${id}/items/${itemId}`,
+      })
+      const updated = await inboundAppendItemPhoto({ shipmentItemId: itemId, url: result.url })
+      return { ok: true, url: result.url, photoUrls: updated.photoUrls }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[inbound/:id/items/:id/upload-photo] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })
 

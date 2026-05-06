@@ -14,7 +14,9 @@ import {
   Boxes, AlertTriangle, CalendarClock,
   FileText, ChevronUp, ChevronDown,
   Upload, Link2, Trash2, Camera, Unlock, History, Check,
+  Smartphone,
 } from 'lucide-react'
+import Link from 'next/link'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -913,9 +915,18 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
                 title={`Items (${shipment.items.length})`}
                 icon={PackageCheck}
                 right={
-                  <button onClick={fillExpected} className="text-[10px] text-blue-700 hover:underline inline-flex items-center gap-1">
-                    <Check size={10} /> Fill all expected
-                  </button>
+                  <div className="inline-flex items-center gap-3">
+                    <Link
+                      href={`/fulfillment/inbound/${id}/receive`}
+                      className="text-[10px] text-blue-700 hover:underline inline-flex items-center gap-1"
+                      title="Open mobile receive flow (touch-friendly, camera scan + photo)"
+                    >
+                      <Smartphone size={10} /> Mobile receive
+                    </Link>
+                    <button onClick={fillExpected} className="text-[10px] text-blue-700 hover:underline inline-flex items-center gap-1">
+                      <Check size={10} /> Fill all expected
+                    </button>
+                  </div>
                 }
               >
                 <div className="space-y-2">
