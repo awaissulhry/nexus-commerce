@@ -220,6 +220,8 @@ model Product {
   outboundSyncQueue    OutboundSyncQueue[] // Phase 8: Outbound Sync Engine
   stockLevels          StockLevel[] // H.1: per-location stock ledger
   translations         ProductTranslation[] // H.10: per-language master content
+  relationsFrom        ProductRelation[] @relation("ProductRelationFrom") // H.11
+  relationsTo          ProductRelation[] @relation("ProductRelationTo") // H.11
 
   // NN.1 — optimistic concurrency. Bumped on every PATCH/PUT.
   // Clients send the version they read; server rejects with 409 if
@@ -3275,4 +3277,27 @@ model ProductTranslation {
   @@index([language])
   @@index([productId])
   @@index([source])
+}
+
+// ── Related products / cross-sells (H.11) ─────────────────────────────
+// Links products. type ∈ CROSS_SELL | ACCESSORY | REPLACEMENT |
+// BUNDLE_PART | UPSELL | RECOMMENDED. See migration for full
+// semantics. Reciprocal pairs are materialised as two rows so they
+// can drift independently (e.g. same pair could be CROSS_SELL one
+// way and UPSELL the other).
+model ProductRelation {
+  id            String   @id @default(cuid())
+  fromProduct   Product  @relation("ProductRelationFrom", fields: [fromProductId], references: [id], onDelete: Cascade)
+  fromProductId String
+  toProduct     Product  @relation("ProductRelationTo", fields: [toProductId], references: [id], onDelete: Cascade)
+  toProductId   String
+  type          String
+  displayOrder  Int      @default(0)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([fromProductId, toProductId, type])
+  @@index([fromProductId, type])
+  @@index([toProductId, type])
 }
