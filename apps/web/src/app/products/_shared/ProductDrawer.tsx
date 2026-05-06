@@ -37,6 +37,11 @@ import {
   Boxes,
   Edit3,
   Image as ImageIcon,
+  Globe,
+  Plus,
+  Sparkles,
+  Check,
+  Trash2,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -59,6 +64,8 @@ interface ProductDetail {
   weightValue: number | null
   weightUnit: string | null
   description: string | null
+  bulletPoints?: string[]
+  keywords?: string[]
   fulfillmentMethod: string | null
   updatedAt: string
   createdAt: string
@@ -103,7 +110,7 @@ export interface ProductDrawerProps {
   onChanged?: () => void
 }
 
-type Tab = 'details' | 'listings' | 'activity'
+type Tab = 'details' | 'listings' | 'translations' | 'activity'
 
 export default function ProductDrawer({
   productId,
@@ -246,6 +253,12 @@ export default function ProductDrawer({
             <Boxes className="w-3 h-3" /> Listings
           </DrawerTab>
           <DrawerTab
+            active={tab === 'translations'}
+            onClick={() => setTab('translations')}
+          >
+            <Globe className="w-3 h-3" /> Translations
+          </DrawerTab>
+          <DrawerTab
             active={tab === 'activity'}
             onClick={() => setTab('activity')}
           >
@@ -276,6 +289,19 @@ export default function ProductDrawer({
             />
           )}
           {data && tab === 'listings' && <ListingsTab listings={data.channelListings ?? []} />}
+          {data && tab === 'translations' && (
+            <TranslationsTab
+              productId={data.id}
+              masterName={data.name}
+              masterDescription={data.description ?? null}
+              masterBullets={data.bulletPoints ?? []}
+              masterKeywords={data.keywords ?? []}
+              onChanged={() => {
+                fetchDetail()
+                onChanged?.()
+              }}
+            />
+          )}
           {data && tab === 'activity' && <ActivityTab productId={data.id} />}
         </div>
 
@@ -918,4 +944,527 @@ function formatValue(v: unknown): string {
   } catch {
     return String(v)
   }
+}
+
+// ────────────────────────────────────────────────────────────────────
+// TranslationsTab (H.10) — per-language master content editor
+// ────────────────────────────────────────────────────────────────────
+/**
+ * Lists every ProductTranslation row plus the Master (primary
+ * language) row up top so the user has a single surface for all
+ * language variants. Each row collapses to a one-line summary;
+ * expand to edit. AI-sourced rows show an "AI · review" pill until
+ * the user marks reviewed.
+ */
+
+interface TranslationRow {
+  id: string
+  language: string
+  name: string | null
+  description: string | null
+  bulletPoints: string[]
+  keywords: string[]
+  source: string | null
+  sourceModel: string | null
+  reviewedAt: string | null
+  updatedAt: string
+}
+
+const KNOWN_LANGUAGES: Array<{ code: string; label: string }> = [
+  { code: 'it', label: 'Italian' },
+  { code: 'de', label: 'German' },
+  { code: 'fr', label: 'French' },
+  { code: 'es', label: 'Spanish' },
+  { code: 'en', label: 'English' },
+  { code: 'nl', label: 'Dutch' },
+  { code: 'sv', label: 'Swedish' },
+  { code: 'pl', label: 'Polish' },
+]
+
+function languageLabel(code: string): string {
+  const m = KNOWN_LANGUAGES.find((l) => l.code === code)
+  return m ? `${m.label} (${code.toUpperCase()})` : code.toUpperCase()
+}
+
+function TranslationsTab({
+  productId,
+  masterName,
+  masterDescription,
+  masterBullets,
+  masterKeywords,
+  onChanged,
+}: {
+  productId: string
+  masterName: string
+  masterDescription: string | null
+  masterBullets: string[]
+  masterKeywords: string[]
+  onChanged: () => void
+}) {
+  const [primaryLanguage, setPrimaryLanguage] = useState<string>('it')
+  const [rows, setRows] = useState<TranslationRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [adding, setAdding] = useState(false)
+  const [newLang, setNewLang] = useState('de')
+  const [newLangCustom, setNewLangCustom] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${productId}/translations`,
+        { cache: 'no-store' },
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const json = await res.json()
+      setPrimaryLanguage((json.primaryLanguage ?? 'it').toLowerCase())
+      setRows(json.translations ?? [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [productId])
+
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
+
+  const toggle = (key: string) =>
+    setExpanded((s) => {
+      const next = new Set(s)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+
+  const create = async () => {
+    const code = (newLangCustom.trim() || newLang).toLowerCase()
+    if (!code) return
+    if (code === primaryLanguage) {
+      setError(
+        `${code} is the primary language — edit the master fields directly`,
+      )
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${productId}/translations/${code}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source: 'manual' }),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      setAdding(false)
+      setNewLangCustom('')
+      setExpanded((s) => new Set(s).add(code))
+      void refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const save = async (
+    language: string,
+    payload: Partial<TranslationRow>,
+  ) => {
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${productId}/translations/${language}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      onChanged()
+      void refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const markReviewed = async (language: string) => {
+    setBusy(true)
+    try {
+      await fetch(
+        `${getBackendUrl()}/api/products/${productId}/translations/${language}/review`,
+        { method: 'POST' },
+      )
+      void refresh()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const remove = async (language: string) => {
+    if (!confirm(`Delete the ${languageLabel(language)} translation?`)) return
+    setBusy(true)
+    try {
+      await fetch(
+        `${getBackendUrl()}/api/products/${productId}/translations/${language}`,
+        { method: 'DELETE' },
+      )
+      void refresh()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="px-5 py-8 text-center text-[12px] text-slate-400 italic">
+        <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Loading…
+      </div>
+    )
+  }
+
+  return (
+    <div className="px-5 py-4 space-y-3">
+      {error && (
+        <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-[12px] text-rose-800">
+          {error}
+        </div>
+      )}
+
+      {/* Master row — read-only here. Editing happens in Details. */}
+      <div className="border border-blue-200 bg-blue-50/40 rounded-md p-3">
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <div className="inline-flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wider font-semibold text-blue-700 bg-blue-100 rounded px-1.5 py-0.5">
+              Master
+            </span>
+            <span className="text-[12px] font-medium text-slate-900">
+              {languageLabel(primaryLanguage)}
+            </span>
+          </div>
+          <span className="text-[10px] text-blue-600 italic">
+            Edit on the Details tab
+          </span>
+        </div>
+        <div className="text-[12px] text-slate-700 truncate">
+          {masterName || <span className="text-slate-400">—</span>}
+        </div>
+        {masterDescription && (
+          <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">
+            {masterDescription.replace(/<[^>]+>/g, ' ').trim()}
+          </div>
+        )}
+      </div>
+
+      {rows.length === 0 && !adding && (
+        <div className="text-center py-6 text-[12px] text-slate-500 space-y-2">
+          <Globe className="w-5 h-5 mx-auto text-slate-300" />
+          <div>No translations yet.</div>
+        </div>
+      )}
+
+      {rows.map((r) => {
+        const isExpanded = expanded.has(r.language)
+        const isAi = r.source?.startsWith('ai-')
+        const needsReview = isAi && !r.reviewedAt
+        return (
+          <TranslationRowCard
+            key={r.id}
+            row={r}
+            expanded={isExpanded}
+            needsReview={!!needsReview}
+            masterFallback={{
+              name: masterName,
+              description: masterDescription,
+              bulletPoints: masterBullets,
+              keywords: masterKeywords,
+            }}
+            busy={busy}
+            onToggle={() => toggle(r.language)}
+            onSave={(payload) => save(r.language, payload)}
+            onReview={() => markReviewed(r.language)}
+            onDelete={() => remove(r.language)}
+          />
+        )
+      })}
+
+      {adding ? (
+        <div className="border border-purple-200 bg-purple-50/40 rounded-md p-3 space-y-2">
+          <div className="text-[11px] font-semibold text-purple-700 uppercase tracking-wider">
+            Add translation
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <select
+              value={newLang}
+              onChange={(e) => setNewLang(e.target.value)}
+              className="h-8 px-2 text-[12px] border border-slate-200 rounded bg-white"
+            >
+              {KNOWN_LANGUAGES.filter(
+                (l) =>
+                  l.code !== primaryLanguage &&
+                  !rows.some((r) => r.language === l.code),
+              ).map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.label}
+                </option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={newLangCustom}
+              onChange={(e) => setNewLangCustom(e.target.value)}
+              placeholder="or type code"
+              className="h-8 px-2 text-[12px] border border-slate-200 rounded bg-white font-mono uppercase"
+            />
+          </div>
+          <div className="flex items-center justify-end gap-1.5">
+            <button
+              type="button"
+              onClick={() => setAdding(false)}
+              className="h-7 px-2 text-[11px] text-slate-600 hover:bg-slate-100 rounded"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={create}
+              disabled={busy}
+              className="h-7 px-3 text-[11px] bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+            >
+              Create
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="w-full h-8 text-[12px] border border-dashed border-slate-300 rounded text-slate-600 hover:bg-slate-50 inline-flex items-center justify-center gap-1.5"
+        >
+          <Plus className="w-3 h-3" /> Add translation
+        </button>
+      )}
+
+      <div className="text-[10px] text-slate-500 pt-2 border-t border-slate-100">
+        AI-generated translations stay marked &ldquo;unreviewed&rdquo; until
+        you confirm them. Generation happens via /products bulk AI fill —
+        pick a non-{primaryLanguage.toUpperCase()} marketplace and the
+        result lands here.
+      </div>
+    </div>
+  )
+}
+
+function TranslationRowCard({
+  row,
+  expanded,
+  needsReview,
+  masterFallback,
+  busy,
+  onToggle,
+  onSave,
+  onReview,
+  onDelete,
+}: {
+  row: TranslationRow
+  expanded: boolean
+  needsReview: boolean
+  masterFallback: {
+    name: string
+    description: string | null
+    bulletPoints: string[]
+    keywords: string[]
+  }
+  busy: boolean
+  onToggle: () => void
+  onSave: (payload: Partial<TranslationRow>) => void
+  onReview: () => void
+  onDelete: () => void
+}) {
+  const [name, setName] = useState(row.name ?? '')
+  const [description, setDescription] = useState(row.description ?? '')
+  const [bullets, setBullets] = useState((row.bulletPoints ?? []).join('\n'))
+  const [keywords, setKeywords] = useState((row.keywords ?? []).join(', '))
+  useEffect(() => {
+    setName(row.name ?? '')
+    setDescription(row.description ?? '')
+    setBullets((row.bulletPoints ?? []).join('\n'))
+    setKeywords((row.keywords ?? []).join(', '))
+  }, [row.name, row.description, row.bulletPoints, row.keywords])
+
+  const dirty =
+    (name || '') !== (row.name ?? '') ||
+    (description || '') !== (row.description ?? '') ||
+    bullets !== (row.bulletPoints ?? []).join('\n') ||
+    keywords !== (row.keywords ?? []).join(', ')
+
+  const summaryName = row.name?.trim() || masterFallback.name
+  const summaryDesc =
+    row.description?.replace(/<[^>]+>/g, ' ').trim() ||
+    masterFallback.description?.replace(/<[^>]+>/g, ' ').trim() ||
+    ''
+
+  const save = () => {
+    onSave({
+      name: name.trim() ? name : null,
+      description: description.trim() ? description : null,
+      bulletPoints: bullets
+        .split('\n')
+        .map((b) => b.trim())
+        .filter(Boolean),
+      keywords: keywords
+        .split(',')
+        .map((k) => k.trim())
+        .filter(Boolean),
+      source: 'manual',
+    } as Partial<TranslationRow>)
+  }
+
+  return (
+    <div
+      className={`border rounded-md ${
+        needsReview ? 'border-amber-200' : 'border-slate-200'
+      } bg-white`}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full px-3 py-2 flex items-start gap-2 text-left hover:bg-slate-50"
+      >
+        <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-700 bg-slate-100 rounded px-1.5 py-0.5 flex-shrink-0 mt-0.5">
+          {row.language.toUpperCase()}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[12px] font-medium text-slate-900 truncate">
+            {summaryName}
+          </div>
+          {summaryDesc && (
+            <div className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
+              {summaryDesc}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {needsReview && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+              <Sparkles className="w-2.5 h-2.5" /> AI · review
+            </span>
+          )}
+          <ChevronRight
+            className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded ? 'rotate-90' : ''}`}
+          />
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-slate-100 p-3 space-y-2">
+          <div>
+            <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
+              Name
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={masterFallback.name}
+              className="w-full h-8 px-2 text-[12px] border border-slate-200 rounded bg-white"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
+              Description
+            </label>
+            <textarea
+              rows={4}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder={masterFallback.description ?? ''}
+              className="w-full px-2 py-1.5 text-[12px] border border-slate-200 rounded bg-white"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
+              Bullets · one per line
+            </label>
+            <textarea
+              rows={5}
+              value={bullets}
+              onChange={(e) => setBullets(e.target.value)}
+              className="w-full px-2 py-1.5 text-[12px] border border-slate-200 rounded bg-white"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
+              Keywords · comma-separated
+            </label>
+            <input
+              type="text"
+              value={keywords}
+              onChange={(e) => setKeywords(e.target.value)}
+              className="w-full h-8 px-2 text-[12px] border border-slate-200 rounded bg-white"
+            />
+          </div>
+
+          {row.source && (
+            <div className="text-[10px] text-slate-500 pt-1 border-t border-slate-100">
+              Source: <span className="font-mono">{row.source}</span>
+              {row.sourceModel && <> · {row.sourceModel}</>}
+              {row.reviewedAt && (
+                <>
+                  {' · reviewed '}
+                  {new Date(row.reviewedAt).toLocaleDateString()}
+                </>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center gap-1.5 pt-1">
+            {needsReview && (
+              <button
+                type="button"
+                onClick={onReview}
+                disabled={busy}
+                className="h-7 px-2 text-[11px] bg-amber-50 text-amber-800 border border-amber-200 rounded hover:bg-amber-100 inline-flex items-center gap-1"
+              >
+                <Check className="w-3 h-3" /> Mark reviewed
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={busy}
+              className="h-7 px-2 text-[11px] text-rose-700 hover:bg-rose-50 rounded inline-flex items-center gap-1"
+            >
+              <Trash2 className="w-3 h-3" /> Delete
+            </button>
+            <button
+              type="button"
+              onClick={save}
+              disabled={busy || !dirty}
+              className="ml-auto h-7 px-3 text-[11px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-40"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
