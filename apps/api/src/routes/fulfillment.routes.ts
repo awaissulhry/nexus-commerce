@@ -34,6 +34,7 @@ import {
 } from '../services/cloudinary.service.js'
 import {
   createInboundShipmentPlan as fbaCreateInboundShipmentPlan,
+  getInboundShipmentLabels as fbaGetLabels,
   isFbaInboundConfigured,
 } from '../services/fba-inbound.service.js'
 
@@ -1163,18 +1164,57 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // H.8b — real SP-API getLabels. The :id param accepts EITHER the
+  // local FBAShipment.id (cuid) OR the Amazon-issued shipmentId
+  // (FBA-prefixed). Local lookup first to resolve to the Amazon ID;
+  // if not found, treat :id as the Amazon ID directly so operators
+  // can hit the route with whatever they have.
+  //
+  // Body (all optional):
+  //   pageType   PackageLabel_A4_4 (default) | _Letter_4 | _Thermal | …
+  //   labelType  BARCODE_2D (default — FNSKU unit labels)
+  //              | UNIQUE (carton labels)
+  //              | PALLET (pallet labels)
+  //   numberOfPackages, packageLabelsToPrint, numberOfPallets
+  //
+  // Response: { downloadUrl } — Amazon-hosted temp URL (minutes TTL)
+  // pointing at the labels PDF. Frontend renders as a download link.
   fastify.post('/fulfillment/fba/shipments/:id/labels', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const shipment = await prisma.fBAShipment.findUnique({ where: { id } })
-      if (!shipment) return reply.code(404).send({ error: 'FBA shipment not found' })
-      // SP-API: GET /fba/inbound/v0/labels — returns a feed for FNSKU + carton labels
-      // We scaffold a static URL for now so the UI download button works.
+      const body = (request.body ?? {}) as {
+        pageType?: any; labelType?: any
+        numberOfPackages?: number; packageLabelsToPrint?: string[]; numberOfPallets?: number
+      }
+      if (!isFbaInboundConfigured()) {
+        return reply.code(503).send({
+          error: 'SP-API not configured. Set AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN, AMAZON_MARKETPLACE_ID.',
+        })
+      }
+      // Resolve to the Amazon-issued shipmentId. Local FBAShipment.id
+      // (cuid) → Amazon shipmentId via the row; if no row, assume the
+      // operator passed Amazon's ID directly.
+      let amazonShipmentId = id
+      const local = await prisma.fBAShipment.findUnique({
+        where: { id },
+        select: { shipmentId: true },
+      }).catch(() => null)
+      if (local?.shipmentId) amazonShipmentId = local.shipmentId
+
+      const result = await fbaGetLabels({
+        shipmentId: amazonShipmentId,
+        pageType: body.pageType,
+        labelType: body.labelType,
+        numberOfPackages: body.numberOfPackages,
+        packageLabelsToPrint: body.packageLabelsToPrint,
+        numberOfPallets: body.numberOfPallets,
+      })
       return {
         ok: true,
-        labelsUrl: `/api/fulfillment/fba/shipments/${id}/labels.pdf`,
-        labelType: 'FNSKU',
-        message: 'SP-API integration not yet wired — placeholder PDF returned. See SP-API getLabels.',
+        downloadUrl: result.downloadUrl,
+        // Pre-H.8b clients used `labelsUrl` — keep alias for backwards compat.
+        labelsUrl: result.downloadUrl,
+        shipmentId: amazonShipmentId,
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[fba/shipments/:id/labels] failed')

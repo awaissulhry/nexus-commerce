@@ -220,3 +220,89 @@ export async function createInboundShipmentPlan(args: {
     shipmentPlans: plans as InboundShipmentPlanResponse[],
   }
 }
+
+// ─── H.8b — getLabels ──────────────────────────────────────────────
+
+export type FbaPageType =
+  | 'PackageLabel_Letter_2' | 'PackageLabel_Letter_4' | 'PackageLabel_Letter_6'
+  | 'PackageLabel_Letter_6_CarrierLeft'
+  | 'PackageLabel_A4_2' | 'PackageLabel_A4_4'
+  | 'PackageLabel_Plain_Paper' | 'PackageLabel_Plain_Paper_CarrierBottom'
+  | 'PackageLabel_Thermal' | 'PackageLabel_Thermal_Unified'
+  | 'PackageLabel_Thermal_NonPCP' | 'PackageLabel_Thermal_No_Carrier_Rotation'
+
+export type FbaLabelType = 'BARCODE_2D' | 'UNIQUE' | 'PALLET'
+
+export interface GetLabelsArgs {
+  shipmentId: string
+  pageType?: FbaPageType
+  labelType?: FbaLabelType
+  numberOfPackages?: number
+  packageLabelsToPrint?: string[]
+  numberOfPallets?: number
+}
+
+export interface GetLabelsResult {
+  /** Amazon-hosted temp URL to a multi-page PDF. Expires within minutes. */
+  downloadUrl: string
+}
+
+/**
+ * H.8b — Call SP-API v0 getLabels. Returns a short-lived Amazon CDN
+ * URL for the FNSKU/carton labels PDF; the frontend renders it as a
+ * download link.
+ *
+ * Defaults pick the EU-friendly A4_4 layout + BARCODE_2D for FNSKU
+ * unit labels. Pass `labelType: 'UNIQUE'` for carton labels and
+ * `labelType: 'PALLET'` for pallet labels.
+ *
+ * Direct HTTP for consistency with H.8a — same LWA token cache, same
+ * region resolution. The amazon-sp-api library does have getLabels in
+ * its v0 resource map, but routing through the same fetch flow keeps
+ * error handling uniform across the FBA inbound surface.
+ */
+export async function getInboundShipmentLabels(args: GetLabelsArgs): Promise<GetLabelsResult> {
+  if (!isFbaInboundConfigured()) {
+    throw new Error('SP-API not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)')
+  }
+  if (!args.shipmentId) throw new Error('shipmentId required')
+
+  const pageType = args.pageType ?? 'PackageLabel_A4_4'
+  const labelType = args.labelType ?? 'BARCODE_2D'
+  const token = await getLwaAccessToken()
+
+  const qs = new URLSearchParams()
+  qs.set('PageType', pageType)
+  qs.set('LabelType', labelType)
+  if (args.numberOfPackages != null) qs.set('NumberOfPackages', String(args.numberOfPackages))
+  if (args.numberOfPallets != null) qs.set('NumberOfPallets', String(args.numberOfPallets))
+  if (args.packageLabelsToPrint && args.packageLabelsToPrint.length > 0) {
+    qs.set('PackageLabelsToPrint', args.packageLabelsToPrint.join(','))
+  }
+
+  const url = `${REGION_ENDPOINTS[SP_REGION]}/fba/inbound/v0/shipments/${encodeURIComponent(args.shipmentId)}/labels?${qs.toString()}`
+
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'x-amz-access-token': token,
+      'Accept': 'application/json',
+    },
+  })
+
+  const text = await res.text()
+  let data: any = null
+  try { data = text ? JSON.parse(text) : null } catch { data = text }
+
+  if (!res.ok) {
+    const errMsg = data?.errors?.[0]?.message ?? data?.message ?? text.slice(0, 300)
+    logger.warn('fba-inbound: getLabels failed', { status: res.status, shipmentId: args.shipmentId, err: errMsg })
+    throw new Error(`SP-API getLabels ${res.status}: ${errMsg}`)
+  }
+
+  const downloadUrl = data?.payload?.DownloadURL
+  if (!downloadUrl) {
+    throw new Error('SP-API getLabels: no DownloadURL in response')
+  }
+  return { downloadUrl }
+}

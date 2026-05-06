@@ -2007,6 +2007,77 @@ function PoPicker({
 // FBAWizardModal — kept from B.5 with the H.0c "preview" honesty
 // banner. Real SP-API integration lands in commits 8a–8d.
 // ─────────────────────────────────────────────────────────────────────
+// H.8b — small helper that calls the labels endpoint on demand
+// (lazy: don't fetch until operator clicks). Renders the resulting
+// Amazon-hosted PDF URL as a target-blank link. Refresh button
+// re-fetches because Amazon's URL is short-lived (minutes).
+function FbaLabelDownload({ shipmentId }: { shipmentId: string }) {
+  const [labelType, setLabelType] = useState<'BARCODE_2D' | 'UNIQUE' | 'PALLET'>('BARCODE_2D')
+  const [pageType, setPageType] = useState<'PackageLabel_A4_4' | 'PackageLabel_Letter_4' | 'PackageLabel_Thermal'>('PackageLabel_A4_4')
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchLabels = async () => {
+    setBusy(true)
+    setError(null)
+    setDownloadUrl(null)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/fba/shipments/${encodeURIComponent(shipmentId)}/labels`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pageType, labelType }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error ?? `Failed (${res.status})`)
+      setDownloadUrl(data?.downloadUrl ?? data?.labelsUrl ?? null)
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Labels</div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <select value={labelType} onChange={(e) => setLabelType(e.target.value as any)} className="h-7 text-[11px] px-2 border border-slate-200 rounded">
+          <option value="BARCODE_2D">FNSKU (unit)</option>
+          <option value="UNIQUE">Carton</option>
+          <option value="PALLET">Pallet</option>
+        </select>
+        <select value={pageType} onChange={(e) => setPageType(e.target.value as any)} className="h-7 text-[11px] px-2 border border-slate-200 rounded">
+          <option value="PackageLabel_A4_4">A4 — 4 per sheet</option>
+          <option value="PackageLabel_Letter_4">Letter — 4 per sheet</option>
+          <option value="PackageLabel_Thermal">Thermal</option>
+        </select>
+        <button
+          onClick={fetchLabels}
+          disabled={busy}
+          className="h-7 px-2.5 text-[11px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1"
+        >
+          {busy ? 'Fetching…' : downloadUrl ? 'Refresh' : 'Get labels →'}
+        </button>
+        {downloadUrl && (
+          <a
+            href={downloadUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="h-7 px-2.5 text-[11px] bg-emerald-600 text-white rounded hover:bg-emerald-700 inline-flex items-center gap-1"
+          >
+            <FileText size={11} /> Download PDF
+          </a>
+        )}
+      </div>
+      {error && <div className="text-[10px] text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-1">{error}</div>}
+      {downloadUrl && (
+        <div className="text-[10px] text-slate-500">Amazon link expires in a few minutes — click "Refresh" to mint a new one.</div>
+      )}
+    </div>
+  )
+}
+
 function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [step, setStep] = useState<'plan' | 'commit'>('plan')
   const [items, setItems] = useState<Array<{ sku: string; quantity: number; productId?: string }>>([{ sku: '', quantity: 1 }])
@@ -2058,16 +2129,16 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
           <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
         </header>
 
-        {/* H.8a status banner — plan call is real, labels + transport
-            are still stubbed. */}
+        {/* H.8b status banner — plan + labels are real, transport
+            still stubbed. */}
         <div className="mx-5 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-md text-[12px] text-amber-900">
           <div className="font-semibold mb-1 inline-flex items-center gap-1.5">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
-            Plan call is live — labels + transport still scaffolded
+            Plan + Labels live · Transport still scaffolded
           </div>
           <div className="text-amber-800 leading-snug">
-            Plan-shipment submits to Amazon SP-API for real (returns Amazon-issued shipment IDs + destination FC).
-            FNSKU labels (8b) and transport booking (8c) still need real SP-API. Status polling (8d) lands shortly after.
+            Plan-shipment + getLabels (FNSKU/carton/pallet) submit to Amazon SP-API for real.
+            Transport booking (8c) and status polling (8d) still need real SP-API.
           </div>
         </div>
 
@@ -2093,11 +2164,11 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
 
         {step === 'commit' && plan && (
           <div className="p-5 space-y-3">
-            <div className="text-[12px] text-slate-500">Step 2 of 2 — confirm and Nexus will create local records (Amazon submit lands in 8a).</div>
+            <div className="text-[12px] text-slate-500">Step 2 of 2 — Amazon-issued shipment IDs below. Confirm to write local records, then download FNSKU labels for each shipment.</div>
             {plan.shipmentPlans.map((sp: any, i: number) => (
               <div key={i} className="border border-slate-200 rounded-md p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-[12px] font-semibold text-slate-900">FBA shipment {sp.shipmentId}</div>
+                <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
+                  <div className="text-[12px] font-semibold text-slate-900 font-mono">{sp.shipmentId}</div>
                   <span className="text-[11px] font-mono bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded">→ {sp.destinationFC}</span>
                 </div>
                 <ul className="space-y-1">
@@ -2108,6 +2179,9 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
                     </li>
                   ))}
                 </ul>
+                <div className="mt-2 pt-2 border-t border-slate-100">
+                  <FbaLabelDownload shipmentId={sp.shipmentId} />
+                </div>
               </div>
             ))}
             <footer className="pt-3 border-t border-slate-200 flex items-center gap-2 justify-end">
