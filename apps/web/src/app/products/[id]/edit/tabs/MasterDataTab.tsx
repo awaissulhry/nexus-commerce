@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { CheckCircle2, Loader2, AlertCircle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { cn } from '@/lib/utils'
@@ -113,11 +114,25 @@ export default function MasterDataTab({ product, onChange }: Props) {
       }
       // Only clear the dirty set on success — keep entries on error so
       // the next save attempt retries the same fields.
+      const flushedFields = Array.from(dirtyRef.current)
       dirtyRef.current = new Set()
       setStatus('saved')
       window.setTimeout(() => {
         setStatus((s) => (s === 'saved' ? 'idle' : s))
       }, 1500)
+      // Phase 10/F11 — broadcast so /products grid + /bulk-operations
+      // refresh within ~200ms. MasterDataTab edits identity / physical /
+      // pricing-floor fields (sku, name, brand, weight, costPrice,
+      // minMargin, etc.) — none of these cascade to ChannelListing,
+      // so we only emit product.updated. basePrice + totalStock edits
+      // happen via the inline grid PATCH /api/products/:id (which
+      // emits its own listing.updated).
+      emitInvalidation({
+        type: 'product.updated',
+        id: product.id,
+        fields: flushedFields,
+        meta: { source: 'master-data-tab' },
+      })
     } catch (e) {
       setStatus('error')
       setError(e instanceof Error ? e.message : String(e))

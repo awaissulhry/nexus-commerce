@@ -50,6 +50,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 
 interface VariantRow {
   id: string
@@ -403,6 +404,14 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
             setRows((prev) => [...prev, saved])
             setCreateOpen(false)
             setStatusMsg({ kind: 'success', text: `Variant ${saved.sku} added.` })
+            // Phase 10/F11 — broadcast so /products grid + /listings
+            // refresh. New child product means the parent's variantCount
+            // changes and any per-channel coverage tied to it.
+            emitInvalidation({
+              type: 'product.created',
+              id: saved.id,
+              meta: { parentId: parent.id, source: 'variations-tab' },
+            })
             await refresh()
           }}
         />
@@ -424,6 +433,23 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
             )
             setEditing(null)
             setStatusMsg({ kind: 'success', text: `${saved.sku} updated.` })
+            // Phase 10/F11 — variant edits land via PATCH /api/products/bulk
+            // which routes basePrice/totalStock through services. Emit both
+            // product.updated (always) and listing.updated (if cascadable
+            // fields could be in the patch — we don't have field-level
+            // detail here so emit listing.updated unconditionally).
+            emitInvalidation({
+              type: 'product.updated',
+              id: saved.id,
+              meta: { parentId: parent.id, source: 'variations-tab-edit' },
+            })
+            emitInvalidation({
+              type: 'listing.updated',
+              meta: {
+                productIds: [saved.id],
+                source: 'variations-tab-edit',
+              },
+            })
             try {
               await refresh()
             } catch (err) {
@@ -454,6 +480,22 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
             setStatusMsg({
               kind: 'success',
               text: `${removed.sku} deleted (channel listings cascaded).`,
+            })
+            // Phase 10/F11 — variant delete cascades to ChannelListings
+            // via the schema's onDelete: Cascade. Emit both events so
+            // /products grid (variantCount), /listings (rows gone),
+            // and /catalog/organize all refresh.
+            emitInvalidation({
+              type: 'product.deleted',
+              id: removed.id,
+              meta: { parentId: parent.id, source: 'variations-tab-delete' },
+            })
+            emitInvalidation({
+              type: 'listing.deleted',
+              meta: {
+                productIds: [removed.id],
+                source: 'variations-tab-delete',
+              },
             })
             try {
               await refresh()

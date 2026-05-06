@@ -16,6 +16,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
@@ -736,6 +737,26 @@ export default function BulkEditClient({
         window.setTimeout(() => {
           setStatus((s) => (s === 'saved' ? 'idle' : s))
         }, 1500)
+        // Phase 10/F11 — broadcast so /products grid + /listings +
+        // /bulk-operations refresh within ~200ms. Bulk edit touches
+        // both master fields (PATCH /api/products/bulk → cascades to
+        // ChannelListing per Phase 13) AND per-channel listing
+        // overrides (PUT /api/products/:id/listings/...). Emit both
+        // event types unconditionally — we don't have field-level
+        // detail at this level and other pages tolerate spurious
+        // refreshes (the ETag short-circuit means the cost is ~50
+        // bytes per page).
+        const productIds = Array.from(new Set(rows.map((r) => r.id)))
+        if (productIds.length > 0) {
+          emitInvalidation({
+            type: 'product.updated',
+            meta: { productIds, source: 'bulk-edit-client' },
+          })
+          emitInvalidation({
+            type: 'listing.updated',
+            meta: { productIds, source: 'bulk-edit-client' },
+          })
+        }
       } else {
         setStatus('error')
         setStatusMsg('Some cells failed to save')
@@ -744,7 +765,7 @@ export default function BulkEditClient({
       setStatus('error')
       setStatusMsg('Some cells failed to save')
     }
-  }, [flushChannel, flushMaster])
+  }, [flushChannel, flushMaster, rows])
 
   const armFlush = useCallback(() => {
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
