@@ -243,13 +243,11 @@ The undo / redo stack lives entirely in the in-memory grid; once Save flushes to
 
 Storage already exists — just need pre-value capture in the apply path and a small UI affordance.
 
-## 26. 🟡 Bulk-ops: drag-fill needs an Esc / cancel mid-drag
+## 26. ✅ Bulk-ops: drag-fill needs an Esc / cancel mid-drag — resolved 2026-05-06 in c672ff8
 
-**Friction:** "Drag-fill went outside intended row, no easy way to cancel."
+**Resolution:** Right-click cancel added alongside the existing Esc cancel; affordance hint pill ("Esc or right-click to cancel") follows the dashed extension rectangle so the cancel paths are discoverable during the drag.
 
-Once the user starts the fill, it auto-commits when the mouse releases. There's no way to bail mid-drag if they realise they're filling the wrong direction or too many rows.
-
-**Proper fix:** during drag, listen for `Escape` (and probably right-click) to abort the in-progress fill before commit. Visual: dim or strike through the highlighted target range while the abort key is held, so users learn the affordance. The drag handler already has a clean lifecycle (mousedown / mousemove rAF / mouseup) — adding a key listener inside the same lifecycle is straightforward.
+**Original friction:** "Drag-fill went outside intended row, no easy way to cancel." Esc-cancel was already wired into the drag handler — the gap was discoverability and the missing mouse-driven path.
 
 ## 27. 🔴 Listing wizard: AI title terminology drift ("Giubbotto" vs "Giacca")
 
@@ -1050,7 +1048,7 @@ The flow is asynchronous — each step polls an `operationId` until the operatio
 - **17** `/products` URL state for filters / sort / page
 - **18** `/products` bulk-edit-in-place
 - **25** Bulk-ops undo across saves (real user request)
-- **26** Bulk-ops drag-fill cancel (real user request)
+- **26** ✅ Resolved 2026-05-06 in c672ff8 — right-click cancel + affordance hint added; Esc cancel was already wired.
 - **28** Listing wizard multi-marketplace apply — was P2 #13, **promoted** based on usage signal
 - **29** `/products` "needs photos" filter (and sibling hygiene filters)
 - **30** `/products` show + filter by category / productType
