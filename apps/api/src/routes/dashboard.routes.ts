@@ -471,6 +471,187 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       }
     },
   )
+
+  /**
+   * H.13 — sync health dashboard data.
+   *
+   *   GET /api/dashboard/health
+   *
+   * Single-shot rollup the operator can hit when something feels off:
+   *   - Queue: OutboundSyncQueue depth (pending / inFlight / failed)
+   *     plus the oldest pending row (drives the "stuck job" warning).
+   *   - Per-channel sync: ChannelConnection status, last sync result,
+   *     24h error count, derived status (ok / warn / fail).
+   *   - 24h SyncLog roll-up: success + fail counts and computed error
+   *     rate. Powers the headline stat at the top of the page.
+   *   - Recent errors: last 20 from SyncError + SyncLog(status=FAILED)
+   *     merged and sorted newest-first so the operator can scan.
+   *
+   * Replaces the "tab-hop between /sync-logs, /logs, /api/monitoring/
+   * queue-stats" workflow. 30s Cache-Control because the page is
+   * polled, and these tables don't change second-to-second.
+   */
+  fastify.get('/dashboard/health', async (_request, reply) => {
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000)
+
+    // ── Queue depth + oldest stuck row ─────────────────────────────
+    const [pending, inFlight, failed, oldestPending] = await Promise.all([
+      prisma.outboundSyncQueue.count({ where: { syncStatus: 'PENDING' } }),
+      prisma.outboundSyncQueue.count({ where: { syncStatus: 'IN_PROGRESS' } }),
+      prisma.outboundSyncQueue.count({ where: { syncStatus: 'FAILED' } }),
+      prisma.outboundSyncQueue.findFirst({
+        where: { syncStatus: 'PENDING' },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, createdAt: true, targetChannel: true },
+      }),
+    ])
+
+    // ── 24h sync log rollup ─────────────────────────────────────────
+    const [logsSuccessful, logsFailed] = await Promise.all([
+      prisma.syncLog.count({
+        where: { status: 'SUCCESS', createdAt: { gte: since24h } },
+      }),
+      prisma.syncLog.count({
+        where: { status: 'FAILED', createdAt: { gte: since24h } },
+      }),
+    ])
+    const logsTotal = logsSuccessful + logsFailed
+    const errorRate24h = logsTotal === 0 ? 0 : logsFailed / logsTotal
+
+    // ── Per-channel status ─────────────────────────────────────────
+    const connections = await prisma.channelConnection.findMany({
+      orderBy: [{ channelType: 'asc' }, { marketplace: 'asc' }],
+      select: {
+        id: true,
+        channelType: true,
+        marketplace: true,
+        managedBy: true,
+        isActive: true,
+        lastSyncStatus: true,
+        lastSyncAt: true,
+        lastSyncError: true,
+        displayName: true,
+      },
+    })
+
+    // 24h error count per channel from SyncError. groupBy on (channel)
+    // gives one query for every channel rather than N findMany calls.
+    const errorByChannel = await prisma.syncError.groupBy({
+      by: ['channel'],
+      where: { createdAt: { gte: since24h } },
+      _count: { _all: true },
+    })
+    const errorCountByChannel = new Map(
+      errorByChannel.map((r) => [r.channel, r._count._all]),
+    )
+
+    const channels = connections.map((c) => {
+      const errors24h = errorCountByChannel.get(c.channelType) ?? 0
+      const status =
+        !c.isActive
+          ? 'inactive'
+          : c.lastSyncStatus === 'FAILED'
+            ? 'fail'
+            : errors24h > 5
+              ? 'warn'
+              : 'ok'
+      return {
+        id: c.id,
+        channel: c.channelType,
+        marketplace: c.marketplace,
+        managedBy: c.managedBy,
+        isActive: c.isActive,
+        displayName: c.displayName,
+        lastSyncStatus: c.lastSyncStatus,
+        lastSyncAt: c.lastSyncAt,
+        lastSyncError: c.lastSyncError,
+        errors24h,
+        status,
+      }
+    })
+
+    // ── Recent errors: merge SyncError + SyncLog(FAILED) ────────────
+    // SyncError captures ad-hoc cross-channel failures; SyncLog
+    // captures per-product publish attempts. Merging gives the
+    // operator one timeline to triage from.
+    const [syncErrors, failedLogs] = await Promise.all([
+      prisma.syncError.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        select: {
+          id: true,
+          channel: true,
+          errorType: true,
+          errorMessage: true,
+          context: true,
+          createdAt: true,
+        },
+      }),
+      prisma.syncLog.findMany({
+        where: { status: 'FAILED' },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        select: {
+          id: true,
+          syncType: true,
+          errorMessage: true,
+          productId: true,
+          createdAt: true,
+        },
+      }),
+    ])
+    const recentErrors = [
+      ...syncErrors.map((e) => ({
+        id: `err:${e.id}`,
+        kind: 'sync-error' as const,
+        when: e.createdAt,
+        channel: e.channel,
+        type: e.errorType,
+        message: e.errorMessage,
+        productId: null,
+        context: e.context,
+      })),
+      ...failedLogs.map((l) => ({
+        id: `log:${l.id}`,
+        kind: 'sync-log' as const,
+        when: l.createdAt,
+        channel: l.syncType.split('_')[0] ?? 'UNKNOWN',
+        type: l.syncType,
+        message: l.errorMessage ?? 'Unknown error',
+        productId: l.productId,
+        context: null,
+      })),
+    ]
+      .sort((a, b) => b.when.getTime() - a.when.getTime())
+      .slice(0, 20)
+
+    reply.header('Cache-Control', 'private, max-age=30')
+    return {
+      generatedAt: new Date().toISOString(),
+      queue: {
+        pending,
+        inFlight,
+        failed,
+        total: pending + inFlight + failed,
+        oldestPending: oldestPending
+          ? {
+              id: oldestPending.id,
+              createdAt: oldestPending.createdAt,
+              targetChannel: oldestPending.targetChannel,
+              ageMs: Date.now() - oldestPending.createdAt.getTime(),
+            }
+          : null,
+      },
+      logs24h: {
+        successful: logsSuccessful,
+        failed: logsFailed,
+        total: logsTotal,
+        errorRate: errorRate24h,
+      },
+      channels,
+      recentErrors,
+    }
+  })
 }
 
 export default dashboardRoutes
