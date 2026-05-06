@@ -391,6 +391,25 @@ function ShortcutHelp({ onClose }: { onClose: () => void }) {
     { keys: '/', label: 'Focus the page search' },
     { keys: 'Esc', label: 'Close any overlay' },
   ]
+  // P.15 — page-specific shortcuts surfaced here so operators
+  // discover them through `?` instead of by trial. Per-page entries
+  // are scoped by pathname; pages that don't match render nothing.
+  // Adding a new page's shortcuts is one entry below — no event-bus
+  // contract needed because the help overlay is global anyway.
+  const pageShortcuts = (() => {
+    const path = typeof window !== 'undefined' ? window.location.pathname : ''
+    if (path === '/products' || path.startsWith('/products?')) {
+      return {
+        title: '/products',
+        items: [
+          { keys: 'n', label: 'New product (open the create wizard)' },
+          { keys: 'f', label: 'Toggle the filter panel' },
+          { keys: 'r', label: 'Refresh the grid' },
+        ],
+      }
+    }
+    return null
+  })()
 
   return (
     <div
@@ -440,6 +459,27 @@ function ShortcutHelp({ onClose }: { onClose: () => void }) {
               ))}
             </ul>
           </section>
+
+          {pageShortcuts && (
+            <section>
+              <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                On {pageShortcuts.title}
+              </div>
+              <ul className="space-y-1.5">
+                {pageShortcuts.items.map((s) => (
+                  <li
+                    key={s.keys}
+                    className="flex items-center justify-between text-[13px] text-slate-700"
+                  >
+                    <span>{s.label}</span>
+                    <kbd className="text-[10px] font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">
+                      {s.keys}
+                    </kbd>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           <section>
             <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">

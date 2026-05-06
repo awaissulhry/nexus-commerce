@@ -529,6 +529,50 @@ export default function ProductsWorkspace() {
   // Reset selection when filters change
   useEffect(() => { setSelected(new Set()) }, [page, search, statusFilters.join(','), channelFilters.join(','), marketplaceFilters.join(','), productTypeFilters.join(','), brandFilters.join(','), tagFilters.join(','), fulfillmentFilters.join(','), missingChannelFilters.join(','), stockLevel, hasPhotos])
 
+  // P.15 — page-level keyboard shortcuts. Layered on top of the
+  // global CommandPalette which owns Cmd+K / `?` / `/` / 'g <l>'
+  // chords. These are /products-specific:
+  //
+  //   n  → new product (navigates to the create wizard)
+  //   f  → toggle the filter panel
+  //   r  → refresh the grid
+  //
+  // Skipped while typing in any input/textarea/contenteditable so
+  // they don't hijack edits in inline-edit cells. Skipped on
+  // modifier-key combos so they don't conflict with Cmd+R, Ctrl+F,
+  // or browser builtins. Same isTypingTarget check the palette uses.
+  useEffect(() => {
+    const isTypingTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false
+      const tag = target.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
+      if (target.isContentEditable) return true
+      return false
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (isTypingTarget(e.target)) return
+      const k = e.key.toLowerCase()
+      if (k === 'n') {
+        e.preventDefault()
+        router.push('/products/new')
+        return
+      }
+      if (k === 'f') {
+        e.preventDefault()
+        setFiltersOpen((o) => !o)
+        return
+      }
+      if (k === 'r') {
+        e.preventDefault()
+        void fetchProducts()
+        return
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [router, fetchProducts])
+
   // Auto-load default saved view on first mount if URL has no filter state
   const appliedDefaultRef = useRef(false)
   useEffect(() => {
