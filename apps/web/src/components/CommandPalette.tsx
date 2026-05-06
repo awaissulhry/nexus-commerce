@@ -40,6 +40,7 @@ const COMMANDS: Command[] = [
   { id: 'goto-orders', label: 'Go to Orders', icon: FileText, href: '/orders', group: 'Navigation', chord: 'g o' },
   { id: 'goto-pricing', label: 'Go to Pricing', icon: Tag, href: '/pricing', group: 'Navigation', chord: 'g r' },
   { id: 'goto-stock', label: 'Go to Stock', icon: Warehouse, href: '/fulfillment/stock', group: 'Navigation', chord: 'g s' },
+  { id: 'goto-pos', label: 'Go to Purchase Orders (approval workflow)', icon: FileEdit, href: '/fulfillment/purchase-orders', group: 'Navigation', chord: 'g u' },
   { id: 'goto-activity', label: 'Go to Activity Log', icon: Activity, href: '/sync-logs', group: 'Navigation' },
   { id: 'goto-health', label: 'Go to Sync Health', icon: HeartPulse, href: '/dashboard/health', group: 'Navigation', chord: 'g h' },
   // Catalog actions

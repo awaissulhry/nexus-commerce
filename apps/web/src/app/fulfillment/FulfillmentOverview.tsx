@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
   Truck, PackageCheck, Boxes, Undo2, TrendingDown, RefreshCw,
-  Warehouse as WarehouseIcon, AlertTriangle, ArrowRight,
+  Warehouse as WarehouseIcon, AlertTriangle, ArrowRight, ShoppingCart,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -19,6 +19,10 @@ type Overview = {
   stock: { lowStock: number; outOfStock: number }
   returns: { pending: number; inspecting: number }
   replenishment: { critical: number }
+  /** Optional — present when /api/fulfillment/overview includes the
+   *  active-PO count. Falls back to 0 when absent so the tile still
+   *  renders without a backend roundtrip. */
+  purchaseOrders?: { active: number }
   suppliers: { active: number }
   defaultWarehouse: { name: string; code: string; country: string } | null
 }
@@ -132,6 +136,17 @@ export default function FulfillmentOverview() {
                 { label: 'Critical', value: data.replenishment.critical, tone: data.replenishment.critical > 0 ? 'danger' : 'default' },
               ]}
               cta="Velocity-driven reorder"
+            />
+
+            <SectionCard
+              icon={ShoppingCart}
+              title="Purchase Orders"
+              tone="bg-amber-50 text-amber-600"
+              href="/fulfillment/purchase-orders"
+              stats={[
+                { label: 'Active', value: data.purchaseOrders?.active ?? 0, tone: 'default' },
+              ]}
+              cta="Approval workflow"
             />
 
             <SectionCard

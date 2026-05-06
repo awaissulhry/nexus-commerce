@@ -323,6 +323,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         openWorkOrders,
         totalSuppliers,
         defaultWarehouse,
+        activePoCount,
       ] = await Promise.all([
         prisma.shipment.count({ where: { status: { in: ['DRAFT', 'READY_TO_PICK'] as any } } }),
         prisma.shipment.count({ where: { status: 'READY_TO_PICK' as any } }),
@@ -343,6 +344,12 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         prisma.workOrder.count({ where: { status: { in: ['PLANNED', 'IN_PROGRESS'] as any } } }),
         prisma.supplier.count({ where: { isActive: true } }),
         prisma.warehouse.findFirst({ where: { isDefault: true } }),
+        // R.7 — active POs (pre-terminal states needing operator attention)
+        prisma.purchaseOrder.count({
+          where: {
+            status: { in: ['DRAFT', 'REVIEW', 'APPROVED', 'SUBMITTED'] as any },
+          },
+        }),
       ])
 
       return {
@@ -351,6 +358,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         stock: { lowStock: lowStockCount, outOfStock: outOfStockCount },
         returns: { pending: pendingReturns, inspecting: inspectingReturns },
         replenishment: { critical: replenishmentCritical },
+        purchaseOrders: { active: activePoCount },
         suppliers: { active: totalSuppliers },
         defaultWarehouse,
       }
