@@ -70,6 +70,7 @@ import { startFbaStatusPollCron } from "./jobs/fba-status-poll.job.js";
 import { startForecastAccuracyCron } from "./jobs/forecast-accuracy.job.js";
 import { startAutoPoCron } from "./jobs/auto-po-replenishment.job.js";
 import { startLeadTimeStatsCron } from "./jobs/lead-time-stats.job.js";
+import { startStockoutDetectorCron } from "./jobs/stockout-detector.job.js";
 import pricingRoutes from "./routes/pricing.routes.js";
 // BullMQ worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS=1.
 // initializeQueue pings Redis and throws on failure; tryStartQueueWorkers
@@ -480,6 +481,14 @@ async function start() {
     // NEXUS_ENABLE_LEAD_TIME_STATS_CRON=0.
     if (process.env.NEXUS_ENABLE_LEAD_TIME_STATS_CRON !== '0') {
       startLeadTimeStatsCron();
+    }
+
+    // R.12 — stockout ledger sweep. Daily 06:30 UTC. Walks
+    // StockLevel + open StockoutEvents to catch missed transitions
+    // and refresh running loss estimates. Default-on; opt out via
+    // NEXUS_ENABLE_STOCKOUT_DETECTOR_CRON=0.
+    if (process.env.NEXUS_ENABLE_STOCKOUT_DETECTOR_CRON !== '0') {
+      startStockoutDetectorCron();
     }
 
     logger.info('✅ API server initialized', {

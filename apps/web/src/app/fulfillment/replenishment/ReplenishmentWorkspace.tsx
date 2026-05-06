@@ -441,6 +441,11 @@ export default function ReplenishmentWorkspace() {
           show a noisy empty card. */}
       <ForecastHealthCard />
 
+      {/* R.12 — stockout impact (events count + lost margin/revenue).
+          Renders only when there are stockouts to report; silent
+          pre-launch. */}
+      <StockoutImpactCard />
+
       {/* Filter bar */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="inline-flex items-center bg-slate-100 rounded-md p-0.5">
@@ -1687,6 +1692,74 @@ function ChannelCoverPanel({
         })}
       </ul>
     </div>
+  )
+}
+
+// R.12 — Stockout impact card. Workspace-level summary of YTD/30d
+// stockouts + estimated lost margin/revenue. Renders only when there's
+// data; silent during pre-launch when nothing's actually stocked out.
+function StockoutImpactCard() {
+  const [data, setData] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [refreshTick, setRefreshTick] = useState(0)
+  useEffect(() => {
+    setLoading(true)
+    fetch(`${getBackendUrl()}/api/fulfillment/replenishment/stockouts/summary?windowDays=30`, { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then(setData)
+      .catch(() => setData(null))
+      .finally(() => setLoading(false))
+  }, [refreshTick])
+
+  if (loading || !data) return null
+  // Silent on no data — the page already has plenty of content.
+  if (data.eventsInWindow === 0 && data.openCount === 0) return null
+
+  const lostRev = data.totalLostRevenueCents / 100
+  const lostMargin = data.totalLostMarginCents / 100
+
+  return (
+    <Card>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+            Stockout impact (last {data.windowDays} days)
+          </div>
+          <div className="mt-1 flex items-baseline gap-3 flex-wrap">
+            <span className="text-[20px] font-semibold tabular-nums text-rose-700">
+              {lostMargin.toFixed(0)}€ lost margin
+            </span>
+            {data.openCount > 0 && (
+              <span className="text-[11px] text-rose-700 font-semibold">
+                {data.openCount} ongoing
+              </span>
+            )}
+          </div>
+          <div className="text-[11px] text-slate-500 mt-0.5">
+            {data.eventsInWindow} event{data.eventsInWindow === 1 ? '' : 's'} ·{' '}
+            {Number(data.totalDurationDays).toFixed(1)} days total ·{' '}
+            {data.totalLostUnits} units lost ·{' '}
+            {lostRev.toFixed(0)}€ lost revenue
+          </div>
+          {data.worstSku && (
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              Worst: <span className="font-mono">{data.worstSku.sku}</span>
+              {' '}({Number(data.worstSku.durationDays).toFixed(1)}d
+              {data.worstSku.estimatedLostMargin != null
+                ? `, ${(data.worstSku.estimatedLostMargin / 100).toFixed(0)}€ lost`
+                : ''})
+            </div>
+          )}
+        </div>
+        <button
+          onClick={() => setRefreshTick((n) => n + 1)}
+          className="h-7 px-2 text-[11px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1"
+          title="Refresh"
+        >
+          <RefreshCw size={11} /> Refresh
+        </button>
+      </div>
+    </Card>
   )
 }
 

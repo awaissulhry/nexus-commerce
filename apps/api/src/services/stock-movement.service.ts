@@ -2,6 +2,7 @@ import prisma from '../db.js'
 import type { Prisma } from '@prisma/client'
 import { outboundSyncQueue } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
+import { handleMovementStockoutTransition } from './stockout-detector.service.js'
 
 // B.1/B.2 — single entrypoint for every stock change.
 // Anyone touching Product.totalStock or ProductVariation.stock MUST go
@@ -202,7 +203,7 @@ export async function applyStockMovement(input: StockMovementInput) {
   // The runner closes over every step including the cascade.
   const runner = async (
     tx: Prisma.TransactionClient,
-  ): Promise<{ movement: any; cascade: CascadeResult }> => {
+  ): Promise<{ movement: any; cascade: CascadeResult; stockout: { resolvedLocationId: string; prevAvailable: number; nextAvailable: number } }> => {
     // H.2 — every movement now resolves to a StockLocation. Legacy
     // (no locationId, no warehouseId) callers transparently land on
     // IT-MAIN.
@@ -313,7 +314,16 @@ export async function applyStockMovement(input: StockMovementInput) {
       actor,
     })
 
-    return { movement, cascade: cascadeResult }
+    return {
+      movement,
+      cascade: cascadeResult,
+      // R.12 — stockout transition snapshot for the post-tx hook
+      stockout: {
+        resolvedLocationId,
+        prevAvailable: quantityBefore - reserved,
+        nextAvailable: newAvailable,
+      },
+    }
   }
 
   // Run inside the caller's tx if supplied; otherwise open our own.
@@ -356,6 +366,32 @@ export async function applyStockMovement(input: StockMovementInput) {
           },
         )
       }
+    }
+  }
+
+  // R.12 — stockout detection hook. Runs AFTER the transaction
+  // commits so we don't open events for movements that get rolled
+  // back. Failures must not block the movement; logged + ignored.
+  if (!outerTx) {
+    try {
+      const product = await prisma.product.findUnique({
+        where: { id: productId },
+        select: { sku: true },
+      })
+      if (product) {
+        await handleMovementStockoutTransition({
+          productId,
+          sku: product.sku,
+          locationId: transactionResult.stockout.resolvedLocationId,
+          prevAvailable: transactionResult.stockout.prevAvailable,
+          nextAvailable: transactionResult.stockout.nextAvailable,
+        })
+      }
+    } catch (err) {
+      logger.warn('applyStockMovement: stockout hook failed', {
+        productId,
+        err: err instanceof Error ? err.message : String(err),
+      })
     }
   }
 

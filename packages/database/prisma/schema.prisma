@@ -223,6 +223,7 @@ model Product {
   relationsFrom        ProductRelation[] @relation("ProductRelationFrom") // H.11
   relationsTo          ProductRelation[] @relation("ProductRelationTo") // H.11
   recommendations      ReplenishmentRecommendation[] // R.3
+  stockoutEvents       StockoutEvent[] // R.12
 
   // H.16 — Compliance master data. HS code = customs classification,
   // mostly 6-digit (HS) or 8-10 digit (CN/HTS); stored as text since
@@ -2427,10 +2428,11 @@ model StockLocation {
   warehouseId String?    @unique
   warehouse   Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
 
-  stockLevels   StockLevel[]
-  movements     StockMovement[] @relation("StockLocationMovements")
-  movementsFrom StockMovement[] @relation("StockMovementFromLocation")
-  movementsTo   StockMovement[] @relation("StockMovementToLocation")
+  stockLevels    StockLevel[]
+  movements      StockMovement[] @relation("StockLocationMovements")
+  movementsFrom  StockMovement[] @relation("StockMovementFromLocation")
+  movementsTo    StockMovement[] @relation("StockMovementToLocation")
+  stockoutEvents StockoutEvent[] // R.12
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3173,6 +3175,69 @@ model ReplenishmentRecommendation {
   @@index([generatedAt])
   @@index([urgency, status])
   @@index([resultingPoId])
+}
+
+// ── R.12: Stockout ledger + lost-margin tracking ──────────────────
+// One row per "this product went to zero, then came back" episode.
+// Two detection paths:
+//   1. Movement-driven (immediate): the applyStockMovement hook
+//      opens an event when available transitions to 0; closes when
+//      it transitions away from 0.
+//   2. Cron sweep (safety net): nightly check that catches movements
+//      that bypassed the hook + recomputes running estimates for
+//      ongoing events.
+//
+// Lost-margin math:
+//   estimatedLostUnits   = velocityAtStart × durationDays
+//   estimatedLostRevenue = estimatedLostUnits × sellingPriceCents
+//   estimatedLostMargin  = estimatedLostUnits × (sellingPrice - unitCost)
+//
+// When unitCost is null (legacy product), margin is null but
+// revenue still gets logged. Forecast accuracy (R.1) tells us if
+// our predictions were right; this tells us how much money we lost
+// when they weren't.
+model StockoutEvent {
+  id          String  @id @default(cuid())
+  productId   String
+  sku         String
+
+  // Optional location scope. Null = product-wide event (rare —
+  // typically location-scoped post-H.1).
+  locationId  String?
+
+  // Optional channel/marketplace scope (deferred for v1; reserved
+  // for R.12.x channel-level detection).
+  channel     String?
+  marketplace String?
+
+  // Lifecycle
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
+  detectedBy  String    // 'cron' | 'movement' | 'manual'
+  closedBy    String?
+
+  // Snapshot at start
+  velocityAtStart    Decimal @db.Decimal(10, 2)
+  marginCentsPerUnit Int?
+  unitCostCents      Int?
+  sellingPriceCents  Int?
+
+  // Computed at close (or refreshed on each cron tick)
+  durationDays         Decimal? @db.Decimal(8, 2)
+  estimatedLostUnits   Int?
+  estimatedLostRevenue Int?
+  estimatedLostMargin  Int?
+
+  notes String?
+
+  product  Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  location StockLocation? @relation(fields: [locationId], references: [id])
+
+  @@index([productId, startedAt])
+  @@index([endedAt])
+  @@index([sku, startedAt])
+  // Partial unique index in raw SQL — at most one OPEN event per
+  // (productId, locationId) at any time. See migration.
 }
 
 // ── R.6: Auto-PO cron run ledger ──────────────────────────────────

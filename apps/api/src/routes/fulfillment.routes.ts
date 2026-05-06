@@ -29,6 +29,12 @@ import {
 } from '../services/lead-time-stats.service.js'
 import { getLeadTimeStatsCronStatus } from '../jobs/lead-time-stats.job.js'
 import {
+  runStockoutSweep,
+  getStockoutSummary,
+  listStockoutEvents,
+} from '../services/stockout-detector.service.js'
+import { getStockoutDetectorCronStatus } from '../jobs/stockout-detector.job.js'
+import {
   runAutoPoSweep,
   getAutoPoStatus,
 } from '../services/auto-po.service.js'
@@ -4091,6 +4097,33 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       ...await getLeadTimeStatsStatus(),
       cron: getLeadTimeStatsCronStatus(),
     }
+  })
+
+  // R.12 — stockout ledger surfaces.
+  fastify.get('/fulfillment/replenishment/stockouts/summary', async (request) => {
+    const q = request.query as { windowDays?: string }
+    const windowDays = Math.max(1, Math.min(365, Number(q.windowDays) || 30))
+    return await getStockoutSummary({ windowDays })
+  })
+
+  fastify.get('/fulfillment/replenishment/stockouts/events', async (request) => {
+    const q = request.query as { status?: 'open' | 'closed' | 'all'; limit?: string }
+    const limit = Number(q.limit) || 50
+    return await listStockoutEvents({ status: q.status ?? 'all', limit })
+  })
+
+  fastify.post('/fulfillment/replenishment/stockouts/sweep', async (_req, reply) => {
+    try {
+      const r = await runStockoutSweep()
+      return { ok: true, ...r }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[replenishment/stockouts/sweep] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.get('/fulfillment/replenishment/stockouts/status', async () => {
+    return { cron: getStockoutDetectorCronStatus() }
   })
 
   // R.6 — auto-PO run history. Forensic ledger; latest first.
