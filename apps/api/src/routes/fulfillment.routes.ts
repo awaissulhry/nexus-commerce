@@ -43,6 +43,11 @@ import {
   runFbaStatusPoll,
   getFbaStatusPollStatus,
 } from '../jobs/fba-status-poll.job.js'
+import {
+  publishInboundEvent,
+  subscribeInboundEvents,
+  getListenerCount,
+} from '../services/inbound-events.service.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // FULFILLMENT B.3–B.9 — full domain API surface
@@ -721,6 +726,54 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // H.14 — SSE stream of inbound events. Long-lived GET; keeps a
+  // single open connection per client. We send a comment line
+  // every 25s so middleware (Railway proxy, Cloudflare etc.) can't
+  // close idle connections. EventSource auto-reconnects on its own,
+  // so a transient drop is invisible to the operator.
+  fastify.get('/fulfillment/inbound/events', async (request, reply) => {
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      // Tell proxies not to buffer (Cloudflare honours this; Railway's
+      // Envoy passes it through).
+      'X-Accel-Buffering': 'no',
+    })
+    // Initial hello so the client knows the stream is live.
+    reply.raw.write(`event: ping\ndata: ${JSON.stringify({ ts: Date.now(), connected: true })}\n\n`)
+
+    const send = (event: any) => {
+      try {
+        reply.raw.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+      } catch {
+        // If write throws, the connection is dead — cleanup runs in close handler.
+      }
+    }
+
+    const unsubscribe = subscribeInboundEvents(send)
+    const heartbeat = setInterval(() => {
+      try {
+        reply.raw.write(`: heartbeat ${Date.now()}\n\n`)
+      } catch {
+        // ignore
+      }
+    }, 25_000)
+
+    request.raw.on('close', () => {
+      clearInterval(heartbeat)
+      unsubscribe()
+    })
+
+    // Keep handler alive by returning a never-resolving promise.
+    // Fastify will tear down when the connection closes.
+    await new Promise(() => {})
+  })
+
+  fastify.get('/fulfillment/inbound/events/stats', async () => {
+    return { listenerCount: getListenerCount() }
+  })
+
   // H.12 — QC queue. Cross-shipment view of items currently in
   // FAIL/HOLD on non-CLOSED shipments. The existing release-hold
   // endpoint stays as the action surface; this just lists what's
@@ -953,6 +1006,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         },
         include: { items: true },
       })
+      publishInboundEvent({ type: 'inbound.created', shipmentId: shipment.id, ts: Date.now() })
       return shipment
     } catch (error: any) {
       fastify.log.error({ err: error }, '[POST /fulfillment/inbound] failed')
@@ -1061,6 +1115,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         actor: body.actor ?? 'inbound-receive',
         receivedById: body.receivedById,
       })
+      publishInboundEvent({ type: 'inbound.received', shipmentId: id, ts: Date.now() })
       return updated
     } catch (error: any) {
       if (error instanceof NotFoundError) return reply.code(404).send({ error: error.message })
