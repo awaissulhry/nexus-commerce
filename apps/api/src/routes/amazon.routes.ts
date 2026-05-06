@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import { amazonOrdersService } from '../services/amazon-orders.service.js'
 import { amazonInventoryService } from '../services/amazon-inventory.service.js'
+import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
 import prisma from '../db.js'
 import {
   detectVariationGroups,
@@ -1525,6 +1526,141 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
       })
     }
   })
+
+  /**
+   * GET /api/amazon/sp-api/health
+   *
+   * Pre-flight diagnostic for the Listings Items API path the wizard
+   * uses. Use this to verify SP-API auth before launching a real
+   * publish — surfaces creds-missing / LWA-failed / network issues
+   * cleanly so the operator doesn't waste a wizard run debugging a
+   * config problem.
+   *
+   * Tests, in order:
+   *   1. Required env vars present.
+   *   2. AMAZON_SELLER_ID set (publishes can't run without it).
+   *   3. LWA token exchange — proves the refresh token + LWA app
+   *      credentials are valid.
+   *   4. Optional: getListingsItem against ?sku= to round-trip an
+   *      authenticated SP-API call. Useful when a known SKU exists in
+   *      the seller's catalog; skipped when ?sku= is absent.
+   */
+  fastify.get<{ Querystring: { sku?: string; marketplaceId?: string } }>(
+    '/sp-api/health',
+    async (request) => {
+      const checks: Array<{
+        name: string
+        ok: boolean
+        detail?: string
+      }> = []
+
+      const requiredEnv = [
+        'AMAZON_LWA_CLIENT_ID',
+        'AMAZON_LWA_CLIENT_SECRET',
+        'AMAZON_REFRESH_TOKEN',
+        'AWS_ACCESS_KEY_ID',
+        'AWS_SECRET_ACCESS_KEY',
+      ] as const
+      const missingEnv = requiredEnv.filter((k) => !process.env[k])
+      checks.push({
+        name: 'env',
+        ok: missingEnv.length === 0,
+        detail:
+          missingEnv.length === 0
+            ? 'All required SP-API env vars set'
+            : `Missing: ${missingEnv.join(', ')}`,
+      })
+
+      const sellerId =
+        process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID
+      checks.push({
+        name: 'sellerId',
+        ok: !!sellerId,
+        detail: sellerId
+          ? 'AMAZON_SELLER_ID set'
+          : 'Set AMAZON_SELLER_ID to the SP-API merchant token',
+      })
+
+      // LWA token exchange — proves refresh token + client creds.
+      // Wrapped in try so a 401 from LWA reports cleanly rather than
+      // bubbling up as a 500.
+      let lwaOk = false
+      let lwaDetail = ''
+      if (missingEnv.length === 0) {
+        try {
+          await amazonSpApiClient.getAccessToken()
+          lwaOk = true
+          lwaDetail = 'Access token obtained from Login With Amazon'
+        } catch (err) {
+          lwaDetail = err instanceof Error ? err.message : String(err)
+        }
+      } else {
+        lwaDetail = 'Skipped — required env vars missing'
+      }
+      checks.push({ name: 'lwa', ok: lwaOk, detail: lwaDetail })
+
+      // Optional round-trip: GET a known SKU. Lets the operator
+      // verify SP-API connectivity end-to-end (auth + signing +
+      // network). When ?sku= absent we skip — the LWA exchange is
+      // proof enough for a baseline health check.
+      const probeSku = (request.query?.sku ?? '').trim()
+      const probeMarketplace =
+        (request.query?.marketplaceId ?? '').trim() ||
+        process.env.AMAZON_MARKETPLACE_ID ||
+        'APJ6JRA9NG5V4'
+      let listingProbe: {
+        ran: boolean
+        ok: boolean
+        sku?: string
+        asin?: string | null
+        status?: string | null
+        error?: string
+      } = { ran: false, ok: false }
+      if (probeSku && lwaOk && sellerId) {
+        try {
+          const r = await amazonSpApiClient.getListingsItem({
+            sellerId,
+            sku: probeSku,
+            marketplaceId: probeMarketplace,
+            includedData: ['summaries'],
+          })
+          listingProbe = {
+            ran: true,
+            ok: r.success,
+            sku: probeSku,
+            asin: r.asin ?? null,
+            status: r.status ?? null,
+            error: r.success ? undefined : r.error,
+          }
+        } catch (err) {
+          listingProbe = {
+            ran: true,
+            ok: false,
+            sku: probeSku,
+            error: err instanceof Error ? err.message : String(err),
+          }
+        }
+      }
+
+      const overall = checks.every((c) => c.ok)
+        ? listingProbe.ran
+          ? listingProbe.ok
+            ? 'OK'
+            : 'PROBE_FAILED'
+          : 'OK_NO_PROBE'
+        : 'FAILED'
+
+      return {
+        overall,
+        checks,
+        listingProbe,
+        config: {
+          region: process.env.AMAZON_REGION ?? 'eu-west-1',
+          marketplaceId: probeMarketplace,
+        },
+      }
+    },
+  )
 }
 
 export default amazonRoutes

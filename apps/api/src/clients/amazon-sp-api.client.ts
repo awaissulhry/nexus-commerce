@@ -16,14 +16,33 @@ interface LWATokenResponse {
   token_type: string
 }
 
+/**
+ * SP-API issue payload. Each issue has a severity:
+ *   ERROR    — blocks the listing from going live; publish considered failed
+ *   WARNING  — does not block but the listing may not surface optimally
+ *   INFO     — recommendation only
+ *
+ * Pre-audit-fix #3 the parser collapsed every issue into a single
+ * blocking error, which broke real-world submissions where Amazon
+ * routinely returns WARNING-level recommendations (image dimensions,
+ * attribute shape suggestions). Now severity drives the gate:
+ * publish fails only when at least one ERROR is present.
+ */
+interface SPAPIIssue {
+  code: string
+  message: string
+  details?: string
+  severity?: 'ERROR' | 'WARNING' | 'INFO'
+  /** Affected attribute paths, when SP-API can localise the issue. */
+  attributeNames?: string[]
+  /** Issue category (e.g. INVALID_ATTRIBUTE, MISSING_ATTRIBUTE). */
+  categories?: string[]
+}
+
 interface SPAPIResponse {
   sku?: string
   status?: string
-  issues?: Array<{
-    code: string
-    message: string
-    details?: string
-  }>
+  issues?: SPAPIIssue[]
   [key: string]: any
 }
 
@@ -153,22 +172,63 @@ export class AmazonSpApiClient {
   }
 
   /**
-   * Parse SP-API error response
-   * SP-API returns 200/207 even on errors, with issues array
+   * Parse SP-API errors. Returns a joined message of *blocking* (ERROR-
+   * severity) issues only; WARNING and INFO issues do not fail the
+   * publish — they're surfaced separately via parseWarnings(). Issues
+   * without a severity field are treated as ERROR for safety (older
+   * SP-API responses elide the field).
+   *
+   * SP-API returns 200/207 even when issues exist; severity is the
+   * only reliable signal for "this listing won't go live".
    */
   private parseErrors(response: SPAPIResponse): string | null {
-    if (!response.issues || response.issues.length === 0) {
-      return null
-    }
+    if (!response.issues || response.issues.length === 0) return null
 
-    const errorMessages = response.issues.map((issue) => {
-      const code = issue.code || 'UNKNOWN'
-      const message = issue.message || 'Unknown error'
-      const details = issue.details ? ` (${issue.details})` : ''
-      return `${code}: ${message}${details}`
+    const errors = response.issues.filter((issue) => {
+      const sev = (issue.severity ?? 'ERROR').toUpperCase()
+      return sev === 'ERROR'
     })
+    if (errors.length === 0) return null
 
-    return errorMessages.join(' | ')
+    return errors
+      .map((issue) => {
+        const code = issue.code || 'UNKNOWN'
+        const message = issue.message || 'Unknown error'
+        const details = issue.details ? ` (${issue.details})` : ''
+        const attrs =
+          issue.attributeNames && issue.attributeNames.length > 0
+            ? ` [${issue.attributeNames.join(', ')}]`
+            : ''
+        return `${code}: ${message}${details}${attrs}`
+      })
+      .join(' | ')
+  }
+
+  /**
+   * Parse non-blocking issues (WARNING + INFO) into a structured array
+   * the wizard UI can render. Includes the severity so the UI can
+   * tier them visually.
+   */
+  private parseWarnings(response: SPAPIResponse): Array<{
+    code: string
+    message: string
+    severity: 'WARNING' | 'INFO'
+    attributeNames?: string[]
+  }> {
+    if (!response.issues || response.issues.length === 0) return []
+    return response.issues
+      .filter((issue) => {
+        const sev = (issue.severity ?? '').toUpperCase()
+        return sev === 'WARNING' || sev === 'INFO'
+      })
+      .map((issue) => ({
+        code: issue.code || 'UNKNOWN',
+        message: issue.message || '',
+        severity: ((issue.severity ?? 'WARNING').toUpperCase() === 'INFO'
+          ? 'INFO'
+          : 'WARNING') as 'WARNING' | 'INFO',
+        attributeNames: issue.attributeNames,
+      }))
   }
 
   /**
@@ -388,6 +448,16 @@ export class AmazonSpApiClient {
     submissionId?: string
     status?: string
     issues?: SPAPIResponse['issues']
+    /** Non-blocking issues from SP-API (WARNING / INFO). Always
+     *  populated when the response contained any issues, even on
+     *  success — Amazon routinely returns recommendations alongside
+     *  a successful publish. */
+    warnings?: Array<{
+      code: string
+      message: string
+      severity: 'WARNING' | 'INFO'
+      attributeNames?: string[]
+    }>
     error?: string
     rawResponse?: SPAPIResponse
   }> {
@@ -438,26 +508,38 @@ export class AmazonSpApiClient {
       const data = (await response.json()) as SPAPIResponse
 
       const errorMessage = this.parseErrors(data)
+      const warnings = this.parseWarnings(data)
       if (errorMessage) {
-        logger.warn('SP-API putListingsItem returned issues', {
+        logger.warn('SP-API putListingsItem returned blocking issues', {
           sku,
           errors: errorMessage,
+          warningCount: warnings.length,
         })
         return {
           success: false,
           sku,
           submissionId: data.submissionId,
           issues: data.issues,
+          warnings: warnings.length > 0 ? warnings : undefined,
           error: errorMessage,
           rawResponse: data,
         }
       }
 
+      // Successful publish; warnings are non-blocking but worth surfacing.
+      if (warnings.length > 0) {
+        logger.info('SP-API putListingsItem succeeded with warnings', {
+          sku,
+          warningCount: warnings.length,
+          firstWarning: warnings[0]?.message,
+        })
+      }
       return {
         success: true,
         sku,
         submissionId: data.submissionId,
         status: data.status,
+        warnings: warnings.length > 0 ? warnings : undefined,
         rawResponse: data,
       }
     } catch (error) {

@@ -65,6 +65,17 @@ export interface AmazonPublishResult {
   error?: string
   /** Which step failed (parentPut|childPut|parentRead|childRead). */
   failedStep?: string
+  /** Non-blocking issues from SP-API (WARNING / INFO). Always
+   *  populated when SP-API surfaced any — both successful and failed
+   *  publishes can carry these. The wizard UI tiers them by severity. */
+  warnings?: Array<{
+    code: string
+    message: string
+    severity: 'WARNING' | 'INFO'
+    /** Where the issue applies, scoped per-child by SKU when relevant. */
+    sku?: string
+    attributeNames?: string[]
+  }>
 }
 
 export class AmazonPublishAdapter {
@@ -110,6 +121,17 @@ export class AmazonPublishAdapter {
     const parentSku = payload.parentSku
     const children = Array.isArray(payload.children) ? payload.children : []
 
+    // Collect every non-blocking issue across parent + child PUTs so
+    // the wizard UI can render them all together. Each entry tagged
+    // with its SKU so the user knows which row triggered the issue.
+    const collectedWarnings: AmazonPublishResult['warnings'] = []
+    const stampWarnings = (
+      sku: string,
+      ws: NonNullable<AmazonPublishResult['warnings']>,
+    ) => {
+      for (const w of ws) collectedWarnings!.push({ ...w, sku })
+    }
+
     // ── Step 1: PUT parent ───────────────────────────────────────────
     const parentResult = await amazonSpApiClient.putListingsItem({
       sellerId,
@@ -119,12 +141,14 @@ export class AmazonPublishAdapter {
       attributes: payload.attributes,
       requirements: 'LISTING',
     })
+    if (parentResult.warnings) stampWarnings(parentSku, parentResult.warnings)
     if (!parentResult.success) {
       return {
         ok: false,
         parentSku,
         error: parentResult.error ?? 'Parent putListingsItem failed.',
         failedStep: 'parentPut',
+        warnings: collectedWarnings.length > 0 ? collectedWarnings : undefined,
       }
     }
 
@@ -152,6 +176,9 @@ export class AmazonPublishAdapter {
           requirements: 'LISTING',
         })
         childSkusSent.push(child.channelSku)
+        if (childResult.warnings) {
+          stampWarnings(child.channelSku, childResult.warnings)
+        }
         if (!childResult.success) {
           return {
             ok: false,
@@ -160,6 +187,8 @@ export class AmazonPublishAdapter {
             submissionId: parentResult.submissionId,
             error: `Child ${child.channelSku} putListingsItem failed: ${childResult.error ?? 'unknown'}`,
             failedStep: 'childPut',
+            warnings:
+              collectedWarnings.length > 0 ? collectedWarnings : undefined,
           }
         }
         if (childResult.submissionId) {
@@ -214,6 +243,7 @@ export class AmazonPublishAdapter {
         Object.keys(childAsinsByMasterSku).length > 0
           ? childAsinsByMasterSku
           : undefined,
+      warnings: collectedWarnings.length > 0 ? collectedWarnings : undefined,
     }
   }
 

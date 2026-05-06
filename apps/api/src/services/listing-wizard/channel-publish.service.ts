@@ -52,6 +52,18 @@ export interface SubmissionEntry {
   /** E.8 — Per-child ASIN map: master SKU → child ASIN. Same persistence
    *  + UI surface logic as parentAsin. */
   childAsinsByMasterSku?: Record<string, string>
+  /** Audit-fix #3 — non-blocking SP-API issues from a successful or
+   *  partially-successful publish (image dimension recommendations,
+   *  attribute shape suggestions, etc.). Wizard UI shows them as a
+   *  yellow strip beneath the channel row so the operator knows to
+   *  address them without thinking the publish failed. */
+  warnings?: Array<{
+    code: string
+    message: string
+    severity: 'WARNING' | 'INFO'
+    sku?: string
+    attributeNames?: string[]
+  }>
 }
 
 export interface PublishPayloadInput {
@@ -138,6 +150,7 @@ export class ChannelPublishService {
             ...base,
             status: 'FAILED',
             error: result.error,
+            warnings: result.warnings,
           }
         }
         // ASINs that landed in this request — surface them to the caller so
@@ -150,6 +163,7 @@ export class ChannelPublishService {
           submissionId: result.submissionId,
           parentAsin: result.parentAsin,
           childAsinsByMasterSku: result.childAsinsByMasterSku,
+          warnings: result.warnings,
         }
       } catch (err) {
         return {
