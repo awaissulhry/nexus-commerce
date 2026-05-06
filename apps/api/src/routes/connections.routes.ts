@@ -1,28 +1,22 @@
 /**
  * Unified channel-connections endpoint.
  *
- * Single source of truth for the /settings/channels page and the
- * sidebar's per-channel status dot. Returns one row per supported
- * channel:
+ * Reads directly from the ChannelConnection table for all connectors —
+ * eBay grants are written by the OAuth callback flow, Amazon's
+ * synthetic env-managed row is written by seedEnvManagedConnections()
+ * on API startup (apps/api/src/index.ts). Shopify/Woo/Etsy don't have
+ * adapters yet; we emit "pending" placeholder rows so the UI can
+ * still render their cards.
  *
- *   - eBay rows come from the ChannelConnection table (one row per
- *     OAuth grant; the most recent active row wins).
- *   - Amazon is synthesised from env vars (AMAZON_LWA_CLIENT_ID,
- *     AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN, AWS_*) until
- *     P2-2 ships per-account LWA OAuth. The synthetic row uses a
- *     stable id of `env:AMAZON` and `isManagedBy: 'env'` so the UI
- *     can disable Disconnect.
- *   - Shopify, WooCommerce, Etsy: not yet implemented — their entries
- *     report `isActive: false` and `isManagedBy: 'pending'` so the
- *     UI shows "Not connected" without false-claiming env support.
- *
- * The contract is intentionally a flat list of typed rows rather
- * than a per-channel object: the FE iterates a fixed list of channel
- * cards and matches by `channel`, so a flat list keeps both the
- * server and client logic boring.
+ * Generic-first read with legacy fallback: `displayName`/`tokenExpiresAt`/
+ * `accessToken` came from the H.2 schema unification (2026-05-06) and
+ * are populated by the same migration's backfill UPDATE plus the
+ * dual-writes in ebay-auth.service.ts. The `r.ebay*` fallbacks remain
+ * until the legacy columns are dropped in a follow-up migration.
  */
 
 import type { FastifyPluginAsync } from "fastify";
+import type { ChannelConnection } from "@prisma/client";
 import prisma from "../db.js";
 import { logger } from "../utils/logger.js";
 
@@ -45,79 +39,34 @@ interface ConnectionRow {
   updatedAt: string;
 }
 
-/**
- * Synthesise an Amazon connection row from env vars.
- *
- * SP-API access uses an LWA refresh token that doesn't expire (eBay
- * tokens last 18 months and rotate; LWA refresh tokens last forever
- * unless the seller revokes the grant). So `tokenExpiresAt` is null
- * for the synthetic row — there's nothing to count down to.
- *
- * `createdAt` / `updatedAt` are pegged to the API process start time
- * so the row is stable across requests within a single deploy. The
- * UI doesn't render these for env-managed rows but the type contract
- * requires them.
- */
-const PROCESS_START = new Date().toISOString();
-
-function synthesiseAmazonRow(): ConnectionRow {
-  const isConfigured = !!(
-    process.env.AMAZON_LWA_CLIENT_ID &&
-    process.env.AMAZON_LWA_CLIENT_SECRET &&
-    process.env.AMAZON_REFRESH_TOKEN &&
-    process.env.AWS_ACCESS_KEY_ID &&
-    process.env.AWS_SECRET_ACCESS_KEY &&
-    process.env.AWS_ROLE_ARN
-  );
-
-  // AMAZON_SELLER_ID is the human-meaningful identifier of the
-  // connected Seller Central account. AMAZON_MERCHANT_ID is an
-  // older alias still set in some environments.
-  const sellerId =
-    process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? null;
-
-  return {
-    id: "env:AMAZON",
-    channel: "AMAZON",
-    isActive: isConfigured,
-    isManagedBy: "env",
-    sellerName: sellerId,
-    storeName: null,
-    storeFrontUrl: null,
-    tokenExpiresAt: null,
-    lastSyncAt: null,
-    lastSyncStatus: isConfigured ? "SUCCESS" : null,
-    lastSyncError: isConfigured
-      ? null
-      : "Amazon credentials not configured (AMAZON_LWA_* and AWS_* env vars required)",
-    createdAt: PROCESS_START,
-    updatedAt: PROCESS_START,
-  };
-}
+const CHANNEL_ORDER: Record<Channel, number> = {
+  AMAZON: 0,
+  EBAY: 1,
+  SHOPIFY: 2,
+  WOOCOMMERCE: 3,
+  ETSY: 4,
+};
+const ALL_CHANNELS: Channel[] = ["AMAZON", "EBAY", "SHOPIFY", "WOOCOMMERCE", "ETSY"];
 
 /**
- * Pick the eBay row to surface to the UI when multiple
- * ChannelConnection rows exist for channelType=EBAY. Active rows
- * win over inactive; within a tie, most recent updatedAt wins.
- * Returns null if there are no eBay rows at all.
+ * Convert a raw DB row to the API contract. Generic columns win;
+ * legacy ebay* serve as fallbacks for fields the migration didn't
+ * (or couldn't) backfill — e.g. ebayStoreName/ebayStoreFrontUrl were
+ * never lifted to generic equivalents because they're eBay-specific.
  */
-async function loadEbayRow(): Promise<ConnectionRow | null> {
-  const rows = await prisma.channelConnection.findMany({
-    where: { channelType: "EBAY" },
-    orderBy: [{ isActive: "desc" }, { updatedAt: "desc" }],
-    take: 1,
-  });
-  if (rows.length === 0) return null;
-  const r = rows[0];
+function toConnectionRow(r: ChannelConnection): ConnectionRow {
+  const channel = r.channelType as Channel;
+  const managed = (r.managedBy ?? "oauth") as IsManagedBy;
   return {
     id: r.id,
-    channel: "EBAY",
+    channel,
     isActive: r.isActive,
-    isManagedBy: "oauth",
-    sellerName: r.ebaySignInName,
-    storeName: r.ebayStoreName,
-    storeFrontUrl: r.ebayStoreFrontUrl,
-    tokenExpiresAt: r.ebayTokenExpiresAt?.toISOString() ?? null,
+    isManagedBy: managed,
+    sellerName: r.displayName ?? r.ebaySignInName ?? null,
+    storeName: r.ebayStoreName ?? null,
+    storeFrontUrl: r.ebayStoreFrontUrl ?? null,
+    tokenExpiresAt:
+      (r.tokenExpiresAt ?? r.ebayTokenExpiresAt)?.toISOString() ?? null,
     lastSyncAt: r.lastSyncAt?.toISOString() ?? null,
     lastSyncStatus: r.lastSyncStatus,
     lastSyncError: r.lastSyncError,
@@ -125,6 +74,8 @@ async function loadEbayRow(): Promise<ConnectionRow | null> {
     updatedAt: r.updatedAt.toISOString(),
   };
 }
+
+const PROCESS_START = new Date().toISOString();
 
 function pendingRow(channel: Channel): ConnectionRow {
   return {
@@ -147,19 +98,34 @@ function pendingRow(channel: Channel): ConnectionRow {
 const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/connections", async (_request, reply) => {
     try {
-      const ebay = await loadEbayRow();
+      // Pull every real row (oauth + env). Order: active first, then
+      // most recently updated — handles the rare case where a channel
+      // has multiple revoked rows alongside a fresh one.
+      const rows = await prisma.channelConnection.findMany({
+        where: {
+          OR: [{ managedBy: "oauth" }, { managedBy: "env" }],
+        },
+        orderBy: [{ isActive: "desc" }, { updatedAt: "desc" }],
+      });
 
-      const rows: ConnectionRow[] = [
-        synthesiseAmazonRow(),
-        ebay ?? pendingRow("EBAY"),
-        pendingRow("SHOPIFY"),
-        pendingRow("WOOCOMMERCE"),
-        pendingRow("ETSY"),
-      ];
+      // Keep one row per channel — first wins given the orderBy above.
+      const byChannel = new Map<Channel, ConnectionRow>();
+      for (const r of rows) {
+        const channel = r.channelType as Channel;
+        if (!byChannel.has(channel)) {
+          byChannel.set(channel, toConnectionRow(r));
+        }
+      }
+
+      // Pad missing channels with pending placeholders so the FE can
+      // render a complete grid without per-channel branching.
+      const result: ConnectionRow[] = ALL_CHANNELS.map(
+        (c) => byChannel.get(c) ?? pendingRow(c),
+      ).sort((a, b) => CHANNEL_ORDER[a.channel] - CHANNEL_ORDER[b.channel]);
 
       return reply.send({
         success: true,
-        connections: rows,
+        connections: result,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

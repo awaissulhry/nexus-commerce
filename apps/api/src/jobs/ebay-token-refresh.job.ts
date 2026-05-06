@@ -29,12 +29,24 @@ let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 async function runRefreshSweep(): Promise<void> {
   const startedAt = Date.now()
 
+  // The H.2 schema unification (2026-05-06) added managedBy. We
+  // explicitly filter for OAuth-managed eBay connections so the
+  // sweep can't accidentally try to refresh env-managed rows
+  // (Amazon's synthetic row has no refresh token to call). The
+  // query tolerates rows where the H.2 backfill ran but legacy
+  // ebay* still holds the canonical refresh token: the OR catches
+  // either side being populated.
   let connections: Array<{ id: string; ebaySignInName: string | null }>
   try {
     connections = await prisma.channelConnection.findMany({
       where: {
         isActive: true,
-        ebayRefreshToken: { not: null },
+        channelType: 'EBAY',
+        managedBy: 'oauth',
+        OR: [
+          { refreshToken: { not: null } },
+          { ebayRefreshToken: { not: null } },
+        ],
       },
       select: { id: true, ebaySignInName: true },
     })
@@ -56,23 +68,28 @@ async function runRefreshSweep(): Promise<void> {
 
   for (const conn of connections) {
     try {
-      // Read once before, once after — if expiresAt advanced, a refresh happened.
+      // Read once before, once after — if expiresAt advanced, a refresh
+      // happened. Compare the generic tokenExpiresAt (with legacy
+      // fallback for rows that haven't been re-saved since the H.2
+      // backfill) so callers using either field see the same picture.
       const before = await prisma.channelConnection.findUnique({
         where: { id: conn.id },
-        select: { ebayTokenExpiresAt: true },
+        select: { tokenExpiresAt: true, ebayTokenExpiresAt: true },
       })
 
       await ebayAuthService.getValidToken(conn.id)
 
       const after = await prisma.channelConnection.findUnique({
         where: { id: conn.id },
-        select: { ebayTokenExpiresAt: true },
+        select: { tokenExpiresAt: true, ebayTokenExpiresAt: true },
       })
 
+      const beforeExp = before?.tokenExpiresAt ?? before?.ebayTokenExpiresAt
+      const afterExp = after?.tokenExpiresAt ?? after?.ebayTokenExpiresAt
       const advanced =
-        before?.ebayTokenExpiresAt &&
-        after?.ebayTokenExpiresAt &&
-        after.ebayTokenExpiresAt.getTime() > before.ebayTokenExpiresAt.getTime()
+        beforeExp &&
+        afterExp &&
+        afterExp.getTime() > beforeExp.getTime()
 
       if (advanced) {
         refreshed++

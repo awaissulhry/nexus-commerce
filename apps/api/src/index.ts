@@ -66,8 +66,101 @@ import { initializeChannelSyncWorker } from "./workers/channel-sync.worker.js";
 import { initializeBulkListWorker } from "./workers/bulk-list.worker.js";
 import { initializeQueue, closeQueue } from "./lib/queue.js";
 import { logger } from "./utils/logger.js";
+import prisma from "./db.js";
 
 let queueWorkersStarted = false;
+
+/**
+ * Seed env-managed connections (Amazon today) into ChannelConnection.
+ *
+ * Until P2-2 ships per-account LWA OAuth, Amazon SP-API access lives
+ * on `process.env.AMAZON_*` and `AWS_*`. The connection-layer audit
+ * on 2026-05-06 (TECH_DEBT #45) noted that the synthetic Amazon row
+ * was being computed at request time inside connections.routes.ts —
+ * which made it impossible for other tables (e.g. VariantChannelListing)
+ * to FK onto it. After H.2 we materialise the synthetic row in DB so
+ * everything else can treat env-managed and oauth-managed connections
+ * uniformly.
+ *
+ * Failure here MUST NOT crash the API. The connections endpoint has
+ * a path that returns a "Misconfigured" Amazon card if the row is
+ * missing/inactive, so a transient DB error during seed is degraded
+ * but not fatal.
+ */
+async function seedEnvManagedConnections(): Promise<void> {
+  try {
+    const amazonConfigured = !!(
+      process.env.AMAZON_LWA_CLIENT_ID &&
+      process.env.AMAZON_LWA_CLIENT_SECRET &&
+      process.env.AMAZON_REFRESH_TOKEN &&
+      process.env.AWS_ACCESS_KEY_ID &&
+      process.env.AWS_SECRET_ACCESS_KEY &&
+      process.env.AWS_ROLE_ARN
+    );
+    const sellerId =
+      process.env.AMAZON_SELLER_ID ??
+      process.env.AMAZON_MERCHANT_ID ??
+      null;
+
+    // findFirst+update-or-create rather than upsert because the
+    // identifying tuple (channelType, managedBy) isn't a Prisma
+    // @@unique. The H.2 partial unique on (channelType, marketplace)
+    // WHERE isActive=true could fight a real OAuth Amazon row landing
+    // later, so we do not let this seed step write isActive=true if
+    // there's already an OAuth-managed Amazon row active.
+    const existingOauth = await prisma.channelConnection.findFirst({
+      where: { channelType: "AMAZON", managedBy: "oauth", isActive: true },
+      select: { id: true },
+    });
+    if (existingOauth) {
+      logger.info(
+        "seedEnvManagedConnections: oauth-managed Amazon row already active — skipping env synthesis",
+        { existingId: existingOauth.id },
+      );
+      return;
+    }
+
+    const existingEnv = await prisma.channelConnection.findFirst({
+      where: { channelType: "AMAZON", managedBy: "env" },
+      select: { id: true },
+    });
+
+    const data = {
+      channelType: "AMAZON",
+      marketplace: null,
+      managedBy: "env",
+      isActive: amazonConfigured,
+      displayName: sellerId,
+      lastSyncStatus: amazonConfigured ? "SUCCESS" : "FAILED",
+      lastSyncError: amazonConfigured
+        ? null
+        : "Amazon credentials not configured (AMAZON_LWA_* and AWS_* env vars required)",
+    };
+
+    if (existingEnv) {
+      await prisma.channelConnection.update({
+        where: { id: existingEnv.id },
+        data,
+      });
+      logger.info("seedEnvManagedConnections: updated env-managed Amazon row", {
+        id: existingEnv.id,
+        isActive: amazonConfigured,
+        sellerId,
+      });
+    } else {
+      const created = await prisma.channelConnection.create({ data });
+      logger.info("seedEnvManagedConnections: created env-managed Amazon row", {
+        id: created.id,
+        isActive: amazonConfigured,
+        sellerId,
+      });
+    }
+  } catch (err) {
+    logger.error("seedEnvManagedConnections: failed (non-fatal)", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
 
 async function tryStartQueueWorkers(): Promise<void> {
   if (process.env.ENABLE_QUEUE_WORKERS !== '1') {
@@ -218,6 +311,15 @@ async function start() {
     });
 
     app.log.info(`API server listening at http://0.0.0.0:${port}`);
+
+    // ── Seed env-managed ChannelConnection rows (H.2 Phase 2) ──────
+    // Amazon SP-API today is single-tenant via process.env.AMAZON_*
+    // and AWS_*. Until P2-2 ships per-account LWA OAuth, we keep the
+    // synthetic representation in ChannelConnection so the rest of
+    // the codebase can FK to it and the connections endpoint can
+    // read uniformly. Idempotent: upsert keyed on (channelType,
+    // managedBy='env').
+    await seedEnvManagedConnections();
 
     // ── BullMQ queue workers (outbound sync, channel sync, bulk list) ──
     // Opt-in via ENABLE_QUEUE_WORKERS=1. Requires REDIS_URL or REDIS_HOST.

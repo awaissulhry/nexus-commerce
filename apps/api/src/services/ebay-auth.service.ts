@@ -166,37 +166,53 @@ export class EbayAuthService {
         throw new Error(`ChannelConnection not found: ${connectionId}`);
       }
 
-      if (!connection.ebayAccessToken || !connection.ebayRefreshToken) {
+      // Generic-first read with legacy fallback. The H.2 migration
+      // backfilled generic from legacy on existing rows; both sources
+      // should agree, but if a future migration drops legacy first
+      // this still works.
+      const accessToken = connection.accessToken ?? connection.ebayAccessToken;
+      const refreshToken = connection.refreshToken ?? connection.ebayRefreshToken;
+      const expiresAt = connection.tokenExpiresAt ?? connection.ebayTokenExpiresAt;
+
+      if (!accessToken || !refreshToken) {
         throw new Error("eBay tokens not configured for this connection");
       }
 
       // Check if token is expired or about to expire (within 5 minutes)
       const now = new Date();
-      const expiresAt = connection.ebayTokenExpiresAt;
 
       if (expiresAt && now.getTime() < expiresAt.getTime() - 5 * 60 * 1000) {
         // Token is still valid
         logger.debug("Using existing eBay access token", { connectionId });
-        return connection.ebayAccessToken;
+        return accessToken;
       }
 
       // Token is expired or about to expire, refresh it
       logger.info("eBay access token expired or expiring soon, refreshing", { connectionId });
 
-      const newTokenData = await this.refreshAccessToken(connection.ebayRefreshToken);
+      const newTokenData = await this.refreshAccessToken(refreshToken);
 
       // Calculate new expiration time
       const newExpiresAt = new Date(Date.now() + newTokenData.expires_in * 1000);
+      const newRefreshToken = newTokenData.refresh_token || refreshToken;
 
-      // Update the connection with new token
+      // Dual-write: generic columns are the new home, legacy ebay*
+      // columns stay populated for one release while callers migrate.
+      // Clearing lastSyncError on SUCCESS so a stale error from a
+      // previous failure doesn't keep showing in the UI alongside
+      // a SUCCESS status (audit 2026-05-06 caught this drift).
       const updated = await prisma.channelConnection.update({
         where: { id: connectionId },
         data: {
+          accessToken: newTokenData.access_token,
+          refreshToken: newRefreshToken,
+          tokenExpiresAt: newExpiresAt,
           ebayAccessToken: newTokenData.access_token,
-          ebayRefreshToken: newTokenData.refresh_token || connection.ebayRefreshToken,
+          ebayRefreshToken: newRefreshToken,
           ebayTokenExpiresAt: newExpiresAt,
           lastSyncAt: new Date(),
           lastSyncStatus: "SUCCESS",
+          lastSyncError: null,
         },
       });
 
@@ -205,7 +221,7 @@ export class EbayAuthService {
         expiresAt: newExpiresAt,
       });
 
-      return updated.ebayAccessToken!;
+      return updated.accessToken ?? updated.ebayAccessToken!;
     } catch (error) {
       logger.error("Error getting valid eBay token", { connectionId, error });
 
@@ -243,9 +259,15 @@ export class EbayAuthService {
     try {
       const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
+      // Dual-write: see getValidToken for rationale.
       await prisma.channelConnection.update({
         where: { id: connectionId },
         data: {
+          accessToken,
+          refreshToken,
+          tokenExpiresAt: expiresAt,
+          displayName: sellerInfo?.signInName,
+          managedBy: "oauth",
           ebayAccessToken: accessToken,
           ebayRefreshToken: refreshToken,
           ebayTokenExpiresAt: expiresAt,
@@ -255,6 +277,7 @@ export class EbayAuthService {
           isActive: true,
           lastSyncAt: new Date(),
           lastSyncStatus: "SUCCESS",
+          lastSyncError: null,
         },
       });
 
@@ -277,7 +300,9 @@ export class EbayAuthService {
         where: { id: connectionId },
       });
 
-      if (!connection || !connection.ebayAccessToken) {
+      // Generic-first read with legacy fallback.
+      const accessToken = connection?.accessToken ?? connection?.ebayAccessToken;
+      if (!connection || !accessToken) {
         logger.warn("No tokens to revoke", { connectionId });
         return;
       }
@@ -291,7 +316,7 @@ export class EbayAuthService {
             Authorization: `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64")}`,
           },
           body: new URLSearchParams({
-            token: connection.ebayAccessToken,
+            token: accessToken,
           }).toString(),
         });
 
@@ -305,10 +330,13 @@ export class EbayAuthService {
         // Continue with local cleanup even if revocation fails
       }
 
-      // Clear tokens from database
+      // Clear tokens from database — both generic and legacy.
       await prisma.channelConnection.update({
         where: { id: connectionId },
         data: {
+          accessToken: null,
+          refreshToken: null,
+          tokenExpiresAt: null,
           ebayAccessToken: null,
           ebayRefreshToken: null,
           ebayTokenExpiresAt: null,
