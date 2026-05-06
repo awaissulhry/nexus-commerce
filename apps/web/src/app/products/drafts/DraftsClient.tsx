@@ -1,17 +1,17 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
   AlertCircle,
   ArrowRight,
   Clock,
   FileEdit,
-  RefreshCw,
   Search,
 } from 'lucide-react'
-import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { usePolledList } from '@/lib/sync/use-polled-list'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 
 interface ChannelTuple {
   platform: string
@@ -29,6 +29,12 @@ interface Draft {
   createdAt: string
   updatedAt: string
   isStale: boolean
+}
+
+interface DraftsResponse {
+  success: boolean
+  total: number
+  drafts: Draft[]
 }
 
 const STEP_LABELS: Record<number, string> = {
@@ -59,60 +65,37 @@ function formatRelative(iso: string): string {
 }
 
 export default function DraftsClient() {
-  const [drafts, setDrafts] = useState<Draft[]>([])
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [staleOnly, setStaleOnly] = useState(false)
-
-  // 250ms debounce on search to avoid hammering the endpoint while
-  // the user is still typing.
+  // Local 250ms debounce — keeps the input snappy while batching the
+  // network round-trip. Same pattern UniversalFilterBar uses internally.
+  const [debouncedSearch, setDebouncedSearch] = useState(search)
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(search), 250)
     return () => window.clearTimeout(t)
   }, [search])
 
-  const fetchDrafts = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const params = new URLSearchParams()
-      if (debouncedSearch) params.set('search', debouncedSearch)
-      if (staleOnly) params.set('stale', '1')
-      params.set('limit', '100')
-      const res = await fetch(
-        `${getBackendUrl()}/api/listing-wizard/drafts?${params.toString()}`,
-        { cache: 'no-store' },
-      )
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const json = await res.json()
-      setDrafts(json.drafts ?? [])
-      setTotal(json.total ?? 0)
-    } catch (e: any) {
-      setError(e?.message ?? 'Failed to load drafts')
-      setDrafts([])
-      setTotal(0)
-    } finally {
-      setLoading(false)
-    }
+  // Phase 10 — usePolledList centralises the fetch + ETag + 30s
+  // interval polling + visibility refresh + invalidation listening.
+  // We listen for wizard.* invalidations so a draft saved or deleted
+  // in another tab (e.g. user submits the wizard on /products/:id)
+  // refreshes here within ~200ms.
+  const url = useMemo(() => {
+    const params = new URLSearchParams()
+    if (debouncedSearch) params.set('search', debouncedSearch)
+    if (staleOnly) params.set('stale', '1')
+    params.set('limit', '100')
+    return `/api/listing-wizard/drafts?${params.toString()}`
   }, [debouncedSearch, staleOnly])
 
-  useEffect(() => {
-    fetchDrafts()
-  }, [fetchDrafts])
+  const { data, loading, error, lastFetchedAt, refetch } = usePolledList<DraftsResponse>({
+    url,
+    intervalMs: 30_000,
+    invalidationTypes: ['wizard.submitted', 'wizard.deleted', 'product.deleted'],
+  })
 
-  // Refetch on tab focus so a wizard saved in another tab shows up
-  // here without needing a manual refresh.
-  useEffect(() => {
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible') fetchDrafts()
-    }
-    document.addEventListener('visibilitychange', onVisibility)
-    return () => document.removeEventListener('visibilitychange', onVisibility)
-  }, [fetchDrafts])
-
+  const drafts = data?.drafts ?? []
+  const total = data?.total ?? 0
   const staleCount = useMemo(
     () => drafts.filter((d) => d.isStale).length,
     [drafts],
@@ -120,15 +103,23 @@ export default function DraftsClient() {
 
   return (
     <div className="px-6 py-6 max-w-[1400px] mx-auto">
-      <header className="mb-5">
-        <h1 className="text-[24px] font-semibold text-slate-900">
-          Listing wizard drafts
-        </h1>
-        <p className="text-[13px] text-slate-600 mt-0.5">
-          In-progress wizards that haven&rsquo;t been submitted yet. Click any
-          row to resume where you left off. Wizards expire after 30 days of
-          inactivity.
-        </p>
+      <header className="mb-5 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-[24px] font-semibold text-slate-900">
+            Listing wizard drafts
+          </h1>
+          <p className="text-[13px] text-slate-600 mt-0.5">
+            In-progress wizards that haven&rsquo;t been submitted yet. Click any
+            row to resume where you left off. Wizards expire after 30 days of
+            inactivity.
+          </p>
+        </div>
+        <FreshnessIndicator
+          lastFetchedAt={lastFetchedAt}
+          onRefresh={refetch}
+          loading={loading}
+          error={!!error}
+        />
       </header>
 
       <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -160,14 +151,6 @@ export default function DraftsClient() {
               {staleCount}
             </span>
           )}
-        </button>
-        <button
-          type="button"
-          onClick={fetchDrafts}
-          className="inline-flex items-center gap-1.5 h-8 px-2.5 text-[12px] rounded-md border border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-        >
-          <RefreshCw className={cn('w-3 h-3', loading && 'animate-spin')} />
-          Refresh
         </button>
       </div>
 
