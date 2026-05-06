@@ -16,7 +16,8 @@
     "dev": "echo \"Add your database dev command here\"",
     "build": "prisma generate",
     "postinstall": "prisma generate",
-    "check:drift": "node scripts/check-schema-drift.mjs"
+    "check:drift": "node scripts/check-schema-drift.mjs",
+    "check:column-drift": "node scripts/check-column-drift.mjs"
   },
   "dependencies": {
     "@nexus/shared": "*",
