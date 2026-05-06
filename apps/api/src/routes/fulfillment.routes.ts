@@ -86,6 +86,70 @@ function safeNum(v: unknown, fallback?: number): number | undefined {
   return Number.isFinite(n) ? n : fallback
 }
 
+/**
+ * H.0a — recompute PurchaseOrderItem.quantityReceived as
+ * SUM(InboundShipmentItem.quantityReceived WHERE purchaseOrderItemId = X).
+ * Idempotent. Driven from current state so re-runs converge.
+ */
+async function syncPoiQuantityReceived(purchaseOrderItemId: string): Promise<void> {
+  const sum = await prisma.inboundShipmentItem.aggregate({
+    where: { purchaseOrderItemId },
+    _sum: { quantityReceived: true },
+  })
+  await prisma.purchaseOrderItem.update({
+    where: { id: purchaseOrderItemId },
+    data: { quantityReceived: sum._sum.quantityReceived ?? 0 },
+  })
+}
+
+/**
+ * H.0a — auto-transition PurchaseOrder.status based on aggregate
+ * received vs ordered across all line items.
+ *
+ * Rules:
+ *   - CANCELLED is terminal — never auto-transition out of it.
+ *   - 0 received total → leave status untouched (DRAFT/SUBMITTED/CONFIRMED stays).
+ *   - 0 < received < ordered → PARTIAL.
+ *   - received >= ordered → RECEIVED.
+ *   - Never auto-downgrade — a re-receive with a lower number must
+ *     not slip a RECEIVED PO back to PARTIAL. Operator-driven reversals
+ *     should be explicit.
+ */
+const PO_STATUS_ORDER: Record<string, number> = {
+  DRAFT: 0,
+  SUBMITTED: 1,
+  CONFIRMED: 2,
+  PARTIAL: 3,
+  RECEIVED: 4,
+  CANCELLED: -1,
+}
+
+async function maybeTransitionPoStatus(poId: string): Promise<void> {
+  const po = await prisma.purchaseOrder.findUnique({
+    where: { id: poId },
+    include: { items: { select: { quantityOrdered: true, quantityReceived: true } } },
+  })
+  if (!po || po.status === 'CANCELLED') return
+
+  let totalOrdered = 0
+  let totalReceived = 0
+  for (const it of po.items) {
+    totalOrdered += it.quantityOrdered
+    totalReceived += it.quantityReceived ?? 0
+  }
+  if (totalReceived === 0) return
+
+  const next: 'PARTIAL' | 'RECEIVED' =
+    totalReceived >= totalOrdered ? 'RECEIVED' : 'PARTIAL'
+
+  if (PO_STATUS_ORDER[next] <= PO_STATUS_ORDER[po.status]) return
+
+  await prisma.purchaseOrder.update({
+    where: { id: poId },
+    data: { status: next, version: { increment: 1 } },
+  })
+}
+
 function generatePoNumber(): string {
   const d = new Date()
   const yymmdd = `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
@@ -529,7 +593,14 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         fbaShipmentId?: string
         reference?: string
         expectedAt?: string
-        items?: Array<{ productId?: string; sku: string; quantityExpected: number }>
+        items?: Array<{
+          productId?: string
+          sku: string
+          quantityExpected: number
+          // H.0a — optional manual link to a PO line for ad-hoc inbounds
+          // that nevertheless want PO-level reconciliation.
+          purchaseOrderItemId?: string
+        }>
       }
       if (!body.type) return reply.code(400).send({ error: 'type is required' })
       const items = Array.isArray(body.items) ? body.items : []
@@ -551,6 +622,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
               productId: it.productId ?? null,
               sku: it.sku,
               quantityExpected: it.quantityExpected,
+              purchaseOrderItemId: it.purchaseOrderItemId ?? null,
             })),
           },
         },
@@ -618,6 +690,30 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         data: { status: 'RECEIVING', arrivedAt: shipment.arrivedAt ?? new Date(), version: { increment: 1 } },
         include: { items: true },
       })
+
+      // H.0a — propagate received quantities back to the PO line +
+      // transition PO status if applicable. Idempotent: derived from
+      // SUM(InboundShipmentItem.quantityReceived) per PO line, so
+      // re-runs converge. No-op for items without a PO link.
+      const touchedPoiIds = new Set<string>()
+      for (const upd of itemUpdates) {
+        const orig = shipment.items.find((it) => it.id === upd.itemId)
+        if (orig?.purchaseOrderItemId) touchedPoiIds.add(orig.purchaseOrderItemId)
+      }
+      for (const poiId of touchedPoiIds) {
+        await syncPoiQuantityReceived(poiId)
+      }
+      if (touchedPoiIds.size > 0) {
+        const pois = await prisma.purchaseOrderItem.findMany({
+          where: { id: { in: Array.from(touchedPoiIds) } },
+          select: { purchaseOrderId: true },
+        })
+        const touchedPoIds = new Set(pois.map((r) => r.purchaseOrderId))
+        for (const poId of touchedPoIds) {
+          await maybeTransitionPoStatus(poId)
+        }
+      }
+
       return updated
     } catch (error: any) {
       fastify.log.error({ err: error }, '[inbound/:id/receive] failed')
@@ -1162,6 +1258,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       if (!po) return reply.code(404).send({ error: 'PO not found' })
 
       // Create an InboundShipment (type=SUPPLIER) tied to this PO.
+      // H.0a — thread purchaseOrderItemId per row so the receive flow
+      // can propagate quantities back to the PO without a sku rematch.
       const inbound = await prisma.inboundShipment.create({
         data: {
           type: 'SUPPLIER',
@@ -1174,6 +1272,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
               productId: it.productId,
               sku: it.sku,
               quantityExpected: it.quantityOrdered - (it.quantityReceived ?? 0),
+              purchaseOrderItemId: it.id,
             })),
           },
         },

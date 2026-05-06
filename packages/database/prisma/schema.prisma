@@ -2602,7 +2602,8 @@ model PurchaseOrderItem {
   quantityReceived Int     @default(0)
   unitCostCents    Int     @default(0)
 
-  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  purchaseOrder        PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  inboundShipmentItems InboundShipmentItem[]
 
   @@index([purchaseOrderId])
   @@index([productId])
@@ -2651,10 +2652,19 @@ model InboundShipmentItem {
   qcStatus          String? // PASS | FAIL | HOLD
   qcNotes           String?
 
-  inboundShipment InboundShipment @relation(fields: [inboundShipmentId], references: [id], onDelete: Cascade)
+  // H.0a — direct link to the PO line this inbound row receives
+  // against. Nullable: TRANSFER, MANUFACTURING, returns, and ad-hoc
+  // supplier deliveries (no PO) all leave this NULL. Set when an
+  // InboundShipment is created from POST /fulfillment/purchase-
+  // orders/:id/receive (or via the optional manual-create payload).
+  purchaseOrderItemId String?
+
+  inboundShipment   InboundShipment    @relation(fields: [inboundShipmentId], references: [id], onDelete: Cascade)
+  purchaseOrderItem PurchaseOrderItem? @relation(fields: [purchaseOrderItemId], references: [id], onDelete: SetNull)
 
   @@index([inboundShipmentId])
   @@index([productId])
+  @@index([purchaseOrderItemId])
 }
 
 model WorkOrder {
