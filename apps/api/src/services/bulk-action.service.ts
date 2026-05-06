@@ -311,10 +311,39 @@ export class BulkActionService {
       let skippedItems = 0;
       const errors: Array<{ itemId: string; error: string; timestamp: Date }> = [];
 
-      // Process each item
+      // Process each item. For each: insert a BulkActionItem row in
+      // PENDING with the beforeState snapshot, run the handler, then
+      // update the row with terminal status + afterState (or
+      // errorMessage on throw). The errorLog JSON on BulkActionJob
+      // is still populated for backwards compat.
+      const actionType = job.actionType as BulkActionType;
       for (const item of items) {
+        const beforeState = this.extractItemState(item, actionType);
+        const itemRow = await this.prisma.bulkActionItem.create({
+          data: {
+            jobId,
+            ...this.targetColumnsFor(item.id, actionType),
+            status: 'PENDING',
+            beforeState,
+          },
+        });
+
         try {
           const result = await this.processItem(item, job);
+          const afterState = await this.refetchAfterState(
+            item.id,
+            actionType,
+          );
+
+          await this.prisma.bulkActionItem.update({
+            where: { id: itemRow.id },
+            data: {
+              status:
+                result.status === 'processed' ? 'SUCCEEDED' : 'SKIPPED',
+              afterState,
+              completedAt: new Date(),
+            },
+          });
 
           if (result.status === 'processed') {
             processedItems++;
@@ -328,6 +357,15 @@ export class BulkActionService {
             itemId: item.id,
             error: errorMessage,
             timestamp: new Date()
+          });
+
+          await this.prisma.bulkActionItem.update({
+            where: { id: itemRow.id },
+            data: {
+              status: 'FAILED',
+              errorMessage,
+              completedAt: new Date(),
+            },
           });
 
           logger.warn(`Failed to process item`, {
@@ -950,6 +988,121 @@ export class BulkActionService {
    * will replace these casts with per-action-type Zod parses for
    * real validation.
    */
+  /**
+   * Extract a slim state diff for the given item under the given
+   * action type. Used to populate BulkActionItem.beforeState (called
+   * before the handler runs) and afterState (called after).
+   * Foundation for partial rollback (Commit 12) and conflict
+   * detection (Commit 18).
+   */
+  private extractItemState(
+    item: any,
+    actionType: BulkActionType,
+  ): Record<string, any> {
+    switch (actionType) {
+      case 'PRICING_UPDATE':
+        return {
+          basePrice:
+            item.basePrice != null ? Number(item.basePrice) : null,
+        };
+      case 'INVENTORY_UPDATE':
+        return { totalStock: item.totalStock ?? null };
+      case 'STATUS_UPDATE':
+        return { status: item.status ?? null };
+      case 'ATTRIBUTE_UPDATE':
+        return { variationAttributes: item.variationAttributes ?? null };
+      case 'MARKETPLACE_OVERRIDE_UPDATE':
+        return {
+          priceOverride:
+            item.priceOverride != null ? Number(item.priceOverride) : null,
+          quantityOverride: item.quantityOverride ?? null,
+          stockBuffer: item.stockBuffer ?? null,
+          followMasterPrice: item.followMasterPrice ?? null,
+          followMasterQuantity: item.followMasterQuantity ?? null,
+          pricingRule: item.pricingRule ?? null,
+          priceAdjustmentPercent:
+            item.priceAdjustmentPercent != null
+              ? Number(item.priceAdjustmentPercent)
+              : null,
+        };
+      case 'LISTING_SYNC':
+        return {};
+      default:
+        return {};
+    }
+  }
+
+  /**
+   * Refetch the entity from DB after the handler has run, returning
+   * the slim state diff for the post-mutation values. Cheap (one
+   * indexed-by-id read per item).
+   */
+  private async refetchAfterState(
+    itemId: string,
+    actionType: BulkActionType,
+  ): Promise<Record<string, any>> {
+    switch (actionType) {
+      case 'PRICING_UPDATE':
+      case 'INVENTORY_UPDATE':
+      case 'STATUS_UPDATE': {
+        const fresh = await this.prisma.product.findUnique({
+          where: { id: itemId },
+          select: { basePrice: true, totalStock: true, status: true },
+        });
+        return fresh ? this.extractItemState(fresh, actionType) : {};
+      }
+      case 'ATTRIBUTE_UPDATE': {
+        const fresh = await this.prisma.productVariation.findUnique({
+          where: { id: itemId },
+          select: { variationAttributes: true },
+        });
+        return fresh ? this.extractItemState(fresh, actionType) : {};
+      }
+      case 'MARKETPLACE_OVERRIDE_UPDATE': {
+        const fresh = await this.prisma.channelListing.findUnique({
+          where: { id: itemId },
+          select: {
+            priceOverride: true,
+            quantityOverride: true,
+            stockBuffer: true,
+            followMasterPrice: true,
+            followMasterQuantity: true,
+            pricingRule: true,
+            priceAdjustmentPercent: true,
+          },
+        });
+        return fresh ? this.extractItemState(fresh, actionType) : {};
+      }
+      case 'LISTING_SYNC':
+        return {};
+      default:
+        return {};
+    }
+  }
+
+  /**
+   * Map an item.id to the BulkActionItem polymorphic target column
+   * for the action type. Mirrors ACTION_ENTITY.
+   */
+  private targetColumnsFor(
+    itemId: string,
+    actionType: BulkActionType,
+  ): {
+    productId?: string;
+    variationId?: string;
+    channelListingId?: string;
+  } {
+    const target = ACTION_ENTITY[actionType];
+    switch (target) {
+      case 'product':
+        return { productId: itemId };
+      case 'variation':
+        return { variationId: itemId };
+      case 'channelListing':
+        return { channelListingId: itemId };
+    }
+  }
+
   private async processItem(
     item: any,
     job: BulkActionJob

@@ -1032,11 +1032,55 @@ model BulkActionJob {
   completedAt DateTime? // When processing finished
   updatedAt   DateTime  @updatedAt
 
+  // ── Per-item state (Commit 2 of bulk-ops rebuild) ────────────────────
+  // Foundation for retry of failed items, partial rollback, and
+  // conflict detection. Cascaded on delete.
+  items BulkActionItem[]
+
   @@index([actionType])
   @@index([channel])
   @@index([status])
   @@index([createdAt])
   @@index([completedAt])
+}
+
+// ── BulkActionItem ─────────────────────────────────────────────────────────
+//
+// One row per item processed by a BulkActionJob. The polymorphic target
+// columns (productId / variationId / channelListingId) match the job's
+// actionType target entity per the ACTION_ENTITY map in
+// bulk-action.service.ts. Exactly one of the three is set per row.
+//
+// `beforeState` / `afterState` are slim diffs (changed fields only) — the
+// foundation for partial rollback (Commit 12) and conflict detection
+// (Commit 18). The errorLog JSON column on BulkActionJob is still written
+// for backward compat; this table is the canonical per-item record going
+// forward.
+
+model BulkActionItem {
+  id String @id @default(cuid())
+
+  jobId String
+  job   BulkActionJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  // Polymorphic target. No FK constraints — preserves audit history
+  // when the underlying entity is deleted (same pattern as AuditLog).
+  productId        String?
+  variationId      String?
+  channelListingId String?
+
+  status String @default("PENDING") // PENDING | SUCCEEDED | FAILED | SKIPPED
+
+  errorMessage String?
+  beforeState  Json?
+  afterState   Json?
+
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([jobId])
+  @@index([jobId, status])
+  @@index([productId])
 }
 
 // ── Seller Feedback ────────────────────────────────────────────────────────
