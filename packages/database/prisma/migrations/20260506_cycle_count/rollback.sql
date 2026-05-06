@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS "CycleCountItem";
+DROP TABLE IF EXISTS "CycleCount";

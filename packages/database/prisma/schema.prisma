@@ -2466,6 +2466,7 @@ model StockLocation {
   movementsFrom  StockMovement[] @relation("StockMovementFromLocation")
   movementsTo    StockMovement[] @relation("StockMovementToLocation")
   stockoutEvents StockoutEvent[] // R.12
+  cycleCounts    CycleCount[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3302,6 +3303,87 @@ model ReplenishmentRecommendation {
   @@index([generatedAt])
   @@index([urgency, status])
   @@index([resultingPoId])
+}
+
+// ── Cycle count / physical inventory ───────────────────────────────
+//
+// One CycleCount = one physical-count session against a single
+// StockLocation. The session snapshots every (product, variation)
+// at start time so variances are computed against a stable baseline.
+// Per-item state machine:
+//   PENDING → COUNTED (operator entered counted qty)
+//          → RECONCILED (variance applied via applyStockMovement)
+//          OR IGNORED (operator declined to adjust)
+//
+// Reconciliation routes through applyStockMovement with reason=
+// INVENTORY_COUNT and referenceType=CycleCount so the StockMovement
+// audit trail explains every count-driven adjustment.
+
+model CycleCount {
+  id String @id @default(cuid())
+
+  /** Which physical location is being counted. */
+  locationId String
+  location   StockLocation @relation(fields: [locationId], references: [id], onDelete: Restrict)
+
+  /** Lifecycle: DRAFT → IN_PROGRESS → COMPLETED, or CANCELLED. */
+  status String @default("DRAFT")
+
+  /** Operator-friendly description ("Q2 spot check", "post-move audit", etc.). */
+  notes String?
+
+  startedAt          DateTime?
+  startedByUserId    String?
+  completedAt        DateTime?
+  completedByUserId  String?
+  cancelledAt        DateTime?
+  cancelledReason    String?
+
+  items CycleCountItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  @@index([locationId, status])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model CycleCountItem {
+  id           String     @id @default(cuid())
+  cycleCountId String
+  cycleCount   CycleCount @relation(fields: [cycleCountId], references: [id], onDelete: Cascade)
+
+  /** Snapshot: the entity being counted. SKU is denormalised so the
+   *  count audit survives a Product/Variation deletion. */
+  productId   String
+  variationId String?
+  sku         String
+
+  /** Stock count at session-start (snapshotted from StockLevel). */
+  expectedQuantity Int
+
+  /** Operator entry — NULL until they record. */
+  countedQuantity   Int?
+  countedAt         DateTime?
+  countedByUserId   String?
+
+  /** PENDING | COUNTED | RECONCILED | IGNORED. */
+  status String @default("PENDING")
+
+  /** When variance is applied, link to the resulting StockMovement. */
+  reconciledMovementId  String?
+  reconciledAt          DateTime?
+  reconciledByUserId    String?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([cycleCountId, status])
+  @@index([productId])
 }
 
 // ── Order routing rules ────────────────────────────────────────────

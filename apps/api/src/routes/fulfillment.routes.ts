@@ -5,6 +5,15 @@ import {
   resolveWarehouseForOrder,
   previewRouting,
 } from '../services/order-routing.service.js'
+import {
+  createCycleCount,
+  startCycleCount,
+  recordCount,
+  reconcileItem,
+  ignoreItem,
+  completeCycleCount,
+  cancelCycleCount,
+} from '../services/cycle-count.service.js'
 import { applyStockMovement, listStockMovements } from '../services/stock-movement.service.js'
 import { refreshSalesAggregates } from '../services/sales-aggregate.service.js'
 import { resolveAtp, DEFAULT_LEAD_TIME_DAYS } from '../services/atp.service.js'
@@ -516,6 +525,255 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })
+
+  // ═══════════════════════════════════════════════════════════════════
+  // CYCLE COUNT — physical inventory reconciliation
+  // ═══════════════════════════════════════════════════════════════════
+  //
+  // Workflow:
+  //   POST   /fulfillment/cycle-counts
+  //     Create a DRAFT count + snapshot every StockLevel at the
+  //     given location into items.
+  //   GET    /fulfillment/cycle-counts
+  //     List sessions, filterable by status.
+  //   GET    /fulfillment/cycle-counts/:id
+  //     Single session with all items joined to product names.
+  //   POST   /fulfillment/cycle-counts/:id/start
+  //     DRAFT → IN_PROGRESS.
+  //   PATCH  /fulfillment/cycle-counts/:id/items/:itemId
+  //     Body { countedQuantity, notes? } → status COUNTED.
+  //   POST   /fulfillment/cycle-counts/:id/items/:itemId/reconcile
+  //     Apply variance via applyStockMovement → status RECONCILED.
+  //   POST   /fulfillment/cycle-counts/:id/items/:itemId/ignore
+  //     Mark IGNORED without applying variance.
+  //   POST   /fulfillment/cycle-counts/:id/complete
+  //     Close the session (requires all items RECONCILED or IGNORED).
+  //   POST   /fulfillment/cycle-counts/:id/cancel
+  //     Abort an in-progress session.
+
+  fastify.get('/fulfillment/cycle-counts', async (request, reply) => {
+    try {
+      const q = request.query as { status?: string; limit?: string }
+      const limit = Math.min(Math.max(Number(q.limit ?? 50), 1), 200)
+      const where: Prisma.CycleCountWhereInput = {}
+      if (q.status && q.status !== 'all') where.status = q.status
+      const counts = await prisma.cycleCount.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        include: {
+          location: { select: { id: true, code: true, name: true } },
+          items: { select: { status: true } },
+        },
+      })
+      const items = counts.map((c) => {
+        const counts = { PENDING: 0, COUNTED: 0, RECONCILED: 0, IGNORED: 0 } as Record<string, number>
+        for (const i of c.items) counts[i.status] = (counts[i.status] ?? 0) + 1
+        return {
+          ...c,
+          itemTotals: counts,
+          totalItems: c.items.length,
+          items: undefined, // strip the array; counts are enough for the list
+        }
+      })
+      return reply.send({ success: true, counts: items })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[cycle-counts GET] failed')
+      return reply.code(500).send({ success: false, error: msg })
+    }
+  })
+
+  fastify.post<{
+    Body: { locationId?: string; notes?: string; createdBy?: string }
+  }>('/fulfillment/cycle-counts', async (request, reply) => {
+    try {
+      const b = request.body ?? {}
+      if (!b.locationId) {
+        return reply.code(400).send({ error: 'locationId required' })
+      }
+      const count = await createCycleCount({
+        locationId: b.locationId,
+        notes: b.notes,
+        createdBy: b.createdBy,
+      })
+      return reply.code(201).send({ success: true, count })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('not found')) return reply.code(404).send({ error: msg })
+      if (msg.includes('No stock levels')) return reply.code(409).send({ error: msg })
+      fastify.log.error({ err }, '[cycle-counts POST] failed')
+      return reply.code(500).send({ success: false, error: msg })
+    }
+  })
+
+  fastify.get<{ Params: { id: string } }>(
+    '/fulfillment/cycle-counts/:id',
+    async (request, reply) => {
+      try {
+        const { id } = request.params
+        const count = await prisma.cycleCount.findUnique({
+          where: { id },
+          include: {
+            location: { select: { id: true, code: true, name: true } },
+            items: { orderBy: { sku: 'asc' } },
+          },
+        })
+        if (!count) {
+          return reply.code(404).send({ error: 'Cycle count not found' })
+        }
+        // Join product names for the items.
+        const productIds = Array.from(new Set(count.items.map((i) => i.productId)))
+        const products = productIds.length > 0
+          ? await prisma.product.findMany({
+              where: { id: { in: productIds } },
+              select: { id: true, name: true },
+            })
+          : []
+        const nameById = new Map(products.map((p) => [p.id, p.name] as const))
+        return reply.send({
+          success: true,
+          count: {
+            ...count,
+            items: count.items.map((it) => ({
+              ...it,
+              productName: nameById.get(it.productId) ?? null,
+              variance:
+                it.countedQuantity != null
+                  ? it.countedQuantity - it.expectedQuantity
+                  : null,
+            })),
+          },
+        })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        fastify.log.error({ err }, '[cycle-counts/:id GET] failed')
+        return reply.code(500).send({ success: false, error: msg })
+      }
+    },
+  )
+
+  fastify.post<{ Params: { id: string }; Body: { userId?: string } }>(
+    '/fulfillment/cycle-counts/:id/start',
+    async (request, reply) => {
+      try {
+        const { id } = request.params
+        const updated = await startCycleCount(id, request.body?.userId)
+        return reply.send({ success: true, count: updated })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (msg.includes('not found')) return reply.code(404).send({ error: msg })
+        if (msg.includes('Cannot start')) return reply.code(409).send({ error: msg })
+        return reply.code(500).send({ error: msg })
+      }
+    },
+  )
+
+  fastify.patch<{
+    Params: { id: string; itemId: string }
+    Body: { countedQuantity?: number; notes?: string; userId?: string }
+  }>('/fulfillment/cycle-counts/:id/items/:itemId', async (request, reply) => {
+    try {
+      const { itemId } = request.params
+      const b = request.body ?? {}
+      if (b.countedQuantity == null) {
+        return reply.code(400).send({ error: 'countedQuantity required' })
+      }
+      const updated = await recordCount({
+        itemId,
+        countedQuantity: b.countedQuantity,
+        countedByUserId: b.userId,
+        notes: b.notes,
+      })
+      return reply.send({ success: true, item: updated })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('not found')) return reply.code(404).send({ error: msg })
+      if (msg.includes('Can only record') || msg.includes('already reconciled') || msg.includes('non-negative')) {
+        return reply.code(409).send({ error: msg })
+      }
+      return reply.code(500).send({ error: msg })
+    }
+  })
+
+  fastify.post<{
+    Params: { id: string; itemId: string }
+    Body: { userId?: string }
+  }>('/fulfillment/cycle-counts/:id/items/:itemId/reconcile', async (request, reply) => {
+    try {
+      const { itemId } = request.params
+      const updated = await reconcileItem({
+        itemId,
+        reconciledByUserId: request.body?.userId,
+      })
+      return reply.send({ success: true, item: updated })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('not found')) return reply.code(404).send({ error: msg })
+      if (msg.includes('Can only reconcile') || msg.includes('no counted') || msg.includes('not IN_PROGRESS')) {
+        return reply.code(409).send({ error: msg })
+      }
+      fastify.log.error({ err }, '[cycle-counts reconcile] failed')
+      return reply.code(500).send({ error: msg })
+    }
+  })
+
+  fastify.post<{
+    Params: { id: string; itemId: string }
+    Body: { userId?: string; notes?: string }
+  }>('/fulfillment/cycle-counts/:id/items/:itemId/ignore', async (request, reply) => {
+    try {
+      const { itemId } = request.params
+      const updated = await ignoreItem({
+        itemId,
+        reconciledByUserId: request.body?.userId,
+        notes: request.body?.notes,
+      })
+      return reply.send({ success: true, item: updated })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('not found')) return reply.code(404).send({ error: msg })
+      if (msg.includes('already reconciled')) return reply.code(409).send({ error: msg })
+      return reply.code(500).send({ error: msg })
+    }
+  })
+
+  fastify.post<{ Params: { id: string }; Body: { userId?: string } }>(
+    '/fulfillment/cycle-counts/:id/complete',
+    async (request, reply) => {
+      try {
+        const { id } = request.params
+        const updated = await completeCycleCount(id, request.body?.userId)
+        return reply.send({ success: true, count: updated })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (msg.includes('not found')) return reply.code(404).send({ error: msg })
+        if (msg.includes('Can only complete') || msg.includes('still pending')) {
+          return reply.code(409).send({ error: msg })
+        }
+        return reply.code(500).send({ error: msg })
+      }
+    },
+  )
+
+  fastify.post<{ Params: { id: string }; Body: { reason?: string } }>(
+    '/fulfillment/cycle-counts/:id/cancel',
+    async (request, reply) => {
+      try {
+        const { id } = request.params
+        const updated = await cancelCycleCount({
+          id,
+          reason: request.body?.reason,
+        })
+        return reply.send({ success: true, count: updated })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (msg.includes('not found')) return reply.code(404).send({ error: msg })
+        if (msg.includes('Cannot cancel')) return reply.code(409).send({ error: msg })
+        return reply.code(500).send({ error: msg })
+      }
+    },
+  )
 
   // ═══════════════════════════════════════════════════════════════════
   // OUTBOUND SHIPMENTS

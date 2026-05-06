@@ -1,0 +1,363 @@
+'use client'
+
+import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
+import {
+  AlertCircle,
+  CheckCircle2,
+  ClipboardCheck,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Warehouse as WarehouseIcon,
+  X,
+} from 'lucide-react'
+import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { Input } from '@/components/ui/Input'
+import { useToast } from '@/components/ui/Toast'
+import { getBackendUrl } from '@/lib/backend-url'
+import { cn } from '@/lib/utils'
+
+interface CountSummary {
+  id: string
+  status: string
+  notes: string | null
+  startedAt: string | null
+  completedAt: string | null
+  cancelledAt: string | null
+  createdAt: string
+  location: { id: string; code: string; name: string }
+  totalItems: number
+  itemTotals: Record<string, number>
+}
+
+interface Location {
+  id: string
+  code: string
+  name: string
+}
+
+function relativeTime(iso: string | null): string {
+  if (!iso) return '—'
+  const ms = Date.now() - new Date(iso).getTime()
+  if (ms < 0) return 'just now'
+  const sec = Math.floor(ms / 1000)
+  if (sec < 60) return `${sec}s ago`
+  const min = Math.floor(sec / 60)
+  if (min < 60) return `${min}m ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}h ago`
+  return `${Math.floor(hr / 24)}d ago`
+}
+
+function statusVariant(status: string): 'success' | 'warning' | 'danger' | 'info' | 'default' {
+  switch (status) {
+    case 'COMPLETED': return 'success'
+    case 'IN_PROGRESS': return 'info'
+    case 'DRAFT': return 'warning'
+    case 'CANCELLED': return 'danger'
+    default: return 'default'
+  }
+}
+
+const STATUS_FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'DRAFT', label: 'Draft' },
+  { key: 'IN_PROGRESS', label: 'In Progress' },
+  { key: 'COMPLETED', label: 'Completed' },
+  { key: 'CANCELLED', label: 'Cancelled' },
+] as const
+
+export default function CycleCountListClient() {
+  const { toast } = useToast()
+  const [counts, setCounts] = useState<CountSummary[] | null>(null)
+  const [locations, setLocations] = useState<Location[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+
+  // Create modal state
+  const [createOpen, setCreateOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [newLocationId, setNewLocationId] = useState('')
+  const [newNotes, setNewNotes] = useState('')
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true)
+      const url = new URL(`${getBackendUrl()}/api/fulfillment/cycle-counts`)
+      if (statusFilter !== 'all') url.searchParams.set('status', statusFilter)
+      url.searchParams.set('limit', '100')
+      const [countsRes, locsRes] = await Promise.all([
+        fetch(url.toString(), { cache: 'no-store' }),
+        fetch(`${getBackendUrl()}/api/stock/locations`, { cache: 'no-store' }),
+      ])
+      if (!countsRes.ok) {
+        const body = await countsRes.json().catch(() => ({}))
+        throw new Error(body.error ?? `HTTP ${countsRes.status}`)
+      }
+      const json = await countsRes.json()
+      setCounts(json.counts ?? [])
+      if (locsRes.ok) {
+        const locJson = await locsRes.json()
+        // /api/stock/locations may return { locations: [...] } or [...]
+        const locArr = Array.isArray(locJson) ? locJson : locJson.locations ?? []
+        setLocations(
+          locArr
+            .filter((l: any) => l && l.id && l.code)
+            .map((l: any) => ({ id: l.id, code: l.code, name: l.name ?? l.code })),
+        )
+      }
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLoading(false)
+    }
+  }, [statusFilter])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  const handleCreate = async () => {
+    if (!newLocationId) {
+      toast.error('Select a location')
+      return
+    }
+    setCreating(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/cycle-counts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          locationId: newLocationId,
+          notes: newNotes.trim() || undefined,
+        }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`)
+      toast.success('Cycle count created — open it to start counting')
+      setCreateOpen(false)
+      setNewLocationId('')
+      setNewNotes('')
+      await fetchData()
+    } catch (err) {
+      toast.error(`Create failed: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-1 flex-wrap">
+          {STATUS_FILTERS.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => setStatusFilter(f.key)}
+              className={cn(
+                'px-3 py-1 text-[11px] font-medium rounded border transition-colors',
+                statusFilter === f.key
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300',
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={fetchData} disabled={loading}>
+            <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
+            Refresh
+          </Button>
+          <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
+            <Plus className="w-3.5 h-3.5" />
+            New count
+          </Button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-center gap-2">
+          <AlertCircle className="w-3.5 h-3.5" />
+          {error}
+        </div>
+      )}
+
+      {loading && !counts && (
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-16 bg-white border border-slate-200 rounded-lg animate-pulse" />
+          ))}
+        </div>
+      )}
+
+      {counts && counts.length === 0 && !loading && (
+        <EmptyState
+          icon={ClipboardCheck}
+          title="No cycle counts yet"
+          description="Create a count session to spot-check or fully audit physical inventory at a warehouse location. Variances apply through StockMovement so the audit trail explains every count-driven adjustment."
+          action={{ label: 'Start first count', onClick: () => setCreateOpen(true) }}
+        />
+      )}
+
+      {counts && counts.length > 0 && (
+        <div className="space-y-2">
+          {counts.map((c) => {
+            const resolved = (c.itemTotals.RECONCILED ?? 0) + (c.itemTotals.IGNORED ?? 0)
+            const counted = c.itemTotals.COUNTED ?? 0
+            const pending = c.itemTotals.PENDING ?? 0
+            const progressPct = c.totalItems > 0 ? Math.round((resolved / c.totalItems) * 100) : 0
+            return (
+              <Link
+                key={c.id}
+                href={`/fulfillment/stock/cycle-count/${c.id}`}
+                className="block bg-white border border-slate-200 rounded-lg p-4 hover:border-slate-300 hover:shadow-sm transition-all"
+              >
+                <div className="flex items-start gap-3">
+                  <ClipboardCheck className="w-5 h-5 text-slate-500 flex-shrink-0 mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant={statusVariant(c.status)} size="sm">
+                        {c.status.replace(/_/g, ' ')}
+                      </Badge>
+                      <span className="font-medium text-slate-900 inline-flex items-center gap-1">
+                        <WarehouseIcon className="w-3.5 h-3.5 text-slate-400" />
+                        {c.location.name}
+                        <span className="text-[11px] font-mono text-slate-500 ml-1">
+                          ({c.location.code})
+                        </span>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-500 flex-wrap">
+                      <span>
+                        {c.totalItems} items · {pending} pending · {counted} counted ·{' '}
+                        <span className="text-green-700 font-medium">{c.itemTotals.RECONCILED ?? 0}</span> reconciled
+                        {(c.itemTotals.IGNORED ?? 0) > 0 && (
+                          <> · <span className="text-amber-700">{c.itemTotals.IGNORED}</span> ignored</>
+                        )}
+                      </span>
+                      <span>·</span>
+                      <span title={new Date(c.createdAt).toLocaleString()}>
+                        Created {relativeTime(c.createdAt)}
+                      </span>
+                      {c.startedAt && (
+                        <span>· Started {relativeTime(c.startedAt)}</span>
+                      )}
+                      {c.completedAt && (
+                        <span>· Completed {relativeTime(c.completedAt)}</span>
+                      )}
+                    </div>
+                    {c.notes && (
+                      <div className="text-[11px] text-slate-600 mt-1 italic truncate">
+                        {c.notes}
+                      </div>
+                    )}
+                    {/* Progress bar */}
+                    {c.totalItems > 0 && c.status !== 'CANCELLED' && (
+                      <div className="mt-2 h-1 bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className={cn(
+                            'h-full transition-all',
+                            c.status === 'COMPLETED' ? 'bg-green-500' : 'bg-blue-500',
+                          )}
+                          style={{ width: `${progressPct}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </Link>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Create modal */}
+      {createOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-start justify-center pt-[10vh] px-4"
+          onClick={() => !creating && setCreateOpen(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl border border-slate-200 w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
+              <h2 className="text-[14px] font-semibold text-slate-900">New cycle count</h2>
+              <button
+                type="button"
+                onClick={() => setCreateOpen(false)}
+                disabled={creating}
+                className="text-slate-400 hover:text-slate-700 disabled:opacity-50"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div>
+                <label className="text-[11px] font-medium text-slate-700 uppercase tracking-wide">
+                  Location <span className="text-red-600">*</span>
+                </label>
+                <select
+                  value={newLocationId}
+                  onChange={(e) => setNewLocationId(e.target.value)}
+                  className="mt-1 w-full px-3 py-1.5 text-[13px] border border-slate-200 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+                >
+                  <option value="">Select…</option>
+                  {locations.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.code} — {l.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Every product with a stock level at this location will be snapshotted.
+                </p>
+              </div>
+              <div>
+                <label className="text-[11px] font-medium text-slate-700 uppercase tracking-wide">
+                  Notes (optional)
+                </label>
+                <Input
+                  type="text"
+                  value={newNotes}
+                  onChange={(e) => setNewNotes(e.target.value)}
+                  placeholder='e.g. "Q2 spot check", "post-move audit"'
+                  className="mt-1"
+                />
+              </div>
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
+                <Button variant="primary" size="sm" onClick={handleCreate} disabled={creating}>
+                  {creating ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  )}
+                  Create
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setCreateOpen(false)}
+                  disabled={creating}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
