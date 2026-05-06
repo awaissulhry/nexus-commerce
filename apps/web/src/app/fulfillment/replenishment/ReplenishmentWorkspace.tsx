@@ -120,10 +120,24 @@ interface Suggestion {
   // R.14 — urgency provenance. globalUrgency = aggregate signal;
   // urgency = max(global, worst-channel). urgencySource flags
   // whether a specific channel-marketplace promoted the headline.
+  // R.13 added 'EVENT' for prep-deadline driven promotion.
   globalUrgency?: Urgency
-  urgencySource?: 'GLOBAL' | 'CHANNEL'
+  urgencySource?: 'GLOBAL' | 'CHANNEL' | 'EVENT'
   worstChannelKey?: string | null
   worstChannelDaysOfCover?: number | null
+  // R.13 — event-prep recommendation
+  prepEvent?: {
+    eventId: string
+    name: string
+    startDate: string
+    prepDeadline: string
+    daysUntilStart: number
+    daysUntilDeadline: number
+    expectedLift: number
+    extraUnitsRecommended: number
+  } | null
+  prepEventId?: string | null
+  prepExtraUnits?: number | null
   // R.4 — math snapshot for the drawer's "Reorder math" panel.
   safetyStockUnits?: number
   eoqUnits?: number
@@ -1012,6 +1026,17 @@ function SuggestionRow({
               title={`Promoted because of ${s.worstChannelKey} (${s.worstChannelDaysOfCover}d cover). Aggregate was ${s.globalUrgency ?? 'lower'}.`}
             >
               · {s.worstChannelKey.replace(':', '·')}
+            </span>
+          )}
+          {/* R.13 — event-driven urgency badge. Tooltip shows the
+              event name and prep deadline. Purple to distinguish from
+              channel-driven (slate-grey) and global (no badge). */}
+          {s.urgencySource === 'EVENT' && s.prepEvent && (
+            <span
+              className="text-[9px] uppercase tracking-wider text-violet-600 font-mono"
+              title={`Promoted by ${s.prepEvent.name} prep deadline (${s.prepEvent.daysUntilDeadline}d to deadline, +${s.prepEvent.extraUnitsRecommended} extra units).`}
+            >
+              · {s.prepEvent.name.toUpperCase().slice(0, 12)}
             </span>
           )}
         </div>

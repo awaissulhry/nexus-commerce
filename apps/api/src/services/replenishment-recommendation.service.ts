@@ -49,12 +49,15 @@ export interface RecommendationInput {
   eoqUnits?: number | null
   constraintsApplied?: string[]
   unitCostCents?: number | null
-  // R.14 — urgency provenance
-  urgencySource?: 'GLOBAL' | 'CHANNEL' | null
+  // R.14 — urgency provenance (R.13 added 'EVENT')
+  urgencySource?: 'GLOBAL' | 'CHANNEL' | 'EVENT' | null
   worstChannelKey?: string | null
   worstChannelDaysOfCover?: number | null
   // R.11 — σ_LT applied at generation
   leadTimeStdDevDays?: number | null
+  // R.13 — event-prep audit
+  prepEventId?: string | null
+  prepExtraUnits?: number | null
 }
 
 export interface ActiveRecommendationLite {
@@ -170,6 +173,9 @@ export async function persistRecommendationIfChanged(
           worstChannelDaysOfCover: input.worstChannelDaysOfCover ?? null,
           // R.11 — σ_LT snapshot
           leadTimeStdDevDays: input.leadTimeStdDevDays ?? null,
+          // R.13 — event prep
+          prepEventId: input.prepEventId ?? null,
+          prepExtraUnits: input.prepExtraUnits ?? null,
         },
       })
       if (current) {

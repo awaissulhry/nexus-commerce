@@ -2685,6 +2685,11 @@ model Supplier {
   autoTriggerEnabled           Boolean @default(false)
   autoTriggerMaxQtyPerPo       Int?
   autoTriggerMaxCostCentsPerPo Int?
+  // R.13 — separate opt-in for event-prep auto-PO (Black Friday,
+  // saldi, etc.). Disabled by default even when autoTriggerEnabled
+  // is true: event prep creates large up-front orders that should
+  // be explicit. Operator flips on per-supplier when ready.
+  autoTriggerEventPrep         Boolean @default(false)
 
   products       SupplierProduct[]
   purchaseOrders PurchaseOrder[]
@@ -3151,6 +3156,10 @@ model ReplenishmentRecommendation {
   // R.11 — σ_LT applied at this generation (audit "what variance
   // did we use that day?"). Null when supplier had < 3 PO observations.
   leadTimeStdDevDays      Decimal? @db.Decimal(8, 2)
+  // R.13 — event-prep audit: which RetailEvent (if any) is driving
+  // an "order extra now" recommendation, and how many extra units.
+  prepEventId             String?
+  prepExtraUnits          Int?
 
   preferredSupplierId String?
   isManufactured      Boolean @default(false)

@@ -23,6 +23,11 @@ import {
   type Urgency as PromotedUrgencyTier,
 } from '../services/replenishment-urgency.service.js'
 import {
+  findApplicableEvent,
+  shouldPromoteForPrep,
+  bumpUrgencyOneTier,
+} from '../services/event-prep.service.js'
+import {
   recomputeAllLeadTimeStats,
   recomputeLeadTimeStatsForSupplier,
   getLeadTimeStatsStatus,
@@ -2777,9 +2782,34 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           id: true, sku: true, name: true, totalStock: true, lowStockThreshold: true,
           fulfillmentChannel: true, basePrice: true, costPrice: true,
           serviceLevelPercent: true, orderingCostCents: true, carryingCostPctYear: true,
+          // R.13 — productType drives event-prep applicability
+          productType: true,
         },
         take: 1000,
       })
+
+      // R.13 — load active future RetailEvents once per request.
+      // Cap at 90-day horizon (matches the existing upcoming-events
+      // banner). Filtered to active + lift > 1 (events with no
+      // incremental demand never need prep).
+      const eventHorizon = new Date()
+      eventHorizon.setUTCDate(eventHorizon.getUTCDate() + 90)
+      const retailEvents = await prisma.retailEvent.findMany({
+        where: {
+          isActive: true,
+          startDate: { gte: new Date(), lte: eventHorizon },
+          expectedLift: { gt: 1 },
+        },
+        select: {
+          id: true, name: true, startDate: true, endDate: true,
+          productType: true, channel: true, marketplace: true,
+          expectedLift: true, prepLeadTimeDays: true, isActive: true,
+        },
+      })
+      const retailEventsLite = retailEvents.map((e) => ({
+        ...e,
+        expectedLift: Number(e.expectedLift),
+      }))
 
       // F.1 — Read pre-aggregated demand from DailySalesAggregate instead of
       // GroupBy-ing the live OrderItem table. The aggregate is keyed by SKU
@@ -3086,12 +3116,35 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           })),
           leadTimeDays,
         })
-        const urgency = promoted.urgency
-        const urgencySource = promoted.source
+        let urgency = promoted.urgency
+        let urgencySource: 'GLOBAL' | 'CHANNEL' | 'EVENT' = promoted.source
         const worstChannelKey = promoted.worstChannel
           ? `${promoted.worstChannel.channel}:${promoted.worstChannel.marketplace}`
           : null
         const worstChannelDaysOfCover = promoted.worstChannel?.daysOfCover ?? null
+
+        // R.13 — event-driven prep. Find the most-pressing applicable
+        // event (earliest deadline). When the deadline is within
+        // lead-time, promote urgency one tier — operator must order
+        // NOW or miss the spike.
+        const prepEvent = findApplicableEvent({
+          events: retailEventsLite,
+          productType: p.productType,
+          velocity,
+        })
+        if (prepEvent && shouldPromoteForPrep({
+          daysUntilDeadline: prepEvent.daysUntilDeadline,
+          leadTimeDays,
+        })) {
+          const bumped = bumpUrgencyOneTier(urgency)
+          // Only flag EVENT as the source when prep actually moved the
+          // tier — if global/channel was already CRITICAL, urgency
+          // doesn't change and EVENT didn't drive it.
+          if (bumped !== urgency) {
+            urgency = bumped
+            urgencySource = 'EVENT'
+          }
+        }
 
         return {
           productId: p.id,
@@ -3151,6 +3204,12 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           worstChannelDaysOfCover,
           // R.11 — σ_LT used for this row's safety-stock calc.
           leadTimeStdDevDays: supplierSigmaLt,
+          // R.13 — event-prep recommendation (null when no applicable
+          // event or when no incremental demand is expected). prepEventId
+          // and prepExtraUnits are top-level for ergonomic UI access.
+          prepEvent,
+          prepEventId: prepEvent?.eventId ?? null,
+          prepExtraUnits: prepEvent?.extraUnitsRecommended ?? null,
           needsReorder,
           // F.2 — surface lead-time provenance so the UI can show
           // "from supplier override" vs "from supplier default" vs "fallback".
@@ -3200,6 +3259,9 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         worstChannelDaysOfCover: s.worstChannelDaysOfCover,
         // R.11 — σ_LT
         leadTimeStdDevDays: s.leadTimeStdDevDays,
+        // R.13 — event prep
+        prepEventId: s.prepEventId,
+        prepExtraUnits: s.prepExtraUnits,
       }))
       const recIdsByProduct = await bulkPersistRecommendationsIfChanged(
         recommendationInputs,
