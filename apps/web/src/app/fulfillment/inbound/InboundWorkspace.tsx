@@ -2227,18 +2227,21 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
           <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
         </header>
 
-        {/* H.8d status banner — plan, labels, transport, and status
-            polling are all live against real Amazon SP-API. */}
-        <div className="mx-5 mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-md text-[12px] text-emerald-900">
+        {/* H.8d status banner — Plan + Labels + Status polling are
+            real against SP-API v0; putTransportDetails is deprecated
+            on v0 (Amazon returns 400 with a v2024-03-20 migration
+            note). Honest banner reflects that. */}
+        <div className="mx-5 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-md text-[12px] text-amber-900">
           <div className="font-semibold mb-1 inline-flex items-center gap-1.5">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            FBA wizard fully wired to SP-API
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
+            Plan + Labels + Status polling live · Transport v0 deprecated by Amazon
           </div>
-          <div className="text-emerald-800 leading-snug">
-            Plan-shipment, getLabels (FNSKU/carton/pallet), putTransportDetails
-            (non-partnered SP/LTL), and a 15-min status poll all submit to
-            Amazon SP-API for real. Local FBAShipment rows reconcile from
-            Amazon as the source of truth.
+          <div className="text-amber-800 leading-snug">
+            createInboundShipmentPlan, getLabels (FNSKU/carton/pallet), and the
+            15-min status-polling cron submit to Amazon SP-API v0 for real.
+            putTransportDetails on v0 is deprecated (Amazon returns 400) — until
+            we migrate the inbound surface to v2024-03-20, transport booking
+            must be completed in Seller Central. See TECH_DEBT #50.
           </div>
         </div>
 

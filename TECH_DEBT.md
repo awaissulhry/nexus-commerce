@@ -922,11 +922,46 @@ Promote to 🔴 when a regression slips past the build gates and into production
 
 ---
 
+## 50. 🔴 FBA Inbound v0 putTransportDetails is deprecated
+
+**Symptom:** H.8c verification (2026-05-06) hit Amazon's real SP-API and got back HTTP 400 with body: *"This API is deprecated. Please migrate to the new Fulfillment Inbound v2024-03-20 APIs."* The route runs end-to-end (test passed because the call landed at Amazon), but operationally the endpoint will not book transport for real shipments.
+
+**Surfaced at:** `scripts/verify-inbound-h8c.mjs` against Railway production.
+
+**Scope of the deprecation (verified empirically this session):**
+- ❌ `PUT /fba/inbound/v0/shipments/{id}/transport` — deprecated, returns 400.
+- ✅ `POST /fba/inbound/v0/plans` (createInboundShipmentPlan) — H.8a verified, real SP-API errors return on bad SKUs (ASIN validation, etc.).
+- ✅ `GET /fba/inbound/v0/shipments/{id}/labels` — H.8b verified, real shipment-not-found error for synthetic ID.
+- ✅ `GET /fba/inbound/v0/shipments` (status polling, H.8d) — verified the same session: returns 200 with `ShipmentData`. Deprecation is **selective**, not blanket; the read-side endpoints continue to work.
+
+**Workaround:** None. The H.8a/8b/8c/8d implementations write the right error to logs, banner ("FBA wizard fully wired to SP-API") will mislead operators into thinking transport works.
+
+**Proper fix:** Migrate the FBA Inbound surface to v2024-03-20. This is a structural change, not a port — v2024-03-20 is a multi-step flow:
+
+1. `POST /inbound/fba/2024-03-20/inboundPlans` — createInboundPlan (planId, no shipmentIds yet).
+2. `GET .../inboundPlans/{planId}/packingOptions` — list packing options.
+3. `POST .../inboundPlans/{planId}/packingOptions/{packingOptionId}/confirmation` — pick one.
+4. `POST .../inboundPlans/{planId}/packingInformation` — submit box content.
+5. `GET .../inboundPlans/{planId}/placementOptions` — list FC routing options.
+6. `POST .../inboundPlans/{planId}/placementOptions/{placementOptionId}/confirmation` — confirm placement, get shipmentIds.
+7. `GET .../inboundPlans/{planId}/shipments/{shipmentId}/transportationOptions` — list transport options.
+8. `POST .../inboundPlans/{planId}/transportationOptions/confirmation` — book transport.
+9. `GET .../inboundPlans/{planId}/shipments/{shipmentId}/labels` — fetch labels.
+
+The flow is asynchronous — each step polls an `operationId` until the operation completes. State persistence is required because the operator can drop off and resume mid-flow. This is roughly H.9 + H.10 of complexity, not a one-commit fix.
+
+**Mitigation until then:** Update the InboundWorkspace banner from green ("fully wired") to amber ("v0 endpoints partially deprecated; transport booking flow needs v2024-03-20 migration"). Operators can still use plan-shipment + getLabels on v0 in the meantime; transport booking has to happen in Seller Central until v2024-03-20 lands.
+
+**Estimated effort:** 4–6 commits. State machine rewrite + polling-based operation tracking + UI redesign for the multi-step flow.
+
+---
+
 ## Triage summary
 
 **🔴 P0 — tackle next:**
 - **0** ✅ Schema-migration drift gate landed 2026-05-02 (script + npm script + .githooks/pre-push). Allow-list down to 1 (DraftListing only). **#37 is the column-level escalation.**
 - **37** Column-level drift detection — table-level gate misses column drift. Three incidents this session, latest took prod down 30 min. Shadow-DB `prisma migrate diff` is the fix.
+- **50** FBA Inbound v0 putTransportDetails deprecated — Amazon returns 400 on the real call. Migrate to v2024-03-20 (multi-step flow). Banner is misleading until then.
 - **8** ✅ Resolved 2026-05-02 — verified GTIN wizard validator was already on the correct ProductImage relation; deleted the orphan `Image` model + dead Express service & route (~1,213 lines). Demoted to P2 for the remaining UX polish.
 - **27** ✅ Resolved 2026-05-02 — TerminologyPreference table + CRUD API + AI prompt injection + admin UI at `/settings/terminology`. Seeded with 7 Xavia/IT entries (Giacca, Pantaloni, Casco, Stivali, Protezioni, Pelle, Rete). Verify post-deploy that "Giacca" wins consistently in regenerations; add new preferences inline as drift surfaces.
 - **31** ✅ Resolved 2026-05-03 — migration `20260503_p0_31_channel_connection` adds the table + fixes substantial column-level drift on `VariantChannelListing` surfaced by the audit. eBay auth + listing flows are now operational; orders flow has separate refactor work tracked at #33.
