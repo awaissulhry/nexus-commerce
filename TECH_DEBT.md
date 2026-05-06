@@ -67,15 +67,15 @@ The /orders rebuild (D.2) replaced `reply.status(200).send(...)` with `return { 
 
 **Proper fix (pattern):** Web app should not import `@nexus/database` from server components. Move the query behind an API endpoint (`GET /api/settings/account`) and have the page `fetch(getBackendUrl() + '/api/settings/account')`. This is a project-wide pattern fix — sweep `apps/web/src/app` for `import { prisma } from '@nexus/database'` in `page.tsx` files and route them through the API.
 
-## 3. 🟡 Out-of-scope orphan routes (not in sidebar)
+## 3. ✅ Out-of-scope orphan routes — resolved 2026-05-06
 
-Found during the sidebar audit but not linked from `AppSidebar.tsx`. They show up in `pathname.startsWith()` matchers and external links elsewhere — leaving them broken creates confusion later.
+**Resolution:** Each orphan now redirects to the canonical surface — server-side `redirect()` from `next/navigation`, so any external link or bookmark lands on the live page instead of a 4xx/5xx.
 
-| Route | Status | Note |
-|---|---|---|
-| `/logs` | 500 | Old activity log page; sidebar uses `/sync-logs` now. Either delete or fix and 301 → `/sync-logs`. |
-| `/monitoring/sync` | 404 | Mentioned in user spec as a planned home for Sync Health; sidebar still links to `/dashboard/health`. Decide which is canonical, redirect the other. |
-| `/settings` (root) | 404 | No index page under `/settings/`. Add a `page.tsx` that redirects to `/settings/channels` or to a real settings landing. |
+| Route | Resolution |
+|---|---|
+| `/logs` | Redirects to `/sync-logs`. The original Prisma-in-server-component page deleted along with its `SyncLogDetails` companion. |
+| `/monitoring/sync` | Redirects to `/dashboard/health` (canonical sync-health surface — Cron / StockDrift / Conflicts / Vitals / SystemLogs panels). |
+| `/settings` (root) | Redirects to `/settings/account` (the sidebar's "Settings" link target). |
 
 ## 4. 🟢 `CategorySchema` rows with `schemaVersion: "unknown"`
 
@@ -1043,7 +1043,7 @@ The flow is asynchronous — each step polls an `operationId` until the operatio
 **🟡 P1 — backlog (informed by real usage):**
 - **1** `@fastify/compress` empty body on `/api/orders` (workaround in place)
 - **2** Prisma in server components (workaround in place; pattern fix needs a sweep)
-- **3** Orphan routes (`/logs`, `/monitoring/sync`, `/settings`)
+- **3** ✅ Resolved 2026-05-06 — `/logs`, `/monitoring/sync`, `/settings` all redirect to the canonical sidebar targets.
 - **6** SheetJS CVE — mitigations real, but worth swapping to `exceljs`
 - **17** `/products` URL state for filters / sort / page
 - **18** `/products` bulk-edit-in-place
