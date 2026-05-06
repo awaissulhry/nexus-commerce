@@ -417,6 +417,47 @@ export async function catalogRoutes(app: FastifyInstance) {
           });
         }
 
+        // P0/B2 — validate basePrice matches MasterPriceService's contract:
+        // finite + non-negative. Caller used to be able to send NaN /
+        // Infinity / negative numbers and Prisma would either reject
+        // with a confusing error or quietly commit a wrong row.
+        const masterBasePrice = Number(master.basePrice);
+        if (!Number.isFinite(masterBasePrice) || masterBasePrice < 0) {
+          return reply.status(400).send({
+            success: false,
+            error: {
+              code: "INVALID_BASE_PRICE",
+              message: "Master basePrice must be a non-negative finite number",
+            },
+          });
+        }
+
+        // P0/B2 — same guard for every child price + quantity. Reject
+        // the entire batch on any invalid input rather than letting it
+        // commit a partial set then fail mid-listing.
+        for (const child of children) {
+          const childPrice = Number(child.price);
+          if (!Number.isFinite(childPrice) || childPrice < 0) {
+            return reply.status(400).send({
+              success: false,
+              error: {
+                code: "INVALID_CHILD_PRICE",
+                message: `Child "${child.sku}" price must be a non-negative finite number`,
+              },
+            });
+          }
+          const childQty = Number(child.quantity);
+          if (!Number.isFinite(childQty) || childQty < 0 || !Number.isInteger(childQty)) {
+            return reply.status(400).send({
+              success: false,
+              error: {
+                code: "INVALID_CHILD_QUANTITY",
+                message: `Child "${child.sku}" quantity must be a non-negative integer`,
+              },
+            });
+          }
+        }
+
         // Validate child SKUs are unique
         const childSkus = children.map((c) => c.sku);
         const uniqueChildSkus = new Set(childSkus);
@@ -512,13 +553,22 @@ export async function catalogRoutes(app: FastifyInstance) {
         }
 
         // Execute atomic transaction
+        // P0/B2 — every basePrice + totalStock write inside the
+        // transaction now uses the validated/coerced values, and every
+        // ChannelListing creation populates masterPrice +
+        // masterQuantity snapshots so the Phase 13 drift detector has
+        // a baseline from the moment the listing exists. Previously
+        // listings were born with masterPrice=null, which made the
+        // first edit through MasterPriceService look like a "drift
+        // discovered" event when in fact it was just the missing
+        // baseline.
         const result = await prisma.$transaction(async (tx: any) => {
           // 1. Create master product
           const masterProduct = await tx.product.create({
             data: {
               sku: master.sku,
               name: master.name,
-              basePrice: master.basePrice,
+              basePrice: masterBasePrice.toFixed(2),
               productType: master.productType,
               categoryAttributes: master.categoryAttributes || {},
               status: "ACTIVE",
@@ -532,13 +582,15 @@ export async function catalogRoutes(app: FastifyInstance) {
           let createdChildren: any[] = [];
           if (children.length > 0) {
             createdChildren = await Promise.all(
-              children.map((child) =>
-                tx.product.create({
+              children.map((child) => {
+                const childPrice = Number(child.price);
+                const childQty = Math.max(0, Math.floor(Number(child.quantity)));
+                return tx.product.create({
                   data: {
                     sku: child.sku,
                     name: `${master.name} - ${child.sku}`,
-                    basePrice: child.price,
-                    totalStock: child.quantity,
+                    basePrice: childPrice.toFixed(2),
+                    totalStock: childQty,
                     productType: master.productType,
                     // Children inherit parent's categoryAttributes
                     // In a real scenario, variation attributes would be added here per child
@@ -548,32 +600,49 @@ export async function catalogRoutes(app: FastifyInstance) {
                     masterProductId: masterProduct.id,
                     isParent: false,
                   },
-                })
-              )
+                });
+              })
             );
           }
 
-          // 3. Create channel listings for master product
+          // 3. Create channel listings for master product. P0/B2 —
+          //    populate masterPrice + masterQuantity at creation time
+          //    so the drift baseline is correct. listing.price is the
+          //    initial published price (may be an override per the
+          //    incoming listing.priceOverride) and is independent of
+          //    masterPrice (Phase 13 followMasterPrice machinery
+          //    decides cascade behaviour later).
           let createdListings: any[] = [];
           if (channelListings.length > 0) {
             createdListings = await Promise.all(
-              channelListings.map((listing) =>
-                tx.channelListing.create({
+              channelListings.map((listing) => {
+                const overridePrice = listing.priceOverride != null
+                  ? Number(listing.priceOverride)
+                  : null;
+                const listingPrice = overridePrice != null && Number.isFinite(overridePrice)
+                  ? overridePrice
+                  : masterBasePrice;
+                return tx.channelListing.create({
                   data: {
                     productId: masterProduct.id,
                     channel: listing.channel,
                     channelMarket: `${listing.channel}_US`, // Default to US region
                     region: "US",
+                    marketplace: "US",
                     title: listing.title,
                     description: listing.description,
-                    price: listing.priceOverride || master.basePrice,
+                    price: listingPrice.toFixed(2),
+                    // P0/B2 — Phase 13 snapshot. Without this, every
+                    // first MasterPriceService.update on this listing
+                    // would treat the missing snapshot as drift.
+                    masterPrice: masterBasePrice.toFixed(2),
                     platformAttributes: {
                       bulletPoints: listing.bulletPoints.filter((b) => b.trim()),
                       images: listing.images || [],
                     },
                   },
-                })
-              )
+                });
+              })
             );
           }
 
