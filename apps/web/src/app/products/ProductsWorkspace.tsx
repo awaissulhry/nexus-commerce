@@ -29,6 +29,7 @@ import {
 } from '@/lib/sync/invalidation-channel'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import ProductDrawer from './_shared/ProductDrawer'
+import { parseFilters } from '@/lib/filters'
 
 // ── Types ───────────────────────────────────────────────────────────
 type Lens = 'grid' | 'hierarchy' | 'coverage' | 'health' | 'drafts'
@@ -161,13 +162,24 @@ export default function ProductsWorkspace() {
 
   const lens = (searchParams.get('lens') as Lens) || 'grid'
   const page = parseInt(searchParams.get('page') ?? '1', 10) || 1
-  const search = searchParams.get('search') ?? ''
   const sortBy = searchParams.get('sortBy') ?? 'updated'
   const pageSize = Math.min(500, parseInt(searchParams.get('pageSize') ?? '100', 10) || 100)
 
-  const statusFilters = searchParams.get('status')?.split(',').filter(Boolean) ?? []
-  const channelFilters = searchParams.get('channels')?.split(',').filter(Boolean) ?? []
-  const marketplaceFilters = searchParams.get('marketplaces')?.split(',').filter(Boolean) ?? []
+  // F10 — parse the canonical filter contract from 10a. parseFilters
+  // accepts BOTH the legacy CSV form (?channels=A,B from pre-Phase-10
+  // bookmarks) AND the canonical repeated-key form
+  // (?channel=A&channel=B). This page emits CSV today via the manual
+  // updateUrl call sites; future cleanup can migrate emission to
+  // serializeFilters too. The parse side is the read-side gate that
+  // ensures every URL — old or new — produces the same in-memory
+  // shape.
+  const canonical = useMemo(() => parseFilters(searchParams), [searchParams])
+  const search = canonical.search ?? ''
+  const statusFilters = canonical.status
+  const channelFilters = canonical.channel
+  const marketplaceFilters = canonical.marketplace
+  // Page-specific dimensions stay on their own URL params (the
+  // canonical contract only covers channel/marketplace/status/search).
   const productTypeFilters = searchParams.get('productTypes')?.split(',').filter(Boolean) ?? []
   const brandFilters = searchParams.get('brands')?.split(',').filter(Boolean) ?? []
   const tagFilters = searchParams.get('tags')?.split(',').filter(Boolean) ?? []
