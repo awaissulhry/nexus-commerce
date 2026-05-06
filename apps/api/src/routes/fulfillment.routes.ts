@@ -23,6 +23,12 @@ import {
   type Urgency as PromotedUrgencyTier,
 } from '../services/replenishment-urgency.service.js'
 import {
+  recomputeAllLeadTimeStats,
+  recomputeLeadTimeStatsForSupplier,
+  getLeadTimeStatsStatus,
+} from '../services/lead-time-stats.service.js'
+import { getLeadTimeStatsCronStatus } from '../jobs/lead-time-stats.job.js'
+import {
   runAutoPoSweep,
   getAutoPoStatus,
 } from '../services/auto-po.service.js'
@@ -2613,21 +2619,114 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  /**
+   * H.14 — refund publish.
+   *
+   * Was: flip Return.refundStatus to REFUNDED locally only — operator
+   * had to re-issue the refund manually in the channel back office.
+   *
+   * Now: post the refund to the originating channel (eBay real,
+   * Amazon manual-confirm, Shopify/Woo stubbed). On success, persist
+   * channelRefundId + channelRefundedAt and mark local REFUNDED. On
+   * channel failure, mark refundStatus=CHANNEL_FAILED with the error
+   * message but DO NOT mark the row REFUNDED — the operator must
+   * resolve before re-trying.
+   *
+   * Body:
+   *   refundCents      — number, the amount in cents to refund. Used
+   *                      to set Return.refundCents before publish.
+   *   skipChannelPush  — boolean, when true marks local REFUNDED
+   *                      without calling the channel. Use when the
+   *                      refund was already issued in Seller Central
+   *                      and we just need Nexus to reflect that.
+   *   reason           — optional override for the channel reason
+   *                      enum (passed through to publisher).
+   */
   fastify.post('/fulfillment/returns/:id/refund', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const body = request.body as { refundCents?: number; auto?: boolean }
+      const body = (request.body ?? {}) as {
+        refundCents?: number
+        skipChannelPush?: boolean
+        reason?: string
+      }
+
+      // Snapshot refundCents up front so the publisher reads the
+      // amount we intend to issue. If the body didn't carry one,
+      // leave the existing value (the operator may have set it on
+      // an earlier inspect step).
+      if (typeof body.refundCents === 'number' && body.refundCents > 0) {
+        await prisma.return.update({
+          where: { id },
+          data: { refundCents: body.refundCents },
+        })
+      }
+
+      // Skip-channel path: operator already refunded in Seller
+      // Central / eBay back office and just wants Nexus to reflect.
+      if (body.skipChannelPush) {
+        const updated = await prisma.return.update({
+          where: { id },
+          data: {
+            status: 'REFUNDED',
+            refundStatus: 'REFUNDED',
+            refundedAt: new Date(),
+            channelRefundError: null,
+            version: { increment: 1 },
+          },
+        })
+        return { ...updated, channelOutcome: 'SKIPPED' }
+      }
+
+      const { publishRefundToChannel } = await import(
+        '../services/refunds/refund-publisher.service.js'
+      )
+      const publish = await publishRefundToChannel({
+        returnId: id,
+        reasonText: body.reason,
+      })
+
+      // Channel push failed → record the error, leave the row
+      // unmodified status-wise so the operator can retry.
+      if (publish.outcome === 'FAILED') {
+        const updated = await prisma.return.update({
+          where: { id },
+          data: {
+            refundStatus: 'CHANNEL_FAILED',
+            channelRefundError: publish.error ?? 'Unknown channel error',
+            version: { increment: 1 },
+          },
+        })
+        return reply.code(502).send({
+          ...updated,
+          channelOutcome: 'FAILED',
+          channelError: publish.error,
+        })
+      }
+
+      // OK / OK_MANUAL_REQUIRED / NOT_IMPLEMENTED → mark REFUNDED
+      // locally. NOT_IMPLEMENTED carries the operator-facing message
+      // so the UI can prompt them to finish in the channel back
+      // office. OK_MANUAL_REQUIRED (Amazon FBM) is the same shape.
       const updated = await prisma.return.update({
         where: { id },
         data: {
           status: 'REFUNDED',
           refundStatus: 'REFUNDED',
           refundedAt: new Date(),
-          refundCents: body.refundCents ?? null,
+          channelRefundId: publish.channelRefundId ?? null,
+          channelRefundedAt:
+            publish.outcome === 'OK' ? new Date() : null,
+          channelRefundError: null,
           version: { increment: 1 },
         },
       })
-      return updated
+      return {
+        ...updated,
+        channelOutcome: publish.outcome,
+        channelMessage: publish.channelMessage,
+        channelRefundId: publish.channelRefundId,
+      }
     } catch (error: any) {
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
@@ -2762,6 +2861,20 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         supplierProducts.map((sp) => [`${sp.supplierId}:${sp.productId}`, sp]),
       )
 
+      // R.11 — supplier σ_LT for the safety-stock formula's LT-variance
+      // term. Computed nightly by lead-time-stats.job; null when the
+      // supplier doesn't have ≥3 PO receives in the last 365 days
+      // (collapses safetyStock back to deterministic-LT behavior).
+      const supplierStats = supplierIds.length > 0
+        ? await prisma.supplier.findMany({
+            where: { id: { in: supplierIds } },
+            select: { id: true, leadTimeStdDevDays: true },
+          })
+        : []
+      const supplierSigmaLtById = new Map(
+        supplierStats.map((s) => [s.id, s.leadTimeStdDevDays != null ? Number(s.leadTimeStdDevDays) : null]),
+      )
+
       // F.2 — Resolve per-product lead time + open inbound stock in two
       // batched queries (see atp.service.ts). The urgency formula now
       // uses effectiveStock = on-hand + inboundWithinLeadTime, so a SKU
@@ -2884,6 +2997,9 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         const moq = sp?.moq ?? 1
         const casePack = sp?.casePack ?? null
 
+        const supplierSigmaLt = rule?.preferredSupplierId
+          ? supplierSigmaLtById.get(rule.preferredSupplierId) ?? null
+          : null
         const math = computeRecommendation({
           velocity,
           demandStdDev,
@@ -2894,6 +3010,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           carryingCostPctYear: p.carryingCostPctYear != null ? Number(p.carryingCostPctYear) : null,
           moq,
           casePack,
+          // R.11 — σ_LT (null = deterministic-LT fallback)
+          leadTimeStdDevDays: supplierSigmaLt,
           ruleReorderPoint: rule?.reorderPoint,
           ruleReorderQuantity: rule?.reorderQuantity,
         })
@@ -3025,6 +3143,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           urgencySource,
           worstChannelKey,
           worstChannelDaysOfCover,
+          // R.11 — σ_LT used for this row's safety-stock calc.
+          leadTimeStdDevDays: supplierSigmaLt,
           needsReorder,
           // F.2 — surface lead-time provenance so the UI can show
           // "from supplier override" vs "from supplier default" vs "fallback".
@@ -3072,6 +3192,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         urgencySource: s.urgencySource,
         worstChannelKey: s.worstChannelKey,
         worstChannelDaysOfCover: s.worstChannelDaysOfCover,
+        // R.11 — σ_LT
+        leadTimeStdDevDays: s.leadTimeStdDevDays,
       }))
       const recIdsByProduct = await bulkPersistRecommendationsIfChanged(
         recommendationInputs,
@@ -3517,6 +3639,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             urgencySource: true,
             worstChannelKey: true,
             worstChannelDaysOfCover: true,
+            // R.11 — σ_LT
+            leadTimeStdDevDays: true,
           },
         })
 
@@ -3941,6 +4065,31 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     return {
       ...await getAutoPoStatus(),
       cron: getAutoPoCronStatus(),
+    }
+  })
+
+  // R.11 — manual lead-time stats recompute. Useful at deploy time
+  // before the 06:00 UTC cron fires, or when debugging "why is σ_LT
+  // null for supplier X?".
+  fastify.post('/fulfillment/replenishment/lead-time-stats/recompute', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as { supplierId?: string }
+      if (body.supplierId) {
+        const r = await recomputeLeadTimeStatsForSupplier(body.supplierId)
+        return { ok: true, supplierId: body.supplierId, ...r }
+      }
+      const r = await recomputeAllLeadTimeStats()
+      return { ok: true, ...r }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[replenishment/lead-time-stats/recompute] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.get('/fulfillment/replenishment/lead-time-stats/status', async () => {
+    return {
+      ...await getLeadTimeStatsStatus(),
+      cron: getLeadTimeStatsCronStatus(),
     }
   })
 

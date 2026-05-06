@@ -181,6 +181,14 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
 
   useEffect(() => { fetchOne() }, [fetchOne])
 
+  const [refundResult, setRefundResult] = useState<{
+    outcome: string
+    message?: string
+    error?: string
+    channelRefundId?: string
+  } | null>(null)
+  const [refundBusy, setRefundBusy] = useState(false)
+
   const action = async (path: string, body?: any) => {
     const res = await fetch(`${getBackendUrl()}/api/fulfillment/returns/${id}/${path}`, {
       method: 'POST',
@@ -204,9 +212,55 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
     action('inspect', { items })
   }
 
-  const submitRefund = () => {
+  /**
+   * H.14 — submit refund publishes to the originating channel before
+   * marking the local row REFUNDED. We surface the channel outcome
+   * inline so the operator sees:
+   *   OK                   → refund posted, channelRefundId rendered
+   *   OK_MANUAL_REQUIRED   → Amazon FBM / FBA hint with deep link
+   *   NOT_IMPLEMENTED      → Shopify/Woo stubbed, retry later
+   *   FAILED               → channel rejected; retry button visible
+   *
+   * The "Mark refunded only (skip channel push)" button is a deliberate
+   * override for when the operator already issued the refund in the
+   * channel back office and just needs Nexus to reflect.
+   */
+  const submitRefund = async (skipChannelPush: boolean) => {
     const cents = refundCents ? Math.round(Number(refundCents) * 100) : null
-    action('refund', { refundCents: cents })
+    setRefundBusy(true)
+    setRefundResult(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/returns/${id}/refund`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refundCents: cents, skipChannelPush }),
+        },
+      )
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setRefundResult({
+          outcome: 'FAILED',
+          error: json?.channelError ?? json?.error ?? 'Refund failed',
+        })
+      } else {
+        setRefundResult({
+          outcome: json.channelOutcome ?? 'OK',
+          message: json.channelMessage,
+          channelRefundId: json.channelRefundId,
+        })
+        await fetchOne()
+        onChanged()
+      }
+    } catch (e) {
+      setRefundResult({
+        outcome: 'FAILED',
+        error: e instanceof Error ? e.message : String(e),
+      })
+    } finally {
+      setRefundBusy(false)
+    }
   }
 
   return (
@@ -293,11 +347,80 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
                   </div>
 
                   {ret.refundStatus !== 'REFUNDED' && (
-                    <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
-                      <span className="text-[11px] text-slate-500 mr-1">Refund:</span>
-                      <input type="number" step="0.01" min="0" value={refundCents} onChange={(e) => setRefundCents(e.target.value)} placeholder="0.00" className="h-8 w-24 px-2 text-right tabular-nums border border-slate-200 rounded text-[12px]" />
-                      <span className="text-[11px] text-slate-500">€</span>
-                      <button onClick={submitRefund} className="h-8 px-3 text-[12px] bg-slate-900 text-white rounded hover:bg-slate-800">Mark refunded</button>
+                    <div className="pt-2 border-t border-slate-100 space-y-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] text-slate-500 mr-1">Refund:</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={refundCents}
+                          onChange={(e) => setRefundCents(e.target.value)}
+                          placeholder="0.00"
+                          className="h-8 w-24 px-2 text-right tabular-nums border border-slate-200 rounded text-[12px]"
+                        />
+                        <span className="text-[11px] text-slate-500">€</span>
+                        <button
+                          onClick={() => submitRefund(false)}
+                          disabled={refundBusy}
+                          className="h-8 px-3 text-[12px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
+                          title={`Issue refund on ${ret.channel} and mark refunded locally`}
+                        >
+                          {refundBusy ? '…' : `Refund on ${ret.channel}`}
+                        </button>
+                        <button
+                          onClick={() => submitRefund(true)}
+                          disabled={refundBusy}
+                          className="h-8 px-3 text-[12px] border border-slate-200 text-slate-600 rounded hover:bg-slate-50 disabled:opacity-50"
+                          title="Already refunded in channel back office — just mark Nexus"
+                        >
+                          Mark only
+                        </button>
+                      </div>
+                      {/* H.14 — channel outcome surface. Each tone
+                          maps to one of the four publisher outcomes. */}
+                      {refundResult && (
+                        <div
+                          className={`text-[11px] rounded px-2.5 py-1.5 ${
+                            refundResult.outcome === 'OK'
+                              ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                              : refundResult.outcome === 'OK_MANUAL_REQUIRED'
+                                ? 'bg-amber-50 border border-amber-200 text-amber-800'
+                                : refundResult.outcome === 'NOT_IMPLEMENTED'
+                                  ? 'bg-slate-50 border border-slate-200 text-slate-700'
+                                  : 'bg-rose-50 border border-rose-200 text-rose-800'
+                          }`}
+                        >
+                          <div className="font-medium">
+                            {refundResult.outcome === 'OK' && 'Refund posted to channel.'}
+                            {refundResult.outcome === 'OK_MANUAL_REQUIRED' && 'Channel requires manual finish.'}
+                            {refundResult.outcome === 'NOT_IMPLEMENTED' && 'Channel adapter not yet wired.'}
+                            {refundResult.outcome === 'SKIPPED' && 'Marked refunded locally (channel skipped).'}
+                            {refundResult.outcome === 'FAILED' && 'Channel push failed.'}
+                          </div>
+                          {refundResult.channelRefundId && (
+                            <div className="mt-0.5 font-mono text-[10px]">
+                              Channel refund id: {refundResult.channelRefundId}
+                            </div>
+                          )}
+                          {refundResult.message && (
+                            <div className="mt-0.5">{refundResult.message}</div>
+                          )}
+                          {refundResult.error && (
+                            <div className="mt-0.5 font-mono text-[10px]">
+                              {refundResult.error}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {ret.refundStatus === 'REFUNDED' && (ret as any).channelRefundId && (
+                    <div className="text-[11px] text-emerald-700 pt-1">
+                      Channel refund id:{' '}
+                      <span className="font-mono">
+                        {(ret as any).channelRefundId}
+                      </span>
                     </div>
                   )}
                 </div>

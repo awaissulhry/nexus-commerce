@@ -2661,6 +2661,16 @@ model Supplier {
   paymentTerms    String? // e.g. "Net 30" / "30gg DF"
   defaultCurrency String? @default("EUR")
   leadTimeDays    Int     @default(14)
+  // R.11 — observed lead-time variance, computed nightly by
+  // lead-time-stats.job from PO createdAt → InboundShipment.arrivedAt.
+  // Feeds the second term of the textbook safety-stock formula:
+  //   SS = z × √(σ_d² × LT + d² × σ_LT²)
+  // Null/0 collapses the formula back to R.4's d-only behavior so
+  // suppliers without enough history degrade gracefully.
+  leadTimeStdDevDays      Decimal?  @db.Decimal(8, 2)
+  leadTimeSampleCount     Int       @default(0)
+  leadTimeStatsUpdatedAt  DateTime?
+
   isActive        Boolean @default(true)
   notes           String?
 
@@ -3012,9 +3022,18 @@ model Return {
   status             ReturnStatusFlow      @default(REQUESTED)
   reason             String?
   conditionGrade     ReturnConditionGrade?
-  refundStatus       String                @default("PENDING") // PENDING | APPROVED | REFUNDED | REJECTED
+  refundStatus       String                @default("PENDING") // PENDING | APPROVED | REFUNDED | REJECTED | CHANNEL_FAILED
   refundCents        Int?
   currencyCode       String                @default("EUR")
+  // H.14 — channel refund traceability. channelRefundId comes back
+  // from eBay/Shopify/Woo after the refund posts; used to dedupe on
+  // re-tries and to render a deep-link in the UI. channelRefundError
+  // captures the last failure message so the operator can fix the
+  // root cause (insufficient buyer balance, line-item mismatch, etc.)
+  // before retrying.
+  channelRefundId    String?
+  channelRefundError String?
+  channelRefundedAt  DateTime?
   // FBA returns are managed by Amazon — we mirror them read-only.
   isFbaReturn        Boolean               @default(false)
   // Restock policy snapshot at receipt time
@@ -3127,6 +3146,9 @@ model ReplenishmentRecommendation {
   urgencySource           String? // 'GLOBAL' | 'CHANNEL'
   worstChannelKey         String? // 'AMAZON:IT' format when CHANNEL drove
   worstChannelDaysOfCover Int?
+  // R.11 — σ_LT applied at this generation (audit "what variance
+  // did we use that day?"). Null when supplier had < 3 PO observations.
+  leadTimeStdDevDays      Decimal? @db.Decimal(8, 2)
 
   preferredSupplierId String?
   isManufactured      Boolean @default(false)
