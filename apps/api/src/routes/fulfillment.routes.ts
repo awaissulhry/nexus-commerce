@@ -40,6 +40,13 @@ import {
 } from '../services/stockout-detector.service.js'
 import { getStockoutDetectorCronStatus } from '../jobs/stockout-detector.job.js'
 import {
+  rolloutChallenger,
+  pinSkuToModel,
+  promoteToChampion,
+  ensureDefaultChampionAssignments,
+  getModelsActive,
+} from '../services/forecast-routing.service.js'
+import {
   runAutoPoSweep,
   getAutoPoStatus,
 } from '../services/auto-po.service.js'
@@ -4225,6 +4232,72 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get('/fulfillment/replenishment/stockouts/status', async () => {
     return { cron: getStockoutDetectorCronStatus() }
+  })
+
+  // R.16 — forecast model A/B routing.
+  fastify.get('/fulfillment/replenishment/forecast-models/active', async () => {
+    return await getModelsActive()
+  })
+
+  fastify.post('/fulfillment/replenishment/forecast-models/rollout', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as {
+        challengerModelId?: string
+        cohortPercent?: number
+        expiresAt?: string | null
+      }
+      if (!body.challengerModelId) return reply.code(400).send({ error: 'challengerModelId required' })
+      if (typeof body.cohortPercent !== 'number') return reply.code(400).send({ error: 'cohortPercent (0-100) required' })
+      const r = await rolloutChallenger({
+        challengerModelId: body.challengerModelId,
+        cohortPercent: body.cohortPercent,
+        expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
+        assignedBy: 'manual',
+      })
+      return { ok: true, ...r }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[forecast-models/rollout] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.post('/fulfillment/replenishment/forecast-models/pin', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as { sku?: string; modelId?: string; cohort?: 'champion' | 'challenger' | 'control' }
+      if (!body.sku || !body.modelId || !body.cohort) {
+        return reply.code(400).send({ error: 'sku + modelId + cohort required' })
+      }
+      await pinSkuToModel({ sku: body.sku, modelId: body.modelId, cohort: body.cohort })
+      return { ok: true }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[forecast-models/pin] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.post('/fulfillment/replenishment/forecast-models/promote', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as { modelId?: string; retirePreviousChampion?: boolean }
+      if (!body.modelId) return reply.code(400).send({ error: 'modelId required' })
+      const r = await promoteToChampion({
+        modelId: body.modelId,
+        retirePreviousChampion: body.retirePreviousChampion,
+      })
+      return { ok: true, ...r }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[forecast-models/promote] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.post('/fulfillment/replenishment/forecast-models/seed-champions', async (_req, reply) => {
+    try {
+      const r = await ensureDefaultChampionAssignments({})
+      return { ok: true, ...r }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[forecast-models/seed-champions] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
   })
 
   // R.6 — auto-PO run history. Forensic ledger; latest first.

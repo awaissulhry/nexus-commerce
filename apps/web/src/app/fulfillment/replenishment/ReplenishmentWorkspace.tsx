@@ -463,6 +463,10 @@ export default function ReplenishmentWorkspace() {
           pre-launch. */}
       <StockoutImpactCard />
 
+      {/* R.16 — model A/B card. Silent unless a challenger is rolled
+          out via the rollout endpoint. */}
+      <ForecastModelsCard />
+
       {/* Filter bar */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="inline-flex items-center bg-slate-100 rounded-md p-0.5">
@@ -1723,6 +1727,53 @@ function ChannelCoverPanel({
         })}
       </ul>
     </div>
+  )
+}
+
+// R.16 — Forecast model A/B card. Shows current champion + any
+// rolled-out challengers with cohort sizes. Renders only when the
+// system has a challenger active (silent until A/B testing is
+// kicked off via the rollout endpoint).
+function ForecastModelsCard() {
+  const [data, setData] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    setLoading(true)
+    fetch(`${getBackendUrl()}/api/fulfillment/replenishment/forecast-models/active`, { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then(setData)
+      .catch(() => setData(null))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading || !data) return null
+  const challengers: Array<{ modelId: string; skuCount: number }> = data.challengers ?? []
+  if (challengers.length === 0) return null  // silent in champion-only state
+
+  return (
+    <Card>
+      <div>
+        <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+          Forecast model A/B
+        </div>
+        <div className="mt-1 flex items-baseline gap-3 flex-wrap">
+          <span className="text-[12px] text-slate-700">
+            Champion: <span className="font-mono">{data.champion?.modelId ?? data.defaultModelId}</span>
+            <span className="text-slate-500 ml-1">({data.champion?.skuCount ?? 0} SKUs)</span>
+          </span>
+          {challengers.map((c) => (
+            <span key={c.modelId} className="text-[12px] text-violet-700">
+              Challenger: <span className="font-mono">{c.modelId}</span>
+              <span className="text-violet-500 ml-1">({c.skuCount} SKUs)</span>
+            </span>
+          ))}
+        </div>
+        <div className="text-[10px] text-slate-500 mt-0.5">
+          Compare MAPE per model in the Forecast Health card. Promote via
+          <span className="font-mono"> POST /forecast-models/promote</span>.
+        </div>
+      </div>
+    </Card>
   )
 }
 

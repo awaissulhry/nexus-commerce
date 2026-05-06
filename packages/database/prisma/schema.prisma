@@ -1486,10 +1486,33 @@ model ReplenishmentForecast {
   // horizonDay) regardless of how many times the worker has run.
   generatedAt DateTime @default(now())
 
-  @@unique([sku, channel, marketplace, horizonDay])
+  // R.16 — unique key includes model so champion + challenger can
+  // both write rows for the same (sku, channel, marketplace, day).
+  @@unique([sku, channel, marketplace, horizonDay, model])
   @@index([sku, horizonDay])
   @@index([channel, marketplace, horizonDay])
   @@index([horizonDay])
+}
+
+// ── R.16: Forecast model A/B / champion-challenger ─────────────────
+// One row per (sku, model) assignment. Champion always present;
+// challenger is optional rollout. The forecast generator reads this
+// table and dual-writes ReplenishmentForecast rows when both
+// cohorts are active. Accuracy infrastructure (R.1) already tracks
+// `model` per row, so MAPE rolls up per (sku, model) naturally.
+model ForecastModelAssignment {
+  id         String   @id @default(cuid())
+  sku        String
+  modelId    String   // 'HOLT_WINTERS_V1' | 'PROPHET_V1' | etc.
+  cohort     String   // 'champion' | 'challenger' | 'control'
+  assignedAt DateTime @default(now())
+  assignedBy String   // 'cron' | 'manual' | 'rollout'
+  expiresAt  DateTime?
+
+  @@unique([sku, modelId])
+  @@index([modelId])
+  @@index([cohort])
+  @@index([sku])
 }
 
 // ── R.1: Forecast accuracy (MAPE) ─────────────────────────────────────────

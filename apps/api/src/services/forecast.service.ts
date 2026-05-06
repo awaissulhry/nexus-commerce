@@ -152,13 +152,20 @@ export async function generateForecastForSeries(
     const lower80 = point.lower80 * sig.combined
     const upper80 = point.upper80 * sig.combined
 
+    // R.16 — unique key includes model to support champion +
+    // challenger dual-write. v1 still always uses HOLT_WINTERS_V1
+    // as the model identifier; model A/B happens by registering
+    // alternate forecaster modules and routing via
+    // forecast-routing.service.
+    const modelId = 'HOLT_WINTERS_V1'
     await prisma.replenishmentForecast.upsert({
       where: {
-        sku_channel_marketplace_horizonDay: {
+        sku_channel_marketplace_horizonDay_model: {
           sku: identity.sku,
           channel: identity.channel,
           marketplace: identity.marketplace,
           horizonDay,
+          model: modelId,
         },
       },
       create: {
@@ -171,7 +178,7 @@ export async function generateForecastForSeries(
         upper80: clamp2(upper80),
         signals: sig as any,
         generationTag: regimeToTag(baseline.regime),
-        model: 'HOLT_WINTERS_V1',
+        model: modelId,
       },
       update: {
         forecastUnits: clamp2(adjusted),
