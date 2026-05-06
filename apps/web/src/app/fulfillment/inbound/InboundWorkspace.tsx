@@ -258,6 +258,26 @@ export default function InboundWorkspace() {
       {/* KPI strip */}
       <KpiStrip kpis={kpis} />
 
+      {/* H.10b — saved views bar. Shows up between KPIs and filters
+          so the operator can switch into a known scope before they
+          touch the filters. */}
+      <SavedViewsBar
+        currentFilters={{ type: tab === 'ALL' ? '' : tab, status, delayed: delayed ? 'true' : '', search, sortBy, sortDir }}
+        onApply={(filters) => {
+          // Replace all known filter keys at once. page resets implicitly.
+          updateUrl({
+            type: filters.type || undefined,
+            status: filters.status || undefined,
+            delayed: filters.delayed || undefined,
+            search: filters.search || undefined,
+            sortBy: filters.sortBy && filters.sortBy !== 'createdAt' ? filters.sortBy : undefined,
+            sortDir: filters.sortDir && filters.sortDir !== 'desc' ? filters.sortDir : undefined,
+            page: undefined,
+          })
+          setSearchInput(filters.search ?? '')
+        }}
+      />
+
       {/* Filter bar */}
       <Card>
         <div className="space-y-3">
@@ -2014,6 +2034,227 @@ function PoPicker({
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// H.10b — SavedViewsBar. Persistable named filter snapshots scoped
+// to surface=inbound. Reuses the existing /api/saved-views CRUD that
+// the global products page already uses (the SavedView model has a
+// `surface` discriminator, so two surfaces share the table without
+// schema work). One default view per user per surface is enforced
+// at the API layer.
+// ─────────────────────────────────────────────────────────────────────
+
+type InboundFilters = {
+  type?: string
+  status?: string
+  delayed?: string
+  search?: string
+  sortBy?: string
+  sortDir?: string
+}
+
+type SavedViewRow = {
+  id: string
+  name: string
+  filters: InboundFilters
+  isDefault: boolean
+}
+
+function SavedViewsBar({
+  currentFilters,
+  onApply,
+}: {
+  currentFilters: InboundFilters
+  onApply: (filters: InboundFilters) => void
+}) {
+  const [views, setViews] = useState<SavedViewRow[]>([])
+  const [savingOpen, setSavingOpen] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newDefault, setNewDefault] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [defaultApplied, setDefaultApplied] = useState(false)
+
+  const fetchViews = useCallback(async () => {
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/saved-views?surface=inbound`)
+      const data = await res.json().catch(() => ({}))
+      if (Array.isArray(data?.items)) {
+        setViews(data.items.map((v: any) => ({ id: v.id, name: v.name, filters: v.filters ?? {}, isDefault: !!v.isDefault })))
+      }
+    } catch {
+      // Soft-fail: saved views are convenience, not critical path.
+    }
+  }, [])
+
+  useEffect(() => { void fetchViews() }, [fetchViews])
+
+  // Auto-apply the user's default view ONCE on first load — but only
+  // if the URL is at "everything blank" so we don't override a user
+  // who came in via a deep link.
+  const isClean =
+    !currentFilters.type && !currentFilters.status && !currentFilters.delayed &&
+    !currentFilters.search && (!currentFilters.sortBy || currentFilters.sortBy === 'createdAt') &&
+    (!currentFilters.sortDir || currentFilters.sortDir === 'desc')
+  useEffect(() => {
+    if (defaultApplied) return
+    if (!isClean) { setDefaultApplied(true); return }
+    const def = views.find((v) => v.isDefault)
+    if (def) {
+      onApply(def.filters)
+      setDefaultApplied(true)
+    } else if (views.length >= 0) {
+      // Mark applied so we don't keep checking on every render once
+      // the views list resolves to "no default".
+      setDefaultApplied(true)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [views, defaultApplied, isClean])
+
+  const saveCurrent = async () => {
+    const name = newName.trim()
+    if (!name) { setError('Name required'); return }
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/saved-views`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          surface: 'inbound',
+          filters: currentFilters,
+          isDefault: newDefault,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error ?? `Save failed (${res.status})`)
+      setNewName('')
+      setNewDefault(false)
+      setSavingOpen(false)
+      await fetchViews()
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const removeView = async (id: string) => {
+    if (!confirm('Delete this saved view?')) return
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/saved-views/${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error(`Delete failed (${res.status})`)
+      await fetchViews()
+    } catch (e: any) {
+      alert(e.message)
+    }
+  }
+
+  const setAsDefault = async (id: string) => {
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/saved-views/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isDefault: true }),
+      })
+      if (!res.ok) throw new Error(`Update failed (${res.status})`)
+      await fetchViews()
+    } catch (e: any) {
+      alert(e.message)
+    }
+  }
+
+  return (
+    <Card>
+      <div className="flex items-start gap-2 flex-wrap">
+        <span className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mt-1">Views</span>
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
+          {views.length === 0 && !savingOpen && (
+            <span className="text-[11px] text-slate-400 italic">No saved views yet — set up your filters and click "Save view" to capture them.</span>
+          )}
+          {views.map((v) => (
+            <span
+              key={v.id}
+              className={`group inline-flex items-center gap-1 h-7 pl-2.5 pr-1 rounded-full border text-[11px] ${
+                v.isDefault
+                  ? 'bg-blue-50 border-blue-200 text-blue-800'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <button
+                onClick={() => onApply(v.filters)}
+                className="inline-flex items-center gap-1"
+                title={v.isDefault ? 'Default view — applied on load' : 'Apply this view'}
+              >
+                {v.isDefault && <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500" />}
+                {v.name}
+              </button>
+              {!v.isDefault && (
+                <button
+                  onClick={() => setAsDefault(v.id)}
+                  className="opacity-0 group-hover:opacity-100 px-1 text-[9px] text-slate-500 hover:text-blue-600"
+                  title="Set as default"
+                >
+                  ★
+                </button>
+              )}
+              <button
+                onClick={() => removeView(v.id)}
+                className="h-5 w-5 inline-flex items-center justify-center rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                title="Delete view"
+              >
+                <X size={11} />
+              </button>
+            </span>
+          ))}
+        </div>
+        {!savingOpen && (
+          <button
+            onClick={() => { setSavingOpen(true); setError(null) }}
+            className="h-7 px-2.5 text-[11px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1"
+          >
+            <Plus size={11} /> Save view
+          </button>
+        )}
+      </div>
+      {savingOpen && (
+        <div className="mt-2 pt-2 border-t border-slate-200 flex items-center gap-2 flex-wrap">
+          <input
+            type="text"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="View name (e.g. Late from Vendor X)"
+            className="h-7 px-2 text-[12px] border border-slate-200 rounded flex-1 min-w-[180px]"
+            autoFocus
+          />
+          <label className="text-[11px] text-slate-600 inline-flex items-center gap-1 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={newDefault}
+              onChange={(e) => setNewDefault(e.target.checked)}
+              className="h-3.5 w-3.5"
+            />
+            Set as default
+          </label>
+          <button
+            onClick={saveCurrent}
+            disabled={busy || !newName.trim()}
+            className="h-7 px-2.5 text-[11px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50"
+          >
+            {busy ? 'Saving…' : 'Save'}
+          </button>
+          <button
+            onClick={() => { setSavingOpen(false); setNewName(''); setNewDefault(false); setError(null) }}
+            className="h-7 px-2.5 text-[11px] border border-slate-200 rounded hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          {error && <span className="text-[11px] text-rose-700">{error}</span>}
+        </div>
+      )}
+    </Card>
+  )
+}
+
 // H.10a — BulkReceiveModal. Cross-shipment scan-receive. Operator
 // scans/types a SKU; backend returns every open InboundShipmentItem
 // for that SKU; if exactly one matches, auto-applies +1; if many,
