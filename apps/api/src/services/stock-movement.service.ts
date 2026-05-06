@@ -1,5 +1,7 @@
 import prisma from '../db.js'
 import type { Prisma } from '@prisma/client'
+import { outboundSyncQueue } from '../lib/queue.js'
+import { logger } from '../utils/logger.js'
 
 // B.1/B.2 — single entrypoint for every stock change.
 // Anyone touching Product.totalStock or ProductVariation.stock MUST go
@@ -20,6 +22,27 @@ import type { Prisma } from '@prisma/client'
 // for the unlikely case a caller targets a single variant directly
 // without specifying a location; current production has zero
 // ProductVariation rows so this path is dormant.
+//
+// Phase 13 (master-data cascade) — symmetric with MasterPriceService.
+//   After the stock write commits, every ChannelListing tied to the
+//   product gets:
+//     masterQuantity := newTotal               (always — snapshot for drift)
+//     if followMasterQuantity = true:
+//        quantity := max(0, newTotal - stockBuffer)  (Phase 23.2 oversell guard)
+//        lastSyncStatus := PENDING
+//     OutboundSyncQueue row enqueued with syncType='QUANTITY_UPDATE',
+//     holdUntil = NOW + 5min (matches PHASE 12a undo grace).
+//   Listings whose quantity didn't change (followMasterQuantity=false, or
+//   bufferless qty already correct) only get the masterQuantity snapshot.
+//   Cascade runs in the same transaction as the stock write; cascade
+//   failures roll the entire mutation back (data corruption beats
+//   silent drift). BullMQ enqueue happens after commit; Redis failures
+//   leave the DB row PENDING for the next drain pass.
+
+// Phase 13 — 5-minute grace window before the worker pushes to the
+// marketplace. Same value MasterPriceService uses; consistent with the
+// PHASE 12a pattern in outbound-sync-phase9.service.ts.
+const DEFAULT_HOLD_MS = 5 * 60 * 1000
 
 type MovementReason =
   | 'ORDER_PLACED'
@@ -151,7 +174,7 @@ export async function applyStockMovement(input: StockMovementInput) {
   } = input
   if (change === 0) throw new Error('applyStockMovement: change must be non-zero')
 
-  return await prisma.$transaction(async (tx) => {
+  const transactionResult = await prisma.$transaction(async (tx) => {
     // H.2 — every movement now resolves to a StockLocation. Legacy
     // (no locationId, no warehouseId) callers transparently land on
     // IT-MAIN.
@@ -219,7 +242,7 @@ export async function applyStockMovement(input: StockMovementInput) {
 
     // Product.totalStock as cached SUM(StockLevel.quantity). Single
     // source of truth across all locations for the H.2 world.
-    await recomputeProductTotalStock(tx, productId)
+    const newTotalStock = await recomputeProductTotalStock(tx, productId)
 
     const movement = await tx.stockMovement.create({
       data: {
@@ -242,36 +265,201 @@ export async function applyStockMovement(input: StockMovementInput) {
       },
     })
 
-    // Best-effort fan-out: enqueue one OutboundSyncQueue row per
-    // existing ChannelListing for this product. The Autopilot worker
-    // picks them up next tick. Failures don't roll the transaction
-    // back — the canonical totalStock is source of truth.
-    try {
-      const channelListings = await tx.channelListing.findMany({
-        where: { productId },
-        select: { id: true, channel: true },
-      })
-      const validTargets = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE'] as const
-      for (const cl of channelListings) {
-        if (!validTargets.includes(cl.channel as any)) continue
-        await tx.outboundSyncQueue.create({
-          data: {
+    // Phase 13 — atomic cascade to ChannelListing.
+    //
+    // The product's totalStock just changed; every linked ChannelListing
+    // needs its masterQuantity snapshot updated, and listings that follow
+    // the master need their `quantity` (after stockBuffer subtraction)
+    // updated and flagged for marketplace re-push. We do all of this in
+    // the same transaction as the stock write — failures roll back the
+    // whole movement rather than leaving listings out of date with the
+    // ledger. The previous best-effort/swallow approach masked exactly
+    // the silent-drift bug TECH_DEBT #42 flagged.
+    const cascadeResult = await cascadeQuantityToListings(tx, {
+      productId,
+      newTotalStock,
+      reason,
+      change,
+      referenceType,
+      referenceId,
+      actor,
+    })
+
+    return { movement, cascade: cascadeResult }
+  })
+
+  // Step 6: BullMQ enqueue happens AFTER the DB transaction commits. If
+  // Redis is down, the OutboundSyncQueue rows stay PENDING and the next
+  // drain pass picks them up — work is never lost. Same pattern as
+  // MasterPriceService; see master-price.service.ts.
+  if (transactionResult.cascade.queuedSyncIds.length > 0) {
+    for (const queueId of transactionResult.cascade.queuedSyncIds) {
+      try {
+        await outboundSyncQueue.add(
+          'sync-job',
+          {
+            queueId,
             productId,
-            channelListingId: cl.id,
-            targetChannel: cl.channel as any,
             syncType: 'QUANTITY_UPDATE',
-            syncStatus: 'PENDING',
-            payload: { reason, change, balanceAfter, referenceType, referenceId } as any,
-            maxRetries: 3,
+            source: 'STOCK_MOVEMENT',
+            reason,
+          },
+          {
+            delay: DEFAULT_HOLD_MS,
+            jobId: queueId,
+          },
+        )
+      } catch (err) {
+        logger.warn(
+          'applyStockMovement: BullMQ enqueue failed (DB row remains PENDING for next drain)',
+          {
+            queueId,
+            productId,
+            err: err instanceof Error ? err.message : String(err),
+          },
+        )
+      }
+    }
+  }
+
+  return transactionResult.movement
+}
+
+interface CascadeArgs {
+  productId: string
+  newTotalStock: number
+  reason: MovementReason
+  change: number
+  referenceType?: string
+  referenceId?: string
+  actor?: string
+}
+
+interface CascadeResult {
+  cascadedListingIds: string[]
+  snapshottedListingIds: string[]
+  queuedSyncIds: string[]
+}
+
+/**
+ * Cascade a new totalStock value to every ChannelListing linked to the
+ * product. Mirrors MasterPriceService.computeListingPrice / cascade —
+ * runs inside the caller's transaction.
+ *
+ * Cascade rules:
+ *   masterQuantity := newTotalStock         (always — drift snapshot)
+ *   if followMasterQuantity = true:
+ *      newListingQty := max(0, newTotalStock - stockBuffer)
+ *      if newListingQty != current listing.quantity:
+ *         update listing.quantity + lastSyncStatus=PENDING
+ *         enqueue OutboundSyncQueue (syncType='QUANTITY_UPDATE')
+ *
+ * The ['AMAZON','EBAY','SHOPIFY','WOOCOMMERCE'] gate matches the
+ * SyncChannel enum's accepted values for OutboundSyncQueue.targetChannel —
+ * unknown channels are skipped (we still snapshot masterQuantity for them
+ * but don't enqueue a marketplace push).
+ */
+async function cascadeQuantityToListings(
+  tx: Prisma.TransactionClient,
+  args: CascadeArgs,
+): Promise<CascadeResult> {
+  const { productId, newTotalStock, reason, change, referenceType, referenceId } = args
+
+  const listings = await tx.channelListing.findMany({
+    where: { productId },
+    select: {
+      id: true,
+      channel: true,
+      region: true,
+      marketplace: true,
+      externalListingId: true,
+      quantity: true,
+      masterQuantity: true,
+      stockBuffer: true,
+      followMasterQuantity: true,
+    },
+  })
+
+  const cascadedListingIds: string[] = []
+  const snapshottedListingIds: string[] = []
+  const queueRowsToCreate: Prisma.OutboundSyncQueueCreateManyInput[] = []
+  const validTargets = new Set(['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE'])
+  const holdUntil = new Date(Date.now() + DEFAULT_HOLD_MS)
+
+  for (const listing of listings) {
+    const newListingQty = listing.followMasterQuantity
+      ? Math.max(0, newTotalStock - (listing.stockBuffer ?? 0))
+      : null
+
+    if (newListingQty != null && newListingQty !== listing.quantity) {
+      await tx.channelListing.update({
+        where: { id: listing.id },
+        data: {
+          masterQuantity: newTotalStock,
+          quantity: newListingQty,
+          lastSyncStatus: 'PENDING',
+          lastSyncedAt: null,
+          version: { increment: 1 },
+        },
+      })
+      cascadedListingIds.push(listing.id)
+      if (validTargets.has(listing.channel)) {
+        queueRowsToCreate.push({
+          productId,
+          channelListingId: listing.id,
+          targetChannel: listing.channel as any,
+          targetRegion: listing.region,
+          syncStatus: 'PENDING' as any,
+          syncType: 'QUANTITY_UPDATE',
+          holdUntil,
+          externalListingId: listing.externalListingId,
+          maxRetries: 3,
+          payload: {
+            source: 'STOCK_MOVEMENT',
+            productId,
+            channel: listing.channel,
+            marketplace: listing.marketplace,
+            quantity: newListingQty,
+            oldQuantity: listing.quantity,
+            masterQuantity: newTotalStock,
+            stockBuffer: listing.stockBuffer ?? 0,
+            reason,
+            change,
+            referenceType: referenceType ?? null,
+            referenceId: referenceId ?? null,
           },
         })
       }
-    } catch (e) {
-      // swallow — caller can re-queue if it cares
+    } else {
+      // Snapshot-only path. Either followMasterQuantity=false (drift
+      // signal preserved) or computed quantity equals existing (no-op).
+      if (listing.masterQuantity !== newTotalStock) {
+        await tx.channelListing.update({
+          where: { id: listing.id },
+          data: { masterQuantity: newTotalStock },
+        })
+      }
+      snapshottedListingIds.push(listing.id)
     }
+  }
 
-    return movement
-  })
+  let queuedSyncIds: string[] = []
+  if (queueRowsToCreate.length > 0) {
+    await tx.outboundSyncQueue.createMany({ data: queueRowsToCreate })
+    const justEnqueued = await tx.outboundSyncQueue.findMany({
+      where: {
+        channelListingId: { in: cascadedListingIds },
+        syncType: 'QUANTITY_UPDATE',
+        syncStatus: 'PENDING',
+      },
+      orderBy: { createdAt: 'desc' },
+      take: cascadedListingIds.length,
+      select: { id: true },
+    })
+    queuedSyncIds = justEnqueued.map((r) => r.id)
+  }
+
+  return { cascadedListingIds, snapshottedListingIds, queuedSyncIds }
 }
 
 /**
