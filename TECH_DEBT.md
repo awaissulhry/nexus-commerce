@@ -847,9 +847,11 @@ The CLI in `packages/database` (v6) generates a client compatible with `@prisma/
 
 ---
 
-## 48. 🟡 BullMQ worker recomputes ChannelListing.price ignoring `followMasterPrice`
+## 48. ✅ BullMQ worker recomputes ChannelListing.price ignoring `followMasterPrice` — resolved 2026-05-06 in `e55ed37`
 
-**Symptom:** Every outbound sync job that runs through `bullmq-sync.worker.ts` (line 187–242, the "Phase 28: Pricing Calculation" block) calls `calculateTargetPrice()` and overwrites `ChannelListing.price` based on the listing's `pricingRule` + `priceAdjustmentPercent`. The recompute does **not** check `followMasterPrice` — so a listing where the seller has explicitly opted out of following the master (e.g. an Amazon-EU price floor that should stay at €49.99 regardless of basePrice) gets its override silently overwritten with the rule-based value the next time anything triggers a sync.
+The Phase 28 recompute at `bullmq-sync.worker.ts` now skips when `followMasterPrice = false`, so a seller's per-marketplace override survives subsequent sync passes. Six-line change wraps the existing recompute in the flag check + adds a debug log for the skip path so the behaviour is visible in production logs. Original symptom preserved below.
+
+**Original symptom (kept for history):** Every outbound sync job that runs through `bullmq-sync.worker.ts` (line 187–242, the "Phase 28: Pricing Calculation" block) calls `calculateTargetPrice()` and overwrites `ChannelListing.price` based on the listing's `pricingRule` + `priceAdjustmentPercent`. The recompute does **not** check `followMasterPrice` — so a listing where the seller has explicitly opted out of following the master (e.g. an Amazon-EU price floor that should stay at €49.99 regardless of basePrice) gets its override silently overwritten with the rule-based value the next time anything triggers a sync.
 
 **Surfaced at:** Phase 13e integration scout. Doesn't block the cascade itself — `MasterPriceService` correctly leaves `followMasterPrice=false` listings' price untouched and never enqueues an OutboundSyncQueue row for them, so the worker only runs on listings the cascade DID write. The bug bites when something else (variation sync, manual resync, a Phase 28 repricer pass) creates an OutboundSyncQueue row for a `followMasterPrice=false` listing — the worker then recomputes and trashes the override.
 
@@ -859,9 +861,11 @@ The CLI in `packages/database` (v6) generates a client compatible with `@prisma/
 
 ---
 
-## 49. 🟡 `OutboundSyncService.processPendingSyncs` ignores `holdUntil`
+## 49. ✅ `OutboundSyncService.processPendingSyncs` ignores `holdUntil` — resolved 2026-05-06 in `e55ed37`
 
-**Symptom:** `outbound-sync.service.ts:103` reads every `OutboundSyncQueue` row with `syncStatus='PENDING'` regardless of `holdUntil`. Today the 5-minute grace window works because every caller (`outbound-sync-phase9.service.ts`, `MasterPriceService`, `applyStockMovement`) sets BullMQ's job-level `delay: 5 * 60 * 1000` AND the DB row's `holdUntil` — the BullMQ delay is what actually defers processing. But any caller that creates a row without also adding a BullMQ job (legacy code paths, future schema imports, manual SQL inserts) bypasses the grace entirely and the next worker tick will dispatch immediately.
+`processPendingSyncs()` now filters by `OR: [{ holdUntil: null }, { holdUntil: { lte: now } }]` so the 5-minute undo grace window is respected even when a caller writes an OutboundSyncQueue row without also adding a BullMQ job. Mirrors the existing `getReadyItems()` filter in `outbound-sync-phase9.service.ts`.
+
+**Original symptom (kept for history):** `outbound-sync.service.ts:103` reads every `OutboundSyncQueue` row with `syncStatus='PENDING'` regardless of `holdUntil`. Today the 5-minute grace window works because every caller (`outbound-sync-phase9.service.ts`, `MasterPriceService`, `applyStockMovement`) sets BullMQ's job-level `delay: 5 * 60 * 1000` AND the DB row's `holdUntil` — the BullMQ delay is what actually defers processing. But any caller that creates a row without also adding a BullMQ job (legacy code paths, future schema imports, manual SQL inserts) bypasses the grace entirely and the next worker tick will dispatch immediately.
 
 **Surfaced at:** Phase 13e integration scout — same investigation as #48.
 
@@ -948,8 +952,8 @@ Promote to 🔴 when a regression slips past the build gates and into production
 - **43** Variant mechanism duplication — `Product.parentId` vs unused `ProductVariation`. 244 active children via parentId, 0 in ProductVariation. Decision needed before bulk-ops can be fixed at scale.
 - **44** Bulk operations target unused data shape — depends on #43. Bulk PRICING/INVENTORY jobs currently process 0 items silently.
 - **45** Local apps/api Prisma client v6 vs v7 mismatch — local dev API can't serve Prisma queries; production unaffected. Onboarding blocker.
-- **48** BullMQ worker recomputes ChannelListing.price ignoring followMasterPrice — overrides survive cascade but die on the next sync. ~5-line fix at bullmq-sync.worker.ts:207.
-- **49** OutboundSyncService.processPendingSyncs ignores holdUntil — works today because BullMQ delay carries the grace, breaks for any non-BullMQ caller. ~3-line fix at outbound-sync.service.ts:114.
+- **48** ✅ Resolved 2026-05-06 in `e55ed37` — Phase 28 recompute now honours `followMasterPrice`.
+- **49** ✅ Resolved 2026-05-06 in `e55ed37` — `processPendingSyncs` now filters by `holdUntil`.
 
 **🟢 P2 — when in the area:**
 - **4** CategorySchema "unknown" rows

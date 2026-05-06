@@ -235,3 +235,199 @@ If a future stock migration needs a window like H.1 did:
 
 See `packages/database/prisma/migrations/20260506_h1_stock_locations/`
 for the H.1 migration + rollback as a reference pattern.
+
+---
+
+## Master-data cascade — Product → ChannelListing (Phase 13)
+
+Every mutation of `Product.basePrice` or `Product.totalStock` cascades
+atomically to every `ChannelListing` tied to that product, then
+enqueues a marketplace push with a 5-minute undo grace window. There
+is **one entrypoint per direction** so the cascade can never be
+forgotten by a new caller:
+
+```
+Product.basePrice change ─► MasterPriceService.update(productId, newPrice, ctx)
+                              one Prisma $transaction:
+                                Product.update(basePrice)
+                                ChannelListing fan-out:
+                                  masterPrice := newPrice          (always)
+                                  if followMasterPrice = true:
+                                    FIXED              → price := newPrice
+                                    MATCH_AMAZON       → price untouched
+                                    PERCENT_OF_MASTER  → newPrice * (1 + adj/100)
+                                    lastSyncStatus := PENDING
+                                OutboundSyncQueue.createMany(
+                                  syncType='PRICE_UPDATE',
+                                  holdUntil = NOW + 5min)
+                                AuditLog.create(slim diff + propagation summary)
+
+Product.totalStock change ─► applyStockMovement(input)
+                              one Prisma $transaction:
+                                StockLevel.update / .create
+                                Product.totalStock = SUM(StockLevel)
+                                ChannelListing fan-out:
+                                  masterQuantity := newTotal       (always)
+                                  if followMasterQuantity = true:
+                                    quantity := max(0, newTotal - stockBuffer)
+                                    lastSyncStatus := PENDING
+                                OutboundSyncQueue.createMany(
+                                  syncType='QUANTITY_UPDATE',
+                                  holdUntil = NOW + 5min)
+                                StockMovement.create (audit row)
+```
+
+**Properties**:
+- Atomic — master + listings + queue + audit either all commit or none do
+- Idempotent on no-op — `MasterPriceService` short-circuits when the
+  new value matches the existing one (no audit / queue noise)
+- Crash-safe BullMQ enqueue — the DB row is the source of truth; if
+  Redis is down the row stays PENDING for the next drain pass
+- Symmetric for stock — extending `applyStockMovement` rather than
+  building a parallel `MasterStockService` keeps H.2's "single
+  entrypoint" invariant
+- `followMasterPrice = false` listings get only their `masterPrice`
+  snapshot updated; their `price` column stays as the seller's
+  per-marketplace override (drift signal preserved)
+
+**Wired callers** (`apps/api/src/routes/`):
+| Route | Field | Service |
+| --- | --- | --- |
+| `PATCH /api/products/:id`  | basePrice  | `MasterPriceService.update` |
+| `PATCH /api/products/:id`  | totalStock | `applyStockMovement` (delta = newTotal - current) |
+| `PATCH /api/products/bulk` | basePrice  | post-commit per-product `MasterPriceService.update` |
+| `PATCH /api/products/bulk` | totalStock | post-commit per-product `applyStockMovement` |
+| every other stock writer (orders, returns, inbound, manual adjust, transfers, reservations) | totalStock | `applyStockMovement` (already routed via H.2) |
+
+The bulk handler keeps the cascade out of its main `$transaction`
+because `applyStockMovement` opens its own transaction internally;
+both can run in their own transactions per-product without nesting.
+Failures are surfaced via the response `errors[]` array — the
+caller's other field updates still commit.
+
+**Backfill**: existing ChannelListings get their `masterPrice` /
+`masterQuantity` baseline populated by:
+
+```bash
+node scripts/backfill-channel-listing-master-snapshot.mjs --apply
+```
+
+Idempotent. Leaves listings whose product's `basePrice = 0` alone
+(snapshotting 0 would mark every override as "drift" forever; the next
+real basePrice edit populates the snapshot correctly).
+
+---
+
+## Cross-page sync infrastructure (Phase 10)
+
+Five pages — `/products`, `/listings`, `/catalog/organize`,
+`/bulk-operations`, `/products/drafts` — share one polling /
+invalidation / freshness contract so an edit on any of them
+propagates to the others within ~200ms. The infrastructure is in
+place across every Phase-10 page; new pages adopt it via four
+shared building blocks.
+
+### 1. Filter contract (`apps/web/src/lib/filters/`)
+
+The `CommonFilters` type defines the canonical filter shape every
+page accepts:
+
+```ts
+interface CommonFilters {
+  search?: string
+  channel: string[]      // ['AMAZON', 'EBAY', …] — empty = no filter
+  marketplace: string[]
+  status: string[]       // page-specific values
+}
+```
+
+URL convention is **repeated keys**, not CSV:
+
+```
+?channel=AMAZON&channel=EBAY&marketplace=IT&status=ACTIVE&search=jacket
+```
+
+`parseFilters(searchParams)` accepts both forms — legacy CSV (e.g.
+`?channels=AMAZON,EBAY` from pre-Phase-10 /products bookmarks,
+`?listingStatus=ACTIVE` from /listings) auto-translates to the
+canonical shape with a one-line dev-mode console warning. Pages with
+extra filters intersect `CommonFilters` with their own type.
+
+### 2. ETag / 304 (`apps/api/src/utils/list-etag.ts`)
+
+Every list endpoint returns an ETag derived from one aggregate query:
+
+```
+ETag = W/"<count>.<maxUpdatedAtMs>.<filterHash>"
+```
+
+Frontend sends `If-None-Match` on subsequent fetches; server returns
+304 with a 50-byte body when nothing changed. Idle polling at 5–10s
+intervals collapses to 304s, cutting bandwidth ~10x at scale.
+
+Adopted on `/api/products`, `/api/products/bulk-fetch`,
+`/api/listings`, `/api/listing-wizard/drafts`, `/api/pim/standalones`,
+`/api/pim/parents-overview`. New list endpoints adopt it in 4 lines:
+
+```ts
+const { etag, count } = await listEtag(prisma, { model: 'product', where, filterContext: { … } })
+reply.header('ETag', etag)
+if (matches(request, etag)) return reply.code(304).send()
+```
+
+### 3. usePolledList (`apps/web/src/lib/sync/use-polled-list.ts`)
+
+The fetch primitive every Phase-10 page consumes. Centralises:
+
+1. Initial fetch on mount + URL-change refetch (with abort of prior)
+2. 30s background interval while `document.visibilityState === 'visible'`
+3. `visibilitychange` + `window.focus` refresh
+4. ETag round-trip (send `If-None-Match`, keep data on 304)
+5. Cross-page invalidation subscription (debounced 200ms)
+
+```tsx
+const { data, loading, error, lastFetchedAt, refetch } = usePolledList<MyResponse>({
+  url: useMemo(() => `/api/things?${qs}`, [qs]),
+  intervalMs: 30_000,
+  invalidationTypes: ['product.updated', 'listing.updated', 'wizard.submitted'],
+})
+```
+
+### 4. Invalidation channel (`apps/web/src/lib/sync/invalidation-channel.ts`)
+
+Browser-native `BroadcastChannel('nexus:invalidations')`. Pages emit
+events after their mutations and listen for the events that affect
+their data:
+
+```ts
+// After a successful mutation:
+emitInvalidation({ type: 'product.updated', id, fields: ['basePrice'] })
+
+// On a page that renders products:
+useInvalidationChannel(['product.updated', 'bulk-job.completed'], () => refetch())
+```
+
+Event vocabulary is type-safe (see `InvalidationType` union). Same-tab
+listeners also fire — `BroadcastChannel` skips the sender by spec, so
+`emitInvalidation` re-dispatches via a `window` `CustomEvent` for
+in-tab subscribers.
+
+### Freshness indicator
+
+`<FreshnessIndicator lastFetchedAt onRefresh loading error />`
+mounted in the page header. Ticks every 10s, shifts amber after 60s
+of staleness, red on error. Click to refresh.
+
+### Adopting on a new page
+
+1. Build URL via `useMemo` from your filter state
+2. `usePolledList<ResponseShape>({ url, intervalMs: 30_000, invalidationTypes })`
+3. Mount `<FreshnessIndicator>` in the page header
+4. Call `emitInvalidation` after every mutation handler with the
+   right event type (see existing pages for examples)
+
+The five migrated pages provide working references covering every
+shape: read-only list (`/products/drafts`), tabbed read-write
+(`/catalog/organize`), heavy grid + bulk (`/bulk-operations`),
+multi-lens (`/listings`), and complex filter + multi-mutation
+(`/products`).
