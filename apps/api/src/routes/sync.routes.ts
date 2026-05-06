@@ -1,5 +1,9 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { AmazonSyncService } from "../services/amazon-sync.service.js";
+import {
+  runSyncDriftDetection,
+  getSyncDriftDetectionStatus,
+} from "../jobs/sync-drift-detection.job.js";
 import { logger } from "../utils/logger.js";
 
 interface SyncCatalogBody {
@@ -27,6 +31,34 @@ interface SyncStatusParams {
 }
 
 export async function syncRoutes(app: FastifyInstance) {
+  /**
+   * P.2 — Manual trigger for the master-drift detector.
+   *
+   * Same logic as the cron (`sync-drift-detection.job.ts`); returns
+   * the per-run summary so an operator who's just edited the catalog
+   * can verify the impact without waiting up to 30 minutes for the
+   * next tick.
+   */
+  app.post('/sync/detect-drift', async (_request, reply) => {
+    try {
+      const result = await runSyncDriftDetection();
+      return reply.send({ ok: true, result });
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      logger.error('POST /api/sync/detect-drift failed', { error });
+      return reply.code(500).send({ ok: false, error });
+    }
+  });
+
+  /**
+   * P.2 — Cron status for the drift detector. Useful for ops to
+   * confirm the cron is wired up + see when it last ran without
+   * grepping logs.
+   */
+  app.get('/sync/detect-drift/status', async (_request, reply) => {
+    return reply.send(getSyncDriftDetectionStatus());
+  });
+
   /**
    * POST /api/sync/amazon/catalog
    * Trigger a new Amazon catalog sync

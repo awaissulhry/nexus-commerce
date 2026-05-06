@@ -611,3 +611,7 @@ export class SyncHealthService {
     }
   }
 }
+
+// P.2 — singleton export so callers can `import { syncHealthService }`
+// instead of new'ing per call. Matches the master*.service pattern.
+export const syncHealthService = new SyncHealthService(prisma);

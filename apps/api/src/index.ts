@@ -67,6 +67,7 @@ import { startAmazonInventoryCron } from "./jobs/amazon-inventory-sync.job.js";
 import { startReservationSweepCron } from "./jobs/reservation-sweep.job.js";
 import { startLateShipmentFlagCron } from "./jobs/late-shipment-flag.job.js";
 import { startSavedViewAlertsCron } from "./jobs/saved-view-alerts.job.js";
+import { startSyncDriftDetectionCron } from "./jobs/sync-drift-detection.job.js";
 import { startFbaStatusPollCron } from "./jobs/fba-status-poll.job.js";
 import { startForecastAccuracyCron } from "./jobs/forecast-accuracy.job.js";
 import { startAutoPoCron } from "./jobs/auto-po-replenishment.job.js";
@@ -446,6 +447,16 @@ async function start() {
     // opt out via NEXUS_ENABLE_SAVED_VIEW_ALERTS_CRON=0.
     if (process.env.NEXUS_ENABLE_SAVED_VIEW_ALERTS_CRON !== '0') {
       startSavedViewAlertsCron();
+    }
+
+    // P.2 — sync drift detection cron. Every 30 minutes, scans
+    // ChannelListing rows that follow master and logs a SyncHealthLog
+    // CONFLICT_DETECTED row for each that's drifted away from the
+    // master's price/quantity. Read-only — only writes to
+    // SyncHealthLog. Default-ON; opt out via
+    // NEXUS_ENABLE_SYNC_DRIFT_DETECTION_CRON=0.
+    if (process.env.NEXUS_ENABLE_SYNC_DRIFT_DETECTION_CRON !== '0') {
+      startSyncDriftDetectionCron();
     }
 
     // H.8d — FBA shipment status polling cron. Every 15 minutes,
