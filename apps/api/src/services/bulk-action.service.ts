@@ -508,6 +508,182 @@ export class BulkActionService {
   }
 
   /**
+   * Job History: paginated list of jobs ordered by createdAt DESC.
+   * Powers the /bulk-operations/history page.
+   */
+  async listJobs(filters: {
+    limit?: number;
+    status?: string;
+    actionType?: string;
+    since?: Date;
+  } = {}): Promise<BulkActionJob[]> {
+    const limit = Math.min(Math.max(filters.limit ?? 50, 1), 100);
+    const where: Prisma.BulkActionJobWhereInput = {};
+    if (filters.status) {
+      // Convenience aliases: 'active' = pre-terminal; 'terminal' = post.
+      if (filters.status === 'active') {
+        where.status = { in: ['PENDING', 'QUEUED', 'IN_PROGRESS'] };
+      } else if (filters.status === 'terminal') {
+        where.status = {
+          in: [
+            'COMPLETED',
+            'PARTIALLY_COMPLETED',
+            'FAILED',
+            'CANCELLED',
+          ],
+        };
+      } else {
+        where.status = filters.status;
+      }
+    }
+    if (filters.actionType) {
+      where.actionType = filters.actionType;
+    }
+    if (filters.since) {
+      where.createdAt = { gte: filters.since };
+    }
+    return await this.prisma.bulkActionJob.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  }
+
+  /**
+   * Per-job drill-down: returns BulkActionItem rows for a job, joined
+   * with the human-readable SKU / channel info for each polymorphic
+   * target. Powers the per-job items modal on the history page.
+   */
+  async listItems(
+    jobId: string,
+    filters: { status?: string; limit?: number } = {},
+  ): Promise<
+    Array<{
+      id: string;
+      jobId: string;
+      productId: string | null;
+      variationId: string | null;
+      channelListingId: string | null;
+      status: string;
+      errorMessage: string | null;
+      beforeState: any;
+      afterState: any;
+      createdAt: Date;
+      completedAt: Date | null;
+      // Human-readable target info (joined client-side for the audit
+      // history pattern — no FK exists on the polymorphic columns).
+      sku: string | null;
+      channelLabel: string | null;
+    }>
+  > {
+    const limit = Math.min(Math.max(filters.limit ?? 200, 1), 1000);
+    const where: Prisma.BulkActionItemWhereInput = { jobId };
+    if (filters.status) where.status = filters.status;
+
+    const rows = await this.prisma.bulkActionItem.findMany({
+      where,
+      orderBy: { createdAt: 'asc' },
+      take: limit,
+    });
+
+    // Bulk-resolve SKUs / channel labels in parallel. No FK on the
+    // polymorphic columns means we accept null when the entity has
+    // since been deleted (audit-history-preserving behavior).
+    const productIds = Array.from(
+      new Set(rows.map((r) => r.productId).filter(Boolean) as string[]),
+    );
+    const variationIds = Array.from(
+      new Set(rows.map((r) => r.variationId).filter(Boolean) as string[]),
+    );
+    const channelListingIds = Array.from(
+      new Set(
+        rows.map((r) => r.channelListingId).filter(Boolean) as string[],
+      ),
+    );
+
+    const [products, variations, channelListings] = await Promise.all([
+      productIds.length > 0
+        ? this.prisma.product.findMany({
+            where: { id: { in: productIds } },
+            select: { id: true, sku: true },
+          })
+        : Promise.resolve([]),
+      variationIds.length > 0
+        ? this.prisma.productVariation.findMany({
+            where: { id: { in: variationIds } },
+            select: { id: true, sku: true },
+          })
+        : Promise.resolve([]),
+      channelListingIds.length > 0
+        ? this.prisma.channelListing.findMany({
+            where: { id: { in: channelListingIds } },
+            select: {
+              id: true,
+              channel: true,
+              marketplace: true,
+              productId: true,
+            },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const productSkuById = new Map(products.map((p) => [p.id, p.sku]));
+    const variationSkuById = new Map(variations.map((v) => [v.id, v.sku]));
+    const channelById = new Map(
+      channelListings.map((cl) => [
+        cl.id,
+        {
+          label: `${cl.channel}${cl.marketplace ? ` · ${cl.marketplace}` : ''}`,
+          productId: cl.productId,
+        },
+      ]),
+    );
+    // Listings → SKUs require one more lookup
+    const listingProductIds = Array.from(
+      new Set(channelListings.map((cl) => cl.productId)),
+    );
+    const listingProducts = listingProductIds.length > 0
+      ? await this.prisma.product.findMany({
+          where: { id: { in: listingProductIds } },
+          select: { id: true, sku: true },
+        })
+      : [];
+    const listingProductSkuById = new Map(
+      listingProducts.map((p) => [p.id, p.sku]),
+    );
+
+    return rows.map((r) => {
+      let sku: string | null = null;
+      let channelLabel: string | null = null;
+      if (r.productId) sku = productSkuById.get(r.productId) ?? null;
+      else if (r.variationId)
+        sku = variationSkuById.get(r.variationId) ?? null;
+      else if (r.channelListingId) {
+        const cl = channelById.get(r.channelListingId);
+        if (cl) {
+          channelLabel = cl.label;
+          sku = listingProductSkuById.get(cl.productId) ?? null;
+        }
+      }
+      return {
+        id: r.id,
+        jobId: r.jobId,
+        productId: r.productId,
+        variationId: r.variationId,
+        channelListingId: r.channelListingId,
+        status: r.status,
+        errorMessage: r.errorMessage,
+        beforeState: r.beforeState,
+        afterState: r.afterState,
+        createdAt: r.createdAt,
+        completedAt: r.completedAt,
+        sku,
+        channelLabel,
+      };
+    });
+  }
+
+  /**
    * Create a rollback job for a failed or completed job
    */
   async createRollbackJob(originalJobId: string): Promise<BulkActionJob> {

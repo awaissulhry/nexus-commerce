@@ -115,6 +115,73 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
   )
 
   /**
+   * GET /api/bulk-operations/history
+   * Paginated job history for the /bulk-operations/history page.
+   * Ordered by createdAt DESC. Supports status / actionType / since
+   * filters. Default limit 50, max 100.
+   *
+   * Convenience status aliases:
+   *   - 'active'   → PENDING / QUEUED / IN_PROGRESS
+   *   - 'terminal' → COMPLETED / PARTIALLY_COMPLETED / FAILED / CANCELLED
+   */
+  fastify.get<{
+    Querystring: {
+      limit?: string
+      status?: string
+      actionType?: string
+      since?: string
+    }
+  }>('/bulk-operations/history', async (request, reply) => {
+    try {
+      const { limit, status, actionType, since } = request.query
+      const jobs = await bulkActionService.listJobs({
+        limit: limit ? Number(limit) : undefined,
+        status,
+        actionType,
+        since: since ? new Date(since) : undefined,
+      })
+      return reply.send({ success: true, jobs, count: jobs.length })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      fastify.log.error({ err: error }, '[bulk-operations] history failed')
+      return reply.code(500).send({ success: false, error: message })
+    }
+  })
+
+  /**
+   * GET /api/bulk-operations/:id/items
+   * Per-item drill-down for the history page's "Items" panel.
+   * Returns BulkActionItem rows joined with human-readable SKU /
+   * channel labels (best-effort — null when the entity has since
+   * been deleted; the audit history is preserved on the item row).
+   */
+  fastify.get<{
+    Params: { id: string }
+    Querystring: { status?: string; limit?: string }
+  }>('/bulk-operations/:id/items', async (request, reply) => {
+    const { id } = request.params
+    if (!id) {
+      return reply
+        .code(400)
+        .send({ success: false, error: 'job id required' })
+    }
+    try {
+      const items = await bulkActionService.listItems(id, {
+        status: request.query.status,
+        limit: request.query.limit ? Number(request.query.limit) : undefined,
+      })
+      return reply.send({ success: true, items, count: items.length })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      fastify.log.error(
+        { err: error, jobId: id },
+        '[bulk-operations] items failed',
+      )
+      return reply.code(500).send({ success: false, error: message })
+    }
+  })
+
+  /**
    * GET /api/bulk-operations
    * List jobs that are still pending (PENDING or QUEUED). Useful for
    * a "recent operations" panel; completed/failed jobs are not in
