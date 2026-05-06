@@ -14,7 +14,7 @@ import {
   Package, Plus, FolderTree, Network, Bookmark, BookmarkPlus,
   ExternalLink, Star, Copy, Trash2, Layers, Image as ImageIcon,
   CheckCircle2, XCircle, AlertCircle, Loader2, Upload, Bell,
-  DollarSign,
+  DollarSign, GitCompare,
 } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import PageHeader from '@/components/layout/PageHeader'
@@ -42,6 +42,7 @@ import {
 import BundleEditor from './_modals/BundleEditor'
 import AiBulkGenerateModal from './_modals/AiBulkGenerateModal'
 import ManageAlertsModal from './_modals/ManageAlertsModal'
+import CompareProductsModal from './_modals/CompareProductsModal'
 
 // ── Types ───────────────────────────────────────────────────────────
 type Lens = 'grid' | 'hierarchy' | 'coverage' | 'health' | 'drafts' | 'pricing'
@@ -1232,6 +1233,18 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLooku
   const [tagMenuOpen, setTagMenuOpen] = useState(false)
   const [publishMenuOpen, setPublishMenuOpen] = useState(false)
   const [aiModalOpen, setAiModalOpen] = useState(false)
+  // P.17 — compare-products modal state. Visible when 2-4 products
+  // are in the selection; uses productLookup so no extra fetch.
+  const [compareModalOpen, setCompareModalOpen] = useState(false)
+  const compareEligible =
+    selectedIds.length >= 2 && selectedIds.length <= 4
+  const compareSubjects = useMemo(() => {
+    if (!compareEligible) return []
+    const byId = new Map(productLookup.map((p) => [p.id, p]))
+    return selectedIds
+      .map((id) => byId.get(id))
+      .filter((p): p is ProductRow => !!p)
+  }, [compareEligible, selectedIds, productLookup])
   const tagMenuRef = useRef<HTMLDivElement>(null)
   const pubMenuRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -1423,6 +1436,22 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLooku
             <Copy size={12} /> Duplicate
           </button>
 
+          {/* P.17 — Compare side-by-side. Only enabled with 2-4
+              products selected; the modal renders one column per
+              product so wider sets don't fit. Uses the grid's
+              already-loaded rows so there's no fetch. */}
+          {compareEligible && (
+            <button
+              type="button"
+              onClick={() => setCompareModalOpen(true)}
+              disabled={busy || compareSubjects.length < 2}
+              className="h-7 px-3 text-[12px] bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
+              title="Side-by-side comparison of selected products"
+            >
+              <GitCompare size={12} /> Compare
+            </button>
+          )}
+
           {/* F4 — AI bulk-generate. Opens a modal with marketplace +
               field selectors, then calls /api/products/ai/bulk-generate
               for the selected productIds. */}
@@ -1457,6 +1486,12 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLooku
             setAiModalOpen(false)
             onComplete()
           }}
+        />
+      )}
+      {compareModalOpen && compareSubjects.length >= 2 && (
+        <CompareProductsModal
+          products={compareSubjects}
+          onClose={() => setCompareModalOpen(false)}
         />
       )}
     </div>
