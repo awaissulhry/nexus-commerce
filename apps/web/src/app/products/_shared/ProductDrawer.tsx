@@ -837,6 +837,48 @@ function ListingsTab({
     listingId: string
     message: string
   } | null>(null)
+  // P.12 — same shape for the "Snap to master" action. Calls
+  // /api/listings/bulk-action with action='follow-master' for a
+  // single listing id, which flips every followMaster* flag back to
+  // true. Next sync tick resets the listing's local values to the
+  // master snapshots.
+  const [snapping, setSnapping] = useState<string | null>(null)
+  const [snapError, setSnapError] = useState<{
+    listingId: string
+    message: string
+  } | null>(null)
+
+  const snapToMaster = async (listingId: string) => {
+    setSnapping(listingId)
+    setSnapError(null)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/listings/bulk-action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'follow-master',
+          listingIds: [listingId],
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      emitInvalidation({
+        type: 'listing.updated',
+        id: listingId,
+        meta: { source: 'drawer-listings-snap-to-master' },
+      })
+      onChanged()
+    } catch (e) {
+      setSnapError({
+        listingId,
+        message: e instanceof Error ? e.message : String(e),
+      })
+    } finally {
+      setSnapping(null)
+    }
+  }
 
   const resync = async (listingId: string) => {
     setResyncing(listingId)
@@ -921,6 +963,18 @@ function ListingsTab({
                   const isResyncing = resyncing === l.id
                   const cellResyncErr =
                     resyncError?.listingId === l.id ? resyncError : null
+                  // P.12 — any followMaster=false flag means there's
+                  // an active per-listing override, even if the value
+                  // happens to match master right now (DRIFT only
+                  // fires on actual divergence). Show a subtle
+                  // OVERRIDE pill alongside DRIFT so the operator
+                  // knows the listing is in manual mode.
+                  const hasOverride =
+                    l.followMasterPrice === false ||
+                    l.followMasterQuantity === false
+                  const isSnapping = snapping === l.id
+                  const cellSnapErr =
+                    snapError?.listingId === l.id ? snapError : null
                   return (
                   <tr key={l.id} className="border-b border-slate-100 last:border-0">
                     <td className="px-3 py-2 font-mono text-[11px] text-slate-700 align-top">
@@ -943,6 +997,27 @@ function ListingsTab({
                           }
                         >
                           DRIFT
+                        </span>
+                      )}
+                      {/* P.12 — OVERRIDE pill. Shows whenever any
+                          followMaster=false even if values match;
+                          DRIFT is the subset that has actual
+                          divergence. Lets the operator distinguish
+                          "deliberately overridden, currently equal"
+                          from "deliberately overridden AND drifted". */}
+                      {hasOverride && !priceDrift && !qtyDrift && (
+                        <span
+                          className="ml-1 inline-flex items-center h-5 px-1.5 rounded text-[10px] font-medium bg-blue-50 text-blue-800 border border-blue-200"
+                          title={
+                            l.followMasterPrice === false &&
+                            l.followMasterQuantity === false
+                              ? 'Price + quantity overridden (manual values; happen to match master)'
+                              : l.followMasterPrice === false
+                              ? 'Price overridden (manual value; happens to match master)'
+                              : 'Quantity overridden (manual value; happens to match master)'
+                          }
+                        >
+                          OVERRIDE
                         </span>
                       )}
                       {/* P.11 — last sync timestamp + error visibility.
@@ -980,7 +1055,7 @@ function ListingsTab({
                       )}
                     </td>
                     <td className="px-3 py-2 text-right align-top">
-                      <div className="inline-flex items-center gap-2">
+                      <div className="inline-flex items-center gap-2 flex-wrap justify-end">
                         {/* P.11 — Sync now action. Calls
                             POST /api/listings/:id/resync which flips
                             the row to PENDING + resets retryCount; the
@@ -1001,6 +1076,29 @@ function ListingsTab({
                           )}
                           {isResyncing ? 'Queuing…' : 'Sync now'}
                         </button>
+                        {/* P.12 — Snap to master. Only shown when the
+                            listing has at least one active override.
+                            Flips every followMaster* flag back to true
+                            via /api/listings/bulk-action. The next
+                            sync tick will reset values to the master
+                            snapshots. Single-button, no confirm — the
+                            action is reversible (operator can
+                            re-override any field) and the listing
+                            stays in PENDING for ~5min before push. */}
+                        {hasOverride && (
+                          <button
+                            type="button"
+                            onClick={() => snapToMaster(l.id)}
+                            disabled={isSnapping}
+                            title="Re-enable follow-master for every field. Next sync resets local values to master."
+                            className="text-[11px] text-amber-700 hover:text-amber-900 disabled:opacity-50 inline-flex items-center gap-0.5"
+                          >
+                            {isSnapping ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : null}
+                            {isSnapping ? 'Snapping…' : 'Snap to master'}
+                          </button>
+                        )}
                         <Link
                           href={`/listings/${l.id}`}
                           className="text-[11px] text-blue-700 hover:underline inline-flex items-center gap-0.5"
@@ -1011,6 +1109,11 @@ function ListingsTab({
                       {cellResyncErr && (
                         <div className="text-[10px] text-rose-700 mt-1 max-w-[200px] truncate" title={cellResyncErr.message}>
                           {cellResyncErr.message}
+                        </div>
+                      )}
+                      {cellSnapErr && (
+                        <div className="text-[10px] text-rose-700 mt-1 max-w-[200px] truncate" title={cellSnapErr.message}>
+                          {cellSnapErr.message}
                         </div>
                       )}
                     </td>
