@@ -30,6 +30,10 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
+import {
+  emitInvalidation,
+  useInvalidationChannel,
+} from '@/lib/sync/invalidation-channel'
 import { editHandlers, editKey } from './EditableCell'
 import PreviewChangesModal from './PreviewChangesModal'
 import UploadModal from './UploadModal'
@@ -1338,6 +1342,34 @@ export default function BulkOperationsClient() {
           setSaveStatus((s) => (s.kind === 'saved' ? { kind: 'idle' } : s))
         }, 3000)
       }
+
+      // Phase 10 — broadcast so /products, /listings, /catalog/organize
+      // open in other tabs refresh within ~200ms. The bulk PATCH can
+      // touch master fields (basePrice, totalStock — routed through
+      // MasterPriceService / applyStockMovement in 13d) AND channel
+      // fields (amazon_title, ebay_description) so we emit both
+      // product.updated and listing.updated.
+      if (succeededChanges.length > 0) {
+        const productIds = Array.from(new Set(succeededChanges.map((c) => c.id)))
+        const touchedChannelFields = succeededChanges.some(
+          (c) => c.field.startsWith('amazon_') || c.field.startsWith('ebay_'),
+        )
+        const touchedMasterFields = succeededChanges.some(
+          (c) => !c.field.startsWith('amazon_') && !c.field.startsWith('ebay_') && !c.field.startsWith('attr_'),
+        )
+        if (touchedMasterFields) {
+          emitInvalidation({
+            type: 'product.updated',
+            meta: { productIds, count: productIds.length, source: 'bulk-grid' },
+          })
+        }
+        if (touchedChannelFields) {
+          emitInvalidation({
+            type: 'listing.updated',
+            meta: { productIds, count: productIds.length, source: 'bulk-grid' },
+          })
+        }
+      }
       // D.6.3: changes successfully sent to the backend can no longer
       // be undone via the local history stack — clear it so the
       // toolbar buttons disable and Cmd+Z is a no-op until the user
@@ -1455,6 +1487,26 @@ export default function BulkOperationsClient() {
   useEffect(() => {
     reloadProducts()
   }, [reloadProducts])
+
+  // Phase 10 — listen for invalidations from other pages / tabs.
+  // /products inline edit, /catalog/organize attach, a wizard
+  // submission — any of these can change rows visible in the
+  // bulk-ops grid; when they do, refetch within ~200ms (debounced).
+  useInvalidationChannel(
+    [
+      'product.updated',
+      'product.created',
+      'product.deleted',
+      'listing.updated',
+      'listing.created',
+      'wizard.submitted',
+      'pim.changed',
+      'bulk-job.completed',
+    ],
+    () => {
+      reloadProducts()
+    },
+  )
 
   // T.4 — row-level actions wired through actionsCtxRef so the cells
   // in dynamicColumns can stay memoised (the ref's identity doesn't
