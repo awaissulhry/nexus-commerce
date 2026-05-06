@@ -349,6 +349,42 @@ could rename `BulkOperation` → `BulkUploadJob` to disambiguate, but
 that is a deliberate rename, not a side-effect of bulk-operations
 work.
 
+### Master-cascade routing per actionType
+
+Every `BulkActionJob` runs through `BulkActionService.processItem`,
+which dispatches to a per-actionType handler. The handlers route
+through master-cascade entrypoints (where applicable) so a bulk
+write triggers the same atomic Product → ChannelListing →
+OutboundSyncQueue → AuditLog cascade as a single-product edit.
+
+| actionType | Targets | Cascade entrypoint |
+| --- | --- | --- |
+| `PRICING_UPDATE` | `Product` | `MasterPriceService.update` (full cascade, `skipBullMQEnqueue: true`) |
+| `INVENTORY_UPDATE` | `Product` | `applyStockMovement` with `reason='MANUAL_ADJUSTMENT'`, `referenceType='BulkActionJob'`, `skipBullMQEnqueue: true` |
+| `STATUS_UPDATE` | `Product` | None — direct `product.update` (no master-cascade entrypoint exists yet for status; tracked in `TECH_DEBT.md`) |
+| `ATTRIBUTE_UPDATE` | `ProductVariation` | None — direct `productVariation.update`; PV is currently empty in production (variants live as Product children); retargeting tracked in `TECH_DEBT.md` |
+| `LISTING_SYNC` | `ProductVariation` | Throws "deferred to v2" |
+| `MARKETPLACE_OVERRIDE_UPDATE` | `ChannelListing` | Direct `channelListing.update` (per-listing override is the lowest-level write — no further cascade) |
+
+**`skipBullMQEnqueue: true`** — bulk-action runs detached from the
+HTTP request (fire-and-forget `processJob`). The post-commit
+`outboundSyncQueue.add()` awaited from this context was observed to
+hang indefinitely (root cause TBD; tracked in `TECH_DEBT.md` #54).
+The OutboundSyncQueue *DB rows* still land inside the master-cascade
+transaction; the per-minute cron worker (`apps/api/src/workers/sync.worker.ts`
+→ `OutboundSyncService.processPendingSyncs`) drains PENDING rows
+within ~60s and respects the `holdUntil` grace window. So the
+cascade is correct and eventually-consistent; the BullMQ enqueue is
+an optimization (immediate worker pickup) we deliberately skip in
+this caller until the hang is diagnosed.
+
+**Implication:** bulk PRICING_UPDATE / INVENTORY_UPDATE jobs honor
+the followMaster* contract and the `version` increment that the rest
+of the cascade machinery relies on, with marketplace push delayed
+by up to 60s relative to inline edits (which use the BullMQ path).
+Re-running the same job is a no-op via the `MasterPriceService`
+short-circuit (no audit / queue noise).
+
 ---
 
 ## Cross-page sync infrastructure (Phase 10)

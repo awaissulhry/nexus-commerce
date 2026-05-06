@@ -799,17 +799,18 @@ Properties: atomic master+listing+outbox write (crash-safe), bounded request lat
 
 ---
 
-## 44. 🟡 Bulk operations target unused data shape
+## 44. 🟡 Bulk operations target unused data shape — partially resolved 2026-05-06
 
-**Symptom:** Every `BulkActionJob` of type 'variation' (PRICING_UPDATE, INVENTORY_UPDATE, ATTRIBUTE_UPDATE, LISTING_SYNC) processes 0 items on real catalogs because `ProductVariation` is empty (#43). Users running bulk price updates from the BulkOperationModal see "completed, 0 processed" with no failure indicator.
+**Symptom (original):** Every `BulkActionJob` of type 'variation' (PRICING_UPDATE, INVENTORY_UPDATE, ATTRIBUTE_UPDATE, LISTING_SYNC) processed 0 items on real catalogs because `ProductVariation` is empty (#43).
 
-**Surfaced at:** Phase 3 scout (2026-05-06).
+**Resolved in Commit 1 of the bulk-operations rebuild:** PRICING_UPDATE + INVENTORY_UPDATE now target `Product` and delegate to `MasterPriceService.update` / `applyStockMovement` for the full cascade (Product + ChannelListing + OutboundSyncQueue + AuditLog/StockMovement). STATUS_UPDATE was already correctly targeting Product. See `bulk-action.service.ts:ACTION_ENTITY` and DEVELOPMENT.md "Bulk operations — two-table data model" → "Master-cascade routing per actionType".
 
-**Workaround applied:** None — feature is silently broken. Two BulkActionJob rows exist in DB from 2026-05-03, both `COMPLETED` with no items processed.
+**Still open:**
+- `ATTRIBUTE_UPDATE` still targets `ProductVariation.variationAttributes`. PV is empty so this is a silent no-op against current data. Retargeting requires a schema decision: which Product column holds variant-level attributes? See entry #52.
+- `LISTING_SYNC` still throws "deferred to v2" — separate concern tracked in #34.
+- The BullMQ post-commit enqueue from bulk-action context hangs indefinitely (root cause TBD — see #54). Worked around with `skipBullMQEnqueue: true`; cron worker drains PENDING rows within ~60s.
 
-**Proper fix:** Depends on #43 resolution. If we deprecate `ProductVariation`, bulk-action handlers + `getItemsForJob` switch to querying `Product` filtered by `parentId IS NOT NULL`. If we adopt `ProductVariation`, backfill it from existing `Product` children, then leave bulk-action as-is.
-
-**Note:** The PATCH `/api/products/bulk` path (used by the BulkOperationsClient grid for inline cell edits, Cmd+S) targets `Product` directly and does work today — that's a separate code path. Only the BulkActionJob/modal flow is affected.
+**Note:** The PATCH `/api/products/bulk` path (used by the BulkOperationsClient grid for inline cell edits, Cmd+S) targets `Product` directly and was unaffected — that's a separate code path that has always worked.
 
 ---
 
@@ -974,6 +975,66 @@ The flow is asynchronous — each step polls an `operationId` until the operatio
 
 ---
 
+## 52. 🟡 Bulk ATTRIBUTE_UPDATE still targets empty ProductVariation table
+
+**Symptom:** `BulkActionJob` of type `ATTRIBUTE_UPDATE` shallow-merges into `ProductVariation.variationAttributes`. PV is empty in production, so jobs run silently with 0 items processed. Same shape as the old #44 PRICING/INVENTORY bug, scoped down to the one remaining handler.
+
+**Surfaced at:** Phase 1 audit + Commit 1 of the bulk-operations rebuild (2026-05-06). PRICING + INVENTORY were retargeted to Product in Commit 1; ATTRIBUTE_UPDATE was deferred because there's no obvious target column on Product.
+
+**Decision needed:** which Product column holds the equivalent of `variationAttributes`? Candidates:
+- `Product.attributes` (if it exists — verify in schema)
+- A new `Product.variantAttributes` JSON column added by migration
+- Continue routing through PV but require callers to also create PV rows when they create Product children (large structural change to the catalog import flow)
+
+**Proper fix:** Once decided, change `ACTION_ENTITY.ATTRIBUTE_UPDATE` from `'variation'` to `'product'`, retarget `processAttributeUpdate` to write the chosen Product column, and remove the deprecation comment in DEVELOPMENT.md.
+
+**Risk if left:** Bulk attribute updates from `/bulk-operations` modal silently no-op. Users see "completed, 0 processed" with no error. Low blast-radius (no one has run this op in production per Phase 1 audit), but a real bug.
+
+---
+
+## 53. 🟡 Bulk STATUS_UPDATE doesn't propagate to channels
+
+**Symptom:** Bulk STATUS_UPDATE writes `Product.status` directly (`bulk-action.service.ts:processStatusUpdate`). No fan-out to ChannelListing, no OutboundSyncQueue enqueue, no AuditLog row. Marketplaces are not informed when a SKU goes ACTIVE → INACTIVE → DRAFT, even though many marketplaces (Amazon, eBay) treat status as a listing-level concept that should be reflected in their UI.
+
+**Surfaced at:** Phase 1 audit + Commit 1 of the bulk-operations rebuild (2026-05-06). PRICING and INVENTORY now route through master-cascade entrypoints (`MasterPriceService.update`, `applyStockMovement`); STATUS has no equivalent service to delegate to.
+
+**Proper fix:** Build a `MasterStatusService.update` (or extend `MasterPriceService` to handle status as a paired concern, since they often change together) that:
+1. Updates `Product.status` atomically
+2. Cascades to ChannelListing (whatever the marketplace-status equivalent is — likely a `listingStatus` column)
+3. Enqueues OutboundSyncQueue with `syncType='STATUS_UPDATE'`
+4. Writes an AuditLog row
+
+Then retarget `processStatusUpdate` to delegate to it.
+
+**Risk if left:** A user marks 50 SKUs INACTIVE in bulk; Amazon and eBay continue showing them as ACTIVE until the next manual sync. Buyers can place orders on items that should be off the shelf.
+
+---
+
+## 54. 🔴 BullMQ post-commit `outboundSyncQueue.add()` hangs from bulk-action's fire-and-forget context
+
+**Symptom:** When `BulkActionService.processJob` (running detached after the route returns 202) calls `MasterPriceService.update`, the in-transaction work completes correctly (AuditLog row written, ChannelListing cascaded, OutboundSyncQueue row inserted), but the post-commit `await outboundSyncQueue.add(...)` never resolves. The bulk-action loop never advances past `processedItems++`. Within ~60–120s the Railway API box becomes unresponsive to /api/health and Railway restarts it. Same hypothesis applies to `applyStockMovement`'s post-commit BullMQ enqueue.
+
+**Surfaced at:** Commit 1 of the bulk-operations rebuild (2026-05-06). Reproduced twice on Railway (commit `9705299`, reverted in `5d9617a`).
+
+**Workaround applied (Commit 1 retry):** Added `skipBullMQEnqueue?: boolean` flag to `MasterPriceUpdateContext` and `StockMovementInput`. Bulk-action passes `true`. The OutboundSyncQueue *DB rows* still land inside the transaction; the per-minute cron worker (`apps/api/src/workers/sync.worker.ts` → `OutboundSyncService.processPendingSyncs`) drains them on the next tick. So bulk operations are correct and eventually-consistent — the BullMQ enqueue is an optimization for immediate worker pickup, deliberately skipped here.
+
+**What we know:**
+- The same `outboundSyncQueue.add(...)` works fine when called from request-scoped contexts (`PATCH /api/products/:id` etc.) — the inline grid edits and Phase 13 master cascade have been live for days without issue.
+- The hang is reliably reproducible from bulk-action's fire-and-forget detached `processJob`.
+- The transaction commits *before* the hang — DB-side state is correct. Only the post-commit BullMQ Redis call hangs.
+- The hang is severe enough that it makes the API box unhealthy (502s for ~4 min until Railway restart). Single hung promise on Node shouldn't block the event loop; something downstream is wedging the process.
+
+**Hypotheses to investigate:**
+1. Connection pool / ioredis client lifecycle tied to a request scope that the detached promise has lost
+2. BullMQ idempotency (`{ jobId: queueId }`) interaction with leftover Redis state from a prior unfinished job
+3. Something Fastify cleans up after `reply.send` that the detached promise still references
+
+**Proper fix:** instrument the bulk-action codepath with logging around the BullMQ enqueue, deploy on a feature branch, reproduce, identify the exact line that hangs, fix root cause. Once fixed, remove `skipBullMQEnqueue: true` from the bulk handlers (or keep it for the eventual-consistency property — TBD).
+
+**Risk if left as-is:** marketplace push lags by up to 60s relative to inline edits. Acceptable for bulk operations (sellers expect "applied in a moment"). Not acceptable as a general pattern; other detached/background callers will hit the same hang and need the same workaround.
+
+---
+
 ## Triage summary
 
 **🔴 P0 — tackle next:**
@@ -1003,7 +1064,10 @@ The flow is asynchronous — each step polls an `operationId` until the operatio
 - **36** Dedicated image-manager page at `/products/:id/images`
 - **38** Audit `IF NOT EXISTS` patterns in migrations — silent-on-collision is what hid the Return table drift; sweep + tighten policy — Phase F shipped the wizard step as a quick-reorder + per-channel validation summary only, with the full multi-scope (GLOBAL/PLATFORM/MARKETPLACE) + variation-aware ListingImage editing deferred to a standalone page. The schema, resolution cascade, and validation service are already in place; the page itself + upload service + dnd-kit drag-to-reorder are the remaining work.
 - **43** Variant mechanism duplication — `Product.parentId` vs unused `ProductVariation`. 244 active children via parentId, 0 in ProductVariation. Decision needed before bulk-ops can be fixed at scale.
-- **44** Bulk operations target unused data shape — depends on #43. Bulk PRICING/INVENTORY jobs currently process 0 items silently.
+- **44** Bulk operations target unused data shape — partially resolved 2026-05-06 in Commit 1 of bulk-ops rebuild (PRICING + INVENTORY retargeted to Product via master-cascade). ATTRIBUTE_UPDATE remaining → see #52.
+- **52** Bulk ATTRIBUTE_UPDATE still targets empty ProductVariation — silent no-op against current data; needs schema decision on where variant attributes live on Product.
+- **53** Bulk STATUS_UPDATE doesn't propagate to channels — `Product.status` updates locally but Amazon/eBay continue showing the old status; needs `MasterStatusService` cascade.
+- **54** 🔴 BullMQ post-commit enqueue hangs from bulk-action's detached `processJob` context — workaround `skipBullMQEnqueue: true` in place; cron worker drains PENDING within 60s. Root cause investigation pending.
 - **45** Local apps/api Prisma client v6 vs v7 mismatch — local dev API can't serve Prisma queries; production unaffected. Onboarding blocker.
 - **48** ✅ Resolved 2026-05-06 in `e55ed37` — Phase 28 recompute now honours `followMasterPrice`.
 - **49** ✅ Resolved 2026-05-06 in `e55ed37` — `processPendingSyncs` now filters by `holdUntil`.

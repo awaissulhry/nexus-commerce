@@ -99,6 +99,14 @@ export type StockMovementInput = {
    * BullMQ jobs after their own commit completes.
    */
   tx?: Prisma.TransactionClient
+  /**
+   * Skip the post-transaction BullMQ enqueue (DB rows in
+   * OutboundSyncQueue are still written; the cron sync worker drains
+   * PENDING rows within ~60s). Use from contexts where the BullMQ
+   * add() is not safe to await — symmetric to MasterPriceService's
+   * skipBullMQEnqueue flag. Default false.
+   */
+  skipBullMQEnqueue?: boolean
 }
 
 /**
@@ -184,6 +192,7 @@ export async function applyStockMovement(input: StockMovementInput) {
     returnId,
     reservationId,
     tx: outerTx,
+    skipBullMQEnqueue,
   } = input
   if (change === 0) throw new Error('applyStockMovement: change must be non-zero')
 
@@ -320,7 +329,7 @@ export async function applyStockMovement(input: StockMovementInput) {
   // Redis is down, the OutboundSyncQueue rows stay PENDING and the next
   // drain pass picks them up — work is never lost. Same pattern as
   // MasterPriceService; see master-price.service.ts.
-  if (!outerTx && transactionResult.cascade.queuedSyncIds.length > 0) {
+  if (!outerTx && !skipBullMQEnqueue && transactionResult.cascade.queuedSyncIds.length > 0) {
     for (const queueId of transactionResult.cascade.queuedSyncIds) {
       try {
         await outboundSyncQueue.add(

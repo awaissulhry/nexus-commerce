@@ -81,6 +81,14 @@ export interface MasterPriceUpdateContext {
   applyGrace?: boolean
   /** Optional Prisma transactional client — when called inside an outer $transaction. */
   tx?: Prisma.TransactionClient
+  /**
+   * Skip the post-transaction BullMQ enqueue (the DB row in OutboundSyncQueue
+   * is still written; the cron sync worker will drain PENDING rows within
+   * ~60s). Use from contexts where the BullMQ add() is not safe to await
+   * (e.g. fire-and-forget background jobs that have hit a hang on the
+   * Redis enqueue path). Default false.
+   */
+  skipBullMQEnqueue?: boolean
 }
 
 export interface MasterPriceUpdateResult {
@@ -362,7 +370,12 @@ export class MasterPriceService {
     // it up — we never lose work. We log on enqueue failure but don't throw,
     // because the user's edit already landed and the DB row is the source of
     // truth for "needs to be pushed."
-    if (result.queuedSyncIds.length > 0) {
+    //
+    // skipBullMQEnqueue: callers like bulk-action that have observed the
+    // post-commit BullMQ add() hang in their fire-and-forget context can
+    // opt out. The PENDING row will still be drained by the per-minute
+    // cron worker (sync.worker.ts → OutboundSyncService.processPendingSyncs).
+    if (!ctx.skipBullMQEnqueue && result.queuedSyncIds.length > 0) {
       const delay =
         ctx.applyGrace === false ? 0 : DEFAULT_HOLD_MS
       for (const queueId of result.queuedSyncIds) {
