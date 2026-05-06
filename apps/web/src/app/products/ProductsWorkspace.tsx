@@ -1838,27 +1838,65 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
           ) : <span className="text-slate-400 text-[11px]">—</span>}
         </button>
       )
-    case 'coverage':
-      if (!p.coverage || Object.keys(p.coverage).length === 0) {
-        return <span className="text-[10px] text-slate-400">No listings</span>
-      }
+    case 'coverage': {
+      // F8 — surface ALL canonical channels per row, not just the ones
+      // already listed. Missing channels render as a gray "+" placeholder
+      // that deep-links into the listing wizard with that channel
+      // pre-selected (Phase 7 query param). At a glance the user sees
+      // both coverage AND gaps; the M/N count tells them where they
+      // are without doing the math.
+      const ALL_CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY'] as const
+      const covered = p.coverage ?? {}
+      const coveredCount = Object.keys(covered).length
       return (
         <div className="flex items-center gap-1 flex-wrap">
-          {Object.entries(p.coverage).slice(0, 4).map(([ch, c]) => {
-            const tone = c.error > 0 ? 'border-rose-300 bg-rose-50 text-rose-700' : c.live > 0 ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : c.draft > 0 ? 'border-slate-200 bg-slate-50 text-slate-600' : 'border-slate-200 bg-white text-slate-400'
+          <span
+            className="text-[10px] text-slate-400 mr-0.5 tabular-nums"
+            title={`${coveredCount} of ${ALL_CHANNELS.length} channels listed`}
+          >
+            {coveredCount}/{ALL_CHANNELS.length}
+          </span>
+          {ALL_CHANNELS.map((ch) => {
+            const c = covered[ch]
+            if (c) {
+              const tone =
+                c.error > 0
+                  ? 'border-rose-300 bg-rose-50 text-rose-700'
+                  : c.live > 0
+                  ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                  : c.draft > 0
+                  ? 'border-slate-200 bg-slate-50 text-slate-600'
+                  : 'border-slate-200 bg-white text-slate-400'
+              return (
+                <Link
+                  key={ch}
+                  href={`/listings/${ch.toLowerCase()}?search=${encodeURIComponent(p.sku)}`}
+                  title={`${ch}: ${c.live} live, ${c.draft} draft, ${c.error} error / ${c.total} total`}
+                  className={`inline-flex items-center gap-1 px-1.5 h-5 text-[10px] font-mono border rounded ${tone} hover:opacity-80`}
+                >
+                  {ch.slice(0, 3)}
+                  <span className="opacity-60">{c.total}</span>
+                </Link>
+              )
+            }
+            // Missing — render an actionable placeholder that takes the
+            // user straight to the listing wizard, pre-selecting this
+            // channel via Phase 7's connection-status flow.
             return (
               <Link
                 key={ch}
-                href={`/listings/${ch.toLowerCase()}?search=${encodeURIComponent(p.sku)}`}
-                title={`${ch}: ${c.live} live, ${c.draft} draft, ${c.error} error / ${c.total} total`}
-                className={`inline-flex items-center gap-1 px-1.5 h-5 text-[10px] font-mono border rounded ${tone} hover:opacity-80`}
+                href={`/products/${p.id}/list-wizard?channel=${ch}`}
+                title={`Not listed on ${ch} — click to start a listing`}
+                className="inline-flex items-center gap-0.5 px-1.5 h-5 text-[10px] font-mono border border-dashed border-slate-300 bg-white text-slate-400 rounded hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50"
               >
-                {ch.slice(0, 3)}<span className="opacity-60">{c.total}</span>
+                {ch.slice(0, 3)}
+                <span className="text-[10px] leading-none">+</span>
               </Link>
             )
           })}
         </div>
       )
+    }
     case 'tags':
       return (
         <div className="flex items-center gap-1 flex-wrap">
