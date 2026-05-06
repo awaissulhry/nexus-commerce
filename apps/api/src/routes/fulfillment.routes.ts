@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
+import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { applyStockMovement, listStockMovements } from '../services/stock-movement.service.js'
 import { refreshSalesAggregates } from '../services/sales-aggregate.service.js'
@@ -685,6 +686,251 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (error: any) {
       fastify.log.error({ err: error }, '[bulk-create shipments] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ═══════════════════════════════════════════════════════════════════
+  // PICK LIST — operations execution Tier-1
+  // ═══════════════════════════════════════════════════════════════════
+  //
+  // GET /fulfillment/pick-list?warehouseId=X&status=READY_TO_PICK
+  //   ?status accepts comma-separated values; defaults to
+  //    DRAFT,READY_TO_PICK so newly-created shipments show up too.
+  //   Returns shipments grouped by warehouse, each with its line
+  //   items joined to StockLevel (so the picker sees WHERE the SKU
+  //   is stocked + how many are on the shelf at that location).
+  //
+  // POST /fulfillment/pick-list/:shipmentId/picked
+  //   Marks a shipment status → PICKED, captures pickedAt + pickedBy.
+  //   Used by the "Mark picked" button per row on the page.
+  //
+  // The pick list is the highest-leverage operations execution surface
+  // we ship — pre-this, pickers walked the warehouse with printed
+  // order summaries, looked up SKU locations from memory, and the
+  // process didn't scale past one or two warehouses. Best-in-class
+  // (Linnworks/Cin7) ships zone-aware wave picking; this is the
+  // foundation for that.
+
+  fastify.get<{
+    Querystring: { warehouseId?: string; status?: string; limit?: string }
+  }>('/fulfillment/pick-list', async (request, reply) => {
+    try {
+      const q = request.query
+      const limit = Math.min(Math.max(Number(q.limit ?? 100), 1), 500)
+      const statuses =
+        q.status && q.status.length > 0
+          ? q.status
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : ['DRAFT', 'READY_TO_PICK']
+
+      const where: Prisma.ShipmentWhereInput = {
+        status: { in: statuses as any },
+      }
+      if (q.warehouseId) where.warehouseId = q.warehouseId
+
+      const shipments = await prisma.shipment.findMany({
+        where,
+        orderBy: { createdAt: 'asc' },
+        take: limit,
+        include: {
+          warehouse: { select: { id: true, code: true, name: true } },
+          order: { select: { id: true, channel: true, channelOrderId: true, customerName: true } },
+          items: true,
+        },
+      })
+
+      // Bulk-resolve product details + per-warehouse stock levels.
+      const productIds = Array.from(
+        new Set(
+          shipments
+            .flatMap((s) => s.items.map((i) => i.productId))
+            .filter((p): p is string => !!p),
+        ),
+      )
+      const warehouseIds = Array.from(
+        new Set(shipments.map((s) => s.warehouseId).filter((w): w is string => !!w)),
+      )
+      const products = productIds.length > 0
+        ? await prisma.product.findMany({
+            where: { id: { in: productIds } },
+            select: { id: true, sku: true, name: true, weightValue: true, weightUnit: true },
+          })
+        : []
+      const stockLocations = warehouseIds.length > 0
+        ? await prisma.stockLocation.findMany({
+            where: { warehouseId: { in: warehouseIds } },
+            select: { id: true, code: true, name: true, warehouseId: true },
+          })
+        : []
+      const productById = new Map(products.map((p) => [p.id, p] as const))
+
+      // Per-warehouse stock-level rows for the items we care about.
+      // One bulk fetch keyed by (locationId, productId).
+      const locationsByWarehouse = new Map<string, string[]>()
+      for (const loc of stockLocations) {
+        if (!loc.warehouseId) continue
+        const arr = locationsByWarehouse.get(loc.warehouseId) ?? []
+        arr.push(loc.id)
+        locationsByWarehouse.set(loc.warehouseId, arr)
+      }
+      const locationById = new Map(stockLocations.map((l) => [l.id, l]))
+      const allLocationIds = stockLocations.map((l) => l.id)
+      const stockLevels =
+        allLocationIds.length > 0 && productIds.length > 0
+          ? await prisma.stockLevel.findMany({
+              where: {
+                locationId: { in: allLocationIds },
+                productId: { in: productIds },
+              },
+              select: { locationId: true, productId: true, quantity: true, available: true },
+            })
+          : []
+      // Index: (warehouseId, productId) → first matching StockLevel + location
+      const stockKey = (whId: string, pid: string) => `${whId}::${pid}`
+      const stockByKey = new Map<
+        string,
+        { quantity: number; available: number; locationCode: string }
+      >()
+      for (const sl of stockLevels) {
+        const loc = locationById.get(sl.locationId)
+        if (!loc?.warehouseId) continue
+        // Pick the first non-zero location per (wh, product). If none
+        // are non-zero, picker still sees the location code so they
+        // know where to look.
+        const k = stockKey(loc.warehouseId, sl.productId)
+        const existing = stockByKey.get(k)
+        if (!existing || (sl.available > existing.available)) {
+          stockByKey.set(k, {
+            quantity: sl.quantity,
+            available: sl.available,
+            locationCode: loc.code,
+          })
+        }
+      }
+
+      // Group shipments by warehouse.
+      const byWarehouse = new Map<
+        string,
+        {
+          warehouseId: string
+          code: string
+          name: string
+          shipments: typeof shipments
+        }
+      >()
+      const NO_WAREHOUSE_KEY = '__no_warehouse__'
+      for (const s of shipments) {
+        const key = s.warehouseId ?? NO_WAREHOUSE_KEY
+        if (!byWarehouse.has(key)) {
+          byWarehouse.set(key, {
+            warehouseId: s.warehouseId ?? '',
+            code: s.warehouse?.code ?? 'UNASSIGNED',
+            name: s.warehouse?.name ?? 'No warehouse assigned',
+            shipments: [],
+          })
+        }
+        byWarehouse.get(key)!.shipments.push(s)
+      }
+
+      // Build response with denormalised item info.
+      const responseWarehouses = Array.from(byWarehouse.values()).map((w) => ({
+        warehouseId: w.warehouseId || null,
+        code: w.code,
+        name: w.name,
+        shipmentCount: w.shipments.length,
+        shipments: w.shipments.map((s) => ({
+          shipmentId: s.id,
+          status: s.status,
+          orderId: s.orderId,
+          orderRef: s.order?.channelOrderId ?? s.orderId ?? '',
+          orderChannel: s.order?.channel ?? null,
+          customerName: s.order?.customerName ?? null,
+          createdAt: s.createdAt,
+          carrierCode: s.carrierCode,
+          weightGrams: s.weightGrams,
+          itemCount: s.items.length,
+          totalUnits: s.items.reduce((sum, it) => sum + it.quantity, 0),
+          items: s.items
+            .map((it) => {
+              const product = it.productId ? productById.get(it.productId) : null
+              const stock =
+                s.warehouseId && it.productId
+                  ? stockByKey.get(stockKey(s.warehouseId, it.productId))
+                  : null
+              return {
+                shipmentItemId: it.id,
+                productId: it.productId,
+                sku: it.sku,
+                productName: product?.name ?? null,
+                weightValue: product?.weightValue ?? null,
+                weightUnit: product?.weightUnit ?? null,
+                quantity: it.quantity,
+                location: stock
+                  ? {
+                      locationCode: stock.locationCode,
+                      onHand: stock.quantity,
+                      available: stock.available,
+                    }
+                  : null,
+              }
+            })
+            // Pick-path optimisation: sort items by location code (zone
+            // → aisle → bin), with unlocated items at the end so the
+            // picker walks the known shelves first.
+            .sort((a, b) => {
+              const aLoc = a.location?.locationCode ?? '￿'
+              const bLoc = b.location?.locationCode ?? '￿'
+              return aLoc.localeCompare(bLoc)
+            }),
+        })),
+      }))
+
+      const totals = {
+        warehouses: responseWarehouses.length,
+        shipments: shipments.length,
+        items: shipments.reduce((s, sh) => s + sh.items.length, 0),
+        units: shipments.reduce(
+          (s, sh) => s + sh.items.reduce((u, it) => u + it.quantity, 0),
+          0,
+        ),
+      }
+
+      return reply.send({
+        success: true,
+        warehouses: responseWarehouses,
+        totals,
+        statusFilter: statuses,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[fulfillment/pick-list] failed')
+      return reply.code(500).send({ success: false, error: message })
+    }
+  })
+
+  fastify.post<{
+    Params: { id: string }
+    Body: { pickedBy?: string }
+  }>('/fulfillment/pick-list/:id/picked', async (request, reply) => {
+    try {
+      const { id } = request.params
+      const body = request.body ?? {}
+      const updated = await prisma.shipment.update({
+        where: { id },
+        data: {
+          status: 'PICKED',
+          pickedAt: new Date(),
+          pickedBy: body.pickedBy ?? null,
+          version: { increment: 1 },
+        },
+      })
+      return reply.send({ success: true, shipment: updated })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[pick-list/:id/picked] failed')
+      return reply.code(500).send({ success: false, error: message })
     }
   })
 
