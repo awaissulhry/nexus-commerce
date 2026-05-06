@@ -13,7 +13,7 @@ import {
   Filter, Settings2, X, ChevronDown, ChevronRight, Eye, EyeOff, Tag as TagIcon,
   Package, Plus, FolderTree, Network, Bookmark, BookmarkPlus,
   ExternalLink, Star, Copy, Trash2, Layers, Image as ImageIcon,
-  CheckCircle2, XCircle,
+  CheckCircle2, XCircle, AlertCircle, Loader2,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -960,6 +960,7 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete }: { selected
   const [status, setStatus] = useState<string | null>(null)
   const [tagMenuOpen, setTagMenuOpen] = useState(false)
   const [publishMenuOpen, setPublishMenuOpen] = useState(false)
+  const [aiModalOpen, setAiModalOpen] = useState(false)
   const tagMenuRef = useRef<HTMLDivElement>(null)
   const pubMenuRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -1138,6 +1139,18 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete }: { selected
             <Copy size={12} /> Duplicate
           </button>
 
+          {/* F4 — AI bulk-generate. Opens a modal with marketplace +
+              field selectors, then calls /api/products/ai/bulk-generate
+              for the selected productIds. */}
+          <button
+            onClick={() => setAiModalOpen(true)}
+            disabled={busy}
+            className="h-7 px-3 text-[12px] bg-purple-50 text-purple-700 border border-purple-200 rounded hover:bg-purple-100 disabled:opacity-50 inline-flex items-center gap-1.5"
+            title="Generate descriptions / bullets / keywords with AI"
+          >
+            <Sparkles size={12} /> AI fill
+          </button>
+
           <Link
             href={`/bulk-operations?productIds=${selectedIds.join(',')}`}
             className="h-7 px-3 text-[12px] bg-violet-50 text-violet-700 border border-violet-200 rounded hover:bg-violet-100 inline-flex items-center gap-1.5"
@@ -1151,6 +1164,251 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete }: { selected
           </button>
         </div>
       </Card>
+      {aiModalOpen && (
+        <AiBulkGenerateModal
+          productIds={selectedIds}
+          onClose={() => setAiModalOpen(false)}
+          onComplete={() => {
+            setAiModalOpen(false)
+            onComplete()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+/**
+ * F4 — bulk AI content generation modal.
+ *
+ * Opens when the user clicks "AI fill" in the bulk-action bar with
+ * one or more products selected. Surfaces marketplace + field
+ * selectors, runs POST /api/products/ai/bulk-generate, and shows
+ * per-product success/failure inline so the user can spot which
+ * products didn't generate cleanly. Successful writes emit
+ * product.updated invalidations so other open pages refresh.
+ *
+ * v1 generates AND writes in one shot. The endpoint also supports
+ * dryRun=true for a preview-then-apply flow which we'll wire in a
+ * follow-up commit once we have UI patterns for cell-level edit
+ * within a modal.
+ */
+function AiBulkGenerateModal({
+  productIds,
+  onClose,
+  onComplete,
+}: {
+  productIds: string[]
+  onClose: () => void
+  onComplete: () => void
+}) {
+  const [marketplace, setMarketplace] = useState('IT')
+  const [fields, setFields] = useState<Set<string>>(
+    new Set(['description', 'bullets']),
+  )
+  const [busy, setBusy] = useState(false)
+  const [results, setResults] = useState<
+    Array<{ productId: string; ok: boolean; error?: string }> | null
+  >(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const toggleField = (f: string) =>
+    setFields((s) => {
+      const next = new Set(s)
+      if (next.has(f)) next.delete(f)
+      else next.add(f)
+      return next
+    })
+
+  const run = async () => {
+    setBusy(true)
+    setError(null)
+    setResults(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/ai/bulk-generate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productIds,
+            marketplace: marketplace.toUpperCase(),
+            fields: Array.from(fields),
+          }),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      const json = await res.json()
+      setResults(json.results ?? [])
+      // Phase 10 — broadcast so /products grid + drawer + listings
+      // refresh within ~200ms.
+      const succeeded = (json.results ?? []).filter((r: any) => r.ok)
+      if (succeeded.length > 0) {
+        emitInvalidation({
+          type: 'product.updated',
+          meta: {
+            productIds: succeeded.map((r: any) => r.productId),
+            source: 'ai-bulk-generate',
+            marketplace,
+            fields: Array.from(fields),
+          },
+        })
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const succeededCount = results?.filter((r) => r.ok).length ?? 0
+  const failedCount = results?.filter((r) => !r.ok).length ?? 0
+  const fieldOptions: Array<{ id: string; label: string; help: string }> = [
+    { id: 'description', label: 'Description', help: 'Long-form product copy' },
+    { id: 'bullets', label: 'Bullet points', help: '5 marketing bullets' },
+    { id: 'keywords', label: 'Keywords', help: 'SEO / backend keywords' },
+    { id: 'title', label: 'Title (overwrites name)', help: 'Use cautiously' },
+  ]
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-slate-900/40 flex items-start justify-center pt-[12vh]"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="bg-white rounded-lg shadow-2xl w-[560px] max-w-[92vw] overflow-hidden border border-slate-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-purple-600" />
+            <h2 className="text-[14px] font-semibold text-slate-900">
+              AI generate content
+            </h2>
+            <span className="text-[11px] text-slate-500">
+              {productIds.length} product{productIds.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1 text-slate-400 hover:text-slate-600"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {!results && (
+          <div className="p-5 space-y-4">
+            <div>
+              <label className="text-[11px] font-semibold text-slate-700 uppercase tracking-wider block mb-1">
+                Marketplace
+              </label>
+              <input
+                type="text"
+                value={marketplace}
+                onChange={(e) => setMarketplace(e.target.value.toUpperCase())}
+                placeholder="IT"
+                className="w-32 h-8 px-2 text-[12px] border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-300 uppercase"
+              />
+              <p className="text-[11px] text-slate-500 mt-1">
+                Drives the language + per-marketplace terminology (IT, DE,
+                FR, ES, UK, US, NL, SE, PL, CA, MX).
+              </p>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold text-slate-700 uppercase tracking-wider block mb-1">
+                Generate which fields?
+              </label>
+              <div className="space-y-1.5 mt-1">
+                {fieldOptions.map((opt) => (
+                  <label
+                    key={opt.id}
+                    className="flex items-start gap-2 text-[12px] text-slate-700 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={fields.has(opt.id)}
+                      onChange={() => toggleField(opt.id)}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <div>{opt.label}</div>
+                      <div className="text-[11px] text-slate-500">{opt.help}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {error && (
+              <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-[12px] text-rose-800 flex items-start gap-2">
+                <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-100">
+              <span className="text-[11px] text-slate-500">
+                Writes immediately — overwrites any existing content in the
+                selected fields.
+              </span>
+              <button
+                type="button"
+                onClick={run}
+                disabled={busy || fields.size === 0 || !marketplace}
+                className="h-8 px-3 text-[12px] bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+              >
+                {busy ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3 h-3" />
+                )}
+                {busy ? 'Generating…' : 'Generate'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {results && (
+          <div className="p-5 space-y-3">
+            <div className="text-[12px] text-slate-700">
+              {succeededCount} succeeded
+              {failedCount > 0 && (
+                <span className="text-rose-700">, {failedCount} failed</span>
+              )}
+              .
+            </div>
+            {failedCount > 0 && (
+              <ul className="border border-rose-200 bg-rose-50 rounded-md p-2 max-h-48 overflow-y-auto text-[11px] text-rose-800 space-y-1">
+                {results
+                  .filter((r) => !r.ok)
+                  .map((r) => (
+                    <li key={r.productId}>
+                      <span className="font-mono">{r.productId.slice(0, 12)}</span>{' '}
+                      — {r.error}
+                    </li>
+                  ))}
+              </ul>
+            )}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={onComplete}
+                className="h-8 px-3 text-[12px] bg-slate-900 text-white rounded-md hover:bg-slate-800"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

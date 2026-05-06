@@ -45,6 +45,7 @@ import dashboardRoutes from "./routes/dashboard.routes.js";
 import pimRoutes from "./routes/pim.routes.js";
 import { listingsSyndicationRoutes } from "./routes/listings-syndication.routes.js";
 import productsCatalogRoutes from "./routes/products-catalog.routes.js";
+import productsAiRoutes from "./routes/products-ai.routes.js";
 import ordersReviewsRoutes from "./routes/orders-reviews.routes.js";
 import connectionsRoutes from "./routes/connections.routes.js";
 import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
@@ -298,6 +299,7 @@ app.register(dashboardRoutes, { prefix: '/api' });
 app.register(pimRoutes, { prefix: '/api' });
 app.register(listingsSyndicationRoutes, { prefix: '/api' });
 app.register(productsCatalogRoutes, { prefix: '/api' });
+app.register(productsAiRoutes, { prefix: '/api' });
 app.register(ordersReviewsRoutes, { prefix: '/api' });
 app.register(connectionsRoutes, { prefix: '/api' });
 
