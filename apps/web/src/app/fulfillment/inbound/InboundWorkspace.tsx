@@ -5,7 +5,6 @@
 // model so the audit trail is unified.
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
 import {
   PackageCheck, Plus, RefreshCw, Truck, X,
   ArrowDownToLine, ChevronRight,
@@ -287,9 +286,10 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
                   <button onClick={close} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Close shipment</button>
                 )}
                 {shipment.fbaShipmentId && (
-                  <Link href={`/fulfillment/inbound/fba/${shipment.fbaShipmentId}`} className="ml-auto text-[12px] text-blue-600 hover:underline inline-flex items-center gap-1">
-                    FBA detail <ChevronRight size={12} />
-                  </Link>
+                  <span className="ml-auto text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded inline-flex items-center gap-1.5">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    FBA detail page lands in 8a
+                  </span>
                 )}
               </div>
             </>
@@ -425,6 +425,24 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
           </div>
           <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
         </header>
+
+        {/* H.0c — honesty banner. The plan + create + labels + transport
+            endpoints are stubs today. Real SP-API integration lands in
+            commits 8a–8d (createInboundShipmentPlan, getLabels,
+            putTransportDetails, status polling). Until then this wizard
+            writes Nexus-side records but doesn't reach Amazon. */}
+        <div className="mx-5 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-md text-[12px] text-amber-900">
+          <div className="font-semibold mb-1 inline-flex items-center gap-1.5">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
+            Preview — does not submit to Amazon yet
+          </div>
+          <div className="text-amber-800 leading-snug">
+            This wizard writes Nexus-side records (FBAShipment + mirrored InboundShipment)
+            but the real SP-API integration ships in upcoming commits 8a–8d.
+            Plan destinations + FNSKU labels are scaffolded; nothing reaches
+            Amazon Seller Central. Use it to dry-run the flow only.
+          </div>
+        </div>
 
         {step === 'plan' && (
           <div className="p-5 space-y-3">
