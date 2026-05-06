@@ -1137,21 +1137,10 @@ model WebhookEvent {
   @@index([channel])
 }
 
-// ── Marketplace Credentials ────────────────────────────────────────
-
-model MarketplaceCredential {
-  id             String    @id @default(cuid())
-  channel        String // SHOPIFY, WOOCOMMERCE, ETSY
-  credentialType String // ACCESS_TOKEN, REFRESH_TOKEN, API_KEY, API_SECRET, WEBHOOK_SECRET
-  encryptedValue String // AES-256-GCM encrypted
-  expiresAt      DateTime?
-  isActive       Boolean   @default(true)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  @@unique([channel, credentialType])
-  @@index([channel])
-}
+// (model MarketplaceCredential removed in 20260506_h2_unify_channel_connection.
+//  Designed for SHOPIFY/WOOCOMMERCE/ETSY but never wired up — their service
+//  code reads process.env directly. All connection credentials now live on
+//  ChannelConnection.)
 
 // ── Rate Limit Tracking ────────────────────────────────────────────
 
@@ -1688,35 +1677,62 @@ model FinancialTransaction {
 model ChannelConnection {
   id String @id @default(cuid())
 
-  // Channel Type
-  channelType String // "AMAZON", "EBAY", "SHOPIFY", "WOOCOMMERCE", "ETSY"
+  // ── Channel ────────────────────────────────────────────────────
+  // channelType: "AMAZON", "EBAY", "SHOPIFY", "WOOCOMMERCE", "ETSY"
+  // marketplace: per-marketplace scope when applicable (e.g. "IT",
+  //   "DE", "GLOBAL", null). eBay grants are multi-marketplace under
+  //   a single token, so eBay rows have marketplace=null. Amazon
+  //   per-region OAuth (P2-2) will populate marketplace.
+  // managedBy: "oauth" | "env" | "pending"
+  //   - oauth   = real OAuth grant; tokens populated below
+  //   - env     = synthesised from process.env (Amazon today)
+  //   - pending = adapter not yet shipped
+  channelType String
+  marketplace String?
+  managedBy   String  @default("oauth")
 
-  // eBay OAuth2 Credentials
-  ebayAccessToken    String? // Current access token
-  ebayRefreshToken   String? // Refresh token (long-lived)
-  ebayTokenExpiresAt DateTime? // Token expiration timestamp
-  ebayDevId          String? // eBay Developer ID (from app)
-  ebayAppId          String? // eBay App ID (from app)
-  ebaySignInName     String? // eBay seller username
-  ebayStoreName      String? // eBay store name
-  ebayStoreFrontUrl  String? // eBay store URL
+  // ── Generic credentials ────────────────────────────────────────
+  // Used by all connectors going forward. Legacy ebay* columns
+  // below are dual-written for one release while callers migrate.
+  accessToken    String?
+  refreshToken   String?
+  tokenExpiresAt DateTime?
+  displayName    String? // seller signin / shop name / store handle
 
-  // Connection Status
+  // ── Legacy eBay-specific columns (DEPRECATED) ──────────────────
+  // Kept for one release while ebay-auth.service.ts dual-writes to
+  // both legacy and generic columns. A follow-up migration will drop
+  // these once all callers read generic-only.
+  ebayAccessToken    String?
+  ebayRefreshToken   String?
+  ebayTokenExpiresAt DateTime?
+  ebayDevId          String?
+  ebayAppId          String?
+  ebaySignInName     String?
+  ebayStoreName      String?
+  ebayStoreFrontUrl  String?
+
+  // ── Connection status ──────────────────────────────────────────
   isActive       Boolean   @default(false)
   lastSyncAt     DateTime?
   lastSyncStatus String? // "SUCCESS", "FAILED", "PARTIAL"
   lastSyncError  String?
 
-  // Metadata
-  connectionMetadata Json? // Additional eBay-specific data
+  connectionMetadata Json?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  // Relations
   variantListings VariantChannelListing[]
 
+  // The partial unique index `ChannelConnection_channelType_marketplace_active_key`
+  // (CREATE UNIQUE INDEX ... WHERE "isActive" = true) is enforced at
+  // the DB level in 20260506_h2_unify_channel_connection. Prisma's
+  // schema language can't express partial unique indexes, so it lives
+  // in raw SQL only. The drift gate accepts this because it doesn't
+  // verify indexes — only CREATE TABLE presence per model.
   @@index([channelType])
   @@index([isActive])
+  @@index([managedBy])
 }
 
 model OutboundSyncQueue {
