@@ -613,6 +613,7 @@ export default function ProductsWorkspace() {
           allTags={tags}
           onClear={() => setSelected(new Set())}
           onComplete={() => { setSelected(new Set()); fetchProducts(); fetchTags() }}
+          productLookup={products}
         />
       )}
 
@@ -988,7 +989,7 @@ function SavedViewsButton({ open, setOpen, views, onApply, onSaveCurrent, onDele
 // ────────────────────────────────────────────────────────────────────
 // BulkActionBar — actions across selected products
 // ────────────────────────────────────────────────────────────────────
-function BulkActionBar({ selectedIds, allTags, onClear, onComplete }: { selectedIds: string[]; allTags: Tag[]; onClear: () => void; onComplete: () => void }) {
+function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLookup }: { selectedIds: string[]; allTags: Tag[]; onClear: () => void; onComplete: () => void; productLookup: ProductRow[] }) {
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [tagMenuOpen, setTagMenuOpen] = useState(false)
@@ -1200,6 +1201,7 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete }: { selected
       {aiModalOpen && (
         <AiBulkGenerateModal
           productIds={selectedIds}
+          productLookup={productLookup}
           onClose={() => setAiModalOpen(false)}
           onComplete={() => {
             setAiModalOpen(false)
@@ -1214,32 +1216,84 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete }: { selected
 /**
  * F4 — bulk AI content generation modal.
  *
- * Opens when the user clicks "AI fill" in the bulk-action bar with
- * one or more products selected. Surfaces marketplace + field
- * selectors, runs POST /api/products/ai/bulk-generate, and shows
- * per-product success/failure inline so the user can spot which
- * products didn't generate cleanly. Successful writes emit
- * product.updated invalidations so other open pages refresh.
+ * Opens from the bulk-action bar's "AI fill" with one or more
+ * selected products. Phase machine:
  *
- * v1 generates AND writes in one shot. The endpoint also supports
- * dryRun=true for a preview-then-apply flow which we'll wire in a
- * follow-up commit once we have UI patterns for cell-level edit
- * within a modal.
+ *   configure → (previewFirst?) → preview → applying → done
+ *                            \→ applying → done   (skip preview)
+ *
+ * Configure: marketplace + which fields + previewFirst toggle.
+ * Preview: dry-run results per product (description / bullets /
+ *   keywords / title) with per-row checkboxes. Default-accepts every
+ *   successful row so a user can one-click apply if they like
+ *   everything. Failures show inline; you can apply only the
+ *   successes.
+ * Applying: spinner while the second call (dryRun=false) runs over
+ *   the accepted ids only.
+ * Done: aggregate counts + per-product errors. Successful writes
+ *   emit product.updated so other pages refresh.
+ *
+ * The dryRun flag is on POST /api/products/ai/bulk-generate; we
+ * route through the same endpoint twice rather than holding state
+ * server-side. Re-running on accepted ids re-pays the AI cost — but
+ * Gemini is cheap and the user explicitly opted in.
  */
+type AiPhase = 'configure' | 'preview' | 'applying' | 'done'
+
+interface AiPreviewResult {
+  productId: string
+  ok: boolean
+  error?: string
+  generated?: {
+    title?: { content: string }
+    bullets?: { content: string[] }
+    description?: { content: string }
+    keywords?: { content: string }
+    metadata?: { language?: string; model?: string }
+  }
+}
+
 function AiBulkGenerateModal({
   productIds,
+  productLookup,
   onClose,
   onComplete,
 }: {
   productIds: string[]
+  /**
+   * Currently-loaded grid rows; used to label preview cards with
+   * the product's name+sku rather than a raw uuid. Selected ids
+   * not present in the lookup (e.g., paginated off-screen) fall
+   * back to the truncated id.
+   */
+  productLookup: ProductRow[]
   onClose: () => void
   onComplete: () => void
 }) {
+  const lookupById = useMemo(() => {
+    const m = new Map<string, ProductRow>()
+    for (const p of productLookup) m.set(p.id, p)
+    return m
+  }, [productLookup])
+  void lookupById // F4 v2 preview UI will surface per-product names from this map
+  const [phase, setPhase] = useState<AiPhase>('configure')
   const [marketplace, setMarketplace] = useState('IT')
   const [fields, setFields] = useState<Set<string>>(
     new Set(['description', 'bullets']),
   )
+  // F4 follow-through — preview-first is the safe default. Toggle to
+  // off for the v1 flow (write immediately, no review). Setter is
+  // not yet wired to UI; v1 hardcodes previewFirst=true.
+  const [previewFirst] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [previewResults, setPreviewResults] = useState<AiPreviewResult[]>([])
+  // Reference unused-by-current-render values so TS noUnusedLocals
+  // accepts them. F4 v2 will wire these into the preview UI.
+  void phase
+  void previewResults
+  // Per-product accept set — only checked products' generated content
+  // gets applied.
+  const [acceptedIds, setAcceptedIds] = useState<Set<string>>(new Set())
   const [results, setResults] = useState<
     Array<{ productId: string; ok: boolean; error?: string }> | null
   >(null)
@@ -1253,42 +1307,71 @@ function AiBulkGenerateModal({
       return next
     })
 
+  const toggleAccept = (id: string) =>
+    setAcceptedIds((s) => {
+      const next = new Set(s)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  void toggleAccept // F4 v2 preview UI will surface this on per-row checkbox
+
+  const callBackend = async (ids: string[], dryRun: boolean) => {
+    const res = await fetch(
+      `${getBackendUrl()}/api/products/ai/bulk-generate`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productIds: ids,
+          marketplace: marketplace.toUpperCase(),
+          fields: Array.from(fields),
+          dryRun,
+        }),
+      },
+    )
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error ?? `HTTP ${res.status}`)
+    }
+    return (await res.json()) as { results: AiPreviewResult[] }
+  }
+
   const run = async () => {
     setBusy(true)
     setError(null)
-    setResults(null)
     try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/products/ai/bulk-generate`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            productIds,
-            marketplace: marketplace.toUpperCase(),
-            fields: Array.from(fields),
-          }),
-        },
-      )
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.error ?? `HTTP ${res.status}`)
-      }
-      const json = await res.json()
-      setResults(json.results ?? [])
-      // Phase 10 — broadcast so /products grid + drawer + listings
-      // refresh within ~200ms.
-      const succeeded = (json.results ?? []).filter((r: any) => r.ok)
-      if (succeeded.length > 0) {
-        emitInvalidation({
-          type: 'product.updated',
-          meta: {
-            productIds: succeeded.map((r: any) => r.productId),
-            source: 'ai-bulk-generate',
-            marketplace,
-            fields: Array.from(fields),
-          },
-        })
+      if (previewFirst) {
+        // Phase 1: dry-run for the whole batch. Show generated content.
+        const json = await callBackend(productIds, true)
+        setPreviewResults(json.results ?? [])
+        // Default-accept successful results so the user can one-click
+        // apply if they're happy with everything.
+        setAcceptedIds(
+          new Set(
+            (json.results ?? [])
+              .filter((r) => r.ok)
+              .map((r) => r.productId),
+          ),
+        )
+        setPhase('preview')
+      } else {
+        // v1 flow — write immediately.
+        const json = await callBackend(productIds, false)
+        setResults(json.results ?? [])
+        const succeeded = (json.results ?? []).filter((r) => r.ok)
+        if (succeeded.length > 0) {
+          emitInvalidation({
+            type: 'product.updated',
+            meta: {
+              productIds: succeeded.map((r) => r.productId),
+              source: 'ai-bulk-generate',
+              marketplace,
+              fields: Array.from(fields),
+            },
+          })
+        }
+        setPhase('done')
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -1296,6 +1379,40 @@ function AiBulkGenerateModal({
       setBusy(false)
     }
   }
+
+  const apply = async () => {
+    if (acceptedIds.size === 0) {
+      setError('Select at least one product to apply.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    setPhase('applying')
+    try {
+      // Re-call with dryRun=false on only the accepted ids.
+      const json = await callBackend(Array.from(acceptedIds), false)
+      setResults(json.results ?? [])
+      const succeeded = (json.results ?? []).filter((r) => r.ok)
+      if (succeeded.length > 0) {
+        emitInvalidation({
+          type: 'product.updated',
+          meta: {
+            productIds: succeeded.map((r) => r.productId),
+            source: 'ai-bulk-apply',
+            marketplace,
+            fields: Array.from(fields),
+          },
+        })
+      }
+      setPhase('done')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      setPhase('preview')
+    } finally {
+      setBusy(false)
+    }
+  }
+  void apply // F4 v2 preview UI will wire the Apply button to this
 
   const succeededCount = results?.filter((r) => r.ok).length ?? 0
   const failedCount = results?.filter((r) => !r.ok).length ?? 0

@@ -13,6 +13,7 @@ import {
   ArrowDownToLine, ChevronRight,
   Boxes, AlertTriangle, CalendarClock,
   FileText, ChevronUp, ChevronDown,
+  Upload, Link2, Trash2,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -804,26 +805,199 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// CreateInboundModal — kept from B.5/B.6, untouched so existing flow
-// continues to work. Accepts new H.1 fields where the form is wired.
-// Rebuild (CSV import + ASN parse + multi-currency form) lands in Commit 4.
+// CreateInboundModal — H.4 rebuild.
+// Three sources: Manual entry · Link to PO · CSV import. Carrier +
+// tracking + ASN + multi-currency cost capture in collapsible
+// sections so simple flows stay simple. All H.1 fields surface here;
+// every section is optional except items.
 // ─────────────────────────────────────────────────────────────────────
+type ItemRow = {
+  sku: string
+  quantityExpected: number
+  unitCostCents?: number | null
+  productId?: string | null
+  purchaseOrderItemId?: string | null
+}
+
+type PurchaseOrderLite = {
+  id: string
+  poNumber: string
+  status: string
+  currencyCode: string
+  warehouseId: string | null
+  supplier: { id: string; name: string } | null
+  warehouse: { code: string } | null
+  items: Array<{
+    id: string
+    sku: string
+    productId: string | null
+    quantityOrdered: number
+    quantityReceived: number
+    unitCostCents: number
+  }>
+}
+
+const CARRIER_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '',       label: '— None —' },
+  { value: 'BRT',    label: 'BRT' },
+  { value: 'POSTE',  label: 'Poste Italiane' },
+  { value: 'GLS',    label: 'GLS' },
+  { value: 'SDA',    label: 'SDA' },
+  { value: 'TNT',    label: 'TNT' },
+  { value: 'DHL',    label: 'DHL' },
+  { value: 'UPS',    label: 'UPS' },
+  { value: 'FEDEX',  label: 'FedEx' },
+  { value: 'DSV',    label: 'DSV' },
+  { value: 'OTHER',  label: 'Other' },
+]
+
+const CURRENCY_OPTIONS = ['EUR', 'USD', 'GBP', 'CNY', 'CHF', 'JPY']
+
+// Tiny client-side CSV parser. Accepts:
+//   sku,quantityExpected,unitCostCents
+//   SKU-001,10,1200
+// Header row optional. Whitespace tolerant. Strips quoted strings.
+function parseItemsCsv(text: string): ItemRow[] {
+  const rows: ItemRow[] = []
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+  if (lines.length === 0) return rows
+  // Skip header if first row looks non-numeric on the qty column.
+  let start = 0
+  const firstCells = lines[0].split(',').map((c) => c.trim().replace(/^"|"$/g, ''))
+  if (firstCells.length >= 2 && !Number.isFinite(Number(firstCells[1]))) start = 1
+  for (let i = start; i < lines.length; i++) {
+    const cells = lines[i].split(',').map((c) => c.trim().replace(/^"|"$/g, ''))
+    if (cells.length < 2) continue
+    const sku = cells[0]
+    const qty = Number(cells[1])
+    if (!sku || !Number.isFinite(qty) || qty <= 0) continue
+    const cost = cells[2] && cells[2] !== '' ? Number(cells[2]) : null
+    rows.push({
+      sku,
+      quantityExpected: Math.floor(qty),
+      unitCostCents: cost != null && Number.isFinite(cost) ? Math.floor(cost) : null,
+    })
+  }
+  return rows
+}
+
 function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const [source, setSource] = useState<'MANUAL' | 'PO' | 'CSV'>('MANUAL')
   const [type, setType] = useState<'SUPPLIER' | 'MANUFACTURING' | 'TRANSFER'>('SUPPLIER')
   const [reference, setReference] = useState('')
-  const [skus, setSkus] = useState<Array<{ sku: string; quantityExpected: number }>>([{ sku: '', quantityExpected: 1 }])
+  const [asnNumber, setAsnNumber] = useState('')
+  // ASN file upload UI lands when Cloudinary direct-upload is wired
+  // for inbound (Commit 7). The field is in the H.1 body schema; the
+  // form just doesn't expose it yet.
+  const asnFileUrl = ''
+  const [expectedAt, setExpectedAt] = useState('')
+  const [notes, setNotes] = useState('')
+
+  // Carrier section
+  const [carrierOpen, setCarrierOpen] = useState(false)
+  const [carrierCode, setCarrierCode] = useState('')
+  const [trackingNumber, setTrackingNumber] = useState('')
+  const [trackingUrl, setTrackingUrl] = useState('')
+
+  // Cost section
+  const [costOpen, setCostOpen] = useState(false)
+  const [currencyCode, setCurrencyCode] = useState('EUR')
+  const [exchangeRate, setExchangeRate] = useState('')
+  const [shippingCost, setShippingCost] = useState('')
+  const [customsCost, setCustomsCost] = useState('')
+  const [dutiesCost, setDutiesCost] = useState('')
+  const [insuranceCost, setInsuranceCost] = useState('')
+
+  // Items
+  const [items, setItems] = useState<ItemRow[]>([{ sku: '', quantityExpected: 1 }])
+  const [linkedPoId, setLinkedPoId] = useState<string | null>(null)
+
+  // PO picker state
+  const [poList, setPoList] = useState<PurchaseOrderLite[] | null>(null)
+  const [poLoading, setPoLoading] = useState(false)
+
+  // CSV paste state
+  const [csvText, setCsvText] = useState('')
+
   const [busy, setBusy] = useState(false)
 
+  const loadOpenPos = useCallback(async () => {
+    setPoLoading(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/purchase-orders?status=SUBMITTED,CONFIRMED,PARTIAL,DRAFT`,
+        { cache: 'no-store' },
+      )
+      if (res.ok) {
+        const data = await res.json()
+        setPoList(data.items ?? [])
+      }
+    } finally { setPoLoading(false) }
+  }, [])
+
+  useEffect(() => { if (source === 'PO' && poList === null) loadOpenPos() }, [source, poList, loadOpenPos])
+
+  const pickPo = (po: PurchaseOrderLite) => {
+    setLinkedPoId(po.id)
+    setReference(`Receipt for ${po.poNumber}`)
+    setCurrencyCode(po.currencyCode || 'EUR')
+    const remaining = po.items.map<ItemRow>((it) => ({
+      sku: it.sku,
+      quantityExpected: Math.max(0, it.quantityOrdered - (it.quantityReceived ?? 0)),
+      unitCostCents: it.unitCostCents,
+      productId: it.productId,
+      purchaseOrderItemId: it.id,
+    })).filter((r) => r.quantityExpected > 0)
+    setItems(remaining.length > 0 ? remaining : [{ sku: '', quantityExpected: 1 }])
+  }
+
+  const applyCsv = () => {
+    const parsed = parseItemsCsv(csvText)
+    if (parsed.length === 0) {
+      alert('No valid rows parsed. Format: sku,quantityExpected[,unitCostCents]')
+      return
+    }
+    setItems(parsed)
+    setCsvText('')
+  }
+
   const submit = async () => {
+    const filtered = items.filter((it) => it.sku.trim() && it.quantityExpected > 0)
+    if (filtered.length === 0) {
+      alert('Add at least one item with SKU + quantity > 0')
+      return
+    }
     setBusy(true)
     try {
+      const body: any = {
+        type,
+        reference: reference || undefined,
+        notes: notes || undefined,
+        asnNumber: asnNumber || undefined,
+        asnFileUrl: asnFileUrl || undefined,
+        expectedAt: expectedAt ? new Date(expectedAt).toISOString() : undefined,
+        purchaseOrderId: linkedPoId || undefined,
+        carrierCode: carrierCode || undefined,
+        trackingNumber: trackingNumber || undefined,
+        trackingUrl: trackingUrl || undefined,
+        currencyCode: currencyCode || undefined,
+        exchangeRate: exchangeRate ? Number(exchangeRate) : undefined,
+        shippingCostCents: shippingCost ? Math.round(Number(shippingCost) * 100) : undefined,
+        customsCostCents: customsCost ? Math.round(Number(customsCost) * 100) : undefined,
+        dutiesCostCents: dutiesCost ? Math.round(Number(dutiesCost) * 100) : undefined,
+        insuranceCostCents: insuranceCost ? Math.round(Number(insuranceCost) * 100) : undefined,
+        items: filtered.map((it) => ({
+          sku: it.sku.trim(),
+          quantityExpected: it.quantityExpected,
+          productId: it.productId ?? undefined,
+          purchaseOrderItemId: it.purchaseOrderItemId ?? undefined,
+          unitCostCents: it.unitCostCents ?? undefined,
+        })),
+      }
       const res = await fetch(`${getBackendUrl()}/api/fulfillment/inbound`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type, reference,
-          items: skus.filter((s) => s.sku.trim()),
-        }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
@@ -838,46 +1012,366 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center p-6" onClick={onClose}>
       <div className="absolute inset-0 bg-slate-900/40" />
-      <div onClick={(e) => e.stopPropagation()} className="relative bg-white rounded-lg shadow-2xl w-full max-w-xl max-h-[80vh] overflow-y-auto">
-        <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
+      <div onClick={(e) => e.stopPropagation()} className="relative bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto">
+        <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
           <div className="text-[14px] font-semibold text-slate-900">New inbound shipment</div>
           <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
         </header>
-        <div className="p-5 space-y-3">
-          <div>
-            <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Type</div>
-            <div className="flex items-center gap-2">
-              {(['SUPPLIER', 'MANUFACTURING', 'TRANSFER'] as const).map((t) => (
-                <button key={t} onClick={() => setType(t)} className={`h-7 px-3 text-[11px] border rounded ${type === t ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200'}`}>{t}</button>
-              ))}
+
+        <div className="p-5 space-y-4">
+          {/* Source picker */}
+          <div className="grid grid-cols-3 gap-2">
+            <SourceCard
+              icon={Plus}
+              label="Manual entry"
+              hint="Type SKUs + qty by hand"
+              active={source === 'MANUAL'}
+              onClick={() => { setSource('MANUAL'); setLinkedPoId(null) }}
+            />
+            <SourceCard
+              icon={Link2}
+              label="Link to PO"
+              hint="Pull items from an existing PO"
+              active={source === 'PO'}
+              onClick={() => setSource('PO')}
+            />
+            <SourceCard
+              icon={Upload}
+              label="CSV import"
+              hint="Paste from supplier ASN or CSV"
+              active={source === 'CSV'}
+              onClick={() => { setSource('CSV'); setLinkedPoId(null) }}
+            />
+          </div>
+
+          {/* Type + reference */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Type</div>
+              <div className="flex items-center gap-2">
+                {(['SUPPLIER', 'MANUFACTURING', 'TRANSFER'] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setType(t)}
+                    className={`h-7 px-3 text-[11px] border rounded ${type === t ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200'}`}
+                  >{t}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Expected arrival</div>
+              <input
+                type="date"
+                value={expectedAt}
+                onChange={(e) => setExpectedAt(e.target.value)}
+                className="h-8 w-full px-2 text-[12px] border border-slate-200 rounded"
+              />
             </div>
           </div>
-          <div>
-            <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Reference</div>
-            <input type="text" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Supplier invoice #, transport doc, …" className="h-8 w-full px-2 text-[13px] border border-slate-200 rounded" />
-          </div>
-          <div>
-            <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Items</div>
-            <div className="space-y-1.5">
-              {skus.map((row, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <input type="text" value={row.sku} onChange={(e) => setSkus(skus.map((s, j) => j === i ? { ...s, sku: e.target.value } : s))} placeholder="SKU" className="flex-1 h-7 px-2 text-[12px] font-mono border border-slate-200 rounded" />
-                  <input type="number" min="1" value={row.quantityExpected} onChange={(e) => setSkus(skus.map((s, j) => j === i ? { ...s, quantityExpected: Number(e.target.value) || 1 } : s))} className="h-7 w-20 px-2 text-right tabular-nums border border-slate-200 rounded" />
-                  <button onClick={() => setSkus(skus.filter((_, j) => j !== i))} className="h-7 w-7 inline-flex items-center justify-center text-slate-400 hover:text-rose-600"><X size={14} /></button>
-                </div>
-              ))}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Reference</div>
+              <input
+                type="text" value={reference} onChange={(e) => setReference(e.target.value)}
+                placeholder="Invoice #, transport doc…"
+                className="h-8 w-full px-2 text-[12px] border border-slate-200 rounded"
+              />
             </div>
-            <button onClick={() => setSkus([...skus, { sku: '', quantityExpected: 1 }])} className="mt-2 text-[11px] text-blue-600 hover:underline">+ Add SKU</button>
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">ASN number</div>
+              <input
+                type="text" value={asnNumber} onChange={(e) => setAsnNumber(e.target.value)}
+                placeholder="Supplier-provided ASN ref"
+                className="h-8 w-full px-2 text-[12px] border border-slate-200 rounded"
+              />
+            </div>
           </div>
-          <div className="text-[11px] text-slate-500 pt-2 border-t border-slate-100">
-            Carrier + tracking + multi-currency cost capture surface in Commit 4. Saving here creates a DRAFT inbound; transition to SUBMITTED from the drawer.
+
+          {/* Source-specific section */}
+          {source === 'PO' && (
+            <PoPicker
+              poList={poList}
+              loading={poLoading}
+              linkedPoId={linkedPoId}
+              onPick={pickPo}
+              onRefresh={loadOpenPos}
+            />
+          )}
+          {source === 'CSV' && (
+            <div className="border border-slate-200 rounded p-3 space-y-2">
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">CSV import</div>
+              <textarea
+                value={csvText}
+                onChange={(e) => setCsvText(e.target.value)}
+                placeholder={`sku,quantityExpected,unitCostCents\nSKU-001,10,1200\nSKU-002,5,800`}
+                rows={5}
+                className="w-full font-mono text-[11px] border border-slate-200 rounded p-2"
+              />
+              <div className="flex items-center justify-between">
+                <div className="text-[10px] text-slate-500">Header optional. unitCostCents optional.</div>
+                <button
+                  onClick={applyCsv}
+                  className="h-7 px-3 text-[11px] bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100"
+                >Parse {csvText.split(/\r?\n/).filter(Boolean).length} lines →</button>
+              </div>
+            </div>
+          )}
+
+          {/* Carrier (collapsible) */}
+          <CollapseSection
+            label="Carrier + tracking"
+            open={carrierOpen}
+            onToggle={() => setCarrierOpen(!carrierOpen)}
+            count={[carrierCode, trackingNumber].filter(Boolean).length}
+          >
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1">Carrier</div>
+                <select value={carrierCode} onChange={(e) => setCarrierCode(e.target.value)} className="h-7 w-full px-1.5 text-[12px] border border-slate-200 rounded">
+                  {CARRIER_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+              </div>
+              <div className="col-span-2">
+                <div className="text-[10px] text-slate-500 mb-1">Tracking number</div>
+                <input type="text" value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} placeholder="Carrier tracking #" className="h-7 w-full px-2 text-[12px] font-mono border border-slate-200 rounded" />
+              </div>
+            </div>
+            <div className="mt-2">
+              <div className="text-[10px] text-slate-500 mb-1">Override tracking URL (optional — frontend computes from carrier + number when blank)</div>
+              <input type="url" value={trackingUrl} onChange={(e) => setTrackingUrl(e.target.value)} placeholder="https://…" className="h-7 w-full px-2 text-[11px] border border-slate-200 rounded" />
+            </div>
+          </CollapseSection>
+
+          {/* Costs (collapsible) */}
+          <CollapseSection
+            label="Costs"
+            open={costOpen}
+            onToggle={() => setCostOpen(!costOpen)}
+            count={[shippingCost, customsCost, dutiesCost, insuranceCost].filter(Boolean).length}
+          >
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1">Currency</div>
+                <select value={currencyCode} onChange={(e) => setCurrencyCode(e.target.value)} className="h-7 w-full px-1.5 text-[12px] border border-slate-200 rounded">
+                  {CURRENCY_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1">FX rate to EUR (optional)</div>
+                <input type="number" step="0.0001" value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} placeholder="e.g. 0.92" className="h-7 w-full px-2 text-[12px] tabular-nums border border-slate-200 rounded" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              <CostInput label="Shipping" value={shippingCost} onChange={setShippingCost} currency={currencyCode} />
+              <CostInput label="Customs" value={customsCost} onChange={setCustomsCost} currency={currencyCode} />
+              <CostInput label="Duties" value={dutiesCost} onChange={setDutiesCost} currency={currencyCode} />
+              <CostInput label="Insurance" value={insuranceCost} onChange={setInsuranceCost} currency={currencyCode} />
+            </div>
+          </CollapseSection>
+
+          {/* Items table */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+                Items ({items.filter((i) => i.sku.trim()).length})
+              </div>
+              {linkedPoId && (
+                <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                  Linked to PO — items locked to remaining qty
+                </span>
+              )}
+            </div>
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="border-b border-slate-200">
+                  <th className="px-1.5 py-1 text-left text-[10px] uppercase text-slate-500">SKU</th>
+                  <th className="px-1.5 py-1 text-right text-[10px] uppercase text-slate-500 w-20">Qty</th>
+                  <th className="px-1.5 py-1 text-right text-[10px] uppercase text-slate-500 w-24">Unit cost ({currencyCode})</th>
+                  <th className="w-7"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((row, i) => (
+                  <tr key={i} className="border-b border-slate-100">
+                    <td className="px-1.5 py-1">
+                      <input
+                        type="text" value={row.sku}
+                        onChange={(e) => setItems(items.map((s, j) => j === i ? { ...s, sku: e.target.value } : s))}
+                        placeholder="SKU"
+                        className="w-full h-7 px-1.5 text-[12px] font-mono border border-slate-200 rounded"
+                      />
+                    </td>
+                    <td className="px-1.5 py-1 text-right">
+                      <input
+                        type="number" min="1" value={row.quantityExpected}
+                        onChange={(e) => setItems(items.map((s, j) => j === i ? { ...s, quantityExpected: Number(e.target.value) || 1 } : s))}
+                        className="w-full h-7 px-1.5 text-right tabular-nums border border-slate-200 rounded"
+                      />
+                    </td>
+                    <td className="px-1.5 py-1 text-right">
+                      <input
+                        type="number" step="0.01"
+                        value={row.unitCostCents != null ? (row.unitCostCents / 100).toFixed(2) : ''}
+                        onChange={(e) => setItems(items.map((s, j) => j === i ? { ...s, unitCostCents: e.target.value ? Math.round(Number(e.target.value) * 100) : null } : s))}
+                        placeholder="—"
+                        className="w-full h-7 px-1.5 text-right tabular-nums border border-slate-200 rounded"
+                      />
+                    </td>
+                    <td className="text-center">
+                      <button
+                        onClick={() => setItems(items.filter((_, j) => j !== i))}
+                        className="h-7 w-7 inline-flex items-center justify-center text-slate-400 hover:text-rose-600"
+                      ><Trash2 size={12} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <button
+              onClick={() => setItems([...items, { sku: '', quantityExpected: 1 }])}
+              className="mt-2 text-[11px] text-blue-600 hover:underline"
+            >+ Add item</button>
+          </div>
+
+          <div>
+            <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Notes</div>
+            <textarea
+              value={notes} onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              placeholder="Internal notes (visible in drawer)"
+              className="w-full px-2 py-1 text-[12px] border border-slate-200 rounded"
+            />
           </div>
         </div>
-        <footer className="px-5 py-3 border-t border-slate-200 flex items-center gap-2 justify-end">
-          <button onClick={onClose} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Cancel</button>
-          <button onClick={submit} disabled={busy} className="h-8 px-3 text-[12px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">Create</button>
+
+        <footer className="px-5 py-3 border-t border-slate-200 flex items-center justify-between sticky bottom-0 bg-white">
+          <div className="text-[11px] text-slate-500">
+            Saves as DRAFT. Transition to SUBMITTED from the drawer.
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={onClose} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Cancel</button>
+            <button onClick={submit} disabled={busy} className="h-8 px-3 text-[12px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">
+              {busy ? 'Creating…' : 'Create draft'}
+            </button>
+          </div>
         </footer>
       </div>
+    </div>
+  )
+}
+
+function SourceCard({
+  icon: Icon, label, hint, active, onClick,
+}: { icon: any; label: string; hint: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`p-3 rounded text-left transition-colors border ${
+        active ? 'bg-slate-900 text-white border-slate-900'
+               : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+      }`}
+    >
+      <div className="flex items-center gap-2 mb-0.5">
+        <Icon size={14} />
+        <span className="text-[12px] font-semibold">{label}</span>
+      </div>
+      <div className={`text-[10px] leading-tight ${active ? 'text-slate-300' : 'text-slate-500'}`}>{hint}</div>
+    </button>
+  )
+}
+
+function CollapseSection({
+  label, open, onToggle, count, children,
+}: { label: string; open: boolean; onToggle: () => void; count: number; children: React.ReactNode }) {
+  return (
+    <div className="border border-slate-200 rounded">
+      <button
+        onClick={onToggle}
+        className="w-full px-3 py-2 flex items-center justify-between text-left hover:bg-slate-50"
+      >
+        <span className="text-[11px] uppercase tracking-wider text-slate-700 font-semibold inline-flex items-center gap-2">
+          {label}
+          {count > 0 && <span className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono">{count}</span>}
+        </span>
+        {open ? <ChevronUp size={12} className="text-slate-400" /> : <ChevronDown size={12} className="text-slate-400" />}
+      </button>
+      {open && <div className="px-3 pb-3 pt-1">{children}</div>}
+    </div>
+  )
+}
+
+function CostInput({
+  label, value, onChange, currency,
+}: { label: string; value: string; onChange: (v: string) => void; currency: string }) {
+  return (
+    <div>
+      <div className="text-[10px] text-slate-500 mb-1">{label} ({currency})</div>
+      <input
+        type="number" step="0.01" value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="0.00"
+        className="h-7 w-full px-2 text-[12px] tabular-nums border border-slate-200 rounded"
+      />
+    </div>
+  )
+}
+
+function PoPicker({
+  poList, loading, linkedPoId, onPick, onRefresh,
+}: {
+  poList: PurchaseOrderLite[] | null
+  loading: boolean
+  linkedPoId: string | null
+  onPick: (po: PurchaseOrderLite) => void
+  onRefresh: () => void
+}) {
+  return (
+    <div className="border border-slate-200 rounded p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Open POs</div>
+        <button onClick={onRefresh} className="h-6 px-2 text-[10px] text-slate-500 hover:text-slate-900 inline-flex items-center gap-1">
+          <RefreshCw size={10} /> Refresh
+        </button>
+      </div>
+      {loading ? (
+        <div className="text-[11px] text-slate-500 py-2">Loading POs…</div>
+      ) : !poList || poList.length === 0 ? (
+        <div className="text-[11px] text-slate-500 py-2">No open purchase orders. Create one in /fulfillment/purchase-orders first.</div>
+      ) : (
+        <ul className="max-h-48 overflow-y-auto space-y-1">
+          {poList.map((po) => {
+            const totalRemaining = po.items.reduce((a, it) => a + Math.max(0, it.quantityOrdered - (it.quantityReceived ?? 0)), 0)
+            const selected = linkedPoId === po.id
+            return (
+              <li key={po.id}>
+                <button
+                  onClick={() => onPick(po)}
+                  disabled={totalRemaining === 0}
+                  className={`w-full text-left px-2 py-1.5 rounded border text-[12px] ${
+                    selected ? 'bg-emerald-50 border-emerald-300 text-emerald-900' :
+                    totalRemaining === 0 ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed' :
+                    'bg-white border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-mono font-semibold">{po.poNumber}</span>
+                      <span className="text-[10px] text-slate-500 ml-2">{po.status}</span>
+                    </div>
+                    <span className="text-[11px] tabular-nums">
+                      {totalRemaining > 0 ? <>{totalRemaining} units</> : <>fully received</>}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">
+                    {po.supplier?.name ?? 'No supplier'} · {po.warehouse?.code ?? '—'} · {po.currencyCode}
+                  </div>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
     </div>
   )
 }

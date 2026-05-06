@@ -1156,7 +1156,14 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const q = request.query as any
       const where: any = {}
-      if (q.status && q.status !== 'ALL') where.status = q.status
+      // H.4: status accepts comma-separated multi-select. Used by the
+      // create-inbound modal to limit the PO picker to in-flight POs
+      // (SUBMITTED, CONFIRMED, PARTIAL).
+      if (q.status && q.status !== 'ALL') {
+        const statuses = String(q.status).split(',').map((s) => s.trim()).filter(Boolean)
+        if (statuses.length === 1) where.status = statuses[0]
+        else if (statuses.length > 1) where.status = { in: statuses }
+      }
       if (q.supplierId) where.supplierId = q.supplierId
       const items = await prisma.purchaseOrder.findMany({
         where,
