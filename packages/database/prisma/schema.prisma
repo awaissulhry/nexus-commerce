@@ -3122,6 +3122,11 @@ model ReplenishmentRecommendation {
   eoqUnits           Int?     // Wilson EOQ before MOQ/case clamp
   constraintsApplied String[] @default([]) // ['MOQ_APPLIED','CASE_PACK_ROUNDED_UP','EOQ_BELOW_MOQ']
   unitCostCents      Int?     // cost basis at generation
+  // R.14 — urgency provenance: did the global aggregate drive
+  // urgency, or did a per-channel cover crisis promote it?
+  urgencySource           String? // 'GLOBAL' | 'CHANNEL'
+  worstChannelKey         String? // 'AMAZON:IT' format when CHANNEL drove
+  worstChannelDaysOfCover Int?
 
   preferredSupplierId String?
   isManufactured      Boolean @default(false)

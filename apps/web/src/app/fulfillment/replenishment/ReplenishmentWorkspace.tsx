@@ -117,6 +117,13 @@ interface Suggestion {
   // produced this suggestion. Sent back in PO creation so the audit
   // trail links rec → PO.
   recommendationId?: string | null
+  // R.14 — urgency provenance. globalUrgency = aggregate signal;
+  // urgency = max(global, worst-channel). urgencySource flags
+  // whether a specific channel-marketplace promoted the headline.
+  globalUrgency?: Urgency
+  urgencySource?: 'GLOBAL' | 'CHANNEL'
+  worstChannelKey?: string | null
+  worstChannelDaysOfCover?: number | null
   // R.4 — math snapshot for the drawer's "Reorder math" panel.
   safetyStockUnits?: number
   eoqUnits?: number
@@ -835,6 +842,12 @@ function MobileSuggestionCard({
             <span className={cn('text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border', tone)}>
               {s.urgency}
             </span>
+            {/* R.14 — channel badge on mobile too */}
+            {s.urgencySource === 'CHANNEL' && s.worstChannelKey && (
+              <span className="text-[9px] uppercase tracking-wider text-slate-500 font-mono">
+                · {s.worstChannelKey.replace(':', '·')}
+              </span>
+            )}
           </div>
           <div className="text-[12px] text-slate-900 truncate mt-0.5">{s.name}</div>
         </div>
@@ -976,14 +989,27 @@ function SuggestionRow({
         </div>
       </td>
       <td className="px-3 py-2">
-        <span
-          className={cn(
-            'inline-block text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded',
-            URGENCY_TONE[s.urgency],
+        <div className="inline-flex items-center gap-1 flex-wrap">
+          <span
+            className={cn(
+              'inline-block text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded',
+              URGENCY_TONE[s.urgency],
+            )}
+          >
+            {s.urgency}
+          </span>
+          {/* R.14 — channel-driven urgency badge. Tooltip shows the
+              specific channel and days-of-cover that promoted the
+              headline above the global aggregate. */}
+          {s.urgencySource === 'CHANNEL' && s.worstChannelKey && (
+            <span
+              className="text-[9px] uppercase tracking-wider text-slate-500 font-mono"
+              title={`Promoted because of ${s.worstChannelKey} (${s.worstChannelDaysOfCover}d cover). Aggregate was ${s.globalUrgency ?? 'lower'}.`}
+            >
+              · {s.worstChannelKey.replace(':', '·')}
+            </span>
           )}
-        >
-          {s.urgency}
-        </span>
+        </div>
       </td>
       <td
         className={cn(
@@ -1113,6 +1139,10 @@ interface DetailResponse {
     unitCostCents: number | null
     velocity: number | string
     generatedAt: string
+    // R.14 — urgency provenance
+    urgencySource?: string | null
+    worstChannelKey?: string | null
+    worstChannelDaysOfCover?: number | null
   } | null
   model: string | null
   generationTag: string | null
@@ -1326,6 +1356,24 @@ function ForecastDetailDrawer({
               {/* R.2 — per-location stock breakdown + ATP totals */}
               {detail.atp && (
                 <StockByLocationPanel atp={detail.atp} />
+              )}
+
+              {/* R.14 — channel-driven urgency banner. Renders only
+                  when the worst channel pushed urgency above what the
+                  global aggregate would have shown. Tells operators
+                  why the headline is more severe than the totals
+                  suggest. */}
+              {detail.recommendation?.urgencySource === 'CHANNEL' &&
+                detail.recommendation?.worstChannelKey && (
+                <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
+                  <span className="font-semibold">{detail.recommendation.urgency}</span>{' '}
+                  driven by{' '}
+                  <span className="font-mono">
+                    {detail.recommendation.worstChannelKey.replace(':', ' · ')}
+                  </span>
+                  {' '}({detail.recommendation.worstChannelDaysOfCover}d cover).
+                  Aggregate stock looks fine, but this channel is at risk.
+                </div>
               )}
 
               {/* R.2 — per-channel days-of-cover */}

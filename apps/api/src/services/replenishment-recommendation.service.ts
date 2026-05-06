@@ -49,6 +49,10 @@ export interface RecommendationInput {
   eoqUnits?: number | null
   constraintsApplied?: string[]
   unitCostCents?: number | null
+  // R.14 — urgency provenance
+  urgencySource?: 'GLOBAL' | 'CHANNEL' | null
+  worstChannelKey?: string | null
+  worstChannelDaysOfCover?: number | null
 }
 
 export interface ActiveRecommendationLite {
@@ -158,6 +162,10 @@ export async function persistRecommendationIfChanged(
           eoqUnits: input.eoqUnits ?? null,
           constraintsApplied: input.constraintsApplied ?? [],
           unitCostCents: input.unitCostCents ?? null,
+          // R.14 — urgency provenance
+          urgencySource: input.urgencySource ?? null,
+          worstChannelKey: input.worstChannelKey ?? null,
+          worstChannelDaysOfCover: input.worstChannelDaysOfCover ?? null,
         },
       })
       if (current) {

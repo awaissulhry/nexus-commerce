@@ -19,6 +19,10 @@ import {
   type ConstraintCode,
 } from '../services/replenishment-math.service.js'
 import {
+  promoteUrgency,
+  type Urgency as PromotedUrgencyTier,
+} from '../services/replenishment-urgency.service.js'
+import {
   runAutoPoSweep,
   getAutoPoStatus,
 } from '../services/auto-po.service.js'
@@ -2898,12 +2902,12 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         const daysOfStockLeft =
           velocity > 0 ? Math.floor(effectiveStock / velocity) : Infinity
 
-        let urgency: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' = 'LOW'
-        if (effectiveStock === 0 && velocity > 0) urgency = 'CRITICAL'
-        else if (daysOfStockLeft <= leadTimeDays / 2) urgency = 'CRITICAL'
-        else if (daysOfStockLeft <= leadTimeDays) urgency = 'HIGH'
-        else if (effectiveStock <= reorderPoint) urgency = 'MEDIUM'
-        else urgency = 'LOW'
+        let globalUrgency: PromotedUrgencyTier = 'LOW'
+        if (effectiveStock === 0 && velocity > 0) globalUrgency = 'CRITICAL'
+        else if (daysOfStockLeft <= leadTimeDays / 2) globalUrgency = 'CRITICAL'
+        else if (daysOfStockLeft <= leadTimeDays) globalUrgency = 'HIGH'
+        else if (effectiveStock <= reorderPoint) globalUrgency = 'MEDIUM'
+        else globalUrgency = 'LOW'
 
         const needsReorder = effectiveStock <= reorderPoint && velocity > 0
 
@@ -2944,6 +2948,26 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
               (b.daysOfCover ?? Number.MAX_SAFE_INTEGER) ||
             a.channel.localeCompare(b.channel),
           )
+
+        // R.14 — promote channel urgency. Headline = MAX(global,
+        // worst channel) so a SKU with 200d aggregate cover but 3d
+        // cover on Amazon-IT-FBA fires CRITICAL on the channel that
+        // actually matters. Strictly tightens — never lowers global.
+        const promoted = promoteUrgency({
+          globalUrgency,
+          channels: channelCover.map((c) => ({
+            channel: c.channel,
+            marketplace: c.marketplace,
+            daysOfCover: c.daysOfCover,
+          })),
+          leadTimeDays,
+        })
+        const urgency = promoted.urgency
+        const urgencySource = promoted.source
+        const worstChannelKey = promoted.worstChannel
+          ? `${promoted.worstChannel.channel}:${promoted.worstChannel.marketplace}`
+          : null
+        const worstChannelDaysOfCover = promoted.worstChannel?.daysOfCover ?? null
 
         return {
           productId: p.id,
@@ -2993,6 +3017,14 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           unitCostCents,
           servicePercentEffective: math.servicePercent,
           urgency,
+          // R.14 — urgency provenance. globalUrgency = what the
+          // aggregate said; urgency = max(global, worst-channel).
+          // urgencySource flags whether a channel promoted the
+          // headline so the UI can render a tooltip.
+          globalUrgency,
+          urgencySource,
+          worstChannelKey,
+          worstChannelDaysOfCover,
           needsReorder,
           // F.2 — surface lead-time provenance so the UI can show
           // "from supplier override" vs "from supplier default" vs "fallback".
@@ -3036,6 +3068,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         eoqUnits: s.eoqUnits,
         constraintsApplied: s.constraintsApplied,
         unitCostCents: s.unitCostCents,
+        // R.14 — urgency provenance
+        urgencySource: s.urgencySource,
+        worstChannelKey: s.worstChannelKey,
+        worstChannelDaysOfCover: s.worstChannelDaysOfCover,
       }))
       const recIdsByProduct = await bulkPersistRecommendationsIfChanged(
         recommendationInputs,
@@ -3477,6 +3513,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             unitCostCents: true,
             velocity: true,
             generatedAt: true,
+            // R.14 — urgency provenance
+            urgencySource: true,
+            worstChannelKey: true,
+            worstChannelDaysOfCover: true,
           },
         })
 
