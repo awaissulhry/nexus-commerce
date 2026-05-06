@@ -992,21 +992,11 @@ The flow is asynchronous — each step polls an `operationId` until the operatio
 
 ---
 
-## 53. 🟡 Bulk STATUS_UPDATE doesn't propagate to channels
+## 53. ✅ Bulk STATUS_UPDATE doesn't propagate to channels — resolved 2026-05-06
 
-**Symptom:** Bulk STATUS_UPDATE writes `Product.status` directly (`bulk-action.service.ts:processStatusUpdate`). No fan-out to ChannelListing, no OutboundSyncQueue enqueue, no AuditLog row. Marketplaces are not informed when a SKU goes ACTIVE → INACTIVE → DRAFT, even though many marketplaces (Amazon, eBay) treat status as a listing-level concept that should be reflected in their UI.
+**Resolution:** New `apps/api/src/services/master-status.service.ts` mirrors `MasterPriceService` — single entrypoint for `Product.status` mutations. Atomic transaction: `Product.status` → `ChannelListing.listingStatus` (skipping ENDED/ERROR) → `OutboundSyncQueue` (`syncType='STATUS_UPDATE'`) → `AuditLog`. `bulk-action.service.ts:processStatusUpdate` and the rollback STATUS_UPDATE branch now delegate to it. `skipBullMQEnqueue:true` paired with the per-minute cron drain (same workaround as pricing/inventory paths until #54 lands).
 
-**Surfaced at:** Phase 1 audit + Commit 1 of the bulk-operations rebuild (2026-05-06). PRICING and INVENTORY now route through master-cascade entrypoints (`MasterPriceService.update`, `applyStockMovement`); STATUS has no equivalent service to delegate to.
-
-**Proper fix:** Build a `MasterStatusService.update` (or extend `MasterPriceService` to handle status as a paired concern, since they often change together) that:
-1. Updates `Product.status` atomically
-2. Cascades to ChannelListing (whatever the marketplace-status equivalent is — likely a `listingStatus` column)
-3. Enqueues OutboundSyncQueue with `syncType='STATUS_UPDATE'`
-4. Writes an AuditLog row
-
-Then retarget `processStatusUpdate` to delegate to it.
-
-**Risk if left:** A user marks 50 SKUs INACTIVE in bulk; Amazon and eBay continue showing them as ACTIVE until the next manual sync. Buyers can place orders on items that should be off the shelf.
+**Original symptom (kept for context):** Bulk STATUS_UPDATE wrote `Product.status` directly. No fan-out to ChannelListing, no OutboundSyncQueue enqueue, no AuditLog row. A user marking 50 SKUs INACTIVE in bulk left Amazon/eBay showing them as ACTIVE until the next manual sync — buyers could place orders on items that should be off the shelf.
 
 ---
 
@@ -1072,7 +1062,7 @@ Then retarget `processStatusUpdate` to delegate to it.
 - **43** Variant mechanism duplication — `Product.parentId` vs unused `ProductVariation`. 244 active children via parentId, 0 in ProductVariation. Decision needed before bulk-ops can be fixed at scale.
 - **44** Bulk operations target unused data shape — partially resolved 2026-05-06 in Commit 1 of bulk-ops rebuild (PRICING + INVENTORY retargeted to Product via master-cascade). ATTRIBUTE_UPDATE remaining → see #52.
 - **52** Bulk ATTRIBUTE_UPDATE still targets empty ProductVariation — silent no-op against current data; needs schema decision on where variant attributes live on Product.
-- **53** Bulk STATUS_UPDATE doesn't propagate to channels — `Product.status` updates locally but Amazon/eBay continue showing the old status; needs `MasterStatusService` cascade.
+- **53** ✅ Resolved 2026-05-06 — `MasterStatusService` shipped, `bulk-action.service.ts` `processStatusUpdate` + STATUS_UPDATE rollback both delegate to it; cascade fans out to ChannelListing + OutboundSyncQueue + AuditLog.
 - **54** 🔴 BullMQ post-commit enqueue hangs from bulk-action's detached `processJob` context — workaround `skipBullMQEnqueue: true` in place; cron worker drains PENDING within 60s. Root cause investigation pending.
 - **45** Local apps/api Prisma client v6 vs v7 mismatch — local dev API can't serve Prisma queries; production unaffected. Onboarding blocker.
 - **48** ✅ Resolved 2026-05-06 in `e55ed37` — Phase 28 recompute now honours `followMasterPrice`.

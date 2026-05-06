@@ -18,6 +18,7 @@ import { amazonProvider } from '../providers/amazon.provider.js';
 import { ebayProvider } from '../providers/ebay.provider.js';
 import type { MarketplaceProvider } from '../providers/types.js';
 import { MasterPriceService } from './master-price.service.js';
+import { MasterStatusService } from './master-status.service.js';
 import { applyStockMovement } from './stock-movement.service.js';
 
 // (Removed: a stubbed Decimal mock class whose `.plus()` returned
@@ -124,9 +125,11 @@ export interface ProcessJobResult {
 
 export class BulkActionService {
   private readonly masterPriceService: MasterPriceService;
+  private readonly masterStatusService: MasterStatusService;
 
   constructor(private prisma: PrismaClient = prisma) {
     this.masterPriceService = new MasterPriceService(prisma);
+    this.masterStatusService = new MasterStatusService(prisma);
   }
 
   /**
@@ -696,16 +699,27 @@ export class BulkActionService {
           }
           case 'STATUS_UPDATE': {
             const target = before.status;
-            const VALID = ['DRAFT', 'ACTIVE', 'INACTIVE'];
-            if (typeof target !== 'string' || !VALID.includes(target)) {
+            const VALID = ['DRAFT', 'ACTIVE', 'INACTIVE'] as const;
+            if (
+              typeof target !== 'string' ||
+              !(VALID as readonly string[]).includes(target)
+            ) {
               throw new Error(
                 `beforeState.status invalid (got ${target})`,
               );
             }
-            await this.prisma.product.update({
-              where: { id: item.productId },
-              data: { status: target },
-            });
+            // TECH_DEBT #53: rollback also needs to fan out to
+            // ChannelListing + queue a marketplace push, not just
+            // flip Product.status. Same rationale as forward path.
+            await this.masterStatusService.update(
+              item.productId,
+              target as 'DRAFT' | 'ACTIVE' | 'INACTIVE',
+              {
+                actor: 'bulk-action-rollback',
+                reason: `Rollback of bulk job ${originalJobId}`,
+                skipBullMQEnqueue: true,
+              },
+            );
             break;
           }
           default:
@@ -1676,6 +1690,7 @@ export class BulkActionService {
         return await this.processStatusUpdate(
           item as Product | ProductVariation,
           payload,
+          job.id,
         );
       case 'ATTRIBUTE_UPDATE':
         return await this.processAttributeUpdate(
@@ -1871,9 +1886,10 @@ export class BulkActionService {
   private async processStatusUpdate(
     item: Product | ProductVariation,
     payload: Record<string, any>,
+    jobId: string,
   ): Promise<{ status: 'processed' | 'skipped' }> {
     const VALID = ['DRAFT', 'ACTIVE', 'INACTIVE'] as const;
-    const newStatus = payload.status;
+    const newStatus = payload.status as 'DRAFT' | 'ACTIVE' | 'INACTIVE';
     if (!VALID.includes(newStatus)) {
       throw new Error(
         `Invalid STATUS_UPDATE payload: status must be one of ${VALID.join(', ')}`,
@@ -1885,9 +1901,19 @@ export class BulkActionService {
     const productId =
       'productId' in item && item.productId ? item.productId : item.id;
 
-    await this.prisma.product.update({
-      where: { id: productId },
-      data: { status: newStatus },
+    // TECH_DEBT #53: route through MasterStatusService so the change
+    // cascades to ChannelListing.listingStatus + OutboundSyncQueue +
+    // AuditLog atomically. Without this, the marketplace continues to
+    // show items in the old state until the next manual sync.
+    //
+    // skipBullMQEnqueue mirrors the pricing/inventory paths — the
+    // detached bulk-action context has hit a Queue.add() hang
+    // (TECH_DEBT #54), so we let the per-minute cron drain the
+    // PENDING rows. Workaround until #54 lands.
+    await this.masterStatusService.update(productId, newStatus, {
+      actor: 'bulk-action',
+      reason: `bulk-job:${jobId}`,
+      skipBullMQEnqueue: true,
     });
 
     return { status: 'processed' };
