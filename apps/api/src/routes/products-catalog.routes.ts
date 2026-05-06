@@ -658,19 +658,20 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
   // quick-edit cells in the Grid lens. Avoids re-using the heavy
   // /products/bulk endpoint which is geared at the bulk-operations grid.
   //
-  // Phase 13c — basePrice and totalStock route through dedicated
-  // services so the cascade to ChannelListing happens atomically:
-  //   basePrice  → MasterPriceService.update()    (13a)
-  //   totalStock → applyStockMovement()           (13b)
-  // Other whitelisted fields stay on a direct Product.update because
-  // they don't propagate to listings or marketplaces.
+  // Phase 13c → P0/B4 — basePrice, totalStock, and direct-field
+  // updates all run inside ONE outer $transaction so a request like
+  // { basePrice: 100, totalStock: 50, name: "X" } either commits
+  // every change or rolls back every change. Previously each call
+  // opened its own transaction; a failure on stock left the
+  // already-committed basePrice + cascade visible to the next read.
   //
-  // The three writes run as separate transactions today (one per
-  // service / direct write). Same-PATCH atomicity across all three is
-  // a future enhancement that requires threading an outer Prisma tx
-  // through applyStockMovement. The realistic failure mode is a
-  // single-field grid edit, where atomicity across is moot — the
-  // service-level transactions already provide it for the cascade.
+  //   basePrice  → MasterPriceService.update(..., { tx })
+  //   totalStock → applyStockMovement({ ..., tx })  (B4 added tx support)
+  //   other      → tx.product.update(...)
+  //
+  // BullMQ enqueue for cascade is suppressed when we pass tx into the
+  // services — we add the jobs after the outer commit lands so we
+  // never queue work for a transaction that may roll back.
   fastify.patch('/products/:id', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
@@ -689,49 +690,24 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: 'Product not found' })
       }
 
-      // 1. basePrice — route through MasterPriceService so the cascade
-      //    to ChannelListing.masterPrice + computed price + outbound
-      //    queue + audit log fires atomically.
+      // Validate basePrice up front so we fail fast outside the tx.
+      let newBasePrice: number | undefined
       if (body.basePrice !== undefined) {
-        const newBasePrice = Number(body.basePrice)
-        if (!Number.isFinite(newBasePrice) || newBasePrice < 0) {
+        const v = Number(body.basePrice)
+        if (!Number.isFinite(v) || v < 0) {
           return reply
             .code(400)
             .send({ error: 'basePrice must be a non-negative number' })
         }
-        await masterPriceService.update(id, newBasePrice, {
-          actor,
-          reason,
-        })
+        newBasePrice = v
       }
-
-      // 2. totalStock — convert absolute target into a delta and route
-      //    through applyStockMovement. That writes the StockLevel
-      //    ledger, recomputes Product.totalStock = SUM(StockLevel),
-      //    cascades to ChannelListing.masterQuantity / quantity,
-      //    enqueues the marketplace push, and writes a StockMovement
-      //    audit row — all in one transaction. Reason is
-      //    MANUAL_ADJUSTMENT because that's what an inline grid edit is
-      //    (a person typing a number into a cell, not an order or
-      //    return).
+      // Compute stock delta up front so the outer tx body is purely write.
+      let stockDelta = 0
       if (body.totalStock !== undefined) {
         const newTotal = Math.max(0, Math.floor(Number(body.totalStock) || 0))
-        const delta = newTotal - (current.totalStock ?? 0)
-        if (delta !== 0) {
-          await applyStockMovement({
-            productId: id,
-            change: delta,
-            reason: 'MANUAL_ADJUSTMENT',
-            notes: 'inline grid edit',
-            actor,
-          })
-        }
+        stockDelta = newTotal - (current.totalStock ?? 0)
       }
-
-      // 3. Direct fields — anything not basePrice or totalStock. These
-      //    don't propagate to listings or marketplaces, so a plain
-      //    Product.update is correct. Always increments version so
-      //    optimistic-concurrency guards downstream still trip.
+      // Pre-collect direct field updates so the in-tx code is simple.
       const directFields = [
         'name',
         'lowStockThreshold',
@@ -754,12 +730,36 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         }
         directDirty = true
       }
-      if (directDirty) {
-        await prisma.product.update({
-          where: { id },
-          data: { ...directData, version: { increment: 1 } },
-        })
-      }
+
+      // P0/B4 — single outer transaction. masterPriceService and
+      // applyStockMovement both honour the supplied tx (and suppress
+      // their post-commit BullMQ enqueue when given one — see service
+      // docstrings).
+      await prisma.$transaction(async (tx) => {
+        if (newBasePrice !== undefined) {
+          await masterPriceService.update(id, newBasePrice, {
+            actor,
+            reason,
+            tx,
+          })
+        }
+        if (stockDelta !== 0) {
+          await applyStockMovement({
+            productId: id,
+            change: stockDelta,
+            reason: 'MANUAL_ADJUSTMENT',
+            notes: 'inline grid edit',
+            actor,
+            tx,
+          })
+        }
+        if (directDirty) {
+          await tx.product.update({
+            where: { id },
+            data: { ...directData, version: { increment: 1 } },
+          })
+        }
+      })
 
       // Return the post-update view. Single round-trip, fresh values,
       // matches the prior response shape so frontend callers don't

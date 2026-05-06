@@ -87,6 +87,18 @@ export type StockMovementInput = {
   shipmentId?: string
   returnId?: string
   reservationId?: string
+  /**
+   * P0/B4 — caller's outer transaction. When set, the stock write,
+   * StockLevel ledger update, totalStock recompute, ChannelListing
+   * cascade, audit row, and OutboundSyncQueue inserts all run in
+   * the supplied transaction instead of opening a new one. Mirrors
+   * MasterPriceService.update's `ctx.tx` so endpoints that touch
+   * basePrice + totalStock + other fields can keep all three writes
+   * atomic. The BullMQ post-commit enqueue is suppressed when an
+   * outer tx is supplied — the caller is responsible for adding
+   * BullMQ jobs after their own commit completes.
+   */
+  tx?: Prisma.TransactionClient
 }
 
 /**
@@ -171,10 +183,17 @@ export async function applyStockMovement(input: StockMovementInput) {
     shipmentId,
     returnId,
     reservationId,
+    tx: outerTx,
   } = input
   if (change === 0) throw new Error('applyStockMovement: change must be non-zero')
 
-  const transactionResult = await prisma.$transaction(async (tx) => {
+  // P0/B4 — single transaction body. When the caller supplies an outer
+  // tx (e.g. PATCH /api/products/:id wanting basePrice + totalStock +
+  // direct-fields atomic) we run inside it; otherwise we open our own.
+  // The runner closes over every step including the cascade.
+  const runner = async (
+    tx: Prisma.TransactionClient,
+  ): Promise<{ movement: any; cascade: CascadeResult }> => {
     // H.2 — every movement now resolves to a StockLocation. Legacy
     // (no locationId, no warehouseId) callers transparently land on
     // IT-MAIN.
@@ -286,13 +305,22 @@ export async function applyStockMovement(input: StockMovementInput) {
     })
 
     return { movement, cascade: cascadeResult }
-  })
+  }
+
+  // Run inside the caller's tx if supplied; otherwise open our own.
+  // When using the outer tx, the BullMQ enqueue is suppressed — the
+  // caller is responsible for adding sync jobs after their own
+  // commit completes (otherwise we'd post jobs for a transaction
+  // that may roll back). Same shape MasterPriceService uses.
+  const transactionResult = outerTx
+    ? await runner(outerTx)
+    : await prisma.$transaction(runner)
 
   // Step 6: BullMQ enqueue happens AFTER the DB transaction commits. If
   // Redis is down, the OutboundSyncQueue rows stay PENDING and the next
   // drain pass picks them up — work is never lost. Same pattern as
   // MasterPriceService; see master-price.service.ts.
-  if (transactionResult.cascade.queuedSyncIds.length > 0) {
+  if (!outerTx && transactionResult.cascade.queuedSyncIds.length > 0) {
     for (const queueId of transactionResult.cascade.queuedSyncIds) {
       try {
         await outboundSyncQueue.add(
