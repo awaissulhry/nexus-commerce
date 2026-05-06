@@ -13,6 +13,7 @@ import {
   Boxes,
   Activity,
   HeartPulse,
+  History,
   Plug,
   FileEdit,
   Warehouse,
@@ -45,6 +46,7 @@ const COMMANDS: Command[] = [
   { id: 'catalog-organize', label: 'Organize catalog (group orphans, promote standalones)', icon: Layers, href: '/catalog/organize', group: 'Catalog', chord: 'g c' },
   { id: 'wizard-drafts', label: 'Resume a listing wizard draft', icon: FileEdit, href: '/products/drafts', group: 'Catalog', chord: 'g d' },
   { id: 'bulk-upload', label: 'Bulk upload products', icon: Upload, href: '/bulk-operations', group: 'Catalog', chord: 'g b' },
+  { id: 'bulk-history', label: 'View bulk operations history', icon: History, href: '/bulk-operations/history', group: 'Catalog', chord: 'g j' },
   // System
   { id: 'connections', label: 'Manage channel connections', icon: Plug, href: '/settings/channels', group: 'System' },
   { id: 'settings', label: 'Open Settings', icon: SettingsIcon, href: '/settings/account', group: 'System' },
