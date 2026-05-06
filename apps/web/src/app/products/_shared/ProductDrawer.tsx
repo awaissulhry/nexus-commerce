@@ -661,19 +661,207 @@ function ListingStatusBadge({
 }
 
 /**
- * Activity tab — placeholder shell. F3 wires the AuditLog data
- * fetch + slim diff rendering. Empty-state explains what will live
- * here so the tab is meaningful even before F3 lands.
+ * Activity tab (F3) — AuditLog timeline for the product.
+ *
+ * Reads GET /api/products/:id/activity (ETag-cached). Each row is a
+ * slim before/after diff captured by AuditLogService writers
+ * (PATCH /api/products/:id, PATCH /api/products/bulk, the master-
+ * data services, etc.). Bulk operations also write per-row Product
+ * audit rows; metadata.bulkOperationId is shown so users can
+ * trace a change back to the bulk job that emitted it.
  */
-function ActivityTab({ productId: _productId }: { productId: string }) {
-  return (
-    <div className="px-5 py-10 text-center text-[12px] text-slate-500">
-      <Activity className="w-6 h-6 mx-auto text-slate-300 mb-2" />
-      Activity log coming soon.
-      <div className="text-[11px] text-slate-400 mt-1">
-        AuditLog already captures every product change; the timeline
-        view ships in the next commit (F3).
+interface ActivityEntry {
+  id: string
+  action: string
+  userId: string | null
+  before: Record<string, unknown> | null
+  after: Record<string, unknown> | null
+  metadata: Record<string, unknown> | null
+  createdAt: string
+}
+
+function ActivityTab({ productId }: { productId: string }) {
+  const [items, setItems] = useState<ActivityEntry[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const fetchOnce = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/products/${productId}/activity?limit=100`,
+          { cache: 'no-store' },
+        )
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const json = await res.json()
+        if (cancelled) return
+        setItems(json.items ?? [])
+        setTotal(json.total ?? 0)
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    fetchOnce()
+    return () => {
+      cancelled = true
+    }
+  }, [productId])
+
+  if (loading && items.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-12 text-slate-400 text-[12px]">
+        <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading activity…
       </div>
+    )
+  }
+  if (error) {
+    return (
+      <div className="m-5 border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-[12px] text-rose-800 flex items-start gap-2">
+        <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+        <span>Failed to load activity: {error}</span>
+      </div>
+    )
+  }
+  if (items.length === 0) {
+    return (
+      <div className="px-5 py-10 text-center text-[12px] text-slate-500">
+        <Activity className="w-6 h-6 mx-auto text-slate-300 mb-2" />
+        No activity recorded yet.
+        <div className="text-[11px] text-slate-400 mt-1">
+          Edits, bulk operations, and master-data changes show up here.
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-5 space-y-3">
+      {total > items.length && (
+        <div className="text-[11px] text-slate-500">
+          Showing {items.length} of {total} entries (most recent first)
+        </div>
+      )}
+      <ol className="space-y-2">
+        {items.map((entry) => (
+          <ActivityRow key={entry.id} entry={entry} />
+        ))}
+      </ol>
     </div>
   )
+}
+
+function ActivityRow({ entry }: { entry: ActivityEntry }) {
+  const diff = useMemo(() => buildDiff(entry.before, entry.after), [entry.before, entry.after])
+  const actor = entry.userId ?? 'system'
+  const bulkOpId =
+    entry.metadata && typeof entry.metadata === 'object'
+      ? (entry.metadata as Record<string, unknown>).bulkOperationId
+      : null
+  const source =
+    entry.metadata && typeof entry.metadata === 'object'
+      ? (entry.metadata as Record<string, unknown>).source
+      : null
+  const reason =
+    entry.metadata && typeof entry.metadata === 'object'
+      ? (entry.metadata as Record<string, unknown>).reason
+      : null
+
+  return (
+    <li className="border border-slate-200 rounded-md bg-white px-3 py-2">
+      <div className="flex items-baseline justify-between gap-2 text-[11px] text-slate-500">
+        <span>
+          <span className="font-semibold text-slate-700 capitalize">{entry.action}</span>
+          {' · '}
+          <span className="font-mono">{actor}</span>
+          {(source || reason) ? (
+            <span className="text-slate-400 ml-1">
+              ({String(source ?? reason)})
+            </span>
+          ) : null}
+        </span>
+        <time dateTime={entry.createdAt} className="font-mono">
+          {new Date(entry.createdAt).toLocaleString()}
+        </time>
+      </div>
+      {diff.length > 0 && (
+        <ul className="mt-1.5 space-y-0.5 text-[12px]">
+          {diff.map((d) => (
+            <li key={d.field} className="flex items-baseline gap-2">
+              <span className="text-slate-500 font-mono text-[11px] flex-shrink-0">
+                {d.field}
+              </span>
+              <span className="text-rose-700 line-through">{formatValue(d.before)}</span>
+              <span className="text-slate-400">→</span>
+              <span className="text-emerald-700">{formatValue(d.after)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {typeof bulkOpId === 'string' && (
+        <div className="mt-1.5 text-[10px] text-slate-400">
+          via bulk operation <span className="font-mono">{bulkOpId.slice(0, 12)}…</span>
+        </div>
+      )}
+    </li>
+  )
+}
+
+interface DiffEntry {
+  field: string
+  before: unknown
+  after: unknown
+}
+
+function buildDiff(
+  before: Record<string, unknown> | null,
+  after: Record<string, unknown> | null,
+): DiffEntry[] {
+  // Slim diffs from the writers: before/after are usually
+  // single-key objects (e.g. { basePrice: 100 } → { basePrice: 105 }).
+  // For bulk-edit per-row entries, after is { field, value }; we
+  // surface those too.
+  const out: DiffEntry[] = []
+  const keys = new Set<string>()
+  if (before && typeof before === 'object') for (const k of Object.keys(before)) keys.add(k)
+  if (after && typeof after === 'object') for (const k of Object.keys(after)) keys.add(k)
+  // Special case: bulk-patch writers store after = { field, value }.
+  // Surface that as a single diff entry keyed by the field name.
+  if (
+    after &&
+    typeof after === 'object' &&
+    'field' in after &&
+    'value' in after
+  ) {
+    const a = after as { field: unknown; value: unknown }
+    if (typeof a.field === 'string') {
+      return [{ field: a.field, before: undefined, after: a.value }]
+    }
+  }
+  for (const k of keys) {
+    out.push({
+      field: k,
+      before: before?.[k],
+      after: after?.[k],
+    })
+  }
+  return out
+}
+
+function formatValue(v: unknown): string {
+  if (v === undefined) return '—'
+  if (v === null) return 'null'
+  if (typeof v === 'string') return v.length > 60 ? `${v.slice(0, 60)}…` : v
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v)
+  try {
+    const json = JSON.stringify(v)
+    return json.length > 60 ? `${json.slice(0, 60)}…` : json
+  } catch {
+    return String(v)
+  }
 }

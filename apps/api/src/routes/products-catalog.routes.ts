@@ -796,6 +796,69 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // F3 — GET /api/products/:id/activity
+  // Surfaces the AuditLog timeline for a product. Newest-first,
+  // paginated, ETag-cached so the drawer's polling collapses to 304s
+  // when nothing has happened.
+  //
+  // Filters AuditLog rows where entityType='Product' AND entityId=:id.
+  // Returns slim before/after diffs (writers already trim to changed
+  // fields per AuditLogService's contract) plus metadata + actor +
+  // timestamp.
+  fastify.get<{
+    Params: { id: string }
+    Querystring: { limit?: string; offset?: string }
+  }>('/products/:id/activity', async (request, reply) => {
+    try {
+      const { id } = request.params
+      const limit = Math.min(
+        Math.max(parseInt(request.query.limit ?? '50', 10) || 50, 1),
+        200,
+      )
+      const offset = Math.max(parseInt(request.query.offset ?? '0', 10) || 0, 0)
+
+      // ETag: count + max(createdAt) for this entity. The listEtag
+      // helper supports a custom timestamp field for AuditLog (which
+      // has only createdAt — no updatedAt).
+      const { etag } = await listEtag(prisma, {
+        model: 'auditLog',
+        where: { entityType: 'Product', entityId: id },
+        filterContext: { kind: 'product-activity', id, limit, offset },
+        timestampField: 'createdAt',
+      })
+      reply.header('ETag', etag)
+      reply.header('Cache-Control', 'private, max-age=0, must-revalidate')
+      if (matches(request, etag)) {
+        return reply.code(304).send()
+      }
+
+      const [total, rows] = await Promise.all([
+        prisma.auditLog.count({
+          where: { entityType: 'Product', entityId: id },
+        }),
+        prisma.auditLog.findMany({
+          where: { entityType: 'Product', entityId: id },
+          orderBy: { createdAt: 'desc' },
+          take: limit,
+          skip: offset,
+          select: {
+            id: true,
+            action: true,
+            userId: true,
+            before: true,
+            after: true,
+            metadata: true,
+            createdAt: true,
+          },
+        }),
+      ])
+      return { total, items: rows }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[products/:id/activity] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
   // POST /api/products/bulk-set-stock — set absolute totalStock for N
   // products (and/or update lowStockThreshold).
   //
