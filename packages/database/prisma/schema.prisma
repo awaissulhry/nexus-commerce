@@ -3288,6 +3288,53 @@ model ReplenishmentRecommendation {
   @@index([resultingPoId])
 }
 
+// ── Cron observability ─────────────────────────────────────────────
+//
+// One row per cron invocation. Lets operators answer "when did this
+// job last run?" / "did the 2am job fire?" / "what was the error?"
+// without tailing logs. Crons wrap their handler with the
+// recordCronRun() helper which inserts on start, updates on finish.
+//
+// Append-only by design — we never UPDATE startedAt or jobName once
+// inserted, only finishedAt + status + error + outputSummary on
+// completion. status RUNNING means the previous attempt is still
+// executing (or crashed without writing finishedAt — operators can
+// see stale RUNNING rows as red flags).
+
+model CronRun {
+  id String @id @default(cuid())
+
+  /** Cron job name — e.g. 'forecast', 'auto-po', 'sales-report-ingest'.
+   *  Stable identifier matched against the constants in jobs/*.ts. */
+  jobName String
+
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+
+  /** RUNNING (insert), SUCCESS (clean exit), FAILED (threw). Stale
+   *  RUNNING rows older than the job's expected runtime indicate a
+   *  crash before the wrapper could update the row. */
+  status String @default("RUNNING")
+
+  /** Error message when status=FAILED. */
+  errorMessage String?
+
+  /** Slim summary the cron may return — e.g. "27 forecasts updated"
+   *  or "3 POs created from 12 candidates". Surfaces in the dashboard
+   *  so operators can scan throughput at a glance. */
+  outputSummary String?
+
+  /** triggeredBy: 'cron' | 'manual'. Manual runs from the dashboard
+   *  show up here too so audit traceability is unified. */
+  triggeredBy String @default("cron")
+
+  createdAt DateTime @default(now())
+
+  @@index([jobName, startedAt])
+  @@index([status])
+  @@index([startedAt])
+}
+
 // ── R.17: Substitution-aware demand ───────────────────────────────
 // One-way link: when `primary` is out of stock, customers buy
 // `substitute`. substitutionFraction (0-1) is what portion of

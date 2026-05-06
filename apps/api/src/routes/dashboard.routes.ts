@@ -652,6 +652,87 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       recentErrors,
     }
   })
+
+  // Cron observability — latest run per known job + recent failures.
+  // Powers the CronStatusPanel on /dashboard/health.
+  // Backed by the CronRun table written by recordCronRun().
+  fastify.get('/dashboard/cron-runs', async (_request, reply) => {
+    try {
+      reply.header('Cache-Control', 'private, max-age=15')
+
+      // Latest run per jobName via DISTINCT ON (Postgres-specific). The
+      // grouped-window equivalent in pure Prisma is awkward; raw SQL is
+      // cleaner here.
+      const latest = await prisma.$queryRaw<
+        Array<{
+          jobName: string
+          startedAt: Date
+          finishedAt: Date | null
+          status: string
+          errorMessage: string | null
+          outputSummary: string | null
+          triggeredBy: string
+        }>
+      >`
+        SELECT DISTINCT ON ("jobName")
+          "jobName", "startedAt", "finishedAt", "status",
+          "errorMessage", "outputSummary", "triggeredBy"
+        FROM "CronRun"
+        WHERE "startedAt" > NOW() - INTERVAL '30 days'
+        ORDER BY "jobName", "startedAt" DESC
+      `
+
+      // Stale RUNNING rows (>2h) — likely a crash before the wrapper
+      // could update. Surface as health flags.
+      const staleRunning = await prisma.cronRun.findMany({
+        where: {
+          status: 'RUNNING',
+          startedAt: { lt: new Date(Date.now() - 2 * 60 * 60 * 1000) },
+        },
+        select: {
+          id: true,
+          jobName: true,
+          startedAt: true,
+          triggeredBy: true,
+        },
+        orderBy: { startedAt: 'desc' },
+        take: 20,
+      })
+
+      // Last 20 failures across all jobs.
+      const recentFailures = await prisma.cronRun.findMany({
+        where: { status: 'FAILED' },
+        select: {
+          id: true,
+          jobName: true,
+          startedAt: true,
+          finishedAt: true,
+          errorMessage: true,
+          triggeredBy: true,
+        },
+        orderBy: { startedAt: 'desc' },
+        take: 20,
+      })
+
+      return {
+        latest: latest.map((r) => ({
+          ...r,
+          durationMs:
+            r.finishedAt
+              ? new Date(r.finishedAt).getTime() -
+                new Date(r.startedAt).getTime()
+              : null,
+        })),
+        staleRunning,
+        recentFailures,
+        generatedAt: new Date().toISOString(),
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[dashboard/cron-runs] failed')
+      return reply.code(500).send({ error: message })
+    }
+  })
 }
 
 export default dashboardRoutes

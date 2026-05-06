@@ -6,6 +6,7 @@ import { apiClient, ChannelHealthScore, UnresolvedConflict, SyncError } from '@/
 import HealthVitalsSection from './HealthVitalsSection';
 import ConflictsSection from './ConflictsSection';
 import SystemLogsSection from './SystemLogsSection';
+import CronStatusPanel from './CronStatusPanel';
 
 export default function HealthDashboardPage() {
   const [healthScores, setHealthScores] = useState<ChannelHealthScore[]>([]);
@@ -102,6 +103,9 @@ export default function HealthDashboardPage() {
         <div className="space-y-6">
           {/* Vitals Section */}
           <HealthVitalsSection healthScores={healthScores} />
+
+          {/* Cron Jobs — observability for scheduled job runs */}
+          <CronStatusPanel />
 
           {/* Conflicts Section */}
           <ConflictsSection

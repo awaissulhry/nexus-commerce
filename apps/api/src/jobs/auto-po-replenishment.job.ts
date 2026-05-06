@@ -15,6 +15,7 @@
 import cron from 'node-cron'
 import { logger } from '../utils/logger.js'
 import { runAutoPoSweep } from '../services/auto-po.service.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -22,17 +23,20 @@ let lastPosCreated = 0
 
 export async function runAutoPoCronOnce(): Promise<void> {
   try {
-    const r = await runAutoPoSweep({ triggeredBy: 'cron', dryRun: false })
-    lastRunAt = new Date()
-    lastPosCreated = r.posCreated
-    if (r.posCreated > 0 || r.errorCount > 0) {
-      logger.info('auto-po cron: completed', {
-        posCreated: r.posCreated,
-        eligible: r.eligibleCount,
-        errors: r.errorCount,
-        runLogId: r.runLogId,
-      })
-    }
+    await recordCronRun('auto-po', async () => {
+      const r = await runAutoPoSweep({ triggeredBy: 'cron', dryRun: false })
+      lastRunAt = new Date()
+      lastPosCreated = r.posCreated
+      if (r.posCreated > 0 || r.errorCount > 0) {
+        logger.info('auto-po cron: completed', {
+          posCreated: r.posCreated,
+          eligible: r.eligibleCount,
+          errors: r.errorCount,
+          runLogId: r.runLogId,
+        })
+      }
+      return `${r.posCreated} POs from ${r.eligibleCount} eligible recs (errors=${r.errorCount})`
+    })
   } catch (err) {
     logger.error('auto-po cron: failure', {
       error: err instanceof Error ? err.message : String(err),
