@@ -1725,18 +1725,25 @@ type PurchaseOrderLite = {
   }>
 }
 
-const CARRIER_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: '',       label: '— None —' },
-  { value: 'BRT',    label: 'BRT' },
-  { value: 'POSTE',  label: 'Poste Italiane' },
-  { value: 'GLS',    label: 'GLS' },
-  { value: 'SDA',    label: 'SDA' },
-  { value: 'TNT',    label: 'TNT' },
-  { value: 'DHL',    label: 'DHL' },
-  { value: 'UPS',    label: 'UPS' },
-  { value: 'FEDEX',  label: 'FedEx' },
-  { value: 'DSV',    label: 'DSV' },
-  { value: 'OTHER',  label: 'Other' },
+// H.15 — fallback list. The real list comes from /api/fulfillment/
+// carriers/inbound on mount; this is here so the form still renders
+// usable options when offline / API down. Keep these aligned with
+// apps/api/src/services/carriers.service.ts so the offline UX
+// matches what the server would have served.
+const CARRIER_OPTIONS_FALLBACK: Array<{ value: string; label: string }> = [
+  { value: '',           label: '— None —' },
+  { value: 'BRT',        label: 'BRT (Bartolini)' },
+  { value: 'POSTE',      label: 'Poste Italiane' },
+  { value: 'GLS',        label: 'GLS Italy' },
+  { value: 'SDA',        label: 'SDA' },
+  { value: 'TNT',        label: 'TNT (FedEx)' },
+  { value: 'DHL',        label: 'DHL Express' },
+  { value: 'UPS',        label: 'UPS' },
+  { value: 'FEDEX',      label: 'FedEx' },
+  { value: 'DSV',        label: 'DSV' },
+  { value: 'DPD',        label: 'DPD' },
+  { value: 'CHRONOPOST', label: 'Chronopost' },
+  { value: 'OTHER',      label: 'Other' },
 ]
 
 const CURRENCY_OPTIONS = ['EUR', 'USD', 'GBP', 'CNY', 'CHF', 'JPY']
@@ -1786,6 +1793,22 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
   const [carrierCode, setCarrierCode] = useState('')
   const [trackingNumber, setTrackingNumber] = useState('')
   const [trackingUrl, setTrackingUrl] = useState('')
+  // H.15 — pull dropdown from /api/fulfillment/carriers/inbound,
+  // fall back to the hardcoded list if the API isn't reachable.
+  const [carrierOptions, setCarrierOptions] = useState(CARRIER_OPTIONS_FALLBACK)
+  useEffect(() => {
+    fetch(`${getBackendUrl()}/api/fulfillment/carriers/inbound`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.items && Array.isArray(data.items)) {
+          setCarrierOptions([
+            { value: '', label: '— None —' },
+            ...data.items.map((c: any) => ({ value: c.code, label: c.label })),
+          ])
+        }
+      })
+      .catch(() => { /* fallback already set */ })
+  }, [])
 
   // Cost section
   const [costOpen, setCostOpen] = useState(false)
@@ -2017,7 +2040,7 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
               <div>
                 <div className="text-[10px] text-slate-500 mb-1">Carrier</div>
                 <select value={carrierCode} onChange={(e) => setCarrierCode(e.target.value)} className="h-7 w-full px-1.5 text-[12px] border border-slate-200 rounded">
-                  {CARRIER_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  {carrierOptions.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
               </div>
               <div className="col-span-2">

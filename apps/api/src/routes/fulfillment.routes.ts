@@ -48,6 +48,10 @@ import {
   subscribeInboundEvents,
   getListenerCount,
 } from '../services/inbound-events.service.js'
+import {
+  listCarriers as listInboundCarriers,
+  validateTrackingFormat,
+} from '../services/carriers.service.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // FULFILLMENT B.3–B.9 — full domain API surface
@@ -772,6 +776,18 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get('/fulfillment/inbound/events/stats', async () => {
     return { listenerCount: getListenerCount() }
+  })
+
+  // H.15 — server-side inbound carrier registry. Frontend pulls
+  // this on load instead of duplicating the hardcoded map. PDFs +
+  // emails (when added) can resolveTrackingUrl(...) directly.
+  fastify.get('/fulfillment/carriers/inbound', async () => {
+    return { items: listInboundCarriers() }
+  })
+
+  fastify.post('/fulfillment/carriers/inbound/validate-tracking', async (request) => {
+    const body = request.body as { carrierCode?: string; trackingNumber?: string }
+    return validateTrackingFormat(body.carrierCode, body.trackingNumber)
   })
 
   // H.12 — QC queue. Cross-shipment view of items currently in
