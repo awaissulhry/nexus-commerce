@@ -643,10 +643,37 @@ export default function ProductsWorkspace() {
             setOpen={setSavedViewMenuOpen}
             views={savedViews}
             onApply={(view: SavedView) => {
+              // P.16 — view-local keys (visibleColumns, density,
+              // pageSize) live as state, not URL params. Pull them
+              // out before building the URL so they apply via
+              // setState and don't pollute the location bar.
+              const f = (view.filters ?? {}) as Record<string, any>
+              const viewLocal = {
+                visibleColumns: f._visibleColumns as string[] | undefined,
+                density: f._density as Density | undefined,
+                pageSize: f._pageSize as number | undefined,
+              }
+              if (Array.isArray(viewLocal.visibleColumns)) {
+                setVisibleColumns(viewLocal.visibleColumns)
+              }
+              if (
+                viewLocal.density === 'compact' ||
+                viewLocal.density === 'comfortable' ||
+                viewLocal.density === 'spacious'
+              ) {
+                setDensity(viewLocal.density)
+              }
               const next = new URLSearchParams()
-              for (const [k, v] of Object.entries(view.filters ?? {})) {
+              for (const [k, v] of Object.entries(f)) {
+                if (k.startsWith('_')) continue // view-local, handled above
                 if (v == null || v === '') continue
                 next.set(k, Array.isArray(v) ? v.join(',') : String(v))
+              }
+              if (
+                typeof viewLocal.pageSize === 'number' &&
+                viewLocal.pageSize !== 100
+              ) {
+                next.set('pageSize', String(viewLocal.pageSize))
               }
               router.replace(`${pathname}?${next.toString()}`, { scroll: false })
               setSavedViewMenuOpen(false)
@@ -664,6 +691,24 @@ export default function ProductsWorkspace() {
               if (stockLevel !== 'all') filters.stockLevel = stockLevel
               if (sortBy !== 'updated') filters.sort = sortBy
               if (lens !== 'grid') filters.lens = lens
+              // P.16 — capture grid customization too. Without this
+              // a view restored its filters but reset the operator's
+              // column config + density to whatever localStorage held
+              // — making "Stock review" view useless because it
+              // wouldn't switch to compact mode + show the threshold
+              // column. Underscore-prefixed keys mark them as
+              // view-local (apply via state, not URL).
+              const visibleSig = visibleColumns.slice().sort().join(',')
+              const defaultSig = DEFAULT_VISIBLE.slice().sort().join(',')
+              if (visibleSig !== defaultSig) {
+                filters._visibleColumns = visibleColumns
+              }
+              if (density !== 'comfortable') {
+                filters._density = density
+              }
+              if (pageSize !== 100) {
+                filters._pageSize = pageSize
+              }
               const res = await fetch(`${getBackendUrl()}/api/saved-views`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
