@@ -715,6 +715,24 @@ These are P2 because they don't block shipping. Address after:
 
 ---
 
+## 41. 🟡 Order-driven stock decrement needs fulfillment-method-aware location routing
+
+**Symptom:** `inventory-sync.service.ts::syncGlobalStock` and `processSale` decrement `Product.totalStock` directly via the legacy path (no `locationId`). After H.2, `applyStockMovement` falls back to `IT-MAIN` when no location is given. That's correct for FBM/eBay/Shopify orders (we ship from Riccione) but wrong for Amazon FBA orders (Amazon decrements its own pool, the FBA cron picks it up — our `IT-MAIN` should not move).
+
+**Surfaced at:** H.2 audit. The call graph is `webhooks/order` and `order-ingestion.service.ts:229 → processSale → syncGlobalStock`. The latter doesn't have channel/fulfillment-method context plumbed through.
+
+**Workaround:** Xavia is pre-launch and `order-ingestion.service.ts` is currently only exercised by mock paths. The FBA cron's reconciliation sweep (every 15 min) corrects FBA stock; the only damage from a wrong-direction `IT-MAIN` decrement would be `IT-MAIN` going artificially low for an FBA-fulfilled SKU, which the operator would catch via the rebuilt `/fulfillment/stock` page.
+
+**Proper fix:**
+1. Plumb `channel` + `fulfillmentMethod` through `syncGlobalStock` and `processSale` (already in scope at the call site — `order-ingestion.service.ts:201` has `channel` in the same loop).
+2. Resolve location: `AMAZON + FBA → AMAZON-EU-FBA`; everything else → `IT-MAIN`.
+3. Pass `locationId` to `applyStockMovement`.
+4. For FBA orders, optionally skip the local decrement entirely and rely on the cron — needs product-decision input.
+
+Tied to: production order ingestion at scale (currently pre-launch). Bump to 🔴 once real orders flow.
+
+---
+
 ## Triage summary
 
 **🔴 P0 — tackle next:**
@@ -756,3 +774,4 @@ These are P2 because they don't block shipping. Address after:
 - **32** Delete the orphan `DraftListing` model from schema.prisma
 - **39** Per-seller primary marketplace setting — replaces hardcoded `'IT'` in E.9 backfill + future resolver fallbacks; needed once Nexus serves a second tenant
 - **40** SP-API variation attribute mapping seed — auto-populate `ChannelListing.variationMapping` from `getProductTypeDefinitions` once a real publish lands; tied to #35
+- **41** Order-driven stock decrement — fulfillment-method-aware location routing (FBA → `AMAZON-EU-FBA`, rest → `IT-MAIN`); promote to 🔴 once real orders flow

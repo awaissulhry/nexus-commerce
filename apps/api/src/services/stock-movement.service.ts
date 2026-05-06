@@ -6,13 +6,20 @@ import type { Prisma } from '@prisma/client'
 // through here so the StockMovement audit log captures balanceAfter,
 // reason, reference, and (in B.2) the cross-channel push fans out.
 //
-// H.1 — extended with optional locationId. When provided, the write
-// targets the StockLevel ledger for that (product, location, variation)
-// triple, and Product.totalStock is recomputed as SUM(StockLevel) so
-// the cached column stays consistent. When locationId is omitted, the
-// legacy code path runs unchanged (direct Product.totalStock /
-// ProductVariation.stock mutation). Commit 2 will migrate the remaining
-// callers (returns/inbound/manual-adjust) onto the locationId path.
+// H.1/H.2 — multi-location StockLevel ledger.
+//
+// Resolution order for the location of a movement:
+//   1. explicit `locationId` argument
+//   2. `warehouseId` argument → joined to StockLocation.warehouseId
+//   3. fallback: IT-MAIN (Riccione) — physical Xavia warehouse
+//
+// Once resolved, the write targets the StockLevel row for
+// (location, product, variation) and Product.totalStock is
+// recomputed as SUM(StockLevel.quantity). The legacy variationId
+// branch (no locationId, no warehouseId, has variationId) remains
+// for the unlikely case a caller targets a single variant directly
+// without specifying a location; current production has zero
+// ProductVariation rows so this path is dormant.
 
 type MovementReason =
   | 'ORDER_PLACED'
@@ -64,7 +71,7 @@ export type StockMovementInput = {
  * product, inside the supplied transaction. Called after any StockLevel
  * mutation so the cached totalStock cannot drift.
  */
-async function recomputeProductTotalStock(
+export async function recomputeProductTotalStock(
   tx: Prisma.TransactionClient,
   productId: string,
 ): Promise<number> {
@@ -78,6 +85,39 @@ async function recomputeProductTotalStock(
     data: { totalStock: total },
   })
   return total
+}
+
+/**
+ * Resolve the StockLocation for a movement using the H.2 precedence:
+ *   explicit locationId > warehouseId-derived > IT-MAIN fallback.
+ *
+ * Cached at module level for IT-MAIN since it's the hot path.
+ */
+let cachedDefaultLocationId: string | null = null
+async function resolveLocationId(
+  tx: Prisma.TransactionClient,
+  args: { locationId?: string; warehouseId?: string },
+): Promise<string> {
+  if (args.locationId) return args.locationId
+  if (args.warehouseId) {
+    const sl = await tx.stockLocation.findUnique({
+      where: { warehouseId: args.warehouseId },
+      select: { id: true },
+    })
+    if (sl) return sl.id
+  }
+  if (cachedDefaultLocationId) return cachedDefaultLocationId
+  const itMain = await tx.stockLocation.findUnique({
+    where: { code: 'IT-MAIN' },
+    select: { id: true },
+  })
+  if (!itMain) {
+    throw new Error(
+      'applyStockMovement: IT-MAIN StockLocation missing — run H.1 backfill',
+    )
+  }
+  cachedDefaultLocationId = itMain.id
+  return itMain.id
 }
 
 /**
@@ -112,110 +152,81 @@ export async function applyStockMovement(input: StockMovementInput) {
   if (change === 0) throw new Error('applyStockMovement: change must be non-zero')
 
   return await prisma.$transaction(async (tx) => {
-    let balanceAfter: number
-    let quantityBefore: number | null = null
+    // H.2 — every movement now resolves to a StockLocation. Legacy
+    // (no locationId, no warehouseId) callers transparently land on
+    // IT-MAIN.
+    const resolvedLocationId = await resolveLocationId(tx, {
+      locationId,
+      warehouseId,
+    })
 
-    if (locationId) {
-      // ── H.1 path: StockLevel ledger ───────────────────────────────
-      // Find existing row for (location, product, variation) triple.
-      // Partial unique indexes in the migration enforce uniqueness when
-      // variationId is NULL or non-NULL; we use findFirst here because
-      // Prisma's @@unique([locationId, productId, variationId]) doesn't
-      // expose a typed `where: { unique }` for the NULL case.
-      const existing = await tx.stockLevel.findFirst({
-        where: {
-          locationId,
-          productId,
-          variationId: variationId ?? null,
+    const existing = await tx.stockLevel.findFirst({
+      where: {
+        locationId: resolvedLocationId,
+        productId,
+        variationId: variationId ?? null,
+      },
+      select: { id: true, quantity: true, reserved: true },
+    })
+
+    const quantityBefore = existing?.quantity ?? 0
+    const newQuantity = quantityBefore + change
+    if (newQuantity < 0) {
+      throw new Error(
+        `applyStockMovement: would drive StockLevel quantity negative ` +
+          `(product=${productId} location=${resolvedLocationId} ` +
+          `before=${quantityBefore} change=${change})`,
+      )
+    }
+    const reserved = existing?.reserved ?? 0
+    const newAvailable = newQuantity - reserved
+
+    if (existing) {
+      await tx.stockLevel.update({
+        where: { id: existing.id },
+        data: {
+          quantity: newQuantity,
+          available: newAvailable,
+          lastSyncedAt: new Date(),
         },
-        select: { id: true, quantity: true, reserved: true },
-      })
-
-      quantityBefore = existing?.quantity ?? 0
-      const newQuantity = quantityBefore + change
-      if (newQuantity < 0) {
-        throw new Error(
-          `applyStockMovement: would drive StockLevel quantity negative ` +
-            `(product=${productId} location=${locationId} ` +
-            `before=${quantityBefore} change=${change})`,
-        )
-      }
-      const reserved = existing?.reserved ?? 0
-      const newAvailable = newQuantity - reserved
-
-      if (existing) {
-        await tx.stockLevel.update({
-          where: { id: existing.id },
-          data: {
-            quantity: newQuantity,
-            available: newAvailable,
-            lastSyncedAt: new Date(),
-          },
-        })
-      } else {
-        await tx.stockLevel.create({
-          data: {
-            locationId,
-            productId,
-            variationId: variationId ?? null,
-            quantity: newQuantity,
-            reserved: 0,
-            available: newAvailable,
-            syncStatus: 'SYNCED',
-            lastSyncedAt: new Date(),
-          },
-        })
-      }
-
-      balanceAfter = newQuantity
-
-      // Increment Product.totalStock by `change` rather than recomputing
-      // as SUM(StockLevel). This keeps the new path arithmetic-equivalent
-      // to the legacy path during the Commit 1 → Commit 2 dual-write
-      // window: legacy writers (returns, inbound, manual adjust) still
-      // increment totalStock directly without touching StockLevel, so a
-      // SUM-based recompute here would silently drop their deltas. The
-      // recompute helper below is the source-of-truth reconciliation
-      // used at Commit 2 deploy to seal any drift, and as an ad-hoc
-      // repair tool.
-      await tx.product.update({
-        where: { id: productId },
-        data: { totalStock: { increment: change } },
-      })
-    } else if (variationId) {
-      // ── Legacy path: ProductVariation.stock ───────────────────────
-      const variation = await tx.productVariation.update({
-        where: { id: variationId },
-        data: { stock: { increment: change } },
-        select: { stock: true, productId: true },
-      })
-      balanceAfter = variation.stock
-
-      // Recompute parent total from sum of variants
-      const sum = await tx.productVariation.aggregate({
-        where: { productId: variation.productId },
-        _sum: { stock: true },
-      })
-      await tx.product.update({
-        where: { id: variation.productId },
-        data: { totalStock: sum._sum.stock ?? 0 },
       })
     } else {
-      // ── Legacy path: Product.totalStock direct ────────────────────
-      const updated = await tx.product.update({
-        where: { id: productId },
-        data: { totalStock: { increment: change } },
-        select: { totalStock: true },
+      await tx.stockLevel.create({
+        data: {
+          locationId: resolvedLocationId,
+          productId,
+          variationId: variationId ?? null,
+          quantity: newQuantity,
+          reserved: 0,
+          available: newAvailable,
+          syncStatus: 'SYNCED',
+          lastSyncedAt: new Date(),
+        },
       })
-      balanceAfter = updated.totalStock
     }
+
+    const balanceAfter = newQuantity
+
+    // Variant stock mirrored on ProductVariation.stock for any caller
+    // still reading that column directly. ProductVariation has zero
+    // rows in current production but the field remains schema-live.
+    if (variationId) {
+      await tx.productVariation.update({
+        where: { id: variationId },
+        data: { stock: { increment: change } },
+      })
+    }
+
+    // Product.totalStock as cached SUM(StockLevel.quantity). Single
+    // source of truth across all locations for the H.2 world.
+    await recomputeProductTotalStock(tx, productId)
 
     const movement = await tx.stockMovement.create({
       data: {
         productId,
         variationId: variationId ?? null,
         warehouseId: warehouseId ?? null,
-        locationId: locationId ?? null,
+        locationId: resolvedLocationId,
         change,
         balanceAfter,
         quantityBefore,
