@@ -1,17 +1,29 @@
 #!/usr/bin/env node
 // Commit 0 — reconcile ChannelListing rows that follow master but have
-// drifted price or quantity. The audit found 2 such rows in production
-// (G + H sections of audit-products-state output). They drifted because
-// of writes that happened before MasterPriceService / applyStockMovement
-// became the single entrypoint — historic raw updateMany / direct writes.
+// drifted price or quantity. The audit found 2 such rows in production:
+// AIRMESH-JACKET-YELLOW-MEN on AMAZON IT + DE.
 //
-// Approach:
-//   For each drifted row, route a single MasterPriceService.update or
-//   applyStockMovement call so the cascade + audit + outbound queue
-//   fire normally. We want the marketplace to see the corrected value,
-//   not just the DB.
+// On inspection the drift went the WRONG way:
+//   listing_price=€42.50/€44.95  vs  master_basePrice=€0
+//   listing_qty=50/30             vs  master_totalStock=0
 //
-// Usage (read-only by default — pass --apply to actually fix):
+// The master is broken, not the listings — Product.basePrice and
+// Product.totalStock got zeroed out by some historic write (likely a
+// soft-delete pass or a malformed import) while the live Amazon
+// listings still hold real prices/quantities and are still serving
+// orders to buyers.
+//
+// Snapping listing → master would set Amazon prices to €0 (free) and
+// quantity to 0. Catastrophic. So we go the other direction: flip
+// followMasterPrice + followMasterQuantity to FALSE on the drifted
+// rows so the listings explicitly own their own values until someone
+// restores Product.basePrice/totalStock manually.
+//
+// This is fully reversible — once a human restores the correct master
+// values, set followMaster*=true again and the cascade resumes
+// normally. The audit's drift count drops to zero either way.
+//
+// Usage (read-only by default — pass --apply to write):
 //   DATABASE_URL=... node scripts/reconcile-master-drift.mjs
 //   DATABASE_URL=... node scripts/reconcile-master-drift.mjs --apply
 
@@ -28,7 +40,9 @@ const prisma = new PrismaClient()
 
 console.log(`Mode: ${apply ? 'APPLY (will write)' : 'DRY RUN (no writes)'}\n`)
 
-// G — price drift on master-following rows
+// Find every row whose follow flag is on but the value diverges from
+// master. We treat price-drift and quantity-drift as separate sets
+// because a row may drift on only one of the two.
 const priceDrift = await prisma.$queryRawUnsafe(`
   SELECT cl.id AS listing_id, cl."productId" AS product_id, p.sku, cl.channel,
          cl.marketplace, cl.price AS listing_price, p."basePrice" AS master_price
@@ -46,7 +60,6 @@ for (const row of priceDrift) {
   )
 }
 
-// H — quantity drift on master-following rows
 const qtyDrift = await prisma.$queryRawUnsafe(`
   SELECT cl.id AS listing_id, cl."productId" AS product_id, p.sku, cl.channel,
          cl.marketplace, cl.quantity AS listing_qty,
@@ -71,30 +84,26 @@ for (const row of qtyDrift) {
 
 if (!apply) {
   console.log(
-    `\nDry run complete. Re-run with --apply to write the reconciled values.`,
+    `\nDry run complete. Re-run with --apply to flip followMaster* to false on the drifted rows.`,
   )
   await prisma.$disconnect()
   process.exit(0)
 }
 
-// Apply: for each drifted price row, snap ChannelListing.price to master.
-// We do not invoke MasterPriceService because we don't want to push the
-// marketplace's own current price back through — the master is the
-// source of truth, the listing already drifted. We're just realigning
-// the DB so the next legitimate price change cascades cleanly.
+// Apply: flip followMaster* to false. We DO NOT touch the listing's
+// price or quantity — the live Amazon values stay exactly as they
+// are. We DO NOT enqueue an outbound sync — nothing about the
+// marketplace's view changes.
 //
-// Same for quantity: snap ChannelListing.quantity to the computed
-// expected. No outbound enqueue — the next stock movement will push.
-//
-// AuditLog rows are written so the reconcile is visible in history.
-console.log(`\n━━━ Applying reconciliation ━━━\n`)
+// Audit row records the flag flip so this is visible in history.
+console.log(`\n━━━ Applying: flip followMaster* to false on drifted rows ━━━\n`)
 
 let priceFixed = 0
 for (const row of priceDrift) {
   await prisma.$transaction(async (tx) => {
     await tx.channelListing.update({
       where: { id: row.listing_id },
-      data: { price: row.master_price, version: { increment: 1 } },
+      data: { followMasterPrice: false, version: { increment: 1 } },
     })
     await tx.auditLog.create({
       data: {
@@ -102,12 +111,15 @@ for (const row of priceDrift) {
         entityId: row.listing_id,
         action: 'update',
         userId: null,
-        before: { price: row.listing_price },
-        after: { price: row.master_price },
+        before: { followMasterPrice: true },
+        after: { followMasterPrice: false },
         metadata: {
-          field: 'price',
-          reason: 'master-drift-reconcile',
+          field: 'followMasterPrice',
+          reason: 'master-drift-reconcile-unfollow',
           source: 'scripts/reconcile-master-drift.mjs',
+          listing_price: String(row.listing_price),
+          master_price: String(row.master_price),
+          note: 'master was broken (basePrice=0); flipped follow flag off so live listing price is preserved',
         },
         createdAt: new Date(),
       },
@@ -115,7 +127,7 @@ for (const row of priceDrift) {
   })
   priceFixed++
   console.log(
-    `  ✓ price snapped: ${row.listing_id}  ${row.listing_price} → ${row.master_price}`,
+    `  ✓ unfollowed price: ${row.listing_id}  listing kept at ${row.listing_price}`,
   )
 }
 
@@ -124,7 +136,7 @@ for (const row of qtyDrift) {
   await prisma.$transaction(async (tx) => {
     await tx.channelListing.update({
       where: { id: row.listing_id },
-      data: { quantity: row.expected_qty, version: { increment: 1 } },
+      data: { followMasterQuantity: false, version: { increment: 1 } },
     })
     await tx.auditLog.create({
       data: {
@@ -132,14 +144,16 @@ for (const row of qtyDrift) {
         entityId: row.listing_id,
         action: 'update',
         userId: null,
-        before: { quantity: row.listing_qty },
-        after: { quantity: row.expected_qty },
+        before: { followMasterQuantity: true },
+        after: { followMasterQuantity: false },
         metadata: {
-          field: 'quantity',
-          reason: 'master-drift-reconcile',
+          field: 'followMasterQuantity',
+          reason: 'master-drift-reconcile-unfollow',
           source: 'scripts/reconcile-master-drift.mjs',
-          totalStock: row.total_stock,
+          listing_qty: row.listing_qty,
+          master_total_stock: row.total_stock,
           buffer: row.buffer,
+          note: 'master was broken (totalStock=0); flipped follow flag off so live listing quantity is preserved',
         },
         createdAt: new Date(),
       },
@@ -147,9 +161,15 @@ for (const row of qtyDrift) {
   })
   qtyFixed++
   console.log(
-    `  ✓ quantity snapped: ${row.listing_id}  ${row.listing_qty} → ${row.expected_qty}`,
+    `  ✓ unfollowed qty: ${row.listing_id}  listing kept at ${row.listing_qty}`,
   )
 }
 
 await prisma.$disconnect()
-console.log(`\nDone. price_fixed=${priceFixed} qty_fixed=${qtyFixed}`)
+console.log(`\nDone. price_unfollowed=${priceFixed} qty_unfollowed=${qtyFixed}`)
+console.log(
+  `\nNext step: a human needs to restore Product.basePrice and Product.totalStock`,
+)
+console.log(
+  `for AIRMESH-JACKET-YELLOW-MEN, then flip followMaster* back to true if desired.`,
+)
