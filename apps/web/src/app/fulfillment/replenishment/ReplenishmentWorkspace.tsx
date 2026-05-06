@@ -727,7 +727,31 @@ interface DetailResponse {
     inboundWithinLeadTime: number
     totalOpenInbound: number
     openShipments: OpenShipmentRef[]
+    // R.2 — multi-location additions
+    byLocation?: Array<{
+      locationId: string
+      locationCode: string
+      locationName: string
+      locationType: string
+      servesMarketplaces: string[]
+      quantity: number
+      reserved: number
+      available: number
+    }>
+    totalQuantity?: number
+    totalAvailable?: number
+    stockSource?: string
   } | null
+  // R.2 — per-channel cover breakdown
+  channelCover?: Array<{
+    channel: string
+    marketplace: string
+    velocityPerDay: number
+    available: number
+    locationCode: string | null
+    source: string
+    daysOfCover: number | null
+  }>
   model: string | null
   generationTag: string | null
   signals: any
@@ -906,41 +930,17 @@ function ForecastDetailDrawer({
                 </div>
               </div>
 
-              {/* ATP composition */}
+              {/* R.2 — per-location stock breakdown + ATP totals */}
               {detail.atp && (
-                <div className="border border-slate-200 rounded p-3 bg-slate-50/50">
-                  <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-2">
-                    Available to promise
-                  </div>
-                  <div className="grid grid-cols-3 gap-3 text-[12px]">
-                    <Stat
-                      label="On-hand"
-                      value={detail.product.currentStock.toString()}
-                    />
-                    <Stat
-                      label="Inbound (within lead time)"
-                      value={`+${detail.atp.inboundWithinLeadTime}`}
-                      tone="emerald"
-                    />
-                    <Stat
-                      label="ATP"
-                      value={(
-                        detail.product.currentStock +
-                        detail.atp.inboundWithinLeadTime
-                      ).toString()}
-                      bold
-                    />
-                  </div>
-                  <div className="mt-2 text-[11px] text-slate-500">
-                    Lead time:{' '}
-                    <span className="font-semibold text-slate-700">
-                      {detail.atp.leadTimeDays}d
-                    </span>{' '}
-                    <span className="font-mono text-[10px]">
-                      ({detail.atp.leadTimeSource.toLowerCase().replace(/_/g, ' ')})
-                    </span>
-                  </div>
-                </div>
+                <StockByLocationPanel atp={detail.atp} />
+              )}
+
+              {/* R.2 — per-channel days-of-cover */}
+              {detail.channelCover && detail.channelCover.length > 0 && (
+                <ChannelCoverPanel
+                  channelCover={detail.channelCover}
+                  leadTimeDays={detail.atp?.leadTimeDays ?? 14}
+                />
               )}
 
               {/* Open shipments */}
@@ -1002,39 +1002,6 @@ function ForecastDetailDrawer({
             </>
           )}
         </div>
-      </div>
-    </div>
-  )
-}
-
-function Stat({
-  label,
-  value,
-  tone,
-  bold,
-}: {
-  label: string
-  value: string
-  tone?: 'emerald' | 'rose'
-  bold?: boolean
-}) {
-  return (
-    <div>
-      <div className="text-[10px] uppercase tracking-wider text-slate-500">
-        {label}
-      </div>
-      <div
-        className={cn(
-          'tabular-nums',
-          bold ? 'text-[16px] font-semibold' : 'text-[14px]',
-          tone === 'emerald'
-            ? 'text-emerald-700'
-            : tone === 'rose'
-            ? 'text-rose-700'
-            : 'text-slate-900',
-        )}
-      >
-        {value}
       </div>
     </div>
   )
@@ -1103,6 +1070,166 @@ function SignalChip({ label, factor }: { label: string; factor: number }) {
       <div className="tabular-nums font-semibold">
         ×{Number(factor).toFixed(2)}
       </div>
+    </div>
+  )
+}
+
+// R.2 — Per-location stock breakdown for the drawer. Replaces the
+// old "On-hand / Inbound / ATP" 3-column block. Surfaces every
+// StockLocation row for this product with quantity / reserved /
+// available + the marketplaces it serves. Falls back to an amber
+// warning when stockSource='PRODUCT_TOTAL_STOCK_FALLBACK' (legacy
+// product without StockLevel rows yet).
+function StockByLocationPanel({ atp }: { atp: any }) {
+  const byLocation: Array<any> = atp.byLocation ?? []
+  const totalAvailable: number = atp.totalAvailable ?? 0
+  const inboundLT: number = atp.inboundWithinLeadTime ?? 0
+  const stockSource: string = atp.stockSource ?? 'STOCK_LEVEL'
+  const isFallback = stockSource === 'PRODUCT_TOTAL_STOCK_FALLBACK'
+
+  return (
+    <div className="border border-slate-200 rounded p-3 bg-slate-50/50">
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+          Stock by location
+        </div>
+        <div className="text-[10px] text-slate-500">
+          Lead time:{' '}
+          <span className="font-semibold text-slate-700">{atp.leadTimeDays}d</span>{' '}
+          <span className="font-mono text-[10px]">
+            ({String(atp.leadTimeSource).toLowerCase().replace(/_/g, ' ')})
+          </span>
+        </div>
+      </div>
+
+      {isFallback && (
+        <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-2">
+          This product hasn't been migrated to per-location tracking yet.
+          Totals below are inferred from <span className="font-mono">Product.totalStock</span>;
+          reconcile via the Stock workspace for accurate numbers.
+        </div>
+      )}
+
+      {byLocation.length === 0 ? (
+        <div className="text-[12px] text-slate-500 italic py-2">
+          No stock at any location. Receive inventory or update via Stock workspace.
+        </div>
+      ) : (
+        <ul className="space-y-1.5 text-[12px]">
+          {byLocation.map((loc: any) => (
+            <li key={loc.locationId} className="flex items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="font-mono text-[11px] text-slate-700 truncate">{loc.locationCode}</div>
+                <div className="text-[10px] text-slate-500 truncate">
+                  {String(loc.locationType).toLowerCase().replace('_', ' ')}
+                  {loc.servesMarketplaces && loc.servesMarketplaces.length > 0 && (
+                    <span> · {loc.servesMarketplaces.join(', ')}</span>
+                  )}
+                </div>
+              </div>
+              <div className="text-right tabular-nums flex-shrink-0">
+                <div className="font-semibold text-slate-900">{loc.available}</div>
+                {loc.reserved > 0 && (
+                  <div className="text-[10px] text-slate-500">
+                    {loc.quantity} − {loc.reserved} reserved
+                  </div>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="mt-2 pt-2 border-t border-slate-200 grid grid-cols-3 gap-2 text-[12px]">
+        <div>
+          <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">Available</div>
+          <div className="tabular-nums font-semibold text-slate-900">{totalAvailable}</div>
+        </div>
+        <div>
+          <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">Inbound (LT)</div>
+          <div className="tabular-nums font-semibold text-emerald-700">+{inboundLT}</div>
+        </div>
+        <div>
+          <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">ATP</div>
+          <div className="tabular-nums font-bold text-slate-900">{totalAvailable + inboundLT}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// R.2 — Per-channel days-of-cover panel. For each (channel,
+// marketplace) tuple this product sold on, shows velocity, the
+// matching stock pool's available units, and the resulting days of
+// cover. Tone follows urgency: red ≤ leadTime, amber ≤ 2×leadTime,
+// slate beyond. Source pill flags fallback resolutions ("default
+// warehouse" or "no location") so the operator knows which channels
+// are running on inferred location mappings.
+function ChannelCoverPanel({
+  channelCover,
+  leadTimeDays,
+}: {
+  channelCover: Array<any>
+  leadTimeDays: number
+}) {
+  if (channelCover.length === 0) return null
+  const maxBar = Math.max(...channelCover.map((c: any) => c.daysOfCover ?? 0), leadTimeDays * 4)
+
+  return (
+    <div>
+      <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-2">
+        Days of cover by channel
+      </div>
+      <ul className="space-y-1.5 text-[12px]">
+        {channelCover.map((c: any, i: number) => {
+          const tone =
+            c.daysOfCover == null
+              ? 'bg-slate-50 border-slate-200 text-slate-500'
+              : c.daysOfCover <= leadTimeDays
+              ? 'bg-rose-50 border-rose-200 text-rose-700'
+              : c.daysOfCover <= leadTimeDays * 2
+              ? 'bg-amber-50 border-amber-200 text-amber-800'
+              : 'bg-slate-50 border-slate-200 text-slate-700'
+          const barWidth = c.daysOfCover != null
+            ? Math.min(100, Math.round((c.daysOfCover / maxBar) * 100))
+            : 0
+          return (
+            <li key={i} className={cn('border rounded px-2 py-1.5', tone)}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <span className="font-mono text-[11px]">
+                    {c.channel} · {c.marketplace}
+                  </span>
+                  {c.source !== 'EXACT_MATCH' && (
+                    <span className="ml-1 text-[9px] uppercase tracking-wider opacity-70">
+                      {c.source === 'WAREHOUSE_DEFAULT' ? '(default WH)' : '(no location)'}
+                    </span>
+                  )}
+                </div>
+                <div className="tabular-nums text-[11px] flex-shrink-0">
+                  {c.available} ÷ {c.velocityPerDay}/d ={' '}
+                  <span className="font-semibold">
+                    {c.daysOfCover == null ? '—' : `${c.daysOfCover}d`}
+                  </span>
+                </div>
+              </div>
+              {c.daysOfCover != null && c.velocityPerDay > 0 && (
+                <div className="mt-1 h-1 bg-white/60 rounded overflow-hidden">
+                  <div
+                    className={cn(
+                      'h-full',
+                      c.daysOfCover <= leadTimeDays ? 'bg-rose-500'
+                        : c.daysOfCover <= leadTimeDays * 2 ? 'bg-amber-500'
+                        : 'bg-slate-400',
+                    )}
+                    style={{ width: `${barWidth}%` }}
+                  />
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ul>
     </div>
   )
 }

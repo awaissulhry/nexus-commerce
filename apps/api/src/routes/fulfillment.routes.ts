@@ -3,6 +3,7 @@ import prisma from '../db.js'
 import { applyStockMovement, listStockMovements } from '../services/stock-movement.service.js'
 import { refreshSalesAggregates } from '../services/sales-aggregate.service.js'
 import { resolveAtp, DEFAULT_LEAD_TIME_DAYS } from '../services/atp.service.js'
+import { resolveStockForChannel, type ChannelLocationSource } from '../services/atp-channel.service.js'
 import {
   ingestSalesTrafficForDay,
   ingestAllAmazonMarketplaces,
@@ -2619,6 +2620,31 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const soldBySku = new Map<string, number>()
       for (const r of sold) soldBySku.set(r.sku, r._sum.unitsSold ?? 0)
 
+      // R.2 — per-(sku, channel, marketplace) velocity for the
+      // channelCover[] breakdown. Same date window as the global
+      // groupBy. Ignores channel/marketplace filters: even with a
+      // filter active, the drawer should still show the full per-
+      // channel breakdown so operators can see which specific
+      // channel is driving the urgency.
+      const soldByChannel = await prisma.dailySalesAggregate.groupBy({
+        by: ['sku', 'channel', 'marketplace'],
+        where: { sku: { in: skus }, day: { gte: since } },
+        _sum: { unitsSold: true },
+      })
+      const channelVelocityBySku = new Map<
+        string,
+        Array<{ channel: string; marketplace: string; unitsSold: number }>
+      >()
+      for (const r of soldByChannel) {
+        const arr = channelVelocityBySku.get(r.sku) ?? []
+        arr.push({
+          channel: r.channel,
+          marketplace: r.marketplace,
+          unitsSold: r._sum.unitsSold ?? 0,
+        })
+        channelVelocityBySku.set(r.sku, arr)
+      }
+
       // Pull replenishment rules (overrides) + supplier lead times
       const rules = await prisma.replenishmentRule.findMany({
         where: { productId: { in: products.map((p) => p.id) } },
@@ -2630,8 +2656,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       // uses effectiveStock = on-hand + inboundWithinLeadTime, so a SKU
       // with a 200-unit PO arriving in 5 days no longer fires a
       // false-positive CRITICAL when current stock is low.
+      // R.2 — pass totalStock so legacy products without StockLevel
+      // rows get a synthesized fallback row (UI flags amber).
       const atpByProduct = await resolveAtp({
-        products: products.map((p) => ({ id: p.id, sku: p.sku })),
+        products: products.map((p) => ({ id: p.id, sku: p.sku, totalStock: p.totalStock })),
       })
 
       // F.4 — Pre-fetch ReplenishmentForecast rows for the entire visible
@@ -2736,6 +2764,44 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
         const needsReorder = effectiveStock <= reorderPoint && velocity > 0
 
+        // R.2 — per-channel days-of-cover. For each (channel,
+        // marketplace) tuple this product sold on, resolve which
+        // location pool serves it and divide its available units by
+        // the channel-specific velocity. Headline urgency is still
+        // global (changes ship in R.4); this gives the drawer
+        // visibility into which channels are at risk.
+        const isFba = p.fulfillmentChannel === 'FBA'
+        const channelCover = (channelVelocityBySku.get(p.sku) ?? [])
+          .map((v) => {
+            const stock = resolveStockForChannel({
+              byLocation: atp?.byLocation ?? [],
+              channel: v.channel,
+              marketplace: v.marketplace,
+              fulfillmentMethod:
+                v.channel === 'AMAZON' ? (isFba ? 'FBA' : 'FBM') : null,
+            })
+            const channelVelocity = v.unitsSold / window
+            const daysOfCover =
+              channelVelocity > 0
+                ? Math.floor(stock.available / channelVelocity)
+                : null
+            return {
+              channel: v.channel,
+              marketplace: v.marketplace,
+              velocityPerDay: Number(channelVelocity.toFixed(2)),
+              available: stock.available,
+              locationCode: stock.locationCode,
+              source: stock.source as ChannelLocationSource,
+              daysOfCover,
+            }
+          })
+          .sort((a, b) =>
+            // Sort: lowest cover first (most urgent), then by channel name
+            (a.daysOfCover ?? Number.MAX_SAFE_INTEGER) -
+              (b.daysOfCover ?? Number.MAX_SAFE_INTEGER) ||
+            a.channel.localeCompare(b.channel),
+          )
+
         return {
           productId: p.id,
           sku: p.sku,
@@ -2747,6 +2813,12 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           totalOpenInbound,
           effectiveStock,
           openShipments: atp?.openShipments ?? [],
+          // R.2 — multi-location stock breakdown (replaces the implicit
+          // "currentStock = Product.totalStock" assumption).
+          byLocation: atp?.byLocation ?? [],
+          totalAvailable: atp?.totalAvailable ?? 0,
+          stockSource: atp?.stockSource ?? 'STOCK_LEVEL',
+          channelCover,
           unitsSold30d: unitsSold,
           // F.4 — forecast-driven velocity + horizon demand. Trailing
           // velocity is kept as a reference so the UI can show
@@ -3036,7 +3108,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
         const product = await prisma.product.findUnique({
           where: { id: productId },
-          select: { id: true, sku: true, name: true, totalStock: true },
+          select: { id: true, sku: true, name: true, totalStock: true, fulfillmentChannel: true },
         })
         if (!product) return reply.code(404).send({ error: 'Product not found' })
 
@@ -3076,7 +3148,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             orderBy: { day: 'asc' },
             select: { day: true, unitsSold: true },
           }),
-          resolveAtp({ products: [{ id: product.id, sku: product.sku }] }).then(
+          resolveAtp({ products: [{ id: product.id, sku: product.sku, totalStock: product.totalStock }] }).then(
             (m) => m.get(product.id) ?? null,
           ),
         ])
@@ -3151,6 +3223,50 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         const latestSignals =
           forecastRows.length > 0 ? forecastRows[0].signals : null
 
+        // R.2 — per-(channel, marketplace) days-of-cover for the
+        // drawer's channel breakdown panel. 30-day rolling velocity
+        // per channel-marketplace, divided by the location-pool
+        // available units that channel resolves to.
+        const channelWindowDays = 30
+        const channelSince = new Date(today)
+        channelSince.setUTCDate(channelSince.getUTCDate() - channelWindowDays)
+        const channelSold = await prisma.dailySalesAggregate.groupBy({
+          by: ['channel', 'marketplace'],
+          where: { sku: product.sku, day: { gte: channelSince, lt: today } },
+          _sum: { unitsSold: true },
+        })
+        const isFba = product.fulfillmentChannel === 'FBA'
+        const channelCover = channelSold
+          .map((row) => {
+            const stock = resolveStockForChannel({
+              byLocation: atpEntry?.byLocation ?? [],
+              channel: row.channel,
+              marketplace: row.marketplace,
+              fulfillmentMethod:
+                row.channel === 'AMAZON' ? (isFba ? 'FBA' : 'FBM') : null,
+            })
+            const units = row._sum.unitsSold ?? 0
+            const velocityPerDay = units / channelWindowDays
+            const daysOfCover =
+              velocityPerDay > 0
+                ? Math.floor(stock.available / velocityPerDay)
+                : null
+            return {
+              channel: row.channel,
+              marketplace: row.marketplace,
+              velocityPerDay: Number(velocityPerDay.toFixed(2)),
+              available: stock.available,
+              locationCode: stock.locationCode,
+              source: stock.source,
+              daysOfCover,
+            }
+          })
+          .sort((a, b) =>
+            (a.daysOfCover ?? Number.MAX_SAFE_INTEGER) -
+              (b.daysOfCover ?? Number.MAX_SAFE_INTEGER) ||
+            a.channel.localeCompare(b.channel),
+          )
+
         return {
           product: {
             id: product.id,
@@ -3159,6 +3275,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             currentStock: product.totalStock,
           },
           atp: atpEntry,
+          channelCover,
           model: forecastRows[0]?.model ?? null,
           generationTag: forecastRows[0]?.generationTag ?? null,
           signals: latestSignals,
