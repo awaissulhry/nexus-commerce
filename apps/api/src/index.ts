@@ -68,6 +68,7 @@ import { startLateShipmentFlagCron } from "./jobs/late-shipment-flag.job.js";
 import { startSavedViewAlertsCron } from "./jobs/saved-view-alerts.job.js";
 import { startFbaStatusPollCron } from "./jobs/fba-status-poll.job.js";
 import { startForecastAccuracyCron } from "./jobs/forecast-accuracy.job.js";
+import { startAutoPoCron } from "./jobs/auto-po-replenishment.job.js";
 import pricingRoutes from "./routes/pricing.routes.js";
 // BullMQ worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS=1.
 // initializeQueue pings Redis and throws on failure; tryStartQueueWorkers
@@ -459,6 +460,16 @@ async function start() {
     // NEXUS_ENABLE_FORECAST_ACCURACY_CRON=0.
     if (process.env.NEXUS_ENABLE_FORECAST_ACCURACY_CRON !== '0') {
       startForecastAccuracyCron();
+    }
+
+    // R.6 — auto-PO trigger cron. Daily 05:00 UTC after the forecast
+    // pipeline. Creates DRAFT POs for CRITICAL/HIGH recommendations on
+    // opt-in suppliers (Supplier.autoTriggerEnabled AND
+    // ReplenishmentRule.autoTriggerEnabled both required). Per-PO
+    // qty/cost ceilings cap blast radius. Default-ON; opt out via
+    // NEXUS_ENABLE_AUTO_PO_CRON=0.
+    if (process.env.NEXUS_ENABLE_AUTO_PO_CRON !== '0') {
+      startAutoPoCron();
     }
 
     logger.info('✅ API server initialized', {
