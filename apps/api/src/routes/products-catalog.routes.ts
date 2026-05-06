@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { masterPriceService } from '../services/master-price.service.js'
+import { masterStatusService } from '../services/master-status.service.js'
 import { applyStockMovement } from '../services/stock-movement.service.js'
 import { listEtag, matches } from '../utils/list-etag.js'
 
@@ -608,20 +609,93 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
   // (Bulk publish to channels uses /api/listings/bulk-action which already
   // exists; this is for product-level actions.)
   // ═══════════════════════════════════════════════════════════════════
+  /**
+   * Commit 0 — route through MasterStatusService.
+   *
+   * Was: raw `prisma.product.updateMany` that silently bypassed the
+   * cascade. Listings on Amazon/eBay stayed visible while the seller
+   * had marked the products INACTIVE in Nexus — buyers placed orders
+   * on rows the seller thought were off-shelf.
+   *
+   * Now: per-product call to `masterStatusService.update()` inside a
+   * single outer `$transaction` so the whole batch is atomic, and
+   * each call cascades to ChannelListing.listingStatus + enqueues an
+   * OutboundSyncQueue STATUS_UPDATE row + writes an AuditLog. We
+   * pass `skipBullMQEnqueue` so the BullMQ enqueue can't fire
+   * before the outer tx commits (would queue jobs against rolled-
+   * back rows otherwise) — the cron drain (~60s) picks up PENDING
+   * rows from the DB, which is the source of truth.
+   *
+   * Per-product errors (terminal listing states, missing rows,
+   * etc.) are surfaced in errors[] so the caller's bulk-edit grid
+   * can render per-row feedback. The outer tx still commits the
+   * successful subset on partial failure — only an exception
+   * thrown OUT of the callback rolls back.
+   */
   fastify.post('/products/bulk-status', async (request, reply) => {
     try {
       const body = request.body as { productIds?: string[]; status?: string }
       const productIds = Array.isArray(body.productIds) ? body.productIds : []
-      const status = (body.status ?? '').toUpperCase()
-      if (productIds.length === 0) return reply.code(400).send({ error: 'productIds[] required' })
+      const status = (body.status ?? '').toUpperCase() as
+        | 'ACTIVE'
+        | 'DRAFT'
+        | 'INACTIVE'
+      if (productIds.length === 0) {
+        return reply.code(400).send({ error: 'productIds[] required' })
+      }
       if (!['ACTIVE', 'DRAFT', 'INACTIVE'].includes(status)) {
         return reply.code(400).send({ error: 'status must be ACTIVE | DRAFT | INACTIVE' })
       }
-      const result = await prisma.product.updateMany({
-        where: { id: { in: productIds } },
-        data: { status, version: { increment: 1 } },
+      const actor = userIdFor(request)
+
+      const errors: Array<{ id: string; error: string }> = []
+      let updated = 0
+      let cascadedListings = 0
+      const queuedSyncIds: string[] = []
+
+      // Cap N to keep one transaction reasonable. With 50 products at
+      // ~5 listings each we're at 250 ChannelListing updates per tx
+      // — well within Postgres comfort.
+      if (productIds.length > 200) {
+        return reply.code(400).send({
+          error: `max 200 products per bulk-status call (got ${productIds.length})`,
+        })
+      }
+
+      await prisma.$transaction(async (tx) => {
+        for (const id of productIds) {
+          try {
+            const r = await masterStatusService.update(id, status, {
+              tx,
+              actor,
+              reason: 'bulk-status',
+              skipBullMQEnqueue: true, // post-commit drain owns the enqueue
+            })
+            if (r.changed) {
+              updated++
+              cascadedListings += r.cascadedListingIds.length
+              queuedSyncIds.push(...r.queuedSyncIds)
+            }
+          } catch (err) {
+            errors.push({
+              id,
+              error: err instanceof Error ? err.message : String(err),
+            })
+          }
+        }
       })
-      return { ok: true, updated: result.count }
+
+      // Cron drain (~60s) picks up the OutboundSyncQueue PENDING rows
+      // and pushes to channels. We don't fire BullMQ here because (a)
+      // it'd be a separate detached await per queueId and (b) the cron
+      // is the source of truth for retries anyway.
+      return {
+        ok: errors.length === 0,
+        updated,
+        cascadedListings,
+        queuedSyncCount: queuedSyncIds.length,
+        errors: errors.length > 0 ? errors : undefined,
+      }
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
@@ -693,11 +767,32 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       // service call mutates anything.
       const current = await prisma.product.findUnique({
         where: { id },
-        select: { id: true, totalStock: true },
+        select: { id: true, totalStock: true, version: true },
       })
       if (!current) {
         return reply.code(404).send({ error: 'Product not found' })
       }
+
+      // Commit 0 — optimistic concurrency. The caller may pass the
+      // version they read with via If-Match header (preferred) or
+      // body.expectedVersion (fallback for clients that can't set
+      // headers). If supplied, we CAS-bump version inside the tx; on
+      // mismatch we return 409 with the current version so the
+      // client can refresh and retry. Without a hint the server
+      // unconditionally bumps version so every successful PATCH
+      // moves it forward — keeping the field useful as a freshness
+      // signal even for callers that don't yet send If-Match.
+      const ifMatch = request.headers['if-match']
+      const headerVersion =
+        typeof ifMatch === 'string' && /^\d+$/.test(ifMatch)
+          ? Number(ifMatch)
+          : undefined
+      const bodyVersion =
+        typeof body.expectedVersion === 'number' &&
+        Number.isFinite(body.expectedVersion)
+          ? Number(body.expectedVersion)
+          : undefined
+      const expectedVersion = headerVersion ?? bodyVersion
 
       // Validate basePrice up front so we fail fast outside the tx.
       let newBasePrice: number | undefined
@@ -739,36 +834,100 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         }
         directDirty = true
       }
+      const hasMutations =
+        newBasePrice !== undefined || stockDelta !== 0 || directDirty
+
+      // No-op PATCH (empty body). Return the current state without bumping
+      // version — caller may be polling with no actual change to write.
+      if (!hasMutations) {
+        return {
+          id,
+          version: current.version,
+          basePrice: undefined,
+          noop: true,
+        }
+      }
 
       // P0/B4 — single outer transaction. masterPriceService and
       // applyStockMovement both honour the supplied tx (and suppress
       // their post-commit BullMQ enqueue when given one — see service
-      // docstrings).
-      await prisma.$transaction(async (tx) => {
-        if (newBasePrice !== undefined) {
-          await masterPriceService.update(id, newBasePrice, {
-            actor,
-            reason,
-            tx,
-          })
-        }
-        if (stockDelta !== 0) {
-          await applyStockMovement({
-            productId: id,
-            change: stockDelta,
-            reason: 'MANUAL_ADJUSTMENT',
-            notes: 'inline grid edit',
-            actor,
-            tx,
-          })
-        }
-        if (directDirty) {
-          await tx.product.update({
+      // docstrings). Version bump owns the lock so the field updates
+      // below don't double-increment.
+      try {
+        await prisma.$transaction(async (tx) => {
+          if (expectedVersion !== undefined) {
+            // CAS version bump — Prisma throws P2025 if the row whose
+            // (id, version) tuple we asked for doesn't exist. We catch
+            // and rethrow as VERSION_CONFLICT so the outer handler can
+            // map it to a 409 with the fresh version attached.
+            try {
+              await tx.product.update({
+                where: { id, version: expectedVersion },
+                data: { version: { increment: 1 } },
+              })
+            } catch (err: any) {
+              if (err?.code === 'P2025') {
+                throw Object.assign(
+                  new Error(
+                    'Product version mismatch — another change landed first',
+                  ),
+                  { code: 'VERSION_CONFLICT' },
+                )
+              }
+              throw err
+            }
+          } else {
+            // No CAS — still bump version so the field is a useful
+            // freshness signal even for callers that don't send If-Match.
+            await tx.product.update({
+              where: { id },
+              data: { version: { increment: 1 } },
+            })
+          }
+
+          if (newBasePrice !== undefined) {
+            await masterPriceService.update(id, newBasePrice, {
+              actor,
+              reason,
+              tx,
+            })
+          }
+          if (stockDelta !== 0) {
+            await applyStockMovement({
+              productId: id,
+              change: stockDelta,
+              reason: 'MANUAL_ADJUSTMENT',
+              notes: 'inline grid edit',
+              actor,
+              tx,
+            })
+          }
+          if (directDirty) {
+            // Note: NO version increment here — version was bumped at the
+            // top of the tx so this update is just the field changes.
+            await tx.product.update({
+              where: { id },
+              data: directData,
+            })
+          }
+        })
+      } catch (err: any) {
+        if (err?.code === 'VERSION_CONFLICT') {
+          // Read the latest version so the client can refresh + retry.
+          const latest = await prisma.product.findUnique({
             where: { id },
-            data: { ...directData, version: { increment: 1 } },
+            select: { version: true, updatedAt: true },
+          })
+          return reply.code(409).send({
+            error: err.message,
+            code: 'VERSION_CONFLICT',
+            expectedVersion,
+            currentVersion: latest?.version ?? null,
+            currentUpdatedAt: latest?.updatedAt?.toISOString() ?? null,
           })
         }
-      })
+        throw err
+      }
 
       // Return the post-update view. Single round-trip, fresh values,
       // matches the prior response shape so frontend callers don't

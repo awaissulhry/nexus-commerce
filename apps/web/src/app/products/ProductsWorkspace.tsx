@@ -381,31 +381,54 @@ export default function ProductsWorkspace() {
   // onChanged, bulk-action onComplete) keep calling fetchProducts.
   const fetchProducts = refetchProducts
 
+  // Commit 0 — was `catch {}`. Sidecar fetch failures used to be
+  // swallowed silently: during a backend outage the user saw stale or
+  // empty tag/facet/saved-view UI with no signal that anything went
+  // wrong. Now we log to console so dev tools surface the failure;
+  // production can attach a logger sink to console.warn if needed.
+  // We deliberately do NOT promote these to the page-level error
+  // banner because they're sidecars (the products list itself has
+  // its own error state via productsError) — failing sidecars
+  // shouldn't block the user from working with products.
   const fetchTags = useCallback(async () => {
     try {
       const res = await fetch(`${getBackendUrl()}/api/tags`, { cache: 'no-store' })
-      if (res.ok) {
-        const data = await res.json()
-        setTags(data.items ?? [])
+      if (!res.ok) {
+        console.warn(`[products] fetchTags: ${res.status} ${res.statusText}`)
+        return
       }
-    } catch {}
+      const data = await res.json()
+      setTags(data.items ?? [])
+    } catch (err) {
+      console.warn('[products] fetchTags failed:', err)
+    }
   }, [])
 
   const fetchFacets = useCallback(async () => {
     try {
       const res = await fetch(`${getBackendUrl()}/api/products/facets`, { cache: 'no-store' })
-      if (res.ok) setFacets(await res.json())
-    } catch {}
+      if (!res.ok) {
+        console.warn(`[products] fetchFacets: ${res.status} ${res.statusText}`)
+        return
+      }
+      setFacets(await res.json())
+    } catch (err) {
+      console.warn('[products] fetchFacets failed:', err)
+    }
   }, [])
 
   const fetchSavedViews = useCallback(async () => {
     try {
       const res = await fetch(`${getBackendUrl()}/api/saved-views?surface=products`, { cache: 'no-store' })
-      if (res.ok) {
-        const data = await res.json()
-        setSavedViews(data.items ?? [])
+      if (!res.ok) {
+        console.warn(`[products] fetchSavedViews: ${res.status} ${res.statusText}`)
+        return
       }
-    } catch {}
+      const data = await res.json()
+      setSavedViews(data.items ?? [])
+    } catch (err) {
+      console.warn('[products] fetchSavedViews failed:', err)
+    }
   }, [])
 
   // Lazy-load a parent's children. Cached after first fetch. Returns
@@ -1127,8 +1150,21 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLooku
       const params = new URLSearchParams({
         channel, marketplace, includeCoverage: 'false',
       })
-      // Use the listings endpoint to find matching listings
-      const found = await fetch(`${getBackendUrl()}/api/listings?${params.toString()}&pageSize=500`).then((r) => r.json())
+      // Commit 0 — was `.then((r) => r.json())` with no res.ok check, so
+      // a 500 from /api/listings would crash here with an opaque "no
+      // existing listings" message (the API error JSON has no
+      // `.listings` key, so `(found.listings ?? []).filter(...)` ran on
+      // []). Now we surface the real error so the user knows to retry.
+      const foundRes = await fetch(
+        `${getBackendUrl()}/api/listings?${params.toString()}&pageSize=500`,
+      )
+      if (!foundRes.ok) {
+        const body = await foundRes.json().catch(() => ({}))
+        throw new Error(
+          body?.error ?? `Failed to load listings (${foundRes.status})`,
+        )
+      }
+      const found = await foundRes.json()
       const ids = (found.listings ?? [])
         .filter((l: any) => selectedIds.includes(l.productId))
         .map((l: any) => l.id)
