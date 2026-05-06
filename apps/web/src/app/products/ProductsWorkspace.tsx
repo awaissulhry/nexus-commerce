@@ -28,6 +28,7 @@ import {
   useInvalidationChannel,
 } from '@/lib/sync/invalidation-channel'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import ProductDrawer from './_shared/ProductDrawer'
 
 // ── Types ───────────────────────────────────────────────────────────
 type Lens = 'grid' | 'hierarchy' | 'coverage' | 'health' | 'drafts'
@@ -172,6 +173,12 @@ export default function ProductsWorkspace() {
   const tagFilters = searchParams.get('tags')?.split(',').filter(Boolean) ?? []
   const fulfillmentFilters = searchParams.get('fulfillment')?.split(',').filter(Boolean) ?? []
   const stockLevel = searchParams.get('stockLevel') ?? 'all'
+
+  // F1 — drawer state lives in the URL so back/forward + bookmarks +
+  // shared links all work. Open: ?drawer=<productId>. Close: drop the
+  // param. The drawer component handles Esc + click-overlay close
+  // internally.
+  const drawerProductId = searchParams.get('drawer')
   const hasPhotos = searchParams.get('hasPhotos')
 
   const [searchInput, setSearchInput] = useState(search)
@@ -227,6 +234,18 @@ export default function ProductsWorkspace() {
     }
     router.replace(`${pathname}?${next.toString()}`, { scroll: false })
   }, [searchParams, pathname, router])
+
+  // F1 — listen for nexus:open-product-drawer dispatched by row "View"
+  // buttons (and any future affordance — e.g. cmd+click on a row).
+  // Updates the URL to ?drawer=<id> which the ProductDrawer reads.
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const detail = (e as CustomEvent<{ productId: string }>).detail
+      if (detail?.productId) updateUrl({ drawer: detail.productId })
+    }
+    window.addEventListener('nexus:open-product-drawer', onOpen)
+    return () => window.removeEventListener('nexus:open-product-drawer', onOpen)
+  }, [updateUrl])
 
   // Phase 10 — usePolledList replaces the fetchProducts useCallback +
   // manual setInterval(30s) + visibilitychange listener that lived
@@ -603,6 +622,14 @@ export default function ProductsWorkspace() {
           onChanged={fetchProducts}
         />
       )}
+
+      {/* F1 — product drawer. Mounted at workspace level so it sits
+          above all lenses. URL-driven open state (?drawer=<id>). */}
+      <ProductDrawer
+        productId={drawerProductId}
+        onClose={() => updateUrl({ drawer: undefined })}
+        onChanged={fetchProducts}
+      />
     </div>
   )
 }
@@ -1584,7 +1611,24 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
     case 'actions':
       return (
         <div className="flex items-center gap-1 justify-end">
-          <Link href={`/products/${p.id}/edit`} className="h-6 px-2 text-[11px] text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded">Edit</Link>
+          {/* F1 — "View" opens the drawer instead of navigating. Drawer
+              has its own "Open full edit" link for users who want the
+              full page. Custom event lets us avoid threading another
+              callback through GridLens → ProductCell. */}
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(
+                new CustomEvent('nexus:open-product-drawer', {
+                  detail: { productId: p.id },
+                }),
+              )
+            }}
+            className="h-6 px-2 text-[11px] text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded"
+            title="Quick view (Esc closes)"
+          >
+            View
+          </button>
           <Link href={`/products/${p.id}/list-wizard`} className="h-6 px-2 text-[11px] text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded">List</Link>
         </div>
       )
