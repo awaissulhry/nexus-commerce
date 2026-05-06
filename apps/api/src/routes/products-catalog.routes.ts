@@ -189,6 +189,11 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
               variations: true,
               translations: true,
               relationsFrom: true,
+              // P.8 — count of child Products (parentId self-relation).
+              // Drives the Variations tab badge in the drawer for
+              // parent products. Distinct from `variations` which
+              // counts the deprecated ProductVariation relation.
+              children: true,
             },
           },
           images: {
@@ -317,6 +322,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
           variations: p._count.variations,
           translations: p._count.translations,
           relationsFrom: p._count.relationsFrom,
+          children: p._count.children,
         },
         images: p.images,
         channelListings: p.channelListings,

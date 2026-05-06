@@ -44,6 +44,7 @@ import {
   Trash2,
   Network,
   Search,
+  Layers,
 } from 'lucide-react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -82,6 +83,9 @@ interface ProductDetail {
     /** P.6 — counts for tab badges (translations + outgoing relations). */
     translations?: number
     relationsFrom?: number
+    /** P.8 — count of child Products (parentId), shown on the
+     *  Variations tab badge for parent products. */
+    children?: number
   }
   channelListings?: Array<{
     id: string
@@ -119,7 +123,7 @@ export interface ProductDrawerProps {
   onChanged?: () => void
 }
 
-type Tab = 'details' | 'listings' | 'translations' | 'related' | 'activity'
+type Tab = 'details' | 'listings' | 'variations' | 'translations' | 'related' | 'activity'
 
 export default function ProductDrawer({
   productId,
@@ -135,7 +139,7 @@ export default function ProductDrawer({
   const searchParams = useSearchParams()
   const urlTab = searchParams.get('drawerTab') as Tab | null
   const tab: Tab =
-    urlTab && ['details', 'listings', 'translations', 'related', 'activity'].includes(urlTab)
+    urlTab && ['details', 'listings', 'variations', 'translations', 'related', 'activity'].includes(urlTab)
       ? urlTab
       : 'details'
   const setTab = useCallback(
@@ -307,6 +311,18 @@ export default function ProductDrawer({
           >
             <Boxes className="w-3 h-3" /> Listings
           </DrawerTab>
+          {/* P.8 — Variations tab only renders for parent products.
+              Children render under their parent's drawer; standalone
+              products don't have variants by definition. */}
+          {data?.isParent && (
+            <DrawerTab
+              active={tab === 'variations'}
+              onClick={() => setTab('variations')}
+              count={data?._count?.children}
+            >
+              <Layers className="w-3 h-3" /> Variations
+            </DrawerTab>
+          )}
           <DrawerTab
             active={tab === 'translations'}
             onClick={() => setTab('translations')}
@@ -352,6 +368,16 @@ export default function ProductDrawer({
             />
           )}
           {data && tab === 'listings' && <ListingsTab listings={data.channelListings ?? []} />}
+          {data && tab === 'variations' && data.isParent && (
+            <VariationsTab
+              parentId={data.id}
+              parentSku={data.sku}
+              onChanged={() => {
+                fetchDetail()
+                onChanged?.()
+              }}
+            />
+          )}
           {data && tab === 'translations' && (
             <TranslationsTab
               productId={data.id}
@@ -1127,6 +1153,328 @@ function formatValue(v: unknown): string {
   } catch {
     return String(v)
   }
+}
+
+// ────────────────────────────────────────────────────────────────────
+// VariationsTab (P.8) — child Products of a parent, with quick-edit
+// ────────────────────────────────────────────────────────────────────
+/**
+ * For parent products only. Reads /api/products/:parentId/children,
+ * lists each child's sku, name, axis values, basePrice, totalStock,
+ * status. Inline-edit price + stock per child via the same
+ * PATCH /api/products/:id pattern the grid uses; sends If-Match
+ * for optimistic concurrency. On 409 we surface inline + refresh.
+ *
+ * Click the child's SKU → open it in the drawer (replaces current).
+ * Click "Open full edit" → /products/<childId>/edit.
+ *
+ * No bulk operations here — the dedicated /products/[id]/matrix +
+ * the bulk-action bar on the main grid are where multi-row work
+ * happens. This tab is the "scan + tweak one or two cells" surface.
+ */
+interface ChildProduct {
+  id: string
+  sku: string
+  name: string
+  basePrice: string | number | null
+  totalStock: number | null
+  status: string
+  version?: number
+  variations: Record<string, string> | null
+}
+
+function VariationsTab({
+  parentId,
+  parentSku,
+  onChanged,
+}: {
+  parentId: string
+  parentSku: string
+  onChanged: () => void
+}) {
+  const [children, setChildren] = useState<ChildProduct[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [editing, setEditing] = useState<{
+    childId: string
+    field: 'price' | 'stock'
+  } | null>(null)
+  const [draft, setDraft] = useState('')
+  const [savingError, setSavingError] = useState<{
+    childId: string
+    field: 'price' | 'stock'
+    message: string
+  } | null>(null)
+
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${parentId}/children`,
+        { cache: 'no-store' },
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const json = await res.json()
+      setChildren(json.children ?? [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [parentId])
+
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
+
+  // Cross-tab refresh — same pattern as the parent drawer. If
+  // another tab edits one of the children we re-pull the list so
+  // this tab doesn't show stale price/stock.
+  useInvalidationChannel(
+    ['product.updated', 'product.created', 'product.deleted'],
+    () => { void refresh() },
+  )
+
+  const startEdit = (child: ChildProduct, field: 'price' | 'stock') => {
+    setSavingError(null)
+    setDraft(
+      String(field === 'price' ? Number(child.basePrice ?? 0) : child.totalStock ?? 0),
+    )
+    setEditing({ childId: child.id, field })
+  }
+
+  const commit = async (child: ChildProduct, field: 'price' | 'stock') => {
+    const value = draft.trim()
+    setEditing(null)
+    if (value === '') return
+    const body: Record<string, unknown> =
+      field === 'price'
+        ? { basePrice: Number(value) }
+        : { totalStock: Number(value) }
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (typeof child.version === 'number') headers['If-Match'] = String(child.version)
+      const res = await fetch(`${getBackendUrl()}/api/products/${child.id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}))
+        if (res.status === 409 && errJson?.code === 'VERSION_CONFLICT') {
+          setSavingError({
+            childId: child.id,
+            field,
+            message: `Another change landed first (v${errJson.currentVersion ?? '?'}) — refreshing.`,
+          })
+          void refresh()
+          return
+        }
+        throw new Error(errJson?.error ?? `Update failed (${res.status})`)
+      }
+      emitInvalidation({
+        type: 'product.updated',
+        id: child.id,
+        fields: [field === 'price' ? 'basePrice' : 'totalStock'],
+        meta: { source: 'drawer-variations' },
+      })
+      // basePrice + totalStock both cascade to ChannelListing.
+      emitInvalidation({
+        type: 'listing.updated',
+        meta: { productIds: [child.id], source: 'drawer-variations', field },
+      })
+      setSavingError(null)
+      void refresh()
+      onChanged()
+    } catch (e) {
+      setSavingError({
+        childId: child.id,
+        field,
+        message: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }
+
+  if (loading && children.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-12 text-slate-400 text-[12px]">
+        <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading variations…
+      </div>
+    )
+  }
+  if (error) {
+    return (
+      <div className="m-5 border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-[12px] text-rose-800 flex items-start gap-2">
+        <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+        <span>Failed to load variations: {error}</span>
+      </div>
+    )
+  }
+  if (children.length === 0) {
+    return (
+      <div className="px-5 py-10 text-center text-[12px] text-slate-500">
+        <Layers className="w-6 h-6 mx-auto text-slate-300 mb-2" />
+        No variations under {parentSku} yet.
+        <div className="text-[11px] text-slate-400 mt-1">
+          Add child products from the catalog organize page.
+        </div>
+      </div>
+    )
+  }
+
+  // Collect axis names across all children so the table header is
+  // stable even if some children are missing an axis value.
+  const axisKeys = Array.from(
+    children.reduce((set, c) => {
+      if (c.variations) for (const k of Object.keys(c.variations)) set.add(k)
+      return set
+    }, new Set<string>()),
+  )
+
+  return (
+    <div className="p-5 space-y-3">
+      <div className="text-[11px] text-slate-500">
+        {children.length} variation{children.length === 1 ? '' : 's'} under{' '}
+        <span className="font-mono text-slate-700">{parentSku}</span>. Click
+        price or stock to edit inline.
+      </div>
+      <div className="overflow-x-auto -mx-5 px-5">
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr className="text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-200">
+              <th className="text-left py-1.5 px-2 font-semibold">SKU</th>
+              {axisKeys.map((k) => (
+                <th key={k} className="text-left py-1.5 px-2 font-semibold">
+                  {k}
+                </th>
+              ))}
+              <th className="text-right py-1.5 px-2 font-semibold">Price</th>
+              <th className="text-right py-1.5 px-2 font-semibold">Stock</th>
+              <th className="text-center py-1.5 px-2 font-semibold">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {children.map((c) => {
+              const editingPrice =
+                editing?.childId === c.id && editing.field === 'price'
+              const editingStock =
+                editing?.childId === c.id && editing.field === 'stock'
+              const cellErr =
+                savingError?.childId === c.id ? savingError : null
+              return (
+                <tr
+                  key={c.id}
+                  className="border-b border-slate-100 hover:bg-slate-50/50"
+                >
+                  <td className="py-1.5 px-2 align-top">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Replace current drawer with this child via
+                        // the same custom-event channel the grid uses.
+                        window.dispatchEvent(
+                          new CustomEvent('nexus:open-product-drawer', {
+                            detail: { productId: c.id },
+                          }),
+                        )
+                      }}
+                      className="text-left text-blue-700 hover:underline font-mono text-[11px]"
+                    >
+                      {c.sku}
+                    </button>
+                  </td>
+                  {axisKeys.map((k) => (
+                    <td key={k} className="py-1.5 px-2 text-slate-700 align-top">
+                      {c.variations?.[k] ?? <span className="text-slate-300">—</span>}
+                    </td>
+                  ))}
+                  <td className="py-1.5 px-2 text-right tabular-nums align-top">
+                    {editingPrice ? (
+                      <input
+                        autoFocus
+                        type="number"
+                        step="0.01"
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                        onBlur={() => commit(c, 'price')}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') commit(c, 'price')
+                          if (e.key === 'Escape') setEditing(null)
+                        }}
+                        className="w-20 h-6 px-1.5 text-[12px] text-right tabular-nums border border-blue-300 rounded"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => startEdit(c, 'price')}
+                        className="text-slate-900 hover:text-blue-700"
+                      >
+                        €{Number(c.basePrice ?? 0).toFixed(2)}
+                      </button>
+                    )}
+                    {cellErr?.field === 'price' && (
+                      <div className="text-[10px] text-rose-700 mt-0.5">
+                        {cellErr.message}
+                      </div>
+                    )}
+                  </td>
+                  <td className="py-1.5 px-2 text-right tabular-nums align-top">
+                    {editingStock ? (
+                      <input
+                        autoFocus
+                        type="number"
+                        min="0"
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                        onBlur={() => commit(c, 'stock')}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') commit(c, 'stock')
+                          if (e.key === 'Escape') setEditing(null)
+                        }}
+                        className="w-16 h-6 px-1.5 text-[12px] text-right tabular-nums border border-blue-300 rounded"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => startEdit(c, 'stock')}
+                        className={cn(
+                          'font-semibold',
+                          (c.totalStock ?? 0) === 0
+                            ? 'text-rose-600'
+                            : 'text-slate-900 hover:text-blue-700',
+                        )}
+                      >
+                        {c.totalStock ?? 0}
+                      </button>
+                    )}
+                    {cellErr?.field === 'stock' && (
+                      <div className="text-[10px] text-rose-700 mt-0.5">
+                        {cellErr.message}
+                      </div>
+                    )}
+                  </td>
+                  <td className="py-1.5 px-2 text-center align-top">
+                    <StatusBadge status={c.status} />
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="text-[11px] text-slate-500">
+        Bulk variant operations live on{' '}
+        <Link
+          href={`/products/${parentId}/matrix`}
+          className="text-blue-700 hover:underline"
+        >
+          the matrix view
+        </Link>
+        .
+      </div>
+    </div>
+  )
 }
 
 // ────────────────────────────────────────────────────────────────────
