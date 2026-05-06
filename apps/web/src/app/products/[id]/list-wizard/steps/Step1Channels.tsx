@@ -157,6 +157,34 @@ export default function Step1Channels({
     })
   }, [])
 
+  // Phase 7 — once the connection-status payload lands, drop any
+  // previously-selected entries for platforms whose adapter isn't wired.
+  // Users could have stored a Shopify/WooCommerce selection from before
+  // we surfaced the "Coming soon" gating, and we don't want them to
+  // sail past Step 1 only to hit a NOT_IMPLEMENTED at submit time.
+  useEffect(() => {
+    if (!status) return
+    const blocked = new Set(
+      status.platforms
+        .filter((p) => p.reason === 'not_implemented')
+        .map((p) => p.platform),
+    )
+    if (blocked.size === 0) return
+    setSelected((prev) => {
+      let mutated = false
+      const next = new Set<string>()
+      for (const key of prev) {
+        const [platform] = key.split(':')
+        if (platform && blocked.has(platform as Platform)) {
+          mutated = true
+          continue
+        }
+        next.add(key)
+      }
+      return mutated ? next : prev
+    })
+  }, [status])
+
   const channelTuples = useMemo<ChannelTuple[]>(() => {
     return Array.from(selected).map((key) => {
       const [platform, marketplace] = key.split(':')
@@ -379,10 +407,18 @@ function PlatformCard({
 }) {
   const Icon = PLATFORM_ICON[status.platform]
   const label = PLATFORM_LABEL[status.platform]
+  // Phase 7 — adapter doesn't exist yet (Shopify, WooCommerce). Block
+  // selection and own the messaging here so users can't reach Step 10
+  // and hit a NOT_IMPLEMENTED submit failure. When the adapter lands,
+  // the connection-status payload will stop returning 'not_implemented'
+  // and the UI flips to normal automatically.
+  const isComingSoon = status.reason === 'not_implemented'
   const reasonLabel = (() => {
     switch (status.reason) {
       case 'not_implemented':
-        return 'Publishing adapter not yet wired'
+        // Replaced by the "Coming soon" badge in the header — no
+        // duplicate subtitle.
+        return null
       case 'no_credentials':
         return 'No API credentials configured'
       case 'inactive':
@@ -395,13 +431,28 @@ function PlatformCard({
   })()
 
   return (
-    <div className="border border-slate-200 rounded-lg bg-white">
+    <div
+      className={cn(
+        'border rounded-lg bg-white',
+        isComingSoon ? 'border-slate-200 opacity-75' : 'border-slate-200',
+      )}
+    >
       <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-100">
         <div className="flex items-center gap-2.5 min-w-0">
           <Icon className="w-4 h-4 text-slate-500 flex-shrink-0" />
           <div className="min-w-0">
-            <div className="text-[13px] font-semibold text-slate-900 truncate">
-              {label}
+            <div className="flex items-center gap-2">
+              <div className="text-[13px] font-semibold text-slate-900 truncate">
+                {label}
+              </div>
+              {isComingSoon && (
+                <span
+                  className="inline-flex items-center h-5 px-1.5 rounded text-[10px] uppercase tracking-wide font-semibold bg-amber-50 text-amber-800 border border-amber-200"
+                  title="Available in next release"
+                >
+                  Coming soon
+                </span>
+              )}
             </div>
             {reasonLabel && (
               <div className="text-[11px] text-slate-500 truncate">
@@ -411,9 +462,10 @@ function PlatformCard({
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          {/* EE.3 — Connect CTA when not connected. /settings/channels
-              is the canonical location for OAuth + credential setup. */}
-          {!status.connected && (
+          {/* EE.3 — Connect CTA only when the adapter exists but the
+              user hasn't completed setup. For "Coming soon" platforms
+              there's nothing to connect yet, so skip the CTA entirely. */}
+          {!status.connected && !isComingSoon && (
             <Link
               href="/settings/channels"
               target="_blank"
@@ -423,22 +475,32 @@ function PlatformCard({
               <ExternalLink className="w-3 h-3" />
             </Link>
           )}
-          <ConnectionBadge connected={status.connected} />
+          {!isComingSoon && <ConnectionBadge connected={status.connected} />}
         </div>
       </div>
       <div className="px-4 py-3 flex flex-wrap gap-1.5">
         {status.marketplaces.map((m) => {
           const key = `${status.platform}:${m.code}`
           const isSelected = selected.has(key)
+          const buttonTitle = isComingSoon
+            ? `${m.label} — available in next release`
+            : m.label
           return (
             <button
               key={m.code}
               type="button"
-              onClick={() => onToggle(status.platform, m.code)}
-              title={m.label}
+              onClick={() => {
+                if (isComingSoon) return
+                onToggle(status.platform, m.code)
+              }}
+              disabled={isComingSoon}
+              aria-disabled={isComingSoon}
+              title={buttonTitle}
               className={cn(
                 'inline-flex items-center gap-1.5 h-7 px-2 text-[12px] rounded-md border transition-colors',
-                isSelected
+                isComingSoon
+                  ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed'
+                  : isSelected
                   ? 'bg-blue-50 border-blue-300 text-blue-800'
                   : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300',
               )}
@@ -446,8 +508,10 @@ function PlatformCard({
               <span className="font-mono text-[11px] font-medium">
                 {m.code}
               </span>
-              <span className="text-slate-500 text-[11px]">{m.label}</span>
-              {isSelected && (
+              <span className={cn('text-[11px]', isComingSoon ? 'text-slate-400' : 'text-slate-500')}>
+                {m.label}
+              </span>
+              {isSelected && !isComingSoon && (
                 <CheckCircle2 className="w-3 h-3 text-blue-600 flex-shrink-0" />
               )}
             </button>
