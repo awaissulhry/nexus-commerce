@@ -41,6 +41,7 @@ import {
   isPrimaryLanguage,
   languageForMarketplace,
 } from '../services/products/translation-resolver.service.js'
+import { getProvider } from '../services/ai/providers/index.js'
 
 const ALLOWED_FIELDS = new Set<ContentField>([
   'title',
@@ -385,6 +386,188 @@ const productsAiRoutes: FastifyPluginAsync = async (fastify) => {
           providersUsed: Array.from(providersUsed),
           modelsUsed: Array.from(modelsUsed),
         },
+      }
+    },
+  )
+
+  /**
+   * P.14 — POST /api/products/:id/ai/suggest-fields
+   *
+   * Asks the LLM to fill in master-data fields that are commonly
+   * missing (brand + productType today). Returns suggestions only
+   * — the operator decides whether to apply each one via PATCH
+   * /api/products/:id. No auto-write here. Suggestions surface in
+   * the drawer's DetailGrid next to empty fields.
+   *
+   * Why these two fields specifically:
+   *   - brand and productType drive faceted filtering, AI listing
+   *     content terminology lookup (IT_TERMS), and per-channel
+   *     category mapping. They're the highest-impact missing-data
+   *     to fix.
+   *   - title/description/bullets/keywords have a dedicated bulk
+   *     flow (POST /products/ai/bulk-generate). Don't duplicate.
+   *
+   * Body (optional): { provider?: 'gemini' | 'anthropic' }
+   * Query: none
+   *
+   * Response (200):
+   *   {
+   *     productId,
+   *     suggestions: { brand?: string; productType?: string; reasoning?: string },
+   *     usage: ProviderUsage,
+   *   }
+   *
+   * Returns 503 when no AI provider is configured.
+   */
+  fastify.post<{
+    Params: { id: string }
+    Body: { provider?: string }
+  }>(
+    '/products/:id/ai/suggest-fields',
+    {
+      // Same rate-limit philosophy as bulk-generate — AI calls are
+      // billable and one stuck retry loop can pin quota. Per-product
+      // is cheaper than fan-out so 20/min is generous enough for
+      // sweeping a small batch by hand.
+      config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      const { id } = request.params
+      const provider = getProvider(request.body?.provider)
+      if (!provider) {
+        return reply.code(503).send({
+          error:
+            'No AI provider configured — set GEMINI_API_KEY or ANTHROPIC_API_KEY on the API server.',
+        })
+      }
+
+      const product = await prisma.product.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          description: true,
+          brand: true,
+          productType: true,
+          // bullet points + first image give the model more signal
+          // for products with sparse name/description.
+          bulletPoints: true,
+          images: { select: { url: true }, take: 1 },
+        },
+      })
+      if (!product) {
+        return reply.code(404).send({ error: 'Product not found' })
+      }
+
+      const startedAt = Date.now()
+      // Plain-text prompt; jsonMode asks the provider to return
+      // JSON-only output. Anthropic emits JSON-shaped text; Gemini
+      // honours jsonMode natively. Both work with parseJson below.
+      const prompt = [
+        'You are a product-catalog assistant. Given the product info',
+        'below, suggest the most likely brand and productType.',
+        'productType is a short canonical English noun (e.g. "Jacket",',
+        '"Helmet", "Glove", "Bag"). brand is the manufacturer / brand',
+        'name as it appears on the product. Both fields can be null',
+        'if you genuinely cannot tell from the info given.',
+        '',
+        'Return strict JSON: {"brand": string|null, "productType":',
+        'string|null, "reasoning": string}',
+        '',
+        'Product info:',
+        `SKU: ${product.sku}`,
+        `Name: ${product.name}`,
+        product.description
+          ? `Description: ${product.description.slice(0, 800)}`
+          : null,
+        product.brand ? `Existing brand (override?): ${product.brand}` : null,
+        product.productType
+          ? `Existing productType (override?): ${product.productType}`
+          : null,
+        product.bulletPoints && product.bulletPoints.length > 0
+          ? `Bullets: ${product.bulletPoints.slice(0, 5).join(' | ')}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join('\n')
+
+      try {
+        const result = await provider.generate({
+          prompt,
+          temperature: 0.2, // low — we want deterministic-ish answers
+          jsonMode: true,
+          feature: 'products-ai-suggest-fields',
+          entityType: 'Product',
+          entityId: id,
+        })
+        // Strip code-fences in case the provider emits ```json wrappers
+        // even with jsonMode set.
+        const cleaned = result.text
+          .replace(/^```(?:json)?\s*/i, '')
+          .replace(/```\s*$/i, '')
+          .trim()
+        let parsed: { brand?: string | null; productType?: string | null; reasoning?: string }
+        try {
+          parsed = JSON.parse(cleaned)
+        } catch {
+          throw new Error(`Provider returned invalid JSON: ${result.text.slice(0, 200)}`)
+        }
+        // Normalise — drop empty strings + treat 'null' string as null
+        const norm = (v: unknown): string | null => {
+          if (typeof v !== 'string') return null
+          const t = v.trim()
+          if (!t || t.toLowerCase() === 'null') return null
+          return t
+        }
+        const suggestions = {
+          brand: norm(parsed.brand) ?? undefined,
+          productType: norm(parsed.productType) ?? undefined,
+          reasoning:
+            typeof parsed.reasoning === 'string' ? parsed.reasoning : undefined,
+        }
+
+        // Telemetry — same logUsage shape as bulk-generate so the
+        // /settings/ai dashboard rolls everything up uniformly.
+        logUsage({
+          provider: result.usage.provider,
+          model: result.usage.model,
+          feature: 'products-ai-suggest-fields',
+          entityType: 'Product',
+          entityId: id,
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+          costUSD: result.usage.costUSD,
+          latencyMs: Date.now() - startedAt,
+          ok: true,
+          metadata: { suggestions },
+        })
+
+        return {
+          productId: id,
+          suggestions,
+          usage: result.usage,
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        logUsage({
+          provider: provider.name,
+          model: provider.defaultModel,
+          feature: 'products-ai-suggest-fields',
+          entityType: 'Product',
+          entityId: id,
+          inputTokens: 0,
+          outputTokens: 0,
+          costUSD: 0,
+          latencyMs: Date.now() - startedAt,
+          ok: false,
+          errorMessage: message,
+        })
+        fastify.log.error(
+          { err, productId: id },
+          '[products/ai/suggest-fields] failed',
+        )
+        return reply.code(500).send({ error: message })
       }
     },
   )

@@ -708,6 +708,75 @@ function ForecastCard({ productId }: { productId: string }) {
 }
 
 function DetailGrid({ product }: { product: ProductDetail }) {
+  // P.14 — AI suggest state. When either brand or productType is
+  // empty, the operator can hit "Suggest with AI" to call
+  // /api/products/:id/ai/suggest-fields. Suggestions surface inline
+  // with [Apply] [Skip] buttons; Apply does a regular PATCH so the
+  // existing optimistic-concurrency + cascade machinery handles it.
+  const [suggesting, setSuggesting] = useState(false)
+  const [suggestion, setSuggestion] = useState<{
+    brand?: string
+    productType?: string
+    reasoning?: string
+  } | null>(null)
+  const [suggestError, setSuggestError] = useState<string | null>(null)
+  const [applying, setApplying] = useState<'brand' | 'productType' | null>(null)
+  const [applied, setApplied] = useState<Set<'brand' | 'productType'>>(new Set())
+
+  const needsBrand = !product.brand
+  const needsType = !product.productType
+  const canSuggest = needsBrand || needsType
+
+  const runSuggest = async () => {
+    setSuggesting(true)
+    setSuggestError(null)
+    setApplied(new Set())
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${product.id}/ai/suggest-fields`,
+        { method: 'POST' },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      const json = (await res.json()) as {
+        suggestions: { brand?: string; productType?: string; reasoning?: string }
+      }
+      setSuggestion(json.suggestions)
+    } catch (e) {
+      setSuggestError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSuggesting(false)
+    }
+  }
+
+  const apply = async (field: 'brand' | 'productType', value: string) => {
+    setApplying(field)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/products/${product.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      emitInvalidation({
+        type: 'product.updated',
+        id: product.id,
+        fields: [field],
+        meta: { source: 'drawer-ai-suggest-apply' },
+      })
+      setApplied((s) => new Set(s).add(field))
+    } catch (e) {
+      setSuggestError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setApplying(null)
+    }
+  }
+
   const fields: Array<{ label: string; value: React.ReactNode }> = [
     { label: 'Brand', value: product.brand ?? <em className="text-slate-400">—</em> },
     { label: 'Type', value: product.productType ?? <em className="text-slate-400">—</em> },
@@ -739,13 +808,106 @@ function DetailGrid({ product }: { product: ProductDetail }) {
     },
   ]
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[12px]">
-      {fields.map((f) => (
-        <div key={f.label} className="flex items-baseline justify-between gap-2">
-          <span className="text-slate-500">{f.label}</span>
-          <span className="text-slate-900 text-right">{f.value}</span>
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[12px]">
+        {fields.map((f) => (
+          <div key={f.label} className="flex items-baseline justify-between gap-2">
+            <span className="text-slate-500">{f.label}</span>
+            <span className="text-slate-900 text-right">{f.value}</span>
+          </div>
+        ))}
+      </div>
+      {/* P.14 — AI suggest CTA + inline result. Only renders when at
+          least one of brand/productType is empty so a complete
+          product doesn't see an irrelevant button. */}
+      {canSuggest && (
+        <div className="border border-purple-100 bg-purple-50/40 rounded-md p-2 space-y-2">
+          {!suggestion && (
+            <button
+              type="button"
+              onClick={runSuggest}
+              disabled={suggesting}
+              className="text-[11px] text-purple-700 hover:text-purple-900 disabled:opacity-50 inline-flex items-center gap-1"
+            >
+              {suggesting ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Sparkles className="w-3 h-3" />
+              )}
+              {suggesting
+                ? 'Asking AI…'
+                : `Suggest ${needsBrand && needsType ? 'brand + type' : needsBrand ? 'brand' : 'type'} with AI`}
+            </button>
+          )}
+          {suggestion && (
+            <>
+              <div className="text-[10px] uppercase tracking-wider text-purple-700 font-semibold">
+                AI suggestion
+              </div>
+              {suggestion.brand && needsBrand && (
+                <div className="flex items-center justify-between gap-2 text-[12px]">
+                  <span className="text-slate-700">
+                    Brand: <span className="font-medium">{suggestion.brand}</span>
+                  </span>
+                  {applied.has('brand') ? (
+                    <span className="text-emerald-700 inline-flex items-center gap-0.5">
+                      <Check className="w-3 h-3" /> Applied
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => apply('brand', suggestion.brand!)}
+                      disabled={applying === 'brand'}
+                      className="text-[11px] text-blue-700 hover:underline disabled:opacity-50"
+                    >
+                      {applying === 'brand' ? 'Applying…' : 'Apply'}
+                    </button>
+                  )}
+                </div>
+              )}
+              {suggestion.productType && needsType && (
+                <div className="flex items-center justify-between gap-2 text-[12px]">
+                  <span className="text-slate-700">
+                    Type: <span className="font-medium">{suggestion.productType}</span>
+                  </span>
+                  {applied.has('productType') ? (
+                    <span className="text-emerald-700 inline-flex items-center gap-0.5">
+                      <Check className="w-3 h-3" /> Applied
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => apply('productType', suggestion.productType!)}
+                      disabled={applying === 'productType'}
+                      className="text-[11px] text-blue-700 hover:underline disabled:opacity-50"
+                    >
+                      {applying === 'productType' ? 'Applying…' : 'Apply'}
+                    </button>
+                  )}
+                </div>
+              )}
+              {suggestion.reasoning && (
+                <div className="text-[10px] text-slate-500 italic">
+                  {suggestion.reasoning}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setSuggestion(null)
+                  setApplied(new Set())
+                }}
+                className="text-[10px] text-slate-500 hover:text-slate-700"
+              >
+                Dismiss
+              </button>
+            </>
+          )}
+          {suggestError && (
+            <div className="text-[10px] text-rose-700">{suggestError}</div>
+          )}
         </div>
-      ))}
+      )}
     </div>
   )
 }
