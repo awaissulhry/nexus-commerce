@@ -1,12 +1,37 @@
 /**
- * eBay Orders Service
- * Handles fetching eBay orders from the Fulfillment API and syncing them with the database
- * Includes cross-channel inventory deduction logic
+ * eBay Orders Service (audit fix #2 — TECH_DEBT #33)
+ *
+ * Fetches orders from eBay's Fulfillment API and writes them to the
+ * Phase 26 unified `Order` model. Inventory deduction routes through
+ * applyStockMovement so the cross-channel cascade (StockLevel ledger,
+ * ChannelListing.masterQuantity, OutboundSyncQueue push) fires for
+ * every eBay sale.
+ *
+ * Phase 26 mapping (replaces the legacy salesChannel/ebayOrderId/...
+ * field names that broke this service against the post-Phase-26
+ * schema):
+ *   eBay orderId            → Order.channelOrderId (with channel='EBAY')
+ *   pricingSummary.total    → Order.totalPrice (Decimal)
+ *   pricingSummary.currency → Order.currencyCode
+ *   buyer.username          → Order.customerName
+ *   buyer.email             → Order.customerEmail (or fabricated stub
+ *                             when eBay omits it; the schema requires
+ *                             a value)
+ *   creationDate            → Order.purchaseDate
+ *   orderStatus / fulfillmentStatus / lastModifiedDate
+ *                           → Order.ebayMetadata (JSON)
+ *
+ * Idempotency: upsert on the (channel, channelOrderId) compound
+ * unique. OrderItem rows are uniquely identified by their eBay
+ * lineItemId stored in `ebayMetadata.lineItemId`; we only insert (and
+ * deduct inventory for) line items we haven't seen on a prior sync.
+ * Re-running the cron is safe — quantities never double-deduct.
  */
 
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { EbayAuthService } from './ebay-auth.service.js'
+import { applyStockMovement } from './stock-movement.service.js'
 
 interface EbayOrder {
   orderId: string
@@ -81,14 +106,19 @@ export class EbayOrdersService {
   }
 
   /**
-   * Fetch recent eBay orders from the Fulfillment API
-   * Fetches orders from the last 7 days by default
+   * Fetch recent eBay orders from the Fulfillment API. Default 7-day
+   * window matches the Amazon orders cron — keeps the total volume
+   * pulled per tick reasonable while still catching anything the
+   * previous tick missed.
    */
-  async fetchEbayOrders(accessToken: string, days: number = 7): Promise<EbayOrder[]> {
+  async fetchEbayOrders(
+    accessToken: string,
+    days: number = 7,
+  ): Promise<EbayOrder[]> {
     try {
-      const sevenDaysAgo = new Date()
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - days)
-      const fromDate = sevenDaysAgo.toISOString()
+      const since = new Date()
+      since.setDate(since.getDate() - days)
+      const fromDate = since.toISOString()
 
       const response = await fetch(
         `https://api.ebay.com/sell/fulfillment/v1/order?filter=creationdate:[${fromDate}]&limit=200`,
@@ -98,17 +128,18 @@ export class EbayOrdersService {
             Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           },
-        }
+        },
       )
 
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(`eBay API error: ${(error as Error).message || response.statusText}`)
+        const errorBody = await response.text().catch(() => '')
+        throw new Error(
+          `eBay API error ${response.status}: ${errorBody.slice(0, 500)}`,
+        )
       }
 
-      const data = await response.json()
-      const typedData = data as { orders: any[] }
-      return typedData.orders || []
+      const data = (await response.json()) as { orders?: EbayOrder[] }
+      return data.orders ?? []
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       logger.error('Error fetching eBay orders', { error: message })
@@ -117,12 +148,16 @@ export class EbayOrdersService {
   }
 
   /**
-   * Find product by eBay SKU or ItemID
-   * Uses VariantChannelListing to cross-reference
+   * Resolve an eBay SKU back to a Nexus Product. Tries (in order):
+   *   1. VariantChannelListing keyed on externalSku / externalListingId
+   *      — the canonical cross-channel link.
+   *   2. Product.sku exact match — for products with no variant set.
+   *   3. ProductVariation.sku exact match — for legacy data.
+   * Returns null when nothing matches; the caller still creates the
+   * OrderItem (with productId=null) so the line stays auditable.
    */
   private async findProductBySku(sku: string, ebayItemId?: string) {
     try {
-      // First try to find by SKU in VariantChannelListing
       const listing = await (prisma as any).variantChannelListing.findFirst({
         where: {
           OR: [
@@ -131,33 +166,19 @@ export class EbayOrdersService {
           ].filter(Boolean),
         },
         include: {
-          variant: {
-            include: {
-              product: true,
-            },
-          },
+          variant: { include: { product: true } },
         },
       })
+      if (listing?.variant?.product) return listing.variant.product
 
-      if (listing?.variant?.product) {
-        return listing.variant.product
-      }
-
-      // Fallback: try to find by SKU in Product or ProductVariation
-      const product = await prisma.product.findFirst({
-        where: { sku },
-      })
-
+      const product = await prisma.product.findFirst({ where: { sku } })
       if (product) return product
 
       const variation = await (prisma as any).productVariation.findFirst({
         where: { sku },
-        include: {
-          product: true,
-        },
+        include: { product: true },
       })
-
-      return variation?.product || null
+      return variation?.product ?? null
     } catch (error) {
       logger.error('Error finding product by SKU', { sku, error })
       return null
@@ -165,197 +186,230 @@ export class EbayOrdersService {
   }
 
   /**
-   * Process a single eBay order and create/update in database
-   * Handles inventory deduction for each line item
+   * Map eBay's order status to our unified OrderStatus enum (PENDING |
+   * SHIPPED | CANCELLED | DELIVERED). eBay's status taxonomy is
+   * coarser than ours; we lean conservative and default ambiguous
+   * states to PENDING. fulfillmentStatus from the API takes
+   * precedence when it's a more specific delivery state.
    */
-  private async processOrder(order: EbayOrder, connectionId: string) {
-    try {
-      // Check if order already exists (idempotency)
-      const existingOrder = await (prisma as any).order.findFirst({
-        where: {
-          ebayOrderId: order.orderId,
-          salesChannel: 'EBAY',
+  private mapOrderStatus(
+    ebayStatus: string,
+    fulfillmentStatus: string,
+  ): 'PENDING' | 'SHIPPED' | 'CANCELLED' | 'DELIVERED' {
+    if (ebayStatus === 'CANCELLED' || ebayStatus === 'INACTIVE') {
+      return 'CANCELLED'
+    }
+    if (fulfillmentStatus === 'FULFILLED') return 'DELIVERED'
+    if (
+      ebayStatus === 'COMPLETED' ||
+      fulfillmentStatus === 'IN_PROGRESS'
+    ) {
+      return 'SHIPPED'
+    }
+    return 'PENDING'
+  }
+
+  /**
+   * Process one eBay order: upsert the Order row, then for each line
+   * item we haven't seen before, create the OrderItem and deduct
+   * inventory through applyStockMovement (so ChannelListing.master
+   * Quantity and the cross-channel sync queue both update).
+   */
+  private async processOrder(order: EbayOrder, _connectionId: string) {
+    const totalPrice = Number(order.pricingSummary.total)
+    if (!Number.isFinite(totalPrice)) {
+      throw new Error(
+        `eBay order ${order.orderId}: invalid pricingSummary.total ${order.pricingSummary.total}`,
+      )
+    }
+
+    // eBay's Fulfillment API sometimes omits buyer.email (anonymized
+    // for guest checkout). The Order schema requires customerEmail,
+    // so synthesise a placeholder using the public username — kept
+    // distinct from real addresses with the .invalid suffix.
+    const customerEmail =
+      (order.buyer.email ?? '').trim() ||
+      `${(order.buyer.username || 'unknown').replace(/[^a-zA-Z0-9._-]/g, '')}@buyer.ebay.invalid`
+
+    const orderData = {
+      channel: 'EBAY' as const,
+      // eBay doesn't have per-marketplace splits like Amazon;
+      // 'EBAY-GLOBAL' keeps the column non-null without faking a
+      // marketplace code that doesn't exist.
+      marketplace: 'EBAY-GLOBAL',
+      channelOrderId: order.orderId,
+      status: this.mapOrderStatus(order.orderStatus, order.fulfillmentStatus),
+      totalPrice,
+      currencyCode: order.pricingSummary.currency ?? 'EUR',
+      customerName: order.buyer.username || 'eBay Buyer',
+      customerEmail,
+      shippingAddress: order.shippingAddress as unknown as object,
+      purchaseDate: new Date(order.creationDate),
+      // eBay is always merchant-fulfilled.
+      fulfillmentMethod: 'MFN',
+      ebayMetadata: {
+        orderStatus: order.orderStatus,
+        fulfillmentStatus: order.fulfillmentStatus,
+        lastModifiedDate: order.lastModifiedDate,
+      },
+    }
+
+    // Look up existing on the (channel, channelOrderId) compound
+    // unique so the upsert stays idempotent across sync runs.
+    const existing = await prisma.order.findUnique({
+      where: {
+        channel_channelOrderId: {
+          channel: 'EBAY' as any,
+          channelOrderId: order.orderId,
+        },
+      },
+      include: {
+        items: {
+          select: { id: true, sku: true, ebayMetadata: true, productId: true, quantity: true },
+        },
+      },
+    })
+
+    let dbOrder
+    if (existing) {
+      dbOrder = await prisma.order.update({
+        where: { id: existing.id },
+        data: orderData,
+      })
+      this.stats.ordersUpdated++
+    } else {
+      dbOrder = await prisma.order.create({ data: orderData })
+      this.stats.ordersCreated++
+    }
+
+    // Inventory deduction is one-shot per (orderId, lineItemId) — track
+    // which line items we've already booked so re-running this sync
+    // doesn't double-deduct.
+    const seenLineItemIds = new Set<string>(
+      (existing?.items ?? [])
+        .map((it) => (it.ebayMetadata as any)?.lineItemId)
+        .filter((id): id is string => typeof id === 'string'),
+    )
+
+    for (const lineItem of order.lineItems) {
+      this.stats.itemsProcessed++
+      const isNewLine = !seenLineItemIds.has(lineItem.lineItemId)
+      if (!isNewLine) continue // already booked on a prior sync
+
+      const itemPrice = Number(lineItem.lineItemCost)
+      if (!Number.isFinite(itemPrice)) {
+        logger.warn('eBay line item: non-numeric lineItemCost — skipping', {
+          orderId: order.orderId,
+          lineItemId: lineItem.lineItemId,
+          raw: lineItem.lineItemCost,
+        })
+        continue
+      }
+
+      const product = await this.findProductBySku(lineItem.sku, lineItem.lineItemId)
+      const taxAmount = lineItem.taxes ? Number(lineItem.taxes.taxAmount) : 0
+      const discountAmount = lineItem.discounts
+        ? lineItem.discounts.reduce(
+            (sum, d) => sum + (Number(d.discountAmount) || 0),
+            0,
+          )
+        : 0
+
+      await prisma.orderItem.create({
+        data: {
+          orderId: dbOrder.id,
+          productId: product?.id ?? null,
+          sku: lineItem.sku,
+          quantity: lineItem.quantity,
+          price: itemPrice,
+          ebayMetadata: {
+            lineItemId: lineItem.lineItemId,
+            title: lineItem.title,
+            taxAmount,
+            discountAmount,
+          },
         },
       })
 
-      const orderData = {
-        salesChannel: 'EBAY',
-        ebayOrderId: order.orderId,
-        purchaseDate: new Date(order.creationDate),
-        lastUpdateDate: new Date(order.lastModifiedDate),
-        status: this.mapOrderStatus(order.orderStatus),
-        fulfillmentChannel: order.fulfillmentStatus || 'MFN',
-        buyerName: order.buyer.username,
-        buyerEmail: order.buyer.email,
-        buyerPhone: null,
-        shippingAddress: order.shippingAddress,
-        totalAmount: parseFloat(order.pricingSummary.total),
-        currencyCode: order.pricingSummary.currency,
-        ebayMetadata: {
-          orderStatus: order.orderStatus,
-          fulfillmentStatus: order.fulfillmentStatus,
-        },
+      if (!product) {
+        logger.warn('Could not link eBay line item to a Nexus product', {
+          sku: lineItem.sku,
+          ebayItemId: lineItem.lineItemId,
+          orderId: order.orderId,
+        })
+        continue
       }
+      this.stats.itemsLinked++
 
-      let dbOrder
-      if (existingOrder) {
-        // Update existing order
-        dbOrder = await (prisma as any).order.update({
-          where: { id: existingOrder.id },
-          data: orderData,
-        })
-        this.stats.ordersUpdated++
-      } else {
-        // Create new order
-        dbOrder = await (prisma as any).order.create({
-          data: orderData,
-        })
-        this.stats.ordersCreated++
-      }
-
-      // Process line items
-      for (const lineItem of order.lineItems) {
-        this.stats.itemsProcessed++
-
-        // Find the product
-        const product = await this.findProductBySku(lineItem.sku, lineItem.lineItemId)
-
-        if (!product) {
-          logger.warn('Could not find product for eBay line item', {
-            sku: lineItem.sku,
-            ebayItemId: lineItem.lineItemId,
-          })
-          continue
-        }
-
-        this.stats.itemsLinked++
-
-        // Create or update OrderItem
-        const itemPrice = parseFloat(lineItem.lineItemCost)
-        const taxAmount = lineItem.taxes ? parseFloat(lineItem.taxes.taxAmount) : 0
-        const discountAmount = lineItem.discounts
-          ? lineItem.discounts.reduce((sum, d) => sum + parseFloat(d.discountAmount), 0)
-          : 0
-
-        const subtotal = itemPrice * lineItem.quantity - discountAmount
-        const totalWithShipping = subtotal + taxAmount
-
-        await (prisma as any).orderItem.upsert({
-          where: {
-            orderId_ebayLineItemId: {
-              orderId: dbOrder.id,
-              ebayLineItemId: lineItem.lineItemId,
-            },
-          },
-          create: {
-            orderId: dbOrder.id,
-            ebayLineItemId: lineItem.lineItemId,
-            productId: product.id,
-            sellerSku: lineItem.sku,
-            title: lineItem.title,
-            quantity: lineItem.quantity,
-            itemPrice,
-            itemTax: taxAmount,
-            shippingPrice: 0, // eBay doesn't break out shipping per item
-            shippingTax: 0,
-            subtotal,
-            totalWithShipping,
-            fulfillmentStatus: 'Pending',
-            ebayMetadata: {
-              lineItemId: lineItem.lineItemId,
-            },
-          },
-          update: {
-            quantity: lineItem.quantity,
-            itemPrice,
-            itemTax: taxAmount,
-            subtotal,
-            totalWithShipping,
-          },
-        })
-
-        // CRITICAL: Deduct inventory from Product.totalStock
-        await prisma.product.update({
-          where: { id: product.id },
-          data: {
-            totalStock: {
-              decrement: lineItem.quantity,
-            },
-          },
-        })
-
-        this.stats.inventoryDeducted++
-
-        logger.info('Inventory deducted for eBay order', {
+      // Inventory deduction routes through applyStockMovement so the
+      // StockLevel ledger, ChannelListing.masterQuantity, and the
+      // OutboundSyncQueue (cross-channel push) all update atomically.
+      try {
+        await applyStockMovement({
           productId: product.id,
-          productSku: product.sku,
+          change: -lineItem.quantity,
+          reason: 'ORDER_PLACED',
+          referenceType: 'ORDER',
+          referenceId: dbOrder.id,
+          orderId: dbOrder.id,
+          actor: 'ebay-orders-sync',
+          notes: `eBay order ${order.orderId} line ${lineItem.lineItemId}`,
+        })
+        this.stats.inventoryDeducted++
+      } catch (err) {
+        // A stock-movement failure shouldn't roll back the order
+        // ingestion (we don't want to lose the order record). Log
+        // and continue; the audit reads stockMovement separately.
+        logger.error('Stock-movement deduction failed for eBay line', {
+          productId: product.id,
           quantity: lineItem.quantity,
-          newStock: Math.max(0, product.totalStock - lineItem.quantity),
+          orderId: order.orderId,
+          error: err instanceof Error ? err.message : String(err),
         })
       }
-
-      return dbOrder
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      logger.error('Error processing eBay order', { orderId: order.orderId, error: message })
-      throw error
     }
+
+    return dbOrder
   }
 
   /**
-   * Map eBay order status to our unified status
-   */
-  private mapOrderStatus(ebayStatus: string): string {
-    const statusMap: Record<string, string> = {
-      ACTIVE: 'Pending',
-      COMPLETED: 'Shipped',
-      CANCELLED: 'Cancelled',
-      INACTIVE: 'Cancelled',
-    }
-    return statusMap[ebayStatus] || 'Pending'
-  }
-
-  /**
-   * Main sync method: Fetch eBay orders and sync with database
+   * Main entry: fetch + sync. One per active eBay ChannelConnection,
+   * triggered by the cron or by a settings page "Sync now" button.
    */
   async syncEbayOrders(connectionId: string): Promise<SyncResult> {
     const startedAt = new Date()
     const errors: Array<{ orderId?: string; error: string }> = []
-
     this.resetStats()
 
     try {
-      // Get the eBay connection and valid token
       const connection = await (prisma as any).channelConnection.findUnique({
         where: { id: connectionId },
       })
-
       if (!connection) {
         throw new Error(`ChannelConnection not found: ${connectionId}`)
       }
-
       if (!connection.isActive) {
         throw new Error('eBay connection is not active')
       }
 
-      // Get valid access token
       const authService = new EbayAuthService()
       const accessToken = await authService.getValidToken(connection)
 
-      // Fetch orders from eBay
       const orders = await this.fetchEbayOrders(accessToken)
       this.stats.ordersFetched = orders.length
-
       logger.info('Fetched eBay orders', { count: orders.length })
 
-      // Process each order
       for (const order of orders) {
         try {
           await this.processOrder(order, connectionId)
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error)
+          const message =
+            error instanceof Error ? error.message : String(error)
           errors.push({ orderId: order.orderId, error: message })
-          logger.error('Failed to process eBay order', { orderId: order.orderId, error: message })
+          logger.error('Failed to process eBay order', {
+            orderId: order.orderId,
+            error: message,
+          })
         }
       }
 
@@ -363,7 +417,12 @@ export class EbayOrdersService {
 
       return {
         syncId: `ebay-orders-${Date.now()}`,
-        status: errors.length === 0 ? 'SUCCESS' : errors.length < orders.length ? 'PARTIAL' : 'FAILED',
+        status:
+          errors.length === 0
+            ? 'SUCCESS'
+            : errors.length < orders.length
+              ? 'PARTIAL'
+              : 'FAILED',
         ordersFetched: this.stats.ordersFetched,
         ordersCreated: this.stats.ordersCreated,
         ordersUpdated: this.stats.ordersUpdated,
@@ -377,7 +436,6 @@ export class EbayOrdersService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       logger.error('eBay orders sync failed', { error: message })
-
       return {
         syncId: `ebay-orders-${Date.now()}`,
         status: 'FAILED',
@@ -388,18 +446,21 @@ export class EbayOrdersService {
         itemsLinked: this.stats.itemsLinked,
         inventoryDeducted: this.stats.inventoryDeducted,
         errors: [{ error: message }],
-        startedAt: new Date(),
+        startedAt,
         completedAt: new Date(),
       }
     }
   }
 
   /**
-   * Get sync status by syncId
+   * Placeholder — full sync-status tracking lives on a future SyncLog
+   * surface. Today the syncEbayOrders() result IS the status.
    */
-  async getSyncStatus(syncId: string): Promise<any> {
-    // In a production system, you'd store sync status in a SyncLog table
-    // For now, return a placeholder
+  async getSyncStatus(syncId: string): Promise<{
+    syncId: string
+    status: string
+    message: string
+  }> {
     return {
       syncId,
       status: 'COMPLETED',
