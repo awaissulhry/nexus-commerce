@@ -635,13 +635,33 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  // Receive inbound items: posts an array of {itemId, quantityReceived,
-  // qcStatus?} and applies StockMovements.
+  // Receive inbound items. H.0b — event-log idempotent flow.
+  //
+  // Body shape (unchanged for backwards compat):
+  //   items[].quantityReceived    — cumulative target. Server computes
+  //                                  delta = target - currentReceived.
+  //                                  delta=0 ⇒ no-op (handles double-click).
+  //   items[].idempotencyKey?     — optional explicit retry token. If a
+  //                                  receipt with the same (itemId, key)
+  //                                  already exists, no-op.
+  //   items[].qcStatus?, qcNotes?, notes?
+  //
+  // Each non-zero delta writes one InboundReceipt event + applies a
+  // StockMovement (when QC pass/unset) + bumps the cached
+  // quantityReceived. The event log is source of truth; the cached
+  // column is the SUM(quantity) over events for fast reads.
   fastify.post('/fulfillment/inbound/:id/receive', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
       const body = request.body as {
-        items?: Array<{ itemId: string; quantityReceived: number; qcStatus?: string; qcNotes?: string }>
+        items?: Array<{
+          itemId: string
+          quantityReceived: number
+          qcStatus?: string
+          qcNotes?: string
+          idempotencyKey?: string
+          notes?: string
+        }>
       }
       const itemUpdates = Array.isArray(body.items) ? body.items : []
 
@@ -651,40 +671,91 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       })
       if (!shipment) return reply.code(404).send({ error: 'Inbound shipment not found' })
 
+      const reasonMap: Record<string, any> = {
+        SUPPLIER: 'SUPPLIER_DELIVERY',
+        MANUFACTURING: 'MANUFACTURING_OUTPUT',
+        FBA: 'FBA_TRANSFER_OUT', // sending TO Amazon = stock leaves
+        TRANSFER: 'INBOUND_RECEIVED',
+      }
+      const reason = reasonMap[shipment.type] ?? 'INBOUND_RECEIVED'
+      const sign = shipment.type === 'FBA' ? -1 : 1
+
       for (const upd of itemUpdates) {
         const orig = shipment.items.find((it) => it.id === upd.itemId)
         if (!orig) continue
-        await prisma.inboundShipmentItem.update({
-          where: { id: upd.itemId },
-          data: {
-            quantityReceived: upd.quantityReceived,
-            qcStatus: upd.qcStatus ?? null,
-            qcNotes: upd.qcNotes ?? null,
-          },
-        })
-        // QC PASS or unset = stock the units. FAIL/HOLD = don't add to inventory yet.
-        if ((!upd.qcStatus || upd.qcStatus === 'PASS') && orig.productId && upd.quantityReceived > 0) {
-          const reasonMap: any = {
-            SUPPLIER: 'SUPPLIER_DELIVERY',
-            MANUFACTURING: 'MANUFACTURING_OUTPUT',
-            FBA: 'FBA_TRANSFER_OUT', // sending TO Amazon = stock leaves
-            TRANSFER: 'INBOUND_RECEIVED',
+
+        const target = Number(upd.quantityReceived)
+        if (!Number.isFinite(target) || target < 0) continue
+        const delta = target - orig.quantityReceived
+
+        if (delta === 0) {
+          // Allow QC-only updates without stock churn (operator
+          // adding a note hours after the receive event).
+          if (upd.qcStatus !== undefined || upd.qcNotes !== undefined) {
+            await prisma.inboundShipmentItem.update({
+              where: { id: orig.id },
+              data: { qcStatus: upd.qcStatus ?? null, qcNotes: upd.qcNotes ?? null },
+            })
           }
-          const reason = reasonMap[shipment.type] ?? 'INBOUND_RECEIVED'
-          // FBA shipments DECREMENT (we're sending units to Amazon).
-          // Supplier/Manufacturing/Transfer INCREMENT.
-          const sign = shipment.type === 'FBA' ? -1 : 1
-          await applyStockMovement({
+          continue
+        }
+
+        // Idempotency dedupe: explicit-key callers get a hard guarantee.
+        // Cumulative-target callers without a key are already protected
+        // by the delta=0 short-circuit above.
+        if (upd.idempotencyKey) {
+          const existing = await prisma.inboundReceipt.findFirst({
+            where: { inboundShipmentItemId: orig.id, idempotencyKey: upd.idempotencyKey },
+            select: { id: true },
+          })
+          if (existing) continue
+        }
+
+        // QC PASS or unset ⇒ stock the units. FAIL/HOLD ⇒ event logged
+        // but no stock added (until released). applyStockMovement opens
+        // its own transaction; running it before the event-log write
+        // keeps the failure mode recoverable (retry with same target
+        // ⇒ delta=0 ⇒ no-op).
+        let stockMovementId: string | null = null
+        if ((!upd.qcStatus || upd.qcStatus === 'PASS') && orig.productId) {
+          const mv = await applyStockMovement({
             productId: orig.productId,
             warehouseId: shipment.warehouseId ?? undefined,
-            change: sign * upd.quantityReceived,
+            change: sign * delta,
             reason,
             referenceType: 'InboundShipment',
             referenceId: shipment.id,
             actor: 'inbound-receive',
           })
+          stockMovementId = mv.id
         }
+
+        // Atomic: write the event + bump the cached quantityReceived
+        // + persist QC state, all in one transaction.
+        await prisma.$transaction([
+          prisma.inboundReceipt.create({
+            data: {
+              inboundShipmentItemId: orig.id,
+              quantity: delta,
+              qcStatus: upd.qcStatus ?? null,
+              qcNotes: upd.qcNotes ?? null,
+              notes: upd.notes ?? null,
+              idempotencyKey: upd.idempotencyKey ?? null,
+              stockMovementId,
+              receivedBy: 'inbound-receive',
+            },
+          }),
+          prisma.inboundShipmentItem.update({
+            where: { id: orig.id },
+            data: {
+              quantityReceived: target,
+              qcStatus: upd.qcStatus ?? null,
+              qcNotes: upd.qcNotes ?? null,
+            },
+          }),
+        ])
       }
+
       const updated = await prisma.inboundShipment.update({
         where: { id },
         data: { status: 'RECEIVING', arrivedAt: shipment.arrivedAt ?? new Date(), version: { increment: 1 } },

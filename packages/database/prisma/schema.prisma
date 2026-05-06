@@ -2662,9 +2662,45 @@ model InboundShipmentItem {
   inboundShipment   InboundShipment    @relation(fields: [inboundShipmentId], references: [id], onDelete: Cascade)
   purchaseOrderItem PurchaseOrderItem? @relation(fields: [purchaseOrderItemId], references: [id], onDelete: SetNull)
 
+  // H.0b — append-only event log. quantityReceived above is a cached
+  // SUM(receipts.quantity); receipts are source of truth.
+  receipts InboundReceipt[]
+
   @@index([inboundShipmentId])
   @@index([productId])
   @@index([purchaseOrderItemId])
+}
+
+// H.0b — InboundReceipt: append-only log of receive events per
+// InboundShipmentItem. Each event is a signed delta; the cached
+// `InboundShipmentItem.quantityReceived` is SUM(quantity). Optional
+// `idempotencyKey` lets clients dedupe explicit retries; without a
+// key, cumulative-target semantics in the receive route handle the
+// double-click case naturally (delta=0 ⇒ no event).
+model InboundReceipt {
+  id                    String   @id @default(cuid())
+  inboundShipmentItemId String
+  // Signed delta. Positive: receive. Negative: operator-driven
+  // reversal. Never zero (route short-circuits before insert; CHECK
+  // constraint enforces).
+  quantity              Int
+  qcStatus              String? // PASS | FAIL | HOLD
+  qcNotes               String?
+  notes                 String?
+  // Per-(item, key) unique enforced by partial index in migration —
+  // NULL keys are allowed to repeat; explicit keys must be unique.
+  idempotencyKey        String?
+  // Link back to the StockMovement this event drove. Null when QC=FAIL/HOLD
+  // (no stock added) or for backfill rows.
+  stockMovementId       String?
+  receivedBy            String?
+  receivedAt            DateTime @default(now())
+
+  inboundShipmentItem InboundShipmentItem @relation(fields: [inboundShipmentItemId], references: [id], onDelete: Cascade)
+
+  @@index([inboundShipmentItemId])
+  @@index([receivedAt])
+  @@index([idempotencyKey])
 }
 
 model WorkOrder {
