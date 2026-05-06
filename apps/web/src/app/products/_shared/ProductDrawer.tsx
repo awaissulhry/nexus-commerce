@@ -45,6 +45,7 @@ import {
   Network,
   Search,
   Layers,
+  RefreshCw,
 } from 'lucide-react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -367,7 +368,15 @@ export default function ProductDrawer({
               }}
             />
           )}
-          {data && tab === 'listings' && <ListingsTab listings={data.channelListings ?? []} />}
+          {data && tab === 'listings' && (
+            <ListingsTab
+              listings={data.channelListings ?? []}
+              onChanged={() => {
+                fetchDetail()
+                onChanged?.()
+              }}
+            />
+          )}
           {data && tab === 'variations' && data.isParent && (
             <VariationsTab
               parentId={data.id}
@@ -801,8 +810,12 @@ function QuickField({
 
 function ListingsTab({
   listings,
+  onChanged,
 }: {
   listings: NonNullable<ProductDetail['channelListings']>
+  /** Called after a successful resync so the parent refetches and
+   *  the row's status pill flips to PENDING. */
+  onChanged: () => void
 }) {
   const grouped = useMemo(() => {
     const map = new Map<string, typeof listings>()
@@ -813,6 +826,47 @@ function ListingsTab({
     }
     return Array.from(map.entries())
   }, [listings])
+
+  // P.11 — per-listing sync state. Tracks the listing currently being
+  // resynced + any per-listing error so the row can show inline
+  // feedback without an alert(). Only one resync at a time per drawer
+  // open — operators don't typically need to fan out from here, the
+  // dashboard's bulk surface handles that.
+  const [resyncing, setResyncing] = useState<string | null>(null)
+  const [resyncError, setResyncError] = useState<{
+    listingId: string
+    message: string
+  } | null>(null)
+
+  const resync = async (listingId: string) => {
+    setResyncing(listingId)
+    setResyncError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/listings/${listingId}/resync`,
+        { method: 'POST' },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      // Tell the rest of the app this listing is in a new state so
+      // the dashboard health card and any other open tabs refresh.
+      emitInvalidation({
+        type: 'listing.updated',
+        id: listingId,
+        meta: { source: 'drawer-listings-resync' },
+      })
+      onChanged()
+    } catch (e) {
+      setResyncError({
+        listingId,
+        message: e instanceof Error ? e.message : String(e),
+      })
+    } finally {
+      setResyncing(null)
+    }
+  }
 
   if (listings.length === 0) {
     return (
@@ -861,12 +915,18 @@ function ListingsTab({
                     l.masterQuantity != null &&
                     l.quantity != null &&
                     Number(l.masterQuantity) !== Number(l.quantity)
+                  // P.11 — surface the last sync timestamp + error
+                  // inline so triage doesn't need a navigation. Falls
+                  // back to em-dash when the listing has never synced.
+                  const isResyncing = resyncing === l.id
+                  const cellResyncErr =
+                    resyncError?.listingId === l.id ? resyncError : null
                   return (
                   <tr key={l.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-3 py-2 font-mono text-[11px] text-slate-700">
+                    <td className="px-3 py-2 font-mono text-[11px] text-slate-700 align-top">
                       {l.marketplace}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 align-top">
                       <ListingStatusBadge
                         listingStatus={l.listingStatus}
                         lastSyncStatus={l.lastSyncStatus}
@@ -885,8 +945,25 @@ function ListingsTab({
                           DRIFT
                         </span>
                       )}
+                      {/* P.11 — last sync timestamp + error visibility.
+                          The badge already encodes status; this surfaces
+                          the WHEN and the WHY so triage doesn't need to
+                          open the dedicated /listings/<id> page. */}
+                      <div className="text-[10px] text-slate-500 mt-1">
+                        {l.lastSyncedAt
+                          ? `Synced ${new Date(l.lastSyncedAt).toLocaleString()}`
+                          : 'Not yet synced'}
+                      </div>
+                      {l.lastSyncError && l.lastSyncStatus === 'FAILED' && (
+                        <div
+                          className="text-[10px] text-rose-700 mt-0.5 truncate max-w-[200px]"
+                          title={l.lastSyncError}
+                        >
+                          {l.lastSyncError}
+                        </div>
+                      )}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
+                    <td className="px-3 py-2 text-right tabular-nums align-top">
                       {l.price != null ? `€${Number(l.price).toFixed(2)}` : '—'}
                       {priceDrift && (
                         <div className="text-[10px] text-amber-700 mt-0.5">
@@ -894,7 +971,7 @@ function ListingsTab({
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
+                    <td className="px-3 py-2 text-right tabular-nums align-top">
                       {l.quantity ?? '—'}
                       {qtyDrift && (
                         <div className="text-[10px] text-amber-700 mt-0.5">
@@ -902,13 +979,40 @@ function ListingsTab({
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-right">
-                      <Link
-                        href={`/listings/${l.id}`}
-                        className="text-[11px] text-blue-700 hover:underline inline-flex items-center gap-0.5"
-                      >
-                        Open <ChevronRight className="w-3 h-3" />
-                      </Link>
+                    <td className="px-3 py-2 text-right align-top">
+                      <div className="inline-flex items-center gap-2">
+                        {/* P.11 — Sync now action. Calls
+                            POST /api/listings/:id/resync which flips
+                            the row to PENDING + resets retryCount; the
+                            BullMQ worker picks it up next tick. The
+                            row's status pill flips to PENDING after
+                            the parent's onChanged() refetch. */}
+                        <button
+                          type="button"
+                          onClick={() => resync(l.id)}
+                          disabled={isResyncing}
+                          title="Re-queue this listing for the next sync tick"
+                          className="text-[11px] text-slate-500 hover:text-blue-700 disabled:opacity-50 inline-flex items-center gap-0.5"
+                        >
+                          {isResyncing ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-3 h-3" />
+                          )}
+                          {isResyncing ? 'Queuing…' : 'Sync now'}
+                        </button>
+                        <Link
+                          href={`/listings/${l.id}`}
+                          className="text-[11px] text-blue-700 hover:underline inline-flex items-center gap-0.5"
+                        >
+                          Open <ChevronRight className="w-3 h-3" />
+                        </Link>
+                      </div>
+                      {cellResyncErr && (
+                        <div className="text-[10px] text-rose-700 mt-1 max-w-[200px] truncate" title={cellResyncErr.message}>
+                          {cellResyncErr.message}
+                        </div>
+                      )}
                     </td>
                   </tr>
                   )
