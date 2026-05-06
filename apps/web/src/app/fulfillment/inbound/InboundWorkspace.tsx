@@ -2058,14 +2058,16 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
           <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
         </header>
 
-        {/* H.0c — honesty banner */}
+        {/* H.8a status banner — plan call is real, labels + transport
+            are still stubbed. */}
         <div className="mx-5 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-md text-[12px] text-amber-900">
           <div className="font-semibold mb-1 inline-flex items-center gap-1.5">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
-            Preview — does not submit to Amazon yet
+            Plan call is live — labels + transport still scaffolded
           </div>
           <div className="text-amber-800 leading-snug">
-            This wizard writes Nexus-side records but the real SP-API integration ships in upcoming commits 8a–8d. Use it to dry-run the flow only.
+            Plan-shipment submits to Amazon SP-API for real (returns Amazon-issued shipment IDs + destination FC).
+            FNSKU labels (8b) and transport booking (8c) still need real SP-API. Status polling (8d) lands shortly after.
           </div>
         </div>
 

@@ -32,6 +32,10 @@ import {
   isCloudinaryConfigured,
   uploadBufferToCloudinary,
 } from '../services/cloudinary.service.js'
+import {
+  createInboundShipmentPlan as fbaCreateInboundShipmentPlan,
+  isFbaInboundConfigured,
+} from '../services/fba-inbound.service.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // FULFILLMENT B.3–B.9 — full domain API surface
@@ -1029,32 +1033,63 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   // FBA Send-to-Amazon (B.6 scaffold)
   // ═══════════════════════════════════════════════════════════════════
 
+  // H.8a — real SP-API createInboundShipmentPlan. v0 endpoint
+  // (deprecated but functional; 2024-03-20 multi-step flow lands in
+  // a future migration — see TECH_DEBT). Returns Amazon-issued
+  // shipment plans grouped by destination FC. 503 with a clear
+  // message when SP-API isn't configured rather than silently
+  // falling back to a stub.
   fastify.post('/fulfillment/fba/plan-shipment', async (request, reply) => {
     try {
       const body = request.body as {
-        items?: Array<{ sku: string; quantity: number; prepType?: string }>
-        warehouseId?: string
+        items?: Array<{ sku: string; quantity: number; asin?: string; condition?: string; quantityInCase?: number }>
+        labelPrepPreference?: 'SELLER_LABEL' | 'AMAZON_LABEL_ONLY' | 'AMAZON_LABEL_PREFERRED'
       }
       const items = Array.isArray(body.items) ? body.items : []
       if (items.length === 0) return reply.code(400).send({ error: 'items[] required' })
 
-      // SP-API call would go here:
-      //   POST /fba/inbound/v0/plans (createInboundShipmentPlan)
-      // Returns shipment plans grouped by destination FC. We scaffold a
-      // single-FC plan with the default destinationFC so the UI works.
-      const planId = `PLAN-${Date.now()}`
+      if (!isFbaInboundConfigured()) {
+        return reply.code(503).send({
+          error: 'SP-API not configured. Set AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN, AMAZON_MARKETPLACE_ID.',
+        })
+      }
+
+      const result = await fbaCreateInboundShipmentPlan({
+        items: items.map((it) => ({
+          sellerSku: it.sku,
+          quantity: it.quantity,
+          asin: it.asin,
+          condition: it.condition as any,
+          quantityInCase: it.quantityInCase,
+        })),
+        labelPrepPreference: body.labelPrepPreference,
+      })
+
+      // Return a shape compatible with the existing UI wizard. The
+      // legacy stub returned { planId, shipmentPlans[] } where
+      // shipmentPlans[i] = { shipmentId, destinationFC, items[] }.
+      // We map Amazon's PascalCase response onto the same lowercase
+      // keys so the wizard doesn't need to change in this commit.
       return {
-        planId,
-        shipmentPlans: [
-          {
-            shipmentId: `FBA${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
-            destinationFC: 'MXP5',
-            items: items.map((it) => ({ ...it, fnsku: null, prepType: it.prepType ?? 'NONE' })),
-          },
-        ],
+        planId: `PLAN-${result.shipmentPlans.map((p) => p.ShipmentId).join('-')}`,
+        shipmentPlans: result.shipmentPlans.map((p) => ({
+          shipmentId: p.ShipmentId,
+          destinationFC: p.DestinationFulfillmentCenterId,
+          labelPrepType: p.LabelPrepType,
+          shipToAddress: p.ShipToAddress,
+          items: p.Items.map((it) => ({
+            sku: it.SellerSKU,
+            quantity: it.Quantity,
+            fnsku: it.FulfillmentNetworkSKU ?? null,
+            prepDetails: it.PrepDetailsList ?? [],
+          })),
+        })),
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[fba/plan-shipment] failed')
+      // Surface the SP-API error message intact — operator-facing UI
+      // benefits from seeing "InvalidSellerSKU" etc. rather than a
+      // generic 500.
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })
