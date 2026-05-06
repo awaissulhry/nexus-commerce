@@ -44,7 +44,10 @@ interface AiPreviewResult {
     bullets?: { content: string[] }
     description?: { content: string }
     keywords?: { content: string }
-    metadata?: { language?: string; model?: string }
+    /** P.13 — provider added so the per-card footer can show
+     *  "anthropic · claude-3-5-sonnet" instead of just the model
+     *  name. The bulk-generate response already populated this. */
+    metadata?: { language?: string; model?: string; provider?: string }
   }
 }
 
@@ -97,6 +100,18 @@ export default function AiBulkGenerateModal({
   const [results, setResults] = useState<
     Array<{ productId: string; ok: boolean; error?: string }> | null
   >(null)
+  // P.13 — surface per-batch cost so the operator sees what they
+  // spent. The summary is populated by the bulk-generate response on
+  // both the dry-run and apply legs, so we can show "spent $0.04 on
+  // 8 previews" before the operator commits + the final spend on
+  // done.
+  const [summary, setSummary] = useState<{
+    totalCostUSD?: number
+    totalInputTokens?: number
+    totalOutputTokens?: number
+    providersUsed?: string[]
+    modelsUsed?: string[]
+  } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const toggleField = (f: string) =>
@@ -133,7 +148,16 @@ export default function AiBulkGenerateModal({
       const body = await res.json().catch(() => ({}))
       throw new Error(body.error ?? `HTTP ${res.status}`)
     }
-    return (await res.json()) as { results: AiPreviewResult[] }
+    return (await res.json()) as {
+      results: AiPreviewResult[]
+      summary?: {
+        totalCostUSD?: number
+        totalInputTokens?: number
+        totalOutputTokens?: number
+        providersUsed?: string[]
+        modelsUsed?: string[]
+      }
+    }
   }
 
   const run = async () => {
@@ -143,6 +167,7 @@ export default function AiBulkGenerateModal({
       if (previewFirst) {
         const json = await callBackend(productIds, true)
         setPreviewResults(json.results ?? [])
+        setSummary(json.summary ?? null)
         setAcceptedIds(
           new Set(
             (json.results ?? [])
@@ -154,6 +179,7 @@ export default function AiBulkGenerateModal({
       } else {
         const json = await callBackend(productIds, false)
         setResults(json.results ?? [])
+        setSummary(json.summary ?? null)
         const succeeded = (json.results ?? []).filter((r) => r.ok)
         if (succeeded.length > 0) {
           emitInvalidation({
@@ -186,6 +212,7 @@ export default function AiBulkGenerateModal({
     try {
       const json = await callBackend(Array.from(acceptedIds), false)
       setResults(json.results ?? [])
+      setSummary(json.summary ?? null)
       const succeeded = (json.results ?? []).filter((r) => r.ok)
       if (succeeded.length > 0) {
         emitInvalidation({
@@ -432,6 +459,7 @@ export default function AiBulkGenerateModal({
                         {g?.metadata?.language && (
                           <div className="text-[10px] text-slate-500">
                             {g.metadata.language}
+                            {g.metadata.provider ? ` · ${g.metadata.provider}` : ''}
                             {g.metadata.model ? ` · ${g.metadata.model}` : ''}
                           </div>
                         )}
@@ -538,6 +566,39 @@ export default function AiBulkGenerateModal({
               )}
               .
             </div>
+            {/* P.13 — cost + provider visibility. AiUsageLog already
+                records every call server-side; this surfaces the
+                same numbers in-modal so operators see what each
+                bulk run cost without leaving for /settings/ai. */}
+            {summary && (
+              <div className="border border-slate-200 bg-slate-50 rounded-md p-2 text-[11px] text-slate-700 space-y-0.5">
+                {typeof summary.totalCostUSD === 'number' && (
+                  <div>
+                    Spent{' '}
+                    <span className="font-semibold tabular-nums">
+                      ${summary.totalCostUSD.toFixed(4)}
+                    </span>
+                    {typeof summary.totalInputTokens === 'number' &&
+                      typeof summary.totalOutputTokens === 'number' && (
+                        <span className="text-slate-500">
+                          {' '}
+                          ({summary.totalInputTokens.toLocaleString()} in /{' '}
+                          {summary.totalOutputTokens.toLocaleString()} out tokens)
+                        </span>
+                      )}
+                  </div>
+                )}
+                {summary.providersUsed && summary.providersUsed.length > 0 && (
+                  <div className="text-slate-500">
+                    via{' '}
+                    {summary.providersUsed.join(', ')}
+                    {summary.modelsUsed && summary.modelsUsed.length > 0 && (
+                      <> · {summary.modelsUsed.join(', ')}</>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             {failedCount > 0 && (
               <ul className="border border-rose-200 bg-rose-50 rounded-md p-2 max-h-48 overflow-y-auto text-[11px] text-rose-800 space-y-1">
                 {results

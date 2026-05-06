@@ -350,6 +350,27 @@ const productsAiRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      // P.13 — roll up usage so the modal can show "spent $0.12 on
+      // 8 products with anthropic/claude-3-5-sonnet". The per-result
+      // generated.usage array already carries cost; we sum across
+      // every successful result. Failed calls don't contribute (no
+      // usage object on a thrown call).
+      let totalCostUSD = 0
+      let totalInputTokens = 0
+      let totalOutputTokens = 0
+      const providersUsed = new Set<string>()
+      const modelsUsed = new Set<string>()
+      for (const r of results) {
+        if (!r.ok || !r.generated?.usage) continue
+        for (const u of r.generated.usage) {
+          totalCostUSD += u.costUSD ?? 0
+          totalInputTokens += u.inputTokens ?? 0
+          totalOutputTokens += u.outputTokens ?? 0
+          if (u.provider) providersUsed.add(u.provider)
+          if (u.model) modelsUsed.add(u.model)
+        }
+      }
+
       return {
         results,
         summary: {
@@ -357,6 +378,12 @@ const productsAiRoutes: FastifyPluginAsync = async (fastify) => {
           succeeded: results.filter((r) => r.ok).length,
           failed: results.filter((r) => !r.ok).length,
           dryRun,
+          // P.13 — cost + token visibility for the modal.
+          totalCostUSD,
+          totalInputTokens,
+          totalOutputTokens,
+          providersUsed: Array.from(providersUsed),
+          modelsUsed: Array.from(modelsUsed),
         },
       }
     },
