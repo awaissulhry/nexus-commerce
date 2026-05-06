@@ -42,6 +42,8 @@ import {
   Sparkles,
   Check,
   Trash2,
+  Network,
+  Search,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -110,7 +112,7 @@ export interface ProductDrawerProps {
   onChanged?: () => void
 }
 
-type Tab = 'details' | 'listings' | 'translations' | 'activity'
+type Tab = 'details' | 'listings' | 'translations' | 'related' | 'activity'
 
 export default function ProductDrawer({
   productId,
@@ -259,6 +261,12 @@ export default function ProductDrawer({
             <Globe className="w-3 h-3" /> Translations
           </DrawerTab>
           <DrawerTab
+            active={tab === 'related'}
+            onClick={() => setTab('related')}
+          >
+            <Network className="w-3 h-3" /> Related
+          </DrawerTab>
+          <DrawerTab
             active={tab === 'activity'}
             onClick={() => setTab('activity')}
           >
@@ -296,6 +304,15 @@ export default function ProductDrawer({
               masterDescription={data.description ?? null}
               masterBullets={data.bulletPoints ?? []}
               masterKeywords={data.keywords ?? []}
+              onChanged={() => {
+                fetchDetail()
+                onChanged?.()
+              }}
+            />
+          )}
+          {data && tab === 'related' && (
+            <RelatedTab
+              productId={data.id}
               onChanged={() => {
                 fetchDetail()
                 onChanged?.()
@@ -1464,6 +1481,530 @@ function TranslationRowCard({
             </button>
           </div>
         </div>
+      )}
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────
+// RelatedTab (H.11) — cross-sells, accessories, replacements
+// ────────────────────────────────────────────────────────────────────
+/**
+ * Lists outgoing relations grouped by type (cross-sells, accessories,
+ * etc.) plus an "Add related" search picker.
+ *
+ * Reciprocal toggle is on by default — most cross-sells should be
+ * symmetric (if jacket links gloves, gloves should link jacket too).
+ * The user can untick it for asymmetric relations like REPLACEMENT
+ * (the new product replaces the old one, not the other way around).
+ *
+ * The search picker hits /api/products?search=... and shows up to 10
+ * results, lazily — fires on debounce (250ms).
+ */
+
+interface RelatedRow {
+  id: string
+  type: string
+  displayOrder: number
+  notes: string | null
+  toProduct: {
+    id: string
+    sku: string
+    name: string
+    basePrice: number | null
+    totalStock: number | null
+    status: string
+    imageUrl: string | null
+  } | null
+  fromProduct?: {
+    id: string
+    sku: string
+    name: string
+    basePrice: number | null
+    totalStock: number | null
+    status: string
+    imageUrl: string | null
+  } | null
+}
+
+const RELATION_TYPES: Array<{ code: string; label: string; hint: string }> = [
+  { code: 'CROSS_SELL', label: 'Cross-sell', hint: 'You might also like' },
+  { code: 'ACCESSORY', label: 'Accessory', hint: 'Works with this' },
+  { code: 'UPSELL', label: 'Upsell', hint: 'Step up to this tier' },
+  { code: 'REPLACEMENT', label: 'Replacement', hint: 'Supersedes' },
+  { code: 'BUNDLE_PART', label: 'Bundle part', hint: 'Member of bundle' },
+  { code: 'RECOMMENDED', label: 'Recommended', hint: 'Generic suggestion' },
+]
+
+function relationLabel(code: string): string {
+  return RELATION_TYPES.find((t) => t.code === code)?.label ?? code
+}
+
+interface SearchResult {
+  id: string
+  sku: string
+  name: string
+  imageUrl?: string | null
+}
+
+function RelatedTab({
+  productId,
+  onChanged,
+}: {
+  productId: string
+  onChanged: () => void
+}) {
+  const [outgoing, setOutgoing] = useState<RelatedRow[]>([])
+  const [incoming, setIncoming] = useState<RelatedRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  // Picker state
+  const [search, setSearch] = useState('')
+  const [results, setResults] = useState<SearchResult[]>([])
+  const [searching, setSearching] = useState(false)
+  const [selectedTo, setSelectedTo] = useState<SearchResult | null>(null)
+  const [pickedType, setPickedType] = useState<string>('CROSS_SELL')
+  const [reciprocal, setReciprocal] = useState(true)
+
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${productId}/relations`,
+        { cache: 'no-store' },
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const json = await res.json()
+      setOutgoing(json.outgoing ?? [])
+      setIncoming(json.incoming ?? [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [productId])
+
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
+
+  // Debounced search → /api/products?search=
+  useEffect(() => {
+    if (!adding) return
+    const term = search.trim()
+    if (term.length < 2) {
+      setResults([])
+      return
+    }
+    let cancelled = false
+    const handle = setTimeout(async () => {
+      setSearching(true)
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/products?search=${encodeURIComponent(term)}&limit=10`,
+          { cache: 'no-store' },
+        )
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const json = await res.json()
+        if (cancelled) return
+        const rows = (json.products ?? []) as Array<{
+          id: string
+          sku: string
+          name: string
+          imageUrl?: string | null
+        }>
+        setResults(
+          rows
+            .filter((r) => r.id !== productId)
+            .map((r) => ({
+              id: r.id,
+              sku: r.sku,
+              name: r.name,
+              imageUrl: r.imageUrl ?? null,
+            })),
+        )
+      } catch {
+        if (!cancelled) setResults([])
+      } finally {
+        if (!cancelled) setSearching(false)
+      }
+    }, 250)
+    return () => {
+      cancelled = true
+      clearTimeout(handle)
+    }
+  }, [adding, search, productId])
+
+  const create = async () => {
+    if (!selectedTo) return
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${productId}/relations`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            toProductId: selectedTo.id,
+            type: pickedType,
+            reciprocal,
+          }),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      setAdding(false)
+      setSelectedTo(null)
+      setSearch('')
+      setResults([])
+      onChanged()
+      void refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const remove = async (relationId: string) => {
+    if (!confirm('Remove this related-product link?')) return
+    setBusy(true)
+    try {
+      await fetch(
+        `${getBackendUrl()}/api/products/relations/${relationId}?reciprocal=true`,
+        { method: 'DELETE' },
+      )
+      onChanged()
+      void refresh()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Group outgoing by type for the rendered sections.
+  const outgoingByType = useMemo(() => {
+    const m = new Map<string, RelatedRow[]>()
+    for (const t of RELATION_TYPES) m.set(t.code, [])
+    for (const r of outgoing) {
+      const arr = m.get(r.type) ?? []
+      arr.push(r)
+      m.set(r.type, arr)
+    }
+    return m
+  }, [outgoing])
+
+  if (loading) {
+    return (
+      <div className="px-5 py-8 text-center text-[12px] text-slate-400 italic">
+        <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Loading…
+      </div>
+    )
+  }
+
+  return (
+    <div className="px-5 py-4 space-y-4">
+      {error && (
+        <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-[12px] text-rose-800">
+          {error}
+        </div>
+      )}
+
+      {RELATION_TYPES.map((t) => {
+        const rows = outgoingByType.get(t.code) ?? []
+        if (rows.length === 0) return null
+        return (
+          <section key={t.code} className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[12px] font-semibold text-slate-700">
+                  {t.label}
+                </div>
+                <div className="text-[10px] text-slate-500">{t.hint}</div>
+              </div>
+              <span className="text-[10px] text-slate-400">
+                {rows.length} item{rows.length === 1 ? '' : 's'}
+              </span>
+            </div>
+            {rows.map((r) => {
+              const p = r.toProduct
+              if (!p) return null
+              return (
+                <div
+                  key={r.id}
+                  className="flex items-center gap-2 px-2 py-1.5 border border-slate-200 rounded bg-white"
+                >
+                  {p.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={p.imageUrl}
+                      alt=""
+                      className="w-8 h-8 rounded object-cover bg-slate-100 flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-slate-300 flex-shrink-0">
+                      <Package className="w-4 h-4" />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[12px] text-slate-900 font-medium truncate">
+                      {p.name}
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-mono truncate">
+                      {p.sku}
+                      {p.basePrice != null && (
+                        <span className="ml-1.5 tabular-nums">
+                          · €{p.basePrice.toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      window.dispatchEvent(
+                        new CustomEvent('nexus:open-product-drawer', {
+                          detail: { productId: p.id },
+                        }),
+                      )
+                    }
+                    title="Open"
+                    className="h-7 w-7 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 rounded"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => remove(r.id)}
+                    disabled={busy}
+                    title="Remove"
+                    className="h-7 w-7 inline-flex items-center justify-center text-slate-400 hover:text-rose-600 rounded"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )
+            })}
+          </section>
+        )
+      })}
+
+      {outgoing.length === 0 && !adding && (
+        <div className="text-center py-6 text-[12px] text-slate-500 space-y-2">
+          <Network className="w-5 h-5 mx-auto text-slate-300" />
+          <div>No related products yet.</div>
+        </div>
+      )}
+
+      {adding ? (
+        <div className="border border-purple-200 bg-purple-50/40 rounded-md p-3 space-y-2">
+          <div className="text-[11px] font-semibold text-purple-700 uppercase tracking-wider">
+            Add related
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
+              Type
+            </label>
+            <select
+              value={pickedType}
+              onChange={(e) => setPickedType(e.target.value)}
+              className="w-full h-8 px-2 text-[12px] border border-slate-200 rounded bg-white"
+            >
+              {RELATION_TYPES.map((t) => (
+                <option key={t.code} value={t.code}>
+                  {t.label} — {t.hint}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
+              Search product
+            </label>
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                autoFocus
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="SKU, name, brand…"
+                className="w-full h-8 pl-7 pr-2 text-[12px] border border-slate-200 rounded bg-white"
+              />
+            </div>
+            {searching && (
+              <div className="text-[10px] text-slate-400 mt-1 italic">
+                Searching…
+              </div>
+            )}
+            {results.length > 0 && !selectedTo && (
+              <div className="mt-1 border border-slate-200 rounded bg-white max-h-48 overflow-y-auto">
+                {results.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedTo(r)
+                      setResults([])
+                    }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 text-left"
+                  >
+                    {r.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={r.imageUrl}
+                        alt=""
+                        className="w-6 h-6 rounded object-cover bg-slate-100 flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="w-6 h-6 rounded bg-slate-100 flex-shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[12px] text-slate-900 truncate">
+                        {r.name}
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-mono truncate">
+                        {r.sku}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {selectedTo && (
+              <div className="mt-1 flex items-center gap-2 px-2 py-1.5 border border-purple-300 rounded bg-white">
+                {selectedTo.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={selectedTo.imageUrl}
+                    alt=""
+                    className="w-6 h-6 rounded object-cover bg-slate-100 flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-6 h-6 rounded bg-slate-100 flex-shrink-0" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="text-[12px] text-slate-900 truncate font-medium">
+                    {selectedTo.name}
+                  </div>
+                  <div className="text-[10px] text-slate-500 font-mono truncate">
+                    {selectedTo.sku}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTo(null)}
+                  className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 rounded"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+          <label className="flex items-start gap-2 text-[11px] text-slate-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={reciprocal}
+              onChange={() => setReciprocal((v) => !v)}
+              className="mt-0.5"
+            />
+            <div>
+              <div>Create the reverse link too</div>
+              <div className="text-[10px] text-slate-500">
+                Most cross-sells should be symmetric. Untick for asymmetric
+                relations like Replacement.
+              </div>
+            </div>
+          </label>
+          <div className="flex items-center justify-end gap-1.5 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                setAdding(false)
+                setSelectedTo(null)
+                setSearch('')
+                setResults([])
+              }}
+              className="h-7 px-2 text-[11px] text-slate-600 hover:bg-slate-100 rounded"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={create}
+              disabled={busy || !selectedTo}
+              className="h-7 px-3 text-[11px] bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+            >
+              Add
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="w-full h-8 text-[12px] border border-dashed border-slate-300 rounded text-slate-600 hover:bg-slate-50 inline-flex items-center justify-center gap-1.5"
+        >
+          <Plus className="w-3 h-3" /> Add related product
+        </button>
+      )}
+
+      {/* Incoming awareness — read-only list of products that link
+          to this one. Useful when editing/removing this product. */}
+      {incoming.length > 0 && (
+        <section className="pt-3 border-t border-slate-100 space-y-1.5">
+          <div className="text-[11px] font-semibold text-slate-700">
+            Linked from {incoming.length} product
+            {incoming.length === 1 ? '' : 's'}
+          </div>
+          <div className="text-[10px] text-slate-500">
+            These products have an outgoing link to this one. Editing
+            them happens in their own drawer.
+          </div>
+          {incoming.map((r) => {
+            const p = r.fromProduct
+            if (!p) return null
+            return (
+              <div
+                key={r.id}
+                onClick={() =>
+                  window.dispatchEvent(
+                    new CustomEvent('nexus:open-product-drawer', {
+                      detail: { productId: p.id },
+                    }),
+                  )
+                }
+                className="flex items-center gap-2 px-2 py-1.5 border border-slate-100 rounded bg-slate-50/40 cursor-pointer hover:bg-slate-50"
+              >
+                {p.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={p.imageUrl}
+                    alt=""
+                    className="w-6 h-6 rounded object-cover bg-slate-100 flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-6 h-6 rounded bg-slate-100 flex-shrink-0" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="text-[12px] text-slate-700 truncate">
+                    {p.name}
+                  </div>
+                  <div className="text-[10px] text-slate-500 font-mono truncate">
+                    {p.sku} ·{' '}
+                    <span className="uppercase">{relationLabel(r.type)}</span>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </section>
       )}
     </div>
   )
