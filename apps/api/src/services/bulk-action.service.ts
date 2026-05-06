@@ -316,35 +316,8 @@ export class BulkActionService {
       // update the row with terminal status + afterState (or
       // errorMessage on throw). The errorLog JSON on BulkActionJob
       // is still populated for backwards compat.
-      //
-      // Commit 3 — mid-run cancel: every 10 items we re-read job.status
-      // from DB. If the user has flipped it to CANCELLED via
-      // POST /:id/cancel, break out of the loop. The final-status
-      // logic below sets PARTIALLY_COMPLETED if any items processed,
-      // CANCELLED if none.
       const actionType = job.actionType as BulkActionType;
-      let cancelled = false;
-      let itemIndex = 0;
       for (const item of items) {
-        if (
-          itemIndex > 0 &&
-          itemIndex % 10 === 0
-        ) {
-          const fresh = await this.prisma.bulkActionJob.findUnique({
-            where: { id: jobId },
-            select: { status: true },
-          });
-          if (fresh?.status === 'CANCELLED') {
-            cancelled = true;
-            logger.info('Bulk action job cancelled mid-run', {
-              jobId,
-              processedItems,
-              remainingItems: items.length - itemIndex,
-            });
-            break;
-          }
-        }
-        itemIndex++;
         const beforeState = this.extractItemState(item, actionType);
         const itemRow = await this.prisma.bulkActionItem.create({
           data: {
@@ -423,14 +396,7 @@ export class BulkActionService {
 
       // Determine final status
       let finalStatus: BulkActionStatus;
-      if (cancelled) {
-        // Mid-run cancellation. If any items completed before the
-        // cancel was detected, mark partial; otherwise CANCELLED.
-        finalStatus =
-          processedItems > 0 || skippedItems > 0
-            ? 'PARTIALLY_COMPLETED'
-            : 'CANCELLED';
-      } else if (failedItems === 0) {
+      if (failedItems === 0) {
         finalStatus = 'COMPLETED';
       } else if (processedItems > 0 || skippedItems > 0) {
         finalStatus = 'PARTIALLY_COMPLETED';
@@ -605,12 +571,7 @@ export class BulkActionService {
   }
 
   /**
-   * Cancel a job. Pre-Commit-3 only PENDING/QUEUED jobs were
-   * cancellable; Commit 3 added mid-run cancel — for IN_PROGRESS
-   * jobs we flip the DB status to CANCELLED and the worker bails
-   * on its next status re-read (every 10 items). The final job
-   * status will be CANCELLED (no items completed) or
-   * PARTIALLY_COMPLETED (some completed before cancel was seen).
+   * Cancel a pending job
    */
   async cancelJob(jobId: string): Promise<BulkActionJob> {
     try {
@@ -622,27 +583,11 @@ export class BulkActionService {
         throw new Error(`Job not found: ${jobId}`);
       }
 
-      const cancellable = ['PENDING', 'QUEUED', 'IN_PROGRESS'];
-      if (!cancellable.includes(job.status)) {
+      if (job.status !== 'PENDING' && job.status !== 'QUEUED') {
         throw new Error(`Cannot cancel job with status: ${job.status}`);
       }
 
-      logger.info(`Cancelling job`, { jobId, fromStatus: job.status });
-
-      // For PENDING/QUEUED: complete the cancel synchronously.
-      // For IN_PROGRESS: flip status; the worker's mid-loop poll
-      // will see it and break. Set completedAt only for the
-      // pre-execution path; the worker writes completedAt when it
-      // commits the final state.
-      if (job.status === 'IN_PROGRESS') {
-        return await this.prisma.bulkActionJob.update({
-          where: { id: jobId },
-          data: {
-            status: 'CANCELLED',
-            updatedAt: new Date(),
-          },
-        });
-      }
+      logger.info(`Cancelling job`, { jobId });
 
       return await this.prisma.bulkActionJob.update({
         where: { id: jobId },

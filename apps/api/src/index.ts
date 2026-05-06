@@ -76,7 +76,6 @@ import pricingRoutes from "./routes/pricing.routes.js";
 import { initializeBullMQWorker } from "./workers/bullmq-sync.worker.js";
 import { initializeChannelSyncWorker } from "./workers/channel-sync.worker.js";
 import { initializeBulkListWorker } from "./workers/bulk-list.worker.js";
-import { initializeBulkActionWorker } from "./workers/bulk-action.worker.js";
 import { initializeQueue, closeQueue } from "./lib/queue.js";
 import { logger } from "./utils/logger.js";
 import prisma from "./db.js";
@@ -188,9 +187,8 @@ async function tryStartQueueWorkers(): Promise<void> {
     initializeBullMQWorker();
     initializeChannelSyncWorker();
     initializeBulkListWorker();
-    initializeBulkActionWorker();
     queueWorkersStarted = true;
-    logger.info('✅ Queue workers started (BullMQ outbound-sync + channel-sync + bulk-list + bulk-action)');
+    logger.info('✅ Queue workers started (BullMQ outbound-sync + channel-sync + bulk-list)');
   } catch (err) {
     logger.error('queue workers: initialization failed — HTTP routes still served, queue surface dormant', {
       error: err instanceof Error ? err.message : String(err),
