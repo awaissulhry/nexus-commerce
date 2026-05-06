@@ -1562,6 +1562,115 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     return supplier
   })
 
+  // H.13 — supplier scorecard. Aggregates from PurchaseOrder +
+  // InboundShipment + InboundShipmentItem over a rolling window
+  // (default 365 days). Metrics:
+  //   - leadTimeDays — avg/median/max of (createdAt → first inbound
+  //     shipment for that PO arriving) in days. Only POs with at
+  //     least one arrived inbound count.
+  //   - onTimePercent — arrivedAt <= expectedAt / total arrived.
+  //   - defectRate — (FAIL + HOLD items) / total received items.
+  //   - openPOs — non-terminal POs.
+  //   - spend — sum of PurchaseOrder.totalCents (all-time, since
+  //     totals don't change after submit).
+  fastify.get('/fulfillment/suppliers/:id/scorecard', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const q = request.query as { windowDays?: string }
+      const windowDays = Math.max(1, Math.min(3650, Number(q.windowDays) || 365))
+      const since = new Date(Date.now() - windowDays * 86400_000)
+
+      const supplier = await prisma.supplier.findUnique({ where: { id }, select: { id: true, name: true, leadTimeDays: true, defaultCurrency: true } })
+      if (!supplier) return reply.code(404).send({ error: 'Supplier not found' })
+
+      // POs in window with their inbound shipments + items.
+      const pos = await prisma.purchaseOrder.findMany({
+        where: { supplierId: id, createdAt: { gte: since } },
+        include: {
+          inboundShipments: {
+            include: {
+              items: { select: { qcStatus: true, quantityReceived: true, quantityExpected: true } },
+            },
+          },
+        },
+      })
+
+      // Lead time: createdAt → earliest arrived inbound shipment.
+      const leadDaysList: number[] = []
+      let onTimeArrived = 0
+      let totalArrived = 0
+      let failHoldUnits = 0
+      let receivedUnits = 0
+
+      for (const po of pos) {
+        const arrived = po.inboundShipments.filter((s) => s.arrivedAt != null)
+        if (arrived.length > 0) {
+          const earliest = arrived.reduce((acc, s) => acc.arrivedAt! < s.arrivedAt! ? acc : s)
+          const leadMs = earliest.arrivedAt!.getTime() - po.createdAt.getTime()
+          if (leadMs > 0) leadDaysList.push(leadMs / 86400_000)
+        }
+        for (const ship of arrived) {
+          totalArrived++
+          if (ship.expectedAt && ship.arrivedAt && ship.arrivedAt.getTime() <= ship.expectedAt.getTime()) {
+            onTimeArrived++
+          }
+          for (const it of ship.items) {
+            receivedUnits += it.quantityReceived
+            if (it.qcStatus === 'FAIL' || it.qcStatus === 'HOLD') {
+              failHoldUnits += it.quantityReceived
+            }
+          }
+        }
+      }
+
+      const sortedLead = [...leadDaysList].sort((a, b) => a - b)
+      const median = sortedLead.length === 0 ? null
+        : sortedLead.length % 2 === 0
+          ? (sortedLead[sortedLead.length / 2 - 1] + sortedLead[sortedLead.length / 2]) / 2
+          : sortedLead[(sortedLead.length - 1) / 2]
+      const avg = sortedLead.length === 0 ? null : sortedLead.reduce((s, x) => s + x, 0) / sortedLead.length
+      const max = sortedLead.length === 0 ? null : sortedLead[sortedLead.length - 1]
+
+      const openPOs = await prisma.purchaseOrder.count({
+        where: { supplierId: id, status: { notIn: ['CLOSED', 'CANCELLED'] as any } },
+      })
+      const spendCents = pos.reduce((sum, p) => sum + (p.totalCents ?? 0), 0)
+
+      return {
+        supplierId: id,
+        supplierName: supplier.name,
+        windowDays,
+        since: since.toISOString(),
+        leadTime: {
+          stated: supplier.leadTimeDays,
+          observedAvgDays: avg,
+          observedMedianDays: median,
+          observedMaxDays: max,
+          sampleCount: leadDaysList.length,
+        },
+        onTime: {
+          arrivedCount: totalArrived,
+          onTimeCount: onTimeArrived,
+          percent: totalArrived === 0 ? null : (onTimeArrived / totalArrived) * 100,
+        },
+        defectRate: {
+          totalUnitsReceived: receivedUnits,
+          failHoldUnits,
+          percent: receivedUnits === 0 ? null : (failHoldUnits / receivedUnits) * 100,
+        },
+        openPOs,
+        spend: {
+          totalCents: spendCents,
+          currencyCode: supplier.defaultCurrency ?? 'EUR',
+          poCount: pos.length,
+        },
+      }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[suppliers/:id/scorecard] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
   fastify.post('/fulfillment/suppliers', async (request, reply) => {
     try {
       const body = request.body as any
