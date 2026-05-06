@@ -2227,17 +2227,18 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
           <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
         </header>
 
-        {/* H.8c status banner — plan, labels, and transport are real;
-            status polling still ahead. */}
-        <div className="mx-5 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-md text-[12px] text-amber-900">
+        {/* H.8d status banner — plan, labels, transport, and status
+            polling are all live against real Amazon SP-API. */}
+        <div className="mx-5 mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-md text-[12px] text-emerald-900">
           <div className="font-semibold mb-1 inline-flex items-center gap-1.5">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
-            Plan + Labels + Transport live · Status polling next
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            FBA wizard fully wired to SP-API
           </div>
-          <div className="text-amber-800 leading-snug">
-            Plan-shipment, getLabels (FNSKU/carton/pallet), and putTransportDetails
-            (non-partnered SP/LTL) submit to Amazon SP-API for real. Status polling
-            (8d) reconciles Amazon's authoritative state back into local rows.
+          <div className="text-emerald-800 leading-snug">
+            Plan-shipment, getLabels (FNSKU/carton/pallet), putTransportDetails
+            (non-partnered SP/LTL), and a 15-min status poll all submit to
+            Amazon SP-API for real. Local FBAShipment rows reconcile from
+            Amazon as the source of truth.
           </div>
         </div>
 

@@ -64,6 +64,7 @@ import { startAmazonInventoryCron } from "./jobs/amazon-inventory-sync.job.js";
 import { startReservationSweepCron } from "./jobs/reservation-sweep.job.js";
 import { startLateShipmentFlagCron } from "./jobs/late-shipment-flag.job.js";
 import { startSavedViewAlertsCron } from "./jobs/saved-view-alerts.job.js";
+import { startFbaStatusPollCron } from "./jobs/fba-status-poll.job.js";
 import pricingRoutes from "./routes/pricing.routes.js";
 // BullMQ worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS=1.
 // initializeQueue pings Redis and throws on failure; tryStartQueueWorkers
@@ -434,6 +435,15 @@ async function start() {
     // opt out via NEXUS_ENABLE_SAVED_VIEW_ALERTS_CRON=0.
     if (process.env.NEXUS_ENABLE_SAVED_VIEW_ALERTS_CRON !== '0') {
       startSavedViewAlertsCron();
+    }
+
+    // H.8d — FBA shipment status polling cron. Every 15 minutes,
+    // batches non-terminal local FBAShipment IDs into SP-API
+    // getShipments calls and mirrors Amazon's authoritative status.
+    // No-op if SP-API isn't configured. Default-ON; opt out via
+    // NEXUS_ENABLE_FBA_STATUS_POLL_CRON=0.
+    if (process.env.NEXUS_ENABLE_FBA_STATUS_POLL_CRON !== '0') {
+      startFbaStatusPollCron();
     }
 
     logger.info('✅ API server initialized', {

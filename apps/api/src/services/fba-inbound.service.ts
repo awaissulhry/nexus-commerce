@@ -418,3 +418,130 @@ export async function putInboundShipmentTransport(args: PutTransportArgs): Promi
   const transportStatus = data?.payload?.TransportResult?.TransportStatus ?? 'WORKING'
   return { transportStatus }
 }
+
+// ─── H.8d — getShipments (status polling) ──────────────────────────
+
+/** Amazon's full ShipmentStatus enum, plus null for safety. */
+export type AmazonShipmentStatus =
+  | 'WORKING' | 'READY_TO_SHIP' | 'SHIPPED' | 'IN_TRANSIT'
+  | 'DELIVERED' | 'CHECKED_IN' | 'RECEIVING' | 'CLOSED'
+  | 'CANCELLED' | 'DELETED' | 'ERROR'
+
+export interface AmazonShipmentRow {
+  ShipmentId: string
+  ShipmentName?: string
+  ShipmentStatus: AmazonShipmentStatus
+  DestinationFulfillmentCenterId?: string
+  LabelPrepType?: string
+  AreCasesRequired?: boolean
+  ConfirmedNeedByDate?: string
+  BoxContentsSource?: string
+}
+
+export interface GetShipmentsResult {
+  shipments: AmazonShipmentRow[]
+  nextToken?: string
+}
+
+/**
+ * H.8d — Call SP-API v0 getShipments. Returns the current state of
+ * shipments matching the requested status filter. Used by the
+ * polling cron to reconcile local FBAShipment.status from Amazon's
+ * authoritative state.
+ *
+ * Amazon supports two query types: SHIPMENT (filter by status list)
+ * and DATE_RANGE (filter by lastUpdated window). We use SHIPMENT
+ * because it's exactly what the polling cron needs ("give me every
+ * non-terminal shipment").
+ *
+ * Pagination: getShipments returns NextToken when results overflow
+ * one page. Caller passes the token back in to fetch the next page.
+ * For polling tens of shipments at a time, single-page is usually
+ * enough; the cron iterates if needed.
+ */
+export async function getInboundShipmentsBatch(args: {
+  shipmentStatusList?: AmazonShipmentStatus[]
+  shipmentIdList?: string[]
+  lastUpdatedAfter?: string
+  lastUpdatedBefore?: string
+  nextToken?: string
+}): Promise<GetShipmentsResult> {
+  if (!isFbaInboundConfigured()) {
+    throw new Error('SP-API not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)')
+  }
+  const marketplaceId = process.env.AMAZON_MARKETPLACE_ID!
+  const token = await getLwaAccessToken()
+
+  const qs = new URLSearchParams()
+  qs.set('MarketplaceId', marketplaceId)
+
+  if (args.nextToken) {
+    qs.set('QueryType', 'NEXT_TOKEN')
+    qs.set('NextToken', args.nextToken)
+  } else if (args.shipmentIdList && args.shipmentIdList.length > 0) {
+    qs.set('QueryType', 'SHIPMENT')
+    qs.set('ShipmentIdList', args.shipmentIdList.join(','))
+  } else {
+    qs.set('QueryType', 'SHIPMENT')
+    const statuses = args.shipmentStatusList ?? [
+      'WORKING', 'READY_TO_SHIP', 'SHIPPED', 'IN_TRANSIT',
+      'DELIVERED', 'CHECKED_IN', 'RECEIVING',
+    ]
+    qs.set('ShipmentStatusList', statuses.join(','))
+  }
+
+  const url = `${REGION_ENDPOINTS[SP_REGION]}/fba/inbound/v0/shipments?${qs.toString()}`
+
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'x-amz-access-token': token,
+      'Accept': 'application/json',
+    },
+  })
+
+  const text = await res.text()
+  let data: any = null
+  try { data = text ? JSON.parse(text) : null } catch { data = text }
+
+  if (!res.ok) {
+    const errMsg = data?.errors?.[0]?.message ?? data?.message ?? text.slice(0, 300)
+    logger.warn('fba-inbound: getShipments failed', { status: res.status, err: errMsg })
+    throw new Error(`SP-API getShipments ${res.status}: ${errMsg}`)
+  }
+
+  const shipments = (data?.payload?.ShipmentData ?? []) as AmazonShipmentRow[]
+  const nextToken: string | undefined = data?.payload?.NextToken
+  return { shipments, nextToken }
+}
+
+/**
+ * Map Amazon's ShipmentStatus to local enum values. Lossy by
+ * design — local enum is intentionally smaller (5 values vs
+ * Amazon's 11). Kept centralized so the cron + any future caller
+ * agree on the mapping.
+ */
+export function mapAmazonShipmentStatusToLocal(
+  amazon: AmazonShipmentStatus,
+): 'WORKING' | 'SHIPPED' | 'IN_TRANSIT' | 'RECEIVING' | 'CLOSED' {
+  switch (amazon) {
+    case 'WORKING':
+    case 'READY_TO_SHIP':
+      return 'WORKING'
+    case 'SHIPPED':
+      return 'SHIPPED'
+    case 'IN_TRANSIT':
+    case 'DELIVERED':
+      return 'IN_TRANSIT'
+    case 'CHECKED_IN':
+    case 'RECEIVING':
+      return 'RECEIVING'
+    case 'CLOSED':
+    case 'CANCELLED':
+    case 'DELETED':
+    case 'ERROR':
+      return 'CLOSED'
+    default:
+      return 'WORKING'
+  }
+}

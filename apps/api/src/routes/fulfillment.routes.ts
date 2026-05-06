@@ -39,6 +39,10 @@ import {
   isFbaInboundConfigured,
   type FbaShipmentType,
 } from '../services/fba-inbound.service.js'
+import {
+  runFbaStatusPoll,
+  getFbaStatusPollStatus,
+} from '../jobs/fba-status-poll.job.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // FULFILLMENT B.3–B.9 — full domain API surface
@@ -1280,6 +1284,28 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.log.error({ err: error }, '[fba/shipments/:id/transport] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
+  })
+
+  // H.8d — FBA status polling. POST trigger for manual reconcile;
+  // GET returns the cron's last-run snapshot. The cron itself runs
+  // every 15 min from index.ts on startup.
+  fastify.post('/fulfillment/fba/poll-status', async (_request, reply) => {
+    try {
+      if (!isFbaInboundConfigured()) {
+        return reply.code(503).send({
+          error: 'SP-API not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)',
+        })
+      }
+      const result = await runFbaStatusPoll()
+      return { ok: true, ...result }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[fba/poll-status] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.get('/fulfillment/fba/poll-status', async () => {
+    return { ok: true, ...getFbaStatusPollStatus() }
   })
 
   // ═══════════════════════════════════════════════════════════════════
