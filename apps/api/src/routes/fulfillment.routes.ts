@@ -726,7 +726,83 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       },
     })
     if (!shipment) return reply.code(404).send({ error: 'Inbound shipment not found' })
-    return shipment
+
+    // H.11 — landed cost summary. Goods = sum of (unitCostCents *
+    // quantityExpected) — using expected, not received, so the
+    // landed cost is the planned figure regardless of receive
+    // progress. Operators with cost variance use the discrepancy
+    // surface to track actuals.
+    const goodsCents = shipment.items.reduce((sum, it) => {
+      return sum + (it.unitCostCents ?? 0) * it.quantityExpected
+    }, 0)
+    const shippingCents = shipment.shippingCostCents ?? 0
+    const customsCents = shipment.customsCostCents ?? 0
+    const dutiesCents = shipment.dutiesCostCents ?? 0
+    const insuranceCents = shipment.insuranceCostCents ?? 0
+    const totalCents = goodsCents + shippingCents + customsCents + dutiesCents + insuranceCents
+
+    return {
+      ...shipment,
+      landedCost: {
+        currencyCode: shipment.currencyCode,
+        exchangeRate: shipment.exchangeRate,
+        goodsCents,
+        shippingCents,
+        customsCents,
+        dutiesCents,
+        insuranceCents,
+        totalCents,
+      },
+    }
+  })
+
+  // H.11 — patch costs. Updates shipment-level cost fields and/or
+  // per-line unitCostCents in a single call. Empty body is a no-op
+  // (returns the unchanged shipment). Pass `null` to clear a field.
+  fastify.patch('/fulfillment/inbound/:id/costs', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = request.body as {
+        currencyCode?: string
+        exchangeRate?: number | null
+        shippingCostCents?: number | null
+        customsCostCents?: number | null
+        dutiesCostCents?: number | null
+        insuranceCostCents?: number | null
+        items?: Array<{ id: string; unitCostCents: number | null }>
+      }
+      const existing = await prisma.inboundShipment.findUnique({ where: { id } })
+      if (!existing) return reply.code(404).send({ error: 'Inbound shipment not found' })
+
+      const data: any = {}
+      if (body.currencyCode !== undefined) data.currencyCode = body.currencyCode
+      if (body.exchangeRate !== undefined) data.exchangeRate = body.exchangeRate
+      if (body.shippingCostCents !== undefined) data.shippingCostCents = body.shippingCostCents
+      if (body.customsCostCents !== undefined) data.customsCostCents = body.customsCostCents
+      if (body.dutiesCostCents !== undefined) data.dutiesCostCents = body.dutiesCostCents
+      if (body.insuranceCostCents !== undefined) data.insuranceCostCents = body.insuranceCostCents
+
+      if (Object.keys(data).length > 0) {
+        await prisma.inboundShipment.update({ where: { id }, data })
+      }
+
+      if (body.items && body.items.length > 0) {
+        // updateMany doesn't support per-row values; loop with bounded
+        // concurrency. Item count per shipment is small (<100) so
+        // sequential is fine.
+        for (const it of body.items) {
+          await prisma.inboundShipmentItem.update({
+            where: { id: it.id },
+            data: { unitCostCents: it.unitCostCents },
+          })
+        }
+      }
+
+      return { ok: true }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[inbound/:id/costs] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
   })
 
   fastify.post('/fulfillment/inbound', async (request, reply) => {

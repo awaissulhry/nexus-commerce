@@ -928,17 +928,12 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
                 </DrawerSection>
               )}
 
-              {/* Costs */}
-              {(shipment.shippingCostCents || shipment.customsCostCents || shipment.dutiesCostCents || shipment.insuranceCostCents) && (
-                <DrawerSection title={`Landed cost (${shipment.currencyCode})`} icon={Boxes}>
-                  <div className="grid grid-cols-2 gap-2 text-[12px]">
-                    {shipment.shippingCostCents != null && <CostRow label="Shipping" cents={shipment.shippingCostCents} />}
-                    {shipment.customsCostCents != null && <CostRow label="Customs" cents={shipment.customsCostCents} />}
-                    {shipment.dutiesCostCents != null && <CostRow label="Duties" cents={shipment.dutiesCostCents} />}
-                    {shipment.insuranceCostCents != null && <CostRow label="Insurance" cents={shipment.insuranceCostCents} />}
-                  </div>
-                </DrawerSection>
-              )}
+              {/* H.11 — landed cost (editable). Always rendered;
+                  empty fields show as placeholders so operators can
+                  add costs after creation. */}
+              <DrawerSection title={`Landed cost (${shipment.currencyCode})`} icon={Boxes}>
+                <LandedCostEditor shipment={shipment} onSaved={() => fetchOne()} />
+              </DrawerSection>
 
               {/* Items */}
               <DrawerSection
@@ -1157,6 +1152,178 @@ function CostRow({ label, cents }: { label: string; cents: number }) {
       <span className="text-slate-500">{label}</span>
       <span className="font-semibold tabular-nums float-right">{(cents / 100).toFixed(2)}</span>
     </div>
+  )
+}
+
+// H.11 — editable landed cost panel. Inputs are in major units
+// (e.g. EUR), persisted as cents. Per-line unitCostCents inputs
+// inline below the totals. Save batches one PATCH for the
+// shipment-level fields and a list of item-level updates.
+function LandedCostEditor({ shipment, onSaved }: { shipment: any; onSaved: () => void }) {
+  const fmt = (cents: number | null | undefined): string =>
+    cents == null ? '' : (cents / 100).toFixed(2)
+
+  const [shipping, setShipping] = useState(fmt(shipment.shippingCostCents))
+  const [customs, setCustoms] = useState(fmt(shipment.customsCostCents))
+  const [duties, setDuties] = useState(fmt(shipment.dutiesCostCents))
+  const [insurance, setInsurance] = useState(fmt(shipment.insuranceCostCents))
+  const [exchangeRate, setExchangeRate] = useState(shipment.exchangeRate ? String(shipment.exchangeRate) : '')
+  const [itemCosts, setItemCosts] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {}
+    for (const it of shipment.items ?? []) initial[it.id] = fmt(it.unitCostCents)
+    return initial
+  })
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Recompute the goods total live from itemCosts so operators see
+  // the impact of an edit without saving first.
+  const liveGoodsCents = (shipment.items ?? []).reduce((sum: number, it: any) => {
+    const v = itemCosts[it.id]
+    const cents = v && v.trim() ? Math.round(Number(v) * 100) : 0
+    return sum + (Number.isFinite(cents) ? cents : 0) * it.quantityExpected
+  }, 0)
+  const liveOverhead =
+    (shipping.trim() ? Math.round(Number(shipping) * 100) : 0) +
+    (customs.trim() ? Math.round(Number(customs) * 100) : 0) +
+    (duties.trim() ? Math.round(Number(duties) * 100) : 0) +
+    (insurance.trim() ? Math.round(Number(insurance) * 100) : 0)
+  const liveTotal = liveGoodsCents + liveOverhead
+
+  const parseToCents = (s: string): number | null | undefined => {
+    if (s.trim() === '') return null
+    const n = Number(s)
+    if (!Number.isFinite(n)) return undefined // invalid → don't send
+    return Math.round(n * 100)
+  }
+
+  const save = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const itemsPayload = (shipment.items ?? [])
+        .map((it: any) => {
+          const next = parseToCents(itemCosts[it.id] ?? '')
+          if (next === undefined) return null
+          if (next === (it.unitCostCents ?? null)) return null
+          return { id: it.id, unitCostCents: next }
+        })
+        .filter(Boolean)
+
+      const body: any = {
+        shippingCostCents: parseToCents(shipping),
+        customsCostCents: parseToCents(customs),
+        dutiesCostCents: parseToCents(duties),
+        insuranceCostCents: parseToCents(insurance),
+        exchangeRate: exchangeRate.trim() ? Number(exchangeRate) : null,
+      }
+      // strip undefined (invalid input — leaves field unchanged server-side)
+      for (const k of Object.keys(body)) if (body[k] === undefined) delete body[k]
+      if (itemsPayload.length > 0) body.items = itemsPayload
+
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/inbound/${shipment.id}/costs`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error ?? `Save failed (${res.status})`)
+      onSaved()
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const dirty =
+    shipping !== fmt(shipment.shippingCostCents) ||
+    customs !== fmt(shipment.customsCostCents) ||
+    duties !== fmt(shipment.dutiesCostCents) ||
+    insurance !== fmt(shipment.insuranceCostCents) ||
+    exchangeRate !== (shipment.exchangeRate ? String(shipment.exchangeRate) : '') ||
+    (shipment.items ?? []).some((it: any) => (itemCosts[it.id] ?? '') !== fmt(it.unitCostCents))
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2 text-[12px]">
+        <DrawerCostInput label="Shipping" value={shipping} onChange={setShipping} />
+        <DrawerCostInput label="Customs" value={customs} onChange={setCustoms} />
+        <DrawerCostInput label="Duties" value={duties} onChange={setDuties} />
+        <DrawerCostInput label="Insurance" value={insurance} onChange={setInsurance} />
+      </div>
+
+      <div className="border-t border-slate-100 pt-2">
+        <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">Per-line unit cost ({shipment.currencyCode})</div>
+        <ul className="space-y-1">
+          {(shipment.items ?? []).map((it: any) => (
+            <li key={it.id} className="flex items-center gap-2 text-[12px]">
+              <span className="font-mono text-slate-700 truncate flex-1 min-w-0">{it.sku}</span>
+              <span className="text-slate-500 tabular-nums">×{it.quantityExpected}</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={itemCosts[it.id] ?? ''}
+                onChange={(e) => setItemCosts((prev) => ({ ...prev, [it.id]: e.target.value }))}
+                placeholder="0.00"
+                className="h-6 w-20 px-1.5 text-right tabular-nums border border-slate-200 rounded text-[11px]"
+              />
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="border-t border-slate-100 pt-2 space-y-1 text-[12px]">
+        <CostRow label="Goods" cents={liveGoodsCents} />
+        <CostRow label="Overhead (shipping + customs + duties + insurance)" cents={liveOverhead} />
+        <div className="flex items-center justify-between border-t border-slate-200 pt-1.5 mt-1.5 text-[13px]">
+          <span className="font-semibold text-slate-900">Landed cost</span>
+          <span className="font-semibold tabular-nums text-slate-900">{(liveTotal / 100).toFixed(2)} {shipment.currencyCode}</span>
+        </div>
+      </div>
+
+      <div className="border-t border-slate-100 pt-2 flex items-center gap-2 flex-wrap">
+        <label className="text-[11px] text-slate-600 inline-flex items-center gap-1">
+          FX rate
+          <input
+            type="number"
+            step="0.000001"
+            value={exchangeRate}
+            onChange={(e) => setExchangeRate(e.target.value)}
+            placeholder="—"
+            className="h-6 w-24 px-1.5 text-right tabular-nums border border-slate-200 rounded text-[11px]"
+          />
+        </label>
+        <span className="text-[10px] text-slate-400">to {shipment.currencyCode}</span>
+        <div className="flex-1" />
+        {error && <span className="text-[11px] text-rose-700">{error}</span>}
+        <button
+          onClick={save}
+          disabled={busy || !dirty}
+          className="h-7 px-2.5 text-[11px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50"
+        >
+          {busy ? 'Saving…' : dirty ? 'Save costs' : 'No changes'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function DrawerCostInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <label className="flex items-center gap-1.5">
+      <span className="text-slate-500 flex-1 truncate">{label}</span>
+      <input
+        type="number"
+        step="0.01"
+        min="0"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="0.00"
+        className="h-6 w-24 px-1.5 text-right tabular-nums border border-slate-200 rounded"
+      />
+    </label>
   )
 }
 
