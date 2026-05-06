@@ -12,6 +12,7 @@ import {
   History as HistoryIcon,
   Loader2,
   RefreshCw,
+  RotateCw,
   XCircle,
   SkipForward,
   Ban,
@@ -185,6 +186,8 @@ function ItemsPanel({ jobId }: { jobId: string }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [retrying, setRetrying] = useState(false)
+  const [retryNotice, setRetryNotice] = useState<string | null>(null)
 
   const fetchItems = useCallback(async () => {
     setLoading(true)
@@ -207,6 +210,40 @@ function ItemsPanel({ jobId }: { jobId: string }) {
       setLoading(false)
     }
   }, [jobId, statusFilter])
+
+  // POST /:id/retry-failed → creates a new job scoped to FAILED items,
+  // then POST /:newId/process to start it. The user sees a toast-style
+  // notice with the new job's name; the new job will surface in the
+  // Active Jobs strip on /bulk-operations and at the top of /history
+  // once it lands a row.
+  const retryFailed = useCallback(async () => {
+    setRetrying(true)
+    setError(null)
+    setRetryNotice(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/bulk-operations/${jobId}/retry-failed`,
+        { method: 'POST' },
+      )
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      const newJob = body.job
+      // Kick off processing on the new job.
+      await fetch(
+        `${getBackendUrl()}/api/bulk-operations/${newJob.id}/process`,
+        { method: 'POST' },
+      )
+      setRetryNotice(
+        `Retry job started: "${newJob.jobName}" (${newJob.totalItems} items)`,
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setRetrying(false)
+    }
+  }, [jobId])
 
   useEffect(() => {
     fetchItems()
@@ -253,16 +290,39 @@ function ItemsPanel({ jobId }: { jobId: string }) {
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          onClick={fetchItems}
-          disabled={loading}
-          className="text-[11px] text-slate-500 hover:text-slate-900 inline-flex items-center gap-1 disabled:opacity-50"
-        >
-          <RefreshCw className={cn('w-3 h-3', loading && 'animate-spin')} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          {counts.FAILED > 0 && (
+            <button
+              type="button"
+              onClick={retryFailed}
+              disabled={retrying}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-red-700 bg-white border border-red-200 rounded hover:bg-red-50 disabled:opacity-50 transition-colors"
+              title={`Create a new job that re-runs only the ${counts.FAILED} failed items`}
+            >
+              <RotateCw className={cn('w-3 h-3', retrying && 'animate-spin')} />
+              {retrying
+                ? 'Starting retry…'
+                : `Retry ${counts.FAILED} failed`}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={fetchItems}
+            disabled={loading}
+            className="text-[11px] text-slate-500 hover:text-slate-900 inline-flex items-center gap-1 disabled:opacity-50"
+          >
+            <RefreshCw className={cn('w-3 h-3', loading && 'animate-spin')} />
+            Refresh
+          </button>
+        </div>
       </div>
+
+      {retryNotice && (
+        <div className="text-[12px] text-green-800 bg-green-50 border border-green-200 rounded px-3 py-2 mb-3 inline-flex items-center gap-2">
+          <CheckCircle2 className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+          {retryNotice}
+        </div>
+      )}
 
       {error && (
         <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 mb-3">

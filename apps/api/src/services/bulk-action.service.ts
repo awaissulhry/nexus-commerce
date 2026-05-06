@@ -508,6 +508,91 @@ export class BulkActionService {
   }
 
   /**
+   * Create a new BulkActionJob targeting the FAILED items of an
+   * existing job. Same actionType + actionPayload + channel; scope
+   * narrowed to the failed items' polymorphic targets.
+   *
+   * The retry is a fresh job (separate id, separate item rows) so
+   * the original audit trail stays intact. Useful when failures
+   * were transient (DB hiccup, marketplace rate limit, etc.) — the
+   * user fixes the cause and re-runs only the items that failed.
+   */
+  async retryFailedItems(jobId: string): Promise<BulkActionJob> {
+    const original = await this.prisma.bulkActionJob.findUnique({
+      where: { id: jobId },
+    });
+    if (!original) {
+      throw new Error(`Job not found: ${jobId}`);
+    }
+
+    const failed = await this.prisma.bulkActionItem.findMany({
+      where: { jobId, status: 'FAILED' },
+      select: {
+        productId: true,
+        variationId: true,
+        channelListingId: true,
+      },
+    });
+    if (failed.length === 0) {
+      throw new Error(
+        `No failed items to retry for job ${jobId}`,
+      );
+    }
+
+    // Extract polymorphic target IDs based on the original action's
+    // target entity. ACTION_ENTITY tells us which column was set.
+    const target =
+      ACTION_ENTITY[original.actionType as BulkActionType];
+    let targetProductIds: string[] = [];
+    let targetVariationIds: string[] = [];
+    if (target === 'product') {
+      targetProductIds = Array.from(
+        new Set(failed.map((f) => f.productId).filter(Boolean) as string[]),
+      );
+    } else if (target === 'variation') {
+      targetVariationIds = Array.from(
+        new Set(failed.map((f) => f.variationId).filter(Boolean) as string[]),
+      );
+    } else if (target === 'channelListing') {
+      // ChannelListing-targeted: re-scope by the parent productIds so
+      // the new job's getItemsForJob can re-resolve the listings.
+      const listingIds = Array.from(
+        new Set(
+          failed
+            .map((f) => f.channelListingId)
+            .filter(Boolean) as string[],
+        ),
+      );
+      const listings = await this.prisma.channelListing.findMany({
+        where: { id: { in: listingIds } },
+        select: { productId: true },
+      });
+      targetProductIds = Array.from(
+        new Set(listings.map((l) => l.productId)),
+      );
+    }
+
+    if (
+      targetProductIds.length === 0 &&
+      targetVariationIds.length === 0
+    ) {
+      throw new Error(
+        `Cannot retry: failed items had no resolvable target IDs (entities may have been deleted)`,
+      );
+    }
+
+    return await this.createJob({
+      jobName: `${original.jobName} (retry)`,
+      actionType: original.actionType as BulkActionType,
+      channel: original.channel ?? undefined,
+      targetProductIds,
+      targetVariationIds,
+      actionPayload: original.actionPayload as Record<string, any>,
+      createdBy: original.createdBy ?? undefined,
+    });
+  }
+
+  /**
    * Job History: paginated list of jobs ordered by createdAt DESC.
    * Powers the /bulk-operations/history page.
    */

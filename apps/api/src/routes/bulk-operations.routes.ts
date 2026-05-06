@@ -149,6 +149,45 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   /**
+   * POST /api/bulk-operations/:id/retry-failed
+   * Create a new BulkActionJob scoped to the FAILED items of the
+   * given job. Same actionType / actionPayload / channel — only the
+   * scope narrows to the polymorphic target IDs of items that
+   * failed. The new job is created in PENDING; the caller should
+   * POST /:newId/process to start it (matches the standard create
+   * → process flow).
+   */
+  fastify.post<{ Params: { id: string } }>(
+    '/bulk-operations/:id/retry-failed',
+    async (request, reply) => {
+      const { id } = request.params
+      if (!id) {
+        return reply
+          .code(400)
+          .send({ success: false, error: 'job id required' })
+      }
+      try {
+        const job = await bulkActionService.retryFailedItems(id)
+        return reply.code(201).send({ success: true, job })
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : String(error)
+        fastify.log.error(
+          { err: error, jobId: id },
+          '[bulk-operations] retry-failed failed',
+        )
+        if (message.startsWith('Job not found')) {
+          return reply.code(404).send({ success: false, error: message })
+        }
+        if (message.startsWith('No failed items')) {
+          return reply.code(409).send({ success: false, error: message })
+        }
+        return reply.code(500).send({ success: false, error: message })
+      }
+    },
+  )
+
+  /**
    * GET /api/bulk-operations/:id/items
    * Per-item drill-down for the history page's "Items" panel.
    * Returns BulkActionItem rows joined with human-readable SKU /
