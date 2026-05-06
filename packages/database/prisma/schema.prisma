@@ -3245,6 +3245,15 @@ model ReplenishmentRecommendation {
   // (both in EUR cents after R.15 FX conversion).
   freightCostPerUnitCents      Int?
   landedCostPerUnitCents       Int?
+  // R.8 — Amazon FBA Restock cross-check. Captures Amazon's own
+  // recommendation at the time we generated this rec, plus the
+  // signed delta (positive = Amazon recommends more, negative = we
+  // recommend more) and the report freshness. amazonReportAsOf is
+  // the FbaRestockReport.processedAt — null when no Amazon signal
+  // for the matching marketplace within the staleness window.
+  amazonRecommendedQty   Int?
+  amazonDeltaPct         Decimal? @db.Decimal(8, 2)
+  amazonReportAsOf       DateTime?
 
   preferredSupplierId String?
   isManufactured      Boolean @default(false)
@@ -3392,6 +3401,64 @@ model AutoPoRunLog {
 
   @@index([startedAt])
   @@index([triggeredBy])
+}
+
+// R.8 — FBA Restock Inventory Recommendations report metadata.
+// One row per ingestion attempt per marketplace. Forensic trail for
+// when SP-API requests fail and we want to know which day the rec
+// engine had a stale (or no) Amazon signal for a given marketplace.
+model FbaRestockReport {
+  id              String    @id @default(cuid())
+  marketplace     String    // SP-API marketplace ID, e.g. APJ6JRA9NG5V4 (IT)
+  marketplaceCode String    // human-friendly code, e.g. "IT"
+  status          String    // REQUESTED | IN_PROGRESS | DONE | FATAL | CANCELLED
+  reportId        String?   // SP-API reportId
+  reportDocumentId String?
+  requestedAt     DateTime  @default(now())
+  processedAt     DateTime? // when we successfully ingested rows
+  rowCount        Int       @default(0)
+  errorMessage    String?
+  payloadDigest   String?   // sha256 of raw report payload for de-dup
+  triggeredBy     String    // 'cron' | 'manual'
+  durationMs      Int?
+
+  rows            FbaRestockRow[]
+
+  @@index([marketplace])
+  @@index([status])
+  @@index([requestedAt])
+}
+
+// R.8 — Per-SKU rows from the latest Restock report. Composite unique
+// on (sku, marketplace, reportId) so re-ingestion is idempotent.
+// Engine reads the latest row per (sku, marketplace) within the
+// staleness cutoff (7d default).
+model FbaRestockRow {
+  id          String   @id @default(cuid())
+  reportId    String
+  report      FbaRestockReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  sku         String
+  marketplace String   // SP-API marketplace ID
+  /** Amazon's recommended replenishment quantity for the next ship cycle. */
+  recommendedReplenishmentQty Int?
+  /** Days of supply at current FBA stock + Amazon's demand forecast. */
+  daysOfSupply                Decimal? @db.Decimal(8, 2)
+  /** Amazon's recommended ship-by date. */
+  recommendedShipDate         DateTime?
+  /** Amazon's predicted days for inventory to land in FBA. */
+  daysToInbound               Int?
+  /** 30-day Amazon-net sales pace (units). */
+  salesPace30dUnits           Int?
+  /** Forecasted units short of demand if we don't ship. */
+  salesShortageUnits          Int?
+  /** Amazon's verbatim alert level if any (e.g. 'Recommended Restock'). */
+  alertType                   String?
+  /** Snapshot of the row's report.processedAt for fast freshness checks. */
+  asOf                        DateTime @default(now())
+
+  @@unique([sku, marketplace, reportId])
+  @@index([sku, marketplace, asOf])
+  @@index([reportId])
 }
 
 // ─────────────────────────────────────────────────────────────────────

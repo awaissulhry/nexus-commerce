@@ -72,6 +72,18 @@ import {
   type SpeculativeRec,
 } from '../services/cash-flow.service.js'
 import {
+  ingestRestockReportForMarketplace,
+  ingestRestockReportsForAllMarketplaces,
+  loadLatestRowsForCohort,
+  getLatestRowForSku,
+  getStatusSummary as getFbaRestockStatus,
+  compareRecommendations as compareFbaRestock,
+  DEFAULT_STALE_DAYS as FBA_RESTOCK_STALE_DAYS,
+  eligibleMarketplaceCodes,
+} from '../services/fba-restock.service.js'
+import { amazonMarketplaceId } from '../services/categories/marketplace-ids.js'
+import { getFbaRestockCronStatus } from '../jobs/fba-restock-ingestion.job.js'
+import {
   runAutoPoSweep,
   getAutoPoStatus,
 } from '../services/auto-po.service.js'
@@ -3443,6 +3455,55 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      // R.8 — Amazon FBA Restock cross-check. Bulk-load latest rows
+      // for the cohort across every eligible marketplace, then walk
+      // suggestions and attach { amazonRecommendedQty, amazonDeltaPct,
+      // amazonReportAsOf } so the persistence layer + UI can render
+      // divergence. Lookup keyed by (sku, marketplaceId) where
+      // marketplaceId is derived from the suggestion's
+      // fulfillmentChannel + marketplace context. For v1 we only
+      // cross-check FBA-fulfilled items (fulfillmentChannel === 'FBA')
+      // since the Restock report is FBA-only.
+      const fbaSuggestions = suggestions.filter((s) => s.fulfillmentChannel === 'FBA')
+      const fbaSkus = fbaSuggestions.map((s) => s.sku)
+      const fbaMarketplaceIds = eligibleMarketplaceCodes().map((c) => amazonMarketplaceId(c))
+      const fbaRows =
+        fbaSkus.length > 0
+          ? await loadLatestRowsForCohort({
+              skus: fbaSkus,
+              marketplaceIds: fbaMarketplaceIds,
+              staleDays: FBA_RESTOCK_STALE_DAYS,
+            }).catch((err) => {
+              fastify.log.warn({ err }, '[replenishment] fba-restock cross-check failed')
+              return new Map() as Awaited<ReturnType<typeof loadLatestRowsForCohort>>
+            })
+          : (new Map() as Awaited<ReturnType<typeof loadLatestRowsForCohort>>)
+      // Resolve the marketplace for each FBA suggestion. The list
+      // route already constrained on marketplaceFilter (when set);
+      // when omitted, prefer IT (Xavia primary) and fall back to any
+      // fresh row for that SKU across the eligible marketplaces.
+      const preferredMarketplaceId = marketplaceFilter
+        ? amazonMarketplaceId(marketplaceFilter)
+        : amazonMarketplaceId('IT')
+      for (const s of fbaSuggestions) {
+        let row = fbaRows.get(`${s.sku}:${preferredMarketplaceId}`)
+        if (!row) {
+          for (const mp of fbaMarketplaceIds) {
+            const candidate = fbaRows.get(`${s.sku}:${mp}`)
+            if (candidate) { row = candidate; break }
+          }
+        }
+        const cmp = compareFbaRestock({
+          ourQty: s.reorderQuantity,
+          amazonQty: row?.recommendedReplenishmentQty ?? null,
+          asOf: row?.asOf ?? null,
+        })
+        ;(s as any).amazonRecommendedQty = row?.recommendedReplenishmentQty ?? null
+        ;(s as any).amazonDeltaPct = cmp.deltaPct
+        ;(s as any).amazonReportAsOf = row?.asOf ?? null
+        ;(s as any).amazonStatus = cmp.status
+      }
+
       // R.3 — persist recommendations (diff-aware: only writes rows
       // for products whose urgency / qty / stock / needsReorder
       // actually changed vs the current ACTIVE row). Failure to
@@ -3489,6 +3550,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         // R.19 — landed-cost audit
         freightCostPerUnitCents: (s as any).freightCostPerUnitCents ?? null,
         landedCostPerUnitCents: (s as any).landedCostPerUnitCents ?? null,
+        // R.8 — Amazon FBA Restock cross-check audit
+        amazonRecommendedQty: (s as any).amazonRecommendedQty ?? null,
+        amazonDeltaPct: (s as any).amazonDeltaPct ?? null,
+        amazonReportAsOf: (s as any).amazonReportAsOf ?? null,
       }))
       const recIdsByProduct = await bulkPersistRecommendationsIfChanged(
         recommendationInputs,
@@ -3974,6 +4039,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             // R.19 — landed-cost audit
             freightCostPerUnitCents: true,
             landedCostPerUnitCents: true,
+            // R.8 — Amazon FBA Restock audit
+            amazonRecommendedQty: true,
+            amazonDeltaPct: true,
+            amazonReportAsOf: true,
           },
         })
 
@@ -4671,6 +4740,73 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (err: any) {
       if (err?.code === 'P2025') return reply.code(404).send({ error: 'not found' })
       fastify.log.error({ err }, '[substitutions:delete] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // ─── R.8 — Amazon FBA Restock Reports ────────────────────────────
+  // Manual refresh. Body: { marketplaceCode?: string }; omit to
+  // refresh every eligible marketplace.
+  fastify.post('/fulfillment/replenishment/fba-restock/refresh', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as { marketplaceCode?: string }
+      if (body.marketplaceCode) {
+        const result = await ingestRestockReportForMarketplace({
+          marketplaceCode: body.marketplaceCode,
+          triggeredBy: 'manual',
+        })
+        return { ok: true, results: [result] }
+      }
+      const results = await ingestRestockReportsForAllMarketplaces('manual')
+      return { ok: true, results }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[fba-restock:refresh] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // Status summary for the page card.
+  fastify.get('/fulfillment/replenishment/fba-restock/status', async (_req, reply) => {
+    try {
+      const summary = await getFbaRestockStatus()
+      const cron = getFbaRestockCronStatus()
+      return {
+        ...summary,
+        cron: {
+          scheduled: cron.scheduled,
+          lastRunAt: cron.lastRunAt,
+        },
+      }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[fba-restock:status] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // Drawer drill-down: latest row for one (sku, marketplaceCode).
+  fastify.get('/fulfillment/replenishment/fba-restock/by-sku/:sku', async (request, reply) => {
+    try {
+      const { sku } = request.params as { sku: string }
+      const q = request.query as { marketplaceCode?: string }
+      const code = (q.marketplaceCode ?? 'IT').toUpperCase()
+      const marketplaceId = amazonMarketplaceId(code)
+      const row = await getLatestRowForSku({ sku, marketplaceId })
+      if (!row) return reply.code(404).send({ error: 'no fresh restock row for this sku/marketplace' })
+      return {
+        sku: row.sku,
+        marketplace: row.marketplace,
+        marketplaceCode: row.report?.marketplaceCode ?? code,
+        recommendedReplenishmentQty: row.recommendedReplenishmentQty,
+        daysOfSupply: row.daysOfSupply == null ? null : Number(row.daysOfSupply),
+        recommendedShipDate: row.recommendedShipDate,
+        daysToInbound: row.daysToInbound,
+        salesPace30dUnits: row.salesPace30dUnits,
+        salesShortageUnits: row.salesShortageUnits,
+        alertType: row.alertType,
+        asOf: row.asOf,
+      }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[fba-restock:by-sku] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })

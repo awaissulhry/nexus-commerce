@@ -496,6 +496,10 @@ export default function ReplenishmentWorkspace() {
           the operator to set cashOnHandCents when null. */}
       <CashFlowCard />
 
+      {/* R.8 — Amazon FBA Restock health. Silent until at least one
+          marketplace has a fresh ingestion. */}
+      <FbaRestockHealthCard />
+
 
       {/* Filter bar */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -1221,6 +1225,10 @@ interface DetailResponse {
     // R.19 — landed-cost audit
     freightCostPerUnitCents?: number | null
     landedCostPerUnitCents?: number | null
+    // R.8 — Amazon FBA Restock cross-check audit
+    amazonRecommendedQty?: number | null
+    amazonDeltaPct?: number | string | null
+    amazonReportAsOf?: string | null
   } | null
   model: string | null
   generationTag: string | null
@@ -1476,6 +1484,13 @@ function ForecastDetailDrawer({
                   that bumped the final qty up. */}
               {detail.recommendation && (
                 <ReorderMathPanel rec={detail.recommendation} />
+              )}
+
+              {/* R.8 — Amazon FBA Restock cross-check. Renders only
+                  when this product has a fresh Amazon recommendation
+                  cached on the rec. */}
+              {detail.recommendation?.amazonRecommendedQty != null && detail.recommendation && (
+                <FbaRestockSignalPanel rec={detail.recommendation} />
               )}
 
               {/* R.17 — substitution links + raw-vs-adjusted velocity. */}
@@ -1906,6 +1921,170 @@ function StockoutImpactCard() {
         </button>
       </div>
     </Card>
+  )
+}
+
+// R.8 — page-level Amazon FBA Restock ingestion health. One row per
+// eligible marketplace, plus a manual refresh button. Silent until
+// the first successful ingestion across any marketplace.
+function FbaRestockHealthCard() {
+  const [data, setData] = useState<{
+    items: Array<{
+      marketplaceCode: string
+      marketplaceId: string
+      lastIngestedAt: string | null
+      rowCount: number
+      hasFreshData: boolean
+    }>
+    staleDays: number
+    cron: { scheduled: boolean; lastRunAt: string | null }
+  } | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+
+  async function load() {
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/replenishment/fba-restock/status`,
+        { cache: 'no-store' },
+      )
+      if (res.ok) setData(await res.json())
+    } catch {}
+  }
+  useEffect(() => { load() }, [])
+
+  async function manualRefresh() {
+    setRefreshing(true)
+    try {
+      await fetch(`${getBackendUrl()}/api/fulfillment/replenishment/fba-restock/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      await load()
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  if (!data) return null
+  const anyFresh = data.items.some((i) => i.hasFreshData)
+  if (!anyFresh && !data.cron?.scheduled) return null
+
+  function fmtAge(iso: string | null) {
+    if (!iso) return '—'
+    const ms = Date.now() - new Date(iso).getTime()
+    const h = Math.floor(ms / 3600000)
+    if (h < 1) return 'just now'
+    if (h < 24) return `${h}h ago`
+    return `${Math.floor(h / 24)}d ago`
+  }
+
+  return (
+    <Card className="p-4 mb-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+            Amazon Restock signal
+          </span>
+          <span className="text-[10px] text-slate-400">
+            staleness cutoff {data.staleDays}d
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={manualRefresh}
+          disabled={refreshing}
+          className="text-[11px] text-indigo-600 hover:underline disabled:opacity-50"
+        >
+          {refreshing ? 'refreshing…' : 'refresh now'}
+        </button>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+        {data.items.map((it) => (
+          <div
+            key={it.marketplaceCode}
+            className={cn(
+              'border rounded p-2 text-[11px]',
+              it.hasFreshData ? 'border-slate-200 bg-slate-50/50' : 'border-amber-200 bg-amber-50/40',
+            )}
+          >
+            <div className="flex items-center justify-between mb-0.5">
+              <span className="font-mono font-semibold">{it.marketplaceCode}</span>
+              <span className={cn('text-[10px]', it.hasFreshData ? 'text-emerald-700' : 'text-amber-700')}>
+                {it.hasFreshData ? 'fresh' : 'stale'}
+              </span>
+            </div>
+            <div className="text-slate-500">{fmtAge(it.lastIngestedAt)}</div>
+            <div className="font-mono text-slate-700">{it.rowCount.toLocaleString()} rows</div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
+// R.8 — drawer: Amazon recommendation vs ours. Rendered only when
+// the rec carries a fresh amazonRecommendedQty (set by the engine
+// on FBA-fulfilled SKUs). Surfaces divergence so the operator can
+// reconcile before pushing a PO.
+function FbaRestockSignalPanel({ rec }: { rec: NonNullable<DetailResponse['recommendation']> }) {
+  if (rec.amazonRecommendedQty == null) return null
+  const ours = rec.reorderQuantity
+  const amazon = rec.amazonRecommendedQty
+  const delta = rec.amazonDeltaPct == null ? null : Number(rec.amazonDeltaPct)
+  const isAligned = delta != null && Math.abs(delta) < 20
+  const amazonHigher = delta != null && delta >= 20
+  const ourHigher = delta != null && delta <= -20
+  const tint = isAligned
+    ? 'border-emerald-200 bg-emerald-50/40'
+    : 'border-amber-200 bg-amber-50/40'
+  const label = isAligned
+    ? 'Aligned with Amazon'
+    : amazonHigher
+      ? 'Amazon recommends more'
+      : ourHigher
+        ? 'We recommend more'
+        : 'Cross-check'
+  const ageLabel = rec.amazonReportAsOf
+    ? `${Math.max(0, Math.floor((Date.now() - new Date(rec.amazonReportAsOf).getTime()) / 86400000))}d old`
+    : 'fresh'
+  return (
+    <div className={cn('border rounded p-3', tint)}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+          {label}
+        </span>
+        <span className="text-[10px] text-slate-400">Amazon Restock · {ageLabel}</span>
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-[12px]">
+        <div>
+          <div className="text-slate-500">Ours</div>
+          <div className="font-mono font-semibold text-slate-900">{ours}u</div>
+        </div>
+        <div>
+          <div className="text-slate-500">Amazon</div>
+          <div className="font-mono font-semibold text-slate-900">{amazon}u</div>
+        </div>
+        <div>
+          <div className="text-slate-500">Δ</div>
+          <div
+            className={cn(
+              'font-mono font-semibold',
+              amazonHigher ? 'text-amber-700' : ourHigher ? 'text-sky-700' : 'text-slate-700',
+            )}
+          >
+            {delta != null ? `${delta > 0 ? '+' : ''}${delta.toFixed(1)}%` : '—'}
+          </div>
+        </div>
+      </div>
+      {!isAligned && (
+        <p className="mt-2 text-[10px] text-slate-600 leading-snug">
+          {amazonHigher && 'Amazon sees demand we may not — check for a regional spike or post-event lift on this SKU. '}
+          {ourHigher && 'Our blended view suggests more inventory than Amazon alone — likely non-Amazon channel demand. '}
+          Advisory only; the engine has not changed the recommended qty.
+        </p>
+      )}
+    </div>
   )
 }
 

@@ -67,6 +67,10 @@ export interface RecommendationInput {
   // R.19 — landed-cost audit
   freightCostPerUnitCents?: number | null
   landedCostPerUnitCents?: number | null
+  // R.8 — Amazon FBA Restock cross-check audit
+  amazonRecommendedQty?: number | null
+  amazonDeltaPct?: number | null
+  amazonReportAsOf?: Date | null
 }
 
 export interface ActiveRecommendationLite {
@@ -194,6 +198,10 @@ export async function persistRecommendationIfChanged(
           // R.19 — landed-cost audit
           freightCostPerUnitCents: input.freightCostPerUnitCents ?? null,
           landedCostPerUnitCents: input.landedCostPerUnitCents ?? null,
+          // R.8 — Amazon FBA Restock cross-check audit
+          amazonRecommendedQty: input.amazonRecommendedQty ?? null,
+          amazonDeltaPct: input.amazonDeltaPct ?? null,
+          amazonReportAsOf: input.amazonReportAsOf ?? null,
         },
       })
       if (current) {

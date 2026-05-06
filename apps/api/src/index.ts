@@ -71,6 +71,7 @@ import { startForecastAccuracyCron } from "./jobs/forecast-accuracy.job.js";
 import { startAutoPoCron } from "./jobs/auto-po-replenishment.job.js";
 import { startLeadTimeStatsCron } from "./jobs/lead-time-stats.job.js";
 import { startStockoutDetectorCron } from "./jobs/stockout-detector.job.js";
+import { startFbaRestockCron } from "./jobs/fba-restock-ingestion.job.js";
 import pricingRoutes from "./routes/pricing.routes.js";
 // BullMQ worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS=1.
 // initializeQueue pings Redis and throws on failure; tryStartQueueWorkers
@@ -489,6 +490,14 @@ async function start() {
     // NEXUS_ENABLE_STOCKOUT_DETECTOR_CRON=0.
     if (process.env.NEXUS_ENABLE_STOCKOUT_DETECTOR_CRON !== '0') {
       startStockoutDetectorCron();
+    }
+
+    // R.8 — FBA Restock Inventory Recommendations ingestion. Daily
+    // 04:00 UTC. Pulls Amazon's per-SKU rec for IT/DE/FR/ES/NL into
+    // FbaRestockRow so the engine can cross-check against ours.
+    // Default-on; opt out via NEXUS_ENABLE_FBA_RESTOCK_CRON=0.
+    if (process.env.NEXUS_ENABLE_FBA_RESTOCK_CRON !== '0') {
+      startFbaRestockCron();
     }
 
     logger.info('✅ API server initialized', {
