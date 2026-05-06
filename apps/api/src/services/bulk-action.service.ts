@@ -1065,6 +1065,14 @@ export class BulkActionService {
       data: { price: newPrice.toFixed(2) },
     });
 
+    // P0-3 — flag the parent's ChannelListings so outbound sync re-publishes
+    // the updated variant prices. We don't write ChannelListing.price here:
+    // that column is parent-level and per-variant prices live on
+    // ProductVariation, which the outbound sync reads at publish time. Without
+    // this flag, bulk-edited prices stayed local and the marketplace kept
+    // showing the pre-edit values until something else triggered a sync.
+    await this.flagChannelListingsForResync([item.productId])
+
     return { status: 'processed' };
   }
 
@@ -1111,7 +1119,44 @@ export class BulkActionService {
       data: { stock: newStock },
     });
 
+    // P0-3 — same drift fix as PRICING_UPDATE. Per-variant stock lives on
+    // ProductVariation; flagging the parent's listings so outbound sync
+    // pushes fresh quantities to the marketplace.
+    await this.flagChannelListingsForResync([item.productId])
+
     return { status: 'processed' };
+  }
+
+  /**
+   * P0-3 — fan a ChannelListing re-sync flag out to every listing tied to
+   * the given parent products. Called from PRICING_UPDATE and
+   * INVENTORY_UPDATE after the variant write succeeds. Sets
+   * `lastSyncStatus='PENDING'` (the same signal the rest of the app uses,
+   * see listings-syndication.routes.ts and jobs/sync.job.ts) and clears
+   * `lastSyncedAt` so the outbound sync infrastructure picks the row up
+   * on its next pass. Errors are caught and logged — a flag-flip failure
+   * shouldn't fail the bulk job, since the variant write already
+   * succeeded; the next manual or scheduled sync will catch the drift
+   * regardless.
+   */
+  private async flagChannelListingsForResync(
+    productIds: string[],
+  ): Promise<void> {
+    if (productIds.length === 0) return;
+    try {
+      await this.prisma.channelListing.updateMany({
+        where: { productId: { in: productIds } },
+        data: {
+          lastSyncStatus: 'PENDING',
+          lastSyncedAt: null,
+        },
+      });
+    } catch (error) {
+      logger.warn('Failed to flag ChannelListings for re-sync', {
+        productIds,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   /**
