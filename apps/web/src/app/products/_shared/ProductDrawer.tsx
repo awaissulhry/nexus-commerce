@@ -46,6 +46,7 @@ import {
   Search,
   Layers,
   RefreshCw,
+  CheckCircle2,
 } from 'lucide-react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -88,6 +89,16 @@ interface ProductDetail {
      *  Variations tab badge for parent products. */
     children?: number
   }
+  /** P.18 — health score 0-100 + per-issue list. Computed
+   *  server-side in /api/products/:id/health and surfaced in the
+   *  DetailsTab as a Health card. */
+  score?: number
+  issues?: Array<{
+    severity: 'error' | 'warning' | 'info'
+    message: string
+    channel?: string
+    marketplace?: string
+  }>
   channelListings?: Array<{
     id: string
     channel: string
@@ -464,6 +475,127 @@ function DrawerTab({
   )
 }
 
+/**
+ * P.18 — health rollup card. Score 0-100 with three-tone band
+ * (≥80 emerald, ≥50 amber, else rose) plus a deduped issue list
+ * grouped by severity. Issue rows show a small icon + the message
+ * + (channel, marketplace) when present so per-listing problems
+ * stay attributable.
+ *
+ * Read-only today. The "Quick fixes" the audit asked for are deferred
+ * because each issue type maps to a different remediation surface
+ * (AI fill for missing description, BulkImageUpload for no images,
+ * AI suggest for brand/productType — already inline elsewhere). A
+ * separate commit can add per-issue action buttons once the patterns
+ * stabilise.
+ */
+function HealthCard({
+  score,
+  issues,
+}: {
+  score?: number
+  issues: Array<{
+    severity: 'error' | 'warning' | 'info'
+    message: string
+    channel?: string
+    marketplace?: string
+  }>
+}) {
+  const errors = issues.filter((i) => i.severity === 'error')
+  const warnings = issues.filter((i) => i.severity === 'warning')
+  const infos = issues.filter((i) => i.severity === 'info')
+
+  // Three-tone score band. Mirrors the CoverageLens header's
+  // emerald/amber/rose thresholds for visual consistency across
+  // the workspace — operators learn one colour scale.
+  const scoreTone =
+    score == null
+      ? 'text-slate-400'
+      : score >= 80
+      ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+      : score >= 50
+      ? 'text-amber-700 bg-amber-50 border-amber-200'
+      : 'text-rose-700 bg-rose-50 border-rose-200'
+
+  return (
+    <div className="border border-slate-200 rounded-md p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+          Health
+        </div>
+        {score != null && (
+          <div className="flex items-center gap-2">
+            <span
+              className={cn(
+                'inline-flex items-center h-6 px-2 rounded border text-[12px] font-semibold tabular-nums',
+                scoreTone,
+              )}
+              title="Composite score 0-100. Each error -10, warning -3, info -1, capped at 0."
+            >
+              {score}
+              <span className="text-[9px] opacity-60 ml-0.5">/100</span>
+            </span>
+            <span className="text-[11px] text-slate-500 tabular-nums">
+              {errors.length > 0 && (
+                <span className="text-rose-700">{errors.length}E</span>
+              )}
+              {errors.length > 0 && warnings.length > 0 && ' · '}
+              {warnings.length > 0 && (
+                <span className="text-amber-700">{warnings.length}W</span>
+              )}
+              {(errors.length > 0 || warnings.length > 0) &&
+                infos.length > 0 &&
+                ' · '}
+              {infos.length > 0 && (
+                <span className="text-slate-500">{infos.length}I</span>
+              )}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {issues.length === 0 ? (
+        <div className="text-[12px] text-slate-500 italic">
+          No issues. The product passes every readiness check.
+        </div>
+      ) : (
+        <ul className="space-y-1">
+          {[...errors, ...warnings, ...infos].map((i, idx) => {
+            const tone =
+              i.severity === 'error'
+                ? 'text-rose-700'
+                : i.severity === 'warning'
+                ? 'text-amber-700'
+                : 'text-slate-500'
+            const Icon =
+              i.severity === 'error'
+                ? AlertCircle
+                : i.severity === 'warning'
+                ? AlertCircle
+                : CheckCircle2
+            return (
+              <li
+                key={idx}
+                className={cn('flex items-start gap-1.5 text-[12px]', tone)}
+              >
+                <Icon className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                <span className="min-w-0">
+                  {i.message}
+                  {(i.channel || i.marketplace) && (
+                    <span className="text-slate-500 text-[10px] ml-1">
+                      ({[i.channel, i.marketplace].filter(Boolean).join(' / ')})
+                    </span>
+                  )}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 function StatusBadge({ status }: { status: string }) {
   const tone =
     status === 'ACTIVE'
@@ -580,6 +712,19 @@ function DetailsTab({
 
       {/* Master read-only summary */}
       <DetailGrid product={product} />
+
+      {/* P.18 — Health card. Server-side scoring + issue list have
+          existed since the /health endpoint shipped but the drawer
+          never surfaced them; operators only saw issues by clicking
+          into per-listing rows. Now they see a compact rollup at a
+          glance + can scan the full list before deciding what to
+          fix first. Read-only — quick-fix wiring is its own commit. */}
+      {(product.score != null || (product.issues && product.issues.length > 0)) && (
+        <HealthCard
+          score={product.score}
+          issues={product.issues ?? []}
+        />
+      )}
 
       {/* Description */}
       {product.description && (
