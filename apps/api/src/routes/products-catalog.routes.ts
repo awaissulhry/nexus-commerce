@@ -1,5 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import { masterPriceService } from '../services/master-price.service.js'
+import { applyStockMovement } from '../services/stock-movement.service.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // PRODUCTS REBUILD C.2 — catalog browse extensions
@@ -625,33 +627,134 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
   // PATCH /api/products/:id — small whitelisted update for inline
   // quick-edit cells in the Grid lens. Avoids re-using the heavy
   // /products/bulk endpoint which is geared at the bulk-operations grid.
+  //
+  // Phase 13c — basePrice and totalStock route through dedicated
+  // services so the cascade to ChannelListing happens atomically:
+  //   basePrice  → MasterPriceService.update()    (13a)
+  //   totalStock → applyStockMovement()           (13b)
+  // Other whitelisted fields stay on a direct Product.update because
+  // they don't propagate to listings or marketplaces.
+  //
+  // The three writes run as separate transactions today (one per
+  // service / direct write). Same-PATCH atomicity across all three is
+  // a future enhancement that requires threading an outer Prisma tx
+  // through applyStockMovement. The realistic failure mode is a
+  // single-field grid edit, where atomicity across is moot — the
+  // service-level transactions already provide it for the cascade.
   fastify.patch('/products/:id', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
       const body = (request.body ?? {}) as any
-      const allowed = [
-        'name', 'basePrice', 'totalStock', 'lowStockThreshold',
-        'status', 'fulfillmentMethod', 'brand', 'productType',
-        'description',
-      ]
-      const data: any = { version: { increment: 1 } }
-      for (const k of allowed) {
-        if (body[k] !== undefined) {
-          if (k === 'basePrice') data.basePrice = Number(body.basePrice)
-          else if (k === 'totalStock' || k === 'lowStockThreshold') data[k] = Math.max(0, Math.floor(Number(body[k]) || 0))
-          else if (k === 'fulfillmentMethod') data[k] = body[k] || null
-          else data[k] = body[k]
+      const actor = userIdFor(request)
+      const reason = 'inline-grid-edit'
+
+      // Prefetch — confirm product exists once, get current totalStock for
+      // the stock-delta computation, and surface a clean 404 before any
+      // service call mutates anything.
+      const current = await prisma.product.findUnique({
+        where: { id },
+        select: { id: true, totalStock: true },
+      })
+      if (!current) {
+        return reply.code(404).send({ error: 'Product not found' })
+      }
+
+      // 1. basePrice — route through MasterPriceService so the cascade
+      //    to ChannelListing.masterPrice + computed price + outbound
+      //    queue + audit log fires atomically.
+      if (body.basePrice !== undefined) {
+        const newBasePrice = Number(body.basePrice)
+        if (!Number.isFinite(newBasePrice) || newBasePrice < 0) {
+          return reply
+            .code(400)
+            .send({ error: 'basePrice must be a non-negative number' })
+        }
+        await masterPriceService.update(id, newBasePrice, {
+          actor,
+          reason,
+        })
+      }
+
+      // 2. totalStock — convert absolute target into a delta and route
+      //    through applyStockMovement. That writes the StockLevel
+      //    ledger, recomputes Product.totalStock = SUM(StockLevel),
+      //    cascades to ChannelListing.masterQuantity / quantity,
+      //    enqueues the marketplace push, and writes a StockMovement
+      //    audit row — all in one transaction. Reason is
+      //    MANUAL_ADJUSTMENT because that's what an inline grid edit is
+      //    (a person typing a number into a cell, not an order or
+      //    return).
+      if (body.totalStock !== undefined) {
+        const newTotal = Math.max(0, Math.floor(Number(body.totalStock) || 0))
+        const delta = newTotal - (current.totalStock ?? 0)
+        if (delta !== 0) {
+          await applyStockMovement({
+            productId: id,
+            change: delta,
+            reason: 'MANUAL_ADJUSTMENT',
+            notes: 'inline grid edit',
+            actor,
+          })
         }
       }
-      const updated = await prisma.product.update({
+
+      // 3. Direct fields — anything not basePrice or totalStock. These
+      //    don't propagate to listings or marketplaces, so a plain
+      //    Product.update is correct. Always increments version so
+      //    optimistic-concurrency guards downstream still trip.
+      const directFields = [
+        'name',
+        'lowStockThreshold',
+        'status',
+        'fulfillmentMethod',
+        'brand',
+        'productType',
+        'description',
+      ] as const
+      const directData: any = {}
+      let directDirty = false
+      for (const k of directFields) {
+        if (body[k] === undefined) continue
+        if (k === 'lowStockThreshold') {
+          directData[k] = Math.max(0, Math.floor(Number(body[k]) || 0))
+        } else if (k === 'fulfillmentMethod') {
+          directData[k] = body[k] || null
+        } else {
+          directData[k] = body[k]
+        }
+        directDirty = true
+      }
+      if (directDirty) {
+        await prisma.product.update({
+          where: { id },
+          data: { ...directData, version: { increment: 1 } },
+        })
+      }
+
+      // Return the post-update view. Single round-trip, fresh values,
+      // matches the prior response shape so frontend callers don't
+      // need to change.
+      const updated = await prisma.product.findUnique({
         where: { id },
-        data,
         select: {
-          id: true, sku: true, name: true, basePrice: true, totalStock: true,
-          lowStockThreshold: true, status: true, fulfillmentMethod: true,
-          brand: true, productType: true, version: true, updatedAt: true,
+          id: true,
+          sku: true,
+          name: true,
+          basePrice: true,
+          totalStock: true,
+          lowStockThreshold: true,
+          status: true,
+          fulfillmentMethod: true,
+          brand: true,
+          productType: true,
+          version: true,
+          updatedAt: true,
         },
       })
+      if (!updated) {
+        // Edge case: product deleted between our prefetch and now.
+        return reply.code(404).send({ error: 'Product not found' })
+      }
       return {
         ...updated,
         basePrice: Number(updated.basePrice),
