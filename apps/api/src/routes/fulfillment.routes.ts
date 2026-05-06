@@ -661,7 +661,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const now = Date.now()
       const weekFromNow = new Date(now + 7 * 86400_000)
 
-      const [byStatus, byType, openDiscCount, arrivingThisWeek, delayedCount] = await Promise.all([
+      const [byStatus, byType, openDiscCount, arrivingThisWeek, delayedCount, qcQueueCount] = await Promise.all([
         prisma.inboundShipment.groupBy({
           by: ['status'],
           _count: { status: true },
@@ -686,6 +686,15 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             status: { in: ['DRAFT', 'SUBMITTED', 'IN_TRANSIT', 'ARRIVED', 'RECEIVING', 'PARTIALLY_RECEIVED'] },
           },
         }),
+        // H.12 — items currently in QC quarantine (FAIL or HOLD) on
+        // any non-CLOSED shipment. CLOSED shipments are excluded
+        // because their QC dispositions are historical.
+        prisma.inboundShipmentItem.count({
+          where: {
+            qcStatus: { in: ['FAIL', 'HOLD'] },
+            inboundShipment: { status: { not: 'CLOSED' } },
+          },
+        }),
       ])
 
       const statusCounts: Record<string, number> = {}
@@ -702,12 +711,77 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         arrivingThisWeek,
         delayed: delayedCount,
         openDiscrepancies: openDiscCount,
+        qcQueueCount,
         statusCounts,
         typeCounts,
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[fulfillment/inbound/kpis] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // H.12 — QC queue. Cross-shipment view of items currently in
+  // FAIL/HOLD on non-CLOSED shipments. The existing release-hold
+  // endpoint stays as the action surface; this just lists what's
+  // in the queue with enough context for the operator to decide.
+  fastify.get('/fulfillment/inbound/qc-queue', async (_request, reply) => {
+    try {
+      const items = await prisma.inboundShipmentItem.findMany({
+        where: {
+          qcStatus: { in: ['FAIL', 'HOLD'] },
+          inboundShipment: { status: { not: 'CLOSED' } },
+        },
+        include: {
+          inboundShipment: {
+            select: {
+              id: true,
+              type: true,
+              status: true,
+              reference: true,
+              expectedAt: true,
+              warehouseId: true,
+            },
+          },
+        },
+        orderBy: [
+          { inboundShipment: { expectedAt: 'asc' } },
+          { id: 'asc' },
+        ],
+      })
+
+      const productIds = Array.from(new Set(items.map((i) => i.productId).filter((x): x is string => !!x)))
+      const products = productIds.length > 0
+        ? await prisma.product.findMany({
+            where: { id: { in: productIds } },
+            select: { id: true, name: true },
+          })
+        : []
+      const nameById = new Map(products.map((p) => [p.id, p.name]))
+
+      return {
+        count: items.length,
+        items: items.map((it) => ({
+          itemId: it.id,
+          sku: it.sku,
+          productId: it.productId,
+          productName: it.productId ? (nameById.get(it.productId) ?? null) : null,
+          quantityExpected: it.quantityExpected,
+          quantityReceived: it.quantityReceived,
+          qcStatus: it.qcStatus,
+          qcNotes: it.qcNotes,
+          shipment: {
+            id: it.inboundShipment.id,
+            type: it.inboundShipment.type,
+            status: it.inboundShipment.status,
+            reference: it.inboundShipment.reference,
+            expectedAt: it.inboundShipment.expectedAt,
+          },
+        })),
+      }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[fulfillment/inbound/qc-queue] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })
 

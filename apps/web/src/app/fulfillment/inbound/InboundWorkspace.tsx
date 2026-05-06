@@ -70,6 +70,7 @@ type Kpis = {
   arrivingThisWeek: number
   delayed: number
   openDiscrepancies: number
+  qcQueueCount?: number
   statusCounts: Record<string, number>
   typeCounts: Record<string, number>
 }
@@ -150,6 +151,7 @@ export default function InboundWorkspace() {
   const [createOpen, setCreateOpen] = useState(false)
   const [fbaWizardOpen, setFbaWizardOpen] = useState(false)
   const [bulkReceiveOpen, setBulkReceiveOpen] = useState(false)
+  const [qcQueueOpen, setQcQueueOpen] = useState(false)
 
   const updateUrl = useCallback((patch: Record<string, string | undefined>) => {
     const next = new URLSearchParams(searchParams.toString())
@@ -256,7 +258,7 @@ export default function InboundWorkspace() {
       />
 
       {/* KPI strip */}
-      <KpiStrip kpis={kpis} />
+      <KpiStrip kpis={kpis} onQcClick={() => setQcQueueOpen(true)} />
 
       {/* H.10b — saved views bar. Shows up between KPIs and filters
           so the operator can switch into a known scope before they
@@ -526,6 +528,12 @@ export default function InboundWorkspace() {
           onReceived={() => { fetchAll(); fetchKpis() }}
         />
       )}
+      {qcQueueOpen && (
+        <QcQueueModal
+          onClose={() => setQcQueueOpen(false)}
+          onChanged={() => { fetchAll(); fetchKpis() }}
+        />
+      )}
     </div>
   )
 }
@@ -533,16 +541,17 @@ export default function InboundWorkspace() {
 // ─────────────────────────────────────────────────────────────────────
 // KPI strip
 // ─────────────────────────────────────────────────────────────────────
-function KpiStrip({ kpis }: { kpis: Kpis | null }) {
+function KpiStrip({ kpis, onQcClick }: { kpis: Kpis | null; onQcClick?: () => void }) {
   if (!kpis) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-        {[0, 1, 2, 3].map((i) => (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+        {[0, 1, 2, 3, 4].map((i) => (
           <Card key={i}><div className="h-[68px] flex items-center justify-center text-[12px] text-slate-400">…</div></Card>
         ))}
       </div>
     )
   }
+  const qcCount = kpis.qcQueueCount ?? 0
   const cards = [
     {
       icon: Boxes,
@@ -550,6 +559,7 @@ function KpiStrip({ kpis }: { kpis: Kpis | null }) {
       value: kpis.openShipments.toLocaleString(),
       detail: `${kpis.statusCounts.DRAFT ?? 0} draft · ${kpis.statusCounts.RECEIVING ?? 0} receiving`,
       tone: kpis.openShipments > 0 ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-600',
+      onClick: undefined as undefined | (() => void),
     },
     {
       icon: Truck,
@@ -557,6 +567,7 @@ function KpiStrip({ kpis }: { kpis: Kpis | null }) {
       value: kpis.inTransit.toLocaleString(),
       detail: `${kpis.statusCounts.ARRIVED ?? 0} arrived awaiting receive`,
       tone: kpis.inTransit > 0 ? 'bg-amber-50 text-amber-600' : 'bg-slate-50 text-slate-600',
+      onClick: undefined,
     },
     {
       icon: CalendarClock,
@@ -564,6 +575,7 @@ function KpiStrip({ kpis }: { kpis: Kpis | null }) {
       value: kpis.delayed.toLocaleString(),
       detail: kpis.delayed > 0 ? 'Past expected arrival' : `${kpis.arrivingThisWeek} arriving in 7d`,
       tone: kpis.delayed > 0 ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 text-slate-600',
+      onClick: undefined,
     },
     {
       icon: AlertTriangle,
@@ -571,12 +583,21 @@ function KpiStrip({ kpis }: { kpis: Kpis | null }) {
       value: kpis.openDiscrepancies.toLocaleString(),
       detail: 'REPORTED + ACKNOWLEDGED',
       tone: kpis.openDiscrepancies > 0 ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 text-slate-600',
+      onClick: undefined,
+    },
+    {
+      icon: Unlock,
+      label: 'QC queue',
+      value: qcCount.toLocaleString(),
+      detail: qcCount > 0 ? 'Held / failed — click to review' : 'No items in quarantine',
+      tone: qcCount > 0 ? 'bg-violet-50 text-violet-600' : 'bg-slate-50 text-slate-600',
+      onClick: qcCount > 0 ? onQcClick : undefined,
     },
   ]
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-      {cards.map((c, i) => (
-        <Card key={i}>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+      {cards.map((c, i) => {
+        const inner = (
           <div className="flex items-start gap-3">
             <div className={`w-9 h-9 rounded-md inline-flex items-center justify-center flex-shrink-0 ${c.tone}`}>
               <c.icon size={16} />
@@ -587,8 +608,16 @@ function KpiStrip({ kpis }: { kpis: Kpis | null }) {
               <div className="text-[11px] text-slate-500 mt-0.5 truncate">{c.detail}</div>
             </div>
           </div>
-        </Card>
-      ))}
+        )
+        if (c.onClick) {
+          return (
+            <button key={i} onClick={c.onClick} className="text-left">
+              <Card className="hover:bg-violet-50/30 hover:border-violet-200 cursor-pointer transition-colors">{inner}</Card>
+            </button>
+          )
+        }
+        return <Card key={i}>{inner}</Card>
+      })}
     </div>
   )
 }
@@ -2201,6 +2230,162 @@ function PoPicker({
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// H.12 — QcQueueModal. Cross-shipment view of every InboundShipment-
+// Item currently in FAIL or HOLD on a non-CLOSED shipment. The
+// existing per-item release-hold endpoint
+// (POST /:shipmentId/items/:itemId/release-hold) does the actual
+// state change; this modal just lists, surfaces context, and exposes
+// the "Release" action inline so an operator doesn't have to drill
+// into each shipment to clear a backlog.
+// ─────────────────────────────────────────────────────────────────────
+
+type QcQueueItem = {
+  itemId: string
+  sku: string
+  productId: string | null
+  productName: string | null
+  quantityExpected: number
+  quantityReceived: number
+  qcStatus: 'FAIL' | 'HOLD' | string
+  qcNotes: string | null
+  shipment: {
+    id: string
+    type: string
+    status: string
+    reference: string | null
+    expectedAt: string | null
+  }
+}
+
+function QcQueueModal({ onClose, onChanged }: { onClose: () => void; onChanged: () => void }) {
+  const [items, setItems] = useState<QcQueueItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [busyItemId, setBusyItemId] = useState<string | null>(null)
+
+  const fetchQueue = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/inbound/qc-queue`)
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error ?? `Load failed (${res.status})`)
+      setItems(data?.items ?? [])
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { void fetchQueue() }, [fetchQueue])
+
+  const release = async (it: QcQueueItem) => {
+    if (!confirm(`Release ${it.sku} (qty ${it.quantityReceived})? This applies stock as if the QC passed.`)) return
+    setBusyItemId(it.itemId)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/inbound/${it.shipment.id}/items/${it.itemId}/release-hold`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actor: 'qc-queue-release' }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err?.error ?? `Release failed (${res.status})`)
+      }
+      await fetchQueue()
+      onChanged()
+    } catch (e: any) {
+      alert(e.message)
+    } finally {
+      setBusyItemId(null)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center p-6" onClick={onClose}>
+      <div className="absolute inset-0 bg-slate-900/40" />
+      <div onClick={(e) => e.stopPropagation()} className="relative bg-white rounded-lg shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-y-auto">
+        <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
+          <div className="text-[14px] font-semibold text-slate-900 inline-flex items-center gap-2">
+            <Unlock size={16} className="text-violet-600" /> QC queue ({items.length})
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => fetchQueue()}
+              className="h-7 px-2.5 text-[11px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1"
+              title="Refresh"
+            >
+              <RefreshCw size={11} /> Refresh
+            </button>
+            <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
+          </div>
+        </header>
+
+        <div className="p-5 space-y-3">
+          <div className="text-[12px] text-slate-500">
+            Items currently in FAIL or HOLD across non-closed shipments. Releasing applies stock as if the QC passed (the existing release-hold path) — the receipt event log preserves the original disposition for audit.
+          </div>
+
+          {loading && <div className="text-[12px] text-slate-500 py-4 text-center">Loading…</div>}
+          {error && (
+            <div className="text-[12px] text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2">{error}</div>
+          )}
+          {!loading && !error && items.length === 0 && (
+            <div className="text-[12px] text-slate-500 italic py-6 text-center bg-emerald-50 border border-emerald-200 rounded">
+              <Check size={16} className="inline-block text-emerald-600 mr-1" />
+              QC queue is empty — nothing held or failed.
+            </div>
+          )}
+          {!loading && items.length > 0 && (
+            <ul className="space-y-2">
+              {items.map((it) => (
+                <li key={it.itemId} className="border border-slate-200 rounded p-3">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[12px] font-mono text-slate-900">{it.sku}</span>
+                        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                          it.qcStatus === 'FAIL'
+                            ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                            : 'bg-amber-50 text-amber-700 border border-amber-200'
+                        }`}>{it.qcStatus}</span>
+                        <span className="text-[10px] tabular-nums text-slate-600">{it.quantityReceived} / {it.quantityExpected}</span>
+                      </div>
+                      {it.productName && <div className="text-[12px] text-slate-700 mt-0.5">{it.productName}</div>}
+                      <div className="text-[11px] text-slate-500 mt-1 inline-flex items-center gap-2 flex-wrap">
+                        <span className="font-mono">{it.shipment.reference ?? it.shipment.id}</span>
+                        <span className="text-[10px] font-mono bg-slate-100 px-1.5 py-0.5 rounded">{it.shipment.type}</span>
+                        <span className="text-[10px] font-mono bg-slate-100 px-1.5 py-0.5 rounded">{it.shipment.status}</span>
+                        {it.shipment.expectedAt && (
+                          <span className="text-[10px] text-slate-500">ETA {new Date(it.shipment.expectedAt).toLocaleDateString('en-GB')}</span>
+                        )}
+                      </div>
+                      {it.qcNotes && (
+                        <div className="text-[11px] text-slate-600 mt-1.5 px-2 py-1 bg-slate-50 border border-slate-200 rounded">
+                          <span className="text-slate-500 mr-1">QC note:</span>{it.qcNotes}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => release(it)}
+                      disabled={busyItemId === it.itemId}
+                      className="h-7 px-2.5 text-[11px] bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1 flex-shrink-0"
+                      title="Release the hold and apply stock as if QC had passed"
+                    >
+                      <Unlock size={11} /> {busyItemId === it.itemId ? 'Releasing…' : 'Release'}
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // H.10b — SavedViewsBar. Persistable named filter snapshots scoped
 // to surface=inbound. Reuses the existing /api/saved-views CRUD that
 // the global products page already uses (the SavedView model has a
