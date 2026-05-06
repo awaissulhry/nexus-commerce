@@ -180,7 +180,7 @@ export default function NotificationsBell() {
   }
 
   return (
-    <div ref={wrapRef} className="fixed top-3 right-3 z-40">
+    <div ref={wrapRef} className="fixed top-14 md:top-3 right-3 z-40">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

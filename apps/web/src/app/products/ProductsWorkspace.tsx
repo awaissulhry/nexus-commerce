@@ -2929,6 +2929,230 @@ async function readEntriesRecursive(
 }
 
 // ────────────────────────────────────────────────────────────────────
+// MobileProductList (H.9) — card list for narrow viewports
+// ────────────────────────────────────────────────────────────────────
+/**
+ * H.9 — mobile-only card list.
+ *
+ * Renders the same product set as the desktop grid, but as one
+ * tap-friendly card per row. Image thumbnail + name + SKU + price/
+ * stock + status pill. Tap anywhere on the card opens the product
+ * drawer via the same custom event the grid uses; long-tap the
+ * checkbox in the corner toggles selection.
+ *
+ * Parents render their chevron-expand exactly like the desktop
+ * grid; children appear inline indented below their parent. The
+ * 30s polling layer + invalidation channel are unaffected — this
+ * is purely a presentation swap.
+ *
+ * Not virtualized: pageSize caps at 500, real mobile sessions
+ * scroll at most a few dozen rows before tapping in. The cost of
+ * windowing here is more code than it saves.
+ */
+function MobileProductList({
+  products,
+  selected,
+  toggleSelect,
+  expandedParents,
+  childrenByParent,
+  loadingChildren,
+  onToggleExpand,
+}: {
+  products: ProductRow[]
+  selected: Set<string>
+  toggleSelect: (id: string) => void
+  expandedParents: Set<string>
+  childrenByParent: Record<string, ProductRow[]>
+  loadingChildren: Set<string>
+  onToggleExpand: (parentId: string) => void
+}) {
+  const openDrawer = (id: string) => {
+    window.dispatchEvent(
+      new CustomEvent('nexus:open-product-drawer', { detail: { productId: id } }),
+    )
+  }
+  if (products.length === 0) {
+    return (
+      <div className="border border-slate-200 rounded-md py-12 text-center text-[13px] text-slate-400">
+        No products match these filters
+      </div>
+    )
+  }
+  return (
+    <div className="space-y-1.5">
+      {products.map((p) => {
+        const isExpanded = expandedParents.has(p.id)
+        const childCount = p.childCount ?? 0
+        const canExpand = p.isParent && childCount > 0
+        const isLoading = loadingChildren.has(p.id)
+        const kids = childrenByParent[p.id] ?? []
+        return (
+          <div key={p.id} className="space-y-1.5">
+            <MobileProductCard
+              p={p}
+              isChild={false}
+              selected={selected.has(p.id)}
+              toggleSelect={() => toggleSelect(p.id)}
+              onOpen={() => openDrawer(p.id)}
+              chevron={
+                canExpand
+                  ? {
+                      isExpanded,
+                      onClick: () => onToggleExpand(p.id),
+                      childCount,
+                    }
+                  : undefined
+              }
+            />
+            {isExpanded && (
+              <div className="ml-6 space-y-1 border-l-2 border-slate-200 pl-2">
+                {isLoading ? (
+                  <div className="text-[12px] text-slate-500 italic px-2 py-1.5 bg-slate-50/60 rounded">
+                    Loading variants…
+                  </div>
+                ) : kids.length === 0 ? (
+                  <div className="text-[12px] text-slate-500 italic px-2 py-1.5 bg-slate-50/60 rounded">
+                    No variants found
+                  </div>
+                ) : (
+                  kids.map((c) => (
+                    <MobileProductCard
+                      key={c.id}
+                      p={c}
+                      isChild
+                      selected={selected.has(c.id)}
+                      toggleSelect={() => toggleSelect(c.id)}
+                      onOpen={() => openDrawer(c.id)}
+                    />
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function MobileProductCard({
+  p,
+  isChild,
+  selected,
+  toggleSelect,
+  onOpen,
+  chevron,
+}: {
+  p: ProductRow
+  isChild: boolean
+  selected: boolean
+  toggleSelect: () => void
+  onOpen: () => void
+  chevron?: { isExpanded: boolean; onClick: () => void; childCount: number }
+}) {
+  const stock = Number(p.totalStock ?? 0)
+  const stockTone =
+    stock === 0
+      ? 'text-rose-600'
+      : stock <= 5
+        ? 'text-amber-600'
+        : 'text-emerald-700'
+  const status = p.status ?? 'DRAFT'
+  const statusColor: Record<string, string> = {
+    ACTIVE: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    DRAFT: 'bg-slate-50 text-slate-600 border-slate-200',
+    INACTIVE: 'bg-slate-50 text-slate-500 border-slate-200',
+  }
+  return (
+    <div
+      onClick={onOpen}
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border bg-white cursor-pointer active:bg-slate-50 ${
+        isChild
+          ? 'border-slate-100 bg-slate-50/40'
+          : selected
+            ? 'border-blue-300 bg-blue-50/40'
+            : 'border-slate-200'
+      }`}
+    >
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          toggleSelect()
+        }}
+        aria-label={selected ? 'Deselect' : 'Select'}
+        className={`w-5 h-5 rounded flex-shrink-0 border-2 inline-flex items-center justify-center ${
+          selected
+            ? 'bg-blue-600 border-blue-600 text-white'
+            : 'border-slate-300 bg-white'
+        }`}
+      >
+        {selected && <CheckCircle2 className="w-3 h-3" />}
+      </button>
+      {p.imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={p.imageUrl}
+          alt=""
+          className="w-12 h-12 rounded object-cover bg-slate-100 flex-shrink-0"
+        />
+      ) : (
+        <div className="w-12 h-12 rounded bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
+          <Package className="w-5 h-5" />
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] text-slate-900 font-medium truncate">
+          {p.name ?? '—'}
+        </div>
+        <div className="text-[11px] text-slate-500 font-mono truncate flex items-center gap-1.5">
+          <span>{p.sku}</span>
+          {chevron && (
+            <span className="text-slate-300">
+              · {chevron.childCount} variant
+              {chevron.childCount === 1 ? '' : 's'}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 mt-1 text-[11px]">
+          <span className="tabular-nums text-slate-700">
+            €{Number(p.basePrice ?? 0).toFixed(2)}
+          </span>
+          <span className="text-slate-300">·</span>
+          <span className={`tabular-nums ${stockTone}`}>
+            {stock.toLocaleString()} pcs
+          </span>
+          <span
+            className={`ml-auto inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+              statusColor[status] ?? statusColor.DRAFT
+            }`}
+          >
+            {status}
+          </span>
+        </div>
+      </div>
+      {chevron && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            chevron.onClick()
+          }}
+          aria-label={chevron.isExpanded ? 'Collapse variants' : 'Expand variants'}
+          className="w-7 h-7 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 flex-shrink-0"
+        >
+          {chevron.isExpanded ? (
+            <ChevronDown className="w-4 h-4" />
+          ) : (
+            <ChevronRight className="w-4 h-4" />
+          )}
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────
 // VirtualizedGrid — flat-row TanStack Virtual table for the grid lens
 // ────────────────────────────────────────────────────────────────────
 /**
@@ -3446,24 +3670,43 @@ function GridLens(props: any) {
         </div>
       </div>
 
-      <VirtualizedGrid
-        products={products}
-        visible={visible}
-        density={density}
-        cellPad={cellPad}
-        selected={selected}
-        toggleSelect={toggleSelect}
-        toggleSelectAll={toggleSelectAll}
-        allSelected={allSelected}
-        sortBy={sortBy}
-        onSort={onSort}
-        expandedParents={expandedParents}
-        childrenByParent={childrenByParent}
-        loadingChildren={loadingChildren}
-        onToggleExpand={onToggleExpand}
-        onTagEdit={onTagEdit}
-        onChanged={onChanged}
-      />
+      {/* Desktop grid — virtualized table. Hidden below md where the
+          card list takes over. */}
+      <div className="hidden md:block">
+        <VirtualizedGrid
+          products={products}
+          visible={visible}
+          density={density}
+          cellPad={cellPad}
+          selected={selected}
+          toggleSelect={toggleSelect}
+          toggleSelectAll={toggleSelectAll}
+          allSelected={allSelected}
+          sortBy={sortBy}
+          onSort={onSort}
+          expandedParents={expandedParents}
+          childrenByParent={childrenByParent}
+          loadingChildren={loadingChildren}
+          onToggleExpand={onToggleExpand}
+          onTagEdit={onTagEdit}
+          onChanged={onChanged}
+        />
+      </div>
+      {/* Mobile card list — md:hidden. Shows the same product set
+          but as tap-friendly cards. Selection works (long-press on
+          the checkbox region in the corner) but the daily-driver
+          mobile flow is browse + open-drawer. */}
+      <div className="md:hidden">
+        <MobileProductList
+          products={products}
+          selected={selected}
+          toggleSelect={toggleSelect}
+          expandedParents={expandedParents}
+          childrenByParent={childrenByParent}
+          loadingChildren={loadingChildren}
+          onToggleExpand={onToggleExpand}
+        />
+      </div>
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-[12px] text-slate-500">

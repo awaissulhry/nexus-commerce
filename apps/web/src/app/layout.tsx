@@ -3,6 +3,7 @@ import "./globals.css";
 import AppSidebar from "@/components/layout/AppSidebar";
 import CommandPalette from "@/components/CommandPalette";
 import NotificationsBell from "@/components/NotificationsBell";
+import MobileTopBar from "@/components/MobileTopBar";
 
 export const metadata: Metadata = {
   title: "Nexus Commerce",
@@ -19,9 +20,12 @@ export default function RootLayout({
       <body>
         <div className="flex h-screen bg-slate-50 overflow-hidden">
           <AppSidebar />
-          <main className="flex-1 overflow-auto">
-            <div className="p-6">{children}</div>
-          </main>
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <MobileTopBar />
+            <main className="flex-1 overflow-auto">
+              <div className="p-3 md:p-6">{children}</div>
+            </main>
+          </div>
         </div>
         <CommandPalette />
         <NotificationsBell />

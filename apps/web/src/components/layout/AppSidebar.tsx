@@ -108,6 +108,25 @@ const EXPAND_STATE_KEY = 'sidebar:expandedChannels'
 export default function AppSidebar() {
   const pathname = usePathname() ?? '/'
   const [counts, setCounts] = useState<SidebarCounts>({})
+  // H.9 — mobile drawer state. Listens for a custom event so the
+  // hamburger button in the layout can toggle without prop drilling.
+  // Auto-closes on every pathname change so a nav click both routes
+  // and dismisses the drawer in one gesture.
+  const [mobileOpen, setMobileOpen] = useState(false)
+  useEffect(() => {
+    const onToggle = () => setMobileOpen((v) => !v)
+    const onClose = () => setMobileOpen(false)
+    window.addEventListener('nexus:toggle-sidebar', onToggle)
+    window.addEventListener('nexus:close-sidebar', onClose)
+    return () => {
+      window.removeEventListener('nexus:toggle-sidebar', onToggle)
+      window.removeEventListener('nexus:close-sidebar', onClose)
+    }
+  }, [])
+  // Close on route change.
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [pathname])
   // SSR-safe init: default Amazon-expanded; useEffect below rehydrates
   // from localStorage so the user's last expand/collapse state persists
   // across page navigations.
@@ -212,7 +231,21 @@ export default function AppSidebar() {
   }
 
   return (
-    <aside className="w-60 bg-slate-900 flex flex-col h-screen sticky top-0 border-r border-slate-800 flex-shrink-0">
+    <>
+      {/* H.9 — mobile backdrop. Tap to close. md:hidden so it never
+          renders on desktop where the sidebar is part of flex flow. */}
+      {mobileOpen && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 bg-slate-900/50 z-30 md:hidden"
+          aria-hidden
+        />
+      )}
+      <aside
+        className={`w-60 bg-slate-900 flex flex-col h-screen border-r border-slate-800 flex-shrink-0 transition-transform duration-200 ease-out
+          fixed top-0 left-0 z-40 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
+          md:sticky md:translate-x-0 md:z-auto md:flex`}
+      >
       {/* ── Logo + ⌘K ────────────────────────────────────────── */}
       <div className="h-14 flex items-center justify-between px-4 border-b border-slate-800 flex-shrink-0">
         <Link href="/" className="flex items-center gap-2">
@@ -512,7 +545,8 @@ export default function AppSidebar() {
           </div>
         </button>
       </div>
-    </aside>
+      </aside>
+    </>
   )
 }
 
