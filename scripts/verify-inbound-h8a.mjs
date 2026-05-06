@@ -75,12 +75,22 @@ if (res.status === 503) {
   if (data?.planId && data.planId.startsWith('PLAN-FBA')) ok('planId concatenates real Amazon shipmentIds (no fake timestamp)')
   else bad('planId shape', data?.planId)
 } else if (res.status === 500) {
-  // Real SP-API rejection — distinct from old stub which would never
-  // fail. The error message should look like an Amazon SP-API error.
+  // Three valid 500 branches all prove the new H.8a code is running
+  // (the old stub never returned 500):
+  //   a. SP-API call landed at Amazon and Amazon rejected (fake SKU,
+  //      throttle, etc.)
+  //   b. Pre-flight ship-from address validation caught a real
+  //      production config gap — Warehouse row has incomplete address.
+  //      This is the honest-error path: stops before sending an
+  //      incomplete request to Amazon.
+  //   c. SP-API client-side wrapper error (LWA token exchange failed,
+  //      etc.)
   if (data?.error && /SP-API|InvalidSellerSKU|InvalidSKU|The ASIN|MarketplaceId|access denied|InvalidParameter|RequestThrottled/i.test(data.error)) {
     ok('500: real SP-API error surfaced (call reached Amazon)')
-  } else if (data?.error && /SP-API createInboundShipmentPlan/i.test(data.error)) {
-    ok('500: SP-API error path triggered')
+  } else if (data?.error && /ship-from address incomplete|Warehouse\.addressLine1|NEXUS_FBA_SHIP_FROM/i.test(data.error)) {
+    ok('500: ship-from validation caught (config gap surfaced honestly, not a stub)')
+  } else if (data?.error && /SP-API createInboundShipmentPlan|LWA token/i.test(data.error)) {
+    ok('500: SP-API client error path triggered')
   } else {
     bad('500 with unexpected error shape', JSON.stringify(data).slice(0, 300))
   }
