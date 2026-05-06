@@ -179,9 +179,9 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  // GET /api/amazon/products/:id/children - Fetch children of a parent product
-  // Lifts categoryAttributes.variations to a top-level `variations` field for
-  // easy frontend consumption (per-attribute badge rendering).
+  // GET /api/amazon/products/:id/children — DEPRECATED ALIAS.
+  // Canonical endpoint is GET /api/products/:id/children (channel-agnostic).
+  // Kept for backward compat; remove once external callers are migrated.
   fastify.get<{ Params: { id: string } }>('/products/:id/children', async (request, reply) => {
     try {
       const { id } = request.params

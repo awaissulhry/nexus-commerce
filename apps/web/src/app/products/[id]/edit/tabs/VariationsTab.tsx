@@ -105,7 +105,7 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
     setRefreshing(true)
     try {
       const res = await fetch(
-        `${getBackendUrl()}/api/amazon/products/${parent.id}/children`,
+        `${getBackendUrl()}/api/products/${parent.id}/children`,
         { cache: 'no-store' },
       )
       if (!res.ok) throw new Error(`HTTP ${res.status}`)

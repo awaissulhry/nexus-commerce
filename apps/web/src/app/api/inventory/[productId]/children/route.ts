@@ -12,7 +12,7 @@ export async function GET(
 
   try {
     const res = await fetch(
-      `${getBackendUrl()}/api/amazon/products/${productId}/children`,
+      `${getBackendUrl()}/api/products/${productId}/children`,
       { cache: 'no-store' }
     )
 
@@ -46,7 +46,7 @@ export async function GET(
       variationName: c.variationTheme || null,
       variationValue: null,
       // Backend sets c.variations from categoryAttributes.variations
-      // (see /api/amazon/products/:id/children handler).
+      // (see /api/products/:id/children handler).
       variations: (c.variations as Record<string, string> | null | undefined) ?? null,
       brand: null,
       fulfillment: c.fulfillmentMethod || c.fulfillmentChannel || null,

@@ -921,7 +921,7 @@ export default function BulkEditClient({
       // Also refresh children for the variant rows.
       try {
         const res = await fetch(
-          `${getBackendUrl()}/api/amazon/products/${product.id}/children`,
+          `${getBackendUrl()}/api/products/${product.id}/children`,
           { cache: 'no-store' },
         )
         if (res.ok) {

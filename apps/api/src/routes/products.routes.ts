@@ -509,6 +509,31 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // GET /api/products/:id/children — channel-agnostic variant fetch.
+  // Lifts categoryAttributes.variations to a top-level `variations` field
+  // so the frontend can render axis badges without re-parsing JSON.
+  // Aliased at /api/amazon/products/:id/children for backward compat.
+  fastify.get<{ Params: { id: string } }>('/products/:id/children', async (request, reply) => {
+    try {
+      const { id } = request.params
+      const children = await prisma.product.findMany({
+        where: { parentId: id },
+        orderBy: { sku: 'asc' },
+      })
+      const enriched = children.map((c) => {
+        const ca = c.categoryAttributes
+        const variations =
+          ca && typeof ca === 'object' && !Array.isArray(ca) && (ca as any).variations
+            ? ((ca as any).variations as Record<string, string>)
+            : null
+        return { ...c, variations }
+      })
+      return { success: true, children: enriched }
+    } catch (error) {
+      return reply.code(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' })
+    }
+  })
+
   // PATCH /api/products/bulk
   //
   // Body: { changes: Array<{ id, field, value, cascade? }> }

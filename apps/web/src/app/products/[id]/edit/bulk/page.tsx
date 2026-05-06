@@ -32,7 +32,7 @@ export default async function ProductBulkEditPage({ params }: PageProps) {
   // master-tab schema fetch — that's how every required + optional
   // Amazon attribute lands as an editable column on the master tab.
   const [childrenRes, fieldsRes, listingsRes] = await Promise.all([
-    fetch(`${backend}/api/amazon/products/${id}/children`, {
+    fetch(`${backend}/api/products/${id}/children`, {
       cache: 'no-store',
     }),
     fetch(`${backend}/api/pim/fields${productTypeQs}`, {
