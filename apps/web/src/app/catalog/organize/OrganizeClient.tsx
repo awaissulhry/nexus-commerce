@@ -22,13 +22,7 @@
 
 'use client'
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   AlertCircle,
@@ -53,6 +47,8 @@ import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { usePolledList } from '@/lib/sync/use-polled-list'
+import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 
 type Tab = 'groups' | 'standalone' | 'parents'
 
@@ -245,8 +241,6 @@ function GroupsTab({
 }: {
   onStatus: (s: { kind: 'success' | 'error'; text: string }) => void
 }) {
-  const [loading, setLoading] = useState(true)
-  const [groups, setGroups] = useState<DetectedGroup[]>([])
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null)
   const [approved, setApproved] = useState<Set<string>>(new Set())
   const [rejected, setRejected] = useState<Set<string>>(new Set())
@@ -254,30 +248,24 @@ function GroupsTab({
   const [search, setSearch] = useState('')
   const [minConfidence, setMinConfidence] = useState(0)
 
-  const fetchDetection = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/amazon/pim/detect-groups`,
-        { cache: 'no-store' },
-      )
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const json = await res.json()
-      setGroups(json.groups ?? [])
-    } catch (err) {
-      onStatus({
-        kind: 'error',
-        text: `Detection failed: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      })
-    } finally {
-      setLoading(false)
-    }
-  }, [onStatus])
+  // Phase 10 — usePolledList centralises fetch + ETag + 30s polling +
+  // visibility refresh + invalidation listening. Listens for
+  // pim.changed so a successful attach/promote on another tab
+  // (or the Parents/Standalones sub-tabs here) triggers a refresh.
+  const { data, loading, error, refetch } = usePolledList<{
+    groups: DetectedGroup[]
+  }>({
+    url: '/api/amazon/pim/detect-groups',
+    intervalMs: 60_000,
+    invalidationTypes: ['pim.changed', 'product.created', 'product.deleted'],
+  })
+  const groups = data?.groups ?? []
+  const fetchDetection = refetch
   useEffect(() => {
-    void fetchDetection()
-  }, [fetchDetection])
+    if (error) {
+      onStatus({ kind: 'error', text: `Detection failed: ${error}` })
+    }
+  }, [error, onStatus])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -330,6 +318,15 @@ function GroupsTab({
       })
       setApproved(new Set())
       setRejected(new Set())
+      // Phase 10 — broadcast so other open pages (/products,
+      // /listings, /catalog/organize sub-tabs in another tab) refresh.
+      emitInvalidation({
+        type: 'pim.changed',
+        meta: {
+          mastersCreated: json.mastersCreated,
+          childrenLinked: json.childrenLinked,
+        },
+      })
       await fetchDetection()
     } catch (err) {
       onStatus({
@@ -627,10 +624,8 @@ function StandaloneTab({
 }: {
   onStatus: (s: { kind: 'success' | 'error'; text: string }) => void
 }) {
-  const [items, setItems] = useState<StandaloneItem[]>([])
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [coverage, setCoverage] = useState<
     'all' | 'unlisted' | 'partial' | 'complete'
   >('all')
@@ -640,33 +635,40 @@ function StandaloneTab({
   } | null>(null)
   const [promoteId, setPromoteId] = useState<StandaloneItem | null>(null)
 
-  const refetch = useCallback(async () => {
-    setLoading(true)
-    try {
-      const url = new URL(`${getBackendUrl()}/api/pim/standalones`)
-      if (search.trim()) url.searchParams.set('search', search.trim())
-      if (coverage !== 'all') url.searchParams.set('coverage', coverage)
-      url.searchParams.set('limit', '50')
-      const res = await fetch(url.toString(), { cache: 'no-store' })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const json = await res.json()
-      setItems(json.items ?? [])
-      setTotal(json.total ?? 0)
-    } catch (err) {
+  // 250ms debounce — keeps the input snappy while batching the fetch
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(search), 250)
+    return () => window.clearTimeout(t)
+  }, [search])
+
+  // Phase 10 — usePolledList replaces the bespoke fetch + useEffect.
+  // ETag round-trip on the server side (10b) means idle polling
+  // collapses to 304s.
+  const url = useMemo(() => {
+    const params = new URLSearchParams()
+    if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim())
+    if (coverage !== 'all') params.set('coverage', coverage)
+    params.set('limit', '50')
+    return `/api/pim/standalones?${params.toString()}`
+  }, [debouncedSearch, coverage])
+  const { data, loading, error, refetch } = usePolledList<{
+    items: StandaloneItem[]
+    total: number
+  }>({
+    url,
+    intervalMs: 30_000,
+    invalidationTypes: ['pim.changed', 'product.created', 'product.deleted'],
+  })
+  const items = data?.items ?? []
+  const total = data?.total ?? 0
+  useEffect(() => {
+    if (error) {
       onStatus({
         kind: 'error',
-        text: `Couldn't load standalones: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
+        text: `Couldn't load standalones: ${error}`,
       })
-    } finally {
-      setLoading(false)
     }
-  }, [search, coverage, onStatus])
-  useEffect(() => {
-    const t = window.setTimeout(() => void refetch(), search ? 250 : 0)
-    return () => window.clearTimeout(t)
-  }, [refetch, search])
+  }, [error, onStatus])
 
   const allSelected = items.length > 0 && selected.size === items.length
 
@@ -868,6 +870,8 @@ function StandaloneTab({
             })
             setAttachOpen(null)
             setSelected(new Set())
+            // Phase 10 — invalidate so other tabs / pages refresh.
+            emitInvalidation({ type: 'pim.changed', meta: { attached: count } })
             void refetch()
           }}
           onError={(text) => onStatus({ kind: 'error', text })}
@@ -884,6 +888,8 @@ function StandaloneTab({
               text: `${promoteId.sku} is now a parent.`,
             })
             setPromoteId(null)
+            // Phase 10 — invalidate so other tabs / pages refresh.
+            emitInvalidation({ type: 'pim.changed', id: promoteId.id, meta: { promotedTo: 'parent' } })
             void refetch()
           }}
           onError={(text) => onStatus({ kind: 'error', text })}
@@ -1454,39 +1460,37 @@ function ParentsTab({
 }: {
   onStatus: (s: { kind: 'success' | 'error'; text: string }) => void
 }) {
-  const [items, setItems] = useState<ParentRow[]>([])
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [incompleteOnly, setIncompleteOnly] = useState(false)
-
-  const refetch = useCallback(async () => {
-    setLoading(true)
-    try {
-      const url = new URL(`${getBackendUrl()}/api/pim/parents-overview`)
-      if (search.trim()) url.searchParams.set('search', search.trim())
-      if (incompleteOnly) url.searchParams.set('incomplete', '1')
-      url.searchParams.set('limit', '50')
-      const res = await fetch(url.toString(), { cache: 'no-store' })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const json = await res.json()
-      setItems(json.items ?? [])
-      setTotal(json.total ?? 0)
-    } catch (err) {
-      onStatus({
-        kind: 'error',
-        text: `Couldn't load parents: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      })
-    } finally {
-      setLoading(false)
-    }
-  }, [search, incompleteOnly, onStatus])
   useEffect(() => {
-    const t = window.setTimeout(() => void refetch(), search ? 250 : 0)
+    const t = window.setTimeout(() => setDebouncedSearch(search), 250)
     return () => window.clearTimeout(t)
-  }, [refetch, search])
+  }, [search])
+
+  // Phase 10 — usePolledList replaces the bespoke fetch + useEffect.
+  const url = useMemo(() => {
+    const params = new URLSearchParams()
+    if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim())
+    if (incompleteOnly) params.set('incomplete', '1')
+    params.set('limit', '50')
+    return `/api/pim/parents-overview?${params.toString()}`
+  }, [debouncedSearch, incompleteOnly])
+  const { data, loading, error, refetch } = usePolledList<{
+    items: ParentRow[]
+    total: number
+  }>({
+    url,
+    intervalMs: 30_000,
+    invalidationTypes: ['pim.changed', 'product.created', 'product.deleted'],
+  })
+  const items = data?.items ?? []
+  const total = data?.total ?? 0
+  useEffect(() => {
+    if (error) {
+      onStatus({ kind: 'error', text: `Couldn't load parents: ${error}` })
+    }
+  }, [error, onStatus])
 
   return (
     <div className="space-y-4">
