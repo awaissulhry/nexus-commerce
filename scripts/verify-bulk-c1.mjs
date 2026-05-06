@@ -105,7 +105,15 @@ async function snapshotProduct(productId) {
      FROM "ChannelListing" WHERE "productId" = $1`,
     [productId],
   )).rows
-  return { product, listings }
+  // Snapshot every StockLevel row so restore can rewrite quantity AND
+  // available coherently (the table has a check constraint that
+  // enforces available = quantity - reserved).
+  const stockLevels = (await client.query(
+    `SELECT id, quantity, reserved, available
+     FROM "StockLevel" WHERE "productId" = $1`,
+    [productId],
+  )).rows
+  return { product, listings, stockLevels }
 }
 
 async function restoreProduct(snap) {
@@ -126,13 +134,38 @@ async function restoreProduct(snap) {
         l.lastSyncStatus, l.version],
     )
   }
-  await client.query(
-    `UPDATE "StockLevel"
-     SET quantity = $2
-     WHERE "productId" = $1
-       AND "locationId" = (SELECT id FROM "StockLocation" WHERE code = 'IT-MAIN' LIMIT 1)`,
-    [p.id, p.totalStock],
-  )
+  // Restore each StockLevel row from snapshot. Set quantity, reserved,
+  // available together so the StockLevel_available_invariant constraint
+  // (available = quantity - reserved) is respected.
+  for (const sl of snap.stockLevels) {
+    await client.query(
+      `UPDATE "StockLevel"
+       SET quantity = $2, reserved = $3, available = $4
+       WHERE id = $1`,
+      [sl.id, sl.quantity, sl.reserved, sl.available],
+    )
+  }
+  // Any StockLevel rows created by applyStockMovement during the test
+  // (i.e. rows that didn't exist at snapshot time) get zeroed out.
+  // applyStockMovement creates a row when none exists for the
+  // (location, product, variation) tuple — the test's INVENTORY +5
+  // would create one if no row existed yet.
+  const snapshotIds = snap.stockLevels.map((s) => s.id)
+  if (snapshotIds.length > 0) {
+    await client.query(
+      `UPDATE "StockLevel"
+       SET quantity = 0, reserved = 0, available = 0
+       WHERE "productId" = $1 AND id <> ALL($2::text[])`,
+      [p.id, snapshotIds],
+    )
+  } else {
+    await client.query(
+      `UPDATE "StockLevel"
+       SET quantity = 0, reserved = 0, available = 0
+       WHERE "productId" = $1`,
+      [p.id],
+    )
+  }
 }
 
 let target
