@@ -14,7 +14,7 @@ import {
   Package, Plus, FolderTree, Network, Bookmark, BookmarkPlus,
   ExternalLink, Star, Copy, Trash2, Layers, Image as ImageIcon,
   CheckCircle2, XCircle, AlertCircle, Loader2, Upload, Bell,
-  DollarSign, GitCompare,
+  DollarSign, GitCompare, Download,
 } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import PageHeader from '@/components/layout/PageHeader'
@@ -614,6 +614,25 @@ export default function ProductsWorkspace() {
               title="Drop a folder of product photos; we match each file to its SKU"
             >
               <Upload size={12} /> Upload photos
+            </button>
+            {/* P.19 — CSV export of the currently-loaded grid view.
+                Pure client-side: no new endpoint, just dumps the
+                products array (filtered + sorted exactly as the grid
+                shows it) to a download. Capped by pageSize, so the
+                operator gets what they see; bumping pageSize to 500
+                captures most catalogs in one go. */}
+            <button
+              type="button"
+              onClick={() => exportProductsCsv(products)}
+              disabled={products.length === 0}
+              className="h-8 px-3 text-[12px] border border-slate-200 text-slate-700 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
+              title={
+                products.length === 0
+                  ? 'Nothing to export'
+                  : `Download ${products.length} row${products.length === 1 ? '' : 's'} as CSV (current filter + sort)`
+              }
+            >
+              <Download size={12} /> Export CSV
             </button>
             <Link href="/products/new" className="h-8 px-3 text-[12px] bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
               <Plus size={12} /> New product
@@ -4179,5 +4198,97 @@ function TagEditor({ productId, onClose, onChanged, allTags }: { productId: stri
       </aside>
     </div>
   )
+}
+
+// ────────────────────────────────────────────────────────────────────
+// P.19 — CSV export of the loaded grid view
+// ────────────────────────────────────────────────────────────────────
+/**
+ * Pure client-side CSV export of the currently-loaded ProductRow[].
+ * No new endpoint — dumps the array the grid is rendering, in the
+ * filter + sort order the operator sees. Honours pageSize, so:
+ *
+ *   - At pageSize=100 (default), the operator gets the visible page
+ *   - Bumping pageSize to 500 (the cap) captures most catalogs in
+ *     one click; Xavia's ~3,200 SKUs needs page-through but each
+ *     export still represents exactly what's on screen
+ *
+ * The column set mirrors the grid + adds a couple of fields that
+ * are useful in spreadsheets (createdAt, channelCount). Coverage
+ * is flattened to a "channels" string like "AMAZON:2/2,EBAY:0/1"
+ * because nested objects don't survive a CSV round-trip. Tags are
+ * joined with "|" for the same reason.
+ *
+ * Mirrors the export pattern in /fulfillment/replenishment so
+ * operators see consistent CSV ergonomics across the app.
+ */
+function exportProductsCsv(products: ProductRow[]): void {
+  const header = [
+    'SKU',
+    'Name',
+    'Brand',
+    'Type',
+    'Status',
+    'Price',
+    'Stock',
+    'Low @',
+    'Fulfillment',
+    'Photos',
+    'Channels listed',
+    'Channel coverage',
+    'Tags',
+    'Variants',
+    'Is parent',
+    'Parent ID',
+    'Updated',
+    'Created',
+    'ID',
+  ]
+  const rows: string[][] = [header]
+  for (const p of products) {
+    const coverageCells = Object.entries(p.coverage ?? {}).map(
+      ([ch, c]) => `${ch}:${c.live}/${c.total}`,
+    )
+    rows.push([
+      p.sku,
+      p.name,
+      p.brand ?? '',
+      p.productType ?? '',
+      p.status,
+      p.basePrice.toFixed(2),
+      String(p.totalStock),
+      String(p.lowStockThreshold),
+      p.fulfillmentMethod ?? '',
+      String(p.photoCount),
+      String(p.channelCount),
+      coverageCells.join(','),
+      (p.tags ?? []).map((t) => t.name).join('|'),
+      String(p.variantCount),
+      p.isParent ? 'true' : '',
+      p.parentId ?? '',
+      p.updatedAt,
+      p.createdAt,
+      p.id,
+    ])
+  }
+  const csv = rows
+    .map((r) =>
+      r
+        .map((cell) => {
+          const needsQuote = /[",\n]/.test(cell)
+          return needsQuote ? `"${cell.replace(/"/g, '""')}"` : cell
+        })
+        .join(','),
+    )
+    .join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `products-${new Date().toISOString().slice(0, 10)}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
 
