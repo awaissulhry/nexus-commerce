@@ -508,6 +508,291 @@ export class BulkActionService {
   }
 
   /**
+   * Roll back a previously-COMPLETED or PARTIALLY_COMPLETED bulk job.
+   * Each SUCCEEDED BulkActionItem has a beforeState snapshot captured
+   * in Commit 2 (da0ac52); rollback walks those items and re-applies
+   * the captured before values, creating a new BulkActionJob row +
+   * per-item BulkActionItems for audit.
+   *
+   * Supported actionTypes:
+   *   PRICING_UPDATE   → MasterPriceService.update(productId, beforeBasePrice)
+   *   INVENTORY_UPDATE → applyStockMovement(change = beforeStock - currentStock)
+   *   STATUS_UPDATE    → product.update(status = beforeStatus)
+   *
+   * Deferred (returns 409 with "not supported"):
+   *   ATTRIBUTE_UPDATE, MARKETPLACE_OVERRIDE_UPDATE, LISTING_SYNC
+   *
+   * Guards:
+   *   - Original must be COMPLETED or PARTIALLY_COMPLETED
+   *   - Original.isRollbackable must be true
+   *   - Original.rollbackJobId must be null (no double-rollback)
+   *   - Rollback job is NOT itself rollbackable
+   *
+   * Like processPricingUpdate / processInventoryUpdate, we pass
+   * skipBullMQEnqueue=true so the cron worker drains the resulting
+   * sync queue rows. Same eventual-consistency property as the
+   * forward path.
+   */
+  async rollbackBulkActionJob(originalJobId: string): Promise<{
+    rollbackJobId: string
+    succeeded: number
+    failed: number
+    skipped: number
+  }> {
+    const original = await this.prisma.bulkActionJob.findUnique({
+      where: { id: originalJobId },
+    });
+    if (!original) {
+      throw new Error(`Job not found: ${originalJobId}`);
+    }
+    if (
+      original.status !== 'COMPLETED' &&
+      original.status !== 'PARTIALLY_COMPLETED'
+    ) {
+      throw new Error(
+        `Cannot rollback job with status ${original.status} (must be COMPLETED or PARTIALLY_COMPLETED)`,
+      );
+    }
+    if (original.rollbackJobId) {
+      throw new Error('Job has already been rolled back');
+    }
+    if (!original.isRollbackable) {
+      throw new Error('Job is marked non-rollbackable');
+    }
+
+    const SUPPORTED = new Set(['PRICING_UPDATE', 'INVENTORY_UPDATE', 'STATUS_UPDATE']);
+    if (!SUPPORTED.has(original.actionType)) {
+      throw new Error(
+        `Rollback not supported for actionType=${original.actionType} (PRICING_UPDATE / INVENTORY_UPDATE / STATUS_UPDATE only in v0)`,
+      );
+    }
+
+    const succeededItems = await this.prisma.bulkActionItem.findMany({
+      where: { jobId: originalJobId, status: 'SUCCEEDED' },
+    });
+    if (succeededItems.length === 0) {
+      throw new Error(
+        'No SUCCEEDED items to roll back (original job had no successful applies)',
+      );
+    }
+
+    const targetProductIds = Array.from(
+      new Set(
+        succeededItems
+          .map((it) => it.productId)
+          .filter((p): p is string => !!p),
+      ),
+    );
+
+    // Create the rollback job up front so per-item BulkActionItem rows
+    // can attach to it. Status starts IN_PROGRESS; we update at the end.
+    const rollbackJob = await this.prisma.bulkActionJob.create({
+      data: {
+        jobName: `${original.jobName} (rollback)`,
+        actionType: original.actionType,
+        channel: original.channel,
+        targetProductIds,
+        targetVariationIds: [],
+        actionPayload: {
+          __rollback: true,
+          originalJobId,
+          originalJobName: original.jobName,
+        } as any,
+        status: 'IN_PROGRESS',
+        totalItems: succeededItems.length,
+        startedAt: new Date(),
+        createdBy: 'bulk-action-rollback',
+        // Rollback rows themselves are not rollbackable.
+        isRollbackable: false,
+      },
+    });
+
+    let succeeded = 0;
+    let failed = 0;
+    let skipped = 0;
+    const errors: Array<{ itemId: string; error: string; timestamp: Date }> = [];
+
+    for (const item of succeededItems) {
+      const before = (item.beforeState ?? null) as Record<string, any> | null;
+      if (!item.productId) {
+        // Polymorphic target wasn't a product — shouldn't happen for
+        // PRICING/INVENTORY/STATUS but be defensive.
+        await this.prisma.bulkActionItem.create({
+          data: {
+            jobId: rollbackJob.id,
+            productId: null,
+            variationId: item.variationId,
+            channelListingId: item.channelListingId,
+            status: 'SKIPPED',
+            errorMessage: 'No productId on original item',
+            completedAt: new Date(),
+          },
+        });
+        skipped++;
+        continue;
+      }
+      if (!before) {
+        await this.prisma.bulkActionItem.create({
+          data: {
+            jobId: rollbackJob.id,
+            productId: item.productId,
+            status: 'SKIPPED',
+            errorMessage: 'No beforeState captured (pre-Commit-2 row)',
+            completedAt: new Date(),
+          },
+        });
+        skipped++;
+        continue;
+      }
+
+      try {
+        // Capture rollback's own beforeState (= original's afterState)
+        // and its afterState (= original's beforeState) for symmetry.
+        const rollbackBeforeState = item.afterState ?? null;
+        const rollbackAfterState = item.beforeState ?? null;
+
+        switch (original.actionType) {
+          case 'PRICING_UPDATE': {
+            const target = Number(before.basePrice);
+            if (!Number.isFinite(target) || target < 0) {
+              throw new Error(
+                `beforeState.basePrice is not a valid number (got ${before.basePrice})`,
+              );
+            }
+            await this.masterPriceService.update(item.productId, target, {
+              actor: 'bulk-action-rollback',
+              reason: `rollback of job ${originalJobId}`,
+              idempotencyKey: `rollback:${rollbackJob.id}:${item.productId}`,
+              skipBullMQEnqueue: true,
+            });
+            break;
+          }
+          case 'INVENTORY_UPDATE': {
+            const target = Number(before.totalStock);
+            if (!Number.isFinite(target) || target < 0) {
+              throw new Error(
+                `beforeState.totalStock is not a valid number (got ${before.totalStock})`,
+              );
+            }
+            const product = await this.prisma.product.findUnique({
+              where: { id: item.productId },
+              select: { totalStock: true },
+            });
+            if (!product) throw new Error('Product no longer exists');
+            const change = target - (product.totalStock ?? 0);
+            if (change !== 0) {
+              await applyStockMovement({
+                productId: item.productId,
+                change,
+                reason: 'MANUAL_ADJUSTMENT',
+                referenceType: 'BulkActionJobRollback',
+                referenceId: rollbackJob.id,
+                actor: 'bulk-action-rollback',
+                notes: `Rollback of bulk job ${originalJobId}`,
+                skipBullMQEnqueue: true,
+              });
+            }
+            break;
+          }
+          case 'STATUS_UPDATE': {
+            const target = before.status;
+            const VALID = ['DRAFT', 'ACTIVE', 'INACTIVE'];
+            if (typeof target !== 'string' || !VALID.includes(target)) {
+              throw new Error(
+                `beforeState.status invalid (got ${target})`,
+              );
+            }
+            await this.prisma.product.update({
+              where: { id: item.productId },
+              data: { status: target },
+            });
+            break;
+          }
+          default:
+            // Already gated above; defensive.
+            throw new Error(
+              `Unexpected actionType in rollback: ${original.actionType}`,
+            );
+        }
+
+        await this.prisma.bulkActionItem.create({
+          data: {
+            jobId: rollbackJob.id,
+            productId: item.productId,
+            status: 'SUCCEEDED',
+            beforeState: rollbackBeforeState as any,
+            afterState: rollbackAfterState as any,
+            completedAt: new Date(),
+          },
+        });
+        succeeded++;
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : String(err);
+        await this.prisma.bulkActionItem.create({
+          data: {
+            jobId: rollbackJob.id,
+            productId: item.productId,
+            status: 'FAILED',
+            errorMessage,
+            completedAt: new Date(),
+          },
+        });
+        errors.push({
+          itemId: item.id,
+          error: errorMessage,
+          timestamp: new Date(),
+        });
+        failed++;
+        logger.warn('Rollback failed for item', {
+          rollbackJobId: rollbackJob.id,
+          originalItemId: item.id,
+          productId: item.productId,
+          error: errorMessage,
+        });
+      }
+    }
+
+    // Final status on the rollback job.
+    let finalStatus: BulkActionStatus;
+    if (failed === 0) {
+      finalStatus = succeeded > 0 ? 'COMPLETED' : 'FAILED';
+    } else if (succeeded > 0) {
+      finalStatus = 'PARTIALLY_COMPLETED';
+    } else {
+      finalStatus = 'FAILED';
+    }
+
+    await this.prisma.bulkActionJob.update({
+      where: { id: rollbackJob.id },
+      data: {
+        status: finalStatus,
+        processedItems: succeeded,
+        failedItems: failed,
+        skippedItems: skipped,
+        progressPercent: 100,
+        completedAt: new Date(),
+        errorLog: errors.length > 0 ? (errors as any) : undefined,
+        lastError: errors.length > 0 ? errors[errors.length - 1].error : null,
+      },
+    });
+
+    // Link the original to its rollback so the UI can render
+    // "rolled back via rollback-job-X".
+    await this.prisma.bulkActionJob.update({
+      where: { id: originalJobId },
+      data: { rollbackJobId: rollbackJob.id },
+    });
+
+    return {
+      rollbackJobId: rollbackJob.id,
+      succeeded,
+      failed,
+      skipped,
+    };
+  }
+
+  /**
    * Create a new BulkActionJob targeting the FAILED items of an
    * existing job. Same actionType + actionPayload + channel; scope
    * narrowed to the failed items' polymorphic targets.

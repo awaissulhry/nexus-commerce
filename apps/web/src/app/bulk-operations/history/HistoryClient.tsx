@@ -20,6 +20,7 @@ import {
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -40,6 +41,9 @@ interface JobRow {
   createdAt: string
   startedAt: string | null
   completedAt: string | null
+  // Rollback eligibility — drives the Rollback button visibility
+  isRollbackable: boolean
+  rollbackJobId: string | null
 }
 
 interface ItemRow {
@@ -425,9 +429,61 @@ function ItemsPanel({ jobId }: { jobId: string }) {
 
 // ── Job card ───────────────────────────────────────────────────────
 
-function JobCard({ job }: { job: JobRow }) {
+// Rollback button visible when:
+//   - status is COMPLETED or PARTIALLY_COMPLETED
+//   - isRollbackable=true (default for non-rollback jobs)
+//   - rollbackJobId is null (not yet rolled back)
+//   - actionType is a v0-supported one (PRICING/INVENTORY/STATUS)
+const ROLLBACK_SUPPORTED_TYPES = new Set([
+  'PRICING_UPDATE',
+  'INVENTORY_UPDATE',
+  'STATUS_UPDATE',
+])
+
+function isRollbackEligible(job: JobRow): boolean {
+  if (job.status !== 'COMPLETED' && job.status !== 'PARTIALLY_COMPLETED') return false
+  if (!job.isRollbackable) return false
+  if (job.rollbackJobId) return false
+  if (!ROLLBACK_SUPPORTED_TYPES.has(job.actionType)) return false
+  return true
+}
+
+function JobCard({ job, onChanged }: { job: JobRow; onChanged: () => Promise<void> | void }) {
   const [expanded, setExpanded] = useState(false)
+  const [rollingBack, setRollingBack] = useState(false)
   const duration = durationMs(job.startedAt, job.completedAt)
+  const { toast } = useToast()
+  const eligible = isRollbackEligible(job)
+
+  const handleRollback = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const confirmed = window.confirm(
+      `Roll back "${job.jobName}"?\n\n` +
+        `This applies each item's saved beforeState (basePrice / totalStock / status) ` +
+        `back through the master cascade. Creates a new audit job linked to this one.`,
+    )
+    if (!confirmed) return
+    setRollingBack(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/bulk-operations/${job.id}/rollback`,
+        { method: 'POST' },
+      )
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`)
+      const parts = [`${body.succeeded} reverted`]
+      if (body.failed > 0) parts.push(`${body.failed} failed`)
+      if (body.skipped > 0) parts.push(`${body.skipped} skipped`)
+      toast.success(`Rollback complete: ${parts.join(' · ')}`)
+      await onChanged()
+    } catch (err) {
+      toast.error(
+        `Rollback failed: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    } finally {
+      setRollingBack(false)
+    }
+  }
 
   return (
     <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
@@ -455,6 +511,11 @@ function JobCard({ job }: { job: JobRow }) {
             {job.channel && (
               <Badge variant="info" size="sm">
                 {job.channel}
+              </Badge>
+            )}
+            {job.rollbackJobId && (
+              <Badge variant="warning" size="sm">
+                Rolled back
               </Badge>
             )}
           </div>
@@ -490,6 +551,22 @@ function JobCard({ job }: { job: JobRow }) {
             </div>
           )}
         </div>
+        {eligible && (
+          <button
+            type="button"
+            onClick={handleRollback}
+            disabled={rollingBack}
+            className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded hover:bg-amber-100 disabled:opacity-50"
+            title="Apply each item's beforeState (basePrice / totalStock / status) back through the master cascade"
+          >
+            {rollingBack ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <RotateCw className="w-3.5 h-3.5" />
+            )}
+            Rollback
+          </button>
+        )}
       </button>
       {expanded && <ItemsPanel jobId={job.id} />}
     </div>
@@ -626,7 +703,7 @@ export default function HistoryClient() {
       {jobs && jobs.length > 0 && (
         <div className="space-y-2">
           {jobs.map((job) => (
-            <JobCard key={job.id} job={job} />
+            <JobCard key={job.id} job={job} onChanged={fetchJobs} />
           ))}
         </div>
       )}

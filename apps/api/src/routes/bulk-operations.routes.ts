@@ -149,6 +149,60 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   /**
+   * POST /api/bulk-operations/:id/rollback
+   * Roll back a previously-COMPLETED or PARTIALLY_COMPLETED bulk job.
+   * Reads each SUCCEEDED BulkActionItem's beforeState snapshot and
+   * re-applies the captured before values via the master-cascade
+   * primitives (MasterPriceService.update, applyStockMovement,
+   * product.update for status). Creates a new BulkActionJob row for
+   * audit + per-item BulkActionItems for the rollback.
+   *
+   * Returns 201 with { rollbackJobId, succeeded, failed, skipped }.
+   * Returns 404 if not found, 409 if not eligible (wrong status, no
+   * succeeded items, already rolled back, non-rollbackable, or
+   * actionType not supported in v0).
+   *
+   * v0 supports: PRICING_UPDATE / INVENTORY_UPDATE / STATUS_UPDATE.
+   * ATTRIBUTE_UPDATE / MARKETPLACE_OVERRIDE_UPDATE / LISTING_SYNC
+   * deferred until the corresponding upstream gaps are addressed.
+   */
+  fastify.post<{ Params: { id: string } }>(
+    '/bulk-operations/:id/rollback',
+    async (request, reply) => {
+      const { id } = request.params
+      if (!id) {
+        return reply
+          .code(400)
+          .send({ success: false, error: 'job id required' })
+      }
+      try {
+        const result = await bulkActionService.rollbackBulkActionJob(id)
+        return reply.code(201).send({ success: true, ...result })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        fastify.log.error(
+          { err, jobId: id },
+          '[bulk-operations] rollback failed',
+        )
+        if (msg.startsWith('Job not found')) {
+          return reply.code(404).send({ success: false, error: msg })
+        }
+        // Eligibility errors → 409 so the client can render a tailored message.
+        if (
+          msg.startsWith('Cannot rollback') ||
+          msg.startsWith('Job has already been rolled back') ||
+          msg.startsWith('Job is marked non-rollbackable') ||
+          msg.startsWith('Rollback not supported') ||
+          msg.startsWith('No SUCCEEDED items')
+        ) {
+          return reply.code(409).send({ success: false, error: msg })
+        }
+        return reply.code(500).send({ success: false, error: msg })
+      }
+    },
+  )
+
+  /**
    * POST /api/bulk-operations/:id/retry-failed
    * Create a new BulkActionJob scoped to the FAILED items of the
    * given job. Same actionType / actionPayload / channel — only the
