@@ -733,9 +733,13 @@ Tied to: production order ingestion at scale (currently pre-launch). Bump to �
 
 ---
 
-## 42. 🔴 Master-price + master-stock cascade architecture
+## 42. ✅ Master-price + master-stock cascade architecture — resolved 2026-05-06 in Phase 13
 
-**Symptom:** When `Product.basePrice` or `Product.totalStock` changes, ChannelListing rows tied to that product are not updated. The marketplace continues to show the pre-edit value until something else triggers a sync. Equivalent issue for variant edits — `ProductVariation.price` writes don't flag the parent's listings for re-publish. This is silent data drift between master + per-channel state.
+Shipped as commits `3714dff` (13a MasterPriceService), `e2e92d2` (13b stock cascade in applyStockMovement), `a92e82a` (13c PATCH /products/:id wiring), `7c59ae9` (13d PATCH /products/bulk wiring), `d6d1f55` (13e backfill script — already executed against production: 5 masterPrice + 8 masterQuantity rows). Live-verified end-to-end against production: a 39.95 → 41.99 → 39.95 round-trip on a real Xavia listing produced the expected masterPrice snapshot, AuditLog row, and (correctly) zero OutboundSyncQueue rows because the test listing had `followMasterPrice=false`.
+
+Two new worker quirks surfaced by the integration — see #48 and #49 below. Neither blocks Phase 13's cascade correctness; both are pre-existing behaviors of `bullmq-sync.worker.ts` that interact with the new flow.
+
+**Original symptom (kept for history):** When `Product.basePrice` or `Product.totalStock` changes, ChannelListing rows tied to that product are not updated. The marketplace continues to show the pre-edit value until something else triggers a sync. Equivalent issue for variant edits — `ProductVariation.price` writes don't flag the parent's listings for re-publish. This is silent data drift between master + per-channel state.
 
 **Surfaced at:** Phase 1 audit (2026-05-06) of /bulk-operations + /products grid + /products/:id/edit. Three active write paths affected:
 - `PATCH /api/products/:id` (`products-catalog.routes.ts:628`) — inline grid quick-edit. Updates `Product.basePrice`, no listing cascade.
@@ -843,6 +847,28 @@ The CLI in `packages/database` (v6) generates a client compatible with `@prisma/
 
 ---
 
+## 48. 🟡 BullMQ worker recomputes ChannelListing.price ignoring `followMasterPrice`
+
+**Symptom:** Every outbound sync job that runs through `bullmq-sync.worker.ts` (line 187–242, the "Phase 28: Pricing Calculation" block) calls `calculateTargetPrice()` and overwrites `ChannelListing.price` based on the listing's `pricingRule` + `priceAdjustmentPercent`. The recompute does **not** check `followMasterPrice` — so a listing where the seller has explicitly opted out of following the master (e.g. an Amazon-EU price floor that should stay at €49.99 regardless of basePrice) gets its override silently overwritten with the rule-based value the next time anything triggers a sync.
+
+**Surfaced at:** Phase 13e integration scout. Doesn't block the cascade itself — `MasterPriceService` correctly leaves `followMasterPrice=false` listings' price untouched and never enqueues an OutboundSyncQueue row for them, so the worker only runs on listings the cascade DID write. The bug bites when something else (variation sync, manual resync, a Phase 28 repricer pass) creates an OutboundSyncQueue row for a `followMasterPrice=false` listing — the worker then recomputes and trashes the override.
+
+**Workaround applied:** None. Pre-existing behavior; not introduced by Phase 13.
+
+**Proper fix:** Wrap the Phase 28 recompute in a `followMasterPrice=true` check (and a `pricingRule != 'MATCH_AMAZON' || amazonPrice` check, since calculateTargetPrice falls back to masterPrice when MATCH_AMAZON has no Amazon source price — which silently nullifies the rule). Five-line change at `bullmq-sync.worker.ts:207`. Add a regression test that pushes an OutboundSyncQueue row for a followMasterPrice=false listing and asserts the price column doesn't change.
+
+---
+
+## 49. 🟡 `OutboundSyncService.processPendingSyncs` ignores `holdUntil`
+
+**Symptom:** `outbound-sync.service.ts:103` reads every `OutboundSyncQueue` row with `syncStatus='PENDING'` regardless of `holdUntil`. Today the 5-minute grace window works because every caller (`outbound-sync-phase9.service.ts`, `MasterPriceService`, `applyStockMovement`) sets BullMQ's job-level `delay: 5 * 60 * 1000` AND the DB row's `holdUntil` — the BullMQ delay is what actually defers processing. But any caller that creates a row without also adding a BullMQ job (legacy code paths, future schema imports, manual SQL inserts) bypasses the grace entirely and the next worker tick will dispatch immediately.
+
+**Surfaced at:** Phase 13e integration scout — same investigation as #48.
+
+**Proper fix:** Add `OR: [{ holdUntil: null }, { holdUntil: { lte: new Date() } }]` to the `where` clause at `outbound-sync.service.ts:114`. Mirrors the existing `getReadyItems()` filter at `outbound-sync-phase9.service.ts:332`, which is how that newer service correctly respects the grace window.
+
+---
+
 ## 47. 🟢 Vercel auto-deploy from `main` was disconnected for ~5 days
 
 **Symptom:** Vercel stopped deploying commits to `main` somewhere around 2026-05-01. Multiple H.1/H.2/H.3 stock-ledger commits + the Phase 4 catalog rename appeared on `nexus-commerce.vercel.app` as 404s; the actual production deployment lived at `nexus-commerce-three.vercel.app`.
@@ -863,7 +889,7 @@ The CLI in `packages/database` (v6) generates a client compatible with `@prisma/
 - **8** ✅ Resolved 2026-05-02 — verified GTIN wizard validator was already on the correct ProductImage relation; deleted the orphan `Image` model + dead Express service & route (~1,213 lines). Demoted to P2 for the remaining UX polish.
 - **27** ✅ Resolved 2026-05-02 — TerminologyPreference table + CRUD API + AI prompt injection + admin UI at `/settings/terminology`. Seeded with 7 Xavia/IT entries (Giacca, Pantaloni, Casco, Stivali, Protezioni, Pelle, Rete). Verify post-deploy that "Giacca" wins consistently in regenerations; add new preferences inline as drift surfaces.
 - **31** ✅ Resolved 2026-05-03 — migration `20260503_p0_31_channel_connection` adds the table + fixes substantial column-level drift on `VariantChannelListing` surfaced by the audit. eBay auth + listing flows are now operational; orders flow has separate refactor work tracked at #33.
-- **42** Master price + master stock cascade architecture — silent drift between Product.basePrice/totalStock and ChannelListing.{masterPrice,masterQuantity,price,quantity}. Tactical patch reverted (cdf6251 → 2674c05); needs the proper transactional outbox + worker fan-out (~2-3 days). Surfaced by Phase 1 audit 2026-05-06.
+- **42** ✅ Resolved 2026-05-06 — Master-price + master-stock cascade architecture shipped as Phase 13 (commits 3714dff, e2e92d2, a92e82a, 7c59ae9, d6d1f55). Live-verified end-to-end against production. New worker-side quirks moved to #48 + #49.
 
 **🟡 P1 — backlog (informed by real usage):**
 - **1** `@fastify/compress` empty body on `/api/orders` (workaround in place)
@@ -885,6 +911,8 @@ The CLI in `packages/database` (v6) generates a client compatible with `@prisma/
 - **43** Variant mechanism duplication — `Product.parentId` vs unused `ProductVariation`. 244 active children via parentId, 0 in ProductVariation. Decision needed before bulk-ops can be fixed at scale.
 - **44** Bulk operations target unused data shape — depends on #43. Bulk PRICING/INVENTORY jobs currently process 0 items silently.
 - **45** Local apps/api Prisma client v6 vs v7 mismatch — local dev API can't serve Prisma queries; production unaffected. Onboarding blocker.
+- **48** BullMQ worker recomputes ChannelListing.price ignoring followMasterPrice — overrides survive cascade but die on the next sync. ~5-line fix at bullmq-sync.worker.ts:207.
+- **49** OutboundSyncService.processPendingSyncs ignores holdUntil — works today because BullMQ delay carries the grace, breaks for any non-BullMQ caller. ~3-line fix at outbound-sync.service.ts:114.
 
 **🟢 P2 — when in the area:**
 - **4** CategorySchema "unknown" rows
