@@ -14,6 +14,7 @@ import {
   Activity,
   HeartPulse,
   Plug,
+  FileEdit,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -36,6 +37,7 @@ const COMMANDS: Command[] = [
   { id: 'goto-health', label: 'Go to Sync Health', icon: HeartPulse, href: '/dashboard/health', group: 'Navigation' },
   // Catalog actions
   { id: 'catalog-organize', label: 'Organize catalog (group orphans, promote standalones)', icon: Layers, href: '/catalog/organize', group: 'Catalog' },
+  { id: 'wizard-drafts', label: 'Resume a listing wizard draft', icon: FileEdit, href: '/products/drafts', group: 'Catalog' },
   { id: 'bulk-upload', label: 'Bulk upload products', icon: Upload, href: '/bulk-operations', group: 'Catalog' },
   // System
   { id: 'connections', label: 'Manage channel connections', icon: Plug, href: '/settings/channels', group: 'System' },

@@ -31,6 +31,7 @@ import {
   Target,
   Image as ImageIcon,
   Star,
+  FileEdit,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -256,10 +257,17 @@ export default function AppSidebar() {
             count={counts.catalog?.products}
             active={
               pathname === '/products' ||
-              pathname.startsWith('/products/') ||
+              (pathname.startsWith('/products/') &&
+                pathname !== '/products/drafts') ||
               pathname === '/inventory' ||
               pathname.startsWith('/inventory/')
             }
+          />
+          <NavItem
+            href="/products/drafts"
+            icon={FileEdit}
+            label="Drafts"
+            active={pathname === '/products/drafts'}
           />
           <NavItem
             href="/catalog/organize"

@@ -312,6 +312,104 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  /**
+   * GET /api/listing-wizard/drafts
+   *
+   * Surfaces in-progress wizards (status='DRAFT') for the /products/drafts
+   * page. Without this endpoint the drafts are invisible — there's no
+   * navigable list, only the per-product /products/:id/list-wizard URL,
+   * which assumes the user remembers which products they started.
+   *
+   * Filters:
+   *   ?search=  matches Product.sku or Product.name (case-insensitive)
+   *   ?stale=1  only wizards updated > 7 days ago
+   *   ?limit=   1..200, default 50
+   *   ?offset=  default 0
+   *
+   * Returns a flat list shape (productSku/productName lifted out of the
+   * product relation) so the client doesn't have to walk a nested object.
+   */
+  fastify.get<{
+    Querystring: {
+      search?: string
+      stale?: string
+      limit?: string
+      offset?: string
+    }
+  }>('/listing-wizard/drafts', async (request, reply) => {
+    try {
+      const q = request.query
+      const limit = Math.min(
+        Math.max(parseInt(q.limit ?? '50', 10) || 50, 1),
+        200,
+      )
+      const offset = Math.max(parseInt(q.offset ?? '0', 10) || 0, 0)
+      const onlyStale = q.stale === '1' || q.stale === 'true'
+      const search = (q.search ?? '').trim()
+
+      const staleCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      const where: any = { status: 'DRAFT' }
+      if (onlyStale) where.updatedAt = { lt: staleCutoff }
+      if (search) {
+        where.product = {
+          OR: [
+            { sku: { contains: search, mode: 'insensitive' } },
+            { name: { contains: search, mode: 'insensitive' } },
+          ],
+        }
+      }
+
+      const [total, rows] = await Promise.all([
+        prisma.listingWizard.count({ where }),
+        prisma.listingWizard.findMany({
+          where,
+          orderBy: { updatedAt: 'desc' },
+          take: limit,
+          skip: offset,
+          select: {
+            id: true,
+            productId: true,
+            currentStep: true,
+            channels: true,
+            createdAt: true,
+            updatedAt: true,
+            product: {
+              select: {
+                id: true,
+                sku: true,
+                name: true,
+                isParent: true,
+              },
+            },
+          },
+        }),
+      ])
+
+      const drafts = rows.map((r) => ({
+        id: r.id,
+        productId: r.productId,
+        productSku: r.product?.sku ?? null,
+        productName: r.product?.name ?? null,
+        productIsParent: r.product?.isParent ?? false,
+        currentStep: r.currentStep,
+        // Stored as JSON so the type is `unknown`; assume the wizard
+        // always writes the {platform, marketplace}[] shape from Step 1.
+        channels: Array.isArray(r.channels) ? r.channels : [],
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+        isStale: r.updatedAt < staleCutoff,
+      }))
+
+      return { success: true, total, drafts }
+    } catch (err) {
+      fastify.log.error({ err }, '[listing-wizard] drafts list failed')
+      return reply.code(500).send({
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  })
+
   fastify.post<{ Body: StartBody }>(
     '/listing-wizard/start',
     async (request, reply) => {
