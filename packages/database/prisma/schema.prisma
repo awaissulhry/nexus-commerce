@@ -2718,9 +2718,44 @@ model Supplier {
 
   products       SupplierProduct[]
   purchaseOrders PurchaseOrder[]
+  // R.19 — optional shipping profile (mode + freight rates +
+  // container capacity). When present, enables landed-cost EOQ and
+  // container-fill suggestions.
+  shippingProfile SupplierShippingProfile?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// R.19 — supplier shipping profile drives freight cost in the
+// landed-cost EOQ and the container-fill optimizer. One row per
+// supplier (supplierId is unique).
+//
+// Modes:
+//   AIR        — costPerKgCents + costPerCbmCents (volumetric ratio 1cbm:167kg)
+//   SEA_LCL    — costPerCbmCents dominates (1cbm:333kg ratio)
+//   SEA_FCL_20 — fixedCostCents per 20' container (33 cbm / 28000 kg)
+//   SEA_FCL_40 — fixedCostCents per 40HQ container (76 cbm / 28800 kg)
+//   ROAD       — costPerKgCents + costPerCbmCents (1cbm:333kg ratio)
+//
+// Cost cents are in `currencyCode`; landed-cost math runs through
+// fx-rate.service to convert to EUR matching R.15.
+model SupplierShippingProfile {
+  id                   String   @id @default(cuid())
+  supplierId           String   @unique
+  supplier             Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  mode                 String   // AIR | SEA_LCL | SEA_FCL_20 | SEA_FCL_40 | ROAD
+  costPerCbmCents      Int?
+  costPerKgCents       Int?
+  fixedCostCents       Int?
+  currencyCode         String   @default("EUR")
+  containerCapacityCbm Decimal? @db.Decimal(8, 2)
+  containerMaxWeightKg Decimal? @db.Decimal(10, 2)
+  notes                String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([supplierId])
 }
 
 model SupplierProduct {
@@ -3198,6 +3233,12 @@ model ReplenishmentRecommendation {
   // negative when this SKU was a substitute whose spike got removed).
   rawVelocity                  Decimal? @db.Decimal(10, 2)
   substitutionAdjustedDelta    Decimal? @db.Decimal(10, 2)
+  // R.19 — landed-cost audit. freightCostPerUnitCents is the freight
+  // share allocated to this SKU at the recommended order qty;
+  // landedCostPerUnitCents = unitCostCents + freightCostPerUnitCents
+  // (both in EUR cents after R.15 FX conversion).
+  freightCostPerUnitCents      Int?
+  landedCostPerUnitCents       Int?
 
   preferredSupplierId String?
   isManufactured      Boolean @default(false)

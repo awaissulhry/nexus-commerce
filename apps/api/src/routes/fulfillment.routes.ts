@@ -55,6 +55,18 @@ import {
   deleteSubstitution,
 } from '../services/substitution.service.js'
 import {
+  loadShippingProfilesForSuppliers,
+  optimizeContainerFill,
+  freightCostForLine,
+  normalizeDimsToCm,
+  normalizeWeightToGrams,
+  cbmFromDims,
+  getShippingProfile,
+  putShippingProfile,
+  type PackItem,
+  type ShippingMode,
+} from '../services/container-pack.service.js'
+import {
   runAutoPoSweep,
   getAutoPoStatus,
 } from '../services/auto-po.service.js'
@@ -2799,6 +2811,9 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           serviceLevelPercent: true, orderingCostCents: true, carryingCostPctYear: true,
           // R.13 — productType drives event-prep applicability
           productType: true,
+          // R.19 — physical attrs for container/freight optimization
+          dimLength: true, dimWidth: true, dimHeight: true, dimUnit: true,
+          weightValue: true, weightUnit: true,
         },
         take: 1000,
       })
@@ -3308,6 +3323,9 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           eoqUnits: math.eoqUnits,
           constraintsApplied: math.constraintsApplied,
           unitCostCents,
+          // R.19 — exposed so the container-fill rollup can read the
+          // case-pack from the same suggestion object.
+          casePack,
           servicePercentEffective: math.servicePercent,
           urgency,
           // R.14 — urgency provenance. globalUrgency = what the
@@ -3348,6 +3366,77 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       // Sort: CRITICAL first, then HIGH, MEDIUM, LOW
       const order = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 }
       suggestions.sort((a, b) => order[a.urgency] - order[b.urgency] || (a.daysOfStockLeft ?? 999) - (b.daysOfStockLeft ?? 999))
+
+      // R.19 — landed-cost pass. After EOQ + MOQ + case-pack have
+      // settled the recommended qty per SKU, group needsReorder lines
+      // by supplier, run optimizeContainerFill where a profile exists,
+      // and write back per-line freight + landed cost.
+      // Containers are computed only for suppliers that have opted in
+      // by setting a SupplierShippingProfile; everyone else degrades
+      // gracefully (freightCostPerUnitCents = null, landed = unit).
+      const shippingProfiles = await loadShippingProfilesForSuppliers(supplierIds)
+      const containerFillBySupplier = new Map<
+        string,
+        ReturnType<typeof optimizeContainerFill>
+      >()
+      if (shippingProfiles.size > 0) {
+        const supplierItemMap = new Map<string, PackItem[]>()
+        for (const s of suggestions) {
+          if (!s.preferredSupplierId || !s.needsReorder) continue
+          const profile = shippingProfiles.get(s.preferredSupplierId)
+          if (!profile) continue
+          const product = products.find((pp) => pp.id === s.productId)
+          if (!product) continue
+          // Resolve effective dims/weight: variant overrides not in
+          // scope here — Product row carries the master dims for v1.
+          const dims = normalizeDimsToCm({
+            length: product.dimLength != null ? Number(product.dimLength) : null,
+            width: product.dimWidth != null ? Number(product.dimWidth) : null,
+            height: product.dimHeight != null ? Number(product.dimHeight) : null,
+            unit: product.dimUnit,
+          })
+          const grams = normalizeWeightToGrams({
+            value: product.weightValue != null ? Number(product.weightValue) : null,
+            unit: product.weightUnit,
+          })
+          if (!dims || grams == null) continue
+          const cbmPerUnit = cbmFromDims(dims.l, dims.w, dims.h)
+          const kgPerUnit = grams / 1000
+          const arr = supplierItemMap.get(s.preferredSupplierId) ?? []
+          arr.push({
+            productId: s.productId,
+            sku: s.sku,
+            unitsQty: s.reorderQuantity,
+            cbmPerUnit,
+            kgPerUnit,
+            unitCostCents: s.unitCostCents ?? 0,
+            urgency: s.urgency as PackItem['urgency'],
+            casePack: s.casePack ?? null,
+          })
+          supplierItemMap.set(s.preferredSupplierId, arr)
+        }
+        for (const [supplierId, items] of supplierItemMap) {
+          const profile = shippingProfiles.get(supplierId)
+          if (!profile) continue
+          const fill = optimizeContainerFill({ items, profile })
+          containerFillBySupplier.set(supplierId, fill)
+          // Convert profile freight cost to EUR cents matching R.15.
+          // For now we assume profile.currencyCode == EUR; non-EUR
+          // freight currencies can reuse fxRates from earlier.
+          const profileCcy = (profile.currencyCode ?? 'EUR').toUpperCase()
+          const profileFx = profileCcy !== 'EUR' ? fxRates.get(profileCcy) ?? null : null
+          for (const it of items) {
+            const native = fill.perLineFreightCents.get(it.productId) ?? 0
+            const eurCents = profileFx ? Math.round(native / profileFx) : native
+            const perUnit = it.unitsQty > 0 ? Math.round(eurCents / it.unitsQty) : 0
+            const sug = suggestions.find((x) => x.productId === it.productId)
+            if (sug) {
+              ;(sug as any).freightCostPerUnitCents = perUnit
+              ;(sug as any).landedCostPerUnitCents = (sug.unitCostCents ?? 0) + perUnit
+            }
+          }
+        }
+      }
 
       // R.3 — persist recommendations (diff-aware: only writes rows
       // for products whose urgency / qty / stock / needsReorder
@@ -3392,6 +3481,9 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         // R.17 — substitution audit
         rawVelocity: s.rawVelocity,
         substitutionAdjustedDelta: s.substitutionAdjustedDelta,
+        // R.19 — landed-cost audit
+        freightCostPerUnitCents: (s as any).freightCostPerUnitCents ?? null,
+        landedCostPerUnitCents: (s as any).landedCostPerUnitCents ?? null,
       }))
       const recIdsByProduct = await bulkPersistRecommendationsIfChanged(
         recommendationInputs,
@@ -3414,6 +3506,33 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         low: suggestionsWithRecId.filter((s) => s.urgency === 'LOW').length,
       }
 
+      // R.19 — supplier-level container fill summary. UI renders the
+      // ContainerFillCard from this. Empty when no supplier has a
+      // shipping profile.
+      const suppliersById = supplierIds.length > 0
+        ? new Map(
+            (
+              await prisma.supplier.findMany({
+                where: { id: { in: supplierIds } },
+                select: { id: true, name: true },
+              })
+            ).map((s) => [s.id, s.name]),
+          )
+        : new Map<string, string>()
+      const containerFill = Array.from(containerFillBySupplier.entries()).map(
+        ([supplierId, fill]) => ({
+          supplierId,
+          supplierName: suppliersById.get(supplierId) ?? supplierId,
+          mode: fill.mode,
+          totalCbm: fill.totalCbm,
+          totalKg: fill.totalKg,
+          fillPercentByCbm: fill.fillPercentByCbm,
+          fillPercentByWeight: fill.fillPercentByWeight,
+          freightCostCents: fill.freightCostCents,
+          topUpSuggestions: fill.topUpSuggestions,
+        }),
+      )
+
       return {
         suggestions: suggestionsWithRecId,
         counts,
@@ -3424,6 +3543,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           channel: channelFilter,
           marketplace: marketplaceFilter,
         },
+        // R.19 — per-supplier container fill (only suppliers with profiles).
+        containerFill,
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[fulfillment/replenishment] failed')
@@ -3845,6 +3966,9 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             // R.17 — substitution audit
             rawVelocity: true,
             substitutionAdjustedDelta: true,
+            // R.19 — landed-cost audit
+            freightCostPerUnitCents: true,
+            landedCostPerUnitCents: true,
           },
         })
 
@@ -4542,6 +4666,141 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (err: any) {
       if (err?.code === 'P2025') return reply.code(404).send({ error: 'not found' })
       fastify.log.error({ err }, '[substitutions:delete] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // ─── R.19 — supplier shipping profiles ───────────────────────────
+  fastify.get('/fulfillment/supplier-shipping-profiles/:supplierId', async (request, reply) => {
+    try {
+      const { supplierId } = request.params as { supplierId: string }
+      const profile = await getShippingProfile(supplierId)
+      return { profile }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[supplier-shipping-profile:get] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.put('/fulfillment/supplier-shipping-profiles/:supplierId', async (request, reply) => {
+    try {
+      const { supplierId } = request.params as { supplierId: string }
+      const body = (request.body ?? {}) as {
+        mode?: string
+        costPerCbmCents?: number | null
+        costPerKgCents?: number | null
+        fixedCostCents?: number | null
+        currencyCode?: string
+        containerCapacityCbm?: number | null
+        containerMaxWeightKg?: number | null
+        notes?: string | null
+      }
+      const validModes = ['AIR', 'SEA_LCL', 'SEA_FCL_20', 'SEA_FCL_40', 'ROAD']
+      if (!body.mode || !validModes.includes(body.mode)) {
+        return reply.code(400).send({ error: `mode must be one of ${validModes.join(', ')}` })
+      }
+      const profile = await putShippingProfile({
+        supplierId,
+        mode: body.mode as ShippingMode,
+        costPerCbmCents: body.costPerCbmCents,
+        costPerKgCents: body.costPerKgCents,
+        fixedCostCents: body.fixedCostCents,
+        currencyCode: body.currencyCode,
+        containerCapacityCbm: body.containerCapacityCbm,
+        containerMaxWeightKg: body.containerMaxWeightKg,
+        notes: body.notes,
+      })
+      return { ok: true, profile }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[supplier-shipping-profile:put] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // Container fill snapshot. Reuses the live recommendation list to
+  // avoid re-running the engine. Caller supplies supplierId + the
+  // candidate items (productId, units). For v1 this just runs
+  // optimizeContainerFill against the items as-given; the main
+  // /replenishment route already returns containerFill[].
+  fastify.post('/fulfillment/replenishment/container-fill', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as {
+        supplierId?: string
+        items?: Array<{
+          productId: string
+          unitsQty: number
+          casePack?: number | null
+          urgency?: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
+        }>
+      }
+      if (!body.supplierId || !Array.isArray(body.items) || body.items.length === 0) {
+        return reply.code(400).send({ error: 'supplierId + items[] required' })
+      }
+      const profile = await getShippingProfile(body.supplierId)
+      if (!profile) return reply.code(404).send({ error: 'no shipping profile for supplier' })
+      const productIds = body.items.map((i) => i.productId)
+      const products = await prisma.product.findMany({
+        where: { id: { in: productIds } },
+        select: {
+          id: true, sku: true,
+          dimLength: true, dimWidth: true, dimHeight: true, dimUnit: true,
+          weightValue: true, weightUnit: true,
+        },
+      })
+      const productById = new Map(products.map((p) => [p.id, p]))
+      const packItems: PackItem[] = []
+      for (const it of body.items) {
+        const p = productById.get(it.productId)
+        if (!p) continue
+        const dims = normalizeDimsToCm({
+          length: p.dimLength != null ? Number(p.dimLength) : null,
+          width: p.dimWidth != null ? Number(p.dimWidth) : null,
+          height: p.dimHeight != null ? Number(p.dimHeight) : null,
+          unit: p.dimUnit,
+        })
+        const grams = normalizeWeightToGrams({
+          value: p.weightValue != null ? Number(p.weightValue) : null,
+          unit: p.weightUnit,
+        })
+        if (!dims || grams == null) continue
+        packItems.push({
+          productId: p.id,
+          sku: p.sku,
+          unitsQty: Math.max(0, it.unitsQty || 0),
+          cbmPerUnit: cbmFromDims(dims.l, dims.w, dims.h),
+          kgPerUnit: grams / 1000,
+          unitCostCents: 0,
+          urgency: it.urgency ?? 'LOW',
+          casePack: it.casePack ?? null,
+        })
+      }
+      const fill = optimizeContainerFill({
+        items: packItems,
+        profile: {
+          mode: profile.mode as ShippingMode,
+          costPerCbmCents: profile.costPerCbmCents ?? null,
+          costPerKgCents: profile.costPerKgCents ?? null,
+          fixedCostCents: profile.fixedCostCents ?? null,
+          currencyCode: profile.currencyCode,
+          containerCapacityCbm: profile.containerCapacityCbm == null
+            ? null : Number(profile.containerCapacityCbm),
+          containerMaxWeightKg: profile.containerMaxWeightKg == null
+            ? null : Number(profile.containerMaxWeightKg),
+        },
+      })
+      return {
+        ok: true,
+        mode: fill.mode,
+        totalCbm: fill.totalCbm,
+        totalKg: fill.totalKg,
+        fillPercentByCbm: fill.fillPercentByCbm,
+        fillPercentByWeight: fill.fillPercentByWeight,
+        freightCostCents: fill.freightCostCents,
+        perLineFreightCents: Object.fromEntries(fill.perLineFreightCents),
+        topUpSuggestions: fill.topUpSuggestions,
+      }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[container-fill] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })

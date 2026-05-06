@@ -64,6 +64,9 @@ export interface RecommendationInput {
   // R.17 — substitution audit
   rawVelocity?: number | null
   substitutionAdjustedDelta?: number | null
+  // R.19 — landed-cost audit
+  freightCostPerUnitCents?: number | null
+  landedCostPerUnitCents?: number | null
 }
 
 export interface ActiveRecommendationLite {
@@ -188,6 +191,9 @@ export async function persistRecommendationIfChanged(
           // R.17 — substitution audit
           rawVelocity: input.rawVelocity ?? null,
           substitutionAdjustedDelta: input.substitutionAdjustedDelta ?? null,
+          // R.19 — landed-cost audit
+          freightCostPerUnitCents: input.freightCostPerUnitCents ?? null,
+          landedCostPerUnitCents: input.landedCostPerUnitCents ?? null,
         },
       })
       if (current) {

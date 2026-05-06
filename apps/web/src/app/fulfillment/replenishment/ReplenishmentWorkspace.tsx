@@ -149,11 +149,30 @@ interface Suggestion {
   servicePercentEffective?: number
 }
 
+interface ContainerFillEntry {
+  supplierId: string
+  supplierName: string
+  mode: 'AIR' | 'SEA_LCL' | 'SEA_FCL_20' | 'SEA_FCL_40' | 'ROAD'
+  totalCbm: number
+  totalKg: number
+  fillPercentByCbm: number | null
+  fillPercentByWeight: number | null
+  freightCostCents: number
+  topUpSuggestions: Array<{
+    productId: string
+    sku: string
+    addUnits: number
+    marginalFreightSavedCents: number
+  }>
+}
+
 interface ReplenishmentResponse {
   suggestions: Suggestion[]
   counts: { critical: number; high: number; medium: number; low: number }
   window: number
   filter: { channel: string | null; marketplace: string | null }
+  // R.19 — per-supplier container fill summary (only suppliers with profiles).
+  containerFill?: ContainerFillEntry[]
 }
 
 interface UpcomingEvent {
@@ -466,6 +485,12 @@ export default function ReplenishmentWorkspace() {
       {/* R.16 — model A/B card. Silent unless a challenger is rolled
           out via the rollout endpoint. */}
       <ForecastModelsCard />
+
+      {/* R.19 — supplier-level container fill summary. Silent unless
+          at least one supplier has a SupplierShippingProfile. */}
+      {data?.containerFill && data.containerFill.length > 0 && (
+        <ContainerFillCard entries={data.containerFill} />
+      )}
 
       {/* Filter bar */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -1188,6 +1213,9 @@ interface DetailResponse {
     // R.17 — substitution audit
     rawVelocity?: number | string | null
     substitutionAdjustedDelta?: number | string | null
+    // R.19 — landed-cost audit
+    freightCostPerUnitCents?: number | null
+    landedCostPerUnitCents?: number | null
   } | null
   model: string | null
   generationTag: string | null
@@ -1876,6 +1904,89 @@ function StockoutImpactCard() {
   )
 }
 
+// R.19 — supplier-level container fill summary. One row per supplier
+// with a SupplierShippingProfile. Surfaces fill %, freight cost, and
+// any top-up suggestions to push toward 100% container utilization.
+function ContainerFillCard({ entries }: { entries: ContainerFillEntry[] }) {
+  return (
+    <Card className="p-4 mb-3">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+          Container fill
+        </span>
+        <span className="text-[10px] text-slate-400">
+          {entries.length} supplier{entries.length === 1 ? '' : 's'} with shipping profile
+        </span>
+      </div>
+      <div className="space-y-3">
+        {entries.map((e) => {
+          const isFcl = e.mode === 'SEA_FCL_20' || e.mode === 'SEA_FCL_40'
+          const fill = e.fillPercentByCbm ?? null
+          const fillColor = fill == null
+            ? 'bg-slate-300'
+            : fill >= 90 ? 'bg-emerald-500'
+            : fill >= 70 ? 'bg-sky-500'
+            : 'bg-amber-500'
+          return (
+            <div key={e.supplierId} className="border border-slate-200 rounded p-2">
+              <div className="flex items-center justify-between text-[12px] mb-1.5">
+                <span className="font-semibold text-slate-900">{e.supplierName}</span>
+                <span className="text-slate-500 font-mono text-[10px]">{e.mode}</span>
+              </div>
+              {isFcl && fill != null && (
+                <>
+                  <div className="h-2 rounded bg-slate-100 overflow-hidden mb-1">
+                    <div
+                      className={cn('h-full', fillColor)}
+                      style={{ width: `${Math.min(100, fill)}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-slate-500">
+                    <span>{fill.toFixed(1)}% by volume</span>
+                    <span className="font-mono">
+                      {e.totalCbm.toFixed(2)} m³ · {(e.freightCostCents / 100).toFixed(0)} EUR
+                    </span>
+                  </div>
+                </>
+              )}
+              {!isFcl && (
+                <div className="flex items-center justify-between text-[11px] text-slate-500">
+                  <span className="font-mono">
+                    {e.totalCbm.toFixed(2)} m³ · {e.totalKg.toFixed(0)} kg
+                  </span>
+                  <span className="font-mono">
+                    {(e.freightCostCents / 100).toFixed(0)} EUR freight
+                  </span>
+                </div>
+              )}
+              {e.topUpSuggestions.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-slate-200">
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">
+                    Top-up suggestions
+                  </div>
+                  <ul className="space-y-0.5">
+                    {e.topUpSuggestions.slice(0, 3).map((t) => (
+                      <li key={t.productId} className="text-[11px] flex items-center justify-between">
+                        <span className="font-mono truncate">{t.sku}</span>
+                        <span className="text-slate-600">
+                          +{t.addUnits}u → save{' '}
+                          <span className="text-emerald-700 font-semibold">
+                            €{(t.marginalFreightSavedCents / 100).toFixed(0)}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </Card>
+  )
+}
+
 // R.4 — Reorder math snapshot panel. Shows the four primitives
 // (EOQ, safety stock, reorder point, recommended qty) plus the
 // constraint annotations explaining why the final qty is what it
@@ -1946,6 +2057,21 @@ function ReorderMathPanel({ rec }: { rec: NonNullable<DetailResponse['recommenda
                 {(rec.unitCostCents / 100).toFixed(2)} EUR/unit
               </span>
             </>
+          )}
+          {/* R.19 — landed cost (unit + freight) when a supplier
+              shipping profile produced a freight allocation. Both
+              already in EUR cents post-FX. */}
+          {rec.freightCostPerUnitCents != null && rec.landedCostPerUnitCents != null && (
+            <div className="mt-1">
+              <span className="text-slate-500">Landed: </span>
+              <span className="font-mono text-slate-700">
+                {(rec.landedCostPerUnitCents / 100).toFixed(2)} EUR/unit
+              </span>
+              <span className="text-slate-400 ml-1">
+                (= {(rec.unitCostCents / 100).toFixed(2)} unit
+                + {(rec.freightCostPerUnitCents / 100).toFixed(2)} freight)
+              </span>
+            </div>
           )}
         </div>
       )}
