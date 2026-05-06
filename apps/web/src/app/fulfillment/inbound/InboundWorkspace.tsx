@@ -13,7 +13,7 @@ import {
   ArrowDownToLine, ChevronRight,
   Boxes, AlertTriangle, CalendarClock,
   FileText, ChevronUp, ChevronDown,
-  Upload, Link2, Trash2,
+  Upload, Link2, Trash2, Camera, Unlock, History, Check,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -620,10 +620,47 @@ function CarrierLink({
 // (multi-section drawer with QC release + photo upload + discrepancy
 // composer) lands in Commit 6 (web receive flow).
 // ─────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────
+// InboundDrawer — H.6 multi-section operations surface.
+//
+// Sections (top to bottom):
+//   - Sticky header (type + status, close)
+//   - Status timeline (horizontal step indicator)
+//   - Carrier card (when any field set)
+//   - Cost card (when any cost set)
+//   - Items list — each item is a card with progress bar, receive
+//     input, QC dropdown, photo paste, and an expand toggle for
+//     receipt history + release-hold + discrepancy quick-add.
+//   - Ship-level discrepancies section (list + composer)
+//   - Attachments section (list + add-by-URL composer)
+//   - Sticky action bar at bottom (Bulk fill, Submit receive,
+//     status transitions, Cancel)
+// ─────────────────────────────────────────────────────────────────────
+const STATUS_STEPS: InboundStatus[] = [
+  'DRAFT', 'SUBMITTED', 'IN_TRANSIT', 'ARRIVED',
+  'RECEIVING', 'PARTIALLY_RECEIVED', 'RECEIVED', 'RECONCILED', 'CLOSED',
+]
+
+const DISCREPANCY_REASONS: Array<{ value: string; label: string }> = [
+  { value: 'SHORT_SHIP',    label: 'Short ship' },
+  { value: 'OVER_SHIP',     label: 'Over ship' },
+  { value: 'WRONG_ITEM',    label: 'Wrong item' },
+  { value: 'DAMAGED',       label: 'Damaged' },
+  { value: 'QUALITY_ISSUE', label: 'Quality issue' },
+  { value: 'LATE_ARRIVAL',  label: 'Late arrival' },
+  { value: 'COST_VARIANCE', label: 'Cost variance' },
+  { value: 'OTHER',         label: 'Other' },
+]
+
+const ATTACHMENT_KINDS = ['INVOICE', 'PACKING', 'CUSTOMS', 'ASN', 'PHOTO', 'OTHER']
+
 function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
   const [shipment, setShipment] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [receiveBuf, setReceiveBuf] = useState<Record<string, { qty: number; qc: string }>>({})
+  const [receiveBuf, setReceiveBuf] = useState<Record<string, { qty: string; qc: string; photoUrl: string }>>({})
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
+  const [composerOpen, setComposerOpen] = useState<null | { kind: 'discrepancy' } | { kind: 'discrepancyForItem'; itemId: string } | { kind: 'attachment' }>(null)
+  const [busy, setBusy] = useState(false)
 
   const fetchOne = useCallback(async () => {
     setLoading(true)
@@ -637,197 +674,748 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
 
   const submitReceive = async () => {
     const updates = Object.entries(receiveBuf)
-      .filter(([, v]) => v.qty > 0)
-      .map(([itemId, v]) => ({ itemId, quantityReceived: v.qty, qcStatus: v.qc || undefined }))
-    if (updates.length === 0) { alert('Enter received quantities'); return }
-    const res = await fetch(`${getBackendUrl()}/api/fulfillment/inbound/${id}/receive`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: updates }),
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      return alert(err.error ?? 'Receive failed')
+      .map(([itemId, v]) => {
+        const qty = Number(v.qty)
+        if (!Number.isFinite(qty) || qty < 0) return null
+        const photoUrls = v.photoUrl?.trim() ? [v.photoUrl.trim()] : undefined
+        // Skip rows with neither a non-zero qty target nor a QC update nor a photo.
+        const item = shipment?.items?.find((it: any) => it.id === itemId)
+        const cumulativeChanges = qty !== (item?.quantityReceived ?? 0)
+        const qcChanges = v.qc !== (item?.qcStatus ?? '')
+        if (!cumulativeChanges && !qcChanges && !photoUrls) return null
+        return {
+          itemId,
+          quantityReceived: cumulativeChanges ? qty : (item?.quantityReceived ?? 0),
+          qcStatus: v.qc || undefined,
+          photoUrls,
+        }
+      })
+      .filter(Boolean)
+    if (updates.length === 0) { alert('Enter received quantities, change QC, or paste a photo URL'); return }
+    setBusy(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/inbound/${id}/receive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: updates }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error ?? 'Receive failed')
+      }
+      setReceiveBuf({})
+      setShipment(await res.json())
+      // Re-fetch full bundle (receive returns shipment but not includes)
+      fetchOne()
+      onChanged()
+    } catch (e: any) {
+      alert(e.message)
+    } finally { setBusy(false) }
+  }
+
+  const fillExpected = () => {
+    const next: typeof receiveBuf = {}
+    for (const it of shipment?.items ?? []) {
+      const remaining = Math.max(0, it.quantityExpected - it.quantityReceived)
+      if (remaining > 0) {
+        next[it.id] = {
+          qty: String(it.quantityReceived + remaining),
+          qc: receiveBuf[it.id]?.qc ?? 'PASS',
+          photoUrl: receiveBuf[it.id]?.photoUrl ?? '',
+        }
+      }
     }
-    setReceiveBuf({})
-    setShipment(await res.json())
-    onChanged()
+    setReceiveBuf(next)
   }
 
   const transition = async (status: string) => {
-    const res = await fetch(`${getBackendUrl()}/api/fulfillment/inbound/${id}/transition`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
+    setBusy(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/inbound/${id}/transition`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error ?? 'Transition failed')
+      }
+      fetchOne()
+      onChanged()
+    } catch (e: any) {
+      alert(e.message)
+    } finally { setBusy(false) }
+  }
+
+  const releaseHold = async (itemId: string) => {
+    if (!confirm('Release the held units to stock?')) return
+    setBusy(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/inbound/${id}/items/${itemId}/release-hold`, { method: 'POST' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error ?? 'Release failed')
+      }
+      fetchOne()
+      onChanged()
+    } catch (e: any) {
+      alert(e.message)
+    } finally { setBusy(false) }
+  }
+
+  const submitDiscrepancy = async (payload: any) => {
+    setBusy(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/inbound/${id}/discrepancies`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error ?? 'Discrepancy create failed')
+      }
+      setComposerOpen(null)
+      fetchOne()
+      onChanged()
+    } catch (e: any) {
+      alert(e.message)
+    } finally { setBusy(false) }
+  }
+
+  const submitAttachment = async (payload: any) => {
+    setBusy(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/inbound/${id}/attachments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error ?? 'Attachment add failed')
+      }
+      setComposerOpen(null)
+      fetchOne()
+      onChanged()
+    } catch (e: any) {
+      alert(e.message)
+    } finally { setBusy(false) }
+  }
+
+  const updateDiscrepancyStatus = async (did: string, status: string) => {
+    setBusy(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/inbound/discrepancies/${did}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error ?? 'Update failed')
+      }
+      fetchOne()
+      onChanged()
+    } catch (e: any) {
+      alert(e.message)
+    } finally { setBusy(false) }
+  }
+
+  const toggleExpand = (itemId: string) => {
+    setExpandedItems((s) => {
+      const next = new Set(s)
+      if (next.has(itemId)) next.delete(itemId)
+      else next.add(itemId)
+      return next
     })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      return alert(err.error ?? 'Transition failed')
-    }
-    fetchOne()
-    onChanged()
   }
 
   return (
     <div className="fixed inset-0 z-30 flex justify-end" onClick={onClose}>
       <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px]" />
-      <aside onClick={(e) => e.stopPropagation()} className="relative h-full w-full max-w-2xl bg-white shadow-2xl overflow-y-auto">
+      <aside onClick={(e) => e.stopPropagation()} className="relative h-full w-full max-w-3xl bg-white shadow-2xl overflow-y-auto flex flex-col">
+        {/* Sticky header */}
         <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
-          <div className="text-[13px] font-semibold text-slate-900">Inbound shipment</div>
-          <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
+          <div className="text-[13px] font-semibold text-slate-900 inline-flex items-center gap-2">
+            <PackageCheck size={14} /> Inbound shipment
+            {loading && <RefreshCw size={11} className="animate-spin text-slate-400" />}
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={fetchOne} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100" title="Refresh">
+              <RefreshCw size={13} />
+            </button>
+            <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100">
+              <X size={16} />
+            </button>
+          </div>
         </header>
-        <div className="p-5 space-y-4">
+
+        <div className="p-5 space-y-4 flex-1">
           {loading || !shipment ? <div className="text-[12px] text-slate-500">Loading…</div> : (
             <>
+              {/* Top — type + status + reference */}
               <div className="flex items-center gap-2 flex-wrap">
                 <span className={`inline-block text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${TYPE_TONE[shipment.type as InboundType]}`}>{shipment.type}</span>
                 <Badge variant={STATUS_VARIANT[shipment.status as InboundStatus] ?? 'default'} size="sm">{shipment.status.replace(/_/g, ' ')}</Badge>
                 {shipment.reference && <span className="text-[12px] text-slate-500 font-mono">{shipment.reference}</span>}
-              </div>
-
-              {/* Carrier + tracking */}
-              {(shipment.carrierCode || shipment.trackingNumber) && (
-                <div className="border border-slate-200 rounded-md p-3">
-                  <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Carrier</div>
-                  <CarrierLink carrierCode={shipment.carrierCode} trackingNumber={shipment.trackingNumber} trackingUrl={shipment.trackingUrl} />
-                  {shipment.expectedAt && (
-                    <div className="text-[11px] text-slate-500 mt-1">
-                      ETA {new Date(shipment.expectedAt).toLocaleDateString('en-GB')}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Costs (when any set) */}
-              {(shipment.shippingCostCents || shipment.customsCostCents || shipment.dutiesCostCents || shipment.insuranceCostCents) && (
-                <div className="border border-slate-200 rounded-md p-3">
-                  <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Landed cost ({shipment.currencyCode})</div>
-                  <div className="grid grid-cols-2 gap-2 text-[12px]">
-                    {shipment.shippingCostCents != null && <div><span className="text-slate-500">Shipping</span> <span className="font-semibold tabular-nums float-right">{(shipment.shippingCostCents / 100).toFixed(2)}</span></div>}
-                    {shipment.customsCostCents != null && <div><span className="text-slate-500">Customs</span> <span className="font-semibold tabular-nums float-right">{(shipment.customsCostCents / 100).toFixed(2)}</span></div>}
-                    {shipment.dutiesCostCents != null && <div><span className="text-slate-500">Duties</span> <span className="font-semibold tabular-nums float-right">{(shipment.dutiesCostCents / 100).toFixed(2)}</span></div>}
-                    {shipment.insuranceCostCents != null && <div><span className="text-slate-500">Insurance</span> <span className="font-semibold tabular-nums float-right">{(shipment.insuranceCostCents / 100).toFixed(2)}</span></div>}
-                  </div>
-                </div>
-              )}
-
-              {/* Items */}
-              <div>
-                <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-2">Items</div>
-                <table className="w-full text-[12px]">
-                  <thead className="border-b border-slate-200">
-                    <tr>
-                      <th className="px-2 py-1.5 text-left text-[10px] font-semibold uppercase text-slate-500">SKU</th>
-                      <th className="px-2 py-1.5 text-right text-[10px] font-semibold uppercase text-slate-500">Expected</th>
-                      <th className="px-2 py-1.5 text-right text-[10px] font-semibold uppercase text-slate-500">Received</th>
-                      <th className="px-2 py-1.5 text-right text-[10px] font-semibold uppercase text-slate-500">Receive now</th>
-                      <th className="px-2 py-1.5 text-left text-[10px] font-semibold uppercase text-slate-500">QC</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {shipment.items.map((it: any) => (
-                      <tr key={it.id} className="border-b border-slate-100">
-                        <td className="px-2 py-1.5 font-mono text-slate-700">{it.sku}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">{it.quantityExpected}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">{it.quantityReceived}</td>
-                        <td className="px-2 py-1.5 text-right">
-                          <input
-                            type="number"
-                            min="0"
-                            value={receiveBuf[it.id]?.qty ?? ''}
-                            onChange={(e) => setReceiveBuf({ ...receiveBuf, [it.id]: { qty: Number(e.target.value) || 0, qc: receiveBuf[it.id]?.qc ?? '' } })}
-                            className="h-7 w-20 px-2 text-right tabular-nums border border-slate-200 rounded"
-                          />
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <select
-                            value={receiveBuf[it.id]?.qc ?? ''}
-                            onChange={(e) => setReceiveBuf({ ...receiveBuf, [it.id]: { qty: receiveBuf[it.id]?.qty ?? 0, qc: e.target.value } })}
-                            className="h-7 px-2 text-[12px] border border-slate-200 rounded"
-                          >
-                            <option value="">—</option>
-                            <option value="PASS">PASS</option>
-                            <option value="HOLD">HOLD</option>
-                            <option value="FAIL">FAIL</option>
-                          </select>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Discrepancies + attachments summary (full surfaces in Commit 6) */}
-              {(shipment.discrepancies?.length > 0 || shipment.attachments?.length > 0) && (
-                <div className="grid grid-cols-2 gap-3 text-[11px]">
-                  {shipment.discrepancies?.length > 0 && (
-                    <div className="border border-slate-200 rounded-md p-2.5">
-                      <div className="uppercase tracking-wider text-slate-500 font-semibold inline-flex items-center gap-1.5">
-                        <AlertTriangle size={11} className="text-rose-500" />
-                        Discrepancies ({shipment.discrepancies.length})
-                      </div>
-                      <ul className="mt-1.5 space-y-0.5">
-                        {shipment.discrepancies.slice(0, 3).map((d: any) => (
-                          <li key={d.id} className="text-slate-600">
-                            <span className="font-mono">{d.reasonCode}</span> · {d.status}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {shipment.attachments?.length > 0 && (
-                    <div className="border border-slate-200 rounded-md p-2.5">
-                      <div className="uppercase tracking-wider text-slate-500 font-semibold inline-flex items-center gap-1.5">
-                        <FileText size={11} className="text-slate-500" />
-                        Attachments ({shipment.attachments.length})
-                      </div>
-                      <ul className="mt-1.5 space-y-0.5">
-                        {shipment.attachments.slice(0, 3).map((a: any) => (
-                          <li key={a.id} className="text-slate-600 truncate">
-                            <span className="font-mono">{a.kind}</span> · {a.filename ?? a.url}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Actions */}
-              <div className="flex items-center gap-2 pt-3 border-t border-slate-100 flex-wrap">
-                <button onClick={submitReceive} className="h-8 px-3 text-[12px] bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5">
-                  <ArrowDownToLine size={12} /> Receive units
-                </button>
-                {/* Status transitions — surface only the legal next states */}
-                {shipment.status === 'DRAFT' && (
-                  <button onClick={() => transition('SUBMITTED')} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Mark submitted</button>
-                )}
-                {shipment.status === 'SUBMITTED' && (
-                  <button onClick={() => transition('IN_TRANSIT')} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Mark in transit</button>
-                )}
-                {shipment.status === 'IN_TRANSIT' && (
-                  <button onClick={() => transition('ARRIVED')} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Mark arrived</button>
-                )}
-                {shipment.status === 'ARRIVED' && (
-                  <button onClick={() => transition('RECEIVING')} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Start receiving</button>
-                )}
-                {(shipment.status === 'RECEIVED' || shipment.status === 'RECONCILED') && (
-                  <button onClick={() => transition('CLOSED')} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Close</button>
-                )}
-                {shipment.status !== 'CLOSED' && shipment.status !== 'CANCELLED' && (
-                  <button onClick={() => { if (confirm('Cancel shipment?')) transition('CANCELLED') }} className="h-8 px-3 text-[12px] text-rose-700 hover:bg-rose-50 rounded">Cancel</button>
+                {shipment.purchaseOrder?.poNumber && (
+                  <span className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+                    <Link2 size={10} /> PO {shipment.purchaseOrder.poNumber}
+                  </span>
                 )}
                 {shipment.fbaShipmentId && (
-                  <span className="ml-auto text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded inline-flex items-center gap-1.5">
+                  <span className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded inline-flex items-center gap-1.5">
                     <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
-                    FBA detail page lands in 8a
+                    FBA · {shipment.fbaShipmentId}
                   </span>
                 )}
               </div>
+
+              {/* Status timeline */}
+              <StatusTimeline current={shipment.status as InboundStatus} cancelled={shipment.status === 'CANCELLED'} />
+
+              {/* Carrier */}
+              {(shipment.carrierCode || shipment.trackingNumber || shipment.expectedAt) && (
+                <DrawerSection title="Carrier" icon={Truck}>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <CarrierLink carrierCode={shipment.carrierCode} trackingNumber={shipment.trackingNumber} trackingUrl={shipment.trackingUrl} />
+                    {shipment.expectedAt && (() => {
+                      const eta = new Date(shipment.expectedAt)
+                      const isLate = eta.getTime() < Date.now() && !['RECEIVED', 'RECONCILED', 'CLOSED'].includes(shipment.status)
+                      const daysLate = isLate ? Math.floor((Date.now() - eta.getTime()) / 86400_000) : 0
+                      return (
+                        <span className={`text-[11px] inline-flex items-center gap-1 ${isLate ? 'text-rose-700 font-semibold' : 'text-slate-500'}`}>
+                          <CalendarClock size={11} />
+                          ETA {eta.toLocaleDateString('en-GB')}
+                          {isLate && <span className="text-[10px] bg-rose-100 px-1.5 py-0.5 rounded ml-1">{daysLate}d late</span>}
+                        </span>
+                      )
+                    })()}
+                  </div>
+                </DrawerSection>
+              )}
+
+              {/* Costs */}
+              {(shipment.shippingCostCents || shipment.customsCostCents || shipment.dutiesCostCents || shipment.insuranceCostCents) && (
+                <DrawerSection title={`Landed cost (${shipment.currencyCode})`} icon={Boxes}>
+                  <div className="grid grid-cols-2 gap-2 text-[12px]">
+                    {shipment.shippingCostCents != null && <CostRow label="Shipping" cents={shipment.shippingCostCents} />}
+                    {shipment.customsCostCents != null && <CostRow label="Customs" cents={shipment.customsCostCents} />}
+                    {shipment.dutiesCostCents != null && <CostRow label="Duties" cents={shipment.dutiesCostCents} />}
+                    {shipment.insuranceCostCents != null && <CostRow label="Insurance" cents={shipment.insuranceCostCents} />}
+                  </div>
+                </DrawerSection>
+              )}
+
+              {/* Items */}
+              <DrawerSection
+                title={`Items (${shipment.items.length})`}
+                icon={PackageCheck}
+                right={
+                  <button onClick={fillExpected} className="text-[10px] text-blue-700 hover:underline inline-flex items-center gap-1">
+                    <Check size={10} /> Fill all expected
+                  </button>
+                }
+              >
+                <div className="space-y-2">
+                  {shipment.items.map((it: any) => (
+                    <ItemRow
+                      key={it.id}
+                      item={it}
+                      buf={receiveBuf[it.id]}
+                      expanded={expandedItems.has(it.id)}
+                      onBufChange={(v) => setReceiveBuf({ ...receiveBuf, [it.id]: v })}
+                      onToggleExpand={() => toggleExpand(it.id)}
+                      onReleaseHold={() => releaseHold(it.id)}
+                      onAddDiscrepancy={() => setComposerOpen({ kind: 'discrepancyForItem', itemId: it.id })}
+                    />
+                  ))}
+                </div>
+              </DrawerSection>
+
+              {/* Ship-level discrepancies */}
+              <DrawerSection
+                title={`Discrepancies (${shipment.discrepancies?.length ?? 0})`}
+                icon={AlertTriangle}
+                right={
+                  <button
+                    onClick={() => setComposerOpen({ kind: 'discrepancy' })}
+                    className="text-[10px] text-blue-700 hover:underline inline-flex items-center gap-1"
+                  >
+                    <Plus size={10} /> Add discrepancy
+                  </button>
+                }
+              >
+                {shipment.discrepancies?.length === 0 ? (
+                  <div className="text-[11px] text-slate-400 py-2">No ship-level discrepancies.</div>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {shipment.discrepancies.map((d: any) => (
+                      <DiscrepancyRow key={d.id} d={d} onUpdateStatus={(s) => updateDiscrepancyStatus(d.id, s)} />
+                    ))}
+                  </ul>
+                )}
+                {composerOpen?.kind === 'discrepancy' && (
+                  <DiscrepancyComposer
+                    onCancel={() => setComposerOpen(null)}
+                    onSubmit={submitDiscrepancy}
+                    busy={busy}
+                  />
+                )}
+                {composerOpen?.kind === 'discrepancyForItem' && (
+                  <DiscrepancyComposer
+                    itemId={composerOpen.itemId}
+                    itemSku={shipment.items.find((it: any) => it.id === composerOpen.itemId)?.sku}
+                    onCancel={() => setComposerOpen(null)}
+                    onSubmit={submitDiscrepancy}
+                    busy={busy}
+                  />
+                )}
+              </DrawerSection>
+
+              {/* Attachments */}
+              <DrawerSection
+                title={`Attachments (${shipment.attachments?.length ?? 0})`}
+                icon={FileText}
+                right={
+                  <button
+                    onClick={() => setComposerOpen({ kind: 'attachment' })}
+                    className="text-[10px] text-blue-700 hover:underline inline-flex items-center gap-1"
+                  >
+                    <Plus size={10} /> Add attachment
+                  </button>
+                }
+              >
+                {shipment.attachments?.length === 0 ? (
+                  <div className="text-[11px] text-slate-400 py-2">No attachments.</div>
+                ) : (
+                  <ul className="space-y-1">
+                    {shipment.attachments.map((a: any) => (
+                      <li key={a.id} className="flex items-center justify-between text-[11px] py-1">
+                        <span className="inline-flex items-center gap-2 min-w-0">
+                          <span className="text-[9px] uppercase font-semibold text-slate-500 bg-slate-100 px-1 py-0.5 rounded">{a.kind}</span>
+                          <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:underline truncate">
+                            {a.filename ?? a.url}
+                          </a>
+                        </span>
+                        <span className="text-[10px] text-slate-400 flex-shrink-0">{new Date(a.uploadedAt).toLocaleDateString('en-GB')}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {composerOpen?.kind === 'attachment' && (
+                  <AttachmentComposer
+                    onCancel={() => setComposerOpen(null)}
+                    onSubmit={submitAttachment}
+                    busy={busy}
+                  />
+                )}
+              </DrawerSection>
             </>
           )}
         </div>
+
+        {/* Sticky action bar */}
+        {shipment && !loading && (
+          <footer className="px-5 py-3 border-t border-slate-200 flex items-center gap-2 flex-wrap sticky bottom-0 bg-white">
+            <button
+              onClick={submitReceive}
+              disabled={busy || Object.keys(receiveBuf).length === 0}
+              className="h-8 px-3 text-[12px] bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+            >
+              <ArrowDownToLine size={12} /> {busy ? 'Submitting…' : 'Submit receive'}
+            </button>
+            {shipment.status === 'DRAFT' && (
+              <button onClick={() => transition('SUBMITTED')} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Mark submitted</button>
+            )}
+            {shipment.status === 'SUBMITTED' && (
+              <button onClick={() => transition('IN_TRANSIT')} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Mark in transit</button>
+            )}
+            {shipment.status === 'IN_TRANSIT' && (
+              <button onClick={() => transition('ARRIVED')} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Mark arrived</button>
+            )}
+            {shipment.status === 'ARRIVED' && (
+              <button onClick={() => transition('RECEIVING')} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Start receiving</button>
+            )}
+            {(shipment.status === 'RECEIVED' || shipment.status === 'RECONCILED') && (
+              <button onClick={() => transition('CLOSED')} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Close</button>
+            )}
+            {shipment.status !== 'CLOSED' && shipment.status !== 'CANCELLED' && (
+              <button
+                onClick={() => { if (confirm('Cancel shipment? This is terminal.')) transition('CANCELLED') }}
+                className="ml-auto h-8 px-3 text-[12px] text-rose-700 hover:bg-rose-50 rounded"
+              >Cancel</button>
+            )}
+          </footer>
+        )}
       </aside>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Drawer sub-components
+// ─────────────────────────────────────────────────────────────────────
+function DrawerSection({
+  title, icon: Icon, right, children,
+}: { title: string; icon: any; right?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="border border-slate-200 rounded-md p-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold inline-flex items-center gap-1.5">
+          <Icon size={11} className="text-slate-400" />
+          {title}
+        </div>
+        {right}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function StatusTimeline({ current, cancelled }: { current: InboundStatus; cancelled: boolean }) {
+  if (cancelled) {
+    return (
+      <div className="text-[11px] inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 text-slate-700 rounded">
+        <X size={12} className="text-rose-500" />
+        Shipment cancelled
+      </div>
+    )
+  }
+  const idx = STATUS_STEPS.indexOf(current)
+  const visibleSteps = idx === -1 ? STATUS_STEPS : STATUS_STEPS
+  return (
+    <div className="flex items-center gap-1 overflow-x-auto pb-1">
+      {visibleSteps.map((s, i) => {
+        const isCurrent = s === current
+        const isPast = i < idx && idx !== -1
+        const dotCls = isCurrent ? 'bg-blue-600 ring-4 ring-blue-100'
+                        : isPast  ? 'bg-emerald-500'
+                        : 'bg-slate-300'
+        const labelCls = isCurrent ? 'text-blue-700 font-semibold'
+                          : isPast  ? 'text-emerald-700'
+                          : 'text-slate-400'
+        return (
+          <div key={s} className="flex items-center gap-1 flex-shrink-0">
+            <span className={`w-2 h-2 rounded-full ${dotCls}`} />
+            <span className={`text-[10px] uppercase tracking-wider ${labelCls}`}>
+              {s.replace(/_/g, ' ')}
+            </span>
+            {i < visibleSteps.length - 1 && <span className="w-3 h-px bg-slate-200" />}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function CostRow({ label, cents }: { label: string; cents: number }) {
+  return (
+    <div>
+      <span className="text-slate-500">{label}</span>
+      <span className="font-semibold tabular-nums float-right">{(cents / 100).toFixed(2)}</span>
+    </div>
+  )
+}
+
+function ItemRow({
+  item, buf, expanded, onBufChange, onToggleExpand, onReleaseHold, onAddDiscrepancy,
+}: {
+  item: any
+  buf: { qty: string; qc: string; photoUrl: string } | undefined
+  expanded: boolean
+  onBufChange: (v: { qty: string; qc: string; photoUrl: string }) => void
+  onToggleExpand: () => void
+  onReleaseHold: () => void
+  onAddDiscrepancy: () => void
+}) {
+  const target = buf?.qty ?? ''
+  const qc = buf?.qc ?? ''
+  const photoUrl = buf?.photoUrl ?? ''
+  const remaining = Math.max(0, item.quantityExpected - item.quantityReceived)
+  const pct = item.quantityExpected > 0 ? Math.round((item.quantityReceived / item.quantityExpected) * 100) : 0
+  const onHold = item.qcStatus === 'HOLD' || item.qcStatus === 'FAIL'
+
+  return (
+    <div className="border border-slate-200 rounded">
+      <div className="px-3 py-2 flex items-center gap-3 flex-wrap">
+        <button onClick={onToggleExpand} className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 flex-shrink-0">
+          {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        </button>
+        <div className="flex-1 min-w-0">
+          <div className="text-[12px] font-mono font-semibold text-slate-900 truncate">{item.sku}</div>
+          <div className="text-[10px] text-slate-500 mt-0.5 inline-flex items-center gap-2">
+            <span className="tabular-nums">{item.quantityReceived}/{item.quantityExpected} received</span>
+            {remaining > 0 && <span className="text-amber-700">{remaining} remaining</span>}
+            {item.qcStatus && (
+              <span className={`uppercase font-semibold tracking-wider px-1 rounded ${
+                item.qcStatus === 'PASS' ? 'bg-emerald-100 text-emerald-700' :
+                item.qcStatus === 'HOLD' ? 'bg-amber-100 text-amber-700' :
+                item.qcStatus === 'FAIL' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'
+              }`}>{item.qcStatus}</span>
+            )}
+            {(item.photoUrls?.length ?? 0) > 0 && (
+              <span className="inline-flex items-center gap-0.5 text-slate-500"><Camera size={9} /> {item.photoUrls.length}</span>
+            )}
+            {(item.discrepancies?.length ?? 0) > 0 && (
+              <span className="inline-flex items-center gap-0.5 text-rose-700"><AlertTriangle size={9} /> {item.discrepancies.length}</span>
+            )}
+          </div>
+          <div className="mt-1 h-1 bg-slate-100 rounded overflow-hidden">
+            <div className={`h-full ${pct === 100 ? 'bg-emerald-500' : 'bg-blue-500'}`} style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+        <input
+          type="number"
+          min="0"
+          value={target}
+          onChange={(e) => onBufChange({ qty: e.target.value, qc, photoUrl })}
+          placeholder={String(item.quantityReceived)}
+          className="h-7 w-20 px-2 text-right tabular-nums border border-slate-200 rounded text-[12px]"
+          title="Cumulative target. Server computes delta."
+        />
+        <select
+          value={qc}
+          onChange={(e) => onBufChange({ qty: target, qc: e.target.value, photoUrl })}
+          className="h-7 px-1.5 text-[11px] border border-slate-200 rounded"
+        >
+          <option value="">QC —</option>
+          <option value="PASS">PASS</option>
+          <option value="HOLD">HOLD</option>
+          <option value="FAIL">FAIL</option>
+        </select>
+      </div>
+
+      {expanded && (
+        <div className="px-3 pb-3 border-t border-slate-100 space-y-2">
+          {/* Photo URL paste */}
+          <div className="pt-2">
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1 inline-flex items-center gap-1">
+              <Camera size={10} /> Add photo URL (Cloudinary or any image)
+            </div>
+            <input
+              type="url"
+              value={photoUrl}
+              onChange={(e) => onBufChange({ qty: target, qc, photoUrl: e.target.value })}
+              placeholder="https://res.cloudinary.com/…"
+              className="w-full h-7 px-2 text-[11px] border border-slate-200 rounded"
+            />
+            <div className="text-[10px] text-slate-500 mt-1">Submitted with the next receive call. Camera + direct upload land in Commit 7.</div>
+          </div>
+
+          {/* Existing photos */}
+          {(item.photoUrls?.length ?? 0) > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {item.photoUrls.map((u: string, i: number) => (
+                <a key={i} href={u} target="_blank" rel="noopener noreferrer" className="block">
+                  <img src={u} alt="" className="w-12 h-12 rounded object-cover border border-slate-200 bg-slate-100" />
+                </a>
+              ))}
+            </div>
+          )}
+
+          {/* Receipt history */}
+          {(item.receipts?.length ?? 0) > 0 && (
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1 inline-flex items-center gap-1">
+                <History size={10} /> Receipt history ({item.receipts.length})
+              </div>
+              <ul className="space-y-0.5 max-h-40 overflow-y-auto">
+                {item.receipts.slice(0, 10).map((r: any) => (
+                  <li key={r.id} className="text-[10px] flex items-center justify-between text-slate-600">
+                    <span>
+                      <span className={`font-semibold tabular-nums ${r.quantity > 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                        {r.quantity > 0 ? '+' : ''}{r.quantity}
+                      </span>
+                      {r.qcStatus && <span className="ml-2 uppercase">{r.qcStatus}</span>}
+                      {r.notes && <span className="ml-2 italic text-slate-500 truncate">— {r.notes}</span>}
+                    </span>
+                    <span className="text-slate-400 tabular-nums">{new Date(r.receivedAt).toLocaleString()}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Item-level discrepancies */}
+          {(item.discrepancies?.length ?? 0) > 0 && (
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Discrepancies</div>
+              <ul className="space-y-0.5">
+                {item.discrepancies.map((d: any) => (
+                  <li key={d.id} className="text-[11px] inline-flex items-center gap-2">
+                    <span className="text-[9px] uppercase font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-1 py-0.5 rounded">{d.reasonCode}</span>
+                    <span className="text-slate-600">{d.status}</span>
+                    {d.description && <span className="text-slate-500 truncate">— {d.description}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Item-level actions */}
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              onClick={onAddDiscrepancy}
+              className="h-7 px-2 text-[10px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1"
+            >
+              <Plus size={10} /> Add discrepancy
+            </button>
+            {onHold && (
+              <button
+                onClick={onReleaseHold}
+                className="h-7 px-2 text-[10px] bg-amber-50 text-amber-800 border border-amber-200 rounded hover:bg-amber-100 inline-flex items-center gap-1"
+              >
+                <Unlock size={10} /> Release {item.qcStatus} hold ({item.quantityReceived})
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DiscrepancyRow({ d, onUpdateStatus }: { d: any; onUpdateStatus: (s: string) => void }) {
+  const statusTone =
+    d.status === 'RESOLVED' ? 'bg-emerald-100 text-emerald-700' :
+    d.status === 'WAIVED'   ? 'bg-slate-100 text-slate-700' :
+    d.status === 'DISPUTED' ? 'bg-amber-100 text-amber-700' :
+    'bg-rose-100 text-rose-700'
+  const isOpen = d.status === 'REPORTED' || d.status === 'ACKNOWLEDGED'
+  return (
+    <li className="flex items-start justify-between gap-2 py-1 border-b border-slate-100 last:border-0">
+      <div className="min-w-0 flex-1">
+        <div className="inline-flex items-center gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
+            {d.reasonCode}
+          </span>
+          <span className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${statusTone}`}>
+            {d.status}
+          </span>
+        </div>
+        {d.description && <div className="text-[11px] text-slate-600 mt-0.5">{d.description}</div>}
+        <div className="text-[10px] text-slate-400 mt-0.5">{new Date(d.reportedAt).toLocaleDateString('en-GB')}{d.reportedBy ? ` · ${d.reportedBy}` : ''}</div>
+      </div>
+      {isOpen && (
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {d.status === 'REPORTED' && (
+            <button onClick={() => onUpdateStatus('ACKNOWLEDGED')} className="h-6 px-1.5 text-[10px] text-amber-700 hover:bg-amber-50 rounded">Ack</button>
+          )}
+          <button onClick={() => onUpdateStatus('RESOLVED')} className="h-6 px-1.5 text-[10px] text-emerald-700 hover:bg-emerald-50 rounded">Resolve</button>
+          <button onClick={() => onUpdateStatus('WAIVED')} className="h-6 px-1.5 text-[10px] text-slate-500 hover:bg-slate-50 rounded">Waive</button>
+        </div>
+      )}
+    </li>
+  )
+}
+
+function DiscrepancyComposer({
+  itemId, itemSku, onCancel, onSubmit, busy,
+}: {
+  itemId?: string
+  itemSku?: string
+  onCancel: () => void
+  onSubmit: (payload: any) => void
+  busy: boolean
+}) {
+  const [reasonCode, setReasonCode] = useState('SHORT_SHIP')
+  const [description, setDescription] = useState('')
+  const [qtyImpact, setQtyImpact] = useState('')
+
+  const submit = () => {
+    onSubmit({
+      itemId,
+      reasonCode,
+      description: description || undefined,
+      quantityImpact: qtyImpact ? Number(qtyImpact) : undefined,
+    })
+  }
+
+  return (
+    <div className="border border-rose-200 bg-rose-50/30 rounded-md p-3 mt-2 space-y-2">
+      <div className="text-[10px] uppercase tracking-wider text-rose-700 font-semibold">
+        New discrepancy {itemSku && <span className="text-rose-600">— {itemSku}</span>}
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <div className="text-[10px] text-slate-500 mb-1">Reason</div>
+          <select value={reasonCode} onChange={(e) => setReasonCode(e.target.value)} className="h-7 w-full px-1.5 text-[11px] border border-slate-200 rounded">
+            {DISCREPANCY_REASONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <div className="text-[10px] text-slate-500 mb-1">Quantity impact (signed)</div>
+          <input
+            type="number"
+            value={qtyImpact}
+            onChange={(e) => setQtyImpact(e.target.value)}
+            placeholder="+5 = over, -5 = short"
+            className="h-7 w-full px-2 text-[11px] tabular-nums border border-slate-200 rounded"
+          />
+        </div>
+      </div>
+      <textarea
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="Description (visible to supplier on resolution PDF — Commit 17)"
+        rows={2}
+        className="w-full px-2 py-1 text-[11px] border border-slate-200 rounded"
+      />
+      <div className="flex items-center justify-end gap-2">
+        <button onClick={onCancel} className="h-7 px-2 text-[11px] text-slate-500 hover:text-slate-900">Cancel</button>
+        <button onClick={submit} disabled={busy} className="h-7 px-3 text-[11px] bg-rose-600 text-white rounded hover:bg-rose-700 disabled:opacity-50">
+          {busy ? 'Saving…' : 'Create'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function AttachmentComposer({
+  onCancel, onSubmit, busy,
+}: { onCancel: () => void; onSubmit: (p: any) => void; busy: boolean }) {
+  const [kind, setKind] = useState('INVOICE')
+  const [url, setUrl] = useState('')
+  const [filename, setFilename] = useState('')
+
+  const submit = () => {
+    if (!url) { alert('URL required'); return }
+    onSubmit({ kind, url, filename: filename || undefined })
+  }
+
+  return (
+    <div className="border border-slate-300 bg-slate-50/50 rounded-md p-3 mt-2 space-y-2">
+      <div className="text-[10px] uppercase tracking-wider text-slate-700 font-semibold">New attachment</div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <div className="text-[10px] text-slate-500 mb-1">Kind</div>
+          <select value={kind} onChange={(e) => setKind(e.target.value)} className="h-7 w-full px-1.5 text-[11px] border border-slate-200 rounded">
+            {ATTACHMENT_KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
+          </select>
+        </div>
+        <div>
+          <div className="text-[10px] text-slate-500 mb-1">Filename (optional)</div>
+          <input value={filename} onChange={(e) => setFilename(e.target.value)} placeholder="invoice.pdf" className="h-7 w-full px-2 text-[11px] border border-slate-200 rounded" />
+        </div>
+      </div>
+      <div>
+        <div className="text-[10px] text-slate-500 mb-1">URL</div>
+        <input
+          type="url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://res.cloudinary.com/.../inbound/.../file.pdf"
+          className="w-full h-7 px-2 text-[11px] border border-slate-200 rounded"
+        />
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <button onClick={onCancel} className="h-7 px-2 text-[11px] text-slate-500 hover:text-slate-900">Cancel</button>
+        <button onClick={submit} disabled={busy} className="h-7 px-3 text-[11px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">
+          {busy ? 'Saving…' : 'Add'}
+        </button>
+      </div>
     </div>
   )
 }
