@@ -20,11 +20,13 @@
  * Re-running the cron mid-day finds no eligible rows.
  */
 
+import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import {
   attachPoToRecommendation,
 } from './replenishment-recommendation.service.js'
+import { convertCostToEur } from './replenishment-math.service.js'
 
 export const DEFAULT_QTY_CEILING_PER_PO =
   Number(process.env.NEXUS_AUTO_PO_QTY_CEILING_DEFAULT) || 5000
@@ -62,6 +64,16 @@ interface RecRow {
   sku: string
   reorderQuantity: number
   unitCostCents: number | null
+  /** R.15 — currency that unitCostCents is denominated in. EUR-default; non-EUR
+   *  requires fxRateUsed for conversion at ceiling-check time. */
+  unitCostCurrency: string | null
+  /** R.15 — point-in-time FX rate captured at recommendation generation
+   *  (one EUR == fxRateUsed units of unitCostCurrency). Re-using the
+   *  snapshotted rate keeps the auto-PO ceiling check fair to what the
+   *  operator saw on the recommendation when the rec was created.
+   *  Prisma Decimal column → either Decimal instance or null. Coerce
+   *  to number at use site via `Number()`. */
+  fxRateUsed: Prisma.Decimal | null
   preferredSupplierId: string | null
   isManufactured: boolean
 }
@@ -72,6 +84,9 @@ interface SupplierPolicy {
   autoTriggerEnabled: boolean
   autoTriggerMaxQtyPerPo: number | null
   autoTriggerMaxCostCentsPerPo: number | null
+  /** R.15 — supplier's quoted currency. Persisted onto PO.currencyCode
+   *  so the PO ledger preserves which currency the line-item cents are in. */
+  defaultCurrency: string | null
 }
 
 // ─── Pure-function predicates ─────────────────────────────────────
@@ -150,6 +165,8 @@ export async function runAutoPoSweep(args: {
         sku: true,
         reorderQuantity: true,
         unitCostCents: true,
+        unitCostCurrency: true,
+        fxRateUsed: true,
         preferredSupplierId: true,
         isManufactured: true,
       },
@@ -198,6 +215,7 @@ export async function runAutoPoSweep(args: {
         autoTriggerEnabled: true,
         autoTriggerMaxQtyPerPo: true,
         autoTriggerMaxCostCentsPerPo: true,
+        defaultCurrency: true,
       },
     })
     const supplierById = new Map<string, SupplierPolicy>(suppliers.map((s) => [s.id, s]))
@@ -218,26 +236,69 @@ export async function runAutoPoSweep(args: {
         0,
       )
 
+      // R.15 — Convert totalCostCents to EUR before the ceiling check.
+      // Cost ceilings (autoTriggerMaxCostCentsPerPo + the env default
+      // NEXUS_AUTO_PO_COST_CEILING_CENTS_DEFAULT) are EUR-denominated.
+      // Without this conversion, a non-EUR supplier's totalCostCents
+      // (e.g. 7800 CNY-cents ≈ €100) is compared against the ceiling
+      // as if it were 7800 EUR-cents, declining valid POs.
+      //
+      // Per-rec conversion (not bulk) because recs in a group can in
+      // principle have different fxRateUsed snapshots even for the
+      // same supplier (recs span generation runs). Sum the converted
+      // values for the ceiling.
+      let totalCostCentsEur = 0
+      let fxFailed = false
+      for (const r of group) {
+        const eur = convertCostToEur({
+          amountCents: (r.unitCostCents ?? 0) * r.reorderQuantity,
+          currency: r.unitCostCurrency,
+          fxRate: r.fxRateUsed != null ? Number(r.fxRateUsed) : null,
+        })
+        if (eur == null) {
+          fxFailed = true
+          break
+        }
+        totalCostCentsEur += eur
+      }
+      if (fxFailed) {
+        // Conservative: decline rather than potentially overshoot the
+        // ceiling. The operator will see this in the run log and can
+        // either set Supplier.defaultCurrency='EUR' on the rec or
+        // wait for the next forecast pass to repopulate fxRateUsed.
+        counters.declinedCostCeiling += group.length
+        notes.push(
+          `${supplier.name}: declined (FX_RATE_MISSING — non-EUR rec without fxRateUsed; cannot validate ceiling)`,
+        )
+        continue
+      }
+
       const fit = fitsCeilings({
         totalQty,
-        totalCostCents,
+        totalCostCents: totalCostCentsEur,
         supplierMaxQty: supplier.autoTriggerMaxQtyPerPo,
         supplierMaxCostCents: supplier.autoTriggerMaxCostCentsPerPo,
       })
       if (fit.ok === false) {
         if (fit.reason === 'QTY_CEILING_EXCEEDED') counters.declinedQtyCeiling += group.length
         else counters.declinedCostCeiling += group.length
-        notes.push(`${supplier.name}: declined (${fit.reason}, qty=${totalQty}, cost=${totalCostCents}c)`)
+        notes.push(
+          `${supplier.name}: declined (${fit.reason}, qty=${totalQty}, costEur=${totalCostCentsEur}c, costSupplier=${totalCostCents}c)`,
+        )
         continue
       }
 
       if (dryRun) {
-        notes.push(`${supplier.name}: would create PO (${group.length} lines, ${totalQty} units, ${totalCostCents}c)`)
+        notes.push(
+          `${supplier.name}: would create PO (${group.length} lines, ${totalQty} units, ${totalCostCentsEur}c EUR / ${totalCostCents}c supplier)`,
+        )
         // Count as "created" in summary so the preview accurately
         // shows what the real run would do.
         counters.posCreated++
         counters.totalUnitsCreated += totalQty
-        counters.totalCostCentsCreated += totalCostCents
+        // Counter is in EUR-cents so sums across multi-currency
+        // suppliers are comparable.
+        counters.totalCostCentsCreated += totalCostCentsEur
         continue
       }
 
@@ -247,7 +308,11 @@ export async function runAutoPoSweep(args: {
             poNumber: `AUTO-${Date.now()}-${supplierId.slice(-6)}`,
             supplierId,
             status: 'DRAFT',
+            // PO.totalCents stays in supplier currency so it matches
+            // sum(PurchaseOrderItem.unitCostCents). EUR ceiling check
+            // already happened above.
             totalCents: totalCostCents,
+            currencyCode: supplier.defaultCurrency ?? 'EUR',
             createdBy: 'auto-replenishment',
             notes: `Auto-created by R.6 cron at ${new Date().toISOString()} from ${group.length} CRITICAL/HIGH recommendation(s).`,
             items: {
@@ -264,7 +329,9 @@ export async function runAutoPoSweep(args: {
         createdPoIds.push(po.id)
         counters.posCreated++
         counters.totalUnitsCreated += totalQty
-        counters.totalCostCentsCreated += totalCostCents
+        // Counter is in EUR-cents so sums across multi-currency
+        // suppliers are comparable.
+        counters.totalCostCentsCreated += totalCostCentsEur
 
         // Link recs to the PO (status → ACTED).
         for (const rec of group) {
