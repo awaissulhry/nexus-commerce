@@ -1830,6 +1830,13 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           // (the canonical "child product" pattern in this codebase),
           // plus a ProductVariation row with the attribute map. This
           // matches what catalog.routes.ts does for child creation.
+          //
+          // P.1 NOTE — the PV mirror is load-bearing for the listing
+          // wizard's variations.service + submission.service, which
+          // read children via the PV relation (not parentId). Until
+          // those services are refactored to read Product.parentId
+          // children, the PV mirror has to stay; disabling it would
+          // make the wizard see children: [] for new variants.
           for (const v of body.variations) {
             const child = await tx.product.create({
               data: {

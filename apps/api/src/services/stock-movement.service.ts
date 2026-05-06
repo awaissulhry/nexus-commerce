@@ -259,14 +259,17 @@ export async function applyStockMovement(input: StockMovementInput) {
 
     const balanceAfter = newQuantity
 
-    // Variant stock mirrored on ProductVariation.stock for any caller
-    // still reading that column directly. ProductVariation has zero
-    // rows in current production but the field remains schema-live.
+    // P.1 — ProductVariation writes deprecated. The canonical variant
+    // mechanism is Product.parentId; the PV table has zero rows and
+    // the wizard / catalog edit paths that produced mirror rows are
+    // also disabled in this commit. If a caller still passes a
+    // variationId, log a warning so we can find them — but do not
+    // attempt the update (would fail since no PV rows exist anyway).
     if (variationId) {
-      await tx.productVariation.update({
-        where: { id: variationId },
-        data: { stock: { increment: change } },
-      })
+      logger.warn(
+        'applyStockMovement: variationId supplied but ProductVariation writes are deprecated (P.1)',
+        { productId, variationId, change },
+      )
     }
 
     // Product.totalStock as cached SUM(StockLevel.quantity). Single

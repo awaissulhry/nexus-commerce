@@ -1263,6 +1263,11 @@ export async function catalogRoutes(app: FastifyInstance) {
       // queries for theme picking + missing-attribute annotations.
       // Without this, /api/listing-wizard/:id/variations sees
       // children: [] even when child Products with parentId exist.
+      //
+      // P.1 NOTE — kept alive because variations.service.ts reads
+      // children via the PV relation (Product → variations), not
+      // Product.parentId. Refactoring that service to use parentId
+      // is a prerequisite for dropping PV; tracked in TECH_DEBT.
       if (hasVariantAttrs) {
         await prisma.productVariation
           .create({

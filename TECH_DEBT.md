@@ -795,6 +795,30 @@ Properties: atomic master+listing+outbox write (crash-safe), bounded request lat
 
 **Tied to #42 and #44.** Resolving the bulk-ops data-shape mismatch (#44) and shipping the master-price cascade (#42) both need this answered first.
 
+**Update 2026-05-06 — P.1 scope discovery.** Tried to deprecate ProductVariation writes as a foundation step before the /products rebuild. Findings:
+
+- `ProductVariation` table: still 0 rows ✓
+- `VariantChannelListing` table: still 0 rows ✓
+- Code references: 172 across 28 files (much larger surface than expected)
+- The truly dormant write is `stock-movement.service.ts:262-270` — only fires when `variationId` is passed, which never happens since no PV rows exist. Disabled in P.1 (logs warning if hit).
+- All other write sites (wizard create at `products.routes.ts:1850`, catalog children mirror at `catalog.routes.ts:1267`, web actions at `catalog/[id]/edit/actions.ts:53,59` and `inventory/manage/actions.ts:37,89,104`, channel webhooks) are **load-bearing** for the listing wizard's variant submission flow.
+
+**Why removal is blocked**: the listing wizard's reader services depend on the PV relation, not `Product.parentId` children:
+- `apps/api/src/services/listing-wizard/variations.service.ts:131` — reads `product.variations` (PV relation) for theme picking + missing-attribute annotations
+- `apps/api/src/services/listing-wizard/submission.service.ts:347` — reads PV by SKU for Amazon variant submission
+- `apps/api/src/services/listing-wizard/schema-parser.service.ts:535` — reads PV for schema validation
+
+Disabling the wizard's PV writes without first refactoring these readers would silently set `children: []` on every new variant, breaking Amazon variant submission.
+
+**Real removal sequence** (future commit, ~3-5 days):
+1. Refactor `variations.service.ts` to read children via `Product.parentId` + `Product.variantAttributes` (already populated for new rows in catalog children create)
+2. Refactor `submission.service.ts` to walk parentId children for variant SKUs + read VCL → ChannelListing instead
+3. Refactor `schema-parser.service.ts` similarly
+4. Backfill any PV-only data into the parent's children (none today since 0 rows)
+5. Disable the remaining write paths
+6. Drop the model + migration
+7. Sweep remaining 100+ references in bulk-action, pricing-snapshot, forecast, inventory, marketplaces, repricing, webhooks routes
+
 ---
 
 ## 44. 🟡 Bulk operations target unused data shape — partially resolved 2026-05-06
