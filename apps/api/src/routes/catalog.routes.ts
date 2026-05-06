@@ -284,12 +284,34 @@ export async function catalogRoutes(app: FastifyInstance) {
           });
         }
 
-        // Create product with SSOT defaults
+        // P0/B1 — basePrice validation matches MasterPriceService's
+        // contract so we fail fast before the create rather than
+        // letting Prisma swallow a NaN or negative value.
+        const newBasePrice = Number(basePrice);
+        if (!Number.isFinite(newBasePrice) || newBasePrice < 0) {
+          return reply.status(400).send({
+            success: false,
+            error: {
+              code: "INVALID_BASE_PRICE",
+              message: "basePrice must be a non-negative finite number",
+            },
+          });
+        }
+
+        // Create product with SSOT defaults. basePrice is set here on
+        // create — there are no ChannelListings yet, so there's nothing
+        // for MasterPriceService to cascade to. The first ChannelListing
+        // created against this product will pick up basePrice as its
+        // masterPrice snapshot via Phase 13's normal listing-create
+        // flow. No-cascade-required is the correct shape on create;
+        // the bug at this endpoint was actually that it accepted invalid
+        // basePrice values without the service-style guard. That's
+        // closed by the validation above.
         const product = await prisma.product.create({
           data: {
             sku,
             name,
-            basePrice,
+            basePrice: newBasePrice.toFixed(2),
             productType,
             categoryAttributes: categoryAttributes || {},
             status: "ACTIVE",
