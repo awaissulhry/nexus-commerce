@@ -110,10 +110,18 @@ export class OutboundSyncService {
     };
 
     try {
-      // Get all pending syncs
+      // Get all pending syncs that have either passed their grace
+      // window or never had one. TECH_DEBT #49 — without the holdUntil
+      // filter, any caller that wrote an OutboundSyncQueue row without
+      // ALSO adding a BullMQ job (legacy paths, raw imports, manual
+      // SQL) bypassed the 5-minute undo window because BullMQ's job
+      // delay was the only thing deferring processing. This filter
+      // mirrors outbound-sync-phase9.service.ts:332's getReadyItems().
+      const now = new Date();
       const pendingItems = await prisma.outboundSyncQueue.findMany({
         where: {
           syncStatus: "PENDING",
+          OR: [{ holdUntil: null }, { holdUntil: { lte: now } }],
         },
         include: {
           product: true,

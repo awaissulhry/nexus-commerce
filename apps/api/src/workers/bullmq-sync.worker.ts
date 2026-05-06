@@ -201,10 +201,15 @@ async function processOutboundSyncJob(job: Job) {
             pricingRule: true,
             priceAdjustmentPercent: true,
             priceOverride: true,
+            // TECH_DEBT #48 — without this we'd recompute even when
+            // the seller has explicitly opted out of following the
+            // master, and silently overwrite their per-marketplace
+            // override with a rule-based value.
+            followMasterPrice: true,
           },
         })
 
-        if (product && listing) {
+        if (product && listing && listing.followMasterPrice) {
           const pricingResult = calculateTargetPrice({
             masterPrice: product.basePrice,
             costPrice: product.costPrice,
@@ -229,6 +234,14 @@ async function processOutboundSyncJob(job: Job) {
             data: {
               price: pricingResult.finalPrice,
             },
+          })
+        } else if (product && listing && !listing.followMasterPrice) {
+          // followMasterPrice=false → seller has set a per-marketplace
+          // price override. Skip the recompute so we don't trash it on
+          // the next sync. The push uses listing.price as-is.
+          logger.debug('💰 Skipping pricing recompute (followMasterPrice=false)', {
+            queueId,
+            channelListingId,
           })
         }
       } catch (pricingError) {
