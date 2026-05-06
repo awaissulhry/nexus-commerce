@@ -222,6 +222,7 @@ model Product {
   translations         ProductTranslation[] // H.10: per-language master content
   relationsFrom        ProductRelation[] @relation("ProductRelationFrom") // H.11
   relationsTo          ProductRelation[] @relation("ProductRelationTo") // H.11
+  recommendations      ReplenishmentRecommendation[] // R.3
 
   // H.16 — Compliance master data. HS code = customs classification,
   // mostly 6-digit (HS) or 8-10 digit (CN/HTS); stored as text since
@@ -2989,6 +2990,69 @@ model ReplenishmentRule {
   updatedAt DateTime @updatedAt
 
   @@index([preferredSupplierId])
+}
+
+// ── R.3: Replenishment recommendation persistence + audit trail ─────
+// One row per recommendation we've ever shown for a product. Status
+// machine: ACTIVE → SUPERSEDED (replaced by a newer recommendation)
+// or ACTIVE → ACTED (operator created a PO/WO from it). At most one
+// ACTIVE per productId (enforced by partial unique index in raw SQL —
+// see migration). Diff-aware writes: the page persists a new row only
+// when the recommendation actually changed (urgency / reorderQuantity
+// / effectiveStock / needsReorder). Page-loads where nothing changed
+// = zero writes.
+//
+// Snapshot fields (velocity, lead-time inputs, stock state) are
+// frozen at generation time so the audit trail stays meaningful even
+// after the underlying data shifts.
+model ReplenishmentRecommendation {
+  id          String   @id @default(cuid())
+  productId   String
+  sku         String
+  generatedAt DateTime @default(now())
+
+  // Snapshot of generation inputs
+  velocity       Decimal @db.Decimal(10, 2)
+  velocitySource String // FORECAST | TRAILING_VELOCITY
+  leadTimeDays   Int
+  leadTimeSource String // SUPPLIER_PRODUCT_OVERRIDE | SUPPLIER_DEFAULT | FALLBACK
+  safetyDays     Int
+
+  // Snapshot of stock state
+  totalAvailable        Int
+  inboundWithinLeadTime Int
+  effectiveStock        Int
+
+  // Computed outputs
+  reorderPoint    Int
+  reorderQuantity Int
+  daysOfStockLeft Int?
+  urgency         String // CRITICAL | HIGH | MEDIUM | LOW
+  needsReorder    Boolean
+
+  preferredSupplierId String?
+  isManufactured      Boolean @default(false)
+
+  // Lifecycle
+  status               String    @default("ACTIVE") // ACTIVE | SUPERSEDED | ACTED | DISMISSED | EXPIRED
+  supersededAt         DateTime?
+  supersededById       String?
+  actedAt              DateTime?
+  actedByUserId        String?
+  resultingPoId        String?
+  resultingWorkOrderId String?
+
+  // Override audit (when ACTED with an operator-changed qty)
+  overrideQuantity Int?
+  overrideNotes    String?
+  overrideByUserId String?
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, status])
+  @@index([generatedAt])
+  @@index([urgency, status])
+  @@index([resultingPoId])
 }
 
 // ─────────────────────────────────────────────────────────────────────

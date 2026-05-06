@@ -87,6 +87,32 @@ interface Suggestion {
   fulfillmentChannel: string | null
   leadTimeDays: number
   leadTimeSource: 'SUPPLIER_PRODUCT_OVERRIDE' | 'SUPPLIER_DEFAULT' | 'FALLBACK'
+  // R.2 — multi-location stock breakdown
+  byLocation?: Array<{
+    locationId: string
+    locationCode: string
+    locationName: string
+    locationType: string
+    servesMarketplaces: string[]
+    quantity: number
+    reserved: number
+    available: number
+  }>
+  totalAvailable?: number
+  stockSource?: string
+  channelCover?: Array<{
+    channel: string
+    marketplace: string
+    velocityPerDay: number
+    available: number
+    locationCode: string | null
+    source: string
+    daysOfCover: number | null
+  }>
+  // R.3 — id of the persisted ReplenishmentRecommendation that
+  // produced this suggestion. Sent back in PO creation so the audit
+  // trail links rec → PO.
+  recommendationId?: string | null
 }
 
 interface ReplenishmentResponse {
@@ -230,6 +256,8 @@ export default function ReplenishmentWorkspace() {
         body: JSON.stringify({
           quantity: s.reorderQuantity,
           supplierId: s.preferredSupplierId,
+          // R.3 — link PO back to source recommendation
+          recommendationId: s.recommendationId ?? undefined,
         }),
       },
     )
@@ -992,6 +1020,12 @@ function ForecastDetailDrawer({
                 marketplace={null}
               />
 
+              {/* R.3 — Recommendation history. Audit trail of every
+                  recommendation we've ever shown for this product +
+                  the POs/WOs that came from them. Collapsed by
+                  default; expand to load. */}
+              <RecommendationHistoryCard productId={detail.product?.id ?? null} />
+
               {/* Model */}
               {detail.model && (
                 <div className="text-[11px] text-slate-500">
@@ -1230,6 +1264,92 @@ function ChannelCoverPanel({
           )
         })}
       </ul>
+    </div>
+  )
+}
+
+// R.3 — Recommendation history audit trail for the drawer. Shows a
+// chronological list of every recommendation we've ever shown for
+// this product, with status pills (ACTIVE / SUPERSEDED / ACTED) +
+// urgency + qty + the resulting PO/WO when ACTED. Lazy-loaded on
+// expand so closed drawers don't fire the request.
+function RecommendationHistoryCard({ productId }: { productId: string | null }) {
+  const [open, setOpen] = useState(false)
+  const [data, setData] = useState<any>(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!open || !productId || data) return
+    setLoading(true)
+    fetch(`${getBackendUrl()}/api/fulfillment/replenishment/${productId}/history?limit=50`, { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then(setData)
+      .catch(() => setData(null))
+      .finally(() => setLoading(false))
+  }, [open, productId, data])
+
+  if (!productId) return null
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold inline-flex items-center gap-1 hover:text-slate-700"
+      >
+        History {open ? '▾' : '▸'}
+        {data?.history && (
+          <span className="text-slate-400 normal-case font-normal">
+            ({data.history.length})
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="mt-2">
+          {loading && <div className="text-[12px] text-slate-400">Loading…</div>}
+          {!loading && data?.history?.length === 0 && (
+            <div className="text-[11px] text-slate-500 italic">
+              No history yet — recommendations are persisted starting from this commit.
+            </div>
+          )}
+          {!loading && data?.history?.length > 0 && (
+            <ul className="space-y-1 text-[11px]">
+              {data.history.slice(0, 5).map((h: any) => {
+                const tone =
+                  h.status === 'ACTIVE' ? 'bg-blue-50 border-blue-200 text-blue-700'
+                  : h.status === 'ACTED' ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                  : h.status === 'DISMISSED' ? 'bg-slate-100 border-slate-200 text-slate-500'
+                  : 'bg-slate-50 border-slate-200 text-slate-600'
+                return (
+                  <li key={h.id} className="flex items-start gap-2 border border-slate-100 rounded px-2 py-1">
+                    <span className="text-slate-500 tabular-nums w-28 flex-shrink-0">
+                      {new Date(h.generatedAt).toISOString().slice(0, 16).replace('T', ' ')}
+                    </span>
+                    <span className={cn('text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border w-20 text-center flex-shrink-0', tone)}>
+                      {h.status === 'SUPERSEDED' ? 'SUPER.' : h.status}
+                    </span>
+                    <span className="text-slate-700 flex-shrink-0">{h.urgency}</span>
+                    <span className="text-slate-600 tabular-nums flex-shrink-0">qty {h.reorderQuantity}</span>
+                    <span className="text-slate-500 tabular-nums flex-shrink-0">stock {h.effectiveStock}</span>
+                    {h.actedAt && (h.resultingPoId || h.resultingWorkOrderId) && (
+                      <span className="text-emerald-700 truncate">
+                        → {h.resultingPoId ? 'PO ' : 'WO '}{(h.resultingPoId ?? h.resultingWorkOrderId).slice(-8)}
+                        {h.overrideQuantity != null && h.overrideQuantity !== h.reorderQuantity && (
+                          <span className="text-slate-500"> (override {h.reorderQuantity}→{h.overrideQuantity})</span>
+                        )}
+                      </span>
+                    )}
+                  </li>
+                )
+              })}
+              {data.history.length > 5 && (
+                <li className="text-[10px] text-slate-400 italic">
+                  +{data.history.length - 5} more rows · paginated UI coming in R.5
+                </li>
+              )}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -1474,11 +1594,23 @@ function BulkPoModal({
     setSubmitting(true)
     setError(null)
     try {
-      const items = suggestions.map((s) => ({
-        productId: s.productId,
-        quantity: quantities[s.productId] ?? s.reorderQuantity,
-        supplierId: s.preferredSupplierId,
-      }))
+      // R.3 — link each PO line back to its source recommendation +
+      // audit any quantity override (when user changed qty from the
+      // suggested value).
+      const items = suggestions.map((s) => {
+        const finalQty = quantities[s.productId] ?? s.reorderQuantity
+        const overridden = finalQty !== s.reorderQuantity
+        return {
+          productId: s.productId,
+          quantity: finalQty,
+          supplierId: s.preferredSupplierId,
+          recommendationId: s.recommendationId ?? null,
+          quantityOverride: overridden ? finalQty : null,
+          overrideNotes: overridden
+            ? `Operator override: ${s.reorderQuantity} → ${finalQty} via bulk PO modal`
+            : null,
+        }
+      })
       const res = await fetch(
         `${getBackendUrl()}/api/fulfillment/replenishment/bulk-draft-po`,
         {

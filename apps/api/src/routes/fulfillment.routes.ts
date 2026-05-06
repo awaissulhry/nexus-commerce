@@ -5,6 +5,15 @@ import { refreshSalesAggregates } from '../services/sales-aggregate.service.js'
 import { resolveAtp, DEFAULT_LEAD_TIME_DAYS } from '../services/atp.service.js'
 import { resolveStockForChannel, type ChannelLocationSource } from '../services/atp-channel.service.js'
 import {
+  bulkPersistRecommendationsIfChanged,
+  attachPoToRecommendation,
+  getRecommendationHistory,
+  getRecommendationById,
+  type RecommendationInput,
+  type Urgency,
+  type VelocitySource,
+} from '../services/replenishment-recommendation.service.js'
+import {
   ingestSalesTrafficForDay,
   ingestAllAmazonMarketplaces,
 } from '../services/sales-report-ingest.service.js'
@@ -2857,15 +2866,53 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const order = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 }
       suggestions.sort((a, b) => order[a.urgency] - order[b.urgency] || (a.daysOfStockLeft ?? 999) - (b.daysOfStockLeft ?? 999))
 
+      // R.3 — persist recommendations (diff-aware: only writes rows
+      // for products whose urgency / qty / stock / needsReorder
+      // actually changed vs the current ACTIVE row). Failure to
+      // persist must not block the page render — service logs +
+      // returns prev id when individual writes fail.
+      const recommendationInputs: RecommendationInput[] = suggestions.map((s) => ({
+        productId: s.productId,
+        sku: s.sku,
+        velocity: s.velocity,
+        velocitySource: s.forecastSource as VelocitySource,
+        leadTimeDays: s.leadTimeDays,
+        leadTimeSource: s.leadTimeSource,
+        safetyDays: rulesByProduct.get(s.productId)?.safetyStockDays ?? 7,
+        totalAvailable: s.totalAvailable,
+        inboundWithinLeadTime: s.inboundWithinLeadTime,
+        effectiveStock: s.effectiveStock,
+        reorderPoint: s.reorderPoint,
+        reorderQuantity: s.reorderQuantity,
+        daysOfStockLeft: s.daysOfStockLeft,
+        urgency: s.urgency as Urgency,
+        needsReorder: s.needsReorder,
+        preferredSupplierId: s.preferredSupplierId,
+        isManufactured: s.isManufactured,
+      }))
+      const recIdsByProduct = await bulkPersistRecommendationsIfChanged(
+        recommendationInputs,
+      ).catch((err) => {
+        fastify.log.warn({ err }, '[replenishment] persist failed — continuing without ids')
+        return new Map<string, string>()
+      })
+
+      // Attach recommendationId to each suggestion so the UI can
+      // round-trip it back when creating a PO.
+      const suggestionsWithRecId = suggestions.map((s) => ({
+        ...s,
+        recommendationId: recIdsByProduct.get(s.productId) ?? null,
+      }))
+
       const counts = {
-        critical: suggestions.filter((s) => s.urgency === 'CRITICAL').length,
-        high: suggestions.filter((s) => s.urgency === 'HIGH').length,
-        medium: suggestions.filter((s) => s.urgency === 'MEDIUM').length,
-        low: suggestions.filter((s) => s.urgency === 'LOW').length,
+        critical: suggestionsWithRecId.filter((s) => s.urgency === 'CRITICAL').length,
+        high: suggestionsWithRecId.filter((s) => s.urgency === 'HIGH').length,
+        medium: suggestionsWithRecId.filter((s) => s.urgency === 'MEDIUM').length,
+        low: suggestionsWithRecId.filter((s) => s.urgency === 'LOW').length,
       }
 
       return {
-        suggestions,
+        suggestions: suggestionsWithRecId,
         counts,
         window,
         // F.1 — surface the active filters so the UI can render them
@@ -3300,8 +3347,14 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           quantity: number
           supplierId?: string | null
           notes?: string | null
+          // R.3 — link the resulting PO/WO back to the source rec.
+          recommendationId?: string | null
+          // R.3 — operator's quantity override (if quantity != suggested).
+          quantityOverride?: number | null
+          overrideNotes?: string | null
         }>
         notes?: string
+        userId?: string
       }
       const items = body.items ?? []
       if (items.length === 0) {
@@ -3343,16 +3396,19 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         ),
       )
 
-      const grouped = new Map<
-        string,
-        Array<{ productId: string; sku: string; quantity: number; notes?: string | null }>
-      >()
-      const manufactured: Array<{
+      // R.3 — line shape carries the optional source recommendationId
+      // + override fields so we can attach PO/WO ids back after create.
+      type Line = {
         productId: string
         sku: string
         quantity: number
         notes?: string | null
-      }> = []
+        recommendationId?: string | null
+        quantityOverride?: number | null
+        overrideNotes?: string | null
+      }
+      const grouped = new Map<string, Line[]>()
+      const manufactured: Line[] = []
       const skipped: Array<{ productId: string; reason: string }> = []
       for (const item of items) {
         const product = productById.get(item.productId)
@@ -3365,11 +3421,14 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           continue
         }
         const rule = ruleByProduct.get(item.productId)
-        const line = {
+        const line: Line = {
           productId: item.productId,
           sku: product.sku,
           quantity: Math.floor(item.quantity),
           notes: item.notes ?? null,
+          recommendationId: item.recommendationId ?? null,
+          quantityOverride: item.quantityOverride ?? null,
+          overrideNotes: item.overrideNotes ?? null,
         }
         // Manufactured items create a WorkOrder, not a PO line.
         if (rule?.isManufactured) {
@@ -3437,6 +3496,23 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           itemCount: po._count.items,
           totalUnits,
         })
+
+        // R.3 — attach this PO back to every source recommendation
+        // that contributed a line to it. Failures don't roll back the
+        // PO (audit trail is best-effort, not transactional with
+        // PO creation).
+        for (const li of lineItems) {
+          if (!li.recommendationId) continue
+          await attachPoToRecommendation({
+            recommendationId: li.recommendationId,
+            poId: po.id,
+            overrideQuantity: li.quantityOverride ?? null,
+            overrideNotes: li.overrideNotes ?? null,
+            userId: body.userId ?? null,
+          }).catch((err) => {
+            fastify.log.warn({ err, recId: li.recommendationId, poId: po.id }, '[replenishment] attach failed')
+          })
+        }
       }
 
       // Manufactured items → one WorkOrder per line. WorkOrders have no
@@ -3457,6 +3533,18 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           select: { id: true, productId: true, quantity: true },
         })
         createdWorkOrders.push(wo)
+
+        if (line.recommendationId) {
+          await attachPoToRecommendation({
+            recommendationId: line.recommendationId,
+            workOrderId: wo.id,
+            overrideQuantity: line.quantityOverride ?? null,
+            overrideNotes: line.overrideNotes ?? null,
+            userId: body.userId ?? null,
+          }).catch((err) => {
+            fastify.log.warn({ err, recId: line.recommendationId, woId: wo.id }, '[replenishment] attach failed')
+          })
+        }
       }
 
       return {
@@ -3519,7 +3607,16 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/fulfillment/replenishment/:productId/draft-po', async (request, reply) => {
     try {
       const { productId } = request.params as { productId: string }
-      const body = request.body as { quantity?: number; supplierId?: string; expectedDeliveryDate?: string }
+      const body = request.body as {
+        quantity?: number
+        supplierId?: string
+        expectedDeliveryDate?: string
+        // R.3 — link the resulting PO back to the source rec.
+        recommendationId?: string
+        quantityOverride?: number | null
+        overrideNotes?: string | null
+        userId?: string
+      }
       const product = await prisma.product.findUnique({ where: { id: productId }, select: { sku: true } })
       if (!product) return reply.code(404).send({ error: 'Product not found' })
       const supplierId = body.supplierId ?? (await prisma.replenishmentRule.findUnique({ where: { productId } }))?.preferredSupplierId ?? null
@@ -3541,10 +3638,74 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         },
         include: { items: true },
       })
+
+      // R.3 — attach back to the source rec when provided.
+      if (body.recommendationId) {
+        await attachPoToRecommendation({
+          recommendationId: body.recommendationId,
+          poId: po.id,
+          overrideQuantity: body.quantityOverride ?? null,
+          overrideNotes: body.overrideNotes ?? null,
+          userId: body.userId ?? null,
+        }).catch((err) => {
+          fastify.log.warn({ err, recId: body.recommendationId, poId: po.id }, '[replenishment] attach failed')
+        })
+      }
+
       return po
     } catch (error: any) {
       fastify.log.error({ err: error }, '[replenishment/draft-po] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // R.3 — recommendation history per product. Chronological list of
+  // every recommendation we've ever shown for this product, with
+  // status + supersession + ACTED transitions. Powers the drawer
+  // History mini-section.
+  fastify.get('/fulfillment/replenishment/:productId/history', async (request, reply) => {
+    try {
+      const { productId } = request.params as { productId: string }
+      const q = request.query as { limit?: string }
+      const limit = Math.max(1, Math.min(500, Number(q.limit) || 50))
+      const rows = await getRecommendationHistory(productId, limit)
+      return {
+        productId,
+        history: rows.map((r) => ({
+          id: r.id,
+          generatedAt: r.generatedAt,
+          urgency: r.urgency,
+          reorderQuantity: r.reorderQuantity,
+          reorderPoint: r.reorderPoint,
+          daysOfStockLeft: r.daysOfStockLeft,
+          effectiveStock: r.effectiveStock,
+          totalAvailable: r.totalAvailable,
+          status: r.status,
+          supersededAt: r.supersededAt,
+          actedAt: r.actedAt,
+          resultingPoId: r.resultingPoId,
+          resultingWorkOrderId: r.resultingWorkOrderId,
+          overrideQuantity: r.overrideQuantity,
+          overrideNotes: r.overrideNotes,
+        })),
+      }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[replenishment/:productId/history] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // R.3 — single recommendation by id. Useful for forensics + future
+  // approval workflow surfaces.
+  fastify.get('/fulfillment/replenishment/recommendations/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const row = await getRecommendationById(id)
+      if (!row) return reply.code(404).send({ error: 'Recommendation not found' })
+      return row
+    } catch (err: any) {
+      fastify.log.error({ err }, '[replenishment/recommendations/:id] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })
 
