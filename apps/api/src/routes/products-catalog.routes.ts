@@ -164,7 +164,16 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
             select: {
               id: true, channel: true, marketplace: true, listingStatus: true,
               syncStatus: true, lastSyncStatus: true, lastSyncError: true,
+              lastSyncedAt: true,
               isPublished: true, validationStatus: true, validationErrors: true,
+              // F9 — drift signals. masterPrice/masterQuantity are
+              // the snapshots Phase 13 maintains. Compared against
+              // price/quantity, these tell us whether the listing has
+              // diverged from the master (followMasterPrice=false +
+              // values different = drift).
+              price: true, masterPrice: true, followMasterPrice: true,
+              quantity: true, masterQuantity: true, followMasterQuantity: true,
+              externalListingId: true, title: true,
             },
           },
         },

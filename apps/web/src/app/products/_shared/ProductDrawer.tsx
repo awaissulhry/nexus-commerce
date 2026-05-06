@@ -79,6 +79,15 @@ interface ProductDetail {
     isPublished: boolean
     price: string | number | null
     quantity: number | null
+    // F9 — drift signals from Phase 13. masterPrice / masterQuantity
+    // are the snapshots maintained by MasterPriceService and
+    // applyStockMovement; they tell us what the listing thinks the
+    // master value was at last sync. Drift = followMasterPrice=false
+    // AND the snapshot differs from the published price.
+    masterPrice?: string | number | null
+    masterQuantity?: number | null
+    followMasterPrice?: boolean
+    followMasterQuantity?: boolean
     title: string | null
     externalListingId: string | null
   }>
@@ -597,7 +606,23 @@ function ListingsTab({
                 </tr>
               </thead>
               <tbody>
-                {rows.map((l) => (
+                {rows.map((l) => {
+                  // F9 — drift detection. masterPrice/Quantity are
+                  // the snapshots Phase 13 maintains. A divergence
+                  // when followMaster* is false means the seller has
+                  // a per-marketplace override that's drifted from
+                  // master.
+                  const priceDrift =
+                    l.followMasterPrice === false &&
+                    l.masterPrice != null &&
+                    l.price != null &&
+                    Number(l.masterPrice) !== Number(l.price)
+                  const qtyDrift =
+                    l.followMasterQuantity === false &&
+                    l.masterQuantity != null &&
+                    l.quantity != null &&
+                    Number(l.masterQuantity) !== Number(l.quantity)
+                  return (
                   <tr key={l.id} className="border-b border-slate-100 last:border-0">
                     <td className="px-3 py-2 font-mono text-[11px] text-slate-700">
                       {l.marketplace}
@@ -607,12 +632,36 @@ function ListingsTab({
                         listingStatus={l.listingStatus}
                         lastSyncStatus={l.lastSyncStatus}
                       />
+                      {(priceDrift || qtyDrift) && (
+                        <span
+                          className="ml-1 inline-flex items-center h-5 px-1.5 rounded text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200"
+                          title={
+                            priceDrift && qtyDrift
+                              ? 'Both price and quantity differ from the master snapshot'
+                              : priceDrift
+                              ? `Listing price €${Number(l.price).toFixed(2)} differs from master €${Number(l.masterPrice).toFixed(2)} (followMasterPrice=false)`
+                              : `Listing qty ${l.quantity} differs from master ${l.masterQuantity} (followMasterQuantity=false)`
+                          }
+                        >
+                          DRIFT
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">
                       {l.price != null ? `€${Number(l.price).toFixed(2)}` : '—'}
+                      {priceDrift && (
+                        <div className="text-[10px] text-amber-700 mt-0.5">
+                          master €{Number(l.masterPrice).toFixed(2)}
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">
                       {l.quantity ?? '—'}
+                      {qtyDrift && (
+                        <div className="text-[10px] text-amber-700 mt-0.5">
+                          master {l.masterQuantity}
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-right">
                       <Link
@@ -623,7 +672,8 @@ function ListingsTab({
                       </Link>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
