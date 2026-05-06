@@ -4,11 +4,14 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
+  Loader2,
   RefreshCw,
+  RotateCw,
   TrendingDown,
   TrendingUp,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
+import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -82,6 +85,8 @@ export default function StockDriftPanel() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<'quantity' | 'price'>('quantity')
+  const [resyncing, setResyncing] = useState<string | null>(null)
+  const { toast } = useToast()
 
   const fetchData = useCallback(async () => {
     try {
@@ -108,6 +113,44 @@ export default function StockDriftPanel() {
     const id = setInterval(fetchData, 60_000)
     return () => clearInterval(id)
   }, [fetchData])
+
+  const handleResync = useCallback(
+    async (row: DriftRow, kind: 'quantity' | 'price') => {
+      setResyncing(row.id)
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/dashboard/stock-drift/${row.id}/resync`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ kind }),
+          },
+        )
+        const body = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          throw new Error(body.error ?? `HTTP ${res.status}`)
+        }
+        const sku = row.sku ?? row.id.slice(-8)
+        if (kind === 'quantity') {
+          toast.success(
+            `Resynced ${sku}: quantity → ${body.newValue}; sync queued`,
+          )
+        } else {
+          toast.success(
+            `Resynced ${sku}: price → ${body.newValue}; sync queued`,
+          )
+        }
+        await fetchData()
+      } catch (err) {
+        toast.error(
+          `Resync failed: ${err instanceof Error ? err.message : String(err)}`,
+        )
+      } finally {
+        setResyncing(null)
+      }
+    },
+    [fetchData, toast],
+  )
 
   const allClean =
     data &&
@@ -230,6 +273,7 @@ export default function StockDriftPanel() {
                 <th className="text-right font-medium px-3 py-2 w-28">Displayed</th>
                 <th className="text-right font-medium px-3 py-2 w-24">Delta</th>
                 <th className="text-left font-medium px-3 py-2 w-32">Last sync</th>
+                <th className="text-right font-medium px-3 py-2 w-24"></th>
               </tr>
             </thead>
             <tbody>
@@ -288,6 +332,22 @@ export default function StockDriftPanel() {
                           {row.lastSyncStatus}
                         </div>
                       )}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleResync(row, isQty ? 'quantity' : 'price')}
+                        disabled={resyncing === row.id}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-blue-700 bg-white border border-blue-200 rounded hover:bg-blue-50 disabled:opacity-50"
+                        title={`Set ${isQty ? 'quantity' : 'price'} = master and queue immediate sync`}
+                      >
+                        {resyncing === row.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <RotateCw className="w-3 h-3" />
+                        )}
+                        Resync
+                      </button>
                     </td>
                   </tr>
                 )

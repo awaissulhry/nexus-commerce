@@ -734,6 +734,141 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // Force-resync a single drifting ChannelListing. Repairs the
+  // displayed value to match the master snapshot + enqueues an
+  // OutboundSyncQueue row with no grace window so the cron worker
+  // pushes immediately.
+  //
+  // Body: { kind: 'quantity' | 'price' }. The quantity case sets
+  // ChannelListing.quantity = masterQuantity - stockBuffer; the price
+  // case sets price = masterPrice when pricingRule=FIXED. Other rules
+  // are intentional divergence (PERCENT_OF_MASTER, MATCH_AMAZON) and
+  // get a 409.
+  fastify.post<{
+    Params: { id: string }
+    Body: { kind?: 'quantity' | 'price' }
+  }>('/dashboard/stock-drift/:id/resync', async (request, reply) => {
+    try {
+      const { id } = request.params
+      const kind = request.body?.kind ?? 'quantity'
+      const listing = await prisma.channelListing.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          channel: true,
+          region: true,
+          marketplace: true,
+          externalListingId: true,
+          productId: true,
+          masterPrice: true,
+          price: true,
+          masterQuantity: true,
+          quantity: true,
+          stockBuffer: true,
+          pricingRule: true,
+          followMasterQuantity: true,
+          followMasterPrice: true,
+        },
+      })
+      if (!listing) {
+        return reply.code(404).send({ error: 'Listing not found' })
+      }
+
+      if (kind === 'quantity') {
+        if (!listing.followMasterQuantity) {
+          return reply.code(409).send({
+            error:
+              'Listing has followMasterQuantity=false; quantity divergence is intentional. Toggle on to resync.',
+          })
+        }
+        if (listing.masterQuantity == null) {
+          return reply.code(409).send({
+            error: 'Master quantity not snapshotted yet; cannot resync.',
+          })
+        }
+        const newQty = Math.max(
+          0,
+          listing.masterQuantity - (listing.stockBuffer ?? 0),
+        )
+        await prisma.$transaction(async (tx) => {
+          await tx.channelListing.update({
+            where: { id },
+            data: {
+              quantity: newQty,
+              lastSyncStatus: 'PENDING',
+              version: { increment: 1 },
+            },
+          })
+          await tx.outboundSyncQueue.create({
+            data: {
+              productId: listing.productId,
+              channelListingId: listing.id,
+              targetChannel: listing.channel as any,
+              targetRegion: listing.region,
+              syncStatus: 'PENDING' as any,
+              syncType: 'QUANTITY_UPDATE',
+              holdUntil: null, // immediate — operator-initiated
+              externalListingId: listing.externalListingId,
+              payload: { quantity: newQty } as any,
+            },
+          })
+        })
+        return reply.send({
+          success: true,
+          kind,
+          newValue: newQty,
+        })
+      }
+
+      // kind === 'price'
+      if (!listing.followMasterPrice) {
+        return reply.code(409).send({
+          error:
+            'Listing has followMasterPrice=false; price divergence is intentional.',
+        })
+      }
+      if (listing.pricingRule !== 'FIXED') {
+        return reply.code(409).send({
+          error: `pricingRule=${listing.pricingRule} intentionally diverges from master; only FIXED is a literal-follow rule.`,
+        })
+      }
+      if (listing.masterPrice == null) {
+        return reply.code(409).send({
+          error: 'Master price not snapshotted yet; cannot resync.',
+        })
+      }
+      const newPrice = Number(listing.masterPrice)
+      await prisma.$transaction(async (tx) => {
+        await tx.channelListing.update({
+          where: { id },
+          data: {
+            price: newPrice.toFixed(2),
+            lastSyncStatus: 'PENDING',
+            version: { increment: 1 },
+          },
+        })
+        await tx.outboundSyncQueue.create({
+          data: {
+            productId: listing.productId,
+            channelListingId: listing.id,
+            targetChannel: listing.channel as any,
+            targetRegion: listing.region,
+            syncStatus: 'PENDING' as any,
+            syncType: 'PRICE_UPDATE',
+            holdUntil: null,
+            externalListingId: listing.externalListingId,
+            payload: { price: newPrice } as any,
+          },
+        })
+      })
+      return reply.send({ success: true, kind, newValue: newPrice })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[dashboard/stock-drift/:id/resync] failed')
+      return reply.code(500).send({ error: message })
+    }
+  })
+
   // Stock drift detection — surface ChannelListings where the cached
   // master snapshot disagrees with the displayed value. The Phase 13
   // master-cascade should keep these in sync; persistent drift means
