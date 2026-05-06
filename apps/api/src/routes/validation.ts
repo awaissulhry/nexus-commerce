@@ -11,7 +11,14 @@ import { z } from 'zod';
 
 export const CreateBulkJobSchema = z.object({
   jobName: z.string().min(1, 'Job name is required').max(255),
-  actionType: z.enum(['PRICING_UPDATE', 'INVENTORY_UPDATE', 'STATUS_UPDATE', 'ATTRIBUTE_UPDATE', 'LISTING_SYNC']),
+  actionType: z.enum([
+    'PRICING_UPDATE',
+    'INVENTORY_UPDATE',
+    'STATUS_UPDATE',
+    'ATTRIBUTE_UPDATE',
+    'LISTING_SYNC',
+    'MARKETPLACE_OVERRIDE_UPDATE',
+  ]),
   channel: z.string().optional(),
   targetProductIds: z.array(z.string()).optional(),
   targetVariationIds: z.array(z.string()).optional(),

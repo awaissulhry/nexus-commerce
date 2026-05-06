@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
+import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { cn } from '@/lib/utils'
 import {
   FieldInput,
@@ -557,6 +558,16 @@ export default function BulkOperationModal({
         throw new Error(json.error ?? `HTTP ${res.status}`)
       }
       setSchemaResult({ updated: json.updated ?? 0, errors: json.errors ?? [] })
+      if (json.updated && json.updated > 0) {
+        emitInvalidation({
+          type: 'bulk-job.completed',
+          meta: {
+            schemaOp: true,
+            updated: json.updated,
+            errorCount: (json.errors ?? []).length,
+          },
+        })
+      }
     } catch (err) {
       setExecuteError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -706,6 +717,7 @@ export default function BulkOperationModal({
         'PARTIALLY_COMPLETED',
         'CANCELLED',
       ])
+      let finalJob: typeof createdJob | null = null
       while (true) {
         await new Promise((r) => setTimeout(r, 2000))
         const statusRes = await fetch(
@@ -715,7 +727,26 @@ export default function BulkOperationModal({
         if (!statusRes.ok) break
         const { job: latest } = await statusRes.json()
         setJob(latest)
+        finalJob = latest
         if (terminal.has(latest.status)) break
+      }
+      // Emit cross-page invalidation so /products + others refetch.
+      // Skip on FAILED/CANCELLED — no real changes propagated.
+      if (
+        finalJob &&
+        (finalJob.status === 'COMPLETED' ||
+          finalJob.status === 'PARTIALLY_COMPLETED')
+      ) {
+        emitInvalidation({
+          type: 'bulk-job.completed',
+          meta: {
+            jobId: finalJob.id,
+            actionType: opType,
+            status: finalJob.status,
+            processedItems: finalJob.processedItems,
+            failedItems: finalJob.failedItems,
+          },
+        })
       }
     } catch (err) {
       setExecuteError(err instanceof Error ? err.message : String(err))
