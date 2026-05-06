@@ -43,6 +43,7 @@ const COMMANDS: Command[] = [
   { id: 'goto-stock', label: 'Go to Stock', icon: Warehouse, href: '/fulfillment/stock', group: 'Navigation', chord: 'g s' },
   { id: 'goto-pos', label: 'Go to Purchase Orders (approval workflow)', icon: FileEdit, href: '/fulfillment/purchase-orders', group: 'Navigation', chord: 'g u' },
   { id: 'goto-pick-list', label: 'Go to Pick List (warehouse picking)', icon: ClipboardList, href: '/fulfillment/outbound/pick-list', group: 'Navigation', chord: 'g k' },
+  { id: 'goto-qc-queue', label: 'Go to QC Queue (inbound supervisor review)', icon: ClipboardList, href: '/fulfillment/inbound/qc-queue', group: 'Navigation', chord: 'g q' },
   { id: 'goto-activity', label: 'Go to Activity Log', icon: Activity, href: '/sync-logs', group: 'Navigation' },
   { id: 'goto-audit-log', label: 'Go to Audit Log (every mutation)', icon: History, href: '/audit-log', group: 'Navigation', chord: 'g a' },
   { id: 'goto-health', label: 'Go to Sync Health', icon: HeartPulse, href: '/dashboard/health', group: 'Navigation', chord: 'g h' },

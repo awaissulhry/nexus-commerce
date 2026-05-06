@@ -1196,6 +1196,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           quantityReceived: it.quantityReceived,
           qcStatus: it.qcStatus,
           qcNotes: it.qcNotes,
+          // Photos uploaded during the receive flow — surfaced so the
+          // QC supervisor can review damage evidence before deciding
+          // pass vs scrap.
+          photoUrls: it.photoUrls ?? [],
           shipment: {
             id: it.inboundShipment.id,
             type: it.inboundShipment.type,
@@ -1701,6 +1705,61 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   // H.2 — release QC HOLD/FAIL units to stock. Default releases the
   // full held quantity; pass `quantity` for a partial release (rest
   // stays excluded from inventory).
+  // QC scrap — terminal disposition for items that failed inspection
+  // and will NOT be received into stock. Distinct from FAIL (transient)
+  // and HOLD (pending decision). Sets qcStatus=SCRAPPED + appends a
+  // reason to qcNotes. Does NOT mutate stock — the item was never
+  // received via release-hold, so there's nothing to deduct.
+  //
+  // Use case: supplier sent damaged goods, supplier credit requested,
+  // line item is dead. Photos uploaded earlier remain on photoUrls
+  // for supplier-claim audit.
+  fastify.post<{
+    Params: { id: string; itemId: string }
+    Body: { reason?: string; actor?: string }
+  }>('/fulfillment/inbound/:id/items/:itemId/scrap', async (request, reply) => {
+    try {
+      const { id, itemId } = request.params
+      const body = request.body ?? {}
+      const item = await prisma.inboundShipmentItem.findUnique({
+        where: { id: itemId },
+        select: { id: true, inboundShipmentId: true, qcStatus: true, qcNotes: true },
+      })
+      if (!item) {
+        return reply.code(404).send({ error: 'Item not found' })
+      }
+      if (item.inboundShipmentId !== id) {
+        return reply
+          .code(400)
+          .send({ error: 'Item does not belong to this shipment' })
+      }
+      if (item.qcStatus === 'SCRAPPED') {
+        // Idempotent: already scrapped, return current state
+        return reply.send({ success: true, item, alreadyScrapped: true })
+      }
+
+      const reason = body.reason?.trim() ?? null
+      const actor = body.actor?.trim() ?? null
+      const noteSuffix = reason
+        ? `\n[SCRAPPED ${new Date().toISOString()}${actor ? ` by ${actor}` : ''}] ${reason}`
+        : `\n[SCRAPPED ${new Date().toISOString()}${actor ? ` by ${actor}` : ''}]`
+      const newNotes = item.qcNotes ? item.qcNotes + noteSuffix : noteSuffix.trim()
+
+      const updated = await prisma.inboundShipmentItem.update({
+        where: { id: itemId },
+        data: {
+          qcStatus: 'SCRAPPED',
+          qcNotes: newNotes,
+        },
+      })
+      return reply.send({ success: true, item: updated })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[inbound/:id/items/:id/scrap] failed')
+      return reply.code(500).send({ error: message })
+    }
+  })
+
   fastify.post('/fulfillment/inbound/:id/items/:itemId/release-hold', async (request, reply) => {
     try {
       const { id, itemId } = request.params as { id: string; itemId: string }
