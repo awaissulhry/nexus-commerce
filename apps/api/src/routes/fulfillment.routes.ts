@@ -1221,6 +1221,11 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       // Sendcloud auto-picks based on dimensions + destination.
       const serviceId = await sendcloud.resolveServiceMap(order.channel, order.marketplace)
 
+      // CR.11: sender_address from the bound Warehouse. Sendcloud
+      // uses the integration default when omitted; passing an explicit
+      // ID lets multi-warehouse operators ship from the right origin.
+      const senderId = shipment.warehouse?.sendcloudSenderId ?? undefined
+
       const input = {
         ...addr,
         weight: weightKg.toFixed(3),
@@ -1228,6 +1233,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         total_order_value: Number(order.totalPrice).toFixed(2),
         total_order_value_currency: order.currencyCode ?? 'EUR',
         shipment: serviceId ? { id: serviceId } : undefined,
+        sender_address: senderId,
         parcel_items: parcelItems.length > 0 ? parcelItems : undefined,
         external_reference: shipment.id,
         request_label: true,
@@ -8611,6 +8617,56 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       return { ok: true }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[carriers/:code/mappings DELETE] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // CR.11 — Sendcloud sender addresses.
+  //
+  // GET /fulfillment/carriers/:code/sender-addresses
+  //
+  // Lists the sender addresses configured on the connected Sendcloud
+  // account. UI binds Warehouse.sendcloudSenderId to one of these so
+  // print-label sends parcels from the right origin (today the print-
+  // label flow doesn't pass sender_address — Sendcloud uses the
+  // integration default, which is wrong for multi-warehouse setups).
+  fastify.get('/fulfillment/carriers/:code/sender-addresses', async (request, reply) => {
+    try {
+      const { code } = request.params as { code: string }
+      if (code !== 'SENDCLOUD') return { items: [] }
+      const sendcloud = await import('../services/sendcloud/index.js')
+      let creds
+      try {
+        creds = await sendcloud.resolveCredentials()
+      } catch (e: any) {
+        if (e instanceof sendcloud.SendcloudError) {
+          return reply.code(e.status).send({ error: e.message, code: e.code })
+        }
+        throw e
+      }
+      const items = await sendcloud.listSenderAddresses(creds)
+      return { items }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[carriers/:code/sender-addresses] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // CR.11 — bind a Sendcloud sender_address ID to a warehouse.
+  // PATCH /fulfillment/warehouses/:id  body: { sendcloudSenderId: number | null }
+  // null clears the binding (warehouse falls back to integration default).
+  fastify.patch('/fulfillment/warehouses/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = request.body as { sendcloudSenderId?: number | null }
+      const data: { sendcloudSenderId?: number | null } = {}
+      if (Object.prototype.hasOwnProperty.call(body, 'sendcloudSenderId')) {
+        data.sendcloudSenderId = body.sendcloudSenderId ?? null
+      }
+      const updated = await prisma.warehouse.update({ where: { id }, data })
+      return { ok: true, warehouse: updated }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[warehouses/:id PATCH] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })

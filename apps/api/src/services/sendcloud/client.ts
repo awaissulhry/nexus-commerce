@@ -312,5 +312,74 @@ export async function verifyCredentials(
   return { ok: true, username }
 }
 
+/**
+ * CR.11 — list sender addresses configured on the integration.
+ *
+ * Sendcloud uses sender_address IDs (integers) to identify which of
+ * the operator's configured warehouse origins a parcel ships from.
+ * The integration page in panel.sendcloud.sc lets operators add as
+ * many as they have warehouses; this endpoint enumerates them so
+ * Nexus can present a picker rather than asking operators to paste
+ * the numeric ID by hand.
+ *
+ * In dryRun mode returns two plausible mocks so the UI can be
+ * exercised without a real Sendcloud account.
+ */
+export async function listSenderAddresses(
+  creds: SendcloudCredentials,
+): Promise<Array<{
+  id: number
+  contactName: string
+  companyName: string | null
+  street: string
+  city: string
+  postalCode: string
+  country: string
+  isDefault: boolean
+}>> {
+  if (!isReal()) {
+    return [
+      {
+        id: 9001,
+        contactName: 'Xavia Riccione',
+        companyName: 'Xavia S.r.l.',
+        street: 'Via dei Cavalieri 12',
+        city: 'Riccione',
+        postalCode: '47838',
+        country: 'IT',
+        isDefault: true,
+      },
+      {
+        id: 9002,
+        contactName: 'Xavia Bologna',
+        companyName: 'Xavia S.r.l.',
+        street: 'Via Emilia 99',
+        city: 'Bologna',
+        postalCode: '40121',
+        country: 'IT',
+        isDefault: false,
+      },
+    ]
+  }
+  const res = await fetch(`${baseUrl()}/user/addresses/sender`, {
+    headers: { Authorization: authHeader(creds) },
+  })
+  if (!res.ok) {
+    throw new SendcloudError(`HTTP ${res.status}`, res.status, null)
+  }
+  const body: any = await res.json()
+  const addrs = body?.sender_addresses ?? []
+  return addrs.map((a: any) => ({
+    id: a.id,
+    contactName: a.contact_name ?? '',
+    companyName: a.company_name ?? null,
+    street: a.street ?? '',
+    city: a.city ?? '',
+    postalCode: a.postal_code ?? '',
+    country: a.country ?? 'IT',
+    isDefault: a.country_state === 'default' || !!a.is_default,
+  }))
+}
+
 // ── Internal helpers exposed for tests / debugging ──────────────────────
 export const __test = { isReal, isSandbox, baseUrl, mockParcel }

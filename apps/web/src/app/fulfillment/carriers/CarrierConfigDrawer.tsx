@@ -58,7 +58,7 @@ interface Props {
   onChanged: () => void
 }
 
-type TabId = 'credentials' | 'services' | 'rules' | 'performance' | 'webhooks'
+type TabId = 'credentials' | 'services' | 'warehouses' | 'rules' | 'performance' | 'webhooks'
 
 export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: Props) {
   const { t } = useTranslations()
@@ -214,6 +214,7 @@ export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: 
     const list: Tab[] = [{ id: 'credentials', label: 'Credentials' }]
     if (def.code === 'SENDCLOUD') {
       list.push({ id: 'services', label: 'Services' })
+      list.push({ id: 'warehouses', label: 'Warehouses' })
     }
     // Rules tab is available for any carrier the rules engine can
     // target (which is any with a real CarrierCode value).
@@ -291,6 +292,9 @@ export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: 
           )}
           {activeTab === 'services' && def.code === 'SENDCLOUD' && (
             <ServicesTab carrierCode={def.code} />
+          )}
+          {activeTab === 'warehouses' && def.code === 'SENDCLOUD' && (
+            <WarehousesTab carrierCode={def.code} />
           )}
           {activeTab === 'rules' && (
             <RulesTab carrierCode={def.code} />
@@ -654,6 +658,154 @@ function ServicesTab({ carrierCode }: { carrierCode: string }) {
         >
           Add mapping
         </Button>
+      )}
+    </div>
+  )
+}
+
+// ── Warehouses tab ─────────────────────────────────────────────────
+// CR.11: bind each Warehouse to a Sendcloud sender_address ID. The
+// print-label flow passes sender_address per shipment so multi-
+// warehouse operators ship from the right origin (pre-CR.11 always
+// used the Sendcloud integration default — wrong if it points at a
+// different warehouse).
+type Warehouse = {
+  id: string
+  code: string
+  name: string
+  city: string | null
+  country: string
+  isDefault: boolean
+  isActive: boolean
+  sendcloudSenderId: number | null
+}
+
+type SenderAddress = {
+  id: number
+  contactName: string
+  companyName: string | null
+  street: string
+  city: string
+  postalCode: string
+  country: string
+  isDefault: boolean
+}
+
+function WarehousesTab({ carrierCode }: { carrierCode: string }) {
+  const { toast } = useToast()
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([])
+  const [senders, setSenders] = useState<SenderAddress[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  const fetchAll = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [wRes, sRes] = await Promise.all([
+        fetch(`${getBackendUrl()}/api/fulfillment/warehouses`, { cache: 'no-store' }),
+        fetch(
+          `${getBackendUrl()}/api/fulfillment/carriers/${carrierCode}/sender-addresses`,
+          { cache: 'no-store' },
+        ),
+      ])
+      if (wRes.ok) {
+        const w = await wRes.json()
+        setWarehouses(w.items ?? [])
+      }
+      if (sRes.ok) {
+        const s = await sRes.json()
+        setSenders(s.items ?? [])
+      } else {
+        setSenders([])
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [carrierCode])
+
+  useEffect(() => { fetchAll() }, [fetchAll])
+
+  const setSender = async (warehouseId: string, senderId: number | null) => {
+    setBusyId(warehouseId)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/warehouses/${warehouseId}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sendcloudSenderId: senderId }),
+        },
+      )
+      if (!res.ok) throw new Error('Save failed')
+      await fetchAll()
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  if (loading) {
+    return <div className="text-base text-slate-500 dark:text-slate-400 py-2">Loading…</div>
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-base text-slate-700 dark:text-slate-300">
+        Bind each warehouse to a Sendcloud sender address. The print-label flow uses this binding so multi-warehouse operators ship from the right origin. Warehouses with no binding fall back to the Sendcloud integration default.
+      </p>
+
+      {senders.length === 0 && (
+        <div className="text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded p-3">
+          No sender addresses available. Connect Sendcloud first, then add a sender address in panel.sendcloud.sc → Settings → Addresses.
+        </div>
+      )}
+
+      {warehouses.length === 0 ? (
+        <div className="text-base text-slate-500 dark:text-slate-400 italic py-2">
+          No warehouses configured. Add one at /fulfillment/stock first.
+        </div>
+      ) : (
+        <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+          <table className="w-full text-base">
+            <thead className="bg-slate-50 dark:bg-slate-800 text-xs uppercase tracking-wider text-slate-600 dark:text-slate-300">
+              <tr>
+                <th className="text-left px-3 py-2 font-semibold">Warehouse</th>
+                <th className="text-left px-3 py-2 font-semibold">Sendcloud sender</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+              {warehouses.map((w) => (
+                <tr key={w.id} className="text-slate-800 dark:text-slate-100">
+                  <td className="px-3 py-2">
+                    <div className="font-medium">{w.code}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                      {w.name}{w.city ? ` · ${w.city}` : ''}{w.isDefault && ' · default'}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2">
+                    <select
+                      value={w.sendcloudSenderId ?? ''}
+                      disabled={busyId === w.id || senders.length === 0}
+                      onChange={(e) =>
+                        setSender(w.id, e.target.value === '' ? null : Number(e.target.value))
+                      }
+                      className="h-8 w-full px-2 text-base border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+                    >
+                      <option value="">— integration default —</option>
+                      {senders.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.contactName} · {s.city} {s.postalCode}
+                          {s.isDefault ? ' (default)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   )
