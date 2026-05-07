@@ -12,7 +12,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Truck, Search, RefreshCw, Printer, ExternalLink, X, CheckCircle2,
-  AlertTriangle, Send, Download,
+  AlertTriangle, Send, Download, RotateCcw, Trash,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -153,6 +153,40 @@ export default function ShipmentsClient() {
   const markShipped = async (id: string) => {
     await fetch(`${getBackendUrl()}/api/fulfillment/shipments/${id}/mark-shipped`, { method: 'POST' })
     emitInvalidation({ type: 'order.shipped', id })
+    fetchShipments()
+  }
+
+  // O.34: re-print opens the stored label PDF in a new tab. Single
+  // round-trip to /reprint-label so the URL is fresh + the endpoint
+  // can apply auth/expiry recovery in a future commit.
+  const reprintLabel = async (id: string) => {
+    const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipments/${id}/reprint-label`, { method: 'POST' })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      toast.error(err.error ?? t('common.error'))
+      return
+    }
+    const { labelUrl } = await res.json()
+    if (labelUrl) window.open(labelUrl, '_blank')
+  }
+
+  // O.34: void label — destructive, ask before proceeding. Resets
+  // shipment to PACKED so operator can re-rate / re-print.
+  const voidLabel = async (id: string) => {
+    if (!(await askConfirm({
+      title: t('outbound.shipments.void.title'),
+      description: t('outbound.shipments.void.description'),
+      confirmLabel: t('outbound.shipments.void.confirm'),
+      tone: 'danger',
+    }))) return
+    const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipments/${id}/void-label`, { method: 'POST' })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      toast.error(err.error ?? t('common.error'))
+      return
+    }
+    toast.success(t('outbound.shipments.void.toast'))
+    emitInvalidation({ type: 'shipment.updated', id })
     fetchShipments()
   }
 
@@ -428,14 +462,30 @@ export default function ShipmentsClient() {
                     <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1 justify-end">
                         {(s.status === 'DRAFT' || s.status === 'READY_TO_PICK' || s.status === 'PACKED') && (
-                          <button onClick={() => printLabel(s.id)} title="Print label" className="h-6 px-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center gap-1">
-                            <Printer size={11} /> Label
+                          <button onClick={() => printLabel(s.id)} title={t('outbound.shipments.action.label')} className="h-6 px-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center gap-1">
+                            <Printer size={11} /> {t('outbound.shipments.action.label')}
                           </button>
                         )}
                         {s.status === 'LABEL_PRINTED' && (
-                          <button onClick={() => markShipped(s.id)} title="Mark shipped" className="h-6 px-2 text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1">
-                            <CheckCircle2 size={11} /> Ship
-                          </button>
+                          <>
+                            <button
+                              onClick={() => reprintLabel(s.id)}
+                              title={t('outbound.shipments.action.reprint')}
+                              className="h-6 w-6 inline-flex items-center justify-center text-slate-500 hover:text-blue-700 hover:bg-blue-50 rounded"
+                            >
+                              <RotateCcw size={11} />
+                            </button>
+                            <button
+                              onClick={() => voidLabel(s.id)}
+                              title={t('outbound.shipments.action.void')}
+                              className="h-6 w-6 inline-flex items-center justify-center text-slate-500 hover:text-rose-700 hover:bg-rose-50 rounded"
+                            >
+                              <Trash size={11} />
+                            </button>
+                            <button onClick={() => markShipped(s.id)} title={t('outbound.shipments.action.ship')} className="h-6 px-2 text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1">
+                              <CheckCircle2 size={11} /> {t('outbound.shipments.action.ship')}
+                            </button>
+                          </>
                         )}
                       </div>
                     </td>

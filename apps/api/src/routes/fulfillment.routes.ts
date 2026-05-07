@@ -1652,6 +1652,93 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── O.34: void label ────────────────────────────────────────────────
+  // POST /api/fulfillment/shipments/:id/void-label — cancels the
+  // Sendcloud parcel + resets the Shipment to PACKED so operator can
+  // re-pack / re-rate / re-print. Refused after the carrier has
+  // accepted the parcel (Sendcloud rejects with a clear reason).
+  fastify.post('/fulfillment/shipments/:id/void-label', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const shipment = await prisma.shipment.findUnique({ where: { id } })
+      if (!shipment) return reply.code(404).send({ error: 'Shipment not found' })
+      if (!['LABEL_PRINTED'].includes(shipment.status)) {
+        return reply.code(400).send({
+          error: `Cannot void from status ${shipment.status}. Only LABEL_PRINTED labels can be voided.`,
+        })
+      }
+      if (!shipment.sendcloudParcelId) {
+        return reply.code(400).send({ error: 'No Sendcloud parcel to void.' })
+      }
+
+      const sendcloud = await import('../services/sendcloud/index.js')
+      let creds
+      try {
+        creds = await sendcloud.resolveCredentials()
+      } catch (e: any) {
+        if (e instanceof sendcloud.SendcloudError) {
+          return reply.code(e.status).send({ error: e.message, code: e.code })
+        }
+        throw e
+      }
+
+      const result = await sendcloud.voidParcel(creds, Number(shipment.sendcloudParcelId))
+      if (result.ok === false) {
+        return reply.code(502).send({ error: `Sendcloud refused: ${(result as { ok: false; reason: string }).reason}` })
+      }
+
+      // Reset shipment for a fresh print. Keep the order link, items,
+      // weight + dimensions; clear the parcel-specific fields.
+      const updated = await prisma.shipment.update({
+        where: { id },
+        data: {
+          status: shipment.weightGrams ? 'PACKED' : 'DRAFT',
+          sendcloudParcelId: null,
+          trackingNumber: null,
+          trackingUrl: null,
+          labelUrl: null,
+          labelPrintedAt: null,
+          serviceCode: null,
+          serviceName: null,
+          version: { increment: 1 },
+        },
+      })
+
+      const { publishOutboundEvent } = await import('../services/outbound-events.service.js')
+      publishOutboundEvent({ type: 'shipment.updated', shipmentId: id, status: updated.status, ts: Date.now() })
+
+      return updated
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[shipments/:id/void-label] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── O.34: re-print label (existing label PDF, no Sendcloud call) ───
+  // The labelUrl is already stored; this endpoint exists so the UI
+  // has a uniform "Reprint" button (vs. opening the URL directly,
+  // which works but breaks the operator workflow when the URL has
+  // expired or the printer needs the PDF streamed). Future commit
+  // can stream the PDF via fetchLabelPdf for expired-URL recovery;
+  // today this just returns the stored URL.
+  fastify.post('/fulfillment/shipments/:id/reprint-label', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const shipment = await prisma.shipment.findUnique({
+        where: { id },
+        select: { labelUrl: true, status: true },
+      })
+      if (!shipment) return reply.code(404).send({ error: 'Shipment not found' })
+      if (!shipment.labelUrl) {
+        return reply.code(400).send({ error: 'No label has been printed yet.' })
+      }
+      return { labelUrl: shipment.labelUrl, status: shipment.status }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[shipments/:id/reprint-label] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   fastify.post('/fulfillment/shipments/:id/mark-shipped', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
