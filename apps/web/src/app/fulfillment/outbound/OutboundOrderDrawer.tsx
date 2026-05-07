@@ -10,7 +10,7 @@
 // delivery promise), line items with images, shipments-so-far list,
 // and the create-shipment CTA when there's no active shipment.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   X, Package, ExternalLink, Truck, Crown, AlertTriangle, Clock,
@@ -417,15 +417,54 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
     },
   )
 
-  // Esc closes.
+  // Esc closes. O.85: 'P' fires the primary print-label action when
+  // the active shipment is in PACKED state — same idempotent endpoint
+  // the in-drawer button hits, just keyboard-driven for power users.
+  // Skipped when the operator is typing in an input/textarea so we
+  // don't hijack the 'p' key from text editing.
+  // Uses a ref for `data` so the listener doesn't re-bind on every
+  // refetch — handler always reads the current shipment list.
+  const dataRef = useRef<DrawerOrder | null>(null)
+  useEffect(() => { dataRef.current = data }, [data])
   useEffect(() => {
     if (!orderId) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (e.key === 'p' || e.key === 'P') {
+        const target = e.target as HTMLElement | null
+        if (target) {
+          const tag = target.tagName
+          if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+          if (target.isContentEditable) return
+        }
+        if (e.metaKey || e.ctrlKey || e.altKey) return // don't shadow Cmd+P
+        const ship = dataRef.current?.shipments.find((s) => s.status !== 'CANCELLED')
+        if (!ship || ship.status !== 'PACKED') return
+        e.preventDefault()
+        void (async () => {
+          const res = await fetch(
+            `${getBackendUrl()}/api/fulfillment/shipments/${ship.id}/print-label`,
+            { method: 'POST' },
+          )
+          const out = await res.json().catch(() => ({}))
+          if (!res.ok) {
+            toast.error(out.error ?? t('common.error'))
+            return
+          }
+          const url = out.labelUrl ?? out.shipment?.labelUrl
+          if (url) window.open(url, '_blank', 'noopener,noreferrer')
+          toast.success(t('outbound.drawer.printLabel.toast'))
+          emitInvalidation({ type: 'shipment.updated', meta: { shipmentId: ship.id } })
+          fetchDetail()
+        })()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [orderId, onClose])
+  }, [orderId, onClose, fetchDetail, toast, t])
 
   const createShipment = async () => {
     if (!orderId) return
