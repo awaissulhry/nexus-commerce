@@ -737,3 +737,119 @@ Adding a channel propagates to every chip across the app.
   `<sha>`.
 - Color/radius/shadow/z-index migration deferred to U.17 (component
   adoption sweep) where context-aware judgment is needed per site.
+
+---
+
+## Component primitives (U.2, 2026-05-07)
+
+Adds 7 new primitives to the `apps/web/src/components/ui/` library on
+top of the existing 10 (Button, Modal, Input, Toast, Badge, Card,
+Spinner, Skeleton, Tabs, EmptyState).
+
+### IconButton
+
+Standardises 42 hand-rolled `h-N w-N inline-flex justify-center` icon-only
+button patterns. Always pass `aria-label` (TS-required).
+
+```tsx
+<IconButton aria-label="Delete view" onClick={onDelete}>
+  <Trash2 className="w-3 h-3" />
+</IconButton>
+```
+
+Props: `variant: 'solid' | 'ghost' | 'outline'`, `size: 'xs' | 'sm' | 'md' | 'lg'`,
+`tone: 'neutral' | 'info' | 'danger' | 'warning'`. Defaults `ghost / md / neutral`.
+
+### StatusBadge
+
+Wrapper over `<Badge>` that maps a status string to the right tone via
+`STATUS_VARIANT` (lib/theme). Lets row renderers write
+`<StatusBadge status={p.status} />` instead of recomputing the variant.
+
+```tsx
+<StatusBadge status="ACTIVE" />          // emerald
+<StatusBadge status="DRAFT" />           // slate
+<StatusBadge status="ACTIVE" label="Live" />  // override display
+```
+
+### ConfirmDialog
+
+Replaces `confirm()` calls with a focus-trapped modal. Default-focuses
+the cancel button so accidental Enter doesn't delete.
+
+```tsx
+<ConfirmDialog
+  open={open}
+  title="Delete view?"
+  description={`"${name}" will be removed permanently.`}
+  confirmLabel="Delete"
+  tone="danger"
+  onConfirm={() => doDelete()}
+  onClose={() => setOpen(false)}
+/>
+```
+
+Props: `tone: 'danger' | 'warning' | 'info'`, `busy: boolean` (disables
+during async confirm).
+
+### ProgressBar
+
+Determinate (`value` + `max`) or indeterminate (omit `value`).
+
+```tsx
+<ProgressBar value={succeeded} max={total} label="Bulk publish" />
+<ProgressBar indeterminate label="Polling Amazon…" />
+```
+
+Props: `tone: 'info' | 'success' | 'warning' | 'danger'`, `size: 'xs' | 'sm' | 'md'`,
+`showCount`, `showPercent`. Tone defaults to info.
+
+### KeyboardShortcut
+
+Renders shortcut keys as kbd-chips. Auto-translates platform modifiers
+(`Cmd` → ⌘ on Mac, Ctrl elsewhere).
+
+```tsx
+<KeyboardShortcut keys={['Cmd', 'K']} />     // ⌘ + K  on Mac
+<KeyboardShortcut chord="g p" />             // g  then  p  (Linear style)
+<KeyboardShortcut>Esc</KeyboardShortcut>     // single chip
+```
+
+### Tooltip
+
+Hand-rolled (no Radix/Floating UI deps). 500ms hover delay, smart
+auto-flip placement, portal-mounted, keyboard-accessible.
+
+```tsx
+<Tooltip content="Open in new tab" placement="top">
+  <IconButton aria-label="Open"><ExternalLink /></IconButton>
+</Tooltip>
+```
+
+Props: `placement: 'top' | 'bottom' | 'left' | 'right'`, `delay: number` (ms),
+`disableOnTouch: boolean` (default true; stops native long-press from
+firing tooltips on tap).
+
+### TableCell type-aware
+
+Per-type cell renderers. Locale-aware via Intl APIs (it-IT default for
+Xavia operator). All right-align numerics, use tabular-nums, em-dash on
+nullish.
+
+```tsx
+<CurrencyCell value={p.basePrice} currency="EUR" />
+<DateCell value={p.updatedAt} format="short" />        // "7 May"
+<DateCell value={p.updatedAt} format="relative" />     // "2h ago"
+<ImageCell src={p.imageUrl} alt={p.name} size="sm" />
+<LinkCell href={`/products/${p.id}`} mono>{p.sku}</LinkCell>
+<StatusCell status={p.status} />  // alias for StatusBadge
+```
+
+### Adoption
+
+These primitives ship in U.2 ready to use. Adoption sweeps follow:
+- U.3 — useToast() / ConfirmDialog adoption (89 alert/confirm sites)
+- U.5 — TableCell adoption in /products + /bulk-operations
+- U.6 — Tooltip adoption (replace 247 native title="..." attributes)
+- U.11 — KeyboardShortcut adoption in CommandPalette + menus
+- U.17 — IconButton adoption sweep (42 sites) + remaining Button/Input
