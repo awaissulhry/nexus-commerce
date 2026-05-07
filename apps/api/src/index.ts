@@ -77,6 +77,7 @@ import { startAmazonInventoryCron } from "./jobs/amazon-inventory-sync.job.js";
 import { startReservationSweepCron } from "./jobs/reservation-sweep.job.js";
 import { startLateShipmentFlagCron } from "./jobs/late-shipment-flag.job.js";
 import { startTrackingPushbackCron } from "./jobs/tracking-pushback.job.js";
+import { startCarrierServiceSyncCron } from "./jobs/carrier-service-sync.job.js";
 import { startOutboundLateRiskCron } from "./jobs/outbound-late-risk.job.js";
 import { startSavedViewAlertsCron } from "./jobs/saved-view-alerts.job.js";
 import { startSyncDriftDetectionCron } from "./jobs/sync-drift-detection.job.js";
@@ -473,6 +474,13 @@ async function start() {
     // ENABLE_*_SHIP_CONFIRM flags still gate whether the underlying
     // call hits the real API or returns dryRun mocks.
     startTrackingPushbackCron();
+
+    // CR.12 — daily Sendcloud service-catalog sync. Pulls
+    // /shipping_methods per connected Sendcloud account and upserts
+    // CarrierService rows so the CR.7 Services-tab picker stays
+    // current without firing /shipping_methods on every drawer-open.
+    // Default-ON; opt out via NEXUS_ENABLE_CARRIER_SERVICE_SYNC_CRON=0.
+    startCarrierServiceSyncCron();
 
     // O.19 — outbound late-shipment risk monitor. Hourly sweep that
     // logs counts of overdue / due-today / became-overdue-in-last-24h

@@ -8639,6 +8639,24 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // CR.12 — manual catalog refresh. Runs the same logic as the
+  // nightly cron but on demand. Returns counts so the UI can show
+  // a toast like "Synced 12 services". Sendcloud-only today.
+  fastify.post('/fulfillment/carriers/:code/services/sync', async (request, reply) => {
+    try {
+      const { code } = request.params as { code: string }
+      if (code !== 'SENDCLOUD') {
+        return { ok: true, mode: 'no-op', message: `${code} has no service catalog` }
+      }
+      const { runCarrierServiceSync } = await import('../jobs/carrier-service-sync.job.js')
+      const result = await runCarrierServiceSync()
+      return { ok: true, ...result }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[carriers/:code/services/sync] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // CR.16 — pickup scheduling. PickupSchedule rows; one-time SENDCLOUD
   // pickups dispatch immediately to /pickups, recurring pickups
   // persist for the dispatch cron (later commit) to fire daily.

@@ -567,18 +567,42 @@ function ServicesTab({ carrierCode }: { carrierCode: string }) {
     return <div className="text-base text-slate-500 dark:text-slate-400 py-2">Loading…</div>
   }
 
+  const refreshCatalog = async () => {
+    setBusy(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/carriers/${carrierCode}/services/sync`,
+        { method: 'POST' },
+      )
+      if (!res.ok) throw new Error('Sync failed')
+      const body = await res.json().catch(() => ({}))
+      toast.success(
+        `Synced ${body.servicesSynced ?? 0} services` +
+          (body.servicesDeactivated > 0 ? ` · ${body.servicesDeactivated} deactivated` : ''),
+      )
+      await fetchAll()
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
-      <div>
-        <p className="text-base text-slate-700 dark:text-slate-300">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-base text-slate-700 dark:text-slate-300 flex-1">
           Map (channel, marketplace) → carrier service. The print-label flow uses these mappings before falling back to the carrier's automatic pick.
         </p>
-        {services.length === 0 && (
-          <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
-            No services available. Connect the carrier first to populate the picker.
-          </p>
-        )}
+        <Button variant="ghost" size="sm" onClick={refreshCatalog} disabled={busy}>
+          Refresh catalog
+        </Button>
       </div>
+      {services.length === 0 && (
+        <p className="text-sm text-amber-700 dark:text-amber-300">
+          No services available. Connect the carrier first or click Refresh catalog.
+        </p>
+      )}
 
       {/* Existing mappings */}
       {mappings.length === 0 ? (
