@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Truck, Search, RefreshCw, Crown, AlertTriangle, Clock, Package, X, Plus,
+  Bookmark, BookmarkPlus, ChevronDown, Trash2, Star,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -135,6 +136,83 @@ export default function PendingShipmentsClient() {
   const [creating, setCreating] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [searchInput, setSearchInput] = useState(search)
+
+  // O.27: saved views — persistent filter combinations.
+  type SavedView = { id: string; name: string; filters: any; isDefault: boolean }
+  const [views, setViews] = useState<SavedView[]>([])
+  const [showViewsMenu, setShowViewsMenu] = useState(false)
+
+  const fetchViews = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/saved-views?surface=outbound.pending`,
+        { cache: 'no-store' },
+      )
+      if (res.ok) setViews(((await res.json()).items ?? []) as SavedView[])
+    } catch {
+      /* non-fatal */
+    }
+  }, [])
+  useEffect(() => { fetchViews() }, [fetchViews])
+
+  // Apply a view by replacing the URL params with the view's filters.
+  const applyView = (view: SavedView) => {
+    const next = new URLSearchParams()
+    const f = (view.filters ?? {}) as Record<string, string | string[]>
+    if (Array.isArray(f.channel) && f.channel.length) next.set('channel', f.channel.join(','))
+    else if (typeof f.channel === 'string' && f.channel) next.set('channel', f.channel)
+    if (typeof f.urgency === 'string' && f.urgency && f.urgency !== 'ALL') next.set('urgency', f.urgency)
+    if (typeof f.q === 'string' && f.q) next.set('q', f.q)
+    if (typeof f.sort === 'string' && f.sort && f.sort !== 'ship-by-asc') next.set('sort', f.sort)
+    router.replace(`?${next.toString()}`, { scroll: false })
+    setShowViewsMenu(false)
+  }
+
+  const saveCurrentAsView = async () => {
+    const name = window.prompt('Save view as…')
+    if (!name?.trim()) return
+    const filters = {
+      channel: channelFilter,
+      urgency: urgencyFilter,
+      q: search,
+      sort,
+    }
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/saved-views`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ surface: 'outbound.pending', name: name.trim(), filters }),
+      })
+      if (res.ok) {
+        toast.success('View saved')
+        fetchViews()
+      } else {
+        toast.error('Failed to save view')
+      }
+    } catch {
+      toast.error('Failed to save view')
+    }
+    setShowViewsMenu(false)
+  }
+
+  const deleteView = async (id: string) => {
+    const res = await fetch(`${getBackendUrl()}/api/saved-views/${id}`, { method: 'DELETE' })
+    if (res.ok) {
+      toast.success('View deleted')
+      fetchViews()
+    } else {
+      toast.error('Failed to delete view')
+    }
+  }
+
+  const toggleDefault = async (view: SavedView) => {
+    const res = await fetch(`${getBackendUrl()}/api/saved-views/${view.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isDefault: !view.isDefault }),
+    })
+    if (res.ok) fetchViews()
+  }
 
   const setParam = useCallback(
     (key: string, value: string | null) => {
@@ -310,6 +388,71 @@ export default function PendingShipmentsClient() {
             <option value="value-desc">{t('outbound.pending.sort.value')}</option>
             <option value="age-desc">{t('outbound.pending.sort.age')}</option>
           </select>
+          {/* O.27: saved views dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowViewsMenu((v) => !v)}
+              className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+            >
+              <Bookmark size={12} /> {t('savedViews.label')}
+              {views.length > 0 && (
+                <span className="ml-1 tabular-nums text-slate-400">{views.length}</span>
+              )}
+              <ChevronDown size={11} />
+            </button>
+            {showViewsMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowViewsMenu(false)} />
+                <div className="absolute right-0 mt-1 w-72 bg-white border border-slate-200 rounded-md shadow-lg z-20">
+                  <div className="p-1 max-h-72 overflow-y-auto">
+                    {views.length === 0 ? (
+                      <div className="text-sm text-slate-500 px-3 py-2">
+                        {t('savedViews.empty')}
+                      </div>
+                    ) : (
+                      views.map((v) => (
+                        <div
+                          key={v.id}
+                          className="flex items-center gap-1 px-2 py-1.5 hover:bg-slate-50 rounded group"
+                        >
+                          <button
+                            onClick={() => applyView(v)}
+                            className="flex-1 text-left text-md text-slate-700 truncate"
+                          >
+                            {v.name}
+                          </button>
+                          <button
+                            onClick={() => toggleDefault(v)}
+                            title={v.isDefault ? t('savedViews.unsetDefault') : t('savedViews.setDefault')}
+                            className={`h-6 w-6 inline-flex items-center justify-center rounded ${
+                              v.isDefault ? 'text-amber-500' : 'text-slate-300 hover:text-amber-500'
+                            }`}
+                          >
+                            <Star size={11} fill={v.isDefault ? 'currentColor' : 'none'} />
+                          </button>
+                          <button
+                            onClick={() => deleteView(v.id)}
+                            title={t('common.delete')}
+                            className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-rose-600 rounded opacity-0 group-hover:opacity-100"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="border-t border-slate-200 p-1">
+                    <button
+                      onClick={saveCurrentAsView}
+                      className="w-full px-2 py-1.5 text-md text-blue-600 hover:bg-blue-50 rounded inline-flex items-center gap-1.5"
+                    >
+                      <BookmarkPlus size={11} /> {t('savedViews.saveCurrent')}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
           <button
             onClick={fetchData}
             className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
