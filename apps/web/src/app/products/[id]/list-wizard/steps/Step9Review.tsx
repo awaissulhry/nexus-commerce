@@ -65,6 +65,7 @@ interface ReviewResponse {
 export default function Step9Review({
   wizardId,
   updateWizardState,
+  onJumpToStep,
 }: StepProps) {
   const [data, setData] = useState<ReviewResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -201,6 +202,7 @@ export default function Step9Review({
                   payloadExpanded={expandedPayloads.has(report.channelKey)}
                   onToggleChecklist={() => toggleChecklist(report.channelKey)}
                   onTogglePayload={() => togglePayload(report.channelKey)}
+                  onJumpToStep={onJumpToStep}
                 />
               )
             })}
@@ -242,6 +244,7 @@ function ChannelCard({
   payloadExpanded,
   onToggleChecklist,
   onTogglePayload,
+  onJumpToStep,
 }: {
   report: ChannelValidationReport
   payload: ChannelPayloadEntry | undefined
@@ -249,6 +252,7 @@ function ChannelCard({
   payloadExpanded: boolean
   onToggleChecklist: () => void
   onTogglePayload: () => void
+  onJumpToStep: (stepId: number) => void
 }) {
   const tone = report.ready
     ? 'border-slate-200'
@@ -332,18 +336,37 @@ function ChannelCard({
         </div>
       )}
 
-      {/* Always-visible blocking items + warnings */}
+      {/* Always-visible blocking items + warnings.
+          U.4 — incomplete rows are clickable: clicking jumps the user
+          back to the originating step so they can fix the blocker
+          inline rather than memorising "Step 4" and clicking the
+          stepper. The "Fix" button on the right is the explicit
+          affordance; the row body is clickable for ergonomic targets. */}
       {(incomplete.length > 0 || report.warnings.length > 0) && (
         <div className="px-4 py-2 space-y-1 border-b border-slate-100">
           {incomplete.map((it, i) => (
             <div
               key={`i-${i}`}
-              className="text-base text-amber-700 inline-flex items-start gap-1.5"
+              className="flex items-center justify-between gap-2"
             >
-              <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-              <span>
-                Step {it.step} ({it.title}){it.message ? ` — ${it.message}` : ''}
-              </span>
+              <button
+                type="button"
+                onClick={() => onJumpToStep(it.step)}
+                className="text-base text-amber-700 inline-flex items-start gap-1.5 text-left flex-1 min-w-0 hover:text-amber-900 hover:underline rounded"
+                title={`Jump to Step ${it.step} to fix this`}
+              >
+                <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                <span className="min-w-0">
+                  Step {it.step} ({it.title}){it.message ? ` — ${it.message}` : ''}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onJumpToStep(it.step)}
+                className="flex-shrink-0 inline-flex items-center gap-1 h-6 px-2 text-sm font-medium border border-amber-300 text-amber-900 bg-amber-50 rounded hover:bg-amber-100"
+              >
+                Fix →
+              </button>
             </div>
           ))}
           {report.warnings.map((w, i) => (
@@ -379,23 +402,37 @@ function ChannelCard({
       </button>
       {checklistExpanded && (
         <div className="px-4 py-2 border-t border-slate-100 space-y-1">
-          {report.items.map((it) => (
-            <div
-              key={it.step}
-              className="flex items-center gap-2 text-base"
-            >
-              <StatusIcon status={it.status} />
-              <span className="font-mono text-slate-500 w-12 text-sm">
-                Step {it.step}
-              </span>
-              <span className="text-slate-700">{it.title}</span>
-              {it.message && (
-                <span className="text-slate-500 text-sm truncate">
-                  · {it.message}
+          {report.items.map((it) => {
+            const clickable = it.status === 'incomplete' || it.status === 'complete'
+            const Wrapper: any = clickable ? 'button' : 'div'
+            return (
+              <Wrapper
+                key={it.step}
+                {...(clickable
+                  ? {
+                      type: 'button',
+                      onClick: () => onJumpToStep(it.step),
+                      title: `Jump to Step ${it.step}`,
+                    }
+                  : {})}
+                className={cn(
+                  'w-full flex items-center gap-2 text-base text-left rounded px-1 -mx-1',
+                  clickable && 'hover:bg-slate-50 cursor-pointer',
+                )}
+              >
+                <StatusIcon status={it.status} />
+                <span className="font-mono text-slate-500 w-12 text-sm">
+                  Step {it.step}
                 </span>
-              )}
-            </div>
-          ))}
+                <span className="text-slate-700">{it.title}</span>
+                {it.message && (
+                  <span className="text-slate-500 text-sm truncate">
+                    · {it.message}
+                  </span>
+                )}
+              </Wrapper>
+            )
+          })}
         </div>
       )}
 

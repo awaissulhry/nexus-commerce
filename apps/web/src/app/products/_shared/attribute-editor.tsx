@@ -329,6 +329,8 @@ export function FieldGroupSection({
   unsatisfiedCount,
   filledCount,
   defaultExpanded,
+  expanded: expandedProp,
+  onExpandedChange,
   headerAction,
   children,
 }: {
@@ -338,13 +340,26 @@ export function FieldGroupSection({
   unsatisfiedCount?: number
   filledCount?: number
   defaultExpanded: boolean
+  /** U.4 — controlled expansion. When provided, the parent owns
+   *  the open/close state, which is needed for "jump to field"
+   *  flows that must force a collapsed group open. When omitted
+   *  the section is uncontrolled and uses defaultExpanded. */
+  expanded?: boolean
+  onExpandedChange?: (next: boolean) => void
   /** Right-side slot in the header (e.g. a "Copy from sibling"
    *  dropdown for the edit page). Click events here don't bubble to
    *  the toggle. */
   headerAction?: React.ReactNode
   children: React.ReactNode
 }) {
-  const [expanded, setExpanded] = useState(defaultExpanded)
+  const [internalExpanded, setInternalExpanded] = useState(defaultExpanded)
+  const isControlled = expandedProp !== undefined
+  const expanded = isControlled ? expandedProp : internalExpanded
+  const setExpanded = (next: boolean | ((prev: boolean) => boolean)) => {
+    const value = typeof next === 'function' ? next(expanded) : next
+    if (!isControlled) setInternalExpanded(value)
+    onExpandedChange?.(value)
+  }
   return (
     <div
       className={cn(
@@ -406,6 +421,8 @@ export function FieldGroupSection({
 // ── leaf components ─────────────────────────────────────────────
 
 export function FieldCard({
+  id,
+  highlight,
   field,
   viewMode,
   baseValue,
@@ -428,6 +445,11 @@ export function FieldCard({
   allChannelKeys,
   onApplyToChannels,
 }: {
+  /** U.4 — DOM id used as scroll target for "Jump to next" navigation. */
+  id?: string
+  /** U.4 — when true, draws a brief outline pulse to point the user at
+   *  the field after a jump. Caller toggles back off after the pulse. */
+  highlight?: boolean
   field: UnionField
   viewMode: 'base' | { channelKey: string }
   baseValue: Primitive | undefined
@@ -481,9 +503,12 @@ export function FieldCard({
 
   return (
     <div
+      id={id}
+      tabIndex={-1}
       className={cn(
-        'border rounded-lg bg-white px-4 py-3',
+        'border rounded-lg bg-white px-4 py-3 scroll-mt-32 outline-none transition-shadow',
         hasUnsatisfied ? 'border-amber-200' : 'border-slate-200',
+        highlight && 'ring-2 ring-blue-400 ring-offset-2 shadow-md',
       )}
     >
       <div className="mb-1.5 flex items-baseline justify-between gap-3 flex-wrap">

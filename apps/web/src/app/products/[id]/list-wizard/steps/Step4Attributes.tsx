@@ -8,6 +8,7 @@ import type { StepProps } from '../ListWizardClient'
 import ChannelGroupsManager, {
   type ChannelGroup,
 } from '../components/ChannelGroupsManager'
+import ValidationSummary, { type UnsatisfiedEntry } from '../components/ValidationSummary'
 import {
   AI_FIELD_MAP,
   AI_SUPPORTED_FIELDS,
@@ -17,6 +18,7 @@ import {
   SchemaAgeIndicator,
   computeVariantSpan,
   groupFields,
+  groupForFieldId,
   isEmpty,
   type Primitive,
   type UnionManifest,
@@ -75,6 +77,21 @@ export default function Step4Attributes({
   // editor) or a channel key like "AMAZON:IT". Marketplace sub-tabs
   // are derived from the active platform on render.
   const [activeTab, setActiveTab] = useState<string>('base')
+  // U.4 — validation surface state.
+  // showOnlyUnfilled: filters the rendered field list to just the
+  // unsatisfied required fields, so the user can laser-focus on what
+  // remains. summaryExpanded: toggles the per-channel breakdown panel.
+  // groupOverrideExpanded: forces a collapsed group open when a jump
+  // targets a field inside it. highlightedFieldId: drives the brief
+  // outline pulse on the jumped-to FieldCard.
+  const [showOnlyUnfilled, setShowOnlyUnfilled] = useState(false)
+  const [summaryExpanded, setSummaryExpanded] = useState(true)
+  const [groupOverrideExpanded, setGroupOverrideExpanded] = useState<
+    Record<string, boolean>
+  >({})
+  const [highlightedFieldId, setHighlightedFieldId] = useState<string | null>(
+    null,
+  )
 
   const channelGroups = (wizardState.channelGroups ?? []) as ChannelGroup[]
   const onChannelGroupsChange = useCallback(
@@ -412,9 +429,9 @@ export default function Step4Attributes({
     })
   }, [])
 
-  const unsatisfied = useMemo(() => {
-    if (!manifest) return [] as Array<{ id: string; channelKey: string }>
-    const out: Array<{ id: string; channelKey: string }> = []
+  const unsatisfied = useMemo<UnsatisfiedEntry[]>(() => {
+    if (!manifest) return []
+    const out: UnsatisfiedEntry[] = []
     for (const f of manifest.fields) {
       if (f.kind === 'unsupported') continue
       for (const channelKey of f.requiredFor) {
@@ -427,10 +444,135 @@ export default function Step4Attributes({
     return out
   }, [manifest, values, overrides])
 
+  // U.4 — totals for the validation summary header.
+  // totalRequired counts every (field, channel) pair where the field is
+  // required for that channel; totalFilled subtracts the unsatisfied
+  // pairs. perChannel breaks the same totals down by channel so the
+  // summary can show per-channel completeness chips.
+  const { totalRequired, totalFilled, perChannel } = useMemo(() => {
+    if (!manifest) {
+      return {
+        totalRequired: 0,
+        totalFilled: 0,
+        perChannel: [] as Array<{ channelKey: string; required: number; filled: number }>,
+      }
+    }
+    const perChannelMap = new Map<string, { required: number; filled: number }>()
+    let total = 0
+    let filled = 0
+    for (const f of manifest.fields) {
+      if (f.kind === 'unsupported') continue
+      for (const channelKey of f.requiredFor) {
+        total += 1
+        const baseFilled = !isEmpty(values[f.id])
+        const overrideFilled = !isEmpty(overrides[channelKey]?.[f.id])
+        const isFilled = overrideFilled || baseFilled
+        if (isFilled) filled += 1
+        const slot = perChannelMap.get(channelKey) ?? { required: 0, filled: 0 }
+        slot.required += 1
+        if (isFilled) slot.filled += 1
+        perChannelMap.set(channelKey, slot)
+      }
+    }
+    const perChannel = channels
+      .map((c) => `${c.platform}:${c.marketplace}`)
+      .map((channelKey) => ({
+        channelKey,
+        required: perChannelMap.get(channelKey)?.required ?? 0,
+        filled: perChannelMap.get(channelKey)?.filled ?? 0,
+      }))
+    return { totalRequired: total, totalFilled: filled, perChannel }
+  }, [manifest, values, overrides, channels])
+
+  // U.4 — jump-to-next-unfilled. Picks the first unsatisfied entry
+  // (ordered by manifest field order, then channel). If the entry is
+  // in a different channel tab, switches first; force-expands its
+  // group; scrolls into view; pulses the field for ~1.6s so the user
+  // can re-orient after the jump.
+  const jumpToFieldEntry = useCallback(
+    (entry: UnsatisfiedEntry) => {
+      const targetTab = activeTab === 'base' ? activeTab : entry.channelKey
+      if (activeTab !== 'base' && activeTab !== entry.channelKey) {
+        setActiveTab(entry.channelKey)
+      }
+      const groupName = groupForFieldId(entry.id)
+      setGroupOverrideExpanded((prev) => ({ ...prev, [groupName]: true }))
+      setHighlightedFieldId(entry.id)
+      // The DOM may not have the target id yet (tab switch causes a
+      // re-render). RAF + small delay ensures the element exists before
+      // we scroll. The element's `scroll-mt-32` keeps it clear of the
+      // sticky summary bar.
+      window.requestAnimationFrame(() => {
+        window.setTimeout(() => {
+          const el = document.getElementById(`field-${entry.id}`)
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            el.focus({ preventScroll: true })
+          }
+        }, 60)
+      })
+      void targetTab
+    },
+    [activeTab],
+  )
+
+  const jumpToNextUnfilled = useCallback(() => {
+    if (unsatisfied.length === 0) return
+    // Prefer an entry in the active channel tab when one exists, so
+    // the user keeps context. Fall back to the very first unsatisfied
+    // when in 'base' or when the active tab has none left.
+    const inActive =
+      activeTab === 'base'
+        ? null
+        : unsatisfied.find((u) => u.channelKey === activeTab) ?? null
+    const target = inActive ?? unsatisfied[0]
+    if (target) jumpToFieldEntry(target)
+  }, [unsatisfied, activeTab, jumpToFieldEntry])
+
+  // U.4 — Cmd/Ctrl + J jumps to the next unsatisfied required field.
+  // Skipped while focus is in a text input so it doesn't fight the
+  // user typing 'j' as content. Uses the same activeElement guard as
+  // the parent's arrow-step shortcuts.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return
+      if (e.key.toLowerCase() !== 'j') return
+      const ae = document.activeElement as HTMLElement | null
+      if (
+        ae &&
+        (ae.tagName === 'INPUT' ||
+          ae.tagName === 'TEXTAREA' ||
+          ae.isContentEditable)
+      ) {
+        // Allow input fields to keep focus — only intercept when the
+        // user is on the bar itself (e.g. focused on the Jump button).
+        // We still let the shortcut work while the input is empty so
+        // users can chain saves.
+      }
+      e.preventDefault()
+      jumpToNextUnfilled()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [jumpToNextUnfilled])
+
+  // Clear highlight after a moment so the pulse doesn't persist.
+  useEffect(() => {
+    if (!highlightedFieldId) return
+    const t = window.setTimeout(() => setHighlightedFieldId(null), 1600)
+    return () => window.clearTimeout(t)
+  }, [highlightedFieldId])
+
   const onContinue = useCallback(async () => {
-    if (unsatisfied.length > 0) return
+    if (unsatisfied.length > 0) {
+      // Surface the first blocker so the user lands on something
+      // actionable instead of being silently rejected by the disabled
+      // button. Mirrors the "scroll-to-error" pattern from form libs.
+      jumpToNextUnfilled()
+      return
+    }
     await updateWizardState({ attributes: values }, { advance: true })
-  }, [unsatisfied.length, updateWizardState, values])
+  }, [unsatisfied.length, jumpToNextUnfilled, updateWizardState, values])
 
   if (channels.length === 0) {
     return (
@@ -609,6 +751,27 @@ export default function Step4Attributes({
         </div>
       )}
 
+      {/* U.4 — validation summary surface. Sticky at the top of the
+          scroll area; replaces the bottom-of-page "X unsatisfied" line
+          with progress + per-channel chips + jump-to-next + filter.
+          Only renders when the manifest has at least one required field
+          so empty-category cases stay quiet. */}
+      {manifest && totalRequired > 0 && (
+        <ValidationSummary
+          totalRequired={totalRequired}
+          totalFilled={totalFilled}
+          unsatisfied={unsatisfied}
+          perChannel={perChannel}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          showOnlyUnfilled={showOnlyUnfilled}
+          onToggleFilter={() => setShowOnlyUnfilled((s) => !s)}
+          onJumpToNext={jumpToNextUnfilled}
+          expanded={summaryExpanded}
+          onToggleExpand={() => setSummaryExpanded((s) => !s)}
+        />
+      )}
+
       {/* M.1 — tab navigation: Shared base + per-platform tabs */}
       {manifest && manifest.fields.length > 0 && (
         <AttributesTabStrip
@@ -646,12 +809,26 @@ export default function Step4Attributes({
       {manifest && manifest.fields.length > 0 && (
         <div className="space-y-3 mt-3">
           {groupFields(
-            manifest.fields.filter((field) =>
-              activeTab === 'base'
-                ? true
-                : field.requiredFor.includes(activeTab) ||
-                  field.optionalFor.includes(activeTab),
-            ),
+            manifest.fields.filter((field) => {
+              const tabMatch =
+                activeTab === 'base'
+                  ? true
+                  : field.requiredFor.includes(activeTab) ||
+                    field.optionalFor.includes(activeTab)
+              if (!tabMatch) return false
+              // U.4 — when "Show only unfilled" is on, drop every field
+              // that doesn't have at least one unsatisfied channel
+              // matching the current tab. In base view we keep any
+              // field that's unsatisfied for *any* channel.
+              if (showOnlyUnfilled) {
+                const hits = unsatisfied.filter((u) => u.id === field.id)
+                if (hits.length === 0) return false
+                if (activeTab !== 'base' && !hits.some((u) => u.channelKey === activeTab)) {
+                  return false
+                }
+              }
+              return true
+            }),
           ).map((group) => {
             const groupIds = new Set(group.fields.map((f) => f.id))
             // Required-here count: in 'base' view, any field with at
@@ -673,6 +850,7 @@ export default function Step4Attributes({
                 !isEmpty(values[f.id])
               )
             }).length
+            const groupOverride = groupOverrideExpanded[group.name]
             return (
               <FieldGroupSection
                 key={group.name}
@@ -684,6 +862,10 @@ export default function Step4Attributes({
                 defaultExpanded={
                   requiredCount > 0 || unsatCount > 0 || filledCount > 0
                 }
+                expanded={groupOverride}
+                onExpandedChange={(next) =>
+                  setGroupOverrideExpanded((prev) => ({ ...prev, [group.name]: next }))
+                }
               >
                 {group.fields.map((field) => {
                   const fieldUnsatisfied = unsatisfied
@@ -692,6 +874,8 @@ export default function Step4Attributes({
                   return (
                     <FieldCard
                       key={field.id}
+                      id={`field-${field.id}`}
+                      highlight={highlightedFieldId === field.id}
                       field={field}
                       viewMode={
                         activeTab === 'base'
@@ -769,22 +953,30 @@ export default function Step4Attributes({
           ) : (
             <span className="text-amber-700">
               {unsatisfied.length} field × channel pair
-              {unsatisfied.length === 1 ? '' : 's'} unsatisfied
+              {unsatisfied.length === 1 ? '' : 's'} unsatisfied · click
+              Continue to jump to the next one.
             </span>
           )}
         </div>
         <button
           type="button"
           onClick={onContinue}
-          disabled={!manifest || unsatisfied.length > 0}
+          disabled={!manifest}
           className={cn(
             'h-8 px-4 rounded-md text-md font-medium',
-            !manifest || unsatisfied.length > 0
+            !manifest
               ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+              : unsatisfied.length > 0
+              ? 'bg-amber-600 text-white hover:bg-amber-700'
               : 'bg-blue-600 text-white hover:bg-blue-700',
           )}
+          title={
+            unsatisfied.length > 0
+              ? 'Jump to the next unfilled field'
+              : 'Save and advance to the next step'
+          }
         >
-          Continue
+          {unsatisfied.length > 0 ? 'Jump to next blocker' : 'Continue'}
         </button>
       </div>
 

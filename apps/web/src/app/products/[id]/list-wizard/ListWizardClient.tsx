@@ -69,6 +69,9 @@ export interface StepProps {
    *  so downstream steps can rely on these being defined. */
   channel: string
   marketplace: string
+  /** U.4 — exposed so Step 9 (Review) can deep-link incomplete
+   *  checklist rows back to the originating step. */
+  onJumpToStep: (stepId: number) => void
 }
 
 interface Props {
@@ -329,6 +332,7 @@ export default function ListWizardClient({
             updateWizardChannels,
             channel: firstChannel.platform,
             marketplace: firstChannel.marketplace,
+            onJumpToStep: navigateTo,
           }
 
           // ── Phase B step routing ────────────────────────────────
