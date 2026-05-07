@@ -343,6 +343,8 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       stale?: string
       limit?: string
       offset?: string
+      include?: string
+      sort?: string
     }
   }>('/listing-wizard/drafts', async (request, reply) => {
     try {
@@ -354,12 +356,23 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       const offset = Math.max(parseInt(q.offset ?? '0', 10) || 0, 0)
       const onlyStale = q.stale === '1' || q.stale === 'true'
       const search = (q.search ?? '').trim()
+      // C.3 — opt-in to merge Product DRAFT rows alongside wizard
+      // drafts. Comma-list of source kinds: 'wizards', 'products',
+      // or both. Default 'wizards' for back-compat with existing
+      // callers that don't pass include.
+      const includes = (q.include ?? 'wizards').split(',').map((s) => s.trim())
+      const includeWizards = includes.includes('wizards') || includes.includes('all')
+      const includeProducts =
+        includes.includes('products') || includes.includes('all')
+      // C.3 — sort options (recency / age-asc / name / completion).
+      // Default 'recency' (newest updatedAt first).
+      const sort = (q.sort ?? 'recency').toLowerCase()
 
       const staleCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-      const where: any = { status: 'DRAFT' }
-      if (onlyStale) where.updatedAt = { lt: staleCutoff }
+      const wizardWhere: any = { status: 'DRAFT' }
+      if (onlyStale) wizardWhere.updatedAt = { lt: staleCutoff }
       if (search) {
-        where.product = {
+        wizardWhere.product = {
           OR: [
             { sku: { contains: search, mode: 'insensitive' } },
             { name: { contains: search, mode: 'insensitive' } },
@@ -368,66 +381,169 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Phase 10b — short-circuit with 304 Not Modified when nothing
-      // has changed since the client's last fetch. /products/drafts
-      // polls every ~30s and on focus; without ETag every poll
-      // reruns the count + findMany even when no draft was touched.
-      const { etag, count: etagCount } = await listEtag(prisma, {
-        model: 'listingWizard',
-        where,
-        filterContext: { limit, offset, onlyStale, search },
-      })
-      reply.header('ETag', etag)
-      reply.header('Cache-Control', 'private, max-age=0, must-revalidate')
-      if (matches(request, etag)) {
-        return reply.code(304).send()
+      // has changed since the client's last fetch. ETag is keyed on
+      // ListingWizard only; when products are included, skip the
+      // 304 path because we'd need a combined etag (deferred —
+      // analytics-light surface, polling every 30s is fine).
+      let etag: string | undefined
+      let etagCount = 0
+      if (!includeProducts) {
+        const e = await listEtag(prisma, {
+          model: 'listingWizard',
+          where: wizardWhere,
+          filterContext: { limit, offset, onlyStale, search, sort },
+        })
+        etag = e.etag
+        etagCount = e.count
+        reply.header('ETag', etag)
+        reply.header('Cache-Control', 'private, max-age=0, must-revalidate')
+        if (matches(request, etag)) {
+          return reply.code(304).send()
+        }
       }
 
-      const [total, rows] = await Promise.all([
-        // We already have the count from listEtag; the count() call here
-        // costs an extra trivial query but keeps the existing typed
-        // contract clear and avoids a refactor at this layer. Future
-        // optimisation: thread etagCount through.
-        Promise.resolve(etagCount),
-        prisma.listingWizard.findMany({
-          where,
-          orderBy: { updatedAt: 'desc' },
-          take: limit,
-          skip: offset,
-          select: {
-            id: true,
-            productId: true,
-            currentStep: true,
-            channels: true,
-            createdAt: true,
-            updatedAt: true,
-            product: {
-              select: {
-                id: true,
-                sku: true,
-                name: true,
-                isParent: true,
+      // Wizard rows.
+      const wizardRows = includeWizards
+        ? await prisma.listingWizard.findMany({
+            where: wizardWhere,
+            orderBy: { updatedAt: 'desc' },
+            // When products are included, fetch all matching wizards
+            // (capped at 200 by the limit clamp) and let the merge
+            // step apply the final pagination + sort. For wizard-only
+            // requests the take/skip applies directly.
+            take: includeProducts ? 200 : limit,
+            skip: includeProducts ? 0 : offset,
+            select: {
+              id: true,
+              productId: true,
+              currentStep: true,
+              channels: true,
+              createdAt: true,
+              updatedAt: true,
+              product: {
+                select: {
+                  id: true,
+                  sku: true,
+                  name: true,
+                  isParent: true,
+                },
               },
             },
-          },
-        }),
-      ])
+          })
+        : []
 
-      const drafts = rows.map((r) => ({
+      type DraftRow = {
+        kind: 'wizard' | 'product'
+        id: string
+        productId: string
+        productSku: string | null
+        productName: string | null
+        productIsParent: boolean
+        currentStep: number | null
+        channels: unknown[]
+        createdAt: Date
+        updatedAt: Date
+        isStale: boolean
+      }
+      const wizardDrafts: DraftRow[] = wizardRows.map((r) => ({
+        kind: 'wizard',
         id: r.id,
         productId: r.productId,
         productSku: r.product?.sku ?? null,
         productName: r.product?.name ?? null,
         productIsParent: r.product?.isParent ?? false,
         currentStep: r.currentStep,
-        // Stored as JSON so the type is `unknown`; assume the wizard
-        // always writes the {platform, marketplace}[] shape from Step 1.
-        channels: Array.isArray(r.channels) ? r.channels : [],
+        channels: Array.isArray(r.channels) ? (r.channels as unknown[]) : [],
         createdAt: r.createdAt,
         updatedAt: r.updatedAt,
         isStale: r.updatedAt < staleCutoff,
       }))
 
-      return { success: true, total, drafts }
+      // Product DRAFT rows. Excludes products that already have a
+      // DRAFT wizard pointing at them — those would render as
+      // duplicate entries (one for the product itself, one for the
+      // wizard). Wizard rows take precedence since they carry richer
+      // step state.
+      let productDrafts: DraftRow[] = []
+      if (includeProducts) {
+        const wizardProductIds = new Set(wizardRows.map((r) => r.productId))
+        const productWhere: any = {
+          status: 'DRAFT',
+          id: { notIn: Array.from(wizardProductIds) },
+        }
+        if (onlyStale) productWhere.updatedAt = { lt: staleCutoff }
+        if (search) {
+          productWhere.OR = [
+            { sku: { contains: search, mode: 'insensitive' } },
+            { name: { contains: search, mode: 'insensitive' } },
+          ]
+        }
+        const productRows = await prisma.product.findMany({
+          where: productWhere,
+          orderBy: { updatedAt: 'desc' },
+          take: 200,
+          select: {
+            id: true,
+            sku: true,
+            name: true,
+            isParent: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        })
+        productDrafts = productRows.map<DraftRow>((p) => ({
+          kind: 'product',
+          // For product DRAFTs we use the productId as the row id so
+          // the client can dedupe + use it directly for delete.
+          id: p.id,
+          productId: p.id,
+          productSku: p.sku,
+          productName: p.name,
+          productIsParent: p.isParent,
+          currentStep: null,
+          channels: [],
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
+          isStale: p.updatedAt < staleCutoff,
+        }))
+      }
+
+      // Merge + sort + paginate. For wizard-only the rows already
+      // reflect take/skip; we still re-sort to apply the requested
+      // order, then re-slice if offset != 0 (no-op for take/skip
+      // single-source). For combined sources we apply final order +
+      // pagination here.
+      let combined: DraftRow[] = [...wizardDrafts, ...productDrafts]
+      const compareName = (a: DraftRow, b: DraftRow) =>
+        (a.productName ?? '').localeCompare(b.productName ?? '')
+      combined.sort((a, b) => {
+        switch (sort) {
+          case 'age-asc':
+            return a.createdAt.getTime() - b.createdAt.getTime()
+          case 'age-desc':
+            return b.createdAt.getTime() - a.createdAt.getTime()
+          case 'name':
+            return compareName(a, b)
+          case 'completion':
+            return (
+              (b.currentStep ?? 0) - (a.currentStep ?? 0) ||
+              b.updatedAt.getTime() - a.updatedAt.getTime()
+            )
+          case 'recency':
+          default:
+            return b.updatedAt.getTime() - a.updatedAt.getTime()
+        }
+      })
+      const total = includeProducts
+        ? combined.length
+        : etagCount
+      // Slice for the merged path; wizard-only path already
+      // pre-sliced. Re-slice combined here.
+      if (includeProducts) {
+        combined = combined.slice(offset, offset + limit)
+      }
+
+      return { success: true, total, drafts: combined }
     } catch (err) {
       fastify.log.error({ err }, '[listing-wizard] drafts list failed')
       return reply.code(500).send({
@@ -759,6 +875,104 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       return { events }
     },
   )
+
+  // ── C.3 — POST /api/listing-wizard/drafts/bulk-delete ─────────
+  // Bulk-deletes a mixed batch of drafts. Wizards are soft-deleted
+  // (status='DISCARDED' + wizard_discarded telemetry) so the event
+  // trail survives. Products are hard-deleted only when their
+  // status is 'DRAFT' — anything ACTIVE/INACTIVE is silently
+  // skipped to defend against client-side bugs that pass the wrong
+  // ids. Returns counts so the UI can show "Deleted N drafts".
+  fastify.post<{
+    Body: { wizardIds?: string[]; productIds?: string[] }
+  }>('/listing-wizard/drafts/bulk-delete', async (request, reply) => {
+    const wizardIds = Array.isArray(request.body?.wizardIds)
+      ? request.body.wizardIds.filter(
+          (id): id is string => typeof id === 'string' && id.length > 0,
+        )
+      : []
+    const productIds = Array.isArray(request.body?.productIds)
+      ? request.body.productIds.filter(
+          (id): id is string => typeof id === 'string' && id.length > 0,
+        )
+      : []
+    if (wizardIds.length === 0 && productIds.length === 0) {
+      return reply.code(400).send({
+        error: 'wizardIds or productIds is required.',
+      })
+    }
+    if (wizardIds.length + productIds.length > 200) {
+      return reply.code(400).send({
+        error: 'Bulk-delete capped at 200 entries per request.',
+      })
+    }
+
+    let wizardsDiscarded = 0
+    let productsDeleted = 0
+    let productsSkipped = 0
+
+    if (wizardIds.length > 0) {
+      const wizards = await prisma.listingWizard.findMany({
+        where: { id: { in: wizardIds }, status: 'DRAFT' },
+        select: {
+          id: true,
+          productId: true,
+          currentStep: true,
+          createdAt: true,
+        },
+      })
+      // Telemetry first; cascade-on-delete would erase events, but
+      // soft-delete preserves them — write before to keep ordering
+      // consistent with the per-wizard DELETE handler.
+      for (const w of wizards) {
+        void writeWizardEvent({
+          wizardId: w.id,
+          productId: w.productId,
+          type: 'wizard_discarded',
+          step: w.currentStep,
+          durationMs: Math.max(
+            0,
+            Date.now() - w.createdAt.getTime(),
+          ),
+          errorContext: {
+            fromStep: w.currentStep,
+            reason: 'bulk_discard',
+          },
+        })
+      }
+      const u = await prisma.listingWizard.updateMany({
+        where: { id: { in: wizards.map((w) => w.id) } },
+        data: { status: 'DISCARDED', expiresAt: null },
+      })
+      wizardsDiscarded = u.count
+    }
+
+    if (productIds.length > 0) {
+      // Defensive — only delete Products with status='DRAFT'. Anything
+      // ACTIVE/INACTIVE is silently skipped (count goes into
+      // productsSkipped) so the client can confirm the user-visible
+      // outcome without exposing other rows.
+      const eligible = await prisma.product.findMany({
+        where: { id: { in: productIds }, status: 'DRAFT' },
+        select: { id: true },
+      })
+      const eligibleIds = eligible.map((p) => p.id)
+      productsSkipped = productIds.length - eligibleIds.length
+      if (eligibleIds.length > 0) {
+        const r = await prisma.product.deleteMany({
+          where: { id: { in: eligibleIds } },
+        })
+        productsDeleted = r.count
+      }
+    }
+
+    return reply.code(200).send({
+      success: true,
+      wizardsDiscarded,
+      productsDeleted,
+      productsSkipped,
+    })
+  })
 
   // ── C.0 — DELETE /api/listing-wizard/:id ──────────────────────
   // Soft-deletes a DRAFT wizard by flipping status to DISCARDED so
