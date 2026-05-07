@@ -6,7 +6,25 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import {
   Plus, Pencil, Trash2, ScrollText, Check, X, RefreshCw, FlaskConical, ArrowRight,
+  GripVertical,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -70,6 +88,13 @@ export default function RulesClient() {
   const [showNew, setShowNew] = useState(false)
   const [showSimulator, setShowSimulator] = useState(false)
 
+  // O.59: drag-and-drop sensors. Pointer for mouse/touch + Keyboard
+  // so screen-reader users can re-order via Tab + Space + arrows.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
   const fetchRules = useCallback(async () => {
     setLoading(true)
     try {
@@ -84,6 +109,43 @@ export default function RulesClient() {
   }, [])
 
   useEffect(() => { fetchRules() }, [fetchRules])
+
+  // After a drop, reassign priorities so the new order persists. v0
+  // strategy: sequential 10-step priorities (10, 20, 30, …) so a
+  // future single-row edit can slot in between without re-rebalancing
+  // the whole list. Sends one PATCH per moved rule (only the rules
+  // whose priority actually changed).
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = rules.findIndex((r) => r.id === active.id)
+    const newIndex = rules.findIndex((r) => r.id === over.id)
+    if (oldIndex < 0 || newIndex < 0) return
+    const reordered = arrayMove(rules, oldIndex, newIndex)
+    setRules(reordered)
+    const patches: Array<Promise<Response>> = []
+    reordered.forEach((r, idx) => {
+      const newPriority = (idx + 1) * 10
+      if (r.priority !== newPriority) {
+        patches.push(
+          fetch(`${getBackendUrl()}/api/fulfillment/shipping-rules/${r.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ priority: newPriority }),
+          }),
+        )
+      }
+    })
+    const results = await Promise.allSettled(patches)
+    const failed = results.filter((r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.ok)).length
+    if (failed > 0) {
+      toast.error(t('rules.reorder.partialFail', { n: failed }))
+      fetchRules()
+    } else {
+      toast.success(t('rules.reorder.saved'))
+      fetchRules()
+    }
+  }, [rules, fetchRules, toast, t])
 
   const onDelete = async (rule: ShippingRule) => {
     if (!(await askConfirm({
@@ -159,9 +221,16 @@ export default function RulesClient() {
         </Card>
       ) : (
         <Card noPadding>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext items={rules.map((r) => r.id)} strategy={verticalListSortingStrategy}>
           <table className="w-full text-md">
             <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
+                <th className="px-3 py-2 w-8"></th>
                 <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 w-16">{t('rules.col.priority')}</th>
                 <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('rules.col.rule')}</th>
                 <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('rules.col.when')}</th>
@@ -172,36 +241,19 @@ export default function RulesClient() {
             </thead>
             <tbody>
               {rules.map((r) => (
-                <tr key={r.id} className={`border-b border-slate-100 hover:bg-slate-50 ${!r.isActive ? 'opacity-50' : ''}`}>
-                  <td className="px-3 py-2 tabular-nums text-slate-700">{r.priority}</td>
-                  <td className="px-3 py-2">
-                    <div className="font-medium text-slate-900">{r.name}</div>
-                    {r.description && <div className="text-sm text-slate-500">{r.description}</div>}
-                  </td>
-                  <td className="px-3 py-2 text-sm text-slate-600">{summarizeConditions(r.conditions)}</td>
-                  <td className="px-3 py-2 text-sm text-slate-600">{summarizeActions(r.actions)}</td>
-                  <td className="px-3 py-2 text-sm text-slate-600">
-                    {t('rules.fires', { n: r.triggerCount })}
-                    {r.lastFiredAt && <div className="text-xs text-slate-400">{t('rules.lastFired', { date: new Date(r.lastFiredAt).toLocaleDateString('it-IT') })}</div>}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <div className="flex items-center gap-1 justify-end">
-                      <button onClick={() => onToggleActive(r)} className="h-6 px-2 text-sm text-slate-600 border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1" title={r.isActive ? t('rules.action.disable') : t('rules.action.enable')}>
-                        {r.isActive ? <X size={11} /> : <Check size={11} />}
-                        {r.isActive ? t('rules.action.disable') : t('rules.action.enable')}
-                      </button>
-                      <button onClick={() => setEditing(r)} className="h-6 w-6 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded" title="Edit">
-                        <Pencil size={11} />
-                      </button>
-                      <button onClick={() => onDelete(r)} className="h-6 w-6 inline-flex items-center justify-center text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded" title="Delete">
-                        <Trash2 size={11} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                <SortableRuleRow
+                  key={r.id}
+                  rule={r}
+                  onToggleActive={onToggleActive}
+                  onEdit={setEditing}
+                  onDelete={onDelete}
+                  t={t}
+                />
               ))}
             </tbody>
           </table>
+            </SortableContext>
+          </DndContext>
         </Card>
       )}
 
@@ -443,6 +495,72 @@ function Field({ label, children, required = false }: { label: string; children:
       </span>
       {children}
     </label>
+  )
+}
+
+// O.59 — sortable rule row. Renders the same content as the legacy
+// non-sortable row but with a drag handle column + dnd-kit transform
+// styles. The drag handle is the only thing that initiates a drag
+// (PointerSensor.activationConstraint.distance=5) so accidental
+// row clicks don't grab.
+function SortableRuleRow({
+  rule: r,
+  onToggleActive,
+  onEdit,
+  onDelete,
+  t,
+}: {
+  rule: ShippingRule
+  onToggleActive: (rule: ShippingRule) => void
+  onEdit: (rule: ShippingRule) => void
+  onDelete: (rule: ShippingRule) => void
+  t: (key: string, vars?: Record<string, string | number>) => string
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: r.id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : (r.isActive ? 1 : 0.5),
+    background: isDragging ? '#f1f5f9' : undefined,
+  }
+  return (
+    <tr ref={setNodeRef} style={style} className="border-b border-slate-100 hover:bg-slate-50">
+      <td className="px-2 py-2 w-8 text-center">
+        <button
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-600"
+          aria-label={t('rules.dragHandle')}
+        >
+          <GripVertical size={14} />
+        </button>
+      </td>
+      <td className="px-3 py-2 tabular-nums text-slate-700">{r.priority}</td>
+      <td className="px-3 py-2">
+        <div className="font-medium text-slate-900">{r.name}</div>
+        {r.description && <div className="text-sm text-slate-500">{r.description}</div>}
+      </td>
+      <td className="px-3 py-2 text-sm text-slate-600">{summarizeConditions(r.conditions)}</td>
+      <td className="px-3 py-2 text-sm text-slate-600">{summarizeActions(r.actions)}</td>
+      <td className="px-3 py-2 text-sm text-slate-600">
+        {t('rules.fires', { n: r.triggerCount })}
+        {r.lastFiredAt && <div className="text-xs text-slate-400">{t('rules.lastFired', { date: new Date(r.lastFiredAt).toLocaleDateString('it-IT') })}</div>}
+      </td>
+      <td className="px-3 py-2 text-right">
+        <div className="flex items-center gap-1 justify-end">
+          <button onClick={() => onToggleActive(r)} className="h-6 px-2 text-sm text-slate-600 border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1" title={r.isActive ? t('rules.action.disable') : t('rules.action.enable')}>
+            {r.isActive ? <X size={11} /> : <Check size={11} />}
+            {r.isActive ? t('rules.action.disable') : t('rules.action.enable')}
+          </button>
+          <button onClick={() => onEdit(r)} className="h-6 w-6 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded" title={t('common.edit') ?? 'Edit'}>
+            <Pencil size={11} />
+          </button>
+          <button onClick={() => onDelete(r)} className="h-6 w-6 inline-flex items-center justify-center text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded" title={t('common.delete')}>
+            <Trash2 size={11} />
+          </button>
+        </div>
+      </td>
+    </tr>
   )
 }
 
