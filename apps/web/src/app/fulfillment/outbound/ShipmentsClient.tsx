@@ -13,6 +13,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Truck, Search, RefreshCw, Printer, ExternalLink, X, CheckCircle2,
   AlertTriangle, Send, Download, RotateCcw, Trash, Pause, Play,
+  Copy,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -528,16 +529,36 @@ export default function ShipmentsClient() {
                       <span className="tabular-nums">{s.items.reduce((n, i) => n + i.quantity, 0)}</span> units · {s.items.length} SKU{s.items.length === 1 ? '' : 's'}
                     </td>
                     <td className="px-3 py-2 text-base text-slate-700">{s.carrierCode}</td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                       {s.trackingNumber ? (
-                        s.trackingUrl ? (
-                          <a href={s.trackingUrl} target="_blank" rel="noreferrer" className="text-base font-mono text-blue-600 hover:underline inline-flex items-center gap-1">
-                            {s.trackingNumber.slice(0, 16)}{s.trackingNumber.length > 16 ? '…' : ''}
-                            <ExternalLink size={10} />
-                          </a>
-                        ) : (
-                          <span className="text-base font-mono text-slate-700">{s.trackingNumber}</span>
-                        )
+                        <span className="inline-flex items-center gap-1 group/track">
+                          {s.trackingUrl ? (
+                            <a href={s.trackingUrl} target="_blank" rel="noreferrer" className="text-base font-mono text-blue-600 hover:underline inline-flex items-center gap-1">
+                              {s.trackingNumber.slice(0, 16)}{s.trackingNumber.length > 16 ? '…' : ''}
+                              <ExternalLink size={10} />
+                            </a>
+                          ) : (
+                            <span className="text-base font-mono text-slate-700">{s.trackingNumber}</span>
+                          )}
+                          {/* O.65: copy tracking — operator pastes into
+                              customer-support emails without re-typing.
+                              Hover-revealed so it doesn't add noise to
+                              the row when you're scanning visually. */}
+                          <button
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(s.trackingNumber!)
+                                toast.success(t('outbound.shipments.copy.toast'))
+                              } catch {
+                                toast.error(t('common.error'))
+                              }
+                            }}
+                            title={t('outbound.shipments.copy.title')}
+                            className="opacity-0 group-hover/track:opacity-100 h-5 w-5 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 rounded transition-opacity"
+                          >
+                            <Copy size={10} />
+                          </button>
+                        </span>
                       ) : <span className="text-slate-400 text-base">—</span>}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-base text-slate-600">

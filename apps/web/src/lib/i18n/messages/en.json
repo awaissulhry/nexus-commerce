@@ -290,6 +290,8 @@
   "outbound.drawer.customs.col.hs": "HS code",
   "outbound.drawer.customs.col.origin": "Origin",
   "outbound.drawer.customs.col.value": "Value",
+  "outbound.shipments.copy.title": "Copy tracking number",
+  "outbound.shipments.copy.toast": "Tracking number copied",
   "outbound.drawer.cancel.button": "Cancel order",
   "outbound.drawer.cancel.title": "Cancel this order?",
   "outbound.drawer.cancel.description": "Marks the order CANCELLED, voids any unprinted/unshipped Sendcloud parcels, and restocks the items. The marketplace customer is NOT auto-notified — cancel on the channel separately if needed.",
