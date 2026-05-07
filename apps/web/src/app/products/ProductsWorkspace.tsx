@@ -3279,7 +3279,7 @@ function VirtualizedGrid({
                       onSort(sortKeys[col.key])
                     }
                   }}
-                  className={`relative px-3 py-2 text-sm font-semibold uppercase tracking-wider text-slate-700 text-left flex items-center ${sortable ? 'cursor-pointer hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:bg-slate-100' : ''}`}
+                  className={`relative px-3 py-2 text-sm font-semibold uppercase tracking-wider text-slate-700 text-left flex items-center group/sort ${sortable ? 'cursor-pointer hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:bg-slate-100' : ''}`}
                   style={{
                     width: `var(--col-${col.key}-width)`,
                     minWidth: `var(--col-${col.key}-width)`,
@@ -3290,11 +3290,21 @@ function VirtualizedGrid({
                 >
                   <span className="inline-flex items-center gap-1">
                     {col.label}
-                    {isActive && (
+                    {isActive ? (
                       <span className="text-slate-400" aria-hidden="true">
                         {sortDir === 'ascending' ? '↑' : '↓'}
                       </span>
-                    )}
+                    ) : sortable ? (
+                      // E.16 — show ↕ on hover for sortable columns that
+                      // aren't currently the active sort. Telegraphs
+                      // sortability without cluttering the resting state.
+                      <span
+                        className="text-slate-300 opacity-0 group-hover/sort:opacity-100 transition-opacity"
+                        aria-hidden="true"
+                      >
+                        ↕
+                      </span>
+                    ) : null}
                   </span>
                   {/* E.12 — resize handle. Mouse-down captures starting
                       width + clientX, then mousemove updates the CSS
