@@ -1005,6 +1005,8 @@ export default function ProductsWorkspace() {
           setSelected={setSelected}
           onRowToggle={handleRowToggle}
           focusedRowId={focusedRowId}
+          filterCount={filterCount}
+          onClearFilters={() => updateUrl({ status: '', channels: '', marketplaces: '', productTypes: '', brands: '', tags: '', fulfillment: '', missingChannels: '', stockLevel: undefined, hasPhotos: undefined, page: undefined })}
           onPage={onPage}
           onPageSize={onPageSize}
           onTagEdit={onTagEdit}
@@ -3900,7 +3902,46 @@ function GridLens(props: any) {
     return <Card><div role="alert" aria-live="assertive" className="text-md text-rose-600 py-8 text-center">Failed to load: {error}</div></Card>
   }
   if (products.length === 0) {
-    return <EmptyState icon={Boxes} title="No products match these filters" description="Adjust filters or import products." action={{ label: 'New product', href: '/products/new' }} />
+    // E.13 — empty state distinguishes "filters too narrow" from
+    // "catalog is empty". The workspace passes filterCount (number
+    // of active dimensions) + onClearFilters; when filters are
+    // active we surface the count and a one-click clear instead of
+    // making the operator hunt down which filter to remove.
+    const filtered = (props as any).filterCount > 0
+    return (
+      <Card>
+        <div className="py-12 px-6 text-center max-w-md mx-auto space-y-3">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 text-slate-400 mb-1">
+            <Boxes className="w-6 h-6" />
+          </div>
+          <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+            {filtered ? 'No products match these filters' : 'No products yet'}
+          </div>
+          <div className="text-base text-slate-500 dark:text-slate-400">
+            {filtered
+              ? `${(props as any).filterCount} filter${(props as any).filterCount === 1 ? '' : 's'} applied. Try removing a filter or starting fresh.`
+              : 'Import a feed, drop a CSV, or create your first SKU.'}
+          </div>
+          <div className="flex items-center justify-center gap-2 pt-2 flex-wrap">
+            {filtered && (
+              <button
+                type="button"
+                onClick={() => (props as any).onClearFilters?.()}
+                className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5"
+              >
+                <X size={12} /> Clear all filters
+              </button>
+            )}
+            <Link
+              href="/products/new"
+              className={`h-8 px-3 text-base inline-flex items-center gap-1.5 rounded ${filtered ? 'border border-slate-200 text-slate-700 hover:bg-slate-50' : 'bg-slate-900 text-white hover:bg-slate-800'}`}
+            >
+              <Plus size={12} /> New product
+            </Link>
+          </div>
+        </div>
+      </Card>
+    )
   }
 
   return (
