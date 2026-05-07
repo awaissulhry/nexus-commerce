@@ -3718,7 +3718,36 @@ function GridLens(props: any) {
   const toggleSelect = onRowToggle
 
   if (loading && products.length === 0) {
-    return <Card><div role="status" aria-live="polite" className="text-md text-slate-500 py-8 text-center">Loading products…</div></Card>
+    // E.11 — skeleton rows replace the plain "Loading…" text. The
+    // grid shape is preserved so the UI doesn't reflow when real
+    // data lands. Six rows is enough to fill a standard viewport
+    // without claiming the whole 75vh container.
+    return (
+      <Card noPadding>
+        <div role="status" aria-live="polite" className="sr-only">
+          Loading products…
+        </div>
+        <div className="p-1">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-3 px-3 py-3 border-b border-slate-100 last:border-b-0"
+              aria-hidden="true"
+            >
+              <div className="w-4 h-4 rounded bg-slate-200 animate-pulse flex-shrink-0" />
+              <div className="w-10 h-10 rounded bg-slate-200 animate-pulse flex-shrink-0" />
+              <div className="flex-1 min-w-0 space-y-1.5">
+                <div className="h-3.5 bg-slate-200 rounded animate-pulse w-1/2" />
+                <div className="h-3 bg-slate-100 rounded animate-pulse w-3/4" />
+              </div>
+              <div className="w-14 h-4 bg-slate-200 rounded animate-pulse flex-shrink-0" />
+              <div className="w-10 h-4 bg-slate-200 rounded animate-pulse flex-shrink-0" />
+              <div className="w-20 h-4 bg-slate-200 rounded animate-pulse flex-shrink-0 hidden md:block" />
+            </div>
+          ))}
+        </div>
+      </Card>
+    )
   }
   if (error) {
     return <Card><div role="alert" aria-live="assertive" className="text-md text-rose-600 py-8 text-center">Failed to load: {error}</div></Card>
