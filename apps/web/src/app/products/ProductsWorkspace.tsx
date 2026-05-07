@@ -3059,12 +3059,61 @@ function VirtualizedGrid({
     return rows
   }, [products, expandedParents, childrenByParent, loadingChildren])
 
-  // Total table width = checkbox(32) + chevron(24) + sum(col.width).
+  // E.12 — column resize. Per-column overrides hydrated from
+  // localStorage on mount, persisted on commit. The width state is
+  // ONLY committed on mouseUp; the live drag updates a CSS custom
+  // property directly on the table root via tableRootRef so no
+  // React re-render fires per pixel of drag (the cells reference
+  // `var(--col-<key>-width)` which updates live).
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(
+    () => {
+      if (typeof window === 'undefined') return {}
+      try {
+        const raw = window.localStorage.getItem('products.columnWidths')
+        return raw ? JSON.parse(raw) : {}
+      } catch {
+        return {}
+      }
+    },
+  )
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        'products.columnWidths',
+        JSON.stringify(columnWidths),
+      )
+    } catch {
+      /* ignore quota errors */
+    }
+  }, [columnWidths])
+  const colWidth = useCallback(
+    (key: string, fallback?: number) =>
+      columnWidths[key] ?? fallback ?? 100,
+    [columnWidths],
+  )
+  // CSS variables for every visible column; cells reference these via
+  // `var(--col-<key>-width)`. Set as inline style on the table root
+  // so the cascade picks them up everywhere underneath.
+  const tableRootRef = useRef<HTMLDivElement>(null)
+  const cssVarStyle = useMemo(() => {
+    const style: Record<string, string> = {}
+    for (const c of visible) {
+      style[`--col-${c.key}-width`] = `${colWidth(c.key, c.width)}px`
+    }
+    return style as React.CSSProperties
+  }, [visible, colWidth])
+  // Total table width = checkbox(32) + chevron(24) + sum(effective widths).
   // Used for both header + body min-width so horizontal overflow
   // works correctly inside the scroll container.
   const totalWidth = useMemo(
-    () => 32 + 24 + visible.reduce((acc, c) => acc + (c.width ?? 100), 0),
-    [visible],
+    () =>
+      32 +
+      24 +
+      visible.reduce(
+        (acc, c) => acc + colWidth(c.key, c.width),
+        0,
+      ),
+    [visible, colWidth],
   )
 
   // E.9 — right-click context menu state. Tracks the click position
@@ -3146,7 +3195,7 @@ function VirtualizedGrid({
         className="overflow-auto relative"
         style={{ maxHeight: '75vh' }}
       >
-        <div style={{ minWidth: totalWidth }}>
+        <div ref={tableRootRef} style={{ minWidth: totalWidth, ...cssVarStyle }}>
           {/* Header — sticky, flex-aligned to the same column widths
               as the body rows. */}
           <div
@@ -3209,8 +3258,11 @@ function VirtualizedGrid({
                       onSort(sortKeys[col.key])
                     }
                   }}
-                  className={`px-3 py-2 text-sm font-semibold uppercase tracking-wider text-slate-700 text-left flex items-center ${sortable ? 'cursor-pointer hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:bg-slate-100' : ''}`}
-                  style={{ width: col.width, minWidth: col.width }}
+                  className={`relative px-3 py-2 text-sm font-semibold uppercase tracking-wider text-slate-700 text-left flex items-center ${sortable ? 'cursor-pointer hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:bg-slate-100' : ''}`}
+                  style={{
+                    width: `var(--col-${col.key}-width)`,
+                    minWidth: `var(--col-${col.key}-width)`,
+                  }}
                   onClick={() => {
                     if (sortable) onSort(sortKeys[col.key])
                   }}
@@ -3223,6 +3275,19 @@ function VirtualizedGrid({
                       </span>
                     )}
                   </span>
+                  {/* E.12 — resize handle. Mouse-down captures starting
+                      width + clientX, then mousemove updates the CSS
+                      variable directly on the table root (zero React
+                      re-renders during drag). mouseUp commits to state
+                      + localStorage. */}
+                  <ColumnResizeHandle
+                    columnKey={col.key}
+                    fallbackWidth={col.width ?? 100}
+                    tableRootRef={tableRootRef}
+                    onCommit={(w) =>
+                      setColumnWidths((prev) => ({ ...prev, [col.key]: w }))
+                    }
+                  />
                 </div>
               )
             })}
@@ -3343,6 +3408,83 @@ function VirtualizedGrid({
         />
       )}
     </Card>
+  )
+}
+
+// E.12 — column resize handle. Sits absolute-right on each header
+// cell. mouseDown captures starting clientX + starting width;
+// document-level listeners track mousemove (updates the CSS variable
+// directly via tableRootRef — zero React updates during drag) and
+// mouseUp (commits the final width to state + localStorage via
+// onCommit, then removes the listeners).
+//
+// Width is clamped to [60, 600]. The handle visually disappears when
+// not hovered/dragged so headers stay clean; expands to a 4-px-wide
+// hit zone via padding.
+function ColumnResizeHandle({
+  columnKey,
+  fallbackWidth,
+  tableRootRef,
+  onCommit,
+}: {
+  columnKey: string
+  fallbackWidth: number
+  tableRootRef: React.RefObject<HTMLDivElement | null>
+  onCommit: (width: number) => void
+}) {
+  const dragRef = useRef<{ startX: number; startW: number } | null>(null)
+  const onMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const root = tableRootRef.current
+      if (!root) return
+      // Read the current rendered width — covers both saved overrides
+      // and the default (since the CSS variable is set on the root).
+      const computed = parseFloat(
+        getComputedStyle(root).getPropertyValue(`--col-${columnKey}-width`),
+      )
+      const startW = Number.isFinite(computed) ? computed : fallbackWidth
+      dragRef.current = { startX: e.clientX, startW }
+      const onMove = (ev: MouseEvent) => {
+        const ctx = dragRef.current
+        if (!ctx) return
+        const delta = ev.clientX - ctx.startX
+        const next = Math.max(60, Math.min(600, ctx.startW + delta))
+        // Direct DOM mutation — no React state update during drag.
+        // Cells inherit the new width via CSS variable cascade.
+        root.style.setProperty(`--col-${columnKey}-width`, `${next}px`)
+      }
+      const onUp = () => {
+        const ctx = dragRef.current
+        dragRef.current = null
+        document.removeEventListener('mousemove', onMove)
+        document.removeEventListener('mouseup', onUp)
+        if (!ctx) return
+        // Commit the final value (read from the CSS var which is the
+        // source of truth post-drag) so totalWidth updates + the new
+        // width persists in localStorage.
+        const finalComputed = parseFloat(
+          getComputedStyle(root).getPropertyValue(
+            `--col-${columnKey}-width`,
+          ),
+        )
+        if (Number.isFinite(finalComputed)) onCommit(finalComputed)
+      }
+      document.addEventListener('mousemove', onMove)
+      document.addEventListener('mouseup', onUp)
+    },
+    [columnKey, fallbackWidth, tableRootRef, onCommit],
+  )
+  return (
+    <div
+      onMouseDown={onMouseDown}
+      onClick={(e) => e.stopPropagation()}
+      role="separator"
+      aria-label={`Resize ${columnKey} column`}
+      title={`Resize ${columnKey}`}
+      className="absolute top-0 right-0 h-full w-1 cursor-col-resize hover:bg-blue-400 active:bg-blue-500 transition-colors"
+    />
   )
 }
 
@@ -3597,8 +3739,13 @@ const ProductRow = memo(function ProductRow({
         <div
           key={col.key}
           role="cell"
-          className={`${cellPad} flex items-center ${rowBg}`}
-          style={{ width: col.width, minWidth: col.width }}
+          className={`${cellPad} flex items-center ${rowBg} overflow-hidden`}
+          // E.12 — CSS variables drive width so column resize updates
+          // every cell live without a React re-render.
+          style={{
+            width: `var(--col-${col.key}-width)`,
+            minWidth: `var(--col-${col.key}-width)`,
+          }}
         >
           <ProductCell
             col={col.key}
