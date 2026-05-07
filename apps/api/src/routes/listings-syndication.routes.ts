@@ -3,6 +3,7 @@ import prisma from '../db.js'
 import { computeHealth, aggregateIssuesByCategory } from '../services/listings/health.service.js'
 import { publishListingEvent, subscribeListingEvents } from '../services/listing-events.service.js'
 import { listEtag, matches } from '../utils/list-etag.js'
+import { getProvider } from '../services/ai/providers/index.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // SYNDICATION — universal /listings workspace endpoints
@@ -2164,6 +2165,139 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       return { ok: true }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[listings/amazon/suppressions PATCH] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ─────────────────────────────────────────────────────────────────
+  // POST /api/listings/:id/diagnose-suppression — AI explains why a
+  // listing is suppressed and what to fix.
+  //
+  // V.3 — operator hits "Diagnose with AI" inside the drawer's
+  // Amazon section when an active suppression exists. We compose a
+  // prompt with the suppression record + listing context, ask the
+  // configured LLM provider for a plain-English explanation + a
+  // concrete fix list, and return the rendered text.
+  //
+  // No DB writes — purely advisory. Cost lands on AiUsageLog via
+  // the provider's usage logging (feature='listings-suppression-diagnosis').
+  // ─────────────────────────────────────────────────────────────────
+  fastify.post('/listings/:id/diagnose-suppression', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const q = request.query as Record<string, string | undefined>
+
+      const listing = await prisma.channelListing.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          channel: true,
+          marketplace: true,
+          title: true,
+          description: true,
+          externalListingId: true,
+          externalParentId: true,
+          listingStatus: true,
+          lastSyncError: true,
+          product: { select: { sku: true, name: true, brand: true } },
+        },
+      })
+      if (!listing) return reply.code(404).send({ error: 'Listing not found' })
+      if (listing.channel !== 'AMAZON') {
+        return reply.code(400).send({ error: 'Suppression diagnosis is Amazon-only' })
+      }
+
+      const suppression = await prisma.amazonSuppression.findFirst({
+        where: { listingId: id, resolvedAt: null },
+        orderBy: { suppressedAt: 'desc' },
+      })
+      if (!suppression) {
+        return reply.code(400).send({ error: 'No active suppression on this listing' })
+      }
+
+      const provider = getProvider(q.provider ?? null)
+      if (!provider) {
+        return reply.code(503).send({
+          error: 'No AI provider is configured (set GEMINI_API_KEY or ANTHROPIC_API_KEY)',
+        })
+      }
+
+      // Build a context-rich prompt. The model has zero priors on
+      // Amazon's 17,000-flavoured suppression taxonomy — we lean on the
+      // reasonText (which is what Amazon actually says) + structured
+      // listing facts so the answer can ground itself.
+      const prompt = [
+        'You are an Amazon Seller Central expert helping diagnose a listing suppression.',
+        '',
+        'Suppression record:',
+        `  • Severity: ${suppression.severity}`,
+        `  • Source: ${suppression.source}`,
+        `  • Reason code: ${suppression.reasonCode ?? '(none — Amazon did not provide a code)'}`,
+        `  • Reason text: ${suppression.reasonText}`,
+        `  • Suppressed at: ${suppression.suppressedAt.toISOString()}`,
+        '',
+        'Listing context:',
+        `  • Marketplace: ${listing.marketplace}`,
+        `  • ASIN: ${listing.externalListingId ?? '(unknown)'}`,
+        `  • Parent ASIN: ${listing.externalParentId ?? '(none)'}`,
+        `  • SKU: ${listing.product?.sku ?? '(unknown)'}`,
+        `  • Brand: ${listing.product?.brand ?? '(unknown)'}`,
+        `  • Title: ${listing.title ?? '(no channel title)'}`,
+        `  • Last sync error: ${listing.lastSyncError ?? '(none)'}`,
+        '',
+        'Respond in valid JSON with exactly this shape:',
+        '{',
+        '  "explanation": "2-4 sentences in plain English explaining what triggered the suppression and why Amazon flagged it.",',
+        '  "rootCause": "One short phrase naming the underlying issue (e.g. \'missing required attribute\', \'image quality\', \'restricted keyword\').",',
+        '  "suggestedFix": ["concrete step 1", "concrete step 2", "..."],',
+        '  "confidence": "high" | "medium" | "low"',
+        '}',
+        '',
+        'Be specific to this seller\'s situation. If reasonCode is generic, say so and explain what the operator should look at to narrow it down. The fix list should be ordered most-likely-to-resolve first.',
+      ].join('\n')
+
+      const result = await provider.generate({
+        prompt,
+        temperature: 0.2,
+        maxOutputTokens: 800,
+        jsonMode: true,
+        feature: 'listings-suppression-diagnosis',
+        entityType: 'channelListing',
+        entityId: id,
+      })
+
+      // Parse the JSON. Both providers may wrap in code fences when
+      // jsonMode isn't a hard contract — strip those defensively.
+      const cleaned = result.text
+        .trim()
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```$/i, '')
+      let parsed: any
+      try {
+        parsed = JSON.parse(cleaned)
+      } catch {
+        return reply.code(502).send({
+          error: 'AI returned non-JSON response',
+          raw: result.text.slice(0, 500),
+        })
+      }
+
+      return {
+        suppressionId: suppression.id,
+        diagnosis: {
+          explanation: parsed.explanation ?? null,
+          rootCause: parsed.rootCause ?? null,
+          suggestedFix: Array.isArray(parsed.suggestedFix) ? parsed.suggestedFix : [],
+          confidence: parsed.confidence ?? null,
+        },
+        provider: {
+          name: result.usage.provider,
+          model: result.usage.model,
+          costUSD: result.usage.costUSD,
+        },
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[listings/:id/diagnose-suppression] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })

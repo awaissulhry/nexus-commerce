@@ -4315,6 +4315,36 @@ function AmazonContextSection({
   ctx: any
 }) {
   const [logOpen, setLogOpen] = useState(false)
+  const [diagnosing, setDiagnosing] = useState(false)
+  const [diagnosis, setDiagnosis] = useState<null | {
+    explanation: string | null
+    rootCause: string | null
+    suggestedFix: string[]
+    confidence: string | null
+    provider: { name: string; model: string; costUSD: number }
+  }>(null)
+  const [diagError, setDiagError] = useState<string | null>(null)
+
+  const runDiagnose = async () => {
+    setDiagnosing(true)
+    setDiagError(null)
+    try {
+      const r = await fetch(
+        `${getBackendUrl()}/api/listings/${listingId}/diagnose-suppression`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+      )
+      const json = await r.json()
+      if (!r.ok) {
+        setDiagError(json?.error ?? `HTTP ${r.status}`)
+      } else {
+        setDiagnosis({ ...json.diagnosis, provider: json.provider })
+      }
+    } catch (e: any) {
+      setDiagError(e?.message ?? 'Diagnosis request failed')
+    } finally {
+      setDiagnosing(false)
+    }
+  }
 
   const margin =
     ctx.fbaEconomics.estimatedFbaFee != null &&
@@ -4453,12 +4483,24 @@ function AmazonContextSection({
 
       {/* Active suppression record */}
       {ctx.activeSuppression && (
-        <div className="border border-rose-300 bg-rose-50 rounded-md p-2.5">
-          <div className="flex items-center gap-1.5 mb-1">
-            <AlertTriangle size={12} className="text-rose-600" />
-            <span className="text-xs uppercase tracking-wider font-semibold text-rose-700">
-              Active suppression
-            </span>
+        <div className="border border-rose-300 bg-rose-50 rounded-md p-2.5 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5">
+              <AlertTriangle size={12} className="text-rose-600" />
+              <span className="text-xs uppercase tracking-wider font-semibold text-rose-700">
+                Active suppression
+              </span>
+            </div>
+            <button
+              onClick={runDiagnose}
+              disabled={diagnosing}
+              className="h-6 px-2 text-xs bg-white text-violet-700 border border-violet-300 rounded hover:bg-violet-50 disabled:opacity-50 inline-flex items-center gap-1"
+              aria-label="Diagnose suppression with AI"
+              title="Ask the configured AI provider to explain why Amazon suppressed this listing and what to fix"
+            >
+              <Sparkles size={10} />
+              {diagnosing ? 'Diagnosing…' : diagnosis ? 'Re-diagnose' : 'Diagnose with AI'}
+            </button>
           </div>
           <div className="text-base text-rose-700">
             {ctx.activeSuppression.reasonCode && (
@@ -4466,10 +4508,67 @@ function AmazonContextSection({
             )}
             {ctx.activeSuppression.reasonText}
           </div>
-          <div className="text-xs text-slate-500 mt-1">
+          <div className="text-xs text-slate-500">
             Suppressed {new Date(ctx.activeSuppression.suppressedAt).toLocaleString()} ·{' '}
             source: {ctx.activeSuppression.source}
           </div>
+
+          {diagError && (
+            <div className="border border-amber-300 bg-amber-50 rounded p-2 text-xs text-amber-800">
+              <span className="font-semibold">Diagnosis failed:</span> {diagError}
+            </div>
+          )}
+
+          {diagnosis && (
+            <div className="border border-violet-200 bg-white rounded p-2.5 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs uppercase tracking-wider font-semibold text-violet-700 inline-flex items-center gap-1.5">
+                  <Sparkles size={11} /> AI diagnosis
+                </div>
+                <div className="text-xs text-slate-500 tabular-nums">
+                  {diagnosis.provider.name} · {diagnosis.provider.model} · $
+                  {diagnosis.provider.costUSD.toFixed(4)}
+                  {diagnosis.confidence && (
+                    <span
+                      className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${
+                        diagnosis.confidence === 'high'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : diagnosis.confidence === 'medium'
+                            ? 'bg-amber-100 text-amber-700'
+                            : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      {diagnosis.confidence}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {diagnosis.rootCause && (
+                <div className="text-xs">
+                  <span className="font-semibold text-slate-600">Root cause:</span>{' '}
+                  <span className="text-slate-900">{diagnosis.rootCause}</span>
+                </div>
+              )}
+
+              {diagnosis.explanation && (
+                <div className="text-sm text-slate-700 leading-relaxed">{diagnosis.explanation}</div>
+              )}
+
+              {diagnosis.suggestedFix.length > 0 && (
+                <div>
+                  <div className="text-xs uppercase tracking-wider font-semibold text-slate-600 mb-1">
+                    Suggested fix
+                  </div>
+                  <ol className="text-sm text-slate-800 space-y-1 list-decimal list-inside">
+                    {diagnosis.suggestedFix.map((step, i) => (
+                      <li key={i}>{step}</li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
