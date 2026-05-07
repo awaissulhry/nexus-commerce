@@ -15,7 +15,7 @@ import Link from 'next/link'
 import {
   X, Package, ExternalLink, Truck, Crown, AlertTriangle, Clock,
   MapPin, User, CreditCard, Plus, Printer, CheckCircle2, Undo2,
-  TrendingDown,
+  TrendingDown, Globe,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -208,6 +208,41 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
   const [rates, setRates] = useState<Rate[] | null>(null)
   const [ratesLoading, setRatesLoading] = useState(false)
 
+  // O.64: customs preflight surface. The endpoint exists from the
+  // Wave-2 work but no surface ever consumed it — so an Italian
+  // merchant shipping internationally would only learn an HS code
+  // was missing when Sendcloud rejected the print-label call. We
+  // fetch the preflight for each active shipment on drawer open and
+  // render a panel above the activity feed; errors there are an
+  // explicit "fix this before printing" signal.
+  type CustomsPreflight = {
+    shipmentId: string
+    destinationCountry: string | null
+    isInternational: boolean
+    isIntraEU: boolean
+    currency: string
+    totalValue: number
+    lines: Array<{
+      sku: string
+      productSku: string | null
+      quantity: number
+      unitPrice: number
+      totalValue: number
+      hsCode: string | null
+      originCountry: string | null
+    }>
+    issues: Array<{
+      sku: string
+      severity: 'error' | 'warning'
+      code: string
+      message: string
+    }>
+    ready: boolean
+  }
+  const [customsByShipment, setCustomsByShipment] = useState<
+    Record<string, CustomsPreflight>
+  >({})
+
   const compareRates = async (shipmentId: string) => {
     setRatesShipmentId(shipmentId)
     setRates(null)
@@ -316,6 +351,45 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
   }, [orderId, toast])
 
   useEffect(() => { fetchDetail() }, [fetchDetail])
+
+  // O.64: customs preflight per active shipment. Runs after the
+  // drawer payload lands; one fetch per shipment in flight (capped
+  // at the number of shipments per order — typically 1, occasionally
+  // 2-3 with split packages). Cleared when the drawer's order
+  // changes; the in-place merge keeps results during re-fetches so
+  // the panel doesn't flash empty.
+  useEffect(() => {
+    if (!data) return
+    const targets = data.shipments.filter(
+      (s) => s.status !== 'CANCELLED' && s.status !== 'DELIVERED',
+    )
+    if (targets.length === 0) return
+    let cancelled = false
+    void Promise.all(
+      targets.map(async (s) => {
+        try {
+          const res = await fetch(
+            `${getBackendUrl()}/api/fulfillment/shipments/${s.id}/customs-preflight`,
+            { cache: 'no-store' },
+          )
+          if (!res.ok) return null
+          return (await res.json()) as CustomsPreflight
+        } catch {
+          return null
+        }
+      }),
+    ).then((results) => {
+      if (cancelled) return
+      const next: Record<string, CustomsPreflight> = {}
+      for (const r of results) {
+        if (r && r.shipmentId) next[r.shipmentId] = r
+      }
+      setCustomsByShipment(next)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [data])
 
   // O.26: re-fetch the open drawer when a sibling tab transitions
   // this order's outbound state. Filters by id when the event has
@@ -775,6 +849,98 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                         ))}
                       </div>
                     )}
+                  </div>
+                </Card>
+              )}
+
+              {/* O.64: customs preflight — only renders when at least
+                  one active shipment is heading abroad. International
+                  shipments without an HS code get rejected by
+                  Sendcloud's print-label call, so this panel is the
+                  operator's pre-flight checklist. Issues sorted error
+                  → warning so the blocker shows first. */}
+              {Object.values(customsByShipment).some((c) => c.isInternational) && (
+                <Card>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                      <Globe size={12} /> {t('outbound.drawer.customs.title')}
+                    </div>
+                    {Object.values(customsByShipment)
+                      .filter((c) => c.isInternational)
+                      .map((c) => {
+                        const errors = c.issues.filter((i) => i.severity === 'error')
+                        const warnings = c.issues.filter((i) => i.severity === 'warning')
+                        return (
+                          <div key={c.shipmentId} className="space-y-2 border border-slate-200 rounded p-2">
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="text-slate-500">{t('outbound.drawer.customs.destination')}</span>
+                              <span className="font-mono font-medium text-slate-900">{c.destinationCountry ?? '—'}</span>
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                c.ready
+                                  ? 'bg-emerald-50 text-emerald-700'
+                                  : 'bg-rose-50 text-rose-700'
+                              }`}>
+                                {c.ready
+                                  ? t('outbound.drawer.customs.ready')
+                                  : t('outbound.drawer.customs.blocked')}
+                              </span>
+                              <span className="ml-auto text-xs text-slate-500 tabular-nums">
+                                {c.currency} {c.totalValue.toFixed(2)}
+                              </span>
+                            </div>
+                            {errors.length > 0 && (
+                              <ul className="space-y-1 text-xs">
+                                {errors.map((iss, idx) => (
+                                  <li key={`e-${idx}`} className="flex items-start gap-1.5 text-rose-700">
+                                    <AlertTriangle size={11} className="mt-0.5 flex-shrink-0" />
+                                    <span>{iss.message}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                            {warnings.length > 0 && (
+                              <ul className="space-y-1 text-xs">
+                                {warnings.map((iss, idx) => (
+                                  <li key={`w-${idx}`} className="flex items-start gap-1.5 text-amber-700">
+                                    <AlertTriangle size={11} className="mt-0.5 flex-shrink-0" />
+                                    <span>{iss.message}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                            {c.lines.length > 0 && (
+                              <table className="w-full text-xs">
+                                <thead>
+                                  <tr className="text-slate-500 border-b border-slate-100">
+                                    <th className="text-left font-normal py-1">{t('outbound.drawer.customs.col.sku')}</th>
+                                    <th className="text-right font-normal py-1">{t('outbound.drawer.customs.col.qty')}</th>
+                                    <th className="text-left font-normal py-1 px-2">{t('outbound.drawer.customs.col.hs')}</th>
+                                    <th className="text-left font-normal py-1">{t('outbound.drawer.customs.col.origin')}</th>
+                                    <th className="text-right font-normal py-1">{t('outbound.drawer.customs.col.value')}</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {c.lines.map((l, idx) => (
+                                    <tr key={`${l.sku}-${idx}`} className="border-b border-slate-50 last:border-0">
+                                      <td className="py-1 font-mono text-slate-700">{l.sku}</td>
+                                      <td className="py-1 text-right tabular-nums text-slate-700">{l.quantity}</td>
+                                      <td className={`py-1 px-2 font-mono ${l.hsCode ? 'text-slate-700' : 'text-rose-600'}`}>
+                                        {l.hsCode ?? '—'}
+                                      </td>
+                                      <td className={`py-1 ${l.originCountry ? 'text-slate-700' : 'text-amber-600'}`}>
+                                        {l.originCountry ?? '—'}
+                                      </td>
+                                      <td className="py-1 text-right tabular-nums text-slate-700">
+                                        {l.totalValue.toFixed(2)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+                          </div>
+                        )
+                      })}
                   </div>
                 </Card>
               )}
