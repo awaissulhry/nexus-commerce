@@ -12,7 +12,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Truck, Search, RefreshCw, Printer, ExternalLink, X, CheckCircle2,
-  AlertTriangle,
+  AlertTriangle, Send, Download,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -140,20 +140,105 @@ export default function ShipmentsClient() {
     fetchShipments()
   }
 
+  // O.15: parallel bulk runner. Concurrency capped so we don't
+  // hammer Sendcloud (which has its own per-second rate limits) and
+  // the API server's connection pool stays sane. Returns
+  // { ok, fail } counters so callers can render a single toast.
+  const runBulk = useCallback(
+    async <T extends { id: string }>(
+      items: T[],
+      action: (it: T) => Promise<boolean>,
+      concurrency = 5,
+    ): Promise<{ ok: number; fail: number }> => {
+      let ok = 0
+      let fail = 0
+      const queue = [...items]
+      const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+        while (queue.length > 0) {
+          const next = queue.shift()
+          if (!next) return
+          try {
+            const success = await action(next)
+            if (success) ok++
+            else fail++
+          } catch {
+            fail++
+          }
+        }
+      })
+      await Promise.all(workers)
+      return { ok, fail }
+    },
+    [],
+  )
+
+  const reportBulk = (label: string, ok: number, total: number) => {
+    if (ok === total) toast.success(`${label} ${ok} ${ok === 1 ? 'shipment' : 'shipments'}`)
+    else if (ok === 0) toast.error(`${label} failed for all ${total} shipments`)
+    else toast.warning(`${label} ${ok} of ${total} (${total - ok} failed)`)
+  }
+
   const bulkPrint = async () => {
     if (selected.size === 0) { toast.error('Select shipments first'); return }
-    let printed = 0
-    for (const id of selected) {
-      try {
-        const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipments/${id}/print-label`, { method: 'POST' })
-        if (res.ok) printed++
-      } catch {}
-    }
-    if (printed === selected.size) toast.success(`Printed ${printed} ${printed === 1 ? 'label' : 'labels'}`)
-    else if (printed === 0) toast.error(`No labels printed (${selected.size} attempted)`)
-    else toast.warning(`Printed ${printed} of ${selected.size} labels`)
+    const eligible = items.filter((s) => selected.has(s.id) && (s.status === 'DRAFT' || s.status === 'READY_TO_PICK' || s.status === 'PACKED'))
+    if (eligible.length === 0) { toast.error('No selected shipments are ready for label print'); return }
+    const { ok } = await runBulk(eligible, async (s) => {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipments/${s.id}/print-label`, { method: 'POST' })
+      return res.ok
+    })
+    reportBulk('Printed', ok, eligible.length)
     setSelected(new Set())
     fetchShipments()
+  }
+
+  const bulkMarkShipped = async () => {
+    if (selected.size === 0) { toast.error('Select shipments first'); return }
+    const eligible = items.filter((s) => selected.has(s.id) && s.status === 'LABEL_PRINTED')
+    if (eligible.length === 0) { toast.error('No selected shipments are in LABEL_PRINTED status'); return }
+    const { ok } = await runBulk(eligible, async (s) => {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipments/${s.id}/mark-shipped`, { method: 'POST' })
+      return res.ok
+    })
+    reportBulk('Marked shipped', ok, eligible.length)
+    setSelected(new Set())
+    fetchShipments()
+  }
+
+  const bulkExportCsv = () => {
+    if (selected.size === 0) { toast.error('Select shipments first'); return }
+    const rows = items.filter((s) => selected.has(s.id))
+    if (rows.length === 0) return
+    const header = ['shipment_id', 'order_id', 'status', 'carrier', 'tracking_number', 'tracking_url', 'cost_eur', 'shipped_at', 'delivered_at', 'sku_count', 'unit_count']
+    const csv = [
+      header.join(','),
+      ...rows.map((s) =>
+        [
+          s.id,
+          s.orderId ?? '',
+          s.status,
+          s.carrierCode,
+          s.trackingNumber ?? '',
+          s.trackingUrl ?? '',
+          s.costCents != null ? (s.costCents / 100).toFixed(2) : '',
+          s.shippedAt ?? '',
+          s.deliveredAt ?? '',
+          s.items.length,
+          s.items.reduce((n, i) => n + i.quantity, 0),
+        ].map((v) => {
+          const str = String(v)
+          // CSV-quote any field containing comma, quote, or newline.
+          return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str
+        }).join(','),
+      ),
+    ].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `shipments-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success(`Exported ${rows.length} ${rows.length === 1 ? 'shipment' : 'shipments'}`)
   }
 
   const toggleSelect = (id: string) => {
@@ -211,11 +296,17 @@ export default function ShipmentsClient() {
       {selected.size > 0 && (
         <div className="sticky top-2 z-20">
           <Card>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-base font-semibold text-slate-700">{selected.size} selected</span>
               <div className="h-4 w-px bg-slate-200" />
               <button onClick={bulkPrint} className="h-7 px-3 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center gap-1.5">
-                <Printer size={12} /> Print labels ({selected.size})
+                <Printer size={12} /> Print labels
+              </button>
+              <button onClick={bulkMarkShipped} className="h-7 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5">
+                <Send size={12} /> Mark shipped
+              </button>
+              <button onClick={bulkExportCsv} className="h-7 px-3 text-base bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-slate-100 inline-flex items-center gap-1.5">
+                <Download size={12} /> Export CSV
               </button>
               <button onClick={() => setSelected(new Set())} className="ml-auto h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded">
                 <X size={14} />
