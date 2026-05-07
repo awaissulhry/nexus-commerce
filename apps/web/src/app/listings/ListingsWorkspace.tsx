@@ -2738,6 +2738,38 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
   data.products.forEach((p: any) => p.cells.forEach((c: any) => cellKeys.add(`${c.channel}:${c.marketplace}`)))
   const columns = Array.from(cellKeys).sort()
 
+  // M.3 — per-column KPI rollup: how many cells in this column are
+  // live / sync-erroring / suppressed / showing drift. Computed
+  // client-side from the same payload the table renders, so no extra
+  // API roundtrip. Drift = price/qty/title disagree with the master
+  // reference (the same indicator the cell renders inline).
+  const columnStats = new Map<
+    string,
+    { cells: number; live: number; errors: number; suppressed: number; drift: number }
+  >()
+  for (const col of columns) columnStats.set(col, { cells: 0, live: 0, errors: 0, suppressed: 0, drift: 0 })
+  for (const p of data.products as any[]) {
+    const masterPrice = p.masterPriceForCompare
+    const masterQty = p.masterQuantityForCompare
+    const masterTitle = p.masterTitleForCompare ?? p.name
+    for (const c of p.cells as any[]) {
+      const key = `${c.channel}:${c.marketplace}`
+      const s = columnStats.get(key)
+      if (!s) continue
+      s.cells++
+      if (c.listingStatus === 'ACTIVE' || c.listingStatus === 'LIVE') s.live++
+      if (c.lastSyncError || c.syncStatus === 'FAILED') s.errors++
+      if (c.listingStatus === 'SUPPRESSED') s.suppressed++
+      const priceDrift =
+        masterPrice != null && c.price != null && Number(masterPrice) !== Number(c.price)
+      const qtyDrift =
+        masterQty != null && c.quantity != null && Number(masterQty) !== Number(c.quantity)
+      const titleDrift =
+        masterTitle != null && c.title != null && masterTitle !== c.title
+      if (priceDrift || qtyDrift || titleDrift) s.drift++
+    }
+  }
+
   return (
     <div className="space-y-3">
       {/* Header bar — coverage filter + sort + refresh */}
@@ -2822,14 +2854,53 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
                   </th>
                   {columns.map((key) => {
                     const [ch, mp] = key.split(':')
+                    const stats = columnStats.get(key)
                     return (
                       <th
                         key={key}
                         role="columnheader"
-                        className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wider min-w-[110px]"
+                        className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wider min-w-[110px] align-top"
                       >
                         <div className={`inline-block px-1.5 py-0.5 rounded border ${CHANNEL_TONE[ch] ?? ''}`}>{ch}</div>
                         <div className="text-xs text-slate-500 font-mono mt-1">{mp}</div>
+                        {stats && stats.cells > 0 && (
+                          <div className="mt-1.5 flex items-center justify-center gap-1.5 text-[10px] font-normal normal-case">
+                            <span
+                              className="inline-flex items-center gap-0.5 text-emerald-700"
+                              title={`${stats.live} of ${stats.cells} listings are live`}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              {stats.live}
+                            </span>
+                            {stats.errors > 0 && (
+                              <span
+                                className="inline-flex items-center gap-0.5 text-rose-700"
+                                title={`${stats.errors} listing${stats.errors === 1 ? '' : 's'} with sync error`}
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                {stats.errors}
+                              </span>
+                            )}
+                            {stats.suppressed > 0 && (
+                              <span
+                                className="inline-flex items-center gap-0.5 text-orange-700"
+                                title={`${stats.suppressed} listing${stats.suppressed === 1 ? '' : 's'} suppressed by ${ch}`}
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                                {stats.suppressed}
+                              </span>
+                            )}
+                            {stats.drift > 0 && (
+                              <span
+                                className="inline-flex items-center gap-0.5 text-amber-700"
+                                title={`${stats.drift} listing${stats.drift === 1 ? '' : 's'} with drift from master (price/qty/title)`}
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                {stats.drift}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </th>
                     )
                   })}
