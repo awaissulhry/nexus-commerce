@@ -12,6 +12,7 @@
 
 import prisma from '../../db.js'
 import { createParcel, fetchParcel, voidParcel, fetchLabelPdf, listShippingMethods } from './client.js'
+import { decryptSecret, encryptSecret, isEncrypted } from '../../lib/crypto.js'
 import {
   SendcloudCredentials,
   SendcloudError,
@@ -50,12 +51,43 @@ export async function resolveCredentials(): Promise<SendcloudCredentials> {
       'CARRIER_NOT_CONNECTED',
     )
   }
-  // Stored as plaintext JSON today (TODO: rotate to AES-256-GCM
-  // matching MarketplaceCredential — flagged in fulfillment.routes.ts
-  // line 6548). decrypt() helper lands with that rotation.
+  // CR.1: credentials are AES-256-GCM enveloped. Pre-CR.1 rows were
+  // plaintext JSON; we transparently re-encrypt those on first read
+  // so a Railway deploy + first label-print is the migration. No
+  // separate backfill window. Detection is "starts with v1:".
+  let plaintext: string
+  if (isEncrypted(carrier.credentialsEncrypted)) {
+    try {
+      plaintext = decryptSecret(carrier.credentialsEncrypted)
+    } catch {
+      throw new SendcloudError(
+        'Sendcloud credentials failed integrity check. Reconnect via /fulfillment/carriers.',
+        500,
+        'CREDENTIAL_DECRYPT_FAILED',
+      )
+    }
+  } else {
+    plaintext = carrier.credentialsEncrypted
+    // Legacy plaintext row — re-encrypt in place. Fire-and-forget so
+    // a write blip doesn't block label-print; next read re-tries.
+    try {
+      const reEncrypted = encryptSecret(plaintext)
+      void prisma.carrier
+        .update({ where: { code: 'SENDCLOUD' }, data: { credentialsEncrypted: reEncrypted } })
+        .catch(() => { /* non-fatal */ })
+    } catch {
+      // Encryption misconfigured — surface a clear error rather than
+      // silently failing. Operator must set NEXUS_CREDENTIAL_ENC_KEY.
+      throw new SendcloudError(
+        'Credential encryption is not configured (NEXUS_CREDENTIAL_ENC_KEY). See apps/api/src/lib/crypto.ts.',
+        500,
+        'CREDENTIAL_ENC_KEY_MISSING',
+      )
+    }
+  }
   let parsed: SendcloudCredentials
   try {
-    parsed = JSON.parse(carrier.credentialsEncrypted) as SendcloudCredentials
+    parsed = JSON.parse(plaintext) as SendcloudCredentials
   } catch {
     throw new SendcloudError(
       'Sendcloud credentials are unreadable. Reconnect via /fulfillment/carriers.',

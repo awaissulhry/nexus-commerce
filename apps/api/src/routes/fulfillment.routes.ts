@@ -8177,13 +8177,20 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const { code } = request.params as { code: string }
       const body = request.body as { publicKey?: string; privateKey?: string; integrationId?: number; defaultServiceMap?: any }
-      // For B.9 we store creds as JSON for now. Phase: rotate to AES-256-GCM
-      // matching MarketplaceCredential, sharing the same crypto helper.
-      const credentialsEncrypted = JSON.stringify({
-        publicKey: body.publicKey,
-        privateKey: body.privateKey,
-        integrationId: body.integrationId,
-      })
+      // CR.1: encrypt the credential blob at rest with AES-256-GCM.
+      // Envelope format documented in apps/api/src/lib/crypto.ts.
+      // Empty payloads (AMAZON_BUY_SHIPPING / MANUAL connect with no
+      // fields) skip encryption — there's nothing secret to protect
+      // and storing an encrypted-empty-JSON would only obscure the row.
+      const { encryptSecret } = await import('../lib/crypto.js')
+      const hasSecret = !!(body.publicKey || body.privateKey || body.integrationId)
+      const credentialsEncrypted = hasSecret
+        ? encryptSecret(JSON.stringify({
+            publicKey: body.publicKey,
+            privateKey: body.privateKey,
+            integrationId: body.integrationId,
+          }))
+        : null
       const existing = await prisma.carrier.findUnique({ where: { code: code as any } })
       const data = {
         code: code as any,
