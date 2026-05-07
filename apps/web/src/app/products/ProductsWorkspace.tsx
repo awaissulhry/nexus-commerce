@@ -541,6 +541,80 @@ export default function ProductsWorkspace() {
     fetchProducts()
   }, [onTopLevelRefresh, fetchProducts])
 
+  // E.7 — anchor for shift-click range selection. Tracks the most
+  // recent row the user clicked (NOT shift+clicked). Subsequent
+  // shift+clicks select every row between the anchor and the clicked
+  // row in the *current page's products* array order. Stored as a
+  // ref so updating it doesn't trigger a re-render.
+  const selectionAnchorRef = useRef<string | null>(null)
+  const handleRowToggle = useCallback(
+    (id: string, shiftKey: boolean) => {
+      const anchorId = selectionAnchorRef.current
+      if (shiftKey && anchorId && anchorId !== id) {
+        const idxAnchor = products.findIndex((p: ProductRow) => p.id === anchorId)
+        const idxClick = products.findIndex((p: ProductRow) => p.id === id)
+        if (idxAnchor !== -1 && idxClick !== -1) {
+          const lo = Math.min(idxAnchor, idxClick)
+          const hi = Math.max(idxAnchor, idxClick)
+          // Range select: ALL rows in [lo, hi] become selected. We
+          // don't toggle — shift+click is unambiguously additive in
+          // every spreadsheet/file-manager UI.
+          setSelected((prev) => {
+            const next = new Set(prev)
+            for (let i = lo; i <= hi; i++) next.add(products[i].id)
+            return next
+          })
+          return
+        }
+      }
+      // Plain click: anchor moves to this row, toggle as usual.
+      selectionAnchorRef.current = id
+      setSelected((prev) => {
+        const next = new Set(prev)
+        if (next.has(id)) next.delete(id)
+        else next.add(id)
+        return next
+      })
+    },
+    [products, setSelected],
+  )
+
+  // E.7 — Cmd+A selects all visible products (current page only —
+  // matches Linear / Airtable / Notion semantics). Esc clears the
+  // selection. Both ignored when the user is typing in a text input
+  // (where Cmd+A means "select text in this input"). Listener is
+  // attached to the document so the page need not be focused, but
+  // we read the active element to bail when appropriate.
+  useEffect(() => {
+    const isTextInput = (el: Element | null) => {
+      if (!el) return false
+      const tag = el.tagName
+      if (tag === 'INPUT') {
+        const type = (el as HTMLInputElement).type
+        return type !== 'checkbox' && type !== 'radio'
+      }
+      return tag === 'TEXTAREA' || (el as HTMLElement).isContentEditable
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (lens !== 'grid') return
+      if (isTextInput(document.activeElement)) return
+      if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
+        e.preventDefault()
+        setSelected((prev) => {
+          const next = new Set(prev)
+          for (const p of products) next.add(p.id)
+          return next
+        })
+        return
+      }
+      if (e.key === 'Escape' && selected.size > 0) {
+        setSelected(new Set())
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [lens, products, selected.size])
+
   // Phase 10 — usePolledList above owns the 30s poll + visibility
   // refresh + invalidation-driven refetch for the Grid lens. The
   // hook only fires when productsUrl !== null, which depends on
@@ -866,6 +940,7 @@ export default function ProductsWorkspace() {
           onSort={onSort}
           selected={selected}
           setSelected={setSelected}
+          onRowToggle={handleRowToggle}
           onPage={onPage}
           onPageSize={onPageSize}
           onTagEdit={onTagEdit}
@@ -2497,7 +2572,7 @@ function MobileProductList({
 }: {
   products: ProductRow[]
   selected: Set<string>
-  toggleSelect: (id: string) => void
+  toggleSelect: (id: string, shiftKey: boolean) => void
   expandedParents: Set<string>
   childrenByParent: Record<string, ProductRow[]>
   loadingChildren: Set<string>
@@ -2529,7 +2604,7 @@ function MobileProductList({
               p={p}
               isChild={false}
               selected={selected.has(p.id)}
-              toggleSelect={() => toggleSelect(p.id)}
+              toggleSelect={() => toggleSelect(p.id, false)}
               onOpen={() => openDrawer(p.id)}
               chevron={
                 canExpand
@@ -2558,7 +2633,7 @@ function MobileProductList({
                       p={c}
                       isChild
                       selected={selected.has(c.id)}
-                      toggleSelect={() => toggleSelect(c.id)}
+                      toggleSelect={() => toggleSelect(c.id, false)}
                       onOpen={() => openDrawer(c.id)}
                     />
                   ))
@@ -2744,7 +2819,7 @@ function VirtualizedGrid({
   density: Density
   cellPad: string
   selected: Set<string>
-  toggleSelect: (id: string) => void
+  toggleSelect: (id: string, shiftKey: boolean) => void
   toggleSelectAll: () => void
   allSelected: boolean
   sortBy: string
@@ -3041,7 +3116,7 @@ const ProductRow = memo(function ProductRow({
   isExpanded: boolean
   visible: typeof ALL_COLUMNS
   cellPad: string
-  onToggleSelect: (id: string) => void
+  onToggleSelect: (id: string, shiftKey: boolean) => void
   onToggleExpand: (parentId: string) => void
   onTagEdit: (id: string) => void
   onChanged: () => void
@@ -3065,7 +3140,23 @@ const ProductRow = memo(function ProductRow({
         <input
           type="checkbox"
           checked={isSelected}
-          onChange={() => onToggleSelect(product.id)}
+          // E.7 — onClick (not onChange) so we can capture shiftKey
+          // from the mouse event for range-select. preventDefault
+          // stops the native toggle; the parent's setSelected runs
+          // through onToggleSelect and the next render reflects.
+          // onChange is no-op'd to satisfy React's controlled-input
+          // contract without firing a redundant toggle.
+          onChange={() => {}}
+          onClick={(e) => {
+            e.preventDefault()
+            onToggleSelect(product.id, e.shiftKey)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === ' ') {
+              e.preventDefault()
+              onToggleSelect(product.id, e.shiftKey)
+            }
+          }}
         />
       </div>
       <div
@@ -3122,7 +3213,7 @@ function GridLens(props: any) {
   const {
     products, loading, error, page, pageSize, totalPages, total,
     visibleColumns, setVisibleColumns, columnPickerOpen, setColumnPickerOpen,
-    sortBy, onSort, selected, setSelected, onPage, onPageSize, onTagEdit, onChanged,
+    sortBy, onSort, selected, setSelected, onRowToggle, onPage, onPageSize, onTagEdit, onChanged,
     // Expand-on-chevron — see ProductsWorkspace for state ownership.
     expandedParents,
     childrenByParent,
@@ -3147,6 +3238,10 @@ function GridLens(props: any) {
     onSort: (key: string) => void
     selected: Set<string>
     setSelected: Dispatch<SetStateAction<Set<string>>>
+    /** E.7 — shift-aware toggle from the workspace. Plain click
+     *  toggles the row + sets the range anchor; shift+click selects
+     *  the range from anchor to clicked row. */
+    onRowToggle: (id: string, shiftKey: boolean) => void
     onPage: (n: number) => void
     onPageSize: (n: number) => void
     onTagEdit: (id: string) => void
@@ -3192,10 +3287,10 @@ function GridLens(props: any) {
   }, [visibleColumns])
 
   const allSelected = products.length > 0 && products.every((p: ProductRow) => selected.has(p.id))
-  // E.1 — stable refs so ProductRow's React.memo can skip re-renders
-  // when an unrelated row's selection changes. Functional setState
-  // means we don't need `selected` in deps; the ref is reused across
-  // renders.
+  // E.1 / E.7 — stable refs so ProductRow's React.memo can skip re-
+  // renders when an unrelated row's selection changes. toggleSelect
+  // delegates to the workspace's shift-aware handler so range select
+  // works from any row's checkbox.
   const toggleSelectAll = useCallback(() => {
     setSelected((prev) => {
       const next = new Set(prev)
@@ -3207,17 +3302,10 @@ function GridLens(props: any) {
       return next
     })
   }, [products, setSelected])
-  const toggleSelect = useCallback(
-    (id: string) => {
-      setSelected((prev) => {
-        const next = new Set(prev)
-        if (next.has(id)) next.delete(id)
-        else next.add(id)
-        return next
-      })
-    },
-    [setSelected],
-  )
+  // Adapter: ProductRow's onToggleSelect is (id, shiftKey?) so we
+  // forward both to the workspace's handler. Stable because onRowToggle
+  // is itself useCallback'd in the workspace.
+  const toggleSelect = onRowToggle
 
   if (loading && products.length === 0) {
     return <Card><div role="status" aria-live="polite" className="text-md text-slate-500 py-8 text-center">Loading products…</div></Card>
