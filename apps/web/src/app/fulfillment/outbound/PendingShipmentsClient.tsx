@@ -934,6 +934,29 @@ export default function PendingShipmentsClient() {
                   ? t('common.loading')
                   : t('outbound.pending.preflight.button')}
               </button>
+              {/* O.82: bulk-snooze — same 1-hour window as the per-row
+                  snooze (O.70). Useful when an operator triages a
+                  batch of "waiting on customer support" orders and
+                  wants them out of sight in one click. */}
+              <button
+                onClick={() => {
+                  const ids = Array.from(selected)
+                  if (ids.length === 0) return
+                  const until = Date.now() + 3_600_000
+                  const next = { ...snoozedUntil }
+                  for (const id of ids) next[id] = until
+                  setSnoozedUntil(next)
+                  try { localStorage.setItem(SNOOZE_KEY, JSON.stringify(next)) } catch { /* quota */ }
+                  setSelected(new Set())
+                  toast.success(
+                    t('outbound.pending.snooze.bulkToast', { n: ids.length, hours: 1 }),
+                  )
+                }}
+                className="h-11 md:h-7 px-4 md:px-3 text-base bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1.5"
+                title={t('outbound.pending.snooze.bulkTooltip')}
+              >
+                <Clock size={12} /> {t('outbound.pending.snooze.bulkButton')}
+              </button>
               <button
                 onClick={() => setSelected(new Set())}
                 className="ml-auto h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded"
