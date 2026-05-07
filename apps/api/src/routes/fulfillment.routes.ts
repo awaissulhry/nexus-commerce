@@ -2613,6 +2613,27 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         auditByShipment.set(a.entityId, list)
       }
 
+      // O.60: existing returns for this order. Drives the drawer's
+      // "View N returns" deep-link so the operator doesn't accidentally
+      // open a duplicate RMA when one is already in flight. Lean
+      // payload — the returns surface owns the full read.
+      const returns = await prisma.return.findMany({
+        where: { orderId: id },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        select: {
+          id: true,
+          rmaNumber: true,
+          status: true,
+          refundStatus: true,
+          refundCents: true,
+          currencyCode: true,
+          channel: true,
+          isFbaReturn: true,
+          createdAt: true,
+        },
+      })
+
       // Decimal → number on the wire (D.2 lesson). Only fields the
       // drawer reads; preserves channel metadata blobs verbatim.
       return {
@@ -2635,6 +2656,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           // O.49: per-shipment audit log entries (most-recent first).
           activity: auditByShipment.get(s.id) ?? [],
         })),
+        returns,
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[outbound/orders/:id] failed')

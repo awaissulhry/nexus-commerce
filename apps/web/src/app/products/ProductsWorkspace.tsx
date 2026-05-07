@@ -637,8 +637,12 @@ export default function ProductsWorkspace() {
       if (e.key === 'j' || e.key === 'k') {
         if (products.length === 0) return
         e.preventDefault()
-        const idx = focusedRowId
-          ? products.findIndex((p: ProductRow) => p.id === focusedRowId)
+        // Anchor for navigation: prefer the drawer's open product if
+        // one is open (so J/K browses inside the drawer); else the
+        // focused row id.
+        const anchorId = drawerProductId ?? focusedRowId
+        const idx = anchorId
+          ? products.findIndex((p: ProductRow) => p.id === anchorId)
           : -1
         const next =
           e.key === 'j'
@@ -648,7 +652,14 @@ export default function ProductsWorkspace() {
             : idx <= 0
               ? products.length - 1
               : idx - 1
-        setFocusedRowId(products[next].id)
+        const nextId = products[next].id
+        setFocusedRowId(nextId)
+        // E.15 — if the drawer is open, swap its product so J/K
+        // seamlessly browses without closing it. URL-driven so back/
+        // forward and tab-restoration just work.
+        if (drawerProductId) {
+          updateUrl({ drawer: nextId })
+        }
         return
       }
       if (e.key === 'Enter' && focusedRowId) {
@@ -675,6 +686,8 @@ export default function ProductsWorkspace() {
     focusedRowId,
     handleRowToggle,
     setSelected,
+    drawerProductId,
+    updateUrl,
   ])
 
   // Phase 10 — usePolledList above owns the 30s poll + visibility

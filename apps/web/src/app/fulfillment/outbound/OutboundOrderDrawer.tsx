@@ -97,6 +97,19 @@ type DrawerOrder = {
       createdAt: string
     }>
   }>
+  // O.60: lean returns summary so the drawer can deep-link to existing
+  // RMAs instead of letting the operator open a duplicate.
+  returns?: Array<{
+    id: string
+    rmaNumber: string | null
+    status: string
+    refundStatus: string
+    refundCents: number | null
+    currencyCode: string
+    channel: string
+    isFbaReturn: boolean
+    createdAt: string
+  }>
 }
 
 // O.51 / O.54: human-readable label per audit action. Resolved
@@ -938,17 +951,48 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                 </span>
               )
             })()}
-            {/* O.21: returns link — operator initiates an RMA from the
-                shipment context. The returns surface (separate
-                engagement) handles the rest. */}
-            {hasActiveShipment && (
-              <Link
-                href={`/fulfillment/returns?new=1&orderId=${data.id}`}
-                className="h-8 px-3 text-base text-slate-700 border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1.5"
-              >
-                <Undo2 size={11} /> {t('outbound.drawer.generateReturn')}
-              </Link>
-            )}
+            {/* O.21 + O.60: returns links. When an RMA already exists
+                we deep-link to it so the operator doesn't open a
+                duplicate; we still expose a "+ new" button so multi-
+                package orders can spawn additional RMAs. */}
+            {(() => {
+              const returns = data.returns ?? []
+              const openCount = returns.filter(
+                (r) => r.status !== 'COMPLETED' && r.status !== 'CANCELLED',
+              ).length
+              return (
+                <>
+                  {returns.length > 0 && (
+                    <Link
+                      href={`/fulfillment/returns?orderId=${data.id}`}
+                      className="h-8 px-3 text-base text-amber-700 bg-amber-50 border border-amber-200 rounded hover:bg-amber-100 inline-flex items-center gap-1.5"
+                      title={t('outbound.drawer.viewReturnsTooltip', {
+                        n: returns.length,
+                      })}
+                    >
+                      <Undo2 size={11} />
+                      {openCount > 0
+                        ? t('outbound.drawer.viewReturnsOpen', {
+                            n: returns.length,
+                            open: openCount,
+                          })
+                        : t('outbound.drawer.viewReturns', { n: returns.length })}
+                    </Link>
+                  )}
+                  {hasActiveShipment && (
+                    <Link
+                      href={`/fulfillment/returns?new=1&orderId=${data.id}`}
+                      className="h-8 px-3 text-base text-slate-700 border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1.5"
+                    >
+                      <Undo2 size={11} />
+                      {returns.length > 0
+                        ? t('outbound.drawer.generateAnotherReturn')
+                        : t('outbound.drawer.generateReturn')}
+                    </Link>
+                  )}
+                </>
+              )
+            })()}
             {/* O.48: cancel order — only when not already terminal. */}
             {data.status !== 'CANCELLED' && data.status !== 'DELIVERED' && (
               <button
