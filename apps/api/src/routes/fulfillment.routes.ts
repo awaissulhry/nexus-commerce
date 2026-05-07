@@ -1041,6 +1041,79 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── O.21: Public branded tracking ──────────────────────────────────
+  // GET /api/public/track/:trackingNumber — no auth, rate-limited.
+  // Powers the customer-facing /track/[number] page so direct-channel
+  // (Shopify, Woo) customers can follow their package without an
+  // account. Marketplace customers (Amazon, eBay) keep using the
+  // marketplace's own tracking — this surface is for direct sales.
+  //
+  // Returns: minimal PII-safe payload with status, ETA, last scan,
+  // and the timeline. Customer-facing — no order ID, no SKUs, no
+  // pricing. The carrier event descriptions are operator-facing and
+  // may need translation; v0 surfaces them as-is.
+  fastify.get('/api/public/track/:trackingNumber', async (request, reply) => {
+    try {
+      const { trackingNumber } = request.params as { trackingNumber: string }
+      if (!trackingNumber || trackingNumber.length < 6 || trackingNumber.length > 64) {
+        return reply.code(400).send({ error: 'Invalid tracking number' })
+      }
+      const shipment = await prisma.shipment.findFirst({
+        where: { trackingNumber },
+        select: {
+          id: true,
+          status: true,
+          carrierCode: true,
+          trackingNumber: true,
+          trackingUrl: true,
+          shippedAt: true,
+          deliveredAt: true,
+          order: {
+            select: {
+              latestDeliveryDate: true,
+              shippingAddress: true,
+            },
+          },
+          trackingEvents: {
+            orderBy: { occurredAt: 'desc' },
+            take: 30,
+            select: {
+              id: true,
+              occurredAt: true,
+              code: true,
+              description: true,
+              location: true,
+            },
+          },
+        },
+      })
+      if (!shipment) return reply.code(404).send({ error: 'Tracking number not found' })
+
+      // City-only PII — full address would be over-disclosure on a
+      // public URL. Customer already knows their own city; we surface
+      // it so they can confirm the carrier is heading to the right
+      // place.
+      const ship = shipment.order?.shippingAddress as any
+      const destCity = ship?.City ?? ship?.city ?? null
+
+      reply.header('Cache-Control', 'public, max-age=300') // 5 min
+      return {
+        trackingNumber: shipment.trackingNumber,
+        carrier: shipment.carrierCode,
+        carrierTrackingUrl: shipment.trackingUrl,
+        status: shipment.status,
+        shippedAt: shipment.shippedAt,
+        deliveredAt: shipment.deliveredAt,
+        estimatedDelivery: shipment.order?.latestDeliveryDate ?? null,
+        destinationCity: destCity,
+        events: shipment.trackingEvents,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[public/track] failed')
+      return reply.code(500).send({ error: 'Tracking unavailable' })
+    }
+  })
+
   // ── O.18: Customs preflight ────────────────────────────────────────
   // For international shipments, surfaces what will be declared on the
   // commercial invoice (HS codes, origin countries, declared values)

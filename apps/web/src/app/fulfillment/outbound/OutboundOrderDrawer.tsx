@@ -14,7 +14,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
   X, Package, ExternalLink, Truck, Crown, AlertTriangle, Clock,
-  MapPin, User, CreditCard, Plus, Printer, CheckCircle2,
+  MapPin, User, CreditCard, Plus, Printer, CheckCircle2, Undo2,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -545,6 +545,17 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                 </span>
               )
             })()}
+            {/* O.21: returns link — operator initiates an RMA from the
+                shipment context. The returns surface (separate
+                engagement) handles the rest. */}
+            {hasActiveShipment && (
+              <Link
+                href={`/fulfillment/returns/new?orderId=${data.id}`}
+                className="h-8 px-3 text-base text-slate-700 border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1.5"
+              >
+                <Undo2 size={11} /> Generate return
+              </Link>
+            )}
             <Link
               href={`/orders/${data.id}`}
               className="ml-auto h-8 px-3 text-base text-slate-700 border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1.5"
