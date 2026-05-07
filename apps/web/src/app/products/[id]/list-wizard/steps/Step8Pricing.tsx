@@ -4,13 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
-  Loader2,
   TrendingDown,
   TrendingUp,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
+import { Button } from '@/components/ui/Button'
+import { Skeleton } from '@/components/ui/Skeleton'
 import ChannelGroupsManager, {
   type ChannelGroup,
 } from '../components/ChannelGroupsManager'
@@ -400,7 +401,7 @@ export default function Step8Pricing({
   return (
     <div className="max-w-3xl mx-auto py-10 px-6">
       <div className="mb-6">
-        <h2 className="text-[20px] font-semibold text-slate-900">Pricing</h2>
+        <h2 className="text-xl font-semibold text-slate-900">Pricing</h2>
         <p className="text-md text-slate-600 mt-1">
           Set a base price; every channel inherits it. Override per
           marketplace when local fees, currency, or competitive pressure
@@ -409,9 +410,14 @@ export default function Step8Pricing({
       </div>
 
       {loading && (
-        <div className="border border-slate-200 rounded-lg bg-white px-6 py-12 text-center text-md text-slate-500 flex items-center justify-center gap-2">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          Loading pricing context…
+        <div
+          className="border border-slate-200 rounded-lg bg-white px-6 py-6 space-y-3"
+          aria-busy="true"
+          aria-label="Loading pricing context"
+        >
+          <Skeleton variant="text" lines={2} />
+          <Skeleton variant="block" height={56} />
+          <Skeleton variant="block" height={56} />
         </div>
       )}
 
@@ -706,19 +712,14 @@ export default function Step8Pricing({
                 </span>
               )}
             </div>
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="sm"
               onClick={onContinue}
               disabled={totalBlocking > 0}
-              className={cn(
-                'h-8 px-4 rounded-md text-md font-medium',
-                totalBlocking > 0
-                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700',
-              )}
             >
               Continue
-            </button>
+            </Button>
           </div>
         </>
       )}
@@ -836,8 +837,9 @@ function GroupBulkActions({
               placeholder="price"
               className="w-24 h-7 px-1.5 text-base border border-slate-200 rounded text-right tabular-nums focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-300"
             />
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="sm"
               onClick={() => {
                 const raw = drafts[g.id]
                 if (!raw) return
@@ -851,10 +853,9 @@ function GroupBulkActions({
                 })
               }}
               disabled={!drafts[g.id]}
-              className="h-7 px-2 text-sm font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:bg-slate-100 disabled:text-slate-400"
             >
               Apply
-            </button>
+            </Button>
           </div>
         ))}
       </div>

@@ -16,6 +16,8 @@ import {
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
+import { Button } from '@/components/ui/Button'
+import { Skeleton } from '@/components/ui/Skeleton'
 
 // Mirrors backend types from variations.service.ts.
 interface ThemeOption {
@@ -376,7 +378,7 @@ export default function Step5Variations({
   return (
     <div className="max-w-3xl mx-auto py-10 px-6">
       <div className="mb-6">
-        <h2 className="text-[20px] font-semibold text-slate-900">Variations</h2>
+        <h2 className="text-xl font-semibold text-slate-900">Variations</h2>
         <p className="text-md text-slate-600 mt-1">
           Pick a theme that applies across every selected channel, or
           override per channel when their schemas diverge.
@@ -384,9 +386,15 @@ export default function Step5Variations({
       </div>
 
       {loading && !payload && (
-        <div className="border border-slate-200 rounded-lg bg-white px-6 py-12 text-center text-md text-slate-500 flex items-center justify-center gap-2">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          Loading variations…
+        <div
+          className="border border-slate-200 rounded-lg bg-white px-6 py-6 space-y-3"
+          aria-busy="true"
+          aria-label="Loading variations"
+        >
+          <Skeleton variant="text" lines={2} />
+          <Skeleton variant="block" height={48} />
+          <Skeleton variant="block" height={48} />
+          <Skeleton variant="block" height={48} />
         </div>
       )}
 
@@ -767,8 +775,9 @@ export default function Step5Variations({
               blockingCount={blockingChildren.length}
               hasChildren={payload.children.length > 0}
             />
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="sm"
               onClick={onContinue}
               disabled={
                 !payload ||
@@ -776,18 +785,9 @@ export default function Step5Variations({
                   (includedChildren.length === 0 ||
                     blockingChildren.length > 0))
               }
-              className={cn(
-                'h-8 px-4 rounded-md text-md font-medium',
-                !payload ||
-                  (payload.children.length > 0 &&
-                    (includedChildren.length === 0 ||
-                      blockingChildren.length > 0))
-                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700',
-              )}
             >
               Continue
-            </button>
+            </Button>
           </div>
         </>
       )}
@@ -947,7 +947,7 @@ function SingleProductSetup({
   return (
     <div className="max-w-3xl mx-auto py-10 px-6">
       <div className="mb-6">
-        <h2 className="text-[20px] font-semibold text-slate-900">Variations</h2>
+        <h2 className="text-xl font-semibold text-slate-900">Variations</h2>
         <p className="text-md text-slate-600 mt-1">
           <span className="font-mono">{productSku}</span> — {productName}.
           Pick how this product fits into your catalog.
@@ -1040,13 +1040,9 @@ function StandalonePanel({
         </div>
       </div>
       <div className="mt-4 flex items-center justify-end">
-        <button
-          type="button"
-          onClick={onAdvance}
-          className="h-8 px-4 rounded-md bg-blue-600 text-white text-md font-medium hover:bg-blue-700"
-        >
+        <Button variant="primary" size="sm" onClick={onAdvance}>
           Continue
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -1285,15 +1281,15 @@ function LinkParentPanel({ onLinked }: { onLinked: () => void }) {
           )}
 
           <div className="flex items-center justify-end">
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="sm"
               onClick={handleLink}
               disabled={linking}
-              className="h-8 px-4 rounded-md bg-blue-600 text-white text-md font-medium hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
             >
               {linking && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               Link as variant
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -1443,16 +1439,16 @@ function PromotePanel({ onPromoted }: { onPromoted: () => void }) {
         )}
 
         <div className="flex items-center justify-end pt-1">
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="sm"
             onClick={handlePromote}
             disabled={!valid || submitting}
-            className="h-8 px-4 rounded-md bg-blue-600 text-white text-md font-medium hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
           >
             {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             Promote to parent &amp; add {variants.length || 0} variant
             {variants.length === 1 ? '' : 's'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

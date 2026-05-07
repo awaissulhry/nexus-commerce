@@ -7,12 +7,13 @@ import {
   ChevronDown,
   ChevronRight,
   Circle,
-  Loader2,
   MinusCircle,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
+import { Button } from '@/components/ui/Button'
+import { Skeleton } from '@/components/ui/Skeleton'
 
 type SliceStatus = 'complete' | 'incomplete' | 'skipped' | 'unknown'
 
@@ -280,7 +281,7 @@ export default function Step9Review({
     <div className="max-w-3xl mx-auto py-10 px-6">
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-[20px] font-semibold text-slate-900">
+          <h2 className="text-xl font-semibold text-slate-900">
             Review &amp; Verify
           </h2>
           <p className="text-md text-slate-600 mt-1">
@@ -299,9 +300,14 @@ export default function Step9Review({
       </div>
 
       {loading && (
-        <div className="border border-slate-200 rounded-lg bg-white px-6 py-12 text-center text-md text-slate-500 flex items-center justify-center gap-2">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          Loading review…
+        <div
+          className="border border-slate-200 rounded-lg bg-white px-6 py-6 space-y-3"
+          aria-busy="true"
+          aria-label="Loading review"
+        >
+          <Skeleton variant="text" lines={2} />
+          <Skeleton variant="block" height={64} />
+          <Skeleton variant="block" height={64} />
         </div>
       )}
 
@@ -415,19 +421,14 @@ export default function Step9Review({
                     data.validation.blockingChannels.length === 1 ? '' : 's'
                   } blocking`}
             </span>
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="sm"
               onClick={onContinue}
               disabled={!data.validation.allReady}
-              className={cn(
-                'h-8 px-4 rounded-md text-md font-medium',
-                !data.validation.allReady
-                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700',
-              )}
             >
               Continue
-            </button>
+            </Button>
           </div>
         </>
       )}

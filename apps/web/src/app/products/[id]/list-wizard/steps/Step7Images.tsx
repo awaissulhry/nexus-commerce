@@ -6,7 +6,6 @@ import {
   AlertCircle,
   CheckCircle2,
   Crown,
-  Loader2,
   ChevronUp,
   ChevronDown,
   ImageOff,
@@ -15,6 +14,8 @@ import {
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
+import { Button } from '@/components/ui/Button'
+import { Skeleton } from '@/components/ui/Skeleton'
 
 interface ApiImage {
   id: string
@@ -252,7 +253,7 @@ export default function Step7Images({
     <div className="max-w-3xl mx-auto py-10 px-6">
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-[20px] font-semibold text-slate-900">Images</h2>
+          <h2 className="text-xl font-semibold text-slate-900">Images</h2>
           <p className="text-md text-slate-600 mt-1">
             Quick-reorder the master gallery for this listing. Per-channel
             and per-variation overrides live on the dedicated image-manager
@@ -272,9 +273,17 @@ export default function Step7Images({
       </div>
 
       {loading && (
-        <div className="border border-slate-200 rounded-lg bg-white px-6 py-12 text-center text-md text-slate-500 flex items-center justify-center gap-2">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          Loading images…
+        <div
+          className="border border-slate-200 rounded-lg bg-white px-6 py-6 space-y-3"
+          aria-busy="true"
+          aria-label="Loading images"
+        >
+          <Skeleton variant="text" lines={2} />
+          <div className="grid grid-cols-3 gap-3">
+            <Skeleton variant="thumbnail" />
+            <Skeleton variant="thumbnail" />
+            <Skeleton variant="thumbnail" />
+          </div>
         </div>
       )}
 
@@ -463,19 +472,14 @@ export default function Step7Images({
               blockingChannels={blockingChannels}
               channels={channels.map((c) => `${c.platform}:${c.marketplace}`)}
             />
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="sm"
               onClick={onContinue}
               disabled={blockingChannels.length > 0}
-              className={cn(
-                'h-8 px-4 rounded-md text-md font-medium',
-                blockingChannels.length > 0
-                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700',
-              )}
             >
               Continue
-            </button>
+            </Button>
           </div>
         </>
       )}

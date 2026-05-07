@@ -16,6 +16,8 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { Button } from '@/components/ui/Button'
+import { Tooltip } from '@/components/ui/Tooltip'
 
 interface MarketplaceOption {
   code: string
@@ -292,7 +294,7 @@ export default function Step1Channels({
   return (
     <div className="max-w-3xl mx-auto py-10 px-6">
       <div className="mb-6">
-        <h2 className="text-[20px] font-semibold text-slate-900">
+        <h2 className="text-xl font-semibold text-slate-900">
           Channels &amp; Markets
         </h2>
         <p className="text-md text-slate-600 mt-1">
@@ -429,19 +431,14 @@ export default function Step1Channels({
               </>
             )}
           </span>
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="sm"
             onClick={onContinue}
             disabled={channelTuples.length === 0}
-            className={cn(
-              'h-8 px-4 rounded-md text-md font-medium',
-              channelTuples.length === 0
-                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700',
-            )}
           >
             Continue
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -498,12 +495,11 @@ function PlatformCard({
                 {label}
               </div>
               {isComingSoon && (
-                <span
-                  className="inline-flex items-center h-5 px-1.5 rounded text-xs uppercase tracking-wide font-semibold bg-amber-50 text-amber-800 border border-amber-200"
-                  title="Available in next release"
-                >
-                  Coming soon
-                </span>
+                <Tooltip content="Available in next release" placement="top">
+                  <span className="inline-flex items-center h-5 px-1.5 rounded text-xs uppercase tracking-wide font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                    Coming soon
+                  </span>
+                </Tooltip>
               )}
             </div>
             {reasonLabel && (

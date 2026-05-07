@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
@@ -15,6 +15,7 @@ import {
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
+import { Button } from '@/components/ui/Button'
 
 interface ProductTypeListItem {
   productType: string
@@ -250,7 +251,7 @@ export default function Step3ProductType({
   return (
     <div className="max-w-3xl mx-auto py-10 px-6">
       <div className="mb-6">
-        <h2 className="text-[20px] font-semibold text-slate-900">
+        <h2 className="text-xl font-semibold text-slate-900">
           Product Type
         </h2>
         <p className="text-md text-slate-600 mt-1">
@@ -319,19 +320,14 @@ export default function Step3ProductType({
             </span>
           )}
         </span>
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="sm"
           onClick={onContinue}
           disabled={unsatisfied.length > 0}
-          className={cn(
-            'h-8 px-4 rounded-md text-md font-medium',
-            unsatisfied.length > 0
-              ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-              : 'bg-blue-600 text-white hover:bg-blue-700',
-          )}
         >
           Continue
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -548,45 +544,75 @@ function MirrorMenu({
   onMirror: (sourceKey: string) => void
 }) {
   const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // C.2 — replaces the prior `fixed inset-0` click-trap (audit
+  // flagged it as "hand-rolled modal" but it was actually a
+  // dropdown click-outside; the inset-0 trap blocked clicks on
+  // the entire viewport including unrelated chrome). Document
+  // mousedown is the canonical click-outside pattern; Escape
+  // dismiss + click-outside dismiss without intercepting other UI.
+  useEffect(() => {
+    if (!open) return
+    const onPointer = (e: MouseEvent | TouchEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false)
+      }
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onPointer)
+    document.addEventListener('touchstart', onPointer)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onPointer)
+      document.removeEventListener('touchstart', onPointer)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
   return (
-    <div className="relative flex-shrink-0">
+    <div className="relative flex-shrink-0" ref={containerRef}>
       <button
         type="button"
         onClick={() => setOpen((s) => !s)}
+        aria-expanded={open}
+        aria-haspopup="menu"
         className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
       >
         <Copy className="w-3 h-3" />
         Same as ▾
       </button>
       {open && (
-        <>
-          <div
-            className="fixed inset-0 z-10"
-            onClick={() => setOpen(false)}
-            aria-hidden="true"
-          />
-          <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded shadow-md py-1 min-w-[200px]">
-            {candidates.map((c) => {
-              const p = picks[c]
-              return (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => {
-                    onMirror(c)
-                    setOpen(false)
-                  }}
-                  className="w-full text-left px-3 py-1.5 text-base hover:bg-slate-50"
-                >
-                  <div className="font-mono text-slate-700">{c}</div>
-                  <div className="text-xs text-slate-500 truncate">
-                    {p?.productType}
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        </>
+        <div
+          role="menu"
+          className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded shadow-md py-1 min-w-[200px]"
+        >
+          {candidates.map((c) => {
+            const p = picks[c]
+            return (
+              <button
+                key={c}
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  onMirror(c)
+                  setOpen(false)
+                }}
+                className="w-full text-left px-3 py-1.5 text-base hover:bg-slate-50"
+              >
+                <div className="font-mono text-slate-700">{c}</div>
+                <div className="text-xs text-slate-500 truncate">
+                  {p?.productType}
+                </div>
+              </button>
+            )
+          })}
+        </div>
       )}
     </div>
   )

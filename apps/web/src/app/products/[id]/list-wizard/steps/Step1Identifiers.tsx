@@ -5,6 +5,7 @@ import { CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
+import { Button } from '@/components/ui/Button'
 import Step2GtinExemption from './Step2GtinExemption'
 
 type Path = 'have-code' | 'have-exemption' | 'apply-now'
@@ -186,7 +187,7 @@ export default function Step1Identifiers(props: StepProps) {
   return (
     <div className="max-w-2xl mx-auto py-10 px-6">
       <div className="mb-6">
-        <h2 className="text-[20px] font-semibold text-slate-900">
+        <h2 className="text-xl font-semibold text-slate-900">
           Product Identifiers
         </h2>
         <p className="text-md text-slate-600 mt-1">
@@ -348,19 +349,14 @@ export default function Step1Identifiers(props: StepProps) {
       )}
 
       <div className="mt-8 flex items-center justify-end gap-3">
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="sm"
           onClick={onContinue}
           disabled={continueDisabled}
-          className={cn(
-            'h-8 px-4 rounded-md text-md font-medium',
-            continueDisabled
-              ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-              : 'bg-blue-600 text-white hover:bg-blue-700',
-          )}
         >
           {path === 'apply-now' ? 'Continue to apply' : 'Continue'}
-        </button>
+        </Button>
       </div>
     </div>
   )

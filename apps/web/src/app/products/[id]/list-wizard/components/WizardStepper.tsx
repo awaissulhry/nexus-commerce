@@ -119,7 +119,7 @@ export default function WizardStepper({
                       <span
                         aria-hidden="true"
                         className={cn(
-                          'absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[1rem] h-4 px-1 rounded-full text-[10px] font-bold tabular-nums',
+                          'absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[1rem] h-4 px-1 rounded-full text-xs font-bold tabular-nums',
                           'bg-rose-500 text-white ring-2 ring-white',
                           'dark:bg-rose-500 dark:text-white dark:ring-slate-950',
                         )}

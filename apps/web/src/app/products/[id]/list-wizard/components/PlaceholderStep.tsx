@@ -19,7 +19,7 @@ export default function PlaceholderStep({ step }: Props) {
         <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-50 text-blue-600 mb-4">
           <Sparkles className="w-6 h-6" />
         </div>
-        <h2 className="text-[20px] font-semibold text-slate-900">
+        <h2 className="text-xl font-semibold text-slate-900">
           {step.title}
         </h2>
         <p className="text-lg text-slate-600 mt-1">

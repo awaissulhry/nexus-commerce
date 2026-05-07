@@ -14,6 +14,8 @@ import {
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
+import { Modal, ModalFooter } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/Button'
 
 interface ImageItem {
   url: string
@@ -351,7 +353,7 @@ function ApplyFlow({
               GTIN Exemption — {app.brandName} on Amazon {marketplace}
             </h3>
           ) : (
-            <h2 className="text-[20px] font-semibold text-slate-900">
+            <h2 className="text-xl font-semibold text-slate-900">
               GTIN Exemption — {app.brandName} on Amazon {marketplace}
             </h2>
           )}
@@ -791,6 +793,12 @@ function Input({
   )
 }
 
+// C.2 — Modal primitive replaces the prior hand-rolled `fixed inset-0`
+// overlay (focus trap, body scroll lock, escape-to-close, restored
+// focus on dismiss are now handled by the primitive). Callsites
+// already pass `open` via conditional render, so we route that
+// straight through. Keeping the wrapper because both call sites
+// share the title + confirm-button shape.
 function SmallDialog({
   title,
   onClose,
@@ -805,35 +813,16 @@ function SmallDialog({
   children: React.ReactNode
 }) {
   return (
-    <div
-      className="fixed inset-0 bg-slate-900/40 z-50 flex items-center justify-center p-6"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white border border-slate-200 rounded-lg shadow-2xl w-full max-w-md p-5"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="text-lg font-semibold text-slate-900 mb-3">
-          {title}
-        </h3>
-        {children}
-        <div className="flex items-center justify-end gap-2 mt-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-8 px-3 text-md rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="h-8 px-3 text-md rounded-md bg-blue-600 text-white font-medium hover:bg-blue-700"
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
+    <Modal open onClose={onClose} title={title} size="md">
+      {children}
+      <ModalFooter>
+        <Button variant="secondary" size="sm" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button variant="primary" size="sm" onClick={onConfirm}>
+          {confirmLabel}
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 }

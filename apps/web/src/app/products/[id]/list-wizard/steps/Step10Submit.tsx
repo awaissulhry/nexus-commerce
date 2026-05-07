@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
 import { postWizardEvent } from '../lib/telemetry'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { Button } from '@/components/ui/Button'
 
 type SubmissionStatus =
   | 'PENDING'
@@ -450,16 +451,12 @@ export default function Step10Submit({
             </div>
           )}
 
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="lg"
             onClick={onSubmit}
             disabled={submitting || channels.length === 0}
-            className={cn(
-              'mt-6 inline-flex items-center gap-2 h-10 px-5 rounded-md text-lg font-medium',
-              submitting || channels.length === 0
-                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700',
-            )}
+            className="mt-6"
           >
             {submitting ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -467,7 +464,7 @@ export default function Step10Submit({
               <Rocket className="w-4 h-4" />
             )}
             Submit listings
-          </button>
+          </Button>
         </div>
         <HistoryStrip
           events={history}
@@ -494,7 +491,7 @@ export default function Step10Submit({
   return (
     <div className="max-w-2xl mx-auto py-10 px-6">
       <div className="mb-5">
-        <h2 className="text-[20px] font-semibold text-slate-900">
+        <h2 className="text-xl font-semibold text-slate-900">
           Submission
         </h2>
         <p className="mt-1 text-md text-slate-600">

@@ -11,6 +11,7 @@ import {
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Tooltip } from '@/components/ui/Tooltip'
 
 export interface ChannelGroup {
   id: string
@@ -168,14 +169,16 @@ export default function ChannelGroupsManager({
                         <Pencil className="w-2.5 h-2.5 text-slate-400" />
                       </button>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => deleteGroup(g.id)}
-                      title="Delete group"
-                      className="text-slate-400 hover:text-rose-700 flex-shrink-0"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
+                    <Tooltip content="Delete group" placement="top">
+                      <button
+                        type="button"
+                        onClick={() => deleteGroup(g.id)}
+                        aria-label="Delete group"
+                        className="text-slate-400 hover:text-rose-700 flex-shrink-0"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </Tooltip>
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {availableChannels.map((c) => {

@@ -5,6 +5,7 @@ import { AlertCircle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
+import { Button } from '@/components/ui/Button'
 import ChannelGroupsManager, {
   type ChannelGroup,
 } from '../components/ChannelGroupsManager'
@@ -638,7 +639,7 @@ export default function Step4Attributes({
     <div className="max-w-3xl mx-auto py-10 px-6">
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-[20px] font-semibold text-slate-900">
+          <h2 className="text-xl font-semibold text-slate-900">
             Required Attributes
           </h2>
           <p className="text-md text-slate-600 mt-1">
@@ -1008,17 +1009,18 @@ export default function Step4Attributes({
             </span>
           )}
         </div>
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="sm"
           onClick={onContinue}
           disabled={!manifest}
+          // Amber when there are blockers to signal "this jumps,
+          // doesn't advance"; blue when ready to advance. tailwind-
+          // merge in cn() resolves the bg-* conflict to the
+          // override (last write wins in the merged class string).
           className={cn(
-            'h-8 px-4 rounded-md text-md font-medium',
-            !manifest
-              ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-              : unsatisfied.length > 0
-              ? 'bg-amber-600 text-white hover:bg-amber-700'
-              : 'bg-blue-600 text-white hover:bg-blue-700',
+            unsatisfied.length > 0 &&
+              'bg-amber-600 hover:bg-amber-700 border-amber-600',
           )}
           title={
             unsatisfied.length > 0
@@ -1027,7 +1029,7 @@ export default function Step4Attributes({
           }
         >
           {unsatisfied.length > 0 ? 'Jump to next blocker' : 'Continue'}
-        </button>
+        </Button>
       </div>
 
       {/* NN.6 — sticky AI / translate error toast. Replaces (not
