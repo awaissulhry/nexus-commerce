@@ -58,6 +58,8 @@ import {
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { InlineEditTrigger } from '@/components/ui/InlineEditTrigger'
+import { Button } from '@/components/ui/Button'
+import { IconButton } from '@/components/ui/IconButton'
 
 // U.1 — focusable-element selector for the drawer's a11y focus trap.
 // Standard set of natively-tabbable elements. We additionally filter
@@ -379,14 +381,14 @@ export default function ProductDrawer({
               {data?.ebayItemId && <span>eBay {data.ebayItemId}</span>}
             </div>
           </div>
-          <button
-            type="button"
+          <IconButton
             onClick={onClose}
-            className="p-1 text-slate-400 hover:text-slate-600 -mr-1"
             aria-label="Close drawer"
+            size="md"
+            className="-mr-1 text-slate-400 hover:text-slate-600"
           >
             <X className="w-4 h-4" />
-          </button>
+          </IconButton>
         </div>
 
         {/* Tabs */}
@@ -2362,31 +2364,33 @@ function TranslationsTab({
             />
           </div>
           <div className="flex items-center justify-end gap-1.5">
-            <button
-              type="button"
+            <Button
+              size="sm"
+              variant="ghost"
               onClick={() => setAdding(false)}
-              className="h-7 px-2 text-sm text-slate-600 hover:bg-slate-100 rounded"
+              className="text-slate-600"
             >
               Cancel
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              size="sm"
               onClick={create}
               disabled={busy}
-              className="h-7 px-3 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+              className="bg-purple-600 text-white border-purple-600 hover:bg-purple-700"
             >
               Create
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
-        <button
-          type="button"
+        <Button
+          variant="secondary"
           onClick={() => setAdding(true)}
-          className="w-full h-8 text-base border border-dashed border-slate-300 rounded text-slate-600 hover:bg-slate-50 inline-flex items-center justify-center gap-1.5"
+          className="w-full border-dashed border-slate-300 text-slate-600"
+          icon={<Plus className="w-3 h-3" />}
         >
-          <Plus className="w-3 h-3" /> Add translation
-        </button>
+          Add translation
+        </Button>
       )}
 
       <div className="text-xs text-slate-500 pt-2 border-t border-slate-100">
