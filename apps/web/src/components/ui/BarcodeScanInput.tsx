@@ -43,12 +43,17 @@ export function BarcodeScanInput({
 
   // Scanners typically emit a CR + Enter at end. We listen on
   // onKeyDown for Enter and fire onScan with the trimmed value.
+  const [announce, setAnnounce] = useState<string>('')
   const submit = () => {
     const trimmed = value.trim()
     if (!trimmed) return
     onScan(trimmed)
     setValue('')
     setFlashCheck(true)
+    // Announce to screen readers so operators using assistive tech
+    // get audible feedback on each scan (warehouse hardware often has
+    // a beep, but that's separate from screen-reader output).
+    setAnnounce(`Scanned ${trimmed}`)
     // Flash the green check for 600ms then return to default state.
     window.setTimeout(() => setFlashCheck(false), 600)
     // Re-focus so the next scan lands here without the operator
@@ -86,6 +91,7 @@ export function BarcodeScanInput({
         disabled={disabled}
         autoFocus={autoFocus}
         placeholder={placeholder}
+        aria-label={label}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
@@ -95,6 +101,8 @@ export function BarcodeScanInput({
         }}
         className="flex-1 outline-none bg-transparent text-md font-mono tabular-nums placeholder:text-slate-400"
       />
+      {/* Live region for screen-reader announcements on each scan. */}
+      <span aria-live="polite" aria-atomic="true" className="sr-only">{announce}</span>
     </label>
   )
 }
