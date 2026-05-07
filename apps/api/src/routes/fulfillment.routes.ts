@@ -1523,6 +1523,22 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             include: {
               items: { select: { id: true, sku: true, quantity: true } },
               warehouse: { select: { code: true, name: true } },
+              // O.20: tracking timeline. Order DESC so the drawer
+              // renders most-recent first; size cap because timelines
+              // can grow to dozens of events on slow international
+              // routes (every depot scan = one row).
+              trackingEvents: {
+                orderBy: { occurredAt: 'desc' },
+                take: 50,
+                select: {
+                  id: true,
+                  occurredAt: true,
+                  code: true,
+                  description: true,
+                  location: true,
+                  source: true,
+                },
+              },
             },
             orderBy: { createdAt: 'asc' },
           },

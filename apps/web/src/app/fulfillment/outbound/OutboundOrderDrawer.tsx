@@ -74,7 +74,28 @@ type DrawerOrder = {
     items: Array<{ id: string; sku: string; quantity: number }>
     warehouse?: { code: string; name: string } | null
     createdAt: string
+    trackingEvents: Array<{
+      id: string
+      occurredAt: string
+      code: string
+      description: string
+      location: string | null
+      source: string
+    }>
   }>
+}
+
+const TRACKING_TONE: Record<string, string> = {
+  ANNOUNCED: 'text-slate-500 bg-slate-100',
+  PICKED_UP: 'text-blue-700 bg-blue-100',
+  IN_TRANSIT: 'text-blue-700 bg-blue-100',
+  OUT_FOR_DELIVERY: 'text-amber-700 bg-amber-100',
+  DELIVERED: 'text-emerald-700 bg-emerald-100',
+  DELIVERY_ATTEMPTED: 'text-amber-700 bg-amber-100',
+  EXCEPTION: 'text-rose-700 bg-rose-100',
+  RETURNED_TO_SENDER: 'text-rose-700 bg-rose-100',
+  CANCELLED: 'text-slate-500 bg-slate-100',
+  INFO: 'text-slate-500 bg-slate-100',
 }
 
 const CHANNEL_LABEL: Record<string, string> = {
@@ -429,6 +450,49 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                   )}
                 </div>
               </Card>
+
+              {/* O.20: Tracking timeline — collated across all shipments,
+                   most-recent first. Empty when no carrier scans yet. */}
+              {data.shipments.some((s) => s.trackingEvents.length > 0) && (
+                <Card>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                      <Clock size={12} /> Tracking timeline
+                    </div>
+                    <div className="space-y-1.5">
+                      {data.shipments
+                        .flatMap((s) =>
+                          s.trackingEvents.map((e) => ({ ...e, shipmentId: s.id, carrier: s.carrierCode })),
+                        )
+                        .sort((a, b) => +new Date(b.occurredAt) - +new Date(a.occurredAt))
+                        .slice(0, 30)
+                        .map((e) => (
+                          <div key={e.id} className="flex items-start gap-3 text-sm">
+                            <div className="text-slate-500 tabular-nums w-32 flex-shrink-0">
+                              {new Date(e.occurredAt).toLocaleString('it-IT', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </div>
+                            <span
+                              className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
+                                TRACKING_TONE[e.code] ?? 'text-slate-500 bg-slate-100'
+                              }`}
+                            >
+                              {e.code.replace(/_/g, ' ')}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-slate-700">{e.description}</div>
+                              {e.location && <div className="text-xs text-slate-500">{e.location}</div>}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                </Card>
+              )}
 
               {/* Channel metadata (collapsed by default — operator-debug surface) */}
               {channelMetadata && (
