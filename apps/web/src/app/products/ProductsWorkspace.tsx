@@ -1289,93 +1289,78 @@ function FilterBar(props: any) {
   }
 
   return (
-    <Card>
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex-1 min-w-[240px] max-w-md relative">
-            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <Input
-              ref={searchInputRef}
-              placeholder="Search SKU, name, brand, GTIN…"
-              value={searchInput}
-              onChange={(e: any) => setSearchInput(e.target.value)}
-              className="pl-7"
-            />
-          </div>
+    // E.22 — no more Card wrapper around FilterBar. The "huge white
+    // box" sits flush in the page now. Search + Filters toggle live
+    // on one row; pills + accordion drop below as needed. No chevron
+    // rotation animation on the Filters button — active state shown
+    // by the count badge + filled background.
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex-1 min-w-[240px] max-w-md relative">
+          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Input
+            ref={searchInputRef}
+            placeholder="Search SKU, name, brand, GTIN…"
+            value={searchInput}
+            onChange={(e: any) => setSearchInput(e.target.value)}
+            className="pl-7"
+          />
+        </div>
+        <button
+          onClick={() => setFiltersOpen(!filtersOpen)}
+          aria-expanded={filtersOpen}
+          className={`h-8 px-3 text-base border rounded inline-flex items-center gap-1.5 ${filtersOpen ? 'border-slate-900 bg-slate-900 text-white' : filterCount > 0 ? 'border-slate-300 bg-slate-50 text-slate-700' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+        >
+          <Filter size={12} />
+          Filters
           {filterCount > 0 && (
-            <button
-              onClick={() => updateUrl({ status: '', channels: '', marketplaces: '', productTypes: '', brands: '', tags: '', fulfillment: '', missingChannels: '', stockLevel: undefined, hasPhotos: undefined, page: undefined })}
-              className="h-8 px-2 text-base text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
+            <span
+              className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${filtersOpen ? 'bg-white text-slate-900' : 'bg-slate-700 text-white'}`}
             >
-              <X size={12} /> Clear all
-            </button>
+              {filterCount}
+            </span>
           )}
-        </div>
-
-        {/* E.5 + E.8 — active-filter pills row. Each pill is now
-            clickable: opens that dimension's value editor. The
-            "+ Filter" button at the end opens the dimension picker.
-            The accordion is gone — this row IS the editor. */}
-        {/* E.20 — pills row stays, BUT pill clicks now toggle the
-            full accordion (instead of opening a single-dimension
-            popover) per operator preference for the original
-            "many-filters-at-once" UX. */}
-        {activePills.length > 0 && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {activePills.map((p) => (
-              <span
-                key={p.key}
-                className="inline-flex items-center gap-0.5 h-7 text-sm rounded-full bg-blue-50 text-blue-900 border border-blue-200"
-              >
-                <button
-                  type="button"
-                  onClick={() => setFiltersOpen(true)}
-                  className="inline-flex items-center gap-1 pl-2 pr-1 h-full hover:bg-blue-100 rounded-l-full"
-                >
-                  <span className="font-medium text-blue-700">{p.label}:</span>
-                  <span className="truncate max-w-[180px]">{p.value}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={p.clear}
-                  aria-label={`Remove ${p.label} filter`}
-                  className="inline-flex items-center justify-center w-5 h-5 rounded-full hover:bg-blue-100 text-blue-700"
-                >
-                  <X size={11} />
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* E.20 — restored "Filters" button + multi-dimension accordion
-            (was removed in E.8, brought back per operator preference).
-            Shows every filter dimension at once when expanded so common
-            workflows (set status + tag + channel together) don't need
-            multiple popover open/close cycles. */}
-        <div className="flex items-center gap-2">
+        </button>
+        {filterCount > 0 && (
           <button
-            onClick={() => setFiltersOpen(!filtersOpen)}
-            className={`h-8 px-3 text-base border rounded inline-flex items-center gap-1.5 ${filtersOpen || filterCount > 0 ? 'border-slate-300 bg-slate-50' : 'border-slate-200 hover:bg-slate-50'}`}
+            onClick={() => updateUrl({ status: '', channels: '', marketplaces: '', productTypes: '', brands: '', tags: '', fulfillment: '', missingChannels: '', stockLevel: undefined, hasPhotos: undefined, page: undefined })}
+            className="h-8 px-2 text-base text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
           >
-            <Filter size={12} />
-            Filters
-            {filterCount > 0 && (
-              <span className="bg-slate-700 text-white text-xs px-1.5 py-0.5 rounded-full font-semibold">
-                {filterCount}
-              </span>
-            )}
-            <ChevronDown
-              size={12}
-              className={
-                filtersOpen ? 'rotate-180 transition-transform' : 'transition-transform'
-              }
-            />
+            <X size={12} /> Clear all
           </button>
-        </div>
+        )}
+      </div>
 
-        {filtersOpen && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-2 border-t border-slate-100">
+      {activePills.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {activePills.map((p) => (
+            <span
+              key={p.key}
+              className="inline-flex items-center gap-0.5 h-7 text-sm rounded-full bg-blue-50 text-blue-900 border border-blue-200"
+            >
+              <button
+                type="button"
+                onClick={() => setFiltersOpen(true)}
+                className="inline-flex items-center gap-1 pl-2 pr-1 h-full hover:bg-blue-100 rounded-l-full"
+              >
+                <span className="font-medium text-blue-700">{p.label}:</span>
+                <span className="truncate max-w-[180px]">{p.value}</span>
+              </button>
+              <button
+                type="button"
+                onClick={p.clear}
+                aria-label={`Remove ${p.label} filter`}
+                className="inline-flex items-center justify-center w-5 h-5 rounded-full hover:bg-blue-100 text-blue-700"
+              >
+                <X size={11} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {filtersOpen && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-3 mt-1 border-t border-slate-200">
             <FilterGroup
               label="Status"
               options={['ACTIVE', 'DRAFT', 'INACTIVE']}
@@ -1481,8 +1466,7 @@ function FilterBar(props: any) {
             </div>
           </div>
         )}
-      </div>
-    </Card>
+    </div>
   )
 }
 
@@ -2797,11 +2781,11 @@ function MobileProductCard({
           aria-label={chevron.isExpanded ? 'Collapse variants' : 'Expand variants'}
           className="w-7 h-7 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 flex-shrink-0"
         >
-          {chevron.isExpanded ? (
-            <ChevronDown className="w-4 h-4" />
-          ) : (
-            <ChevronRight className="w-4 h-4" />
-          )}
+          {/* E.22 — single ChevronRight that rotates 90° instead of
+              swapping icons. Same smoothness as the desktop ProductRow. */}
+          <ChevronRight
+            className={`w-4 h-4 transition-transform duration-150 ${chevron.isExpanded ? 'rotate-90' : ''}`}
+          />
         </button>
       )}
     </div>
@@ -3579,13 +3563,15 @@ const ProductRow = memo(function ProductRow({
                 : `Expand variants of ${product.sku} (${childCount})`
             }
             title={`${childCount} variant${childCount === 1 ? '' : 's'}`}
-            className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-slate-200 text-slate-600"
+            // E.22 — single ChevronRight that rotates 90° on expand
+            // (was: swap between ChevronRight + ChevronDown). One
+            // element, smooth transform, no jitter on toggle.
+            className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-slate-200 text-slate-500 hover:text-slate-900"
           >
-            {isExpanded ? (
-              <ChevronDown size={14} />
-            ) : (
-              <ChevronRight size={14} />
-            )}
+            <ChevronRight
+              size={14}
+              className={`transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}`}
+            />
           </button>
         ) : isChild ? (
           <span className="block h-4 w-4 ml-1 border-l-2 border-b-2 border-slate-300 rounded-bl" />
