@@ -589,6 +589,12 @@ model ChannelListing {
   // was suppressed 3 times last quarter for the same reason."
   amazonSuppressions AmazonSuppression[]
 
+  // C.14 — eBay Path B back-refs. Stats are time-series (per-listing
+  // hourly snapshots of watcher / hit / question counts); markdowns
+  // are discrete sale events with start/end windows.
+  ebayWatcherStats   EbayWatcherStats[]
+  ebayMarkdowns      EbayMarkdown[]
+
   // NN.1 — optimistic concurrency on per-channel listing edits.
   version Int @default(1)
 
@@ -1975,6 +1981,10 @@ model ChannelConnection {
   updatedAt          DateTime @updatedAt
 
   variantListings VariantChannelListing[]
+  // C.14 — eBay Promoted Listings campaigns scoped to this OAuth
+  // connection. Cascade so revoking a connection sweeps its
+  // campaigns (operationally, eBay also disables them server-side).
+  ebayCampaigns   EbayCampaign[]
 
   // The partial unique index `ChannelConnection_channelType_marketplace_active_key`
   // (CREATE UNIQUE INDEX ... WHERE "isActive" = true) is enforced at
@@ -4504,4 +4514,142 @@ model ChannelPublishAttempt {
   @@index([sku, attemptedAt])
   @@index([outcome, attemptedAt])
   @@index([productId])
+}
+
+// ── C.14: eBay Path B — campaigns, watcher stats, markdowns ───────────
+//
+// Three eBay-specific tables that back the Wave 5 feature surfaces:
+//
+//   - EbayCampaign: Promoted Listings (Standard CPM + Advanced CPC).
+//     One row per campaign on eBay's side; aggregated metrics
+//     (impressions/clicks/sales/spend) live inline, refreshed by a
+//     daily sync against /sell/marketing/v1/ad_campaign/{id}/report.
+//
+//   - EbayWatcherStats: time-series snapshots of per-listing
+//     engagement. Cron syncs each ACTIVE eBay listing periodically
+//     (Trading API GetItem with WatchCount/Hits/Questions fields)
+//     and writes one row per snapshot. /listings/ebay's KPI strip
+//     reads recent rows for trends.
+//
+//   - EbayMarkdown: discrete sale events (one row per scheduled or
+//     active markdown). Discount type (PERCENTAGE / FIXED_PRICE),
+//     start/end window, lifecycle status, sync state. eBay's
+//     promotion API issues the externalPromotionId once we push.
+//
+// Generic Campaign model (defined elsewhere) is left alone — it has
+// no callers and was a Phase-1 stub. Channel-specific tables match
+// the precedent set by AmazonSuppression (S.5) when an existing
+// generic shape would have become a tagged-union maintenance burden.
+
+model EbayCampaign {
+  id String @id @default(cuid())
+
+  // ── Connection scope ─────────────────────────────────────────────
+  channelConnection   ChannelConnection @relation(fields: [channelConnectionId], references: [id], onDelete: Cascade)
+  channelConnectionId String
+  marketplace         String  // EBAY_IT, EBAY_DE, EBAY_FR, EBAY_ES, EBAY_GB
+
+  // ── eBay identity ────────────────────────────────────────────────
+  externalCampaignId String  // eBay-issued campaign id
+  name               String
+
+  // ── Funding ──────────────────────────────────────────────────────
+  // 'STANDARD' = CPM bid percentage (legacy)
+  // 'ADVANCED' = CPC daily budget (newer)
+  fundingStrategy String
+
+  // For STANDARD: bid percentage (e.g. 5.50 = 5.5% of sale price).
+  // 0.00–100.00 range; Decimal(6,2) gives plenty of headroom.
+  bidPercentage Decimal? @db.Decimal(6, 2)
+
+  // For ADVANCED: daily budget cap in marketplace currency.
+  dailyBudget    Decimal? @db.Decimal(10, 2)
+  budgetCurrency String?  // 'EUR', 'GBP', 'USD'
+
+  // ── Lifecycle ────────────────────────────────────────────────────
+  // 'DRAFT' | 'RUNNING' | 'PAUSED' | 'ENDED' | 'SUSPENDED'
+  status    String
+  startDate DateTime
+  endDate   DateTime?
+
+  // ── Aggregated metrics (refreshed by sync) ───────────────────────
+  impressions Int       @default(0)
+  clicks      Int       @default(0)
+  sales       Decimal   @default(0) @db.Decimal(10, 2)
+  spend       Decimal   @default(0) @db.Decimal(10, 2)
+  metricsAt   DateTime?
+
+  // ── Audit ────────────────────────────────────────────────────────
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Same connection can't house two campaigns with the same eBay
+  // campaign id. eBay enforces this server-side too — defensive.
+  @@unique([channelConnectionId, externalCampaignId])
+  @@index([channelConnectionId, status])
+  @@index([marketplace, status])
+}
+
+model EbayWatcherStats {
+  id String @id @default(cuid())
+
+  // ── Listing reference ────────────────────────────────────────────
+  channelListing   ChannelListing @relation(fields: [channelListingId], references: [id], onDelete: Cascade)
+  channelListingId String
+
+  // ── Snapshot ─────────────────────────────────────────────────────
+  snapshotAt    DateTime @default(now())
+  watcherCount  Int      @default(0)
+  hitCount      Int      @default(0)  // total view count (eBay's HitCount)
+  questionCount Int      @default(0)  // unanswered questions
+
+  // ── Audit ────────────────────────────────────────────────────────
+  createdAt DateTime @default(now())
+
+  // Per-listing timeline — the most common read pattern.
+  @@index([channelListingId, snapshotAt])
+}
+
+model EbayMarkdown {
+  id String @id @default(cuid())
+
+  // ── Listing reference ────────────────────────────────────────────
+  channelListing   ChannelListing @relation(fields: [channelListingId], references: [id], onDelete: Cascade)
+  channelListingId String
+
+  // ── eBay identity ────────────────────────────────────────────────
+  // null until we push to eBay; set once the API returns a
+  // promotion id. Same pattern as wizard.submissions[].submissionId.
+  externalPromotionId String?
+
+  // ── Discount shape ───────────────────────────────────────────────
+  // 'PERCENTAGE' | 'FIXED_PRICE'
+  discountType  String
+  discountValue Decimal @db.Decimal(10, 2)
+
+  // Snapshot at creation; auditable record of what the original was.
+  // The current ChannelListing.price might have moved since.
+  originalPrice Decimal @db.Decimal(10, 2)
+  markdownPrice Decimal @db.Decimal(10, 2)
+  currency      String  // 'EUR', 'GBP', 'USD'
+
+  // ── Lifecycle ────────────────────────────────────────────────────
+  // 'DRAFT' | 'SCHEDULED' | 'ACTIVE' | 'ENDED' | 'CANCELLED' | 'FAILED'
+  status    String
+  startDate DateTime
+  endDate   DateTime?
+
+  // Last attempt to push to eBay; null until that path ships.
+  lastSyncedAt   DateTime?
+  lastSyncStatus String?  // 'SUCCESS' | 'FAILED' | 'PENDING'
+  lastSyncError  String?
+
+  // ── Audit ────────────────────────────────────────────────────────
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Per-listing timeline
+  @@index([channelListingId, startDate])
+  // "Active markdowns right now" dashboard query
+  @@index([status, endDate])
 }
