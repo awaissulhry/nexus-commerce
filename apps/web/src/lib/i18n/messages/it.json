@@ -254,6 +254,8 @@
   "outbound.drawer.shipmentInFlight": "Spedizione in corso",
   "outbound.drawer.packAndReady": "Imballa e pronto",
   "outbound.drawer.packedNext": "Imballato — ora stampa l'etichetta",
+  "outbound.drawer.printLabel.button": "Stampa etichetta",
+  "outbound.drawer.printLabel.toast": "Etichetta stampata — apro il PDF",
   "outbound.drawer.openFullOrder": "Apri ordine completo",
   "outbound.drawer.generateReturn": "Genera reso",
   "outbound.drawer.generateAnotherReturn": "+ Nuovo reso",

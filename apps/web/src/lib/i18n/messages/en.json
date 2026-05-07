@@ -283,6 +283,8 @@
   "outbound.drawer.shipmentInFlight": "Shipment in flight",
   "outbound.drawer.packAndReady": "Pack & ready",
   "outbound.drawer.packedNext": "Packed — print label next",
+  "outbound.drawer.printLabel.button": "Print label",
+  "outbound.drawer.printLabel.toast": "Label printed — opening PDF",
   "outbound.drawer.openFullOrder": "Open full order",
   "outbound.drawer.generateReturn": "Generate return",
   "outbound.drawer.generateAnotherReturn": "+ New return",

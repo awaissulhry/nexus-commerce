@@ -1220,9 +1220,10 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                 <Plus size={12} /> {t('outbound.drawer.createShipment')}
               </button>
             ) : (() => {
-              // O.13: surface the next-step CTA based on shipment state.
-              // Pre-PACKED shipments → "Pack & ready" → /pack page.
-              // PACKED → operator clicks Print label on the Shipments tab.
+              // O.13 + O.77: surface the next-step CTA based on shipment
+              // state. Pre-PACKED shipments → "Pack & ready" → /pack
+              // page. PACKED → in-drawer Print label button (was
+              // "go to shipments tab" — that round-trip is now gone).
               // LABEL_PRINTED+ → tracking is in flight.
               const ship = activeShipments[0]
               if (!ship) return null
@@ -1236,10 +1237,35 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                   </Link>
                 )
               }
+              if (ship.status === 'PACKED') {
+                return (
+                  <button
+                    onClick={async () => {
+                      const res = await fetch(
+                        `${getBackendUrl()}/api/fulfillment/shipments/${ship.id}/print-label`,
+                        { method: 'POST' },
+                      )
+                      const out = await res.json().catch(() => ({}))
+                      if (!res.ok) {
+                        toast.error(out.error ?? t('common.error'))
+                        return
+                      }
+                      const url = out.labelUrl ?? out.shipment?.labelUrl
+                      if (url) window.open(url, '_blank', 'noopener,noreferrer')
+                      toast.success(t('outbound.drawer.printLabel.toast'))
+                      emitInvalidation({ type: 'shipment.updated', meta: { shipmentId: ship.id } })
+                      fetchDetail()
+                    }}
+                    className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5"
+                  >
+                    <Printer size={12} /> {t('outbound.drawer.printLabel.button')}
+                  </button>
+                )
+              }
               return (
                 <span className="inline-flex items-center gap-1.5 h-8 px-3 text-base text-emerald-700 bg-emerald-50 border border-emerald-200 rounded">
                   <CheckCircle2 size={12} />
-                  {ship.status === 'PACKED' ? t('outbound.drawer.packedNext') : t('outbound.drawer.shipmentInFlight')}
+                  {t('outbound.drawer.shipmentInFlight')}
                 </span>
               )
             })()}
