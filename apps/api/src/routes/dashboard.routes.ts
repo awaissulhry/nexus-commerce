@@ -264,7 +264,13 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         prisma.productVariation.count(),
         prisma.channelListing.count({ where: { listingStatus: 'LIVE' } }),
         prisma.channelListing.count({ where: { listingStatus: 'DRAFT' } }),
-        prisma.channelListing.count({ where: { listingStatus: 'FAILED' } }),
+        // C.4 — schema lists DRAFT, ACTIVE, INACTIVE, ENDED, ERROR for
+        // ChannelListing.listingStatus. The previous 'FAILED' filter
+        // matched nothing, so this counter was permanently 0 and the
+        // dashboard alert never fired even when listings genuinely
+        // needed attention. ERROR is the real "publish/validation
+        // failed" terminal state.
+        prisma.channelListing.count({ where: { listingStatus: 'ERROR' } }),
         prisma.product.count({
           where: { totalStock: { gt: 0, lte: 10 } },
         }),

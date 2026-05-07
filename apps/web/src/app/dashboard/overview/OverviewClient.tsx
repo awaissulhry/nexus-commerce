@@ -753,14 +753,18 @@ function AlertsPanel({
     items.push({
       label: 'Failed listings',
       count: alerts.failedListings,
-      href: '/listings/amazon',
+      // C.4 — link to the master /listings filtered by status, not a
+      // hardcoded /listings/amazon. Failures can be on any channel and
+      // the master view shows them all with channel/marketplace chips
+      // ready to drill down further.
+      href: '/listings?listingStatus=ERROR',
       tone: 'rose',
     })
   if (alerts.draftListings > 0)
     items.push({
       label: 'Draft listings',
       count: alerts.draftListings,
-      href: '/listings/amazon',
+      href: '/listings?listingStatus=DRAFT',
       tone: 'amber',
     })
   if (alerts.pendingOrders > 0)
