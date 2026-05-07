@@ -218,9 +218,27 @@ export default function PendingShipmentsClient() {
     }
   }
 
-  const unsubscribeAlert = async (view: SavedView, alertId: string) => {
+  // O.52 bug fix + O.58: DELETE goes via /saved-view-alerts/:id
+  // (the singular form — the /saved-views/:viewId/alerts/:alertId
+  // path was a typo and 404'd silently). PATCH for threshold edit
+  // uses the same pattern.
+  const updateAlertThreshold = async (alertId: string, threshold: number) => {
+    const res = await fetch(`${getBackendUrl()}/api/saved-view-alerts/${alertId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threshold }),
+    })
+    if (res.ok) {
+      toast.success(t('outbound.alerts.thresholdUpdated', { threshold }))
+      fetchViews()
+    } else {
+      toast.error(t('common.error'))
+    }
+  }
+
+  const unsubscribeAlert = async (alertId: string) => {
     const res = await fetch(
-      `${getBackendUrl()}/api/saved-views/${view.id}/alerts/${alertId}`,
+      `${getBackendUrl()}/api/saved-view-alerts/${alertId}`,
       { method: 'DELETE' },
     )
     if (res.ok) {
@@ -229,6 +247,31 @@ export default function PendingShipmentsClient() {
     } else {
       toast.error(t('common.error'))
     }
+  }
+
+  // O.58: clicking an active bell opens a tri-action prompt:
+  //   empty submit → remove the alert
+  //   numeric submit → update threshold (PATCH)
+  //   cancel → no-op
+  const editOrRemoveAlert = async (alertId: string, currentThreshold: number) => {
+    const value = window.prompt(
+      t('outbound.alerts.editPrompt', { threshold: currentThreshold }),
+      String(currentThreshold),
+    )
+    if (value == null) return // cancel
+    const trimmed = value.trim()
+    if (trimmed === '') {
+      // explicit empty → remove
+      await unsubscribeAlert(alertId)
+      return
+    }
+    const next = Number(trimmed)
+    if (!Number.isFinite(next) || next < 0) {
+      toast.error(t('outbound.alerts.invalidThreshold'))
+      return
+    }
+    if (next === currentThreshold) return // no-op
+    await updateAlertThreshold(alertId, next)
   }
 
   // O.42: cross-tab refresh of the views dropdown when a sibling tab
@@ -612,8 +655,8 @@ export default function PendingShipmentsClient() {
                                 none, click to create. */}
                             {hasAlert ? (
                               <button
-                                onClick={() => unsubscribeAlert(v, alerts[0].id)}
-                                title={t('outbound.alerts.unsubscribe', {
+                                onClick={() => editOrRemoveAlert(alerts[0].id, alerts[0].threshold)}
+                                title={t('outbound.alerts.editTooltip', {
                                   threshold: alerts[0].threshold,
                                 })}
                                 className="h-6 w-6 inline-flex items-center justify-center text-amber-500 hover:text-amber-700 rounded"
