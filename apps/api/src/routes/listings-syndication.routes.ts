@@ -567,8 +567,16 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           listingStatus: true, syncStatus: true, lastSyncStatus: true,
           lastSyncedAt: true, lastSyncError: true,
           price: true, masterPrice: true,
-          quantity: true, externalListingId: true, isPublished: true,
-          followMasterPrice: true,
+          quantity: true, masterQuantity: true,
+          externalListingId: true, isPublished: true,
+          followMasterPrice: true, followMasterQuantity: true,
+          // C.9 — title + override fields for cross-channel diff. The
+          // matrix's drift indicators read these directly; we send the
+          // effective channel title (override || stored title) plus the
+          // master title so the frontend can compute mismatches without
+          // a second fetch.
+          title: true, titleOverride: true, masterTitle: true,
+          followMasterTitle: true,
         },
       })
 
@@ -576,6 +584,13 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       const byProduct = new Map<string, Array<any>>()
       for (const l of listings) {
         const arr = byProduct.get(l.productId) ?? []
+        // Effective title operators care about: titleOverride wins when
+        // set, else the channel-stored title, else null. The drift
+        // calculation on the frontend ignores null vs null.
+        const effectiveTitle =
+          (l.titleOverride && l.titleOverride.length > 0
+            ? l.titleOverride
+            : l.title) ?? null
         arr.push({
           id: l.id,
           channel: l.channel,
@@ -589,6 +604,11 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           masterPrice: l.masterPrice == null ? null : Number(l.masterPrice),
           followMasterPrice: l.followMasterPrice,
           quantity: l.quantity,
+          masterQuantity: l.masterQuantity,
+          followMasterQuantity: l.followMasterQuantity,
+          title: effectiveTitle,
+          masterTitle: l.masterTitle,
+          followMasterTitle: l.followMasterTitle,
           externalListingId: l.externalListingId,
           isPublished: l.isPublished,
           listingUrl: listingUrlFor(l.channel, l.marketplace, l.externalListingId),
@@ -655,6 +675,14 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           basePrice: p.basePrice == null ? null : Number(p.basePrice),
           totalStock: p.totalStock,
           isParent: p.isParent,
+          // C.9 — per-row master reference for the matrix's leftmost
+          // master cell. masterTitle falls back to product.name when
+          // ChannelListing.masterTitle wasn't set; masterPrice and
+          // masterQuantity come straight from Product so the master
+          // column never depends on a ChannelListing row existing.
+          masterTitleForCompare: p.name,
+          masterPriceForCompare: p.basePrice == null ? null : Number(p.basePrice),
+          masterQuantityForCompare: p.totalStock,
           cells: byProduct.get(p.id) ?? [],
         })),
         count: truncated.length,

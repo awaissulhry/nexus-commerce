@@ -12,7 +12,7 @@ import {
   ExternalLink, Filter, Settings2, X, ChevronDown,
   Eye, EyeOff, CheckCircle2, Tag, Link2,
   ArrowUpRight, Layers, Package, MoreHorizontal, Plus, Pause, Play,
-  TrendingUp, TrendingDown, Edit3,
+  Edit3,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -1975,7 +1975,7 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
               role="grid"
               aria-label="Multi-channel listing matrix"
               aria-rowcount={data.products.length + 1}
-              aria-colcount={columns.length + 1}
+              aria-colcount={columns.length + 2}
             >
               <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-20">
                 <tr role="row">
@@ -1984,6 +1984,20 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
                     className="px-3 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wider sticky left-0 bg-slate-50 z-30 min-w-[260px]"
                   >
                     Product
+                  </th>
+                  {/* C.9 — Master reference column. Anchors every row so
+                      reading across becomes an implicit comparison: each
+                      channel cell to its right is implicitly diff'd against
+                      this anchor. Stays visually distinct (slate, no
+                      channel tone) so it's never confused with a cell. */}
+                  <th
+                    role="columnheader"
+                    className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wider min-w-[120px] bg-slate-100 border-x border-slate-200"
+                  >
+                    <div className="inline-block px-1.5 py-0.5 rounded border border-slate-300 text-slate-700 bg-white">
+                      Master
+                    </div>
+                    <div className="text-xs text-slate-400 mt-1">reference</div>
                   </th>
                   {columns.map((key) => {
                     const [ch, mp] = key.split(':')
@@ -2004,25 +2018,48 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
                 {data.products.map((p: any) => {
                   const cellByKey = new Map<string, any>()
                   p.cells.forEach((c: any) => cellByKey.set(`${c.channel}:${c.marketplace}`, c))
+                  // C.9 — row-level master reference. Each channel cell
+                  // diffs against this anchor. We pass it in as `master`
+                  // so MatrixCell doesn't have to reach into the row.
+                  const master = {
+                    title: p.masterTitleForCompare ?? p.name ?? null,
+                    price: p.masterPriceForCompare ?? null,
+                    quantity: p.masterQuantityForCompare ?? null,
+                  }
                   return (
-                    <tr key={p.id} role="row" className="border-b border-slate-100 hover:bg-slate-50/50">
+                    <tr
+                      key={p.id}
+                      role="row"
+                      className="group/row border-b border-slate-100 hover:bg-slate-50/50"
+                    >
                       <td
                         role="rowheader"
-                        className="px-3 py-2 sticky left-0 bg-white border-r border-slate-100 z-10"
+                        className="px-3 py-2 sticky left-0 bg-white border-r border-slate-100 z-10 group-hover/row:bg-slate-50/50"
                       >
                         <Link href={`/products/${p.id}/edit`} className="hover:text-blue-600 block">
                           <div className="text-md font-medium text-slate-900 truncate max-w-xs">{p.name}</div>
                           <div className="text-sm text-slate-500 font-mono">{p.sku}</div>
                         </Link>
                       </td>
+                      <td
+                        role="gridcell"
+                        className="px-2 py-2 text-center bg-slate-50 border-x border-slate-200"
+                      >
+                        <MasterCell master={master} />
+                      </td>
                       {columns.map((key) => {
                         const c = cellByKey.get(key)
                         const [ch, mp] = key.split(':')
                         return (
-                          <td key={key} role="gridcell" className="px-2 py-2 text-center">
+                          <td
+                            key={key}
+                            role="gridcell"
+                            className="px-2 py-2 text-center"
+                          >
                             {c ? (
                               <MatrixCell
                                 cell={c}
+                                master={master}
                                 product={p}
                                 optimisticSyncing={optimisticSyncing.has(c.id)}
                                 onOpenDrawer={() => setDrawerOpen(c.id)}
@@ -2084,15 +2121,22 @@ function formatRelative(ms: number): string {
 
 // ────────────────────────────────────────────────────────────────────
 // MatrixCell — populated cell for a (product, channel, marketplace) tuple.
+// C.9 — drift surfacing always-on. Channel cell diffs against the row's
+// master reference for price, quantity, and title regardless of the
+// followMaster flags: a cell that *claims* to follow master but has a
+// stale value IS drift, and that's exactly the silent class of bug we
+// want to surface.
 // ────────────────────────────────────────────────────────────────────
 function MatrixCell({
   cell,
+  master,
   product,
   optimisticSyncing,
   onOpenDrawer,
   onSync,
 }: {
   cell: any
+  master: { title: string | null; price: number | null; quantity: number | null }
   product: { id: string; sku: string; name: string }
   optimisticSyncing: boolean
   onOpenDrawer: () => void
@@ -2107,15 +2151,24 @@ function MatrixCell({
     cell.lastSyncStatus === 'FAILED' ||
     cell.syncStatus === 'FAILED'
 
-  // Drift: cell follows master price BUT channel.price !== masterPrice.
-  // Subtle indicator; tooltip carries the delta.
-  const drift =
-    cell.followMasterPrice === false &&
-    cell.price != null &&
-    cell.masterPrice != null &&
-    cell.price !== cell.masterPrice
-      ? cell.price - cell.masterPrice
+  // Drift computations — independent of follow* flags. We compare the
+  // channel's effective value against the master reference and surface
+  // every divergence, leaving the operator to decide whether it's
+  // intentional or a sync bug.
+  const priceDrift =
+    cell.price != null && master.price != null && cell.price !== master.price
+      ? cell.price - master.price
       : null
+  const qtyDrift =
+    cell.quantity != null &&
+    master.quantity != null &&
+    cell.quantity !== master.quantity
+      ? cell.quantity - master.quantity
+      : null
+  const titleDrift =
+    cell.title != null &&
+    master.title != null &&
+    cell.title.trim() !== master.title.trim()
 
   const tone =
     cell.listingStatus === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
@@ -2128,36 +2181,68 @@ function MatrixCell({
     `${cell.channel} ${cell.marketplace}`,
     cell.listingStatus,
     cell.price != null ? `price ${cell.price.toFixed(2)}` : null,
+    priceDrift != null
+      ? `${priceDrift > 0 ? '+' : ''}${priceDrift.toFixed(2)} vs master`
+      : null,
     cell.quantity != null ? `${cell.quantity} units` : null,
+    qtyDrift != null ? `${qtyDrift > 0 ? '+' : ''}${qtyDrift} vs master` : null,
+    titleDrift ? 'title differs from master' : null,
     cell.lastSyncedAt ? `synced ${formatRelative(new Date(cell.lastSyncedAt).getTime())}` : 'never synced',
     cell.lastSyncError ? `error: ${cell.lastSyncError.slice(0, 80)}` : null,
   ].filter(Boolean).join(', ')
 
+  // C.9 — two-column tooltip. Master vs channel side-by-side with
+  // delta annotations, replacing the prior single-column dump. Reads
+  // the same way the matrix row does (master on left, channel on
+  // right) so operator's mental model maps cleanly.
   const tooltipContent = (
-    <div className="space-y-1.5 max-w-[260px]">
+    <div className="space-y-2 max-w-[320px]">
       <div className="font-semibold">{cell.channel} · {cell.marketplace}</div>
-      <div className="text-xs">
-        Status: {cell.listingStatus}
-        {cell.lastSyncStatus && ` · Sync: ${cell.lastSyncStatus}`}
-      </div>
-      {cell.price != null && (
-        <div className="text-xs">
-          Price: {cell.price.toFixed(2)}
-          {drift != null && (
-            <span className={drift > 0 ? 'text-emerald-300' : 'text-rose-300'}>
-              {' '}({drift > 0 ? '+' : ''}{drift.toFixed(2)} vs master)
+      <div className="grid grid-cols-[auto_1fr_1fr] gap-x-2 gap-y-1 text-xs">
+        <div className="text-slate-400 uppercase tracking-wider"></div>
+        <div className="text-slate-300 font-semibold uppercase tracking-wider">Master</div>
+        <div className="text-slate-300 font-semibold uppercase tracking-wider">Channel</div>
+
+        <div className="text-slate-400">Price</div>
+        <div className="tabular-nums">{master.price != null ? master.price.toFixed(2) : '—'}</div>
+        <div className="tabular-nums">
+          {cell.price != null ? cell.price.toFixed(2) : '—'}
+          {priceDrift != null && (
+            <span className={priceDrift > 0 ? ' text-emerald-300' : ' text-rose-300'}>
+              {' '}({priceDrift > 0 ? '+' : ''}{priceDrift.toFixed(2)})
             </span>
           )}
         </div>
-      )}
-      {cell.quantity != null && <div className="text-xs">Stock: {cell.quantity} units</div>}
-      <div className="text-xs">
+
+        <div className="text-slate-400">Stock</div>
+        <div className="tabular-nums">{master.quantity ?? '—'}</div>
+        <div className="tabular-nums">
+          {cell.quantity ?? '—'}
+          {qtyDrift != null && (
+            <span className={qtyDrift > 0 ? ' text-slate-300' : ' text-rose-300'}>
+              {' '}({qtyDrift > 0 ? '+' : ''}{qtyDrift})
+            </span>
+          )}
+        </div>
+
+        <div className="text-slate-400">Title</div>
+        <div className="truncate">{master.title ?? '—'}</div>
+        <div className="truncate">
+          {cell.title ?? '—'}
+          {titleDrift && <span className="text-amber-300"> ⚠</span>}
+        </div>
+      </div>
+      <div className="text-xs text-slate-300 border-t border-slate-700 pt-1.5">
+        Status: {cell.listingStatus}
+        {cell.lastSyncStatus && ` · Sync: ${cell.lastSyncStatus}`}
+      </div>
+      <div className="text-xs text-slate-300">
         {cell.lastSyncedAt
           ? `Last synced ${formatRelative(new Date(cell.lastSyncedAt).getTime())}`
           : 'Never synced'}
       </div>
       {cell.lastSyncError && (
-        <div className="text-xs text-rose-300 border-t border-slate-700 pt-1.5 mt-1.5">
+        <div className="text-xs text-rose-300 border-t border-slate-700 pt-1.5">
           {cell.lastSyncError}
         </div>
       )}
@@ -2166,7 +2251,7 @@ function MatrixCell({
 
   return (
     <Tooltip content={tooltipContent} delay={400}>
-      <div className="group relative inline-block min-w-[100px]">
+      <div className="group relative inline-block min-w-[100px] group-hover/row:ring-1 group-hover/row:ring-blue-200 group-hover/row:rounded">
         <button
           type="button"
           onClick={onOpenDrawer}
@@ -2184,17 +2269,25 @@ function MatrixCell({
             <SyncDot status={syncStatus} hasError={hasError} />
           </div>
           {cell.price != null && (
-            <div className="tabular-nums text-sm mt-0.5 flex items-center gap-1">
-              {cell.price.toFixed(2)}
-              {drift != null && (
-                <span className={drift > 0 ? 'text-emerald-600' : 'text-rose-600'} aria-hidden>
-                  {drift > 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                </span>
-              )}
+            <div className="tabular-nums text-sm mt-0.5 flex items-center gap-1 flex-wrap">
+              <span>{cell.price.toFixed(2)}</span>
+              {priceDrift != null && <DriftBadge delta={priceDrift} unit="price" />}
             </div>
           )}
           {cell.quantity != null && (
-            <div className="tabular-nums text-xs opacity-70">{cell.quantity} pcs</div>
+            <div className="tabular-nums text-xs flex items-center gap-1 flex-wrap">
+              <span className="opacity-70">{cell.quantity} pcs</span>
+              {qtyDrift != null && <DriftBadge delta={qtyDrift} unit="qty" />}
+            </div>
+          )}
+          {titleDrift && (
+            <div
+              className="text-xs mt-0.5 inline-flex items-center gap-1 px-1 rounded bg-amber-50 border border-amber-200 text-amber-700"
+              title={`Channel title differs from master: "${cell.title}"`}
+              aria-label="Title differs from master"
+            >
+              ⚠ T
+            </div>
           )}
           {cell.lastSyncError && (
             <div className="text-xs text-rose-600 mt-0.5 truncate" title={cell.lastSyncError}>
@@ -2217,6 +2310,100 @@ function MatrixCell({
         />
       </div>
     </Tooltip>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────
+// MasterCell — leftmost reference cell in each matrix row. C.9.
+// Shows master price + qty + truncated title with a distinct slate
+// background so it never reads as a channel cell. Anchors the
+// row-as-comparison reading model: every cell to the right is
+// implicitly diff'd against this.
+// ────────────────────────────────────────────────────────────────────
+function MasterCell({
+  master,
+}: {
+  master: { title: string | null; price: number | null; quantity: number | null }
+}) {
+  const truncatedTitle =
+    master.title && master.title.length > 24
+      ? master.title.slice(0, 24) + '…'
+      : master.title
+  const tooltipContent = (
+    <div className="space-y-1 max-w-[280px]">
+      <div className="font-semibold">Master reference</div>
+      {master.title && <div className="text-xs">Title: {master.title}</div>}
+      {master.price != null && (
+        <div className="text-xs tabular-nums">Price: {master.price.toFixed(2)}</div>
+      )}
+      {master.quantity != null && (
+        <div className="text-xs tabular-nums">Stock: {master.quantity} pcs</div>
+      )}
+      <div className="text-xs text-slate-300 border-t border-slate-700 pt-1">
+        Channel cells in this row diff against these values.
+      </div>
+    </div>
+  )
+  return (
+    <Tooltip content={tooltipContent} delay={400}>
+      <div
+        className="block w-full text-left px-1.5 py-1 border border-slate-300 rounded text-xs bg-white text-slate-700 min-w-[100px]"
+        aria-label={`Master reference price ${master.price?.toFixed(2) ?? 'unset'}, stock ${master.quantity ?? 'unset'}`}
+      >
+        <div className="flex items-center justify-between gap-1.5">
+          <div className="font-semibold uppercase tracking-wider truncate text-slate-500">
+            Master
+          </div>
+        </div>
+        {master.price != null && (
+          <div className="tabular-nums text-sm mt-0.5 font-semibold">
+            {master.price.toFixed(2)}
+          </div>
+        )}
+        {master.quantity != null && (
+          <div className="tabular-nums text-xs opacity-70">{master.quantity} pcs</div>
+        )}
+        {truncatedTitle && (
+          <div className="text-xs text-slate-500 mt-0.5 truncate" title={master.title ?? undefined}>
+            {truncatedTitle}
+          </div>
+        )}
+      </div>
+    </Tooltip>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────
+// DriftBadge — tiny coloured delta annotation. C.9.
+// Renders alongside the cell's price or quantity. unit='price' uses
+// red-when-below-master (margin risk) and green-when-above; unit='qty'
+// uses red-when-below (drift toward stockout) and slate-when-above
+// (overstock isn't usually urgent). Always carries a text label —
+// colour-only signalling fails a11y.
+// ────────────────────────────────────────────────────────────────────
+function DriftBadge({ delta, unit }: { delta: number; unit: 'price' | 'qty' }) {
+  const sign = delta > 0 ? '+' : ''
+  const formatted = unit === 'price' ? delta.toFixed(2) : String(delta)
+  const tone =
+    unit === 'price'
+      ? delta > 0
+        ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+        : 'text-rose-700 bg-rose-50 border-rose-200'
+      : delta > 0
+        ? 'text-slate-600 bg-slate-50 border-slate-200'
+        : 'text-rose-700 bg-rose-50 border-rose-200'
+  const ariaText =
+    unit === 'price'
+      ? `${delta > 0 ? 'above' : 'below'} master by ${formatted.replace('-', '')}`
+      : `${delta > 0 ? 'above' : 'below'} master by ${Math.abs(delta)} units`
+  return (
+    <span
+      className={`inline-flex items-center px-1 rounded border text-xs tabular-nums ${tone}`}
+      aria-label={ariaText}
+    >
+      {sign}
+      {formatted}
+    </span>
   )
 }
 
