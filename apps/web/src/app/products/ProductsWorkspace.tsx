@@ -883,9 +883,13 @@ export default function ProductsWorkspace() {
                 error={!!productsError}
               />
             ) : (
-              <button onClick={() => fetchProducts()} className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
-                <RefreshCw size={12} /> Refresh
-              </button>
+              <Button
+                variant="secondary"
+                onClick={() => fetchProducts()}
+                icon={<RefreshCw size={12} />}
+              >
+                Refresh
+              </Button>
             )}
           </div>
         }
@@ -1719,9 +1723,13 @@ function SavedViewsButton({ open, setOpen, views, onApply, onSaveCurrent, onDele
 
   return (
     <div className="relative" ref={ref}>
-      <button onClick={() => setOpen(!open)} className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
-        <Bookmark size={12} /> Views <ChevronDown size={12} />
-      </button>
+      <Button
+        variant="secondary"
+        onClick={() => setOpen(!open)}
+        icon={<Bookmark size={12} />}
+      >
+        Views <ChevronDown size={12} />
+      </Button>
       {open && (
         <div className="absolute right-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-md shadow-lg z-20 p-2">
           {!saveMode ? (
@@ -1766,16 +1774,47 @@ function SavedViewsButton({ open, setOpen, views, onApply, onSaveCurrent, onDele
                           <span className="text-xs font-semibold tabular-nums">{alertCount}</span>
                         )}
                       </button>
-                      <button onClick={() => onSetDefault(v.id)} title="Set as default" aria-label={`Set "${v.name}" as default view`} className="h-6 w-6 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-400 hover:text-amber-500"><Star size={12} /></button>
-                      <button onClick={async () => { if (await askConfirm({ title: `Delete view "${v.name}"?`, description: 'This view + its alerts will be removed permanently.', confirmLabel: 'Delete', tone: 'danger' })) onDelete(v.id) }} title="Delete" aria-label={`Delete saved view "${v.name}"`} className="h-6 w-6 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-400 hover:text-rose-600"><Trash2 size={12} /></button>
+                      <IconButton
+                        onClick={() => onSetDefault(v.id)}
+                        title="Set as default"
+                        aria-label={`Set "${v.name}" as default view`}
+                        size="sm"
+                        className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 text-slate-400 hover:text-amber-500"
+                      >
+                        <Star size={12} />
+                      </IconButton>
+                      <IconButton
+                        onClick={async () => {
+                          if (
+                            await askConfirm({
+                              title: `Delete view "${v.name}"?`,
+                              description: 'This view + its alerts will be removed permanently.',
+                              confirmLabel: 'Delete',
+                              tone: 'danger',
+                            })
+                          ) {
+                            onDelete(v.id)
+                          }
+                        }}
+                        title="Delete"
+                        aria-label={`Delete saved view "${v.name}"`}
+                        size="sm"
+                        className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 text-slate-400 hover:text-rose-600"
+                      >
+                        <Trash2 size={12} />
+                      </IconButton>
                     </li>
                     )
                   })}
                 </ul>
               )}
-              <button onClick={() => setSaveMode(true)} className="w-full mt-1 h-8 px-2 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center justify-center gap-1.5">
-                <BookmarkPlus size={12} /> Save current view
-              </button>
+              <Button
+                onClick={() => setSaveMode(true)}
+                className="w-full mt-1 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                icon={<BookmarkPlus size={12} />}
+              >
+                Save current view
+              </Button>
             </>
           ) : (
             <div className="space-y-2">
@@ -1793,15 +1832,31 @@ function SavedViewsButton({ open, setOpen, views, onApply, onSaveCurrent, onDele
                 Use as default on page load
               </label>
               <div className="flex items-center gap-2">
-                <button
+                <Button
                   onClick={async () => {
                     if (!name.trim()) return
                     const ok = await onSaveCurrent(name.trim(), isDefault)
-                    if (ok) { setSaveMode(false); setName(''); setIsDefault(false); setOpen(false) }
+                    if (ok) {
+                      setSaveMode(false)
+                      setName('')
+                      setIsDefault(false)
+                      setOpen(false)
+                    }
                   }}
-                  className="flex-1 h-8 text-base bg-slate-900 text-white rounded-md hover:bg-slate-800"
-                >Save</button>
-                <button onClick={() => { setSaveMode(false); setName('') }} className="flex-1 h-8 text-base border border-slate-200 rounded-md hover:bg-slate-50">Cancel</button>
+                  className="flex-1 bg-slate-900 text-white border-slate-900 hover:bg-slate-800"
+                >
+                  Save
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setSaveMode(false)
+                    setName('')
+                  }}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
               </div>
             </div>
           )}
