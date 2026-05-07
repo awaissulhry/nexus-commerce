@@ -204,7 +204,7 @@ export default function BundleEditor({
                       <li key={i} className="flex items-center gap-2 px-2 py-1 bg-slate-50 rounded">
                         <span className="text-base font-mono flex-1 truncate">{c.sku}</span>
                         <input type="number" min="1" value={c.quantity} onChange={(e) => setDraft({ ...draft, components: draft.components.map((cc, j) => j === i ? { ...cc, quantity: Number(e.target.value) || 1 } : cc) })} className="w-16 h-7 px-1 text-right tabular-nums border border-slate-200 rounded text-base" />
-                        <button onClick={() => setDraft({ ...draft, components: draft.components.filter((_, j) => j !== i) })} className="text-rose-600"><X size={12} /></button>
+                        <button onClick={() => setDraft({ ...draft, components: draft.components.filter((_, j) => j !== i) })} aria-label={`Remove ${c.sku} from bundle`} className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-rose-600"><X size={12} /></button>
                       </li>
                     ))}
                   </ul>

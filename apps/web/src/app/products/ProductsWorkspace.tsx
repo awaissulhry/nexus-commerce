@@ -3594,7 +3594,7 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
               {t.name}
             </span>
           ))}
-          <button onClick={() => onTagEdit(p.id)} className="h-4 w-4 inline-flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded text-xs">+</button>
+          <button onClick={() => onTagEdit(p.id)} aria-label="Edit tags" title="Edit tags" className="h-4 w-4 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded text-xs">+</button>
         </div>
       )
     case 'photos': {
