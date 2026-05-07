@@ -445,7 +445,15 @@ export default function AppSidebar() {
             href="/fulfillment/outbound"
             icon={PackageOpen}
             label="Outbound Shipments"
-            active={pathname === '/fulfillment/outbound'}
+            // O.22: same pending-orders count drives both the Orders
+            // entry and the Outbound entry — pending-orders == orders
+            // that need a shipment created. Operators expect the same
+            // number to appear in both places.
+            count={counts.operations?.pendingOrders}
+            indicator={
+              (counts.operations?.pendingOrders ?? 0) > 0 ? 'action' : undefined
+            }
+            active={pathname === '/fulfillment/outbound' || pathname.startsWith('/fulfillment/outbound/')}
           />
           <NavItem
             href="/fulfillment/replenishment"
