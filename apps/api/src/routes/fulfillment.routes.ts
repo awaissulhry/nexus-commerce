@@ -1041,6 +1041,102 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── O.18: Customs preflight ────────────────────────────────────────
+  // For international shipments, surfaces what will be declared on the
+  // commercial invoice (HS codes, origin countries, declared values)
+  // and flags issues that would cause carrier rejection (missing HS,
+  // missing origin). Shopify/Sendcloud generate the actual customs
+  // form server-side — this preflight is the operator-visible review
+  // that catches gaps before the print-label round-trip.
+  const EU_COUNTRIES = new Set([
+    'AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU',
+    'IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE',
+  ])
+  fastify.get('/fulfillment/shipments/:id/customs-preflight', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const shipment = await prisma.shipment.findUnique({
+        where: { id },
+        include: {
+          order: {
+            include: {
+              items: {
+                include: {
+                  product: {
+                    select: { sku: true, hsCode: true, countryOfOrigin: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      })
+      if (!shipment) return reply.code(404).send({ error: 'Shipment not found' })
+      if (!shipment.order) return reply.code(400).send({ error: 'Shipment has no order' })
+
+      const ship = shipment.order.shippingAddress as any
+      const destCountry = (ship?.CountryCode ?? ship?.countryCode ?? ship?.country ?? '')
+        .toString()
+        .toUpperCase()
+      // Italy → other EU = no customs declaration needed; Italy → non-EU
+      // (or anywhere outside Italy when warehouse country ≠ destination)
+      // is "international" for customs purposes. v0 assumes Riccione
+      // (Italy) as the warehouse; future multi-warehouse support
+      // computes this against shipment.warehouse.country.
+      const isIntraEU = EU_COUNTRIES.has(destCountry)
+      const isInternational = !isIntraEU
+
+      const lines = shipment.order.items.map((it) => ({
+        sku: it.sku,
+        productSku: it.product?.sku ?? null,
+        quantity: it.quantity,
+        unitPrice: Number(it.price),
+        totalValue: Number(it.price) * it.quantity,
+        hsCode: it.product?.hsCode ?? null,
+        originCountry: it.product?.countryOfOrigin ?? null,
+      }))
+
+      const issues: Array<{ sku: string; severity: 'error' | 'warning'; code: string; message: string }> = []
+      if (isInternational) {
+        for (const l of lines) {
+          if (!l.hsCode) {
+            issues.push({
+              sku: l.sku,
+              severity: 'error',
+              code: 'HS_CODE_MISSING',
+              message: `${l.sku} has no HS code — carrier will reject international shipment`,
+            })
+          }
+          if (!l.originCountry) {
+            issues.push({
+              sku: l.sku,
+              severity: 'warning',
+              code: 'ORIGIN_COUNTRY_MISSING',
+              message: `${l.sku} has no country of origin — defaults may be misapplied`,
+            })
+          }
+        }
+      }
+
+      const totalValue = lines.reduce((sum, l) => sum + l.totalValue, 0)
+
+      return {
+        shipmentId: id,
+        destinationCountry: destCountry || null,
+        isInternational,
+        isIntraEU,
+        currency: shipment.order.currencyCode ?? 'EUR',
+        totalValue,
+        lines,
+        issues,
+        ready: isInternational ? !issues.some((i) => i.severity === 'error') : true,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[customs-preflight] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // O.13: pack station — capture weight + dimensions + scan-verify
   // result and transition the shipment from PICKED/READY_TO_PICK/DRAFT
   // to PACKED. The pack-station page (apps/web/src/app/fulfillment/

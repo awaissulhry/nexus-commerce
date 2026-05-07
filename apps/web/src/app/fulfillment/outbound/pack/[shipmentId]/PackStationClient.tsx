@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Package, CheckCircle2, AlertTriangle, Loader2, Scale } from 'lucide-react'
+import { ArrowLeft, Package, CheckCircle2, AlertTriangle, Loader2, Scale, Globe } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -35,6 +35,25 @@ interface ShipmentDetail {
   warehouse?: { code: string; name: string } | null
 }
 
+interface CustomsPreflight {
+  shipmentId: string
+  destinationCountry: string | null
+  isInternational: boolean
+  isIntraEU: boolean
+  currency: string
+  totalValue: number
+  lines: Array<{
+    sku: string
+    quantity: number
+    unitPrice: number
+    totalValue: number
+    hsCode: string | null
+    originCountry: string | null
+  }>
+  issues: Array<{ sku: string; severity: 'error' | 'warning'; code: string; message: string }>
+  ready: boolean
+}
+
 interface Props {
   shipmentId: string
 }
@@ -43,6 +62,7 @@ export default function PackStationClient({ shipmentId }: Props) {
   const router = useRouter()
   const { toast } = useToast()
   const [shipment, setShipment] = useState<ShipmentDetail | null>(null)
+  const [customs, setCustoms] = useState<CustomsPreflight | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -62,15 +82,18 @@ export default function PackStationClient({ shipmentId }: Props) {
   const fetchShipment = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/fulfillment/shipments/${shipmentId}`,
-        { cache: 'no-store' },
-      )
-      if (!res.ok) {
+      // O.18: parallel fetch — shipment + customs preflight. Customs
+      // returns 200 with isInternational:false when destination is
+      // intra-EU; the panel below renders only when isInternational.
+      const [shipRes, customsRes] = await Promise.all([
+        fetch(`${getBackendUrl()}/api/fulfillment/shipments/${shipmentId}`, { cache: 'no-store' }),
+        fetch(`${getBackendUrl()}/api/fulfillment/shipments/${shipmentId}/customs-preflight`, { cache: 'no-store' }),
+      ])
+      if (!shipRes.ok) {
         toast.error('Shipment not found')
         return
       }
-      const s: ShipmentDetail = await res.json()
+      const s: ShipmentDetail = await shipRes.json()
       setShipment(s)
       // Hydrate operator inputs from any prior pack state.
       if (s.weightGrams) setWeightGrams(String(s.weightGrams))
@@ -78,6 +101,7 @@ export default function PackStationClient({ shipmentId }: Props) {
       if (s.widthCm) setWidthCm(String(s.widthCm))
       if (s.heightCm) setHeightCm(String(s.heightCm))
       if (s.notes) setNotes(s.notes)
+      if (customsRes.ok) setCustoms(await customsRes.json())
     } finally {
       setLoading(false)
     }
@@ -293,6 +317,72 @@ export default function PackStationClient({ shipmentId }: Props) {
           )}
         </div>
       </Card>
+
+      {/* ── Customs review (international only) ─────────────────── */}
+      {customs?.isInternational && (
+        <Card>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
+              <Globe size={12} /> Customs review
+              <Badge variant={customs.ready ? 'success' : 'warning'} size="sm">
+                {customs.ready ? 'Ready' : 'Action required'}
+              </Badge>
+              <span className="ml-auto text-xs text-slate-500 font-normal normal-case tabular-nums">
+                Destination · {customs.destinationCountry ?? '—'} · Total{' '}
+                {new Intl.NumberFormat('it-IT', {
+                  style: 'currency',
+                  currency: customs.currency || 'EUR',
+                }).format(customs.totalValue)}
+              </span>
+            </div>
+            <div className="space-y-1">
+              {customs.lines.map((l) => {
+                const hasIssue = customs.issues.some((i) => i.sku === l.sku && i.severity === 'error')
+                return (
+                  <div
+                    key={l.sku}
+                    className={`flex items-center gap-3 px-3 py-1.5 border rounded text-sm ${
+                      hasIssue ? 'bg-rose-50 border-rose-200' : 'bg-white border-slate-200'
+                    }`}
+                  >
+                    <span className="font-mono text-slate-900 min-w-[120px]">{l.sku}</span>
+                    <span className={`tabular-nums ${l.hsCode ? 'text-slate-700' : 'text-rose-700 font-semibold'}`}>
+                      HS: {l.hsCode ?? 'MISSING'}
+                    </span>
+                    <span className={`text-slate-600 ${l.originCountry ? '' : 'text-amber-700'}`}>
+                      Origin: {l.originCountry ?? '—'}
+                    </span>
+                    <span className="ml-auto tabular-nums text-slate-700">
+                      ×{l.quantity} · {l.totalValue.toFixed(2)} {customs.currency}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+            {customs.issues.length > 0 && (
+              <div className="space-y-1">
+                {customs.issues.map((iss, i) => (
+                  <div
+                    key={i}
+                    className={`flex items-start gap-2 text-sm ${
+                      iss.severity === 'error' ? 'text-rose-700' : 'text-amber-700'
+                    }`}
+                  >
+                    <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
+                    <span>{iss.message}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {!customs.ready && (
+              <div className="text-sm text-slate-600 bg-slate-50 px-3 py-2 rounded border border-slate-200">
+                Set HS codes on the affected products before printing the label —
+                Sendcloud will reject otherwise.
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* ── Notes ────────────────────────────────────────────────── */}
       <Card>
