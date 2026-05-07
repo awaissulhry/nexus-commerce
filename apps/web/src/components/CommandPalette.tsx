@@ -38,7 +38,7 @@ interface Command {
   /** Comma-separated extra keywords for fuzzy matching, e.g. for
    *  "Refresh page" we want "reload" / "fetch" to also match. */
   keywords?: string
-  group: 'Recent' | 'On this page' | 'Navigation' | 'Catalog' | 'System' | 'Action' | 'Listings' | 'Shipments'
+  group: 'Recent' | 'On this page' | 'Navigation' | 'Catalog' | 'System' | 'Action' | 'Listings' | 'Shipments' | 'Pending orders'
   /** Either href (navigate) or run (callback). One must be set. */
   href?: string
   run?: (router: AppRouter) => void
@@ -238,29 +238,54 @@ export default function CommandPalette() {
     } | null
   }
   const [remoteShipments, setRemoteShipments] = useState<ShipmentHit[]>([])
+  // O.90 — remote pending-order search. O.62 covers shipments
+  // (anything that's been packed or in flight); pending orders
+  // (not yet shipped) were unsearchable from Cmd+K. Operators
+  // looking up a brand-new Amazon order from yesterday couldn't
+  // find it. Reuses the existing /outbound/pending-orders endpoint
+  // which already accepts q.search across channelOrderId / customer
+  // name / email / SKU.
+  type PendingOrderHit = {
+    id: string
+    channel: string
+    marketplace: string | null
+    channelOrderId: string
+    customerName: string
+    urgency: string
+    shipByDate: string | null
+    totalPrice: number
+    currencyCode: string | null
+  }
+  const [remotePending, setRemotePending] = useState<PendingOrderHit[]>([])
   useEffect(() => {
     if (!open) {
       setRemoteListings([])
       setRemoteShipments([])
+      setRemotePending([])
       return
     }
     const q = query.trim()
     if (q.length < 3) {
       setRemoteListings([])
       setRemoteShipments([])
+      setRemotePending([])
       return
     }
     const controller = new AbortController()
     const t = setTimeout(async () => {
       setRemoteLoading(true)
       try {
-        const [listingsRes, shipmentsRes] = await Promise.all([
+        const [listingsRes, shipmentsRes, pendingRes] = await Promise.all([
           fetch(
             `${getBackendUrl()}/api/listings?search=${encodeURIComponent(q)}&pageSize=8&sortBy=updatedAt&sortDir=desc`,
             { cache: 'no-store', signal: controller.signal },
           ).catch(() => null),
           fetch(
             `${getBackendUrl()}/api/fulfillment/shipments/search?q=${encodeURIComponent(q)}&limit=8`,
+            { cache: 'no-store', signal: controller.signal },
+          ).catch(() => null),
+          fetch(
+            `${getBackendUrl()}/api/fulfillment/outbound/pending-orders?search=${encodeURIComponent(q)}&pageSize=8`,
             { cache: 'no-store', signal: controller.signal },
           ).catch(() => null),
         ])
@@ -275,6 +300,12 @@ export default function CommandPalette() {
           setRemoteShipments(Array.isArray(data?.items) ? data.items : [])
         } else {
           setRemoteShipments([])
+        }
+        if (pendingRes?.ok) {
+          const data = await pendingRes.json()
+          setRemotePending(Array.isArray(data?.items) ? data.items : [])
+        } else {
+          setRemotePending([])
         }
       } catch {
         /* AbortError + network failures: silent — palette UX shouldn't crash. */
@@ -526,9 +557,30 @@ export default function CommandPalette() {
     [remoteShipments],
   )
 
+  // O.90 — wrap remote pending-order matches in Command shape. Each
+  // hit deep-links to /fulfillment/outbound?drawer={orderId} (same
+  // pattern as O.62's order-attached shipment hits) so the operator
+  // lands directly on the drawer for that order.
+  const remotePendingCommands = useMemo<Command[]>(
+    () =>
+      remotePending.map((o) => {
+        const channelTag = `${o.channel}${o.marketplace ? `:${o.marketplace}` : ''}`
+        const urgencyHint = o.urgency === 'OVERDUE' ? ' · OVERDUE' : o.urgency === 'TODAY' ? ' · ships today' : ''
+        return {
+          id: `pending-${o.id}`,
+          label: `${o.channelOrderId} · ${o.customerName}`,
+          icon: Package,
+          group: 'Pending orders' as const,
+          keywords: `${channelTag}${urgencyHint}`,
+          href: `/fulfillment/outbound?drawer=${o.id}`,
+        } as Command
+      }),
+    [remotePending],
+  )
+
   const pool = useMemo(
-    () => [...activePageCommands, ...remoteShipmentCommands, ...remoteListingCommands, ...COMMANDS],
-    [activePageCommands, remoteShipmentCommands, remoteListingCommands],
+    () => [...activePageCommands, ...remotePendingCommands, ...remoteShipmentCommands, ...remoteListingCommands, ...COMMANDS],
+    [activePageCommands, remotePendingCommands, remoteShipmentCommands, remoteListingCommands],
   )
 
   // U.11 — fuzzy-ish match: query has to appear in label OR keywords
@@ -549,6 +601,10 @@ export default function CommandPalette() {
   // of results when remote matches are available.
   const GROUP_ORDER: Command['group'][] = [
     'On this page',
+    // O.90: Pending orders sit above Shipments because a freshly-
+    // received order that hasn't been packed yet is the operator's
+    // most likely "where is X" lookup.
+    'Pending orders',
     'Shipments',
     'Listings',
     'Recent',
