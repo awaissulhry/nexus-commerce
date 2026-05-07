@@ -1,6 +1,5 @@
 import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
-import { randomUUID } from 'node:crypto'
 import { listEtag, matches } from '../utils/list-etag.js'
 
 // ─────────────────────────────────────────────────────────────────────
@@ -22,21 +21,24 @@ const ALLOWED_CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY']
 // In-memory bulk-job tracker. Multi-instance deploys would need Redis,
 // but the existing bulk-publish-to-ebay route is BullMQ-gated and we're
 // matching its current scope.
-type BulkJob = {
-  id: string
+// S.0.5 / H-5 — bulk-job state lives on the BulkActionJob table.
+// Earlier audit caught the in-memory Map approach: it lost every job
+// on API restart and went non-atomic across replicas. Now we write a
+// BulkActionJob row on enqueue and update it as the worker progresses.
+// The GET endpoint reads from DB, so polling clients see consistent
+// state regardless of which API instance handles the request.
+//
+// actionType is hardcoded 'LISTING_BULK_ACTION' so this surface stays
+// distinguishable from /bulk-operations rows in the same table (which
+// use PRICING_UPDATE / STATUS_UPDATE / etc.). Saves writing a separate
+// table while keeping query partitioning easy.
+const LISTING_BULK_ACTION_TYPE = 'LISTING_BULK_ACTION'
+
+interface ListingBulkActionPayload {
   action: string
-  channel?: string
-  marketplace?: string
-  total: number
-  processed: number
-  succeeded: number
-  failed: number
-  errors: Array<{ listingId: string; reason: string }>
-  status: 'QUEUED' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'
-  createdAt: number
-  updatedAt: number
+  listingIds: string[]
+  payload?: any
 }
-const BULK_JOBS = new Map<string, BulkJob>()
 
 function csvParam(v: unknown): string[] | undefined {
   if (typeof v !== 'string' || v.length === 0 || v === 'ALL') return undefined
@@ -284,16 +286,98 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
 
   // ─────────────────────────────────────────────────────────────────
   // GET /api/listings/facets — counts to drive filter chips
+  //
+  // S.0.5 / M-1 — accepts the same filter params as /api/listings.
+  // Without this, facet counts went stale once any filter was applied
+  // (you'd filter to AMAZON and the Status chip would still show counts
+  // from all channels). Each facet groupBy now applies the same `where`
+  // clause as the list endpoint. The status / syncStatus / channel /
+  // marketplace facet for the dimension being grouped on is itself
+  // excluded from the where so the chip can show "5 ACTIVE in this
+  // filtered set" without zeroing itself out — i.e. the marketplace
+  // chip respects the channel filter, the status chip respects channel
+  // + marketplace, etc. This matches how Linear / Stripe / Notion do
+  // facets: each chip is the count given everything *except* its own
+  // dimension.
   // ─────────────────────────────────────────────────────────────────
-  fastify.get('/listings/facets', async (_request, reply) => {
+  fastify.get('/listings/facets', async (request, reply) => {
     try {
+      const q = request.query as Record<string, string | undefined>
+      const channels = csvParam(q.channel)
+      const marketplaces = csvParam(q.marketplace)
+      const statuses = csvParam(q.listingStatus)
+      const syncStatuses = csvParam(q.syncStatus)
+      const hasError = q.hasError === 'true'
+      const lowStock = q.lowStock === 'true'
+      const isPublishedOnly = q.published === 'true'
+      const search = (q.search ?? '').trim()
+
+      // Build a `where` for each facet that excludes the dimension being
+      // grouped on. That way the channel chip shows "AMAZON: 8" even
+      // when the user has already selected AMAZON — instead of "0" which
+      // would make the chip un-deselectable.
+      const buildWhere = (excludeDim?: 'channel' | 'marketplace' | 'listingStatus' | 'syncStatus'): any => {
+        const where: any = {}
+        if (channels && channels.length > 0 && excludeDim !== 'channel') {
+          where.channel = { in: channels }
+        }
+        if (marketplaces && marketplaces.length > 0 && excludeDim !== 'marketplace') {
+          where.marketplace = { in: marketplaces }
+        }
+        if (statuses && statuses.length > 0 && excludeDim !== 'listingStatus') {
+          where.listingStatus = { in: statuses }
+        }
+        if (syncStatuses && syncStatuses.length > 0 && excludeDim !== 'syncStatus') {
+          where.syncStatus = { in: syncStatuses }
+        }
+        if (hasError) {
+          where.OR = [
+            { listingStatus: 'ERROR' },
+            { lastSyncStatus: 'FAILED' },
+            { syncStatus: 'FAILED' },
+          ]
+        }
+        if (lowStock) {
+          where.AND = [
+            ...(where.AND ?? []),
+            { quantity: { gt: 0 } },
+            { quantity: { lte: 5 } },
+          ]
+        }
+        if (isPublishedOnly) {
+          where.isPublished = true
+        }
+        if (search) {
+          where.OR = [
+            ...(where.OR ?? []),
+            { product: { sku: { contains: search, mode: 'insensitive' } } },
+            { product: { name: { contains: search, mode: 'insensitive' } } },
+            { product: { amazonAsin: { contains: search, mode: 'insensitive' } } },
+            { externalListingId: { contains: search, mode: 'insensitive' } },
+            { title: { contains: search, mode: 'insensitive' } },
+          ]
+        }
+        return where
+      }
+
+      const totalWhere = buildWhere()
       const [byChannel, byMarketplace, byStatus, bySyncStatus, errorCount, total] = await Promise.all([
-        prisma.channelListing.groupBy({ by: ['channel'], _count: true }),
-        prisma.channelListing.groupBy({ by: ['channel', 'marketplace'], _count: true }),
-        prisma.channelListing.groupBy({ by: ['listingStatus'], _count: true }),
-        prisma.channelListing.groupBy({ by: ['syncStatus'], _count: true }),
-        prisma.channelListing.count({ where: { OR: [{ listingStatus: 'ERROR' }, { lastSyncStatus: 'FAILED' }, { syncStatus: 'FAILED' }] } }),
-        prisma.channelListing.count(),
+        prisma.channelListing.groupBy({ by: ['channel'], where: buildWhere('channel'), _count: true }),
+        prisma.channelListing.groupBy({ by: ['channel', 'marketplace'], where: buildWhere('marketplace'), _count: true }),
+        prisma.channelListing.groupBy({ by: ['listingStatus'], where: buildWhere('listingStatus'), _count: true }),
+        prisma.channelListing.groupBy({ by: ['syncStatus'], where: buildWhere('syncStatus'), _count: true }),
+        prisma.channelListing.count({
+          where: {
+            ...totalWhere,
+            OR: [
+              ...(totalWhere.OR ?? []),
+              { listingStatus: 'ERROR' },
+              { lastSyncStatus: 'FAILED' },
+              { syncStatus: 'FAILED' },
+            ],
+          },
+        }),
+        prisma.channelListing.count({ where: totalWhere }),
       ])
 
       return {
@@ -767,25 +851,60 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         return reply.code(400).send({ error: `Invalid action. Allowed: ${validActions.join(', ')}` })
       }
 
-      const jobId = randomUUID()
-      const job: BulkJob = {
-        id: jobId,
-        action,
-        total: ids.length,
-        processed: 0,
-        succeeded: 0,
-        failed: 0,
-        errors: [],
-        status: 'QUEUED',
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
+      // Validate action-specific payload BEFORE creating the job row so
+      // a malformed request doesn't leave a half-baked job in the DB.
+      if (action === 'set-price') {
+        const p = Number(body.payload?.price)
+        if (!Number.isFinite(p) || p < 0) {
+          return reply.code(400).send({ error: 'payload.price must be a non-negative number' })
+        }
       }
-      BULK_JOBS.set(jobId, job)
+      if (action === 'set-pricing-rule') {
+        const rule = String(body.payload?.pricingRule ?? '').toUpperCase()
+        if (!['FIXED', 'MATCH_AMAZON', 'PERCENT_OF_MASTER'].includes(rule)) {
+          return reply.code(400).send({ error: 'payload.pricingRule must be FIXED|MATCH_AMAZON|PERCENT_OF_MASTER' })
+        }
+      }
 
-      // Run async — do not block the response
+      const actionPayload: ListingBulkActionPayload = {
+        action,
+        listingIds: ids,
+        payload: body.payload,
+      }
+
+      // S.0.5 / H-5 — persist to BulkActionJob. The targetProductIds
+      // column is repurposed as targetListingIds here (column type is
+      // String[] either way; per-route semantics carried in actionType).
+      const job = await prisma.bulkActionJob.create({
+        data: {
+          jobName: `Listings: ${action} (${ids.length})`,
+          actionType: LISTING_BULK_ACTION_TYPE,
+          targetProductIds: ids, // listingIds stored here for /listings actionType
+          targetVariationIds: [],
+          actionPayload: actionPayload as any,
+          status: 'QUEUED',
+          totalItems: ids.length,
+          processedItems: 0,
+          failedItems: 0,
+          skippedItems: 0,
+          progressPercent: 0,
+          isRollbackable: false, // Phase J of /bulk-operations adds rollback; not in scope here
+        },
+      })
+      const jobId = job.id
+
+      // Run async — do not block the response. Worker updates the DB
+      // row as it progresses; clients poll GET /api/listings/bulk-action/:jobId.
       ;(async () => {
-        job.status = 'IN_PROGRESS'
-        job.updatedAt = Date.now()
+        await prisma.bulkActionJob.update({
+          where: { id: jobId },
+          data: { status: 'IN_PROGRESS', startedAt: new Date() },
+        })
+
+        let succeeded = 0
+        let failed = 0
+        const errors: Array<{ listingId: string; reason: string }> = []
+
         for (const id of ids) {
           try {
             const data: any = {}
@@ -799,9 +918,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
                 data.lastSyncError = null
                 break
               case 'set-price': {
-                const p = Number(body.payload?.price)
-                if (!Number.isFinite(p) || p < 0) throw new Error('payload.price must be a non-negative number')
-                data.price = p
+                data.price = Number(body.payload?.price)
                 data.followMasterPrice = false
                 break
               }
@@ -823,9 +940,6 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
                 break
               case 'set-pricing-rule': {
                 const rule = String(body.payload?.pricingRule ?? '').toUpperCase()
-                if (!['FIXED', 'MATCH_AMAZON', 'PERCENT_OF_MASTER'].includes(rule)) {
-                  throw new Error('payload.pricingRule must be FIXED|MATCH_AMAZON|PERCENT_OF_MASTER')
-                }
                 data.pricingRule = rule
                 if (rule === 'PERCENT_OF_MASTER') {
                   const pct = Number(body.payload?.priceAdjustmentPercent)
@@ -836,19 +950,60 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
             }
             data.version = { increment: 1 }
             await prisma.channelListing.update({ where: { id }, data })
-            job.succeeded += 1
+            succeeded += 1
           } catch (err: any) {
-            job.failed += 1
-            job.errors.push({ listingId: id, reason: err?.message ?? String(err) })
+            failed += 1
+            errors.push({ listingId: id, reason: err?.message ?? String(err) })
           }
-          job.processed += 1
-          job.updatedAt = Date.now()
+
+          // Flush progress to DB. Per-listing flush is fine at the
+          // current scale (max 1000 items, each <10ms); revisit if real
+          // volume forces batched flushing.
+          const processedTotal = succeeded + failed
+          await prisma.bulkActionJob
+            .update({
+              where: { id: jobId },
+              data: {
+                processedItems: succeeded,
+                failedItems: failed,
+                progressPercent: Math.floor((processedTotal / ids.length) * 100),
+                errorLog: errors as any,
+                lastError: errors.length > 0 ? errors[errors.length - 1].reason : null,
+              },
+            })
+            .catch((e) => {
+              // A flush failure shouldn't kill the worker — log and continue.
+              fastify.log.warn({ err: e, jobId }, '[listings/bulk-action] progress flush failed')
+            })
         }
-        job.status = job.failed === 0 ? 'COMPLETED' : (job.succeeded === 0 ? 'FAILED' : 'COMPLETED')
-        job.updatedAt = Date.now()
-      })().catch((e) => {
-        fastify.log.error({ err: e }, '[listings/bulk-action] worker crashed')
-        job.status = 'FAILED'
+
+        const finalStatus =
+          failed === 0
+            ? 'COMPLETED'
+            : succeeded === 0
+              ? 'FAILED'
+              : 'PARTIALLY_COMPLETED'
+
+        await prisma.bulkActionJob.update({
+          where: { id: jobId },
+          data: {
+            status: finalStatus,
+            completedAt: new Date(),
+            progressPercent: 100,
+          },
+        })
+      })().catch(async (e) => {
+        fastify.log.error({ err: e, jobId }, '[listings/bulk-action] worker crashed')
+        await prisma.bulkActionJob
+          .update({
+            where: { id: jobId },
+            data: {
+              status: 'FAILED',
+              lastError: e?.message ?? String(e),
+              completedAt: new Date(),
+            },
+          })
+          .catch(() => {})
       })
 
       return reply.code(202).send({ jobId, status: 'QUEUED', total: ids.length })
@@ -860,8 +1015,34 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
 
   fastify.get('/listings/bulk-action/:jobId', async (request, reply) => {
     const { jobId } = request.params as { jobId: string }
-    const job = BULK_JOBS.get(jobId)
-    if (!job) return reply.code(404).send({ error: 'Job not found' })
-    return job
+    const job = await prisma.bulkActionJob.findUnique({ where: { id: jobId } })
+    if (!job || job.actionType !== LISTING_BULK_ACTION_TYPE) {
+      return reply.code(404).send({ error: 'Job not found' })
+    }
+
+    // Adapt the BulkActionJob row to the legacy in-memory shape the
+    // existing /listings client polls for. Keeps the frontend
+    // unchanged across the H-5 migration. actionPayload is Prisma
+    // JsonValue so we cast through unknown — runtime shape is enforced
+    // by the writer at job creation time (this route is the only source
+    // of LISTING_BULK_ACTION rows).
+    const payload =
+      (job.actionPayload as unknown as ListingBulkActionPayload | null) ?? {
+        action: 'unknown',
+        listingIds: [],
+      }
+    const errorLog = Array.isArray(job.errorLog) ? job.errorLog : []
+    return {
+      id: job.id,
+      action: payload.action,
+      total: job.totalItems,
+      processed: job.processedItems + job.failedItems,
+      succeeded: job.processedItems,
+      failed: job.failedItems,
+      errors: errorLog,
+      status: job.status,
+      createdAt: job.createdAt.getTime(),
+      updatedAt: job.updatedAt.getTime(),
+    }
   })
 }

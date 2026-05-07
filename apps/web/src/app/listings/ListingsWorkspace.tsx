@@ -18,6 +18,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
@@ -26,7 +27,6 @@ import {
   useInvalidationChannel,
 } from '@/lib/sync/invalidation-channel'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
-import { useToast } from '@/components/ui/Toast'
 
 // ── Types ───────────────────────────────────────────────────────────
 type Lens = 'grid' | 'health' | 'matrix' | 'drafts'
@@ -291,12 +291,32 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
   const [facets, setFacets] = useState<Facets | null>(null)
   const [marketplaces, setMarketplaces] = useState<Marketplace[]>([])
 
+  // S.0.5 / M-1 — facets URL carries the current filters. With the
+  // backend now applying them as a shared `where`, this gives chips
+  // contextual counts (e.g. once you filter to AMAZON, the Status chip
+  // shows "ACTIVE: 5 · DRAFT: 3" within Amazon, not the whole catalog).
+  // The URL changes whenever any filter changes, which re-fires
+  // fetchFacets via the effect below.
+  const facetsUrl = useMemo(() => {
+    const qs = new URLSearchParams()
+    for (const c of channelFilters) qs.append('channel', c)
+    for (const m of marketplaceFilters) qs.append('marketplace', m)
+    for (const s of statusFilters) qs.append('listingStatus', s)
+    for (const s of syncStatusFilters) qs.append('syncStatus', s)
+    if (hasError) qs.set('hasError', 'true')
+    if (lowStock) qs.set('lowStock', 'true')
+    if (publishedOnly) qs.set('published', 'true')
+    if (search) qs.set('search', search)
+    const q = qs.toString()
+    return `/api/listings/facets${q ? `?${q}` : ''}`
+  }, [channelFilters, marketplaceFilters, statusFilters, syncStatusFilters, hasError, lowStock, publishedOnly, search])
+
   const fetchFacets = useCallback(async () => {
     try {
-      const res = await fetch(`${getBackendUrl()}/api/listings/facets`, { cache: 'no-store' })
+      const res = await fetch(`${getBackendUrl()}${facetsUrl}`, { cache: 'no-store' })
       if (res.ok) setFacets(await res.json())
     } catch {}
-  }, [])
+  }, [facetsUrl])
 
   const fetchMarketplaces = useCallback(async () => {
     try {
@@ -305,10 +325,10 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
     } catch {}
   }, [])
 
-  useEffect(() => {
-    fetchFacets()
-    fetchMarketplaces()
-  }, [fetchFacets, fetchMarketplaces])
+  // Refetch facets whenever the URL changes (i.e. any filter changes).
+  // Marketplaces are static reference data; load once.
+  useEffect(() => { fetchFacets() }, [fetchFacets])
+  useEffect(() => { fetchMarketplaces() }, [fetchMarketplaces])
 
   // Phase 10 — when something else changes data we render (a product
   // edit on /products, a bulk-action on /bulk-operations, a wizard
@@ -1063,9 +1083,9 @@ function Pagination({ page, totalPages, onPage }: { page: number; totalPages: nu
 // BulkActionBar
 // ────────────────────────────────────────────────────────────────────
 function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: string[]; onClear: () => void; onComplete: () => void }) {
-  const { toast } = useToast()
   const [busy, setBusy] = useState(false)
   const [jobStatus, setJobStatus] = useState<string | null>(null)
+  const [setPriceOpen, setSetPriceOpen] = useState(false)
 
   const runAction = async (action: string, payload?: any) => {
     setBusy(true)
@@ -1080,18 +1100,36 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
       const jobId = data.jobId
       setJobStatus('Processing…')
 
-      // Poll
+      // Poll. S.0.5 / M-10 — track whether we exited via a terminal
+      // status vs. the 60-second cap; the latter used to silently leave
+      // the prior "Processing N/M…" or "Done" string on screen, even
+      // when the worker was still running. Now we surface an honest
+      // "did not complete in 60s" so the operator knows where to look.
       const start = Date.now()
+      let reachedTerminal = false
+      let lastJob: { processed: number; total: number; succeeded: number; failed: number; status: string } | null = null
       while (Date.now() - start < 60_000) {
         await new Promise((r) => setTimeout(r, 600))
         const j = await fetch(`${getBackendUrl()}/api/listings/bulk-action/${jobId}`)
         if (!j.ok) break
         const job = await j.json()
+        lastJob = job
         setJobStatus(`Processing ${job.processed}/${job.total}…`)
-        if (job.status === 'COMPLETED' || job.status === 'FAILED') {
+        if (
+          job.status === 'COMPLETED' ||
+          job.status === 'FAILED' ||
+          job.status === 'PARTIALLY_COMPLETED'
+        ) {
+          reachedTerminal = true
           setJobStatus(`Done — ${job.succeeded} succeeded, ${job.failed} failed`)
           break
         }
+      }
+      if (!reachedTerminal) {
+        const progress = lastJob
+          ? `${lastJob.processed}/${lastJob.total} processed`
+          : 'no progress visible'
+        setJobStatus(`Job did not complete in 60s — still running (${progress}). Check back shortly.`)
       }
       // Phase 10 — broadcast so other open pages refresh. Bulk listing
       // actions (publish, unpublish, resync, set-price, follow-master)
@@ -1133,13 +1171,7 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
           <button onClick={() => runAction('unpublish')} disabled={busy} className="h-7 px-3 text-base bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-50 inline-flex items-center gap-1.5"><EyeOff size={12} /> Unpublish</button>
           <button onClick={() => runAction('resync')} disabled={busy} className="h-7 px-3 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 disabled:opacity-50 inline-flex items-center gap-1.5"><RefreshCw size={12} /> Resync</button>
           <button
-            onClick={() => {
-              const v = window.prompt('Set price for selected listings (number)')
-              if (!v) return
-              const n = Number(v)
-              if (!Number.isFinite(n) || n < 0) { toast.error('Invalid price'); return }
-              runAction('set-price', { price: n })
-            }}
+            onClick={() => setSetPriceOpen(true)}
             disabled={busy}
             className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
           ><Tag size={12} /> Set price</button>
@@ -1151,7 +1183,125 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
           </button>
         </div>
       </Card>
+      <SetPriceModal
+        open={setPriceOpen}
+        count={selectedIds.length}
+        onClose={() => setSetPriceOpen(false)}
+        onConfirm={(price) => {
+          setSetPriceOpen(false)
+          runAction('set-price', { price })
+        }}
+      />
     </div>
+  )
+}
+
+// S.0.5 / M-3 — Set Price modal replaces the previous window.prompt
+// flow. Uses the canonical Modal primitive (focus trap, Esc, click-
+// outside) and validates the input live so users can't submit a
+// negative or non-numeric value. The "this unfollows master" warning
+// surfaces the side effect that the bulk-action endpoint applies
+// silently — operators noticed it the hard way before.
+function SetPriceModal({
+  open,
+  count,
+  onClose,
+  onConfirm,
+}: {
+  open: boolean
+  count: number
+  onClose: () => void
+  onConfirm: (price: number) => void
+}) {
+  const [value, setValue] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  // Reset whenever the modal is reopened so a stale value from a
+  // previous session doesn't pre-fill.
+  useEffect(() => {
+    if (open) {
+      setValue('')
+      setError(null)
+    }
+  }, [open])
+
+  const submit = () => {
+    const trimmed = value.trim()
+    if (!trimmed) {
+      setError('Enter a price.')
+      return
+    }
+    const n = Number(trimmed)
+    if (!Number.isFinite(n)) {
+      setError('Price must be a number.')
+      return
+    }
+    if (n < 0) {
+      setError('Price cannot be negative.')
+      return
+    }
+    onConfirm(n)
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Set price"
+      description={`Apply to ${count} selected listing${count === 1 ? '' : 's'}.`}
+      size="md"
+    >
+      <ModalBody>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1">
+              Price
+            </label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={value}
+              onChange={(e) => {
+                setValue(e.target.value)
+                if (error) setError(null)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  submit()
+                }
+              }}
+              placeholder="e.g. 99.00"
+              autoFocus
+            />
+            {error && (
+              <div className="text-sm text-rose-600 mt-1.5">{error}</div>
+            )}
+          </div>
+          <div className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-md p-2.5">
+            <strong className="text-slate-700">Heads up:</strong> setting a
+            price unfollows the master price for these listings — they
+            won&apos;t auto-update from the catalog basePrice anymore. Use
+            &quot;Follow master&quot; to re-link later.
+          </div>
+        </div>
+      </ModalBody>
+      <ModalFooter>
+        <button
+          onClick={onClose}
+          className="h-8 px-3 text-base text-slate-700 border border-slate-200 rounded hover:bg-slate-50"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={submit}
+          className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5"
+        >
+          <Tag size={12} /> Apply price
+        </button>
+      </ModalFooter>
+    </Modal>
   )
 }
 
@@ -1159,21 +1309,29 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
 // HealthLens
 // ────────────────────────────────────────────────────────────────────
 function HealthLens({ lockChannel, onOpenDrawer }: { lockChannel?: string; onOpenDrawer: (id: string) => void }) {
-  const [data, setData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-
-  const fetchHealth = useCallback(async () => {
-    setLoading(true)
-    try {
-      const qs = lockChannel ? `?channel=${lockChannel}` : ''
-      const res = await fetch(`${getBackendUrl()}/api/listings/health${qs}`, { cache: 'no-store' })
-      if (res.ok) setData(await res.json())
-    } finally { setLoading(false) }
+  // S.0.5 / H-4 — usePolledList replaces the prior `useEffect(() =>
+  // fetchHealth(), [fetchHealth])` 1-shot fetch. Brings 30s polling,
+  // visibility/focus refresh, and cross-tab invalidation listening for
+  // free. Earlier audit caught operators returning to the tab after
+  // working elsewhere and seeing stale health rollup; this fixes that.
+  const url = useMemo(() => {
+    const qs = lockChannel ? `?channel=${lockChannel}` : ''
+    return `/api/listings/health${qs}`
   }, [lockChannel])
+  const { data, loading, error } = usePolledList<any>({
+    url,
+    intervalMs: 30_000,
+    invalidationTypes: [
+      'listing.updated',
+      'listing.created',
+      'listing.deleted',
+      'bulk-job.completed',
+      'wizard.submitted',
+    ],
+  })
 
-  useEffect(() => { fetchHealth() }, [fetchHealth])
-
-  if (loading) return <Card><div className="text-md text-slate-500 py-8 text-center">Loading health…</div></Card>
+  if (loading && !data) return <Card><div className="text-md text-slate-500 py-8 text-center">Loading health…</div></Card>
+  if (error && !data) return <Card><div className="text-md text-rose-600 py-8 text-center">Failed to load health rollup: {error}</div></Card>
   if (!data) return <Card><div className="text-md text-rose-600 py-8 text-center">Failed to load health rollup.</div></Card>
 
   const allClear = data.errorCount === 0 && data.failedSyncCount === 0 && data.suppressedCount === 0
@@ -1267,22 +1425,28 @@ function HealthStat({ icon: Icon, tone, label, value }: { icon: any; tone: 'dang
 // MatrixLens
 // ────────────────────────────────────────────────────────────────────
 function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marketplace[] }) {
-  const [data, setData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    (async () => {
-      setLoading(true)
-      try {
-        const qs = new URLSearchParams({ limit: '50' })
-        if (lockChannel) qs.set('channels', lockChannel)
-        const res = await fetch(`${getBackendUrl()}/api/listings/matrix?${qs.toString()}`, { cache: 'no-store' })
-        if (res.ok) setData(await res.json())
-      } finally { setLoading(false) }
-    })()
+  // S.0.5 / H-4 — usePolledList migration; same pattern as HealthLens.
+  const url = useMemo(() => {
+    const qs = new URLSearchParams({ limit: '50' })
+    if (lockChannel) qs.set('channels', lockChannel)
+    return `/api/listings/matrix?${qs.toString()}`
   }, [lockChannel])
+  const { data, loading, error } = usePolledList<any>({
+    url,
+    intervalMs: 30_000,
+    invalidationTypes: [
+      'listing.updated',
+      'listing.created',
+      'listing.deleted',
+      'bulk-job.completed',
+      'wizard.submitted',
+      'product.updated',
+      'product.deleted',
+    ],
+  })
 
-  if (loading) return <Card><div className="text-md text-slate-500 py-8 text-center">Loading matrix…</div></Card>
+  if (loading && !data) return <Card><div className="text-md text-slate-500 py-8 text-center">Loading matrix…</div></Card>
+  if (error && !data) return <Card><div className="text-md text-rose-600 py-8 text-center">Failed to load matrix: {error}</div></Card>
   if (!data || !data.products?.length) return <EmptyState icon={LayoutGrid} title="Nothing to show" description="No products available." />
 
   // Compute distinct (channel, marketplace) columns from the data
@@ -1359,21 +1523,30 @@ function MatrixCell({ cell }: { cell: any }) {
 // DraftsLens
 // ────────────────────────────────────────────────────────────────────
 function DraftsLens({ lockChannel, lockMarketplace, search }: { lockChannel?: string; lockMarketplace?: string; search: string; marketplaces: Marketplace[] }) {
-  const [data, setData] = useState<any>(null)
-  const [loading, setLoading] = useState(false)
   const [activeChannel, setActiveChannel] = useState<string>(lockChannel ?? 'AMAZON')
 
-  useEffect(() => {
-    if (!activeChannel) return
-    setLoading(true)
+  // S.0.5 / H-4 — usePolledList migration. Drafts also listens for
+  // wizard.submitted so when a wizard publish flips a draft to live the
+  // count drops in this tab without waiting for the polling tick.
+  const url = useMemo(() => {
+    if (!activeChannel) return null
     const qs = new URLSearchParams({ channel: activeChannel })
     if (lockMarketplace) qs.set('marketplace', lockMarketplace)
     if (search) qs.set('search', search)
-    fetch(`${getBackendUrl()}/api/listings/drafts?${qs.toString()}`, { cache: 'no-store' })
-      .then((r) => r.json())
-      .then(setData)
-      .finally(() => setLoading(false))
+    return `/api/listings/drafts?${qs.toString()}`
   }, [activeChannel, lockMarketplace, search])
+  const { data, loading } = usePolledList<any>({
+    url,
+    intervalMs: 30_000,
+    invalidationTypes: [
+      'listing.updated',
+      'listing.created',
+      'listing.deleted',
+      'bulk-job.completed',
+      'wizard.submitted',
+      'wizard.deleted',
+    ],
+  })
 
   return (
     <div className="space-y-3">
@@ -1449,97 +1622,126 @@ function DraftsLens({ lockChannel, lockMarketplace, search }: { lockChannel?: st
 function ListingDrawer({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
   const [listing, setListing] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [resyncing, setResyncing] = useState(false)
 
-  useEffect(() => {
+  // S.0.5 / M-9 — drawer fetch now has a real .catch and surfaces an
+  // error state in the body. Previously a network failure left the
+  // drawer in "Loading…" forever.
+  const loadListing = useCallback(async () => {
     setLoading(true)
-    fetch(`${getBackendUrl()}/api/listings/${id}`, { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((data) => setListing(data))
-      .finally(() => setLoading(false))
+    setError(null)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/listings/${id}`, { cache: 'no-store' })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      setListing(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLoading(false)
+    }
   }, [id])
+
+  useEffect(() => {
+    loadListing()
+  }, [loadListing])
 
   const resync = async () => {
     setResyncing(true)
     try {
       await fetch(`${getBackendUrl()}/api/listings/${id}/resync`, { method: 'POST' })
       onChanged()
+      // Refresh local listing with the post-resync values so the drawer
+      // reflects new sync status without waiting for the parent grid
+      // refetch + reopen.
+      await loadListing()
     } finally { setResyncing(false) }
   }
 
+  // S.0.5 / M-4 — Modal primitive replaces the hand-rolled `fixed inset-0`
+  // overlay. Brings focus trap, aria-modal=true, Escape key, click-outside,
+  // and body-scroll-lock for free. drawer-right placement matches the
+  // previous side-panel UX exactly.
   return (
-    <div className="fixed inset-0 z-30 flex justify-end" onClick={onClose}>
-      <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px]" />
-      <aside
-        onClick={(e) => e.stopPropagation()}
-        className="relative h-full w-full max-w-lg bg-white shadow-2xl overflow-y-auto"
-      >
-        <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white">
-          <div className="text-md font-semibold text-slate-900">Listing detail</div>
-          <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100">
-            <X size={16} />
-          </button>
-        </header>
-        <div className="p-5 space-y-4">
-          {loading || !listing ? (
-            <div className="text-base text-slate-500">Loading…</div>
-          ) : (
-            <>
-              <div className="flex items-start gap-3">
-                {listing.product?.images?.[0] && <img src={listing.product.images[0]} alt="" className="w-16 h-16 rounded-md object-cover bg-slate-100" />}
-                <div className="min-w-0 flex-1">
-                  <div className="text-lg font-semibold text-slate-900">{listing.product?.name}</div>
-                  <div className="text-sm text-slate-500 font-mono">{listing.product?.sku}</div>
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[listing.channel] ?? ''}`}>{listing.channel}</span>
-                    <span className="font-mono text-sm font-semibold bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">{listing.marketplace}</span>
-                    <Badge variant={STATUS_VARIANT[listing.listingStatus] ?? 'default'} size="sm">{listing.listingStatus}</Badge>
-                  </div>
+    <Modal
+      open={true}
+      onClose={onClose}
+      title="Listing detail"
+      placement="drawer-right"
+    >
+      <ModalBody>
+        {loading ? (
+          <div className="text-base text-slate-500">Loading…</div>
+        ) : error ? (
+          <div className="bg-rose-50 border border-rose-200 rounded-md p-3 space-y-2">
+            <div className="text-sm font-semibold uppercase tracking-wider text-rose-700">Failed to load listing</div>
+            <div className="text-base text-rose-700">{error}</div>
+            <button
+              onClick={loadListing}
+              className="h-8 px-3 text-base bg-white text-rose-700 border border-rose-300 rounded hover:bg-rose-50 inline-flex items-center gap-1.5"
+            >
+              <RefreshCw size={12} /> Retry
+            </button>
+          </div>
+        ) : !listing ? (
+          <div className="text-base text-slate-500">Listing not found.</div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-start gap-3">
+              {listing.product?.images?.[0] && <img src={listing.product.images[0]} alt="" className="w-16 h-16 rounded-md object-cover bg-slate-100" />}
+              <div className="min-w-0 flex-1">
+                <div className="text-lg font-semibold text-slate-900">{listing.product?.name}</div>
+                <div className="text-sm text-slate-500 font-mono">{listing.product?.sku}</div>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[listing.channel] ?? ''}`}>{listing.channel}</span>
+                  <span className="font-mono text-sm font-semibold bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">{listing.marketplace}</span>
+                  <Badge variant={STATUS_VARIANT[listing.listingStatus] ?? 'default'} size="sm">{listing.listingStatus}</Badge>
                 </div>
               </div>
+            </div>
 
-              {listing.lastSyncError && (
-                <div className="bg-rose-50 border border-rose-200 rounded-md p-3">
-                  <div className="text-sm font-semibold uppercase tracking-wider text-rose-700 mb-1">Last sync error</div>
-                  <div className="text-base text-rose-700">{listing.lastSyncError}</div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <Detail label="Price" value={listing.price != null ? `${listing.product?.basePrice ?? ''} ${Number(listing.price).toFixed(2)}` : '—'} />
-                <Detail label="Quantity" value={listing.quantity ?? '—'} />
-                <Detail label="Sync status" value={listing.syncStatus ?? '—'} />
-                <Detail label="Last sync" value={listing.lastSyncedAt ? new Date(listing.lastSyncedAt).toLocaleString() : 'Never'} />
-                <Detail label="Pricing rule" value={listing.pricingRule ?? '—'} />
-                <Detail label="Retry count" value={listing.syncRetryCount} />
-                {listing.externalListingId && <Detail label="External ID" value={listing.externalListingId} />}
-                <Detail label="Published" value={listing.isPublished ? 'Yes' : 'No'} />
+            {listing.lastSyncError && (
+              <div className="bg-rose-50 border border-rose-200 rounded-md p-3">
+                <div className="text-sm font-semibold uppercase tracking-wider text-rose-700 mb-1">Last sync error</div>
+                <div className="text-base text-rose-700">{listing.lastSyncError}</div>
               </div>
+            )}
 
-              {listing.listingUrl && (
-                <a href={listing.listingUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-base text-blue-600 hover:underline">
-                  Open on {listing.channel.charAt(0) + listing.channel.slice(1).toLowerCase()} <ExternalLink size={12} />
-                </a>
-              )}
+            <div className="grid grid-cols-2 gap-3">
+              <Detail label="Price" value={listing.price != null ? `${listing.product?.basePrice ?? ''} ${Number(listing.price).toFixed(2)}` : '—'} />
+              <Detail label="Quantity" value={listing.quantity ?? '—'} />
+              <Detail label="Sync status" value={listing.syncStatus ?? '—'} />
+              <Detail label="Last sync" value={listing.lastSyncedAt ? new Date(listing.lastSyncedAt).toLocaleString() : 'Never'} />
+              <Detail label="Pricing rule" value={listing.pricingRule ?? '—'} />
+              <Detail label="Retry count" value={listing.syncRetryCount} />
+              {listing.externalListingId && <Detail label="External ID" value={listing.externalListingId} />}
+              <Detail label="Published" value={listing.isPublished ? 'Yes' : 'No'} />
+            </div>
 
-              <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
-                <button
-                  onClick={resync}
-                  disabled={resyncing}
-                  className="h-8 px-3 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 disabled:opacity-50 inline-flex items-center gap-1.5"
-                >
-                  <RefreshCw size={12} className={resyncing ? 'animate-spin' : ''} /> Resync from channel
-                </button>
-                <Link
-                  href={`/products/${listing.productId}/edit?channel=${listing.channel}&marketplace=${listing.marketplace}`}
-                  className="h-8 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
-                ><ArrowUpRight size={12} /> Open in editor</Link>
-              </div>
-            </>
-          )}
-        </div>
-      </aside>
-    </div>
+            {listing.listingUrl && (
+              <a href={listing.listingUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-base text-blue-600 hover:underline">
+                Open on {listing.channel.charAt(0) + listing.channel.slice(1).toLowerCase()} <ExternalLink size={12} />
+              </a>
+            )}
+
+            <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+              <button
+                onClick={resync}
+                disabled={resyncing}
+                className="h-8 px-3 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 disabled:opacity-50 inline-flex items-center gap-1.5"
+              >
+                <RefreshCw size={12} className={resyncing ? 'animate-spin' : ''} /> Resync from channel
+              </button>
+              <Link
+                href={`/products/${listing.productId}/edit?channel=${listing.channel}&marketplace=${listing.marketplace}`}
+                className="h-8 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+              ><ArrowUpRight size={12} /> Open in editor</Link>
+            </div>
+          </div>
+        )}
+      </ModalBody>
+    </Modal>
   )
 }
 
