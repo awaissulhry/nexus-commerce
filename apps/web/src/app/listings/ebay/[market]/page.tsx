@@ -1,5 +1,5 @@
 import { COUNTRY_NAMES } from '@/lib/country-names'
-import ListingsWorkspace from '../../ListingsWorkspace'
+import EbayListingsClient from '../EbayListingsClient'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -13,8 +13,7 @@ export default async function EbayMarketPage({
   const code = market.toUpperCase()
   const label = COUNTRY_NAMES[code] ?? code
   return (
-    <ListingsWorkspace
-      lockChannel="EBAY"
+    <EbayListingsClient
       lockMarketplace={code}
       breadcrumbs={[
         { label: 'Listings', href: '/listings' },

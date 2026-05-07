@@ -1260,6 +1260,130 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
     }
   })
 
+  // GET /api/listings/ebay/overview — eBay-specific aggregates
+  //
+  // C.15 — powers the EbayListingsClient header. Mirror of the Amazon
+  // overview, but reads eBay-specific aggregates: latest watcher /
+  // hit / question counts from EbayWatcherStats, active markdown count
+  // from EbayMarkdown, active campaign count from EbayCampaign.
+  //
+  // Scoped to a single eBay marketplace (IT/DE/ES/FR/UK) when
+  // ?marketplace=EBAY_IT is present, or to all eBay marketplaces
+  // aggregated when omitted.
+  fastify.get('/listings/ebay/overview', async (request, reply) => {
+    try {
+      const q = request.query as Record<string, string | undefined>
+      const marketplace = (q.marketplace ?? '').trim()
+
+      // ChannelListing.marketplace stores the country code (IT/DE/...)
+      // for eBay too — same convention as Amazon. The full
+      // EBAY_IT-style marketplaceId only lives in EbayCampaign /
+      // EbayMarkdown payloads. Keep the WHERE clause simple by
+      // accepting either form.
+      const cleanMarket = marketplace.replace(/^EBAY_/, '')
+      const where: any = { channel: 'EBAY' }
+      if (cleanMarket) where.marketplace = cleanMarket
+
+      const [
+        total,
+        live,
+        draft,
+        error,
+        listings,
+        marketplaceBreakdown,
+      ] = await Promise.all([
+        prisma.channelListing.count({ where }),
+        prisma.channelListing.count({ where: { ...where, listingStatus: 'ACTIVE' } }),
+        prisma.channelListing.count({ where: { ...where, listingStatus: 'DRAFT' } }),
+        prisma.channelListing.count({ where: { ...where, listingStatus: 'ERROR' } }),
+        prisma.channelListing.findMany({
+          where,
+          select: {
+            id: true,
+            // C.14 — latest watcher snapshot per listing. We pull all
+            // snapshots and reduce to the most recent on the server
+            // because the volume per listing is bounded by the cron
+            // cadence (one row/hour cap by design).
+            ebayWatcherStats: {
+              orderBy: { snapshotAt: 'desc' },
+              take: 1,
+              select: { watcherCount: true, hitCount: true, questionCount: true, snapshotAt: true },
+            },
+            // Active markdowns on this listing right now
+            ebayMarkdowns: {
+              where: { status: 'ACTIVE' },
+              select: { id: true },
+              take: 1,
+            },
+          },
+        }),
+        // Per-marketplace breakdown (unfiltered — tab strip badges).
+        prisma.channelListing.groupBy({
+          by: ['marketplace'],
+          where: { channel: 'EBAY' },
+          _count: true,
+        }),
+      ])
+
+      // Watcher / hit / question rollups — only over listings that
+      // have at least one snapshot.
+      const withStats = listings.filter((l) => l.ebayWatcherStats.length > 0)
+      const totalWatchers = withStats.reduce(
+        (acc, l) => acc + (l.ebayWatcherStats[0]?.watcherCount ?? 0),
+        0,
+      )
+      const totalHits = withStats.reduce(
+        (acc, l) => acc + (l.ebayWatcherStats[0]?.hitCount ?? 0),
+        0,
+      )
+      const totalQuestions = withStats.reduce(
+        (acc, l) => acc + (l.ebayWatcherStats[0]?.questionCount ?? 0),
+        0,
+      )
+      const avgWatchers = withStats.length === 0 ? null : totalWatchers / withStats.length
+
+      const listingsWithActiveMarkdown = listings.filter(
+        (l) => l.ebayMarkdowns.length > 0,
+      ).length
+
+      // Active campaigns scoped to this marketplace (or all marketplaces
+      // when no filter). EbayCampaign.marketplace stores the full
+      // EBAY_IT-style id; convert from the country code if needed.
+      const ebayMarketId = cleanMarket ? `EBAY_${cleanMarket}` : null
+      const activeCampaigns = await prisma.ebayCampaign.count({
+        where: {
+          status: 'RUNNING',
+          ...(ebayMarketId ? { marketplace: ebayMarketId } : {}),
+        },
+      })
+
+      return {
+        marketplace: cleanMarket || null,
+        counts: { total, live, draft, error },
+        engagement: {
+          coverage: total === 0 ? 0 : Math.round((withStats.length / total) * 100),
+          avgWatchers,
+          totalWatchers,
+          totalHits,
+          totalQuestions,
+        },
+        markdowns: {
+          activeListingCount: listingsWithActiveMarkdown,
+        },
+        campaigns: {
+          activeCount: activeCampaigns,
+        },
+        marketplaceBreakdown: marketplaceBreakdown.map((b) => ({
+          marketplace: b.marketplace,
+          count: b._count,
+        })),
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[listings/ebay/overview] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // ─────────────────────────────────────────────────────────────────
   // POST /api/listings/amazon/suppressions — manually log a suppression
   //
