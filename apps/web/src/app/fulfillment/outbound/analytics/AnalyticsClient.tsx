@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import {
-  Truck, Clock, AlertTriangle, TrendingUp, RefreshCw, DollarSign, Lightbulb,
+  Truck, Clock, AlertTriangle, TrendingUp, RefreshCw, DollarSign, Lightbulb, Users,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -28,6 +28,12 @@ interface Analytics {
     lateRate: number | null
   }>
   byChannel: Record<string, number>
+  byPicker: Array<{
+    operator: string
+    count: number
+    medianCycleMinutes: number | null
+    samples: number
+  }>
   trend: Array<{ date: string; ships: number }>
   insights: Array<{
     kind: 'cost' | 'reliability'
@@ -290,6 +296,52 @@ export default function AnalyticsClient() {
               </tbody>
             </table>
           </Card>
+
+          {/* O.56: Picker performance leaderboard. Renders only when
+              packedBy data exists — fresh installs without operator
+              attribution skip the section. */}
+          {data.byPicker && data.byPicker.length > 0 && (
+            <Card noPadding>
+              <table className="w-full text-md">
+                <thead className="border-b border-slate-200 bg-slate-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Users size={12} /> {t('analytics.picker.operator')}
+                      </span>
+                    </th>
+                    <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
+                      {t('analytics.picker.shipments')}
+                    </th>
+                    <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
+                      {t('analytics.picker.medianCycle')}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.byPicker.map((p, idx) => (
+                    <tr key={p.operator} className="border-b border-slate-100">
+                      <td className="px-3 py-2 text-base text-slate-900 font-medium">
+                        {idx === 0 && <span className="mr-1 text-amber-500">★</span>}
+                        {p.operator}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-base text-slate-700">{p.count}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-base text-slate-700">
+                        {p.medianCycleMinutes == null
+                          ? '—'
+                          : p.medianCycleMinutes < 60
+                          ? `${Math.round(p.medianCycleMinutes)}m`
+                          : `${(p.medianCycleMinutes / 60).toFixed(1)}h`}
+                        {p.samples > 0 && (
+                          <span className="ml-1 text-xs text-slate-400">({p.samples})</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          )}
 
           {/* Channel breakdown */}
           {totalChannelShips > 0 && (

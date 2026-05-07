@@ -107,6 +107,9 @@
   "analytics.col.avgCost": "Avg cost",
   "analytics.col.lateRate": "Late rate",
   "analytics.byChannel": "By channel",
+  "analytics.picker.operator": "Operator",
+  "analytics.picker.shipments": "Shipments",
+  "analytics.picker.medianCycle": "Median cycle",
   "analytics.insights.title": "Insights",
   "analytics.insights.subtitle": "Cost + reliability recommendations from current data",
 

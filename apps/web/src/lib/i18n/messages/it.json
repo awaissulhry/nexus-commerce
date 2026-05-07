@@ -78,6 +78,9 @@
   "analytics.col.avgCost": "Costo medio",
   "analytics.col.lateRate": "% ritardi",
   "analytics.byChannel": "Per canale",
+  "analytics.picker.operator": "Operatore",
+  "analytics.picker.shipments": "Spedizioni",
+  "analytics.picker.medianCycle": "Tempo mediano",
   "analytics.insights.title": "Suggerimenti",
   "analytics.insights.subtitle": "Raccomandazioni su costi e affidabilità dai dati attuali",
 

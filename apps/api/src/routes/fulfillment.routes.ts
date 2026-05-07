@@ -1520,6 +1520,13 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           shippedAt: true,
           deliveredAt: true,
           createdAt: true,
+          // O.56: picker performance source fields. pickedBy + packedBy
+          // are operator strings captured at the picked / packed
+          // transitions; createdAt → packedAt is the cycle the
+          // leaderboard ranks.
+          pickedBy: true,
+          packedBy: true,
+          packedAt: true,
           order: { select: { purchaseDate: true, shipByDate: true, channel: true, marketplace: true } },
         },
       })
@@ -1582,6 +1589,38 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         const d = new Date(Date.now() - i * 86_400_000).toISOString().slice(0, 10)
         trend.push({ date: d, ships: dailyShips[d] ?? 0 })
       }
+
+      // O.56: picker performance aggregation. For each non-null
+      // packedBy operator, accumulate count + cycle-time samples
+      // (createdAt → packedAt, in minutes). pickedBy is captured
+      // separately but currently most operators do pick + pack as
+      // one step, so packedBy is the dominant signal; merging both
+      // would double-count when they're the same person.
+      const byPicker: Record<string, { count: number; cycleMinutes: number[] }> = {}
+      for (const s of shipments) {
+        const who = s.packedBy ?? s.pickedBy
+        if (!who) continue
+        if (!byPicker[who]) byPicker[who] = { count: 0, cycleMinutes: [] }
+        byPicker[who].count++
+        if (s.packedAt) {
+          const cycle = (s.packedAt.getTime() - s.createdAt.getTime()) / 60_000
+          if (cycle > 0 && cycle < 24 * 60 * 7) {
+            // Cap at 7 days to filter out shipments held for special
+            // reasons that would skew medians.
+            byPicker[who].cycleMinutes.push(cycle)
+          }
+        }
+      }
+      const pickersOut = Object.entries(byPicker).map(([who, v]) => {
+        const sorted = [...v.cycleMinutes].sort((a, b) => a - b)
+        const median = sorted.length === 0 ? null : sorted[Math.floor(sorted.length / 2)]
+        return {
+          operator: who,
+          count: v.count,
+          medianCycleMinutes: median,
+          samples: sorted.length,
+        }
+      }).sort((a, b) => b.count - a.count)
 
       const carriersOut = Object.entries(byCarrier).map(([code, v]) => ({
         carrierCode: code,
@@ -1672,6 +1711,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         },
         byCarrier: carriersOut,
         byChannel,
+        byPicker: pickersOut,
         trend,
         insights,
       }
