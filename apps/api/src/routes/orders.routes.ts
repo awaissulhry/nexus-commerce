@@ -483,6 +483,70 @@ export async function ordersRoutes(app: FastifyInstance) {
         )
         const cleanup = await handleOrderCancelled(id)
 
+        // O.50: channel-side pushback — tell the marketplace we
+        // cancelled. dryRun-default per channel; real path gated by
+        // NEXUS_ENABLE_*_ORDER_CANCEL flags. Best-effort: a channel
+        // failure doesn't roll back the local cancellation (operator
+        // already chose to cancel; we just couldn't notify upstream
+        // automatically).
+        let channelAck: import('../services/order-cancellation/channel-cancel.js').ChannelCancelResult | null = null
+        if (existing.channel !== 'MANUAL' && existing.channelOrderId) {
+          const channelCancel = await import(
+            '../services/order-cancellation/channel-cancel.js'
+          )
+          try {
+            if (existing.channel === 'AMAZON') {
+              // Resolve marketplaceId from Order.marketplace
+              const fullOrder = await prisma.order.findUnique({
+                where: { id },
+                select: { marketplace: true },
+              })
+              const map: Record<string, string> = {
+                IT: 'APJ6JRA9NG5V4', DE: 'A1PA6795UKMFR9', FR: 'A13V1IB3VIYZZH',
+                ES: 'A1RKKUPIHCS9HS', UK: 'A1F83G8C2ARO7P', US: 'ATVPDKIKX0DER',
+              }
+              const mpId = map[fullOrder?.marketplace ?? 'IT'] ?? map.IT
+              channelAck = await channelCancel.cancelOnAmazon(
+                existing.channelOrderId,
+                reason,
+                [mpId],
+              )
+            } else if (existing.channel === 'EBAY') {
+              const conn = await (prisma as any).channelConnection.findFirst({
+                where: { channel: 'EBAY', isActive: true },
+                select: { id: true },
+              })
+              if (conn?.id) {
+                channelAck = await channelCancel.cancelOnEbay(
+                  existing.channelOrderId,
+                  reason,
+                  conn.id,
+                )
+              } else {
+                channelAck = {
+                  ok: false,
+                  channel: 'EBAY',
+                  channelOrderId: existing.channelOrderId,
+                  ackRef: null,
+                  dryRun: false,
+                  error: 'No active eBay connection',
+                }
+              }
+            } else if (existing.channel === 'SHOPIFY') {
+              channelAck = await channelCancel.cancelOnShopify(
+                existing.channelOrderId,
+                reason,
+              )
+            }
+          } catch (err: any) {
+            logger.warn('orders/:id/cancel channel pushback failed', {
+              orderId: id,
+              channel: existing.channel,
+              error: err?.message,
+            })
+          }
+        }
+
         // Operator-initiated audit row distinct from the auto-cancel
         // path (auto-cancel-from-order). Lets the audit-log surface
         // distinguish operator vs channel-driven cancellations.
@@ -493,15 +557,23 @@ export async function ordersRoutes(app: FastifyInstance) {
           action: 'manual-cancel',
           before: { status: existing.status },
           after: { status: 'CANCELLED' },
-          metadata: { reason, channel: existing.channel, ...cleanup },
+          metadata: { reason, channel: existing.channel, ...cleanup, channelAck },
         })
 
         return {
           order: updated,
           cleanup,
-          // True until the channel-pushback service ships. UI surfaces
-          // this as a "now go cancel on Amazon/eBay" reminder.
-          channelPushbackPending: existing.channel !== 'MANUAL',
+          // O.50: channelPushbackPending is now true only when the
+          // channel call failed OR the channel is MANUAL OR the
+          // channel push was dryRun (operator hasn't enabled real
+          // mode yet). Honest: operator only sees the "cancel on
+          // marketplace too" reminder when there's actually
+          // marketplace work left.
+          channelPushbackPending:
+            channelAck === null
+            || channelAck.dryRun
+            || !channelAck.ok,
+          channelAck,
           channel: existing.channel,
           channelOrderId: existing.channelOrderId,
         }
