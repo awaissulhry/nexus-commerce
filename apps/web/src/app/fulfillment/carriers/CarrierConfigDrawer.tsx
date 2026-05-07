@@ -64,7 +64,7 @@ interface Props {
   onChanged: () => void
 }
 
-type TabId = 'credentials' | 'services' | 'warehouses' | 'defaults' | 'rules' | 'performance' | 'webhooks'
+type TabId = 'credentials' | 'services' | 'warehouses' | 'defaults' | 'rules' | 'pickups' | 'performance' | 'webhooks'
 
 export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: Props) {
   const { t } = useTranslations()
@@ -228,6 +228,9 @@ export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: 
       list.push({ id: 'defaults', label: 'Defaults' })
       list.push({ id: 'rules', label: 'Rules' })
     }
+    if (def.code === 'SENDCLOUD') {
+      list.push({ id: 'pickups', label: 'Pickups' })
+    }
     list.push({ id: 'performance', label: 'Performance' })
     if (def.code === 'SENDCLOUD') {
       list.push({ id: 'webhooks', label: 'Webhooks' })
@@ -312,6 +315,9 @@ export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: 
           )}
           {activeTab === 'rules' && (
             <RulesTab carrierCode={def.code} />
+          )}
+          {activeTab === 'pickups' && def.code === 'SENDCLOUD' && (
+            <PickupsTab carrierCode={def.code} />
           )}
           {activeTab === 'performance' && (
             <PerformanceTab carrierCode={def.code} />
@@ -1198,6 +1204,267 @@ function Kpi({ label, value, hint }: { label: string; value: string; hint?: stri
       <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">{label}</div>
       <div className="text-lg font-semibold text-slate-900 dark:text-slate-100 mt-0.5">{value}</div>
       {hint && <div className="text-xs text-slate-500 dark:text-slate-400">{hint}</div>}
+    </div>
+  )
+}
+
+// ── Pickups tab ────────────────────────────────────────────────────
+// CR.16: PickupSchedule rows. List active + cancelled bookings; let
+// operator request a new one-time pickup (recurring lands when the
+// dispatch cron ships). One-time SENDCLOUD bookings hit Sendcloud
+// /pickups inline so the operator sees the externalRef in the round-
+// trip confirmation.
+type Pickup = {
+  id: string
+  warehouseId: string | null
+  isRecurring: boolean
+  daysOfWeek: number | null
+  scheduledFor: string | null
+  windowStart: string | null
+  windowEnd: string | null
+  contactName: string | null
+  contactPhone: string | null
+  notes: string | null
+  externalRef: string | null
+  status: string
+  lastDispatchAt: string | null
+  lastDispatchErr: string | null
+  createdAt: string
+}
+
+function PickupsTab({ carrierCode }: { carrierCode: string }) {
+  const { toast } = useToast()
+  const askConfirm = useConfirm()
+
+  const [pickups, setPickups] = useState<Pickup[]>([])
+  const [warehouses, setWarehouses] = useState<Array<{ id: string; code: string; name: string; isDefault: boolean }>>([])
+  const [loading, setLoading] = useState(true)
+  const [adding, setAdding] = useState(false)
+  const [busy, setBusy] = useState(false)
+  // Default scheduledFor = tomorrow (today already booked-up at most carriers).
+  const tomorrow = useMemo(() => {
+    const d = new Date()
+    d.setDate(d.getDate() + 1)
+    return d.toISOString().slice(0, 10)
+  }, [])
+  const [draft, setDraft] = useState({
+    warehouseId: '',
+    scheduledFor: tomorrow,
+    notes: '',
+  })
+
+  const fetchAll = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [pRes, wRes] = await Promise.all([
+        fetch(`${getBackendUrl()}/api/fulfillment/carriers/${carrierCode}/pickups`, { cache: 'no-store' }),
+        fetch(`${getBackendUrl()}/api/fulfillment/warehouses`, { cache: 'no-store' }),
+      ])
+      if (pRes.ok) setPickups((await pRes.json()).items ?? [])
+      if (wRes.ok) {
+        const w = await wRes.json()
+        setWarehouses(w.items ?? [])
+        // Auto-pick default warehouse on first render.
+        const def = (w.items ?? []).find((x: any) => x.isDefault) ?? (w.items ?? [])[0]
+        if (def && !draft.warehouseId) {
+          setDraft((prev) => ({ ...prev, warehouseId: def.id }))
+        }
+      }
+    } finally {
+      setLoading(false)
+    }
+  // draft.warehouseId intentionally omitted — only seed once on initial load.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carrierCode])
+
+  useEffect(() => { fetchAll() }, [fetchAll])
+
+  const requestPickup = async () => {
+    if (!draft.scheduledFor) {
+      toast.error('Pick a date')
+      return
+    }
+    setBusy(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/carriers/${carrierCode}/pickups`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            warehouseId: draft.warehouseId || null,
+            scheduledFor: new Date(draft.scheduledFor).toISOString(),
+            notes: draft.notes || null,
+            isRecurring: false,
+          }),
+        },
+      )
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error ?? 'Pickup request failed')
+      }
+      const body = await res.json().catch(() => ({}))
+      if (body.pickup?.lastDispatchErr) {
+        toast.error(`Carrier rejected: ${body.pickup.lastDispatchErr}`)
+      } else if (body.pickup?.externalRef) {
+        toast.success(`Pickup scheduled · ${body.pickup.externalRef}`)
+      } else {
+        toast.success('Pickup scheduled')
+      }
+      setAdding(false)
+      setDraft({ warehouseId: draft.warehouseId, scheduledFor: tomorrow, notes: '' })
+      fetchAll()
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const cancel = async (id: string) => {
+    const ok = await askConfirm({
+      title: 'Cancel this pickup?',
+      description: 'Sendcloud may still hold the slot until the day passes — this just stops Nexus from re-dispatching.',
+      confirmLabel: 'Cancel pickup',
+      tone: 'danger',
+    })
+    if (!ok) return
+    const res = await fetch(
+      `${getBackendUrl()}/api/fulfillment/carriers/${carrierCode}/pickups/${id}/cancel`,
+      { method: 'POST' },
+    )
+    if (res.ok) fetchAll()
+    else toast.error('Cancel failed')
+  }
+
+  if (loading) {
+    return <div className="text-base text-slate-500 dark:text-slate-400 py-2">Loading…</div>
+  }
+
+  const activePickups = pickups.filter((p) => p.status === 'ACTIVE')
+  const archivedPickups = pickups.filter((p) => p.status !== 'ACTIVE')
+
+  return (
+    <div className="space-y-4">
+      <p className="text-base text-slate-700 dark:text-slate-300">
+        Schedule a pickup with Sendcloud. One-time bookings dispatch inline; the carrier confirmation reference appears below.
+      </p>
+
+      {/* Active pickups */}
+      {activePickups.length === 0 ? (
+        <div className="text-base text-slate-500 dark:text-slate-400 italic py-2">
+          No active pickups.
+        </div>
+      ) : (
+        <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+          <table className="w-full text-base">
+            <thead className="bg-slate-50 dark:bg-slate-800 text-xs uppercase tracking-wider text-slate-600 dark:text-slate-300">
+              <tr>
+                <th className="text-left px-3 py-2 font-semibold">Date</th>
+                <th className="text-left px-3 py-2 font-semibold">Warehouse</th>
+                <th className="text-left px-3 py-2 font-semibold">Status</th>
+                <th className="text-left px-3 py-2 font-semibold">Ref</th>
+                <th className="px-3 py-2 w-10" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+              {activePickups.map((p) => {
+                const wh = warehouses.find((w) => w.id === p.warehouseId)
+                return (
+                  <tr key={p.id} className="text-slate-800 dark:text-slate-100">
+                    <td className="px-3 py-2 font-mono text-sm">
+                      {p.scheduledFor ? new Date(p.scheduledFor).toLocaleDateString() : '—'}
+                    </td>
+                    <td className="px-3 py-2">{wh?.code ?? '—'}</td>
+                    <td className="px-3 py-2">
+                      {p.lastDispatchErr
+                        ? <Badge variant="warning" size="sm">Failed</Badge>
+                        : p.externalRef
+                        ? <Badge variant="success" size="sm">Confirmed</Badge>
+                        : <Badge variant="default" size="sm">Pending</Badge>}
+                    </td>
+                    <td className="px-3 py-2 text-sm font-mono text-slate-500 dark:text-slate-400">
+                      {p.externalRef ?? '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        onClick={() => cancel(p.id)}
+                        className="p-1 rounded hover:bg-rose-50 dark:hover:bg-rose-900/30 text-rose-600 dark:text-rose-400"
+                        aria-label="Cancel pickup"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Add new */}
+      {adding ? (
+        <div className="space-y-2 p-3 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5 block">Warehouse</label>
+              <select
+                value={draft.warehouseId}
+                onChange={(e) => setDraft({ ...draft, warehouseId: e.target.value })}
+                className="h-9 w-full px-2 text-base border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+              >
+                <option value="">— integration default —</option>
+                {warehouses.map((w) => (
+                  <option key={w.id} value={w.id}>{w.code} — {w.name}{w.isDefault ? ' (default)' : ''}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5 block">Date</label>
+              <input
+                type="date"
+                value={draft.scheduledFor}
+                onChange={(e) => setDraft({ ...draft, scheduledFor: e.target.value })}
+                className="h-9 w-full px-2 text-base border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5 block">Notes</label>
+            <input
+              type="text"
+              value={draft.notes}
+              onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
+              placeholder="Driver instructions, gate code, etc."
+              className="h-9 w-full px-2 text-base border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="primary" size="sm" onClick={requestPickup} loading={busy}>Request pickup</Button>
+            <Button variant="ghost" size="sm" onClick={() => setAdding(false)}>Cancel</Button>
+          </div>
+        </div>
+      ) : (
+        <Button variant="secondary" size="sm" icon={<Plus size={11} />} onClick={() => setAdding(true)}>
+          Schedule pickup
+        </Button>
+      )}
+
+      {/* Archive */}
+      {archivedPickups.length > 0 && (
+        <details className="text-sm text-slate-500 dark:text-slate-400">
+          <summary className="cursor-pointer">Archived ({archivedPickups.length})</summary>
+          <ul className="mt-2 space-y-1 ml-4 list-disc">
+            {archivedPickups.slice(0, 10).map((p) => (
+              <li key={p.id}>
+                {p.scheduledFor ? new Date(p.scheduledFor).toLocaleDateString() : '—'} · {p.status}
+                {p.externalRef ? ` · ${p.externalRef}` : ''}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </div>
   )
 }

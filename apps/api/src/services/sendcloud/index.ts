@@ -11,7 +11,7 @@
  */
 
 import prisma from '../../db.js'
-import { createParcel, fetchParcel, voidParcel, fetchLabelPdf, listShippingMethods, listSenderAddresses, verifyCredentials } from './client.js'
+import { createParcel, fetchParcel, voidParcel, fetchLabelPdf, listShippingMethods, listSenderAddresses, requestPickup, verifyCredentials } from './client.js'
 import { decryptSecret, encryptSecret, isEncrypted } from '../../lib/crypto.js'
 import {
   SendcloudCredentials,
@@ -26,6 +26,7 @@ export {
   fetchLabelPdf,
   listShippingMethods,
   listSenderAddresses,
+  requestPickup,
   verifyCredentials,
   SendcloudError,
 }

@@ -381,5 +381,68 @@ export async function listSenderAddresses(
   }))
 }
 
+/**
+ * CR.16 — request a one-time pickup. POST /pickups in real mode;
+ * mock in dryRun. Returns ok+externalRef on success or
+ * ok=false+reason on failure (no throws — caller renders a clean
+ * 400 from the failure shape).
+ */
+export async function requestPickup(
+  creds: SendcloudCredentials,
+  input: {
+    senderAddressId: number
+    pickupDate: string
+    parcelCount?: number
+    weightKg?: number
+    notes?: string
+  },
+): Promise<{
+  ok: true
+  externalRef: string
+  scheduledFor: string
+  status: string
+} | { ok: false; reason: string }> {
+  if (!isReal()) {
+    return {
+      ok: true,
+      externalRef: `MOCK-PU-${Math.floor(Date.now() / 1000)}`,
+      scheduledFor: input.pickupDate,
+      status: 'Scheduled (mock)',
+    }
+  }
+  let res: Response
+  try {
+    res = await fetch(`${baseUrl()}/pickups`, {
+      method: 'POST',
+      headers: {
+        Authorization: authHeader(creds),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        pickup: {
+          sender_address: input.senderAddressId,
+          pickup_date: input.pickupDate,
+          parcel_count: input.parcelCount ?? 1,
+          weight: (input.weightKg ?? 1).toFixed(3),
+          notes: input.notes ?? undefined,
+        },
+      }),
+    })
+  } catch (err: any) {
+    return { ok: false, reason: `Network error: ${err?.message ?? String(err)}` }
+  }
+  let body: any = null
+  try { body = await res.json() } catch { /* */ }
+  if (!res.ok) {
+    return { ok: false, reason: body?.error?.message ?? `HTTP ${res.status}` }
+  }
+  return {
+    ok: true,
+    externalRef: String(body?.pickup?.id ?? ''),
+    scheduledFor: body?.pickup?.pickup_date ?? input.pickupDate,
+    status: body?.pickup?.status ?? 'Scheduled',
+  }
+}
+
 // ── Internal helpers exposed for tests / debugging ──────────────────────
 export const __test = { isReal, isSandbox, baseUrl, mockParcel }

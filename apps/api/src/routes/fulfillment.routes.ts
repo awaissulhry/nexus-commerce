@@ -8639,6 +8639,133 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // CR.16 — pickup scheduling. PickupSchedule rows; one-time SENDCLOUD
+  // pickups dispatch immediately to /pickups, recurring pickups
+  // persist for the dispatch cron (later commit) to fire daily.
+  fastify.get('/fulfillment/carriers/:code/pickups', async (request, reply) => {
+    try {
+      const { code } = request.params as { code: string }
+      const carrier = await prisma.carrier.findUnique({ where: { code: code as any } })
+      if (!carrier) return { items: [] }
+      const items = await prisma.pickupSchedule.findMany({
+        where: { carrierId: carrier.id },
+        orderBy: [{ status: 'asc' }, { scheduledFor: 'asc' }, { createdAt: 'desc' }],
+      })
+      return { items }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[carriers/:code/pickups GET] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.post('/fulfillment/carriers/:code/pickups', async (request, reply) => {
+    try {
+      const { code } = request.params as { code: string }
+      const body = request.body as {
+        warehouseId?: string | null
+        isRecurring?: boolean
+        daysOfWeek?: number | null
+        scheduledFor?: string | null
+        windowStart?: string | null
+        windowEnd?: string | null
+        contactName?: string | null
+        contactPhone?: string | null
+        notes?: string | null
+      }
+      const carrier = await prisma.carrier.findUnique({ where: { code: code as any } })
+      if (!carrier) return reply.code(404).send({ error: 'Carrier not connected' })
+
+      const isRecurring = !!body.isRecurring
+      if (!isRecurring && !body.scheduledFor) {
+        return reply.code(400).send({ error: 'scheduledFor required for one-time pickup' })
+      }
+      if (isRecurring && (!body.daysOfWeek || body.daysOfWeek <= 0)) {
+        return reply.code(400).send({ error: 'daysOfWeek bitmap required for recurring pickup' })
+      }
+
+      const row = await prisma.pickupSchedule.create({
+        data: {
+          carrierId: carrier.id,
+          warehouseId: body.warehouseId ?? null,
+          isRecurring,
+          daysOfWeek: body.daysOfWeek ?? null,
+          scheduledFor: body.scheduledFor ? new Date(body.scheduledFor) : null,
+          windowStart: body.windowStart ?? null,
+          windowEnd: body.windowEnd ?? null,
+          contactName: body.contactName ?? null,
+          contactPhone: body.contactPhone ?? null,
+          notes: body.notes ?? null,
+          status: 'ACTIVE',
+        },
+      })
+
+      // One-time SENDCLOUD pickups dispatch immediately so the operator
+      // sees confirmation. Failures persist as lastDispatchErr.
+      if (!isRecurring && code === 'SENDCLOUD') {
+        try {
+          const sendcloud = await import('../services/sendcloud/index.js')
+          const creds = await sendcloud.resolveCredentials()
+          let senderAddressId: number | null = null
+          if (body.warehouseId) {
+            const wh = await prisma.warehouse.findUnique({
+              where: { id: body.warehouseId },
+              select: { sendcloudSenderId: true },
+            })
+            senderAddressId = wh?.sendcloudSenderId ?? null
+          }
+          if (!senderAddressId) {
+            const senders = await sendcloud.listSenderAddresses(creds)
+            senderAddressId = senders.find((s) => s.isDefault)?.id ?? senders[0]?.id ?? null
+          }
+          if (!senderAddressId) {
+            throw new Error('No Sendcloud sender address available')
+          }
+          const result = await sendcloud.requestPickup(creds, {
+            senderAddressId,
+            pickupDate: body.scheduledFor!.slice(0, 10),
+            notes: body.notes ?? undefined,
+          })
+          if (result.ok === true) {
+            await prisma.pickupSchedule.update({
+              where: { id: row.id },
+              data: { externalRef: result.externalRef, lastDispatchAt: new Date() },
+            })
+          } else {
+            await prisma.pickupSchedule.update({
+              where: { id: row.id },
+              data: { lastDispatchErr: result.reason },
+            })
+          }
+        } catch (err: any) {
+          await prisma.pickupSchedule.update({
+            where: { id: row.id },
+            data: { lastDispatchErr: err?.message ?? String(err) },
+          }).catch(() => { /* */ })
+        }
+      }
+
+      const fresh = await prisma.pickupSchedule.findUnique({ where: { id: row.id } })
+      return { ok: true, pickup: fresh }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[carriers/:code/pickups POST] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.post('/fulfillment/carriers/:code/pickups/:id/cancel', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      await prisma.pickupSchedule.update({
+        where: { id },
+        data: { status: 'CANCELLED' },
+      })
+      return { ok: true }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[carriers/:code/pickups cancel] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // CR.13 — operator-tunable preferences.
   // PATCH /carriers/:code/preferences
   // Body: partial preferences object. Merges with existing rather
