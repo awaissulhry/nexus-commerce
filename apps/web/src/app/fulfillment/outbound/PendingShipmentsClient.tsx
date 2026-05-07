@@ -188,6 +188,45 @@ export default function PendingShipmentsClient() {
   } | null>(null)
   const [preflightLoading, setPreflightLoading] = useState(false)
 
+  // O.70: per-order snooze. Operator hits "Snooze 1h" on rows that
+  // are blocked on something off-screen (waiting for stock, customer
+  // clarification) and the row hides until the timestamp passes,
+  // re-appearing automatically. Stored in localStorage so a refresh
+  // doesn't drop snoozes; per-order timestamps so different orders
+  // expire independently. No backend — this is private operator
+  // state, like a sticky-note on the screen.
+  const SNOOZE_KEY = 'outbound.pending.snoozedUntil'
+  type SnoozeMap = Record<string, number>
+  const [snoozedUntil, setSnoozedUntil] = useState<SnoozeMap>(() => {
+    if (typeof window === 'undefined') return {}
+    try {
+      return JSON.parse(localStorage.getItem(SNOOZE_KEY) ?? '{}') as SnoozeMap
+    } catch {
+      return {}
+    }
+  })
+  const [showSnoozed, setShowSnoozed] = useState(false)
+  // Tick every 30s so expired snoozes return to the active list
+  // without a manual refresh. Cheap setState if nothing changed.
+  const [, setNowTick] = useState(Date.now())
+  useEffect(() => {
+    const id = window.setInterval(() => setNowTick(Date.now()), 30_000)
+    return () => window.clearInterval(id)
+  }, [])
+  const snooze = (orderId: string, hours: number) => {
+    const until = Date.now() + hours * 3_600_000
+    const next = { ...snoozedUntil, [orderId]: until }
+    setSnoozedUntil(next)
+    try { localStorage.setItem(SNOOZE_KEY, JSON.stringify(next)) } catch { /* quota */ }
+    toast.success(t('outbound.pending.snooze.toast', { hours }))
+  }
+  const unsnooze = (orderId: string) => {
+    const next = { ...snoozedUntil }
+    delete next[orderId]
+    setSnoozedUntil(next)
+    try { localStorage.setItem(SNOOZE_KEY, JSON.stringify(next)) } catch { /* quota */ }
+  }
+
   const fetchViews = useCallback(async () => {
     try {
       const res = await fetch(
@@ -777,6 +816,29 @@ export default function PendingShipmentsClient() {
               </>
             )}
           </div>
+          {/* O.70: show-snoozed toggle. Only renders when at least
+              one snooze is currently in effect — avoids visual noise
+              for users who never use the feature. Count reflects
+              currently-active (not yet expired) snoozes. */}
+          {(() => {
+            const activeSnoozeCount = Object.values(snoozedUntil).filter(
+              (until) => until > Date.now(),
+            ).length
+            if (activeSnoozeCount === 0) return null
+            return (
+              <button
+                onClick={() => setShowSnoozed((s) => !s)}
+                className={`h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 ${
+                  showSnoozed
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : 'text-slate-600 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <Clock size={12} />
+                {t('outbound.pending.snooze.showToggle', { n: activeSnoozeCount })}
+              </button>
+            )
+          })()}
           <button
             onClick={fetchData}
             className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
@@ -911,7 +973,15 @@ export default function PendingShipmentsClient() {
                 </tr>
               </thead>
               <tbody>
-                {data.items.map((o) => {
+                {data.items
+                  .filter((o) => {
+                    // O.70: filter out actively-snoozed orders unless
+                    // the operator has flipped the show-snoozed toggle.
+                    const until = snoozedUntil[o.id]
+                    if (!until || until <= Date.now()) return true
+                    return showSnoozed
+                  })
+                  .map((o) => {
                   const tone = URGENCY_TONE[o.urgency]
                   const Icon = tone.icon
                   const ship = o.shippingAddress as any
@@ -919,6 +989,7 @@ export default function PendingShipmentsClient() {
                   // O.5: clicking the row anywhere except the checkbox
                   // and the action button opens the order drawer.
                   const openDrawer = () => setParam('drawer', o.id)
+                  const isSnoozed = snoozedUntil[o.id] && snoozedUntil[o.id] > Date.now()
                   return (
                     <tr
                       key={o.id}
@@ -984,20 +1055,40 @@ export default function PendingShipmentsClient() {
                         </span>
                       </td>
                       <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          onClick={() => {
-                            setSelected(new Set([o.id]))
-                            // Single-row create — defer to the bulk
-                            // path so we share retry/error handling.
-                            void (async () => {
-                              await new Promise((r) => setTimeout(r, 0))
-                              bulkCreateShipments()
-                            })()
-                          }}
-                          className="h-6 px-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center gap-1"
-                        >
-                          <Package size={11} /> {t('outbound.pending.createShipment')}
-                        </button>
+                        <div className="inline-flex items-center gap-1">
+                          {/* O.70: snooze affordance per row. When
+                              already snoozed, click "wakes" the row
+                              (clears the timestamp). */}
+                          {isSnoozed ? (
+                            <button
+                              onClick={() => unsnooze(o.id)}
+                              title={t('outbound.pending.snooze.wake')}
+                              className="h-6 px-2 text-sm bg-slate-100 text-slate-600 rounded hover:bg-slate-200 inline-flex items-center gap-1"
+                            >
+                              <Clock size={11} /> {t('outbound.pending.snooze.wakeLabel')}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => snooze(o.id, 1)}
+                              title={t('outbound.pending.snooze.tooltip')}
+                              className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded"
+                            >
+                              <Clock size={11} />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              setSelected(new Set([o.id]))
+                              void (async () => {
+                                await new Promise((r) => setTimeout(r, 0))
+                                bulkCreateShipments()
+                              })()
+                            }}
+                            className="h-6 px-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center gap-1"
+                          >
+                            <Package size={11} /> {t('outbound.pending.createShipment')}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )
