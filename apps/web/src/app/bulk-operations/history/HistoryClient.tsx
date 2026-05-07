@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -453,15 +454,18 @@ function JobCard({ job, onChanged }: { job: JobRow; onChanged: () => Promise<voi
   const [rollingBack, setRollingBack] = useState(false)
   const duration = durationMs(job.startedAt, job.completedAt)
   const { toast } = useToast()
+  const askConfirm = useConfirm()
   const eligible = isRollbackEligible(job)
 
   const handleRollback = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    const confirmed = window.confirm(
-      `Roll back "${job.jobName}"?\n\n` +
-        `This applies each item's saved beforeState (basePrice / totalStock / status) ` +
-        `back through the master cascade. Creates a new audit job linked to this one.`,
-    )
+    const confirmed = await askConfirm({
+      title: `Roll back "${job.jobName}"?`,
+      description:
+        "This applies each item's saved beforeState (basePrice / totalStock / status) back through the master cascade. Creates a new audit job linked to this one.",
+      confirmLabel: 'Roll back',
+      tone: 'warning',
+    })
     if (!confirmed) return
     setRollingBack(true)
     try {

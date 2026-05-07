@@ -12,6 +12,7 @@ import {
   ColumnFiltersState,
 } from '@tanstack/react-table';
 import { PricingRule, apiClient } from '@/lib/api-client';
+import { useConfirm } from '@/components/ui/ConfirmProvider';
 import EditRuleModal from './EditRuleModal';
 
 interface PricingRulesTableProps {
@@ -46,6 +47,7 @@ export default function PricingRulesTable({
   onRuleUpdated,
   onRuleDeleted,
 }: PricingRulesTableProps) {
+  const askConfirm = useConfirm();
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'priority', desc: false },
   ]);
@@ -55,7 +57,7 @@ export default function PricingRulesTable({
   const [error, setError] = useState<string | null>(null);
 
   const handleDeleteRule = async (ruleId: string) => {
-    if (!confirm('Are you sure you want to deactivate this rule?')) return;
+    if (!(await askConfirm({ title: 'Deactivate this rule?', confirmLabel: 'Deactivate', tone: 'warning' }))) return;
 
     try {
       setDeleting(ruleId);

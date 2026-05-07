@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Input } from '@/components/ui/Input'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -82,6 +83,7 @@ const blankForm = (defaults?: { warehouseId?: string }): RuleFormState => ({
 })
 
 export default function RoutingRulesClient() {
+  const askConfirm = useConfirm()
   const [data, setData] = useState<RulesResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -163,7 +165,7 @@ export default function RoutingRulesClient() {
   }
 
   const handleDelete = async (rule: Rule) => {
-    if (!confirm(`Delete rule "${rule.name}"? This cannot be undone.`)) return
+    if (!(await askConfirm({ title: `Delete rule "${rule.name}"?`, description: 'This cannot be undone.', confirmLabel: 'Delete', tone: 'danger' }))) return
     setDeletingId(rule.id)
     try {
       const res = await fetch(

@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { BulkActionJob } from '@/lib/api-client';
+import { useToast } from '@/components/ui/Toast';
+import { useConfirm } from '@/components/ui/ConfirmProvider';
 
 interface JobDetailsModalProps {
   job: BulkActionJob;
@@ -13,11 +15,13 @@ export default function JobDetailsModal({
   job,
   onClose,
 }: JobDetailsModalProps) {
+  const { toast } = useToast();
+  const askConfirm = useConfirm();
   const [rolling, setRolling] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleRollback = async () => {
-    if (!confirm('Are you sure you want to rollback this job? This action cannot be undone.')) {
+    if (!(await askConfirm({ title: 'Rollback this job?', description: 'This action cannot be undone.', confirmLabel: 'Rollback', tone: 'warning' }))) {
       return;
     }
 
@@ -27,7 +31,7 @@ export default function JobDetailsModal({
       // Note: rollback endpoint may not exist yet, but we'll prepare for it
       // await apiClient.rollbackBulkJob(job.id);
       // For now, just show a message
-      alert('Rollback functionality coming soon');
+      toast.info('Rollback functionality coming soon');
       setRolling(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to rollback job');

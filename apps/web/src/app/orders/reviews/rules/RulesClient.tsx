@@ -8,6 +8,8 @@ import {
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -69,6 +71,7 @@ const PRESETS = [
 const AMAZON_MARKETPLACES = ['IT', 'DE', 'FR', 'ES', 'UK', 'NL', 'PL', 'SE', 'BE', 'TR']
 
 export default function RulesClient() {
+  const askConfirm = useConfirm()
   const [rules, setRules] = useState<Rule[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<Rule | null>(null)
@@ -88,7 +91,7 @@ export default function RulesClient() {
   useEffect(() => { refresh() }, [refresh])
 
   const remove = async (id: string) => {
-    if (!confirm('Delete this rule?')) return
+    if (!(await askConfirm({ title: 'Delete this rule?', confirmLabel: 'Delete', tone: 'danger' }))) return
     await fetch(`${getBackendUrl()}/api/review-rules/${id}`, { method: 'DELETE' })
     refresh()
   }
@@ -200,6 +203,7 @@ export default function RulesClient() {
 }
 
 function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: () => void; onSaved: () => void }) {
+  const { toast } = useToast()
   const [name, setName] = useState(rule?.name ?? '')
   const [scope, setScope] = useState(rule?.scope ?? 'AMAZON_PER_MARKETPLACE')
   const [marketplace, setMarketplace] = useState(rule?.marketplace ?? 'IT')
@@ -212,8 +216,8 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
   const [busy, setBusy] = useState(false)
 
   const save = async () => {
-    if (!name.trim()) return alert('Name required')
-    if (scope === 'AMAZON_PER_MARKETPLACE' && !marketplace) return alert('Marketplace required')
+    if (!name.trim()) { toast.error('Name required'); return }
+    if (scope === 'AMAZON_PER_MARKETPLACE' && !marketplace) { toast.error('Marketplace required'); return }
     setBusy(true)
     try {
       const body = {
@@ -235,7 +239,7 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
       if (!res.ok) throw new Error(data.error)
       onSaved()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally { setBusy(false) }
   }
 
@@ -353,6 +357,8 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
 }
 
 function PreviewModal({ rule, onClose, onRun }: { rule: Rule; onClose: () => void; onRun: () => void }) {
+  const { toast } = useToast()
+  const askConfirm = useConfirm()
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
@@ -366,16 +372,16 @@ function PreviewModal({ rule, onClose, onRun }: { rule: Rule; onClose: () => voi
   }, [rule.id])
 
   const runIt = async () => {
-    if (!confirm(`Enqueue ${data?.matchCount ?? 0} review requests? They run on the next engine tick.`)) return
+    if (!(await askConfirm({ title: `Enqueue ${data?.matchCount ?? 0} review requests?`, description: 'They run on the next engine tick.', confirmLabel: 'Enqueue', tone: 'info' }))) return
     setRunning(true)
     try {
       const res = await fetch(`${getBackendUrl()}/api/review-rules/${rule.id}/run`, { method: 'POST' })
       const d = await res.json()
       if (!res.ok) throw new Error(d.error)
-      alert(`Enqueued ${d.enqueued}, skipped ${d.skipped} (already requested)`)
+      toast.success(`Enqueued ${d.enqueued}, skipped ${d.skipped} (already requested)`)
       onRun()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally { setRunning(false) }
   }
 

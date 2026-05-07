@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 
 interface ChannelConnection {
   id: string
@@ -95,6 +96,7 @@ const CHANNELS: ChannelDef[] = [
 ]
 
 export function ChannelsClient() {
+  const askConfirm = useConfirm()
   const [connections, setConnections] = useState<Map<string, ChannelConnection>>(
     new Map()
   )
@@ -184,7 +186,7 @@ export function ChannelsClient() {
   }
 
   async function handleRevokeConnection(connectionId: string) {
-    if (!confirm('Are you sure you want to disconnect this channel?')) return
+    if (!(await askConfirm({ title: 'Disconnect this channel?', description: 'Existing listings stay live but new syncs will fail until you reconnect.', confirmLabel: 'Disconnect', tone: 'danger' }))) return
 
     try {
       const response = await fetch(`${getBackendUrl()}/api/ebay/auth/revoke`, {

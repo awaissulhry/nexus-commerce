@@ -43,6 +43,8 @@ import BundleEditor from './_modals/BundleEditor'
 import AiBulkGenerateModal from './_modals/AiBulkGenerateModal'
 import ManageAlertsModal from './_modals/ManageAlertsModal'
 import CompareProductsModal from './_modals/CompareProductsModal'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 
 // ── Types ───────────────────────────────────────────────────────────
 type Lens = 'grid' | 'hierarchy' | 'coverage' | 'health' | 'drafts' | 'pricing'
@@ -180,6 +182,7 @@ export default function ProductsWorkspace() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const { toast } = useToast()
 
   const lens = (searchParams.get('lens') as Lens) || 'grid'
   const page = parseInt(searchParams.get('page') ?? '1', 10) || 1
@@ -743,7 +746,7 @@ export default function ProductsWorkspace() {
                 return true
               }
               const err = await res.json().catch(() => ({}))
-              alert(err.error ?? 'Save failed')
+              toast.error(err.error ?? 'Save failed')
               return false
             }}
             onDelete={async (id: string) => {
@@ -1139,6 +1142,7 @@ function FilterGroup({ label, options, selected, onToggle, counts, renderLabel }
 // SavedViewsButton — load / save / delete / set-default
 // ────────────────────────────────────────────────────────────────────
 function SavedViewsButton({ open, setOpen, views, onApply, onSaveCurrent, onDelete, onSetDefault, onAlerts }: any) {
+  const askConfirm = useConfirm()
   const [saveMode, setSaveMode] = useState(false)
   const [name, setName] = useState('')
   const [isDefault, setIsDefault] = useState(false)
@@ -1199,7 +1203,7 @@ function SavedViewsButton({ open, setOpen, views, onApply, onSaveCurrent, onDele
                         )}
                       </button>
                       <button onClick={() => onSetDefault(v.id)} title="Set as default" aria-label={`Set "${v.name}" as default view`} className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-amber-500"><Star size={12} /></button>
-                      <button onClick={() => { if (confirm(`Delete view "${v.name}"?`)) onDelete(v.id) }} title="Delete" aria-label={`Delete saved view "${v.name}"`} className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-rose-600"><Trash2 size={12} /></button>
+                      <button onClick={async () => { if (await askConfirm({ title: `Delete view "${v.name}"?`, description: 'This view + its alerts will be removed permanently.', confirmLabel: 'Delete', tone: 'danger' })) onDelete(v.id) }} title="Delete" aria-label={`Delete saved view "${v.name}"`} className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-rose-600"><Trash2 size={12} /></button>
                     </li>
                     )
                   })}
@@ -4123,6 +4127,7 @@ function DraftsLens() {
 // TagEditor — drawer for product tags
 // ────────────────────────────────────────────────────────────────────
 function TagEditor({ productId, onClose, onChanged, allTags }: { productId: string; onClose: () => void; onChanged: () => void; allTags: Tag[] }) {
+  const { toast } = useToast()
   const [productTags, setProductTags] = useState<Tag[]>([])
   const [newTagName, setNewTagName] = useState('')
   const [newTagColor, setNewTagColor] = useState('#3b82f6')
@@ -4180,7 +4185,7 @@ function TagEditor({ productId, onClose, onChanged, allTags }: { productId: stri
       refresh()
     } else {
       const err = await res.json()
-      alert(err.error)
+      toast.error(err.error ?? 'Failed to create tag')
     }
   }
 

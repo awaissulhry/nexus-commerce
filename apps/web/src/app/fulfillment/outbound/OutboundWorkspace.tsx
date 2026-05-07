@@ -14,6 +14,8 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 
 type Shipment = {
@@ -64,6 +66,8 @@ const PIPELINE: Array<{ key: string; label: string }> = [
 ]
 
 export default function OutboundWorkspace() {
+  const { toast } = useToast()
+  const askConfirm = useConfirm()
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [search, setSearch] = useState('')
   const [items, setItems] = useState<Shipment[]>([])
@@ -107,14 +111,14 @@ export default function OutboundWorkspace() {
 
   const printLabel = async (id: string) => {
     if (!sendcloudConnected) {
-      if (!confirm('Sendcloud not connected. Open carriers settings to connect?')) return
+      if (!(await askConfirm({ title: 'Sendcloud not connected', description: 'Open carrier settings to connect?', confirmLabel: 'Open settings', tone: 'info' }))) return
       window.location.href = '/fulfillment/carriers'
       return
     }
     const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipments/${id}/print-label`, { method: 'POST' })
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
-      alert(err.error ?? 'Label print failed')
+      toast.error(err.error ?? 'Label print failed')
       return
     }
     fetchShipments()
@@ -126,7 +130,7 @@ export default function OutboundWorkspace() {
   }
 
   const bulkPrint = async () => {
-    if (selected.size === 0) return alert('Select shipments first')
+    if (selected.size === 0) { toast.error('Select shipments first'); return }
     let printed = 0
     for (const id of selected) {
       try {
@@ -134,7 +138,9 @@ export default function OutboundWorkspace() {
         if (res.ok) printed++
       } catch {}
     }
-    alert(`Printed ${printed} of ${selected.size} labels`)
+    if (printed === selected.size) toast.success(`Printed ${printed} ${printed === 1 ? 'label' : 'labels'}`)
+    else if (printed === 0) toast.error(`No labels printed (${selected.size} attempted)`)
+    else toast.warning(`Printed ${printed} of ${selected.size} labels`)
     setSelected(new Set())
     fetchShipments()
   }

@@ -12,6 +12,7 @@ import {
   ColumnFiltersState,
 } from '@tanstack/react-table';
 import { BulkActionJob, apiClient } from '@/lib/api-client';
+import { useConfirm } from '@/components/ui/ConfirmProvider';
 import JobDetailsModal from './JobDetailsModal';
 
 interface BulkActionsTableProps {
@@ -86,6 +87,7 @@ export default function BulkActionsTable({
   onJobCancelled,
   onJobRollback,
 }: BulkActionsTableProps) {
+  const askConfirm = useConfirm();
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'createdAt', desc: true },
   ]);
@@ -95,7 +97,7 @@ export default function BulkActionsTable({
   const [error, setError] = useState<string | null>(null);
 
   const handleCancelJob = async (jobId: string) => {
-    if (!confirm('Are you sure you want to cancel this job?')) return;
+    if (!(await askConfirm({ title: 'Cancel this job?', confirmLabel: 'Cancel job', cancelLabel: 'Keep running', tone: 'warning' }))) return;
 
     try {
       setCancelling(jobId);

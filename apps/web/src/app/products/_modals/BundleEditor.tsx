@@ -16,6 +16,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Package, Plus, Trash2, X } from 'lucide-react'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface BundleComponentDraft {
@@ -39,6 +41,8 @@ export default function BundleEditor({
   onClose: () => void
   onChanged: () => void
 }) {
+  const { toast } = useToast()
+  const askConfirm = useConfirm()
   const [bundles, setBundles] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -103,12 +107,12 @@ export default function BundleEditor({
       onChanged()
     } else {
       const err = await res.json()
-      alert(err.error)
+      toast.error(err.error ?? 'Failed to create bundle')
     }
   }
 
   const deleteBundle = async (id: string) => {
-    if (!confirm('Delete this bundle?')) return
+    if (!(await askConfirm({ title: 'Delete this bundle?', confirmLabel: 'Delete', tone: 'danger' }))) return
     await fetch(`${getBackendUrl()}/api/bundles/${id}`, { method: 'DELETE' })
     fetchBundles()
   }

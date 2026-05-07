@@ -19,6 +19,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { cn } from '@/lib/utils'
 import {
   groupForFieldId,
@@ -297,6 +298,7 @@ export default function BulkEditClient({
   masterSchemaFields = [],
 }: Props) {
   const router = useRouter()
+  const askConfirm = useConfirm()
 
   // Drop channel-prefixed master fields — we surface channel data via
   // the per-marketplace tabs instead.
@@ -1167,12 +1169,7 @@ export default function BulkEditClient({
   }, [draftVariant, product.id, product.isParent])
 
   const handleDeleteVariant = useCallback(async (variantId: string) => {
-    if (
-      !window.confirm(
-        'Delete this variant? This removes its listings, offers, and image rows. Cannot be undone.',
-      )
-    )
-      return
+    if (!(await askConfirm({ title: 'Delete this variant?', description: 'Removes its listings, offers, and image rows. Cannot be undone.', confirmLabel: 'Delete', tone: 'danger' }))) return
     setStatus('saving')
     setStatusMsg(null)
     try {
@@ -1195,7 +1192,7 @@ export default function BulkEditClient({
       setStatus('error')
       setStatusMsg(e instanceof Error ? e.message : String(e))
     }
-  }, [])
+  }, [askConfirm])
 
   // ── Cell readers ───────────────────────────────────────────────
   const readCellValue = useCallback(

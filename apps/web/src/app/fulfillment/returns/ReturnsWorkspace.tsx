@@ -13,6 +13,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 
 type ReturnRow = {
@@ -174,6 +175,7 @@ export default function ReturnsWorkspace() {
 }
 
 function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
+  const { toast } = useToast()
   const [ret, setRet] = useState<ReturnRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [conditions, setConditions] = useState<Record<string, string>>({})
@@ -205,7 +207,8 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
-      return alert(err.error ?? `${path} failed`)
+      toast.error(err.error ?? `${path} failed`)
+      return
     }
     await fetchOne()
     onChanged()
@@ -216,7 +219,7 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
       itemId: it.id,
       conditionGrade: conditions[it.id] || 'GOOD',
     })).filter((u) => u.conditionGrade) ?? []
-    if (items.length === 0) return alert('Grade at least one item')
+    if (items.length === 0) { toast.error('Grade at least one item'); return }
     action('inspect', { items })
   }
 
@@ -453,6 +456,7 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
 }
 
 function CreateReturnModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const { toast } = useToast()
   const [orderId, setOrderId] = useState('')
   const [channel, setChannel] = useState('AMAZON')
   const [reason, setReason] = useState('')
@@ -476,7 +480,7 @@ function CreateReturnModal({ onClose, onCreated }: { onClose: () => void; onCrea
       }
       onCreated()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally { setBusy(false) }
   }
 
@@ -559,6 +563,7 @@ function ReturnLabelPanel({
   onUpdated: () => void | Promise<void>
 }) {
   const { toast } = useToast()
+  const askConfirm = useConfirm()
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [url, setUrl] = useState(returnRow.returnLabelUrl ?? '')
@@ -620,7 +625,7 @@ function ReturnLabelPanel({
   }
 
   const handleRemove = async () => {
-    if (!confirm('Remove the attached return label? Tracking + email status will also be cleared.')) return
+    if (!(await askConfirm({ title: 'Remove return label?', description: 'Tracking and email status will also be cleared.', confirmLabel: 'Remove label', tone: 'danger' }))) return
     setBusy(true)
     try {
       const res = await fetch(

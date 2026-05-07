@@ -13,6 +13,7 @@ import {
   Mail, Sparkles,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
+import { useToast } from '@/components/ui/Toast'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
@@ -911,6 +912,7 @@ function ReturnsLens() {
 }
 
 function ReviewsLens() {
+  const { toast } = useToast()
   const [requests, setRequests] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
@@ -929,10 +931,10 @@ function ReviewsLens() {
     try {
       const res = await fetch(`${getBackendUrl()}/api/review-engine/tick`, { method: 'POST' })
       const data = await res.json()
-      alert(`Engine ran: ${data.processed} processed · ${data.sent} sent · ${data.failed} failed · ${data.suppressed} suppressed`)
+      toast.success(`Engine ran: ${data.processed} processed · ${data.sent} sent · ${data.failed} failed · ${data.suppressed} suppressed`)
       refresh()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally { setRunning(false) }
   }
 

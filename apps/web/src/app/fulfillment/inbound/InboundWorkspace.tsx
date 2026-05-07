@@ -22,6 +22,8 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import {
   emitInvalidation,
@@ -755,6 +757,8 @@ const DISCREPANCY_REASONS: Array<{ value: string; label: string }> = [
 const ATTACHMENT_KINDS = ['INVOICE', 'PACKING', 'CUSTOMS', 'ASN', 'PHOTO', 'OTHER']
 
 function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
+  const { toast } = useToast()
+  const askConfirm = useConfirm()
   const [shipment, setShipment] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [receiveBuf, setReceiveBuf] = useState<Record<string, { qty: string; qc: string; photoUrl: string }>>({})
@@ -791,7 +795,7 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
         }
       })
       .filter(Boolean)
-    if (updates.length === 0) { alert('Enter received quantities, change QC, or paste a photo URL'); return }
+    if (updates.length === 0) { toast.error('Enter received quantities, change QC, or paste a photo URL'); return }
     setBusy(true)
     try {
       const res = await fetch(`${getBackendUrl()}/api/fulfillment/inbound/${id}/receive`, {
@@ -809,7 +813,7 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
       fetchOne()
       onChanged()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally { setBusy(false) }
   }
 
@@ -843,12 +847,12 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
       fetchOne()
       onChanged()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally { setBusy(false) }
   }
 
   const releaseHold = async (itemId: string) => {
-    if (!confirm('Release the held units to stock?')) return
+    if (!(await askConfirm({ title: 'Release held units to stock?', confirmLabel: 'Release', tone: 'warning' }))) return
     setBusy(true)
     try {
       const res = await fetch(`${getBackendUrl()}/api/fulfillment/inbound/${id}/items/${itemId}/release-hold`, { method: 'POST' })
@@ -859,7 +863,7 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
       fetchOne()
       onChanged()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally { setBusy(false) }
   }
 
@@ -879,7 +883,7 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
       fetchOne()
       onChanged()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally { setBusy(false) }
   }
 
@@ -899,7 +903,7 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
       fetchOne()
       onChanged()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally { setBusy(false) }
   }
 
@@ -918,7 +922,7 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
       fetchOne()
       onChanged()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally { setBusy(false) }
   }
 
@@ -1159,7 +1163,7 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
             )}
             {shipment.status !== 'CLOSED' && shipment.status !== 'CANCELLED' && (
               <button
-                onClick={() => { if (confirm('Cancel shipment? This is terminal.')) transition('CANCELLED') }}
+                onClick={async () => { if (await askConfirm({ title: 'Cancel shipment?', description: 'This is terminal — the shipment cannot be reopened.', confirmLabel: 'Cancel shipment', cancelLabel: 'Keep open', tone: 'danger' })) transition('CANCELLED') }}
                 className="ml-auto h-8 px-3 text-base text-rose-700 hover:bg-rose-50 rounded"
               >Cancel</button>
             )}
@@ -1664,12 +1668,13 @@ function DiscrepancyComposer({
 function AttachmentComposer({
   onCancel, onSubmit, busy,
 }: { onCancel: () => void; onSubmit: (p: any) => void; busy: boolean }) {
+  const { toast } = useToast()
   const [kind, setKind] = useState('INVOICE')
   const [url, setUrl] = useState('')
   const [filename, setFilename] = useState('')
 
   const submit = () => {
-    if (!url) { alert('URL required'); return }
+    if (!url) { toast.error('URL required'); return }
     onSubmit({ kind, url, filename: filename || undefined })
   }
 
@@ -1793,6 +1798,7 @@ function parseItemsCsv(text: string): ItemRow[] {
 }
 
 function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const { toast } = useToast()
   const [source, setSource] = useState<'MANUAL' | 'PO' | 'CSV'>('MANUAL')
   const [type, setType] = useState<'SUPPLIER' | 'MANUFACTURING' | 'TRANSFER'>('SUPPLIER')
   const [reference, setReference] = useState('')
@@ -1881,7 +1887,7 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
   const applyCsv = () => {
     const parsed = parseItemsCsv(csvText)
     if (parsed.length === 0) {
-      alert('No valid rows parsed. Format: sku,quantityExpected[,unitCostCents]')
+      toast.error('No valid rows parsed. Format: sku,quantityExpected[,unitCostCents]')
       return
     }
     setItems(parsed)
@@ -1891,7 +1897,7 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
   const submit = async () => {
     const filtered = items.filter((it) => it.sku.trim() && it.quantityExpected > 0)
     if (filtered.length === 0) {
-      alert('Add at least one item with SKU + quantity > 0')
+      toast.error('Add at least one item with SKU + quantity > 0')
       return
     }
     setBusy(true)
@@ -1932,7 +1938,7 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
       }
       onCreated()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally { setBusy(false) }
   }
 
@@ -2332,6 +2338,8 @@ type QcQueueItem = {
 }
 
 function QcQueueModal({ onClose, onChanged }: { onClose: () => void; onChanged: () => void }) {
+  const { toast } = useToast()
+  const askConfirm = useConfirm()
   const [items, setItems] = useState<QcQueueItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -2355,7 +2363,7 @@ function QcQueueModal({ onClose, onChanged }: { onClose: () => void; onChanged: 
   useEffect(() => { void fetchQueue() }, [fetchQueue])
 
   const release = async (it: QcQueueItem) => {
-    if (!confirm(`Release ${it.sku} (qty ${it.quantityReceived})? This applies stock as if the QC passed.`)) return
+    if (!(await askConfirm({ title: `Release ${it.sku}?`, description: `Quantity ${it.quantityReceived}. This applies stock as if QC passed.`, confirmLabel: 'Release', tone: 'warning' }))) return
     setBusyItemId(it.itemId)
     try {
       const res = await fetch(`${getBackendUrl()}/api/fulfillment/inbound/${it.shipment.id}/items/${it.itemId}/release-hold`, {
@@ -2370,7 +2378,7 @@ function QcQueueModal({ onClose, onChanged }: { onClose: () => void; onChanged: 
       await fetchQueue()
       onChanged()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally {
       setBusyItemId(null)
     }
@@ -2491,6 +2499,8 @@ function SavedViewsBar({
   currentFilters: InboundFilters
   onApply: (filters: InboundFilters) => void
 }) {
+  const { toast } = useToast()
+  const askConfirm = useConfirm()
   const [views, setViews] = useState<SavedViewRow[]>([])
   const [savingOpen, setSavingOpen] = useState(false)
   const [newName, setNewName] = useState('')
@@ -2574,7 +2584,7 @@ function SavedViewsBar({
   }
 
   const removeView = async (id: string) => {
-    if (!confirm('Delete this saved view?')) return
+    if (!(await askConfirm({ title: 'Delete saved view?', confirmLabel: 'Delete', tone: 'danger' }))) return
     try {
       const res = await fetch(`${getBackendUrl()}/api/saved-views/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error(`Delete failed (${res.status})`)
@@ -2585,7 +2595,7 @@ function SavedViewsBar({
         meta: { surface: 'inbound', action: 'deleted' },
       })
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     }
   }
 
@@ -2604,7 +2614,7 @@ function SavedViewsBar({
         meta: { surface: 'inbound', action: 'set-default' },
       })
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     }
   }
 
@@ -3300,6 +3310,7 @@ function FbaSkuPicker({
 }
 
 function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const { toast } = useToast()
   const [step, setStep] = useState<'plan' | 'commit'>('plan')
   const [items, setItems] = useState<FbaPickerItem[]>([])
   const [plan, setPlan] = useState<any>(null)
@@ -3316,7 +3327,7 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
       if (!res.ok) throw new Error('Plan failed')
       setPlan(await res.json())
       setStep('commit')
-    } catch (e: any) { alert(e.message) } finally { setBusy(false) }
+    } catch (e: any) { toast.error(e.message) } finally { setBusy(false) }
   }
 
   const commit = async () => {
@@ -3336,7 +3347,7 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
       })
       if (!res.ok) throw new Error('Create failed')
       onCreated()
-    } catch (e: any) { alert(e.message) } finally { setBusy(false) }
+    } catch (e: any) { toast.error(e.message) } finally { setBusy(false) }
   }
 
   return (

@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -52,6 +53,7 @@ const EMPTY_DRAFT: DraftItem = {
 const MARKETPLACES = ['IT', 'DE', 'FR', 'ES', 'UK', 'US', 'NL', 'SE', 'PL', 'CA', 'MX']
 
 export default function TerminologyClient({ initial, initialError }: Props) {
+  const askConfirm = useConfirm()
   const [items, setItems] = useState(initial)
   const [error, setError] = useState<string | null>(initialError)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -126,12 +128,7 @@ export default function TerminologyClient({ initial, initialError }: Props) {
   }
 
   const del = async (it: TerminologyItem) => {
-    if (
-      !window.confirm(
-        `Delete "${it.preferred}" preference for ${it.brand ?? 'all brands'} / ${it.marketplace}?`,
-      )
-    )
-      return
+    if (!(await askConfirm({ title: `Delete "${it.preferred}" preference?`, description: `For ${it.brand ?? 'all brands'} / ${it.marketplace}.`, confirmLabel: 'Delete', tone: 'danger' }))) return
     setBusyId(it.id)
     try {
       const res = await fetch(

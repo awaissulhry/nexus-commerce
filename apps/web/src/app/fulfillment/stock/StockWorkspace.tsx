@@ -24,6 +24,8 @@ import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 
 type StockRow = {
@@ -1158,6 +1160,8 @@ type DrawerBundle = {
 type ActionMode = null | { kind: 'adjust'; stockLevelId: string; locationCode: string } | { kind: 'transfer' } | { kind: 'reserve' }
 
 function StockDrawer({ productId, onClose, onChanged }: { productId: string; onClose: () => void; onChanged: () => void }) {
+  const { toast } = useToast()
+  const askConfirm = useConfirm()
   const [bundle, setBundle] = useState<DrawerBundle | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -1461,12 +1465,12 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                         </div>
                         <button
                           onClick={async () => {
-                            if (!confirm(`Release ${r.quantity} units?`)) return
+                            if (!(await askConfirm({ title: `Release ${r.quantity} units?`, confirmLabel: 'Release', tone: 'warning' }))) return
                             try {
                               const res = await fetch(`${getBackendUrl()}/api/stock/release/${r.id}`, { method: 'POST' })
                               if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Release failed')
                               handleActionDone()
-                            } catch (e: any) { alert(e.message) }
+                            } catch (e: any) { toast.error(e.message) }
                           }}
                           className="h-6 px-2 text-xs text-slate-500 hover:text-slate-900 border border-slate-200 rounded"
                         >Release</button>
@@ -1550,6 +1554,7 @@ function Sparkline({ points }: { points: number[] }) {
 }
 
 function AdjustPanel({ stockLevelId, locationCode, onCancel, onDone }: { stockLevelId: string; locationCode: string; onCancel: () => void; onDone: () => void }) {
+  const { toast } = useToast()
   const [change, setChange] = useState('')
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -1557,7 +1562,7 @@ function AdjustPanel({ stockLevelId, locationCode, onCancel, onDone }: { stockLe
   const submit = async () => {
     const n = Number(change)
     if (!Number.isFinite(n) || n === 0) {
-      alert('Enter a non-zero number (positive to add, negative to remove)')
+      toast.error('Enter a non-zero number (positive to add, negative to remove)')
       return
     }
     setSubmitting(true)
@@ -1570,7 +1575,7 @@ function AdjustPanel({ stockLevelId, locationCode, onCancel, onDone }: { stockLe
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Adjust failed')
       onDone()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally { setSubmitting(false) }
   }
 
@@ -1600,6 +1605,7 @@ function AdjustPanel({ stockLevelId, locationCode, onCancel, onDone }: { stockLe
 function TransferPanel({
   productId, stockLevels, onCancel, onDone,
 }: { productId: string; stockLevels: DrawerBundle['stockLevels']; onCancel: () => void; onDone: () => void }) {
+  const { toast } = useToast()
   const [fromId, setFromId] = useState<string>(stockLevels[0]?.location.id ?? '')
   const [toId, setToId] = useState<string>(stockLevels[1]?.location.id ?? stockLevels[0]?.location.id ?? '')
   const [qty, setQty] = useState('')
@@ -1607,8 +1613,8 @@ function TransferPanel({
 
   const submit = async () => {
     const n = Number(qty)
-    if (!Number.isFinite(n) || n <= 0) { alert('Quantity must be > 0'); return }
-    if (fromId === toId) { alert('From and to locations must differ'); return }
+    if (!Number.isFinite(n) || n <= 0) { toast.error('Quantity must be > 0'); return }
+    if (fromId === toId) { toast.error('From and to locations must differ'); return }
     setSubmitting(true)
     try {
       const res = await fetch(`${getBackendUrl()}/api/stock/transfer`, {
@@ -1619,7 +1625,7 @@ function TransferPanel({
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Transfer failed')
       onDone()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally { setSubmitting(false) }
   }
 
@@ -1660,6 +1666,7 @@ function TransferPanel({
 function ReservePanel({
   productId, stockLevels, onCancel, onDone,
 }: { productId: string; stockLevels: DrawerBundle['stockLevels']; onCancel: () => void; onDone: () => void }) {
+  const { toast } = useToast()
   const [locId, setLocId] = useState<string>(stockLevels[0]?.location.id ?? '')
   const [qty, setQty] = useState('')
   const [orderId, setOrderId] = useState('')
@@ -1668,7 +1675,7 @@ function ReservePanel({
 
   const submit = async () => {
     const n = Number(qty)
-    if (!Number.isFinite(n) || n <= 0) { alert('Quantity must be > 0'); return }
+    if (!Number.isFinite(n) || n <= 0) { toast.error('Quantity must be > 0'); return }
     setSubmitting(true)
     try {
       const res = await fetch(`${getBackendUrl()}/api/stock/reserve`, {
@@ -1679,7 +1686,7 @@ function ReservePanel({
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Reserve failed')
       onDone()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally { setSubmitting(false) }
   }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useConfirm } from "@/components/ui/ConfirmProvider";
 import { generateApiKey, revokeApiKey, deleteApiKey } from "./actions";
 import type { ApiKeyRow } from "./page";
 
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export default function ApiKeysClient({ apiKeys }: Props) {
+  const askConfirm = useConfirm();
   const [isPending, startTransition] = useTransition();
   const [newKey, setNewKey] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -32,8 +34,8 @@ export default function ApiKeysClient({ apiKeys }: Props) {
     });
   };
 
-  const handleRevoke = (id: string) => {
-    if (!confirm("Are you sure you want to revoke this API key? It will stop working immediately.")) return;
+  const handleRevoke = async (id: string) => {
+    if (!(await askConfirm({ title: "Revoke this API key?", description: "It will stop working immediately.", confirmLabel: "Revoke", tone: "danger" }))) return;
     startTransition(async () => {
       try {
         await revokeApiKey(id);
@@ -44,8 +46,8 @@ export default function ApiKeysClient({ apiKeys }: Props) {
     });
   };
 
-  const handleDelete = (id: string) => {
-    if (!confirm("Permanently delete this API key? This cannot be undone.")) return;
+  const handleDelete = async (id: string) => {
+    if (!(await askConfirm({ title: "Permanently delete this API key?", description: "This cannot be undone.", confirmLabel: "Delete", tone: "danger" }))) return;
     startTransition(async () => {
       try {
         await deleteApiKey(id);

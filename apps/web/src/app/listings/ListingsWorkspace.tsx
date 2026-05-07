@@ -26,6 +26,7 @@ import {
   useInvalidationChannel,
 } from '@/lib/sync/invalidation-channel'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { useToast } from '@/components/ui/Toast'
 
 // ── Types ───────────────────────────────────────────────────────────
 type Lens = 'grid' | 'health' | 'matrix' | 'drafts'
@@ -1062,6 +1063,7 @@ function Pagination({ page, totalPages, onPage }: { page: number; totalPages: nu
 // BulkActionBar
 // ────────────────────────────────────────────────────────────────────
 function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: string[]; onClear: () => void; onComplete: () => void }) {
+  const { toast } = useToast()
   const [busy, setBusy] = useState(false)
   const [jobStatus, setJobStatus] = useState<string | null>(null)
 
@@ -1135,7 +1137,7 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
               const v = window.prompt('Set price for selected listings (number)')
               if (!v) return
               const n = Number(v)
-              if (!Number.isFinite(n) || n < 0) return alert('Invalid price')
+              if (!Number.isFinite(n) || n < 0) { toast.error('Invalid price'); return }
               runAction('set-price', { price: n })
             }}
             disabled={busy}

@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Bell, X, Plus, Trash2, RefreshCw } from 'lucide-react'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import {
   emitInvalidation,
@@ -67,6 +68,7 @@ export default function ManageAlertsModal({
   view: SavedViewRef
   onClose: () => void
 }) {
+  const askConfirm = useConfirm()
   const [alerts, setAlerts] = useState<AlertRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -170,7 +172,7 @@ export default function ManageAlertsModal({
   }
 
   const deleteAlert = async (id: string) => {
-    if (!confirm('Delete this alert?')) return
+    if (!(await askConfirm({ title: 'Delete this alert?', confirmLabel: 'Delete', tone: 'danger' }))) return
     setBusy(true)
     try {
       await fetch(`${getBackendUrl()}/api/saved-view-alerts/${id}`, {

@@ -25,6 +25,7 @@ import {
   RefreshCw, Scan, Search, X, AlertTriangle, Unlock,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 
 type Item = {
   id: string
@@ -373,6 +374,7 @@ function ItemReceiveDetail({
   onSaved: (message: string) => void
   onError: (message: string) => void
 }) {
+  const askConfirm = useConfirm()
   const [target, setTarget] = useState<number>(item.quantityReceived)
   const [qc, setQc] = useState<string>(item.qcStatus ?? '')
   const [busy, setBusy] = useState(false)
@@ -414,7 +416,7 @@ function ItemReceiveDetail({
   }
 
   const releaseHold = async () => {
-    if (!confirm('Release the held units to stock?')) return
+    if (!(await askConfirm({ title: 'Release the held units to stock?', confirmLabel: 'Release', tone: 'warning' }))) return
     setBusy(true)
     try {
       const res = await fetch(`${getBackendUrl()}/api/fulfillment/inbound/${shipmentId}/items/${item.id}/release-hold`, { method: 'POST' })

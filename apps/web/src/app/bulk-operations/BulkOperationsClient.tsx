@@ -30,6 +30,7 @@ import {
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import {
   emitInvalidation,
@@ -415,6 +416,7 @@ function DeleteRowButton({
 }
 
 export default function BulkOperationsClient() {
+  const askConfirm = useConfirm()
   const [products, setProducts] = useState<BulkProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -1545,12 +1547,7 @@ export default function BulkOperationsClient() {
       const cascadeWarning = isParent
         ? '\n\nThis is a master product. Every variant + ChannelListing + image row underneath will also be deleted. Cannot be undone.'
         : '\n\nIts ChannelListings + offers + image rows will also be deleted. Cannot be undone.'
-      if (
-        !window.confirm(
-          `Delete ${sku}?${cascadeWarning}`,
-        )
-      )
-        return
+      if (!(await askConfirm({ title: `Delete ${sku}?`, description: cascadeWarning.trim(), confirmLabel: 'Delete', tone: 'danger' }))) return
       try {
         const res = await fetch(
           `${getBackendUrl()}/api/catalog/products/${id}`,
@@ -1572,7 +1569,7 @@ export default function BulkOperationsClient() {
         })
       }
     },
-    [],
+    [askConfirm],
   )
   actionsCtxRef.current = { onDelete: handleDeleteRow }
 
@@ -1603,12 +1600,7 @@ export default function BulkOperationsClient() {
             parentCount === 1 ? ' is' : 's are'
           } in the selection — every variant + ChannelListing + image row underneath will cascade. Cannot be undone.`
         : '\n\nChannelListings + offers + image rows for each row will also be deleted. Cannot be undone.'
-    if (
-      !window.confirm(
-        `Delete ${selected.length} row${selected.length === 1 ? '' : 's'}?${cascadeNote}`,
-      )
-    )
-      return
+    if (!(await askConfirm({ title: `Delete ${selected.length} row${selected.length === 1 ? '' : 's'}?`, description: cascadeNote.trim(), confirmLabel: 'Delete', tone: 'danger' }))) return
     setSaveStatus({ kind: 'saving' })
     const failures: string[] = []
     await Promise.all(
@@ -1642,7 +1634,7 @@ export default function BulkOperationsClient() {
         message: `${selected.length - failures.length} deleted, ${failures.length} failed: ${failures.slice(0, 3).join('; ')}`,
       })
     }
-  }, [])
+  }, [askConfirm])
 
   // Selected-row count derived from the active selection rectangle —
   // drives whether the "Delete N rows" toolbar button appears.

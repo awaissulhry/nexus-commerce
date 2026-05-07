@@ -9,6 +9,8 @@ import { Truck, ExternalLink, Lock } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 
 type Carrier = {
@@ -114,6 +116,8 @@ function CarrierCard({
   carrier: Carrier | null
   onChanged: () => void
 }) {
+  const { toast } = useToast()
+  const askConfirm = useConfirm()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [fields, setFields] = useState<Record<string, string>>({})
@@ -142,15 +146,15 @@ function CarrierCard({
       setFields({})
       onChanged()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally { setBusy(false) }
   }
 
   const disconnect = async () => {
-    if (!confirm(`Disconnect ${def.label}? Existing shipments are preserved.`)) return
+    if (!(await askConfirm({ title: `Disconnect ${def.label}?`, description: 'Existing shipments are preserved.', confirmLabel: 'Disconnect', tone: 'danger' }))) return
     const res = await fetch(`${getBackendUrl()}/api/fulfillment/carriers/${def.code}/disconnect`, { method: 'POST' })
     if (res.ok) onChanged()
-    else alert('Disconnect failed')
+    else toast.error('Disconnect failed')
   }
 
   return (

@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
+import { useToast } from "@/components/ui/Toast";
 import { getBackendUrl } from "@/lib/backend-url";
 
 const BACKEND_URL = getBackendUrl();
@@ -24,6 +25,7 @@ interface ManageInventoryClientProps {
 export default function ManageInventoryClient({
   data,
 }: ManageInventoryClientProps) {
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<FilterTab>("All");
   const [search, setSearch] = useState("");
   const [drawerItem, setDrawerItem] = useState<InventoryItem | null>(null);
@@ -155,15 +157,15 @@ export default function ManageInventoryClient({
               
               if (response.ok) {
                 const data = JSON.parse(text);
-                alert(`✅ Successfully imported ${data.data.total} products from Amazon!`);
+                toast.success(`Successfully imported ${data.data.total} products from Amazon!`);
                 window.location.reload();
               } else {
                 const error = JSON.parse(text);
-                alert(`❌ Import failed: ${error.error?.message || error.message || 'Unknown error'}`);
+                toast.error(`Import failed: ${error.error?.message || error.message || 'Unknown error'}`);
               }
             } catch (error) {
               console.error('Import error:', error);
-              alert(`❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+              toast.error(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
             }
           }}
           onImportEbay={async () => {
@@ -178,15 +180,15 @@ export default function ManageInventoryClient({
               
               if (response.ok) {
                 const data = JSON.parse(text);
-                alert(`✅ Successfully imported ${data.data.total} products from eBay!`);
+                toast.success(`Successfully imported ${data.data.total} products from eBay!`);
                 window.location.reload();
               } else {
                 const error = JSON.parse(text);
-                alert(`❌ Import failed: ${error.error?.message || error.message || 'Unknown error'}`);
+                toast.error(`Import failed: ${error.error?.message || error.message || 'Unknown error'}`);
               }
             } catch (error) {
               console.error('Import error:', error);
-              alert(`❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+              toast.error(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
             }
           }}
           onSyncAll={async () => {
@@ -201,15 +203,15 @@ export default function ManageInventoryClient({
               
               if (response.ok) {
                 const data = JSON.parse(text);
-                alert(`✅ Sync initiated! ${data.data.queued} products queued for sync.`);
+                toast.success(`Sync initiated — ${data.data.queued} products queued.`);
                 window.location.reload();
               } else {
                 const error = JSON.parse(text);
-                alert(`❌ Sync failed: ${error.error?.message || error.message || 'Unknown error'}`);
+                toast.error(`Sync failed: ${error.error?.message || error.message || 'Unknown error'}`);
               }
             } catch (error) {
               console.error('Sync error:', error);
-              alert(`❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+              toast.error(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
             }
           }}
         />

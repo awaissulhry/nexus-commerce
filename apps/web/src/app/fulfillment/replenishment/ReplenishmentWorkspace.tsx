@@ -57,6 +57,7 @@ import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -4021,6 +4022,7 @@ function SavedViewsButton({
   onLoad: (state: ReplenishmentViewState) => void
 }) {
   const { toast } = useToast()
+  const askConfirm = useConfirm()
   const [open, setOpen] = useState(false)
   const [views, setViews] = useState<SavedView[] | null>(null)
   const [loading, setLoading] = useState(false)
@@ -4087,7 +4089,7 @@ function SavedViewsButton({
   }
 
   const handleDelete = async (view: SavedView) => {
-    if (!window.confirm(`Delete saved view "${view.name}"?`)) return
+    if (!(await askConfirm({ title: `Delete saved view "${view.name}"?`, confirmLabel: 'Delete', tone: 'danger' }))) return
     try {
       const res = await fetch(
         `${getBackendUrl()}/api/fulfillment/replenishment-views/${view.id}`,

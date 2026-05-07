@@ -10,6 +10,7 @@ import {
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 
 const CHANNEL_TONE: Record<string, string> = {
@@ -31,6 +32,7 @@ const TIMELINE_ICON: Record<string, any> = {
 }
 
 export default function OrderDetailClient({ id }: { id: string }) {
+  const { toast } = useToast()
   const [order, setOrder] = useState<any>(null)
   const [timeline, setTimeline] = useState<any[]>([])
   const [financials, setFinancials] = useState<any>(null)
@@ -59,10 +61,12 @@ export default function OrderDetailClient({ id }: { id: string }) {
       const res = await fetch(`${getBackendUrl()}/api/orders/${id}/request-review`, { method: 'POST' })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      alert(`Review request: ${data.status}${data.errorMessage ? ` — ${data.errorMessage}` : ''}`)
+      const tone = data.status === 'SENT' || data.status === 'OK' ? 'success' : 'info'
+      const msg = `Review request: ${data.status}${data.errorMessage ? ` — ${data.errorMessage}` : ''}`
+      toast[tone === 'success' ? 'success' : 'info'](msg)
       refresh()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally { setReviewBusy(false) }
   }
 

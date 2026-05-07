@@ -55,6 +55,8 @@ import {
   emitInvalidation,
   useInvalidationChannel,
 } from '@/lib/sync/invalidation-channel'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 
 interface ProductDetail {
   id: string
@@ -624,6 +626,7 @@ function DetailsTab({
   product: ProductDetail
   onSaved: () => void
 }) {
+  const { toast } = useToast()
   const [basePrice, setBasePrice] = useState(
     product.basePrice != null ? String(Number(product.basePrice)) : '',
   )
@@ -668,7 +671,7 @@ function DetailsTab({
         }
         onSaved()
       } catch (e) {
-        alert(e instanceof Error ? e.message : String(e))
+        toast.error(e instanceof Error ? e.message : String(e))
       } finally {
         setSaving(null)
       }
@@ -2046,6 +2049,7 @@ function TranslationsTab({
   masterKeywords: string[]
   onChanged: () => void
 }) {
+  const askConfirm = useConfirm()
   const [primaryLanguage, setPrimaryLanguage] = useState<string>('it')
   const [rows, setRows] = useState<TranslationRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -2164,7 +2168,7 @@ function TranslationsTab({
   }
 
   const remove = async (language: string) => {
-    if (!confirm(`Delete the ${languageLabel(language)} translation?`)) return
+    if (!(await askConfirm({ title: `Delete the ${languageLabel(language)} translation?`, description: 'The translation row will be removed; the master content stays intact.', confirmLabel: 'Delete', tone: 'danger' }))) return
     setBusy(true)
     try {
       await fetch(
@@ -2582,6 +2586,7 @@ function RelatedTab({
   productId: string
   onChanged: () => void
 }) {
+  const askConfirm = useConfirm()
   const [outgoing, setOutgoing] = useState<RelatedRow[]>([])
   const [incoming, setIncoming] = useState<RelatedRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -2702,7 +2707,7 @@ function RelatedTab({
   }
 
   const remove = async (relationId: string) => {
-    if (!confirm('Remove this related-product link?')) return
+    if (!(await askConfirm({ title: 'Remove this related-product link?', confirmLabel: 'Remove', tone: 'danger' }))) return
     setBusy(true)
     try {
       await fetch(

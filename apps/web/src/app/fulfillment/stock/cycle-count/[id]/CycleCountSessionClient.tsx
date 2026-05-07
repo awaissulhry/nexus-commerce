@@ -17,6 +17,7 @@ import {
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -73,6 +74,7 @@ function statusVariant(status: string): 'success' | 'warning' | 'danger' | 'info
 export default function CycleCountSessionClient({ countId }: { countId: string }) {
   const router = useRouter()
   const { toast } = useToast()
+  const askConfirm = useConfirm()
   const [data, setData] = useState<CountSession | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -164,7 +166,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
   }
 
   const handleComplete = async () => {
-    if (!confirm('Complete this count session? Make sure every variance has been resolved.')) return
+    if (!(await askConfirm({ title: 'Complete this count session?', description: 'Make sure every variance has been resolved.', confirmLabel: 'Complete', tone: 'warning' }))) return
     setBusyTopAction('complete')
     try {
       const res = await fetch(

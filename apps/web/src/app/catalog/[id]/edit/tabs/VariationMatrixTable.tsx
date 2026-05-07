@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Trash2, Edit2, Check, X } from 'lucide-react'
 import AttributeLockToggle from '@/components/catalog/AttributeLockToggle'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 
 interface Child {
   id: string
@@ -31,6 +32,7 @@ export default function VariationMatrixTable({
   onToggleLock,
   isLoading = false,
 }: VariationMatrixTableProps) {
+  const askConfirm = useConfirm()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValues, setEditValues] = useState<Record<string, any>>({})
   const [savingId, setSavingId] = useState<string | null>(null)
@@ -94,7 +96,7 @@ export default function VariationMatrixTable({
   }
 
   const handleDelete = async (childId: string) => {
-    if (!confirm('Are you sure you want to delete this variation?')) {
+    if (!(await askConfirm({ title: 'Delete this variation?', confirmLabel: 'Delete', tone: 'danger' }))) {
       return
     }
 
