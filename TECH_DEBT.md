@@ -1256,3 +1256,82 @@ searches that come up empty otherwise.
   different "C.10" commits and two different "C.7"s exist in the
   session log; `git log | grep C\.` is no longer a reliable index
   of the syndication roadmap.
+
+---
+
+## Syndication roadmap — final status (2026-05-07)
+
+The 22-commit syndication rebuild approved on 2026-05-07 closes
+here. Active channel scope per `project_active_channels.md` memory:
+**Amazon + eBay + Shopify**. WooCommerce + Etsy explicitly out of
+scope — overlay clients reverted in `457fce7`, backend endpoints
+left dormant for if/when they come back into scope.
+
+**Shipped (20 of 22 commits, all functionally complete):**
+
+  - **Wave 1 — Foundation truth-telling (5/5):** C.1 listing.created
+    emit on publish path, C.2 AppSidebar invalidation listener,
+    C.3 webhook→SSE bridge (Shopify/Etsy), C.4 dashboard alerts
+    channel-aware deep links + ERROR-status fix, C.5 bulk-destructive
+    confirm + 30s undo grace.
+  - **Wave 2 — Real channel writes, gated (3/3):** C.6 Amazon SP-API
+    publish gate (NEXUS_ENABLE_AMAZON_PUBLISH + AMAZON_PUBLISH_MODE +
+    rate limiter + circuit breaker + ChannelPublishAttempt audit log),
+    C.7 eBay AddItem gate (mirror; reuses ChannelPublishAttempt),
+    C.8 outbound-sync Math.random replacement (real Amazon
+    submitListingPayload + eBay createOrReplaceInventoryItem;
+    Shopify/Woo become honest NOT_IMPLEMENTED with reason).
+  - **Wave 3 — Cornerstone (2/2):** C.9 Matrix v2 with master
+    reference column + always-on price/qty/title drift + two-column
+    tooltip + row-hover ring (bundled in `6c916d8`), C.10 drawer
+    cross-channel comparison panel + per-marketplace overrides
+    (bundled in `1dcdf06`).
+  - **Wave 4 — Polish (2/3):** C.11 saved views (`20fe6f5`),
+    C.12 Italian i18n sweep (~70 keys × 2 catalogs, bundled across
+    `52aff10` + `43e8d7a`), **C.13 mobile responsive skipped** per
+    user direction.
+  - **Wave 5 — eBay Path B (4/4):** C.14 schema (EbayCampaign +
+    EbayWatcherStats + EbayMarkdown), C.15 /listings/ebay overlay
+    (5-tile KPI strip, marketplace tabs IT/DE/ES/FR/UK), C.16
+    Promoted Listings campaign manager (CRUD + create modal),
+    C.17 markdown manager (CRUD + listing-search modal + Best Offer/
+    auto-relist placeholders, bundled in `dedf226`).
+  - **Wave 6 — Path A (1/3 active):** C.18 Shopify overlay
+    (`a00683d`). **C.19 WooCommerce + C.20 Etsy reverted** in
+    `457fce7` per scope narrowing.
+  - **Wave 7 — AI rebuild + verify (2/2):** C.21 /listings/generate
+    rebuild (multi-channel, provider switching, cost tracking,
+    listing-content service), C.22 verification + a11y sweep + this
+    doc note.
+
+**Defaults still gated:** every channel write surface (wizard publish
++ outbound sync) defaults to `NEXUS_ENABLE_<CHANNEL>_PUBLISH=false`
++ `<CHANNEL>_PUBLISH_MODE=dry-run`. Zero risk of accidental real
+publishes until the operator opts in via Railway env vars.
+
+**Verification phase (Phase B per the user's H.1 protocol):** still
+in operator's lane — sandbox creds, dry-run wizards, audit-log
+review against the ChannelPublishAttempt table, graduated rollout
+(canary → 5 → 25 → full catalog) for live writes. Code is ready;
+operational verification isn't something I can drive from here.
+
+**Known carryovers / explicit deferrals:**
+
+  - eBay Marketing API real push for Promoted Listings campaigns —
+    C.16 created the local CRUD + UI, but actual push to
+    `/sell/marketing/v1/ad_campaign` stays gated behind
+    NEXUS_ENABLE_EBAY_PUBLISH and lands as a follow-up.
+  - eBay promotion API push for markdowns — same shape as above.
+  - Best Offer + auto-relist controls — placeholder in C.17;
+    needs new ChannelListing columns (bestOfferEnabled,
+    autoRelistCount).
+  - Mobile responsive sweep (originally C.13) — skipped per
+    direction. iPad usability of the matrix view + drawers is
+    operational debt for when Awa flags friction.
+  - A/B variant comparison UI in /listings/generate — service
+    supports the `variant` parameter; UI defaults to variant=0.
+    Surface lands when operators want side-by-side comparison.
+  - Save-as-draft + multi-channel publish from /listings/generate —
+    output is ephemeral (copy → paste into wizard or product
+    editor); persistent draft model would need a generic
+    DraftListing schema replacing the eBay-specific one.

@@ -285,7 +285,8 @@ export default function EbayCampaignsClient() {
                         <button
                           onClick={() => transition(c.id, 'RUNNING')}
                           title="Start / resume"
-                          className="h-7 w-7 inline-flex items-center justify-center text-emerald-600 hover:bg-emerald-50 rounded"
+                          aria-label={`Start campaign "${c.name}"`}
+                          className="h-7 w-7 inline-flex items-center justify-center text-emerald-600 hover:bg-emerald-50 rounded focus:outline-none focus:ring-2 focus:ring-emerald-300"
                         >
                           <Play size={12} />
                         </button>
@@ -294,7 +295,8 @@ export default function EbayCampaignsClient() {
                         <button
                           onClick={() => transition(c.id, 'PAUSED')}
                           title="Pause"
-                          className="h-7 w-7 inline-flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded"
+                          aria-label={`Pause campaign "${c.name}"`}
+                          className="h-7 w-7 inline-flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded focus:outline-none focus:ring-2 focus:ring-amber-300"
                         >
                           <Pause size={12} />
                         </button>
@@ -303,7 +305,8 @@ export default function EbayCampaignsClient() {
                         <button
                           onClick={() => transition(c.id, 'ENDED')}
                           title="End campaign"
-                          className="h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:bg-slate-100 rounded"
+                          aria-label={`End campaign "${c.name}"`}
+                          className="h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:bg-slate-100 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
                         >
                           <Square size={12} />
                         </button>
@@ -312,7 +315,8 @@ export default function EbayCampaignsClient() {
                         <button
                           onClick={() => remove(c)}
                           title="Delete"
-                          className="h-7 w-7 inline-flex items-center justify-center text-rose-500 hover:bg-rose-50 rounded"
+                          aria-label={`Delete DRAFT campaign "${c.name}"`}
+                          className="h-7 w-7 inline-flex items-center justify-center text-rose-500 hover:bg-rose-50 rounded focus:outline-none focus:ring-2 focus:ring-rose-300"
                         >
                           <Trash2 size={12} />
                         </button>

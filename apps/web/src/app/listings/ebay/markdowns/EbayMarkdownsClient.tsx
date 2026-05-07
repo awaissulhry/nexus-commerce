@@ -263,7 +263,8 @@ export default function EbayMarkdownsClient() {
                         <button
                           onClick={() => transition(m.id, 'CANCELLED')}
                           title="Cancel"
-                          className="h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:bg-slate-100 rounded"
+                          aria-label={`Cancel markdown for "${m.listing.product.sku}"`}
+                          className="h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:bg-slate-100 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
                         >
                           <Square size={12} />
                         </button>
@@ -272,7 +273,8 @@ export default function EbayMarkdownsClient() {
                         <button
                           onClick={() => transition(m.id, 'ENDED')}
                           title="End now"
-                          className="h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:bg-slate-100 rounded"
+                          aria-label={`End markdown now for "${m.listing.product.sku}"`}
+                          className="h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:bg-slate-100 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
                         >
                           <Square size={12} />
                         </button>
@@ -281,7 +283,8 @@ export default function EbayMarkdownsClient() {
                         <button
                           onClick={() => remove(m)}
                           title="Delete"
-                          className="h-7 w-7 inline-flex items-center justify-center text-rose-500 hover:bg-rose-50 rounded"
+                          aria-label={`Delete DRAFT markdown for "${m.listing.product.sku}"`}
+                          className="h-7 w-7 inline-flex items-center justify-center text-rose-500 hover:bg-rose-50 rounded focus:outline-none focus:ring-2 focus:ring-rose-300"
                         >
                           <Trash2 size={12} />
                         </button>

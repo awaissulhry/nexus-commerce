@@ -348,12 +348,13 @@ export default function GeneratorPage() {
                 <button
                   key={f.id}
                   onClick={() => toggleField(f.id)}
-                  className={`h-7 px-2 text-sm rounded border transition ${
+                  className={`h-7 px-2 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
                     fields.includes(f.id)
                       ? 'bg-blue-50 border-blue-300 text-blue-700'
                       : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                   }`}
                   aria-pressed={fields.includes(f.id)}
+                  aria-label={`Toggle ${f.label} field`}
                 >
                   {f.label}
                 </button>
@@ -465,7 +466,14 @@ function ProductRow({
           <button
             onClick={onGenerate}
             disabled={state?.loading}
-            className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-60 inline-flex items-center gap-1.5"
+            aria-label={
+              state?.loading
+                ? `Generating content for ${product.sku}`
+                : state?.result
+                  ? `Regenerate content for ${product.sku}`
+                  : `Generate AI content for ${product.sku}`
+            }
+            className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-60 inline-flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300"
           >
             {state?.loading ? (
               <>
