@@ -4232,7 +4232,7 @@ function HealthStat({ label, value, tone }: { label: string; value: number; tone
           <AlertTriangle size={18} />
         </div>
         <div>
-          <div className="text-[24px] font-semibold tabular-nums text-slate-900">{value}</div>
+          <div className="text-2xl font-semibold tabular-nums text-slate-900">{value}</div>
           <div className="text-sm uppercase tracking-wider text-slate-500">{label}</div>
         </div>
       </div>

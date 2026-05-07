@@ -331,7 +331,7 @@ export default function MatrixWorkspace({
             <ChevronLeft className="w-3 h-3" />
             Back to product
           </Link>
-          <h1 className="text-[20px] font-semibold text-slate-900 mt-1 truncate">
+          <h1 className="text-xl font-semibold text-slate-900 mt-1 truncate">
             {product.name}
           </h1>
           <div className="text-base text-slate-500 flex items-center gap-2 flex-wrap">
