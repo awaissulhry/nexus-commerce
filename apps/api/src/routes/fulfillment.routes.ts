@@ -1445,6 +1445,75 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         trend.push({ date: d, ships: dailyShips[d] ?? 0 })
       }
 
+      const carriersOut = Object.entries(byCarrier).map(([code, v]) => ({
+        carrierCode: code,
+        count: v.count,
+        totalCostCents: v.totalCostCents,
+        avgCostCents: v.count > 0 ? Math.round(v.totalCostCents / v.count) : null,
+        lateCount: v.lateCount,
+        lateRate: v.count > 0 ? v.lateCount / v.count : null,
+      })).sort((a, b) => b.count - a.count)
+
+      // O.38: cost-savings + reliability insights. Compares carriers
+      // against the cheapest one with material volume; flags any
+      // carrier whose late-rate is materially worse than the median.
+      const insights: Array<{
+        kind: 'cost' | 'reliability'
+        severity: 'info' | 'warning'
+        message: string
+        carrierCode?: string
+        savingsCentsPerMonth?: number
+      }> = []
+      const carriersWithVolume = carriersOut.filter(
+        (c) => c.count >= 5 && c.avgCostCents != null,
+      )
+      if (carriersWithVolume.length >= 2) {
+        const cheapest = carriersWithVolume.reduce((a, b) =>
+          (a.avgCostCents ?? Infinity) < (b.avgCostCents ?? Infinity) ? a : b,
+        )
+        for (const c of carriersWithVolume) {
+          if (c.carrierCode === cheapest.carrierCode) continue
+          if (c.avgCostCents == null || cheapest.avgCostCents == null) continue
+          const delta = c.avgCostCents - cheapest.avgCostCents
+          if (delta < 50) continue // <€0.50 — noise
+          // Project monthly savings if everything currently going
+          // through `c` shifted to `cheapest`. Assumes the cheaper
+          // carrier can absorb (won't always be true, but the insight
+          // is "explore this", not "do this blindly").
+          const monthlyShips = (c.count / days) * 30
+          const savingsCentsPerMonth = Math.round(monthlyShips * delta)
+          if (savingsCentsPerMonth >= 1000) {
+            // ≥ €10/mo — worth surfacing
+            insights.push({
+              kind: 'cost',
+              severity: savingsCentsPerMonth >= 5000 ? 'warning' : 'info',
+              message: `Switch ${c.carrierCode} → ${cheapest.carrierCode}: avg €${(delta / 100).toFixed(2)}/shipment cheaper, projected savings ~€${(savingsCentsPerMonth / 100).toFixed(0)}/month at current volume.`,
+              carrierCode: c.carrierCode,
+              savingsCentsPerMonth,
+            })
+          }
+        }
+        // Reliability insight: any carrier with > 8% late rate when
+        // median is sub-3%.
+        const lateRates = carriersWithVolume
+          .map((c) => c.lateRate)
+          .filter((v): v is number => v != null)
+          .sort((a, b) => a - b)
+        const medianLate = lateRates.length
+          ? lateRates[Math.floor(lateRates.length / 2)]
+          : 0
+        for (const c of carriersWithVolume) {
+          if (c.lateRate != null && c.lateRate > 0.08 && c.lateRate > medianLate * 2) {
+            insights.push({
+              kind: 'reliability',
+              severity: 'warning',
+              message: `${c.carrierCode} is running ${(c.lateRate * 100).toFixed(0)}% late vs ${(medianLate * 100).toFixed(0)}% median. Consider routing more orders away from it.`,
+              carrierCode: c.carrierCode,
+            })
+          }
+        }
+      }
+
       return {
         windowDays: days,
         totals: {
@@ -1463,16 +1532,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           late: lateCount,
           lateRate,
         },
-        byCarrier: Object.entries(byCarrier).map(([code, v]) => ({
-          carrierCode: code,
-          count: v.count,
-          totalCostCents: v.totalCostCents,
-          avgCostCents: v.count > 0 ? Math.round(v.totalCostCents / v.count) : null,
-          lateCount: v.lateCount,
-          lateRate: v.count > 0 ? v.lateCount / v.count : null,
-        })).sort((a, b) => b.count - a.count),
+        byCarrier: carriersOut,
         byChannel,
         trend,
+        insights,
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[outbound/analytics] failed')

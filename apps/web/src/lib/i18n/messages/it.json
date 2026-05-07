@@ -78,6 +78,8 @@
   "analytics.col.avgCost": "Costo medio",
   "analytics.col.lateRate": "% ritardi",
   "analytics.byChannel": "Per canale",
+  "analytics.insights.title": "Suggerimenti",
+  "analytics.insights.subtitle": "Raccomandazioni su costi e affidabilità dai dati attuali",
 
   "pack.printPackSlip": "Stampa documento di trasporto",
   "pack.split.cta": "Dividi in pacco nuovo",

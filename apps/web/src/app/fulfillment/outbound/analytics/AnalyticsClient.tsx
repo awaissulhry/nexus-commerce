@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import {
-  Truck, Clock, AlertTriangle, TrendingUp, RefreshCw, DollarSign,
+  Truck, Clock, AlertTriangle, TrendingUp, RefreshCw, DollarSign, Lightbulb,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -29,6 +29,13 @@ interface Analytics {
   }>
   byChannel: Record<string, number>
   trend: Array<{ date: string; ships: number }>
+  insights: Array<{
+    kind: 'cost' | 'reliability'
+    severity: 'info' | 'warning'
+    message: string
+    carrierCode?: string
+    savingsCentsPerMonth?: number
+  }>
 }
 
 const WINDOWS = [7, 30, 90] as const
@@ -183,6 +190,39 @@ export default function AnalyticsClient() {
               hint={t('analytics.kpi.totalCostHint', { total: formatEur(data.totals.totalCostCents) })}
             />
           </div>
+
+          {/* O.38: Insights / recommendations */}
+          {data.insights && data.insights.length > 0 && (
+            <Card>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                  <Lightbulb size={12} /> {t('analytics.insights.title')}
+                  <span className="ml-auto text-xs text-slate-500 font-normal normal-case tracking-normal">
+                    {t('analytics.insights.subtitle')}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {data.insights.map((ins, i) => (
+                    <div
+                      key={i}
+                      className={`flex items-start gap-3 px-3 py-2.5 rounded border ${
+                        ins.severity === 'warning'
+                          ? 'bg-amber-50 border-amber-200 text-amber-900'
+                          : 'bg-blue-50 border-blue-200 text-blue-900'
+                      }`}
+                    >
+                      {ins.kind === 'cost' ? (
+                        <DollarSign size={14} className="flex-shrink-0 mt-0.5" />
+                      ) : (
+                        <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
+                      )}
+                      <div className="flex-1 text-md">{ins.message}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Card>
+          )}
 
           {/* Trend */}
           <Card>

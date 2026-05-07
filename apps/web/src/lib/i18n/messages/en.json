@@ -107,6 +107,8 @@
   "analytics.col.avgCost": "Avg cost",
   "analytics.col.lateRate": "Late rate",
   "analytics.byChannel": "By channel",
+  "analytics.insights.title": "Insights",
+  "analytics.insights.subtitle": "Cost + reliability recommendations from current data",
 
   "pack.printPackSlip": "Print pack slip",
   "pack.split.cta": "Split into new package",
