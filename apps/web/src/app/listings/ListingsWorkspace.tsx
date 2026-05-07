@@ -26,6 +26,8 @@ import { Tabs } from '@/components/ui/Tabs'
 import { IconButton } from '@/components/ui/IconButton'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { InlineEditTrigger } from '@/components/ui/InlineEditTrigger'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { useToast } from '@/components/ui/Toast'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
@@ -1117,18 +1119,110 @@ function Pagination({ page, totalPages, onPage }: { page: number; totalPages: nu
 // ────────────────────────────────────────────────────────────────────
 // BulkActionBar
 // ────────────────────────────────────────────────────────────────────
+
+// C.5 — paired actions where each cleanly inverts the other. Driving
+// the post-action undo banner: after a successful bulk action whose
+// pair lives in this map, we surface a 30s "Undo" toast that fires
+// the inverse against the same listingIds. Actions absent from the
+// map (resync, set-price) skip the undo banner — resync is idempotent
+// so undo is meaningless; set-price loses the previous explicit price
+// and the safe inverse is "follow master", which the operator can
+// trigger explicitly if they want it.
+const INVERSE_BULK_ACTION: Record<string, string> = {
+  publish: 'unpublish',
+  unpublish: 'publish',
+  'follow-master': 'unfollow-master',
+  'unfollow-master': 'follow-master',
+}
+
+const ACTION_PAST_LABEL: Record<string, string> = {
+  publish: 'Published',
+  unpublish: 'Unpublished',
+  resync: 'Resynced',
+  'set-price': 'Price set on',
+  'follow-master': 'Following master on',
+  'unfollow-master': 'Unfollowed master on',
+  'set-pricing-rule': 'Pricing rule applied to',
+}
+
 function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: string[]; onClear: () => void; onComplete: () => void }) {
   const [busy, setBusy] = useState(false)
   const [jobStatus, setJobStatus] = useState<string | null>(null)
   const [setPriceOpen, setSetPriceOpen] = useState(false)
+  const confirm = useConfirm()
+  const { toast } = useToast()
+
+  // Fire the inverse action without any further confirm or undo
+  // toast. Used by the undo button on the success toast: the operator
+  // already saw the original action's confirmation (if any) and is
+  // explicitly asking to revert; another confirm step or a re-undo
+  // banner would be noise.
+  const runInverse = useCallback(
+    async (inverseAction: string, ids: string[]) => {
+      try {
+        const res = await fetch(`${getBackendUrl()}/api/listings/bulk-action`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: inverseAction, listingIds: ids }),
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          toast.error(`Undo failed: ${data.error ?? res.statusText}`)
+          return
+        }
+        // Best-effort invalidation; we don't poll the inverse job's
+        // progress — the standard SSE / 30s polling will surface the
+        // result when the worker finishes.
+        emitInvalidation({
+          type: 'listing.updated',
+          meta: {
+            action: inverseAction,
+            count: ids.length,
+            listingIds: ids,
+            source: 'listings-bulk-undo',
+          },
+        })
+        emitInvalidation({
+          type: 'bulk-job.completed',
+          meta: { action: inverseAction, listingIds: ids },
+        })
+        toast.success(
+          `Reverted ${ids.length} listing${ids.length === 1 ? '' : 's'}`,
+        )
+      } catch (e: any) {
+        toast.error(`Undo failed: ${e.message ?? 'Unknown error'}`)
+      }
+    },
+    [toast],
+  )
 
   const runAction = async (action: string, payload?: any) => {
+    // C.5 — confirm step for destructive bulk operations. Today
+    // unpublish is the only one that takes listings off marketplaces;
+    // the others (resync, follow-master, set-price) either don't
+    // change visible state from the buyer's POV or get confirmed via
+    // their own dedicated modal.
+    if (action === 'unpublish') {
+      const ok = await confirm({
+        title: `Unpublish ${selectedIds.length} listing${selectedIds.length === 1 ? '' : 's'}?`,
+        description:
+          'These listings will go offline on their marketplaces. ' +
+          'You can republish from the success banner within 30 seconds.',
+        confirmLabel: 'Unpublish',
+        tone: 'danger',
+      })
+      if (!ok) return
+    }
+
     setBusy(true)
+    // Snapshot at the start of the action so the undo target is
+    // stable even after the bar's selection clears on success.
+    const affectedIds = [...selectedIds]
     try {
       const res = await fetch(`${getBackendUrl()}/api/listings/bulk-action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, listingIds: selectedIds, payload }),
+        body: JSON.stringify({ action, listingIds: affectedIds, payload }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Bulk action failed')
@@ -1142,6 +1236,7 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
       // "did not complete in 60s" so the operator knows where to look.
       const start = Date.now()
       let reachedTerminal = false
+      let succeededCount = 0
       let lastJob: { processed: number; total: number; succeeded: number; failed: number; status: string } | null = null
       while (Date.now() - start < 60_000) {
         await new Promise((r) => setTimeout(r, 600))
@@ -1156,6 +1251,7 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
           job.status === 'PARTIALLY_COMPLETED'
         ) {
           reachedTerminal = true
+          succeededCount = job.succeeded
           setJobStatus(`Done — ${job.succeeded} succeeded, ${job.failed} failed`)
           break
         }
@@ -1175,15 +1271,36 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
         type: 'listing.updated',
         meta: {
           action,
-          count: selectedIds.length,
-          listingIds: selectedIds,
+          count: affectedIds.length,
+          listingIds: affectedIds,
           source: 'listings-bulk',
         },
       })
       emitInvalidation({
         type: 'bulk-job.completed',
-        meta: { action, listingIds: selectedIds },
+        meta: { action, listingIds: affectedIds },
       })
+
+      // C.5 — 30 s undo grace banner. The bulk endpoint has no native
+      // undo; we synthesize one by firing the inverse action against
+      // the same listingIds when the operator clicks Undo. Only paired
+      // actions show the banner — resync and set-price would be
+      // misleading or unsafe to "undo".
+      const inverse = INVERSE_BULK_ACTION[action]
+      if (reachedTerminal && succeededCount > 0 && inverse) {
+        const past = ACTION_PAST_LABEL[action] ?? 'Updated'
+        toast({
+          title: `${past} ${succeededCount} listing${succeededCount === 1 ? '' : 's'}`,
+          description: `Undo within 30 seconds.`,
+          tone: 'success',
+          durationMs: 30_000,
+          action: {
+            label: 'Undo',
+            onClick: () => runInverse(inverse, affectedIds),
+          },
+        })
+      }
+
       onComplete()
       setTimeout(() => setJobStatus(null), 2500)
     } catch (e: any) {
