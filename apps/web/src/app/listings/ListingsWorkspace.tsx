@@ -2656,6 +2656,19 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
   // Stored as `${columnKey}:${kind}` so a single click toggles, and a
   // second click on the same pip clears.
   const [pipFilter, setPipFilter] = useState<string | null>(null)
+  // M.5 — bulk-resync from the pipFilter banner. busy disables the
+  // button + progresses; lastBulk is the post-fan-out summary so the
+  // operator sees what landed (cleared on next pip click or unmount).
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [lastBulk, setLastBulk] = useState<
+    { ok: number; failed: number; total: number } | null
+  >(null)
+  // Reset the bulk summary whenever the operator changes pip filter so
+  // a stale "12 succeeded" from a prior column doesn't sit on the new
+  // banner.
+  useEffect(() => {
+    setLastBulk(null)
+  }, [pipFilter])
 
   const url = useMemo(() => {
     const qs = new URLSearchParams({ limit: '50' })
@@ -2858,14 +2871,67 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
       {pipFilter && (() => {
         const sep = pipFilter.lastIndexOf(':')
         const col = pipFilter.slice(0, sep)
-        const kind = pipFilter.slice(sep + 1)
+        const kind = pipFilter.slice(sep + 1) as 'live' | 'errors' | 'suppressed' | 'drift'
         const kindLabel =
           kind === 'errors' ? 'sync errors' :
           kind === 'suppressed' ? 'suppressed listings' :
           kind === 'drift' ? 'drift from master' :
           'live listings'
+        // Cells in the visible subset that belong to the filtered
+        // column — these are the ones a bulk-resync would target.
+        const targetCells: any[] = []
+        for (const p of visibleProducts) {
+          const cell = p.cells.find(
+            (c: any) => `${c.channel}:${c.marketplace}` === col,
+          )
+          if (cell) targetCells.push(cell)
+        }
+        // Bulk-resync only makes sense for surfaces a resync can move:
+        // sync errors, drift from master. Suppressed listings need
+        // per-listing diagnosis (the drawer's V.3 button) and `live`
+        // is a read-only KPI. Hide the button in those cases.
+        const canBulkResync = kind === 'errors' || kind === 'drift'
+        const runBulkResync = async () => {
+          if (!canBulkResync || bulkBusy || targetCells.length === 0) return
+          setBulkBusy(true)
+          setLastBulk(null)
+          // Mark every target cell optimistic-syncing so the dots go
+          // amber immediately. fireSync covers a single cell; we
+          // inline the same pattern here for the batch.
+          setOptimisticSyncing((prev) => {
+            const next = new Set(prev)
+            for (const c of targetCells) next.add(c.id)
+            return next
+          })
+          const results = await Promise.allSettled(
+            targetCells.map((c) =>
+              fetch(`${getBackendUrl()}/api/listings/${c.id}/resync`, {
+                method: 'POST',
+              }).then((r) => {
+                if (!r.ok) throw new Error(`HTTP ${r.status}`)
+              }),
+            ),
+          )
+          const ok = results.filter((r) => r.status === 'fulfilled').length
+          const failed = results.length - ok
+          setLastBulk({ ok, failed, total: targetCells.length })
+          // Clear optimistic flags after a beat, then refetch to pick
+          // up real server-side syncStatus.
+          setTimeout(() => {
+            setOptimisticSyncing((prev) => {
+              const next = new Set(prev)
+              for (const c of targetCells) next.delete(c.id)
+              return next
+            })
+            refetch()
+          }, 800)
+          for (const c of targetCells) {
+            emitInvalidation({ type: 'listing.updated', id: c.id })
+          }
+          setBulkBusy(false)
+        }
         return (
-          <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded border border-blue-200 bg-blue-50 text-sm">
+          <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded border border-blue-200 bg-blue-50 text-sm flex-wrap">
             <span className="text-blue-900">
               Showing{' '}
               <span className="tabular-nums font-semibold">{visibleProducts.length}</span>{' '}
@@ -2873,14 +2939,39 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
               <span className="tabular-nums">{data.products.length}</span>{' '}
               products with <span className="font-semibold">{kindLabel}</span> on{' '}
               <span className="font-mono">{col}</span>
+              {lastBulk && (
+                <span className="ml-2 text-xs">
+                  · last batch:{' '}
+                  <span className="text-emerald-700 font-semibold">{lastBulk.ok} succeeded</span>
+                  {lastBulk.failed > 0 && (
+                    <>
+                      ,{' '}
+                      <span className="text-rose-700 font-semibold">{lastBulk.failed} failed</span>
+                    </>
+                  )}
+                </span>
+              )}
             </span>
-            <button
-              onClick={() => setPipFilter(null)}
-              className="h-6 px-2 text-xs bg-white border border-blue-300 rounded text-blue-700 hover:bg-blue-100 inline-flex items-center gap-1"
-              aria-label="Clear column filter"
-            >
-              <FilterX size={11} /> Clear
-            </button>
+            <div className="inline-flex items-center gap-1.5">
+              {canBulkResync && targetCells.length > 0 && (
+                <button
+                  onClick={runBulkResync}
+                  disabled={bulkBusy}
+                  className="h-6 px-2 text-xs bg-blue-600 text-white border border-blue-700 rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1"
+                  aria-label={`Resync all ${targetCells.length} listings`}
+                >
+                  <RefreshCw size={11} className={bulkBusy ? 'animate-spin' : ''} />
+                  {bulkBusy ? `Resyncing ${targetCells.length}…` : `Resync all ${targetCells.length}`}
+                </button>
+              )}
+              <button
+                onClick={() => setPipFilter(null)}
+                className="h-6 px-2 text-xs bg-white border border-blue-300 rounded text-blue-700 hover:bg-blue-100 inline-flex items-center gap-1"
+                aria-label="Clear column filter"
+              >
+                <FilterX size={11} /> Clear
+              </button>
+            </div>
           </div>
         )
       })()}
