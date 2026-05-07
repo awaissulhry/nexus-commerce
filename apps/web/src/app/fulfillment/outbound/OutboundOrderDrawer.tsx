@@ -99,18 +99,19 @@ type DrawerOrder = {
   }>
 }
 
-// O.51: human-readable label per audit action. Falls through to the
-// raw action keyword when no key is present so new actions degrade
-// gracefully instead of disappearing.
-const ACTION_LABEL: Record<string, string> = {
-  'print-label': 'Label printed',
-  'void-label': 'Label voided',
-  'void-label-failed': 'Void refused by carrier',
-  'mark-shipped': 'Marked shipped',
-  'hold': 'Put on hold',
-  'release': 'Hold released',
-  'auto-cancel-from-order': 'Auto-cancelled (order cancelled)',
-  'manual-cancel': 'Manually cancelled',
+// O.51 / O.54: human-readable label per audit action. Resolved
+// against the i18n catalog so Italian operators see translated
+// labels; falls through to the raw verb when no key is mapped.
+// Map keys → i18n keys to keep both catalogs co-located.
+const ACTION_TKEY: Record<string, string> = {
+  'print-label': 'outbound.activity.action.printLabel',
+  'void-label': 'outbound.activity.action.voidLabel',
+  'void-label-failed': 'outbound.activity.action.voidLabelFailed',
+  'mark-shipped': 'outbound.activity.action.markShipped',
+  'hold': 'outbound.activity.action.hold',
+  'release': 'outbound.activity.action.release',
+  'auto-cancel-from-order': 'outbound.activity.action.autoCancel',
+  'manual-cancel': 'outbound.activity.action.manualCancel',
 }
 
 const TRACKING_TONE: Record<string, string> = {
@@ -795,7 +796,8 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                               : a.action.includes('release') || a.action.includes('shipped') || a.action.includes('print')
                               ? 'text-emerald-700 bg-emerald-50'
                               : 'text-slate-700 bg-slate-100'
-                          const label = ACTION_LABEL[a.action] ?? a.action
+                          const tKey = ACTION_TKEY[a.action]
+                          const label = tKey ? t(tKey) : a.action
                           return (
                             <div key={a.id} className="flex items-start gap-3 text-sm">
                               <div className="text-slate-500 tabular-nums w-32 flex-shrink-0">
@@ -806,12 +808,21 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                                   minute: '2-digit',
                                 })}
                               </div>
-                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${tone}`}>
+                              {/* O.54: click-through to /audit-log
+                                  filtered to this shipment. Operator
+                                  finds the full forensic detail
+                                  (before/after JSON, metadata) one
+                                  click away from the drawer. */}
+                              <Link
+                                href={`/audit-log?entityType=Shipment&entityId=${a.shipmentId}`}
+                                className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium hover:underline ${tone}`}
+                                title={t('outbound.activity.openAuditLog')}
+                              >
                                 {label}
-                              </span>
+                              </Link>
                               <div className="flex-1 min-w-0 text-slate-600 space-y-0.5">
                                 <div>
-                                  {a.userId ? `by ${a.userId}` : 'by system'}
+                                  {a.userId ? `by ${a.userId}` : t('outbound.activity.bySystem')}
                                   {reason ? ` · ${reason}` : ''}
                                   {dryRun ? ' · dryRun' : ''}
                                 </div>
