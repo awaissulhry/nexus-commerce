@@ -168,6 +168,25 @@ export default function PendingShipmentsClient() {
     total: number
     errors: Array<{ orderId: string; reason: string }>
   } | null>(null)
+  // O.69: bulk-create preflight modal. Same shape as createResults
+  // but rendered *before* the call so operators can fix master-data
+  // gaps without burning the bulk-create round-trip.
+  type PreflightOrder = {
+    orderId: string
+    channelOrderId: string
+    country: string | null
+    isInternational: boolean
+    ready: boolean
+    issues: Array<{ severity: 'error' | 'warning'; code: string }>
+  }
+  const [preflight, setPreflight] = useState<{
+    total: number
+    ready: number
+    errors: number
+    warnings: number
+    orders: PreflightOrder[]
+  } | null>(null)
+  const [preflightLoading, setPreflightLoading] = useState(false)
 
   const fetchViews = useCallback(async () => {
     try {
@@ -451,6 +470,38 @@ export default function PendingShipmentsClient() {
     if (!data) return
     if (data.items.every((o) => selected.has(o.id))) setSelected(new Set())
     else setSelected(new Set(data.items.map((o) => o.id)))
+  }
+
+  // O.69: run the preflight against the current selection. Surfaces
+  // a modal with per-order readiness so the operator can fix gaps
+  // (missing HS codes for international, missing addresses) before
+  // committing to bulk-create.
+  const runPreflight = async () => {
+    if (selected.size === 0) {
+      toast.error(t('outbound.pending.toast.selectFirst'))
+      return
+    }
+    setPreflightLoading(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/outbound/preflight-bulk`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderIds: Array.from(selected) }),
+        },
+      )
+      if (!res.ok) {
+        toast.error(t('common.error'))
+        return
+      }
+      const out = await res.json()
+      setPreflight(out)
+    } catch {
+      toast.error(t('common.error'))
+    } finally {
+      setPreflightLoading(false)
+    }
   }
 
   const bulkCreateShipments = async () => {
@@ -786,6 +837,17 @@ export default function PendingShipmentsClient() {
                 <Plus size={12} /> {t('outbound.pending.bulkCreate', { n: selected.size })}
               </button>
               <button
+                onClick={runPreflight}
+                disabled={preflightLoading}
+                className="h-11 md:h-7 px-4 md:px-3 text-base bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-white disabled:opacity-50 inline-flex items-center gap-1.5"
+                title={t('outbound.pending.preflight.tooltip')}
+              >
+                <AlertTriangle size={12} />
+                {preflightLoading
+                  ? t('common.loading')
+                  : t('outbound.pending.preflight.button')}
+              </button>
+              <button
                 onClick={() => setSelected(new Set())}
                 className="ml-auto h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded"
               >
@@ -975,6 +1037,151 @@ export default function PendingShipmentsClient() {
           t={t}
         />
       )}
+
+      {preflight && (
+        <PreflightModal
+          report={preflight}
+          onClose={() => setPreflight(null)}
+          onProceed={() => {
+            setPreflight(null)
+            void bulkCreateShipments()
+          }}
+          onOpenDrawer={(orderId) => {
+            setPreflight(null)
+            const next = new URLSearchParams(params.toString())
+            next.set('drawer', orderId)
+            router.replace(`?${next.toString()}`, { scroll: false })
+          }}
+          t={t}
+        />
+      )}
+    </div>
+  )
+}
+
+// O.69: bulk-create preflight modal. Renders the per-order
+// readiness report; ready orders show as a compact green pill,
+// blocked orders list their issue codes (mapped to translated
+// labels). Operator can fix issues via Open buttons or proceed
+// anyway — the bulk-create endpoint will skip blocked orders.
+const ISSUE_TKEY: Record<string, string> = {
+  SHIPMENT_EXISTS: 'outbound.pending.preflight.issue.shipmentExists',
+  MISSING_ADDRESS: 'outbound.pending.preflight.issue.missingAddress',
+  CUSTOMS_HS_MISSING: 'outbound.pending.preflight.issue.hsMissing',
+  CUSTOMS_ORIGIN_MISSING: 'outbound.pending.preflight.issue.originMissing',
+}
+
+function PreflightModal({
+  report,
+  onClose,
+  onProceed,
+  onOpenDrawer,
+  t,
+}: {
+  report: {
+    total: number
+    ready: number
+    errors: number
+    warnings: number
+    orders: Array<{
+      orderId: string
+      channelOrderId: string
+      country: string | null
+      isInternational: boolean
+      ready: boolean
+      issues: Array<{ severity: 'error' | 'warning'; code: string }>
+    }>
+  }
+  onClose: () => void
+  onProceed: () => void
+  onOpenDrawer: (orderId: string) => void
+  t: (key: string, vars?: Record<string, string | number>) => string
+}) {
+  const blocked = report.orders.filter((o) => !o.ready)
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div
+        className="bg-white rounded-md shadow-xl w-full max-w-xl mx-4 max-h-[80vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+          <div>
+            <div className="text-sm font-medium text-slate-900">
+              {t('outbound.pending.preflight.title')}
+            </div>
+            <div className="text-sm text-slate-500">
+              {t('outbound.pending.preflight.summary', {
+                ready: report.ready,
+                total: report.total,
+                blocked: report.errors,
+              })}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 rounded"
+          >
+            <X size={12} />
+          </button>
+        </div>
+        <div className="px-4 py-3 space-y-1.5">
+          {blocked.length === 0 ? (
+            <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+              {t('outbound.pending.preflight.allReady')}
+            </div>
+          ) : (
+            blocked.map((o) => (
+              <div
+                key={o.orderId}
+                className="flex items-start gap-2 px-2 py-1.5 border border-rose-200 bg-rose-50 rounded"
+              >
+                <AlertTriangle size={11} className="text-rose-500 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0 text-sm">
+                  <div className="font-mono text-slate-900">
+                    {o.channelOrderId}
+                    {o.country && (
+                      <span className="ml-2 text-xs text-slate-500 font-sans">
+                        → {o.country}
+                      </span>
+                    )}
+                  </div>
+                  <ul className="text-xs text-rose-700 list-disc list-inside">
+                    {o.issues.map((iss, idx) => (
+                      <li key={`${iss.code}-${idx}`}>
+                        {ISSUE_TKEY[iss.code]
+                          ? t(ISSUE_TKEY[iss.code])
+                          : iss.code.replace(/_/g, ' ')}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <button
+                  onClick={() => onOpenDrawer(o.orderId)}
+                  className="text-xs px-2 py-0.5 text-slate-700 border border-slate-200 rounded hover:bg-white"
+                >
+                  {t('common.open')}
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+        <div className="flex items-center gap-2 px-4 py-3 border-t border-slate-200">
+          <button
+            onClick={onClose}
+            className="h-7 px-3 text-sm text-slate-600 border border-slate-200 rounded hover:bg-slate-50"
+          >
+            {t('common.close')}
+          </button>
+          <button
+            onClick={onProceed}
+            disabled={report.ready === 0}
+            className="ml-auto h-7 px-3 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1"
+          >
+            <Plus size={11} />
+            {t('outbound.pending.preflight.proceedReady', { n: report.ready })}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

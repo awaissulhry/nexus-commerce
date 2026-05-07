@@ -2398,6 +2398,96 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // O.69: bulk-create preflight. Operators want to know "if I click
+  // Bulk create on these 30 orders, how many will succeed vs fail
+  // for missing master data" *before* the call. Walks the selected
+  // orders + their items + product master and returns a readiness
+  // report: per-order flags for already-has-shipment, customs gaps
+  // (international + missing HS code), missing-address. The bulk-
+  // create endpoint catches all of these too, but at-create the
+  // operator gets a post-mortem; this gives them a pre-flight.
+  fastify.post(
+    '/fulfillment/outbound/preflight-bulk',
+    async (request, reply) => {
+      try {
+        const body = request.body as { orderIds?: string[] }
+        const orderIds = Array.isArray(body.orderIds) ? body.orderIds : []
+        if (orderIds.length === 0) {
+          return reply.code(400).send({ error: 'orderIds[] required' })
+        }
+        if (orderIds.length > 200) {
+          return reply.code(400).send({ error: 'Max 200 orders' })
+        }
+        const orders = await prisma.order.findMany({
+          where: { id: { in: orderIds } },
+          select: {
+            id: true,
+            channelOrderId: true,
+            shippingAddress: true,
+            shipments: {
+              where: { status: { not: 'CANCELLED' as any } },
+              select: { id: true },
+            },
+            items: {
+              select: {
+                sku: true,
+                product: { select: { hsCode: true, countryOfOrigin: true } },
+              },
+            },
+          },
+        })
+        const reports = orders.map((o) => {
+          const ship = o.shippingAddress as any
+          const country = (ship?.CountryCode ?? ship?.countryCode ?? ship?.country ?? '')
+            .toString()
+            .toUpperCase()
+          const isInternational = country !== '' && !EU_COUNTRIES.has(country)
+          const issues: Array<{ severity: 'error' | 'warning'; code: string }> = []
+          if (o.shipments.length > 0) {
+            issues.push({ severity: 'error', code: 'SHIPMENT_EXISTS' })
+          }
+          if (!ship || (!ship.AddressLine1 && !ship.addressLine1 && !ship.street)) {
+            issues.push({ severity: 'error', code: 'MISSING_ADDRESS' })
+          }
+          if (isInternational) {
+            const noHs = o.items.filter((it) => !it.product?.hsCode).length
+            const noOrigin = o.items.filter((it) => !it.product?.countryOfOrigin).length
+            if (noHs > 0) {
+              issues.push({ severity: 'error', code: 'CUSTOMS_HS_MISSING' })
+            }
+            if (noOrigin > 0) {
+              issues.push({ severity: 'warning', code: 'CUSTOMS_ORIGIN_MISSING' })
+            }
+          }
+          const ready = issues.every((i) => i.severity !== 'error')
+          return {
+            orderId: o.id,
+            channelOrderId: o.channelOrderId,
+            country: country || null,
+            isInternational,
+            ready,
+            issues,
+          }
+        })
+        const errors = reports.filter((r) => !r.ready).length
+        const warnings = reports.filter((r) =>
+          r.issues.some((i) => i.severity === 'warning'),
+        ).length
+        return {
+          total: orders.length,
+          ready: reports.filter((r) => r.ready).length,
+          errors,
+          warnings,
+          missing: orderIds.filter((id) => !orders.find((o) => o.id === id)),
+          orders: reports,
+        }
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[outbound/preflight-bulk] failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
   // ── O.4: Pending-shipment aggregation ─────────────────────────────────
   // The cornerstone read for /fulfillment/outbound. Returns orders that
   // need a shipment created (status ∈ PENDING|PROCESSING, no active
