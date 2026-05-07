@@ -293,6 +293,8 @@
   "outbound.shipments.copy.title": "Copy tracking number",
   "outbound.shipments.copy.toast": "Tracking number copied",
   "outbound.drawer.customs.fixProduct": "Open product to add the missing HS code or origin",
+  "outbound.drawer.copyAddress.title": "Copy shipping address",
+  "outbound.drawer.copyAddress.toast": "Address copied",
   "outbound.pending.bulkResults.title": "Bulk create — results",
   "outbound.pending.bulkResults.summary": "{ok} of {total} created · {failed} failed",
   "common.open": "Open",

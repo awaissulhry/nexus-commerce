@@ -15,7 +15,7 @@ import Link from 'next/link'
 import {
   X, Package, ExternalLink, Truck, Crown, AlertTriangle, Clock,
   MapPin, User, CreditCard, Plus, Printer, CheckCircle2, Undo2,
-  TrendingDown, Globe,
+  TrendingDown, Globe, Copy,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -636,21 +636,45 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                   </div>
                   <div className="text-md text-slate-900">{data.customerName || '—'}</div>
                   <div className="text-base text-slate-600">{data.customerEmail || '—'}</div>
-                  {ship && (
-                    <div className="pt-2 border-t border-slate-100">
-                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                        <MapPin size={12} /> {t('outbound.drawer.shipTo')}
+                  {ship && (() => {
+                    // O.68: copy-address affordance. Operators paste
+                    // shipping addresses into manual carrier portals,
+                    // customer-support emails, and printer dialogs;
+                    // copy-paste from a multi-line div is brittle
+                    // (extra whitespace, missed lines). One-click copy
+                    // gives them a clean newline-joined block.
+                    const addressLines = [
+                      data.customerName,
+                      ship.AddressLine1 ?? ship.addressLine1 ?? ship.street,
+                      ship.AddressLine2 ?? ship.addressLine2,
+                      [ship.PostalCode ?? ship.postalCode, ship.City ?? ship.city].filter(Boolean).join(' '),
+                      [ship.StateOrRegion ?? ship.stateOrProvince ?? ship.state, ship.CountryCode ?? ship.countryCode ?? ship.country].filter(Boolean).join(' · '),
+                    ].filter(Boolean) as string[]
+                    return (
+                      <div className="pt-2 border-t border-slate-100">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                          <MapPin size={12} /> {t('outbound.drawer.shipTo')}
+                          <button
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(addressLines.join('\n'))
+                                toast.success(t('outbound.drawer.copyAddress.toast'))
+                              } catch {
+                                toast.error(t('common.error'))
+                              }
+                            }}
+                            title={t('outbound.drawer.copyAddress.title')}
+                            className="ml-auto h-5 w-5 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 rounded normal-case"
+                          >
+                            <Copy size={11} />
+                          </button>
+                        </div>
+                        <div className="text-base text-slate-700 whitespace-pre-line">
+                          {addressLines.slice(1).join('\n')}
+                        </div>
                       </div>
-                      <div className="text-base text-slate-700 whitespace-pre-line">
-                        {[
-                          ship.AddressLine1 ?? ship.addressLine1 ?? ship.street,
-                          ship.AddressLine2 ?? ship.addressLine2,
-                          [ship.PostalCode ?? ship.postalCode, ship.City ?? ship.city].filter(Boolean).join(' '),
-                          [ship.StateOrRegion ?? ship.stateOrProvince ?? ship.state, ship.CountryCode ?? ship.countryCode ?? ship.country].filter(Boolean).join(' · '),
-                        ].filter(Boolean).join('\n')}
-                      </div>
-                    </div>
-                  )}
+                    )
+                  })()}
                 </div>
               </Card>
 
