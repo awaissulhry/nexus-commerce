@@ -154,6 +154,11 @@ export default function PendingShipmentsClient() {
   const [showViewsMenu, setShowViewsMenu] = useState(false)
   // O.52: per-view alert subscriptions. Map of viewId → alerts[].
   const [alertsByView, setAlertsByView] = useState<Record<string, AlertRow[]>>({})
+  // O.61: multi-alert manager modal. Selected view → opens a panel
+  // listing every alert with edit/remove + an "Add another" form.
+  // The schema has always supported N alerts per view; v0 only
+  // exposed the first one in a single-bell prompt.
+  const [alertsModalView, setAlertsModalView] = useState<SavedView | null>(null)
 
   const fetchViews = useCallback(async () => {
     try {
@@ -190,22 +195,35 @@ export default function PendingShipmentsClient() {
   }, [])
   useEffect(() => { fetchViews() }, [fetchViews])
 
-  // O.52: create / delete alert on a view. Defaults to "GT 5" so the
-  // operator gets a useful threshold without a config dialog.
-  const subscribeAlert = async (view: SavedView) => {
-    const thresholdStr = window.prompt(t('outbound.alerts.prompt'), '5')
-    if (thresholdStr == null) return
-    const threshold = Number(thresholdStr)
-    if (!Number.isFinite(threshold) || threshold < 0) {
-      toast.error(t('outbound.alerts.invalidThreshold'))
-      return
+  // O.52 + O.61: create alert on a view. The legacy single-arg form
+  // (subscribeAlert(view)) prompts for a GT threshold; the multi-arg
+  // form is called by the alerts modal with explicit comparison.
+  const subscribeAlert = async (
+    view: SavedView,
+    explicit?: { comparison: string; threshold: number; name?: string },
+  ) => {
+    let comparison = 'GT'
+    let threshold: number
+    let name = view.name
+    if (explicit) {
+      comparison = explicit.comparison
+      threshold = explicit.threshold
+      if (explicit.name) name = explicit.name
+    } else {
+      const thresholdStr = window.prompt(t('outbound.alerts.prompt'), '5')
+      if (thresholdStr == null) return
+      threshold = Number(thresholdStr)
+      if (!Number.isFinite(threshold) || threshold < 0) {
+        toast.error(t('outbound.alerts.invalidThreshold'))
+        return
+      }
     }
     const res = await fetch(`${getBackendUrl()}/api/saved-views/${view.id}/alerts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: view.name,
-        comparison: 'GT',
+        name,
+        comparison,
         threshold,
         cooldownMinutes: 60,
       }),
@@ -213,8 +231,10 @@ export default function PendingShipmentsClient() {
     if (res.ok) {
       toast.success(t('outbound.alerts.created'))
       fetchViews()
+      return true
     } else {
       toast.error(t('common.error'))
+      return false
     }
   }
 
@@ -249,30 +269,9 @@ export default function PendingShipmentsClient() {
     }
   }
 
-  // O.58: clicking an active bell opens a tri-action prompt:
-  //   empty submit → remove the alert
-  //   numeric submit → update threshold (PATCH)
-  //   cancel → no-op
-  const editOrRemoveAlert = async (alertId: string, currentThreshold: number) => {
-    const value = window.prompt(
-      t('outbound.alerts.editPrompt', { threshold: currentThreshold }),
-      String(currentThreshold),
-    )
-    if (value == null) return // cancel
-    const trimmed = value.trim()
-    if (trimmed === '') {
-      // explicit empty → remove
-      await unsubscribeAlert(alertId)
-      return
-    }
-    const next = Number(trimmed)
-    if (!Number.isFinite(next) || next < 0) {
-      toast.error(t('outbound.alerts.invalidThreshold'))
-      return
-    }
-    if (next === currentThreshold) return // no-op
-    await updateAlertThreshold(alertId, next)
-  }
+  // (O.58's editOrRemoveAlert prompt was superseded by O.61's modal,
+  // which handles edit + remove with first-class buttons rather than
+  // a single tri-action prompt.)
 
   // O.42: cross-tab refresh of the views dropdown when a sibling tab
   // edits the list (saved a new view, deleted one, toggled default).
@@ -650,22 +649,29 @@ export default function PendingShipmentsClient() {
                                 <span className="ml-1 text-xs text-amber-600">●</span>
                               )}
                             </button>
-                            {/* O.52: alerts toggle. If alerts exist, click to
-                                remove (single-active-alert per view in v0); if
-                                none, click to create. */}
+                            {/* O.52 + O.61: alerts manager. Single click on the
+                                bell opens the modal listing every alert for
+                                this view (was single-alert-only in v0). The
+                                count badge surfaces multi-alert visibility
+                                without a hover. */}
                             {hasAlert ? (
                               <button
-                                onClick={() => editOrRemoveAlert(alerts[0].id, alerts[0].threshold)}
-                                title={t('outbound.alerts.editTooltip', {
-                                  threshold: alerts[0].threshold,
+                                onClick={() => { setShowViewsMenu(false); setAlertsModalView(v) }}
+                                title={t('outbound.alerts.manage', {
+                                  n: alerts.filter((a) => a.isActive).length,
                                 })}
-                                className="h-6 w-6 inline-flex items-center justify-center text-amber-500 hover:text-amber-700 rounded"
+                                className="h-6 inline-flex items-center justify-center gap-0.5 px-1 text-amber-500 hover:text-amber-700 rounded"
                               >
                                 <Bell size={11} fill="currentColor" />
+                                {alerts.filter((a) => a.isActive).length > 1 && (
+                                  <span className="text-[10px] font-medium tabular-nums">
+                                    {alerts.filter((a) => a.isActive).length}
+                                  </span>
+                                )}
                               </button>
                             ) : (
                               <button
-                                onClick={() => subscribeAlert(v)}
+                                onClick={() => { setShowViewsMenu(false); setAlertsModalView(v) }}
                                 title={t('outbound.alerts.subscribe')}
                                 className="h-6 w-6 inline-flex items-center justify-center text-slate-300 hover:text-amber-500 rounded"
                               >
@@ -924,6 +930,175 @@ export default function PendingShipmentsClient() {
           </div>
         </Card>
       )}
+
+      {alertsModalView && (
+        <AlertsModal
+          view={alertsModalView}
+          alerts={alertsByView[alertsModalView.id] ?? []}
+          onClose={() => setAlertsModalView(null)}
+          onAdd={async (comparison, threshold) => {
+            const ok = await subscribeAlert(alertsModalView, { comparison, threshold })
+            return Boolean(ok)
+          }}
+          onRemove={unsubscribeAlert}
+          onEditThreshold={updateAlertThreshold}
+          t={t}
+        />
+      )}
+    </div>
+  )
+}
+
+// O.61: alerts manager modal. Lists every alert for the chosen view +
+// add-form at the bottom. The dropdown's bell click handler defers
+// here so multi-alert flows (warn-then-escalate, GT+LT pairs) are a
+// first-class operator workflow rather than buried under prompts.
+function AlertsModal({
+  view,
+  alerts,
+  onClose,
+  onAdd,
+  onRemove,
+  onEditThreshold,
+  t,
+}: {
+  view: { id: string; name: string }
+  alerts: Array<{
+    id: string
+    name: string
+    isActive: boolean
+    comparison: string
+    threshold: number
+    lastCount: number
+    cooldownMinutes: number
+  }>
+  onClose: () => void
+  onAdd: (comparison: string, threshold: number) => Promise<boolean>
+  onRemove: (alertId: string) => Promise<void>
+  onEditThreshold: (alertId: string, threshold: number) => Promise<void>
+  t: (key: string, vars?: Record<string, string | number>) => string
+}) {
+  const [comparison, setComparison] = useState<'GT' | 'LT' | 'CHANGE_ABS' | 'CHANGE_PCT'>('GT')
+  const [thresholdInput, setThresholdInput] = useState('5')
+  const [submitting, setSubmitting] = useState(false)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const n = Number(thresholdInput)
+    if (!Number.isFinite(n) || n < 0) return
+    setSubmitting(true)
+    const ok = await onAdd(comparison, n)
+    setSubmitting(false)
+    if (ok) setThresholdInput('5')
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div
+        className="bg-white rounded-md shadow-xl w-full max-w-md mx-4 max-h-[80vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+          <div>
+            <div className="text-sm font-medium text-slate-900">
+              {t('outbound.alerts.modalTitle')}
+            </div>
+            <div className="text-sm text-slate-500 truncate">{view.name}</div>
+          </div>
+          <button
+            onClick={onClose}
+            className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 rounded"
+          >
+            <X size={12} />
+          </button>
+        </div>
+
+        <div className="px-4 py-3">
+          {alerts.length === 0 ? (
+            <div className="text-sm text-slate-500 py-2">
+              {t('outbound.alerts.empty')}
+            </div>
+          ) : (
+            <ul className="space-y-1.5">
+              {alerts.map((a) => (
+                <li
+                  key={a.id}
+                  className={`flex items-center gap-2 px-2 py-1.5 border rounded ${
+                    a.isActive ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50 opacity-60'
+                  }`}
+                >
+                  <Bell size={11} className={a.isActive ? 'text-amber-500' : 'text-slate-400'} fill="currentColor" />
+                  <span className="text-sm text-slate-700 flex-1">
+                    {t(`outbound.alerts.comparison.${a.comparison}`)}
+                    {' '}
+                    <span className="tabular-nums font-medium text-slate-900">{a.threshold}</span>
+                    <span className="text-xs text-slate-500 ml-2">
+                      {t('outbound.alerts.lastCount', { count: a.lastCount })}
+                    </span>
+                  </span>
+                  <button
+                    onClick={async () => {
+                      const next = window.prompt(
+                        t('outbound.alerts.editPrompt', { threshold: a.threshold }),
+                        String(a.threshold),
+                      )
+                      if (next == null) return
+                      const n = Number(next)
+                      if (!Number.isFinite(n) || n < 0) return
+                      if (n === a.threshold) return
+                      await onEditThreshold(a.id, n)
+                    }}
+                    className="text-xs px-2 py-0.5 text-slate-600 border border-slate-200 rounded hover:bg-white"
+                  >
+                    {t('common.edit')}
+                  </button>
+                  <button
+                    onClick={() => onRemove(a.id)}
+                    className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-rose-600 rounded"
+                    title={t('common.delete')}
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <form onSubmit={submit} className="border-t border-slate-200 px-4 py-3 space-y-2">
+          <div className="text-sm font-medium text-slate-700">
+            {t('outbound.alerts.addAnother')}
+          </div>
+          <div className="flex gap-1.5 items-center">
+            <select
+              value={comparison}
+              onChange={(e) => setComparison(e.target.value as typeof comparison)}
+              className="text-sm border border-slate-200 rounded px-2 py-1 bg-white"
+            >
+              <option value="GT">{t('outbound.alerts.comparison.GT')}</option>
+              <option value="LT">{t('outbound.alerts.comparison.LT')}</option>
+              <option value="CHANGE_ABS">{t('outbound.alerts.comparison.CHANGE_ABS')}</option>
+              <option value="CHANGE_PCT">{t('outbound.alerts.comparison.CHANGE_PCT')}</option>
+            </select>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={thresholdInput}
+              onChange={(e) => setThresholdInput(e.target.value)}
+              className="text-sm border border-slate-200 rounded px-2 py-1 w-24 tabular-nums"
+              placeholder="5"
+            />
+            <button
+              type="submit"
+              disabled={submitting}
+              className="ml-auto h-7 px-3 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1 disabled:opacity-60"
+            >
+              <Plus size={11} /> {t('common.add')}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }

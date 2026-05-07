@@ -4670,17 +4670,88 @@ const ProductCell = memo(function ProductCell({ col, product, onTagEdit, onChang
         </div>
       )
     }
-    case 'tags':
+    case 'tags': {
+      // E.17 — inline tag remove + overflow indicator. Each chip
+      // shows an X on hover; clicking removes that tag from this
+      // product via /api/products/bulk-tag (mode='remove'). When
+      // there are more than 3 tags, a +N more pill bridges to the
+      // editor for the full list.
+      const tags = p.tags ?? []
+      const visible = tags.slice(0, 3)
+      const overflow = tags.length - visible.length
+      const removeTag = async (tagId: string) => {
+        try {
+          const res = await fetch(
+            `${getBackendUrl()}/api/products/bulk-tag`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                productIds: [p.id],
+                tagIds: [tagId],
+                mode: 'remove',
+              }),
+            },
+          )
+          if (!res.ok) throw new Error('Failed')
+          emitInvalidation({
+            type: 'product.updated',
+            meta: { productIds: [p.id], source: 'inline-tag-remove' },
+          })
+          onChanged()
+        } catch {
+          /* swallow — refetch will reveal the actual state */
+        }
+      }
       return (
         <div className="flex items-center gap-1 flex-wrap">
-          {(p.tags ?? []).slice(0, 3).map((t) => (
-            <span key={t.id} className="inline-flex items-center px-1.5 py-0.5 text-xs rounded" style={{ background: t.color ? `${t.color}20` : '#f1f5f9', color: t.color ?? '#64748b' }}>
+          {visible.map((t) => (
+            <span
+              key={t.id}
+              className="group/tag inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs rounded"
+              style={{
+                background: t.color ? `${t.color}20` : '#f1f5f9',
+                color: t.color ?? '#64748b',
+              }}
+            >
               {t.name}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  void removeTag(t.id)
+                }}
+                aria-label={`Remove tag ${t.name}`}
+                className="opacity-0 group-hover/tag:opacity-100 inline-flex items-center justify-center w-3 h-3 rounded-full hover:bg-rose-100 hover:text-rose-700 transition-opacity"
+              >
+                <X size={10} />
+              </button>
             </span>
           ))}
-          <button onClick={() => onTagEdit(p.id)} aria-label="Edit tags" title="Edit tags" className="h-4 w-4 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded text-xs">+</button>
+          {overflow > 0 && (
+            <button
+              type="button"
+              onClick={() => onTagEdit(p.id)}
+              title={tags
+                .slice(3)
+                .map((t) => t.name)
+                .join(', ')}
+              className="inline-flex items-center px-1.5 py-0.5 text-xs rounded bg-slate-100 text-slate-600 hover:bg-slate-200"
+            >
+              +{overflow} more
+            </button>
+          )}
+          <button
+            onClick={() => onTagEdit(p.id)}
+            aria-label="Edit tags"
+            title="Edit tags"
+            className="h-4 w-4 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded text-xs"
+          >
+            +
+          </button>
         </div>
       )
+    }
     case 'photos': {
       const tone = p.photoCount === 0 ? 'text-rose-600' : p.photoCount < 3 ? 'text-amber-600' : 'text-emerald-600'
       return <span className={`text-base tabular-nums font-semibold ${tone}`}>{p.photoCount}</span>
