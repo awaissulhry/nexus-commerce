@@ -15,6 +15,8 @@ import {
   ExternalLink, Star, Copy, Trash2, Layers, Image as ImageIcon,
   CheckCircle2, XCircle, AlertCircle, Loader2, Upload, Bell,
   DollarSign, GitCompare, Download,
+  AlignJustify, Menu as MenuIcon, Equal,
+  ChevronLeft, ChevronsLeft, ChevronsRight,
 } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import PageHeader from '@/components/layout/PageHeader'
@@ -1393,7 +1395,15 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLooku
     <div className="sticky top-2 z-20">
       <Card>
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-base font-semibold text-slate-700">{selectedIds.length} selected</span>
+          {/* U.6 — selection count promoted to a pill so the user can
+              see at a glance how many products the action will affect.
+              Plural is precomputed so the badge reads cleanly for 1
+              vs many. */}
+          <span className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full bg-blue-600 text-white text-sm font-semibold tabular-nums">
+            <CheckCircle2 size={12} />
+            {selectedIds.length}
+            <span className="font-normal opacity-90">selected</span>
+          </span>
           <div className="h-4 w-px bg-slate-200" />
 
           <button onClick={() => setStatusBulk('ACTIVE')} disabled={busy} className="h-7 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 disabled:opacity-50 inline-flex items-center gap-1.5"><CheckCircle2 size={12} /> Activate</button>
@@ -2930,7 +2940,12 @@ function GridLens(props: any) {
       <div role="status" aria-live="polite" className="sr-only">
         Showing {products.length} of {total} products on page {page} of {totalPages}.
       </div>
-      <div className="flex items-center gap-2 justify-between">
+      {/* U.6 — sticky toolbar so the row count, density toggle, and
+          column picker stay reachable while scrolling long grids. The
+          translucent backdrop keeps body content visible behind the
+          bar; rounded corners + shadow give it a panel feel without
+          claiming a full Card. */}
+      <div className="sticky top-0 z-10 -mx-2 px-2 py-1.5 flex items-center gap-2 justify-between bg-white/85 backdrop-blur border-b border-slate-200">
         <div className="flex items-center gap-2">
           <span className="text-sm text-slate-500">
             <span className="font-semibold text-slate-700 tabular-nums">{total}</span> products · page {page} of {totalPages}
@@ -2946,25 +2961,31 @@ function GridLens(props: any) {
         {/* F7 — density picker. Three-segment toggle adjacent to the
             columns picker. Persisted per-user via localStorage. */}
         <div className="inline-flex items-center border border-slate-200 rounded overflow-hidden h-7 text-sm">
-          {(['compact', 'comfortable', 'spacious'] as const).map((d) => (
-            <button
-              key={d}
-              type="button"
-              onClick={() => onDensityChange(d)}
-              title={`${d.charAt(0).toUpperCase()}${d.slice(1)} row density`}
-              aria-label={`${d.charAt(0).toUpperCase()}${d.slice(1)} row density`}
-              aria-pressed={density === d}
-              className={`px-2 h-full ${
-                density === d
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-white text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <span aria-hidden="true">
-                {d === 'compact' ? '≡' : d === 'comfortable' ? '☰' : '☲'}
-              </span>
-            </button>
-          ))}
+          {(['compact', 'comfortable', 'spacious'] as const).map((d) => {
+            // U.6 — Lucide icons replace the ASCII glyphs (≡ ☰ ☲) which
+            // didn't visually align across fonts. The icon vocabulary
+            // walks 4 → 3 → 2 horizontal lines so the density gradient
+            // reads at a glance.
+            const Icon = d === 'compact' ? AlignJustify : d === 'comfortable' ? MenuIcon : Equal
+            const labelTitle = `${d.charAt(0).toUpperCase()}${d.slice(1)} row density`
+            return (
+              <button
+                key={d}
+                type="button"
+                onClick={() => onDensityChange(d)}
+                title={labelTitle}
+                aria-label={labelTitle}
+                aria-pressed={density === d}
+                className={`px-2 h-full inline-flex items-center justify-center ${
+                  density === d
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-white text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+            )
+          })}
         </div>
         <div className="relative">
           <button
@@ -3018,24 +3039,150 @@ function GridLens(props: any) {
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between text-base text-slate-500">
-          <span>Page <span className="font-semibold text-slate-700 tabular-nums">{page}</span> of <span className="tabular-nums">{totalPages}</span></span>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => onPage(Math.max(1, page - 1))}
-              disabled={page === 1}
-              className="h-7 px-3 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
-            >Previous</button>
-            <button
-              onClick={() => onPage(Math.min(totalPages, page + 1))}
-              disabled={page >= totalPages}
-              className="h-7 px-3 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
-            >Next</button>
-          </div>
-        </div>
+        <Pagination page={page} totalPages={totalPages} onPage={onPage} />
       )}
     </div>
   )
+}
+
+/**
+ * U.6 — Pagination polish. Replaces the bare Previous/Next strip with
+ * chevron-prefixed first/prev/next/last buttons and a numbered range
+ * that collapses long page sets into "1 … 5 6 [7] 8 9 … 20" so the
+ * user can hop multiple pages at once. Stays one row, no wrap.
+ */
+function Pagination({
+  page,
+  totalPages,
+  onPage,
+}: {
+  page: number
+  totalPages: number
+  onPage: (next: number) => void
+}) {
+  const numbers = useMemo(() => buildPageRange(page, totalPages), [page, totalPages])
+  return (
+    <nav
+      aria-label="Pagination"
+      className="flex items-center justify-between text-base text-slate-500"
+    >
+      <span className="text-sm">
+        Page <span className="font-semibold text-slate-700 tabular-nums">{page}</span>
+        {' '}of <span className="tabular-nums">{totalPages}</span>
+      </span>
+      <div className="flex items-center gap-1">
+        <PageBtn
+          onClick={() => onPage(1)}
+          disabled={page === 1}
+          ariaLabel="First page"
+          title="First page"
+        >
+          <ChevronsLeft className="w-3.5 h-3.5" />
+        </PageBtn>
+        <PageBtn
+          onClick={() => onPage(Math.max(1, page - 1))}
+          disabled={page === 1}
+          ariaLabel="Previous page"
+          title="Previous page"
+        >
+          <ChevronLeft className="w-3.5 h-3.5" />
+        </PageBtn>
+        {numbers.map((n, i) =>
+          n === 'gap' ? (
+            <span
+              key={`gap-${i}`}
+              className="px-1 text-slate-400 select-none"
+              aria-hidden="true"
+            >
+              …
+            </span>
+          ) : (
+            <button
+              key={n}
+              type="button"
+              onClick={() => onPage(n)}
+              aria-current={n === page ? 'page' : undefined}
+              aria-label={`Page ${n}`}
+              className={`min-w-[1.75rem] h-7 px-2 text-sm tabular-nums rounded border transition-colors ${
+                n === page
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              {n}
+            </button>
+          ),
+        )}
+        <PageBtn
+          onClick={() => onPage(Math.min(totalPages, page + 1))}
+          disabled={page >= totalPages}
+          ariaLabel="Next page"
+          title="Next page"
+        >
+          <ChevronRight className="w-3.5 h-3.5" />
+        </PageBtn>
+        <PageBtn
+          onClick={() => onPage(totalPages)}
+          disabled={page >= totalPages}
+          ariaLabel="Last page"
+          title="Last page"
+        >
+          <ChevronsRight className="w-3.5 h-3.5" />
+        </PageBtn>
+      </div>
+    </nav>
+  )
+}
+
+function PageBtn({
+  onClick,
+  disabled,
+  ariaLabel,
+  title,
+  children,
+}: {
+  onClick: () => void
+  disabled?: boolean
+  ariaLabel: string
+  title: string
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      title={title}
+      className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 rounded text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+    >
+      {children}
+    </button>
+  )
+}
+
+/**
+ * Returns the page-number range to render. Always shows first/last,
+ * the current page, and 1 neighbour on each side — gaps between
+ * non-adjacent groups become 'gap' sentinels.
+ *
+ * Examples (current = 7, total = 20): [1, 'gap', 6, 7, 8, 'gap', 20]
+ *           (current = 2, total = 5):  [1, 2, 3, 4, 5]
+ */
+function buildPageRange(current: number, total: number): Array<number | 'gap'> {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+  const out: Array<number | 'gap'> = [1]
+  const window: number[] = []
+  for (let i = current - 1; i <= current + 1; i++) {
+    if (i > 1 && i < total) window.push(i)
+  }
+  if (window[0] && window[0] > 2) out.push('gap')
+  out.push(...window)
+  if (window[window.length - 1] && window[window.length - 1] < total - 1) out.push('gap')
+  out.push(total)
+  return out
 }
 
 function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; product: ProductRow; onTagEdit: (id: string) => void; onChanged: () => void }) {

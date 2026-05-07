@@ -21,7 +21,7 @@ export default function Error({
         <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-amber-50 border border-amber-200 mb-4">
           <AlertTriangle className="w-5 h-5 text-amber-600" />
         </div>
-        <h2 className="text-lg font-semibold text-slate-900 mb-1">
+        <h2 className="text-xl font-semibold text-slate-900 mb-1">
           Something went wrong
         </h2>
         <p className="text-md text-slate-600 mb-4 break-words">
