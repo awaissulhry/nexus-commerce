@@ -48,6 +48,12 @@ export interface CarrierRow {
   lastErrorAt?: string | null
   lastError?: string | null
   mode?: 'sandbox' | 'production'
+  preferences?: {
+    includeInRateShop?: boolean
+    preferCheapest?: boolean
+    preferFastest?: boolean
+    requireSignature?: boolean
+  } | null
 }
 
 interface Props {
@@ -58,7 +64,7 @@ interface Props {
   onChanged: () => void
 }
 
-type TabId = 'credentials' | 'services' | 'warehouses' | 'rules' | 'performance' | 'webhooks'
+type TabId = 'credentials' | 'services' | 'warehouses' | 'defaults' | 'rules' | 'performance' | 'webhooks'
 
 export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: Props) {
   const { t } = useTranslations()
@@ -219,6 +225,7 @@ export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: 
     // Rules tab is available for any carrier the rules engine can
     // target (which is any with a real CarrierCode value).
     if (def.code !== 'MANUAL') {
+      list.push({ id: 'defaults', label: 'Defaults' })
       list.push({ id: 'rules', label: 'Rules' })
     }
     list.push({ id: 'performance', label: 'Performance' })
@@ -295,6 +302,13 @@ export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: 
           )}
           {activeTab === 'warehouses' && def.code === 'SENDCLOUD' && (
             <WarehousesTab carrierCode={def.code} />
+          )}
+          {activeTab === 'defaults' && (
+            <DefaultsTab
+              carrierCode={def.code}
+              initial={carrier?.preferences ?? null}
+              onSaved={onChanged}
+            />
           )}
           {activeTab === 'rules' && (
             <RulesTab carrierCode={def.code} />
@@ -808,6 +822,145 @@ function WarehousesTab({ carrierCode }: { carrierCode: string }) {
         </div>
       )}
     </div>
+  )
+}
+
+// ── Defaults tab ───────────────────────────────────────────────────
+// CR.13: operator-tunable preferences. Persists to Carrier.preferences
+// JSONB via PATCH /carriers/:code/preferences (merge semantics).
+type Preferences = {
+  includeInRateShop?: boolean
+  preferCheapest?: boolean
+  preferFastest?: boolean
+  requireSignature?: boolean
+}
+
+function DefaultsTab({
+  carrierCode, initial, onSaved,
+}: {
+  carrierCode: string
+  initial: Preferences | null
+  onSaved: () => void
+}) {
+  const { toast } = useToast()
+  // includeInRateShop defaults to true when unset — operator opts OUT.
+  const [prefs, setPrefs] = useState<Preferences>(() => ({
+    includeInRateShop: initial?.includeInRateShop ?? true,
+    preferCheapest: initial?.preferCheapest ?? true,
+    preferFastest: initial?.preferFastest ?? false,
+    requireSignature: initial?.requireSignature ?? false,
+  }))
+  const [busy, setBusy] = useState(false)
+  const [dirty, setDirty] = useState(false)
+
+  const set = <K extends keyof Preferences>(k: K, v: Preferences[K]) => {
+    setPrefs((p) => {
+      const next = { ...p, [k]: v }
+      // Mutually exclusive: preferFastest true → preferCheapest false.
+      if (k === 'preferFastest' && v === true) next.preferCheapest = false
+      if (k === 'preferCheapest' && v === true) next.preferFastest = false
+      return next
+    })
+    setDirty(true)
+  }
+
+  const save = async () => {
+    setBusy(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/carriers/${carrierCode}/preferences`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(prefs),
+        },
+      )
+      if (!res.ok) throw new Error('Save failed')
+      setDirty(false)
+      onSaved()
+      toast.success('Preferences saved')
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-base text-slate-700 dark:text-slate-300">
+        These preferences shape how the rates endpoint and rules engine treat this carrier.
+      </p>
+
+      <div className="space-y-3">
+        <Toggle
+          label="Include in rate-shop"
+          hint="When off, /shipments/:id/rates skips this carrier entirely."
+          checked={!!prefs.includeInRateShop}
+          onChange={(v) => set('includeInRateShop', v)}
+        />
+        <Toggle
+          label="Prefer cheapest"
+          hint="Auto-pick the cheapest eligible service when both Sendcloud and Buy Shipping are connected. Default."
+          checked={!!prefs.preferCheapest}
+          onChange={(v) => set('preferCheapest', v)}
+        />
+        <Toggle
+          label="Prefer fastest"
+          hint="Override cheapest — pick the fastest service. Useful for premium / Prime SLA orders."
+          checked={!!prefs.preferFastest}
+          onChange={(v) => set('preferFastest', v)}
+        />
+        <Toggle
+          label="Require signature on delivery"
+          hint="Default-on signature for parcels routed to this carrier (rules engine can override per shipment)."
+          checked={!!prefs.requireSignature}
+          onChange={(v) => set('requireSignature', v)}
+        />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Button variant="primary" size="sm" onClick={save} loading={busy} disabled={!dirty}>
+          Save preferences
+        </Button>
+        {dirty && <span className="text-sm text-amber-600 dark:text-amber-400">Unsaved changes</span>}
+      </div>
+    </div>
+  )
+}
+
+function Toggle({
+  label, hint, checked, onChange,
+}: {
+  label: string
+  hint?: string
+  checked: boolean
+  onChange: (next: boolean) => void
+}) {
+  return (
+    <label className="flex items-start gap-3 cursor-pointer select-none">
+      <span
+        className={`relative inline-flex h-5 w-9 flex-shrink-0 mt-0.5 rounded-full transition-colors ${
+          checked ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'
+        }`}
+      >
+        <input
+          type="checkbox"
+          className="sr-only"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        <span
+          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+            checked ? 'translate-x-4' : 'translate-x-0.5'
+          }`}
+        />
+      </span>
+      <span className="flex-1">
+        <div className="text-base font-medium text-slate-900 dark:text-slate-100">{label}</div>
+        {hint && <div className="text-sm text-slate-500 dark:text-slate-400">{hint}</div>}
+      </span>
+    </label>
   )
 }
 

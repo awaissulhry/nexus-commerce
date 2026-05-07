@@ -2397,21 +2397,38 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         estimatedDays?: number
       }> = []
 
-      try {
-        const creds = await sendcloud.resolveCredentials()
-        const methods = await sendcloud.listShippingMethods(creds, { weightKg, toCountry: country })
-        for (const m of methods) {
-          rates.push({
-            source: 'SENDCLOUD',
-            carrier: m.carrier,
-            serviceName: m.name,
-            serviceCode: String(m.id),
-            priceEur: m.price,
-          })
+      // CR.13 — pull each carrier's preferences once so we can skip
+      // those opted-out of rate-shop. Single read; carriers are <10
+      // rows for a single-account install. Default = include.
+      const carrierPrefs = await prisma.carrier.findMany({
+        select: { code: true, preferences: true },
+      })
+      const includeSendcloud = (() => {
+        const p = carrierPrefs.find((c) => c.code === 'SENDCLOUD')?.preferences as any
+        return p?.includeInRateShop !== false // default true when unset
+      })()
+      const includeBuyShipping = (() => {
+        const p = carrierPrefs.find((c) => c.code === 'AMAZON_BUY_SHIPPING')?.preferences as any
+        return p?.includeInRateShop !== false
+      })()
+
+      if (includeSendcloud) {
+        try {
+          const creds = await sendcloud.resolveCredentials()
+          const methods = await sendcloud.listShippingMethods(creds, { weightKg, toCountry: country })
+          for (const m of methods) {
+            rates.push({
+              source: 'SENDCLOUD',
+              carrier: m.carrier,
+              serviceName: m.name,
+              serviceCode: String(m.id),
+              priceEur: m.price,
+            })
+          }
+        } catch {
+          // Sendcloud unconnected or unavailable — skip but keep going so
+          // Buy Shipping rates still surface for Amazon orders.
         }
-      } catch {
-        // Sendcloud unconnected or unavailable — skip but keep going so
-        // Buy Shipping rates still surface for Amazon orders.
       }
 
       // CR.4: Buy Shipping is only relevant for Amazon orders. Pre-CR.4
@@ -2421,7 +2438,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       // OrderItemId from amazonMetadata) + warehouse-derived
       // shipFromAddress. Skip silently if the warehouse is not bound
       // or has no address — UI shows Sendcloud rates only.
-      if (shipment.order.channel === 'AMAZON' && process.env.NEXUS_ENABLE_AMAZON_BUY_SHIPPING) {
+      if (includeBuyShipping && shipment.order.channel === 'AMAZON' && process.env.NEXUS_ENABLE_AMAZON_BUY_SHIPPING) {
         const wh = shipment.warehouse
         if (wh && wh.addressLine1 && wh.city && wh.postalCode && wh.country) {
           try {
@@ -8321,6 +8338,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           lastError: c.lastError,
           accountLabel: c.accountLabel,
           mode: c.mode,
+          preferences: c.preferences,
           updatedAt: c.updatedAt,
         })),
       }
@@ -8617,6 +8635,32 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       return { ok: true }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[carriers/:code/mappings DELETE] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // CR.13 — operator-tunable preferences.
+  // PATCH /carriers/:code/preferences
+  // Body: partial preferences object. Merges with existing rather
+  // than replacing so a single-key update doesn't clobber other
+  // toggles.
+  fastify.patch('/fulfillment/carriers/:code/preferences', async (request, reply) => {
+    try {
+      const { code } = request.params as { code: string }
+      const patch = (request.body ?? {}) as Record<string, unknown>
+      const existing = await prisma.carrier.findUnique({
+        where: { code: code as any },
+        select: { preferences: true },
+      })
+      if (!existing) return reply.code(404).send({ error: 'Carrier not connected' })
+      const merged = { ...(existing.preferences as any ?? {}), ...patch }
+      const updated = await prisma.carrier.update({
+        where: { code: code as any },
+        data: { preferences: merged },
+      })
+      return { ok: true, preferences: updated.preferences }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[carriers/:code/preferences PATCH] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })

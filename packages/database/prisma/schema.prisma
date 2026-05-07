@@ -2788,6 +2788,12 @@ model Carrier {
   // a deploy. Encrypted at rest using the same envelope as creds.
   webhookSecret String?
 
+  // CR.13 — operator-tunable preferences as a single JSONB blob so
+  // future toggles land without schema migrations. Documented keys:
+  //   { includeInRateShop, preferCheapest, preferFastest,
+  //     defaultLabelFormat, requireSignature }
+  preferences Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -3645,6 +3651,26 @@ model ReturnItem {
   quantity       Int
   conditionGrade ReturnConditionGrade?
   notes          String?
+
+  // R2.2 — operator inspection artifacts. Both nullable so legacy
+  // rows render fine; populated as the operator works through the
+  // inspect step.
+  //
+  // photoUrls: Cloudinary secure URLs from POST /upload-photo
+  //            (max 10 per item; UI enforces, DB doesn't).
+  //
+  // inspectionChecklist: free-form JSON so we can iterate the
+  //            checklist shape without a migration. Current shape:
+  //              {
+  //                packagingPresent: boolean,
+  //                tagsIntact: boolean,
+  //                visibleDamage: boolean,
+  //                damageNotes: string,
+  //                functionalTestPassed: boolean | null,
+  //                signsOfUse: 'NONE' | 'LIGHT' | 'HEAVY',
+  //              }
+  photoUrls            String[] @default([])
+  inspectionChecklist  Json?
 
   return Return @relation(fields: [returnId], references: [id], onDelete: Cascade)
 
