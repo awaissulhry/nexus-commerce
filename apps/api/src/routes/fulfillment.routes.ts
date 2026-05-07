@@ -1114,6 +1114,129 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── O.31: Outbound analytics ────────────────────────────────────────
+  // GET /api/fulfillment/outbound/analytics?days=30
+  // Aggregates: orders shipped, time-to-ship percentiles (median /
+  // p95 / p99), late rate, average shipping cost, per-carrier
+  // breakdown, daily trend. Powers the analytics dashboard page.
+  fastify.get('/fulfillment/outbound/analytics', async (request, reply) => {
+    try {
+      const q = request.query as { days?: string }
+      const days = Math.min(365, Math.max(1, Number(q.days) || 30))
+      const since = new Date(Date.now() - days * 86_400_000)
+
+      // Pull shipped shipments in window with the fields we need.
+      const shipments = await prisma.shipment.findMany({
+        where: {
+          shippedAt: { gte: since },
+        },
+        select: {
+          id: true,
+          carrierCode: true,
+          status: true,
+          costCents: true,
+          weightGrams: true,
+          shippedAt: true,
+          deliveredAt: true,
+          createdAt: true,
+          order: { select: { purchaseDate: true, shipByDate: true, channel: true, marketplace: true } },
+        },
+      })
+
+      // Time-to-ship in hours (purchaseDate → shippedAt).
+      const timeToShipHours: number[] = []
+      // Late count: shipment where shippedAt > shipByDate.
+      let lateCount = 0
+      let onTimeCount = 0
+      let totalCostCents = 0
+      let costsCounted = 0
+      const byCarrier: Record<string, { count: number; totalCostCents: number; lateCount: number }> = {}
+      const byChannel: Record<string, number> = {}
+      // Daily trend — yyyy-mm-dd → ships
+      const dailyShips: Record<string, number> = {}
+
+      for (const s of shipments) {
+        if (s.shippedAt && s.order?.purchaseDate) {
+          timeToShipHours.push(
+            (s.shippedAt.getTime() - s.order.purchaseDate.getTime()) / 3_600_000,
+          )
+        }
+        if (s.shippedAt && s.order?.shipByDate) {
+          if (s.shippedAt.getTime() > s.order.shipByDate.getTime()) lateCount++
+          else onTimeCount++
+        }
+        if (s.costCents != null) {
+          totalCostCents += s.costCents
+          costsCounted++
+        }
+        const cc = s.carrierCode as string
+        if (!byCarrier[cc]) byCarrier[cc] = { count: 0, totalCostCents: 0, lateCount: 0 }
+        byCarrier[cc].count++
+        if (s.costCents != null) byCarrier[cc].totalCostCents += s.costCents
+        if (s.shippedAt && s.order?.shipByDate && s.shippedAt > s.order.shipByDate) {
+          byCarrier[cc].lateCount++
+        }
+        if (s.order?.channel) {
+          const k = s.order.channel as string
+          byChannel[k] = (byChannel[k] ?? 0) + 1
+        }
+        if (s.shippedAt) {
+          const day = s.shippedAt.toISOString().slice(0, 10)
+          dailyShips[day] = (dailyShips[day] ?? 0) + 1
+        }
+      }
+
+      const sortedTimes = [...timeToShipHours].sort((a, b) => a - b)
+      const pct = (p: number) =>
+        sortedTimes.length === 0
+          ? null
+          : sortedTimes[Math.min(sortedTimes.length - 1, Math.floor(sortedTimes.length * p))]
+      const totalShippedWithSlA = lateCount + onTimeCount
+      const lateRate = totalShippedWithSlA > 0 ? lateCount / totalShippedWithSlA : null
+
+      // Build daily series sorted ascending; fill gaps with 0 so the
+      // chart renders a continuous line.
+      const trend: Array<{ date: string; ships: number }> = []
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(Date.now() - i * 86_400_000).toISOString().slice(0, 10)
+        trend.push({ date: d, ships: dailyShips[d] ?? 0 })
+      }
+
+      return {
+        windowDays: days,
+        totals: {
+          shipped: shipments.length,
+          totalCostCents,
+          avgCostCents: costsCounted > 0 ? Math.round(totalCostCents / costsCounted) : null,
+        },
+        timeToShipHours: {
+          median: pct(0.5),
+          p95: pct(0.95),
+          p99: pct(0.99),
+          count: sortedTimes.length,
+        },
+        sla: {
+          onTime: onTimeCount,
+          late: lateCount,
+          lateRate,
+        },
+        byCarrier: Object.entries(byCarrier).map(([code, v]) => ({
+          carrierCode: code,
+          count: v.count,
+          totalCostCents: v.totalCostCents,
+          avgCostCents: v.count > 0 ? Math.round(v.totalCostCents / v.count) : null,
+          lateCount: v.lateCount,
+          lateRate: v.count > 0 ? v.lateCount / v.count : null,
+        })).sort((a, b) => b.count - a.count),
+        byChannel,
+        trend,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[outbound/analytics] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // ── O.29: Multi-package — split shipment ────────────────────────────
   // POST /api/fulfillment/shipments/:id/split { items: [{ shipmentItemId,
   // quantity }] } — moves the specified quantities to a new sibling
