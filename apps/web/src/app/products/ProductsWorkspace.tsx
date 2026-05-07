@@ -42,10 +42,27 @@ import {
   STATUS_VARIANT,
   CHANNEL_TONE,
 } from '@/lib/products/theme'
-import BundleEditor from './_modals/BundleEditor'
-import AiBulkGenerateModal from './_modals/AiBulkGenerateModal'
-import ManageAlertsModal from './_modals/ManageAlertsModal'
-import CompareProductsModal from './_modals/CompareProductsModal'
+// E.3 — lazy-load the heavy modals so they don't ship in /products'
+// initial bundle. Each is gated by a boolean state in the workspace,
+// so the user only pays the JS download when they actually open one.
+// ssr: false because modals are client-only — there's no SSR benefit
+// to bundling them server-side.
+import dynamic from 'next/dynamic'
+const BundleEditor = dynamic(() => import('./_modals/BundleEditor'), {
+  ssr: false,
+})
+const AiBulkGenerateModal = dynamic(
+  () => import('./_modals/AiBulkGenerateModal'),
+  { ssr: false },
+)
+const ManageAlertsModal = dynamic(
+  () => import('./_modals/ManageAlertsModal'),
+  { ssr: false },
+)
+const CompareProductsModal = dynamic(
+  () => import('./_modals/CompareProductsModal'),
+  { ssr: false },
+)
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 
