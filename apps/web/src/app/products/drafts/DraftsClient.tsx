@@ -25,6 +25,7 @@ import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 interface ChannelTuple {
   platform: string
@@ -107,6 +108,7 @@ function selectionKey(d: Draft): string {
 export default function DraftsClient() {
   const router = useRouter()
   const params = useSearchParams()
+  const { t } = useTranslations()
 
   // C.3 — URL state. Filters, sort, and source are now bookmarkable
   // and reload-stable. The mounting read of `params` seeds local
@@ -351,9 +353,12 @@ export default function DraftsClient() {
   return (
     <div className="px-6 py-6 max-w-[1400px] mx-auto space-y-5">
       <PageHeader
-        title="Listing wizard drafts"
-        description="In-progress wizards + standalone DRAFT products. Click any wizard row to resume; click a product row to configure it."
-        breadcrumbs={[{ label: 'Products', href: '/products' }, { label: 'Drafts' }]}
+        title={t('drafts.title')}
+        description={t('drafts.emptyHint')}
+        breadcrumbs={[
+          { label: t('nav.products'), href: '/products' },
+          { label: t('nav.drafts') },
+        ]}
         actions={
           <FreshnessIndicator
             lastFetchedAt={lastFetchedAt}
@@ -371,8 +376,8 @@ export default function DraftsClient() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by SKU or product name…"
-            className="w-full h-8 pl-8 pr-3 text-base border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-300"
+            placeholder={t('drafts.searchPlaceholder')}
+            className="w-full h-8 pl-8 pr-3 text-base border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-300 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
           />
         </div>
 
@@ -392,7 +397,7 @@ export default function DraftsClient() {
             aria-pressed={staleOnly}
           >
             <Clock className="w-3 h-3" />
-            Stale only
+            {t('drafts.staleOnly')}
             {staleCount > 0 && !staleOnly && (
               <span className="text-xs text-amber-700 font-semibold ml-1">
                 {staleCount}
@@ -436,7 +441,7 @@ export default function DraftsClient() {
           className="flex items-center gap-2 px-3 py-2 rounded-md bg-blue-50 border border-blue-200 text-blue-900"
         >
           <span className="text-base font-medium tabular-nums">
-            {selectedKeys.size} selected
+            {t('drafts.bulkSelected', { n: selectedKeys.size })}
           </span>
           <span className="text-blue-300">·</span>
           <Button
@@ -446,7 +451,7 @@ export default function DraftsClient() {
             disabled={busyDelete}
           >
             <Trash2 className="w-3.5 h-3.5" />
-            Delete {selectedKeys.size}
+            {t('drafts.deleteN', { n: selectedKeys.size })}
           </Button>
           <Button
             variant="secondary"
@@ -454,7 +459,7 @@ export default function DraftsClient() {
             onClick={() => setSelectedKeys(new Set())}
           >
             <X className="w-3.5 h-3.5" />
-            Clear selection
+            {t('drafts.clearSelection')}
           </Button>
         </div>
       )}
@@ -466,10 +471,10 @@ export default function DraftsClient() {
         </div>
       )}
 
-      <div className="border border-slate-200 rounded-lg bg-white overflow-hidden">
+      <div className="border border-slate-200 rounded-lg bg-white overflow-hidden dark:border-slate-800 dark:bg-slate-900">
         <table className="w-full text-base">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr className="text-left text-sm font-semibold uppercase tracking-wide text-slate-500">
+          <thead className="bg-slate-50 border-b border-slate-200 dark:bg-slate-900 dark:border-slate-800">
+            <tr className="text-left text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               <th className="px-4 py-2.5 w-[40px]">
                 <input
                   type="checkbox"
@@ -487,10 +492,10 @@ export default function DraftsClient() {
                   className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-2 focus:ring-blue-500"
                 />
               </th>
-              <th className="px-4 py-2.5">Product</th>
-              <th className="px-4 py-2.5">Channels</th>
-              <th className="px-4 py-2.5">Step / Status</th>
-              <th className="px-4 py-2.5">Last updated</th>
+              <th className="px-4 py-2.5">{t('drafts.col.product')}</th>
+              <th className="px-4 py-2.5">{t('drafts.col.channels')}</th>
+              <th className="px-4 py-2.5">{t('drafts.col.step')}</th>
+              <th className="px-4 py-2.5">{t('drafts.col.lastUpdated')}</th>
               <th className="px-4 py-2.5 w-[140px]" />
             </tr>
           </thead>
@@ -528,12 +533,11 @@ export default function DraftsClient() {
                   <FileEdit className="w-6 h-6 mx-auto text-slate-300" />
                   <div className="mt-2 text-slate-500">
                     {debouncedSearch || staleOnly || source !== 'all'
-                      ? 'No drafts match these filters.'
-                      : 'No drafts in progress.'}
+                      ? t('common.noResults')
+                      : t('drafts.empty')}
                   </div>
                   <div className="mt-1 text-sm text-slate-400">
-                    Wizards started from /products/:id/list-wizard appear here
-                    until submitted, alongside any standalone Product DRAFTs.
+                    {t('drafts.emptyHint')}
                   </div>
                 </td>
               </tr>
@@ -700,7 +704,9 @@ export default function DraftsClient() {
                         href={resumeHref}
                         className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
                       >
-                        {d.kind === 'wizard' ? 'Resume' : 'Configure'}
+                        {d.kind === 'wizard'
+                          ? t('drafts.resume')
+                          : t('drafts.configure')}
                         <ArrowRight className="w-3 h-3" />
                       </Link>
                     </div>

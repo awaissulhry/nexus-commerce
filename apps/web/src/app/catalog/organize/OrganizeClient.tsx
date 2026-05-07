@@ -50,6 +50,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import PageHeader from '@/components/layout/PageHeader'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -137,6 +138,7 @@ const TABS: Array<{ id: Tab; label: string; description: string }> = [
 export default function OrganizeClient() {
   const router = useRouter()
   const params = useSearchParams()
+  const { t } = useTranslations()
   // C.4 — URL-driven tab + per-tab search. Bookmarkable, reload-stable.
   // Tab default 'groups' (auto-detected variation clusters); the
   // search/filters per tab live in their own components and read from
@@ -176,9 +178,12 @@ export default function OrganizeClient() {
           page onto the U.1 typography scale and matches the chrome of
           /products and /products/drafts. */}
       <PageHeader
-        title="Catalog Organization"
-        description="Promote standalones to parents, attach orphans to existing parents, and approve auto-detected variation groups. Multi-channel awareness throughout."
-        breadcrumbs={[{ label: 'Catalog', href: '/catalog' }, { label: 'Organize' }]}
+        title={t('organize.title')}
+        description={t('organize.description')}
+        breadcrumbs={[
+          { label: t('nav.catalog'), href: '/catalog' },
+          { label: t('organize.title') },
+        ]}
       />
 
       {/* Tab strip — U.8 made sticky so users can swap tabs without
@@ -187,28 +192,32 @@ export default function OrganizeClient() {
           readable behind the bar. */}
       <nav
         role="tablist"
-        aria-label="Catalog organization tabs"
-        className="sticky top-0 z-10 -mx-6 px-6 bg-white/85 backdrop-blur border-b border-slate-200 flex items-center gap-1 overflow-x-auto"
+        aria-label={t('organize.title')}
+        className="sticky top-0 z-10 -mx-6 px-6 bg-white/85 backdrop-blur border-b border-slate-200 flex items-center gap-1 overflow-x-auto dark:bg-slate-950/85 dark:border-slate-800"
       >
-        {TABS.map((t) => (
+        {TABS.map((tabDef) => (
           <button
-            key={t.id}
+            key={tabDef.id}
             type="button"
             role="tab"
-            aria-selected={tab === t.id}
-            tabIndex={tab === t.id ? 0 : -1}
-            onClick={() => setTab(t.id)}
+            aria-selected={tab === tabDef.id}
+            tabIndex={tab === tabDef.id ? 0 : -1}
+            onClick={() => setTab(tabDef.id)}
             className={cn(
               'inline-flex items-center gap-2 h-10 px-4 text-md font-medium border-b-2 transition-colors whitespace-nowrap',
-              tab === t.id
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-600 hover:text-slate-900',
+              tab === tabDef.id
+                ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                : 'border-transparent text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200',
             )}
           >
-            {t.id === 'groups' && <Layers className="w-3.5 h-3.5" />}
-            {t.id === 'standalone' && <Boxes className="w-3.5 h-3.5" />}
-            {t.id === 'parents' && <Package className="w-3.5 h-3.5" />}
-            {t.label}
+            {tabDef.id === 'groups' && <Layers className="w-3.5 h-3.5" />}
+            {tabDef.id === 'standalone' && <Boxes className="w-3.5 h-3.5" />}
+            {tabDef.id === 'parents' && <Package className="w-3.5 h-3.5" />}
+            {tabDef.id === 'groups'
+              ? t('organize.tab.groups')
+              : tabDef.id === 'standalone'
+                ? t('organize.tab.standalone')
+                : t('organize.tab.parents')}
           </button>
         ))}
       </nav>
