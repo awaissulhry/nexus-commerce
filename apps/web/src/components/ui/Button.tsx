@@ -35,7 +35,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={disabled || loading}
         className={cn(
           'inline-flex items-center justify-center font-medium border rounded-md transition-colors',
-          'focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:ring-offset-1',
+          // U.13 — focus-visible (not focus) so keyboard users get
+          // the ring but mouse-clickers don't get a sticky outline
+          // after every click. Matches WAI-ARIA 1.3 guidance.
+          'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-white',
           'disabled:opacity-50 disabled:cursor-not-allowed',
           VARIANT[variant],
           SIZE[size],

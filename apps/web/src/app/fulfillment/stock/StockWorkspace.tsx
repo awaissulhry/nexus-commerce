@@ -2207,7 +2207,7 @@ function MatrixCell({ quantity, reserved, maxQty, threshold }: { quantity: numbe
     >
       {quantity}
       {reserved > 0 && (
-        <span className="ml-1 text-[9px] opacity-60">({quantity - reserved})</span>
+        <span className="ml-1 text-xs opacity-60">({quantity - reserved})</span>
       )}
     </span>
   )

@@ -1114,7 +1114,7 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
                     {shipment.attachments.map((a: any) => (
                       <li key={a.id} className="flex items-center justify-between text-sm py-1">
                         <span className="inline-flex items-center gap-2 min-w-0">
-                          <span className="text-[9px] uppercase font-semibold text-slate-500 bg-slate-100 px-1 py-0.5 rounded">{a.kind}</span>
+                          <span className="text-xs uppercase font-semibold text-slate-500 bg-slate-100 px-1 py-0.5 rounded">{a.kind}</span>
                           <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:underline truncate">
                             {a.filename ?? a.url}
                           </a>
@@ -1537,7 +1537,7 @@ function ItemRow({
               <ul className="space-y-0.5">
                 {item.discrepancies.map((d: any) => (
                   <li key={d.id} className="text-sm inline-flex items-center gap-2">
-                    <span className="text-[9px] uppercase font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-1 py-0.5 rounded">{d.reasonCode}</span>
+                    <span className="text-xs uppercase font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-1 py-0.5 rounded">{d.reasonCode}</span>
                     <span className="text-slate-600">{d.status}</span>
                     {d.description && <span className="text-slate-500 truncate">— {d.description}</span>}
                   </li>
@@ -2646,7 +2646,7 @@ function SavedViewsBar({
               {!v.isDefault && (
                 <button
                   onClick={() => setAsDefault(v.id)}
-                  className="opacity-0 group-hover:opacity-100 px-1 text-[9px] text-slate-500 hover:text-blue-600"
+                  className="opacity-0 group-hover:opacity-100 px-1 text-xs text-slate-500 hover:text-blue-600"
                   title="Set as default"
                 >
                   ★

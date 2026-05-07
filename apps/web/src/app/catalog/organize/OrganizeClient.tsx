@@ -891,25 +891,25 @@ function CoverageBadge({ cov }: { cov: StandaloneItem['channelCoverage'] }) {
       {cov.slots.slice(0, 4).map((s) => (
         <span
           key={s}
-          className="font-mono text-[9px] px-1 py-0.5 rounded bg-slate-100 text-slate-700"
+          className="font-mono text-xs px-1 py-0.5 rounded bg-slate-100 text-slate-700"
         >
           {s.replace(':', '·')}
         </span>
       ))}
       {cov.slots.length > 4 && (
-        <span className="text-[9px] text-slate-500">
+        <span className="text-xs text-slate-500">
           +{cov.slots.length - 4}
         </span>
       )}
       {cov.status === 'partial' && (
-        <span className="text-[9px] text-amber-700">
+        <span className="text-xs text-amber-700">
           {cov.draftCount + cov.failedCount > 0
             ? `${cov.draftCount}d/${cov.failedCount}f`
             : 'partial'}
         </span>
       )}
       {cov.status === 'complete' && (
-        <span className="text-[9px] text-emerald-700">all live</span>
+        <span className="text-xs text-emerald-700">all live</span>
       )}
     </div>
   )
@@ -1596,16 +1596,16 @@ function ParentsTab({
                   </td>
                   <td className="px-3 py-2">
                     <div className="inline-flex gap-1">
-                      <span className="px-1.5 py-0.5 text-[9px] rounded border border-emerald-200 bg-emerald-50 text-emerald-700 tabular-nums">
+                      <span className="px-1.5 py-0.5 text-xs rounded border border-emerald-200 bg-emerald-50 text-emerald-700 tabular-nums">
                         {p.listings.live} live
                       </span>
                       {p.listings.draft > 0 && (
-                        <span className="px-1.5 py-0.5 text-[9px] rounded border border-amber-200 bg-amber-50 text-amber-700 tabular-nums">
+                        <span className="px-1.5 py-0.5 text-xs rounded border border-amber-200 bg-amber-50 text-amber-700 tabular-nums">
                           {p.listings.draft} draft
                         </span>
                       )}
                       {p.listings.failed > 0 && (
-                        <span className="px-1.5 py-0.5 text-[9px] rounded border border-rose-200 bg-rose-50 text-rose-700 tabular-nums">
+                        <span className="px-1.5 py-0.5 text-xs rounded border border-rose-200 bg-rose-50 text-rose-700 tabular-nums">
                           {p.listings.failed} failed
                         </span>
                       )}
@@ -1616,13 +1616,13 @@ function ParentsTab({
                       {p.listings.channels.slice(0, 4).map((c) => (
                         <span
                           key={c}
-                          className="font-mono text-[9px] px-1 py-0.5 rounded bg-slate-100 text-slate-700"
+                          className="font-mono text-xs px-1 py-0.5 rounded bg-slate-100 text-slate-700"
                         >
                           {c.replace(':', '·')}
                         </span>
                       ))}
                       {p.listings.channels.length > 4 && (
-                        <span className="text-[9px] text-slate-500">
+                        <span className="text-xs text-slate-500">
                           +{p.listings.channels.length - 4}
                         </span>
                       )}

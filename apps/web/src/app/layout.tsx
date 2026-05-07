@@ -20,17 +20,27 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        {/* U.13 — skip-to-content link (WCAG 2.4.1 Bypass Blocks).
+            Visually hidden until keyboard-focused, then anchors at
+            the top of the viewport so screen-reader/keyboard users
+            can jump past the sidebar nav on every page load. */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:bg-blue-600 focus:text-white focus:px-3 focus:py-2 focus:rounded focus:shadow-lg focus:font-medium"
+        >
+          Skip to main content
+        </a>
         <ToastProvider>
           <ConfirmProvider>
-            {/* U.12 — h-screen swapped for h-[100dvh] so the app
-                shell respects iOS Safari's dynamic viewport (URL-bar
-                hide/show). dvh is supported by every modern engine
-                since 2024; older browsers fall back to vh. */}
             <div className="flex h-[100dvh] bg-slate-50 overflow-hidden">
               <AppSidebar />
               <div className="flex-1 flex flex-col overflow-hidden">
                 <MobileTopBar />
-                <main className="flex-1 overflow-auto">
+                <main
+                  id="main-content"
+                  className="flex-1 overflow-auto"
+                  tabIndex={-1}
+                >
                   <div className="p-3 md:p-6">{children}</div>
                 </main>
               </div>

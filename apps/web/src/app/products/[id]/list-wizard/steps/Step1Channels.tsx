@@ -560,7 +560,7 @@ function SkuStrategyRow({
               {o.recommended && (
                 <span
                   className={cn(
-                    'text-[9px] uppercase tracking-wide font-semibold',
+                    'text-xs uppercase tracking-wide font-semibold',
                     active ? 'text-blue-600' : 'text-emerald-600',
                   )}
                 >

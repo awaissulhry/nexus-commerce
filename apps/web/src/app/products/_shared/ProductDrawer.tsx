@@ -536,7 +536,7 @@ function HealthCard({
               title="Composite score 0-100. Each error -10, warning -3, info -1, capped at 0."
             >
               {score}
-              <span className="text-[9px] opacity-60 ml-0.5">/100</span>
+              <span className="text-xs opacity-60 ml-0.5">/100</span>
             </span>
             <span className="text-sm text-slate-500 tabular-nums">
               {errors.length > 0 && (
@@ -815,7 +815,7 @@ function ForecastCard({ productId }: { productId: string }) {
       </div>
       <div className="grid grid-cols-3 gap-2 text-sm">
         <div>
-          <div className="text-slate-400 uppercase tracking-wider text-[9px]">
+          <div className="text-slate-400 uppercase tracking-wider text-xs">
             Days of cover
           </div>
           <div className="text-lg font-semibold tabular-nums text-slate-900">
@@ -825,7 +825,7 @@ function ForecastCard({ productId }: { productId: string }) {
           </div>
         </div>
         <div>
-          <div className="text-slate-400 uppercase tracking-wider text-[9px]">
+          <div className="text-slate-400 uppercase tracking-wider text-xs">
             Velocity
           </div>
           <div className="text-lg font-semibold tabular-nums text-slate-900">
@@ -835,7 +835,7 @@ function ForecastCard({ productId }: { productId: string }) {
           </div>
         </div>
         <div>
-          <div className="text-slate-400 uppercase tracking-wider text-[9px]">
+          <div className="text-slate-400 uppercase tracking-wider text-xs">
             Stocks out
           </div>
           <div className="text-base font-medium tabular-nums text-slate-900">

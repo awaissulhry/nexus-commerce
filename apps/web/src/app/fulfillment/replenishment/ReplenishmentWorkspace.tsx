@@ -1224,7 +1224,7 @@ function MobileSuggestionCard({
             </span>
             {/* R.14 — channel badge on mobile too */}
             {s.urgencySource === 'CHANNEL' && s.worstChannelKey && (
-              <span className="text-[9px] uppercase tracking-wider text-slate-500 font-mono">
+              <span className="text-xs uppercase tracking-wider text-slate-500 font-mono">
                 · {s.worstChannelKey.replace(':', '·')}
               </span>
             )}
@@ -1235,17 +1235,17 @@ function MobileSuggestionCard({
 
       <div className="grid grid-cols-3 gap-2 text-sm">
         <div>
-          <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">Stock</div>
+          <div className="uppercase tracking-wider text-xs text-slate-500 font-semibold">Stock</div>
           <div className="tabular-nums font-semibold text-slate-900">{s.effectiveStock}</div>
         </div>
         <div>
-          <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">Days left</div>
+          <div className="uppercase tracking-wider text-xs text-slate-500 font-semibold">Days left</div>
           <div className="tabular-nums font-semibold text-slate-900">
             {s.daysOfStockLeft == null ? '—' : `${s.daysOfStockLeft}d`}
           </div>
         </div>
         <div>
-          <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">Reorder</div>
+          <div className="uppercase tracking-wider text-xs text-slate-500 font-semibold">Reorder</div>
           <div className="tabular-nums font-semibold text-slate-900">{s.reorderQuantity}</div>
         </div>
       </div>
@@ -1407,7 +1407,7 @@ function SuggestionRow({
               headline above the global aggregate. */}
           {s.urgencySource === 'CHANNEL' && s.worstChannelKey && (
             <span
-              className="text-[9px] uppercase tracking-wider text-slate-500 font-mono"
+              className="text-xs uppercase tracking-wider text-slate-500 font-mono"
               title={`Promoted because of ${s.worstChannelKey} (${s.worstChannelDaysOfCover}d cover). Aggregate was ${s.globalUrgency ?? 'lower'}.`}
             >
               · {s.worstChannelKey.replace(':', '·')}
@@ -1418,7 +1418,7 @@ function SuggestionRow({
               channel-driven (slate-grey) and global (no badge). */}
           {s.urgencySource === 'EVENT' && s.prepEvent && (
             <span
-              className="text-[9px] uppercase tracking-wider text-violet-600 font-mono"
+              className="text-xs uppercase tracking-wider text-violet-600 font-mono"
               title={`Promoted by ${s.prepEvent.name} prep deadline (${s.prepEvent.daysUntilDeadline}d to deadline, +${s.prepEvent.extraUnitsRecommended} extra units).`}
             >
               · {s.prepEvent.name.toUpperCase().slice(0, 12)}
@@ -2019,7 +2019,7 @@ function SignalChip({ label, factor }: { label: string; factor: number }) {
       : 'text-slate-600 bg-slate-50 border-slate-200'
   return (
     <div className={cn('border rounded px-2 py-1 text-sm', tone)}>
-      <div className="uppercase tracking-wider text-[9px] font-semibold opacity-70">
+      <div className="uppercase tracking-wider text-xs font-semibold opacity-70">
         {label}
       </div>
       <div className="tabular-nums font-semibold">
@@ -2097,15 +2097,15 @@ function StockByLocationPanel({ atp }: { atp: any }) {
 
       <div className="mt-2 pt-2 border-t border-slate-200 grid grid-cols-3 gap-2 text-base">
         <div>
-          <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">Available</div>
+          <div className="uppercase tracking-wider text-xs text-slate-500 font-semibold">Available</div>
           <div className="tabular-nums font-semibold text-slate-900">{totalAvailable}</div>
         </div>
         <div>
-          <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">Inbound (LT)</div>
+          <div className="uppercase tracking-wider text-xs text-slate-500 font-semibold">Inbound (LT)</div>
           <div className="tabular-nums font-semibold text-emerald-700">+{inboundLT}</div>
         </div>
         <div>
-          <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">ATP</div>
+          <div className="uppercase tracking-wider text-xs text-slate-500 font-semibold">ATP</div>
           <div className="tabular-nums font-bold text-slate-900">{totalAvailable + inboundLT}</div>
         </div>
       </div>
@@ -2156,7 +2156,7 @@ function ChannelCoverPanel({
                     {c.channel} · {c.marketplace}
                   </span>
                   {c.source !== 'EXACT_MATCH' && (
-                    <span className="ml-1 text-[9px] uppercase tracking-wider opacity-70">
+                    <span className="ml-1 text-xs uppercase tracking-wider opacity-70">
                       {c.source === 'WAREHOUSE_DEFAULT' ? '(default WH)' : '(no location)'}
                     </span>
                   )}
@@ -2809,13 +2809,13 @@ function CashFlowCard() {
                   aria-label="inflow"
                 />
               </div>
-              <div className="text-[9px] text-slate-500 mt-0.5 font-mono">
+              <div className="text-xs text-slate-500 mt-0.5 font-mono">
                 {b.weekStart.slice(5)}
               </div>
               {data.cashOnHandCents != null && (
                 <div
                   className={cn(
-                    'text-[9px] font-mono',
+                    'text-xs font-mono',
                     b.endingBalanceCents < 0
                       ? 'text-rose-700'
                       : b.health === 'AMBER'
@@ -3453,22 +3453,22 @@ function ForecastAccuracyCard({
       </div>
       <div className="grid grid-cols-3 gap-2 text-base mb-2">
         <div className="border border-slate-200 rounded px-2 py-1 bg-slate-50">
-          <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">MAPE</div>
+          <div className="uppercase tracking-wider text-xs text-slate-500 font-semibold">MAPE</div>
           <div className="tabular-nums font-semibold text-slate-900">{mape}</div>
         </div>
         <div className="border border-slate-200 rounded px-2 py-1 bg-slate-50">
-          <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">MAE</div>
+          <div className="uppercase tracking-wider text-xs text-slate-500 font-semibold">MAE</div>
           <div className="tabular-nums font-semibold text-slate-900">{mae}</div>
         </div>
         <div className="border border-slate-200 rounded px-2 py-1 bg-slate-50">
-          <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">Calibration</div>
-          <div className="tabular-nums font-semibold text-slate-900">{cal} <span className="text-[9px] text-slate-500 font-normal">/ 80%</span></div>
+          <div className="uppercase tracking-wider text-xs text-slate-500 font-semibold">Calibration</div>
+          <div className="tabular-nums font-semibold text-slate-900">{cal} <span className="text-xs text-slate-500 font-normal">/ 80%</span></div>
         </div>
       </div>
       <div className="text-xs text-slate-500">n = {sampleCount} days</div>
       {regimes.length > 1 && (
         <div className="mt-2">
-          <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold mb-1">By regime</div>
+          <div className="uppercase tracking-wider text-xs text-slate-500 font-semibold mb-1">By regime</div>
           <ul className="space-y-0.5">
             {regimes.map(([key, s]: any) => (
               <li key={key} className="flex items-center justify-between text-sm">
@@ -3544,7 +3544,7 @@ function ForecastHealthCard() {
         <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
           {groups.map((g) => (
             <div key={g.key} className="border border-slate-200 rounded px-2 py-1.5">
-              <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">
+              <div className="uppercase tracking-wider text-xs text-slate-500 font-semibold">
                 {g.key}
               </div>
               <div className="tabular-nums font-semibold text-slate-900 mt-0.5">
@@ -3557,7 +3557,7 @@ function ForecastHealthCard() {
       )}
       {sparkPoints.length > 1 && (
         <div className="mt-3">
-          <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold mb-1">
+          <div className="uppercase tracking-wider text-xs text-slate-500 font-semibold mb-1">
             Daily MAPE trend
           </div>
           <svg viewBox={`0 0 ${sparkPoints.length * 8} 24`} className="w-full h-6">

@@ -321,7 +321,7 @@ export default function ManageAlertsModal({
 
                 <div className="grid grid-cols-3 gap-2 text-sm text-slate-600 mt-2">
                   <div>
-                    <div className="text-slate-400 uppercase tracking-wider text-[9px]">
+                    <div className="text-slate-400 uppercase tracking-wider text-xs">
                       Last count
                     </div>
                     <div className="text-slate-900 font-medium tabular-nums">
@@ -329,7 +329,7 @@ export default function ManageAlertsModal({
                     </div>
                   </div>
                   <div>
-                    <div className="text-slate-400 uppercase tracking-wider text-[9px]">
+                    <div className="text-slate-400 uppercase tracking-wider text-xs">
                       Baseline
                     </div>
                     <div className="text-slate-900 font-medium tabular-nums">
@@ -337,7 +337,7 @@ export default function ManageAlertsModal({
                     </div>
                   </div>
                   <div>
-                    <div className="text-slate-400 uppercase tracking-wider text-[9px]">
+                    <div className="text-slate-400 uppercase tracking-wider text-xs">
                       Last fired
                     </div>
                     <div className="text-slate-900 font-medium">
