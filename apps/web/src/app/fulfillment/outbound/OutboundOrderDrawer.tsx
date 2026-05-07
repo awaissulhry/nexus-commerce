@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
@@ -352,9 +353,115 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
         {/* ── Body ─────────────────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           {loading && !data ? (
-            <div className="text-md text-slate-500 py-8 text-center">{t('common.loading')}</div>
+            <div className="space-y-4" aria-busy="true" aria-label={t('common.loading')}>
+              {/* Header-shape skeleton: customer + badges + order id */}
+              <Card>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Skeleton variant="block" width={140} height={20} />
+                    <Skeleton variant="pill" width={80} />
+                  </div>
+                  <Skeleton variant="text" width="60%" />
+                </div>
+              </Card>
+              {/* Address + lifecycle blocks */}
+              <Card><Skeleton lines={3} /></Card>
+              <Card><Skeleton lines={4} /></Card>
+              {/* Items list skeleton — 3 thumbnail rows */}
+              <Card>
+                <div className="space-y-2">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <Skeleton variant="thumbnail" width={40} />
+                      <div className="flex-1">
+                        <Skeleton variant="text" width="70%" />
+                      </div>
+                      <Skeleton variant="block" width={40} height={14} />
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </div>
           ) : data ? (
             <>
+              {/* O.47: status step indicator. Shows where in the
+                  pipeline the highest-status shipment is. Past steps
+                  filled emerald, current step blue, future steps
+                  slate. Cancelled/Returned states render as a single
+                  badge instead since they're terminal-and-bad. */}
+              {(() => {
+                const ship = activeShipments[0]
+                if (!ship) return null
+                const TERMINAL_BAD = ['CANCELLED', 'RETURNED']
+                if (TERMINAL_BAD.includes(ship.status)) {
+                  return (
+                    <div className="flex items-center justify-center py-2">
+                      <Badge variant="danger" size="sm">{ship.status.replace(/_/g, ' ')}</Badge>
+                    </div>
+                  )
+                }
+                if (ship.status === 'ON_HOLD') {
+                  return (
+                    <div className="flex items-center justify-center py-2">
+                      <Badge variant="warning" size="sm">ON HOLD</Badge>
+                    </div>
+                  )
+                }
+                const STEPS: Array<{ key: string; label: string }> = [
+                  { key: 'DRAFT', label: 'Created' },
+                  { key: 'PACKED', label: 'Packed' },
+                  { key: 'LABEL_PRINTED', label: 'Labeled' },
+                  { key: 'SHIPPED', label: 'Shipped' },
+                  { key: 'DELIVERED', label: 'Delivered' },
+                ]
+                const STATUS_RANK: Record<string, number> = {
+                  DRAFT: 0, READY_TO_PICK: 0, PICKED: 0,
+                  PACKED: 1, LABEL_PRINTED: 2,
+                  SHIPPED: 3, IN_TRANSIT: 3, DELIVERED: 4,
+                }
+                const currentIdx = STATUS_RANK[ship.status] ?? 0
+                return (
+                  <div className="flex items-center gap-1 px-1">
+                    {STEPS.map((step, idx) => {
+                      const isPast = idx < currentIdx
+                      const isCurrent = idx === currentIdx
+                      const isLast = idx === STEPS.length - 1
+                      return (
+                        <div key={step.key} className="flex items-center flex-1 last:flex-none">
+                          <div className="flex flex-col items-center gap-1 flex-1 last:flex-none">
+                            <div
+                              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold transition-colors ${
+                                isPast
+                                  ? 'bg-emerald-500 text-white'
+                                  : isCurrent
+                                  ? 'bg-blue-600 text-white ring-4 ring-blue-100'
+                                  : 'bg-slate-100 text-slate-400 border border-slate-300'
+                              }`}
+                            >
+                              {isPast ? '✓' : idx + 1}
+                            </div>
+                            <span
+                              className={`text-[10px] uppercase tracking-wider whitespace-nowrap ${
+                                isCurrent ? 'text-blue-700 font-semibold' : isPast ? 'text-slate-700' : 'text-slate-400'
+                              }`}
+                            >
+                              {step.label}
+                            </span>
+                          </div>
+                          {!isLast && (
+                            <div
+                              className={`flex-1 h-0.5 mx-1 -mt-4 ${
+                                isPast ? 'bg-emerald-500' : 'bg-slate-200'
+                              }`}
+                            />
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
+
               {/* Urgency banner */}
               {urgency && (
                 <div className={`flex items-center gap-2 px-3 py-2 rounded border ${urgency.tint}`}>
