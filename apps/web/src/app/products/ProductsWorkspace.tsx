@@ -5,7 +5,7 @@
 // URL-driven state, virtualized table, inline quick-edit, faceted filters,
 // saved views, tag + bundle editors, bulk actions across channels.
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
@@ -793,6 +793,11 @@ export default function ProductsWorkspace() {
     (stockLevel !== 'all' ? 1 : 0) + (hasPhotos ? 1 : 0)
 
   return (
+    // E.14 — make the debounced search term available to memo'd cells
+    // for inline match highlighting. Provider re-render cost is
+    // bounded by the same 250ms debounce that gates the URL update,
+    // so cells re-highlight at most once per typing pause.
+    <SearchContext.Provider value={search}>
     <div className="space-y-5">
       <PageHeader
         title="Products"
@@ -1067,6 +1072,7 @@ export default function ProductsWorkspace() {
         onChanged={fetchProducts}
       />
     </div>
+    </SearchContext.Provider>
   )
 }
 
@@ -4202,7 +4208,45 @@ function buildPageRange(current: number, total: number): Array<number | 'gap'> {
 // E.1 — memo'd so a row that didn't change skips its 9-column re-render.
 // onTagEdit + onChanged come from useCallback'd refs in the workspace,
 // so they're stable across renders.
+// E.14 — search-term highlighting context. Workspace publishes the
+// debounced URL search term here; cells consume it via useContext to
+// wrap matches in <mark>. Context (not prop) so the search term
+// doesn't have to thread through 4 levels of props + bust memo on
+// every input change. Search updates are already debounced 250ms,
+// so re-renders are bounded.
+const SearchContext = createContext<string>('')
+
+function Highlight({ text, query }: { text: string; query: string }) {
+  if (!query || !text) return <>{text}</>
+  // Case-insensitive split on the query. Escape regex metachars so
+  // operators searching for SKUs with `.`, `[`, `(`, etc don't blow
+  // up the regex. Matches stay in the result array as odd-indexed
+  // entries when split() includes a capturing group.
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`(${escaped})`, 'ig')
+  const parts = text.split(re)
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? (
+          <mark
+            key={i}
+            className="bg-yellow-100 text-slate-900 rounded-sm px-0.5"
+          >
+            {part}
+          </mark>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </>
+  )
+}
+
 const ProductCell = memo(function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; product: ProductRow; onTagEdit: (id: string) => void; onChanged: () => void }) {
+  // E.14 — pull the active search query so SKU + name cells can wrap
+  // matches in <mark>. Other cells ignore it.
+  const searchQuery = useContext(SearchContext)
   const p = product
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<string>('')
@@ -4311,7 +4355,7 @@ const ProductCell = memo(function ProductCell({ col, product, onTagEdit, onChang
     case 'sku':
       return (
         <Link href={`/products/${p.id}/edit`} className="text-base font-mono text-slate-700 hover:text-blue-600 truncate block">
-          {p.sku}
+          <Highlight text={p.sku} query={searchQuery} />
         </Link>
       )
     case 'name':
@@ -4330,7 +4374,7 @@ const ProductCell = memo(function ProductCell({ col, product, onTagEdit, onChang
           ) : (
             <InlineEditTrigger onClick={() => startEdit(p.name)} label="name" align="left">
               <span className="text-md text-slate-900">
-                {p.name}
+                <Highlight text={p.name} query={searchQuery} />
                 {p.isParent && <Layers size={10} className="inline ml-1 text-slate-400" />}
               </span>
             </InlineEditTrigger>
