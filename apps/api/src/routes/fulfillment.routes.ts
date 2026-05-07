@@ -8615,6 +8615,85 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // CR.15 — per-carrier performance metrics.
+  //
+  // GET /fulfillment/carriers/:code/metrics?windowDays=30
+  //
+  // Computes shipment-volume + cost + on-time stats from raw
+  // Shipment + Order rows for the requested window. Bypasses the
+  // CarrierMetric cache for now (CR.3 added the table; CR.15 chose
+  // live aggregation since the volume is bounded by shipments-in-
+  // last-90d which is small for a single-warehouse operator). The
+  // metrics-job (later commit) will pre-warm CarrierMetric rows so
+  // this endpoint can switch to a cached read when volume grows.
+  fastify.get('/fulfillment/carriers/:code/metrics', async (request, reply) => {
+    try {
+      const { code } = request.params as { code: string }
+      const q = request.query as { windowDays?: string }
+      const windowDays = Math.min(365, Math.max(1, Number(q.windowDays ?? 30) || 30))
+      const since = new Date(Date.now() - windowDays * 86400000)
+
+      const shipments = await prisma.shipment.findMany({
+        where: { carrierCode: code as any, createdAt: { gte: since } },
+        select: {
+          id: true,
+          status: true,
+          costCents: true,
+          shippedAt: true,
+          deliveredAt: true,
+          createdAt: true,
+          order: { select: { shipByDate: true, marketplace: true } },
+        },
+      })
+
+      let totalCost = 0
+      let costSamples = 0
+      let onTime = 0
+      let late = 0
+      let delivered = 0
+      let deliveryHoursSum = 0
+      let deliveryHoursSamples = 0
+      const byMarket: Record<string, number> = {}
+
+      for (const s of shipments) {
+        if (s.costCents != null) {
+          totalCost += s.costCents
+          costSamples++
+        }
+        if (s.shippedAt && s.order?.shipByDate) {
+          if (s.shippedAt.getTime() > s.order.shipByDate.getTime()) late++
+          else onTime++
+        }
+        if (s.deliveredAt) {
+          delivered++
+          if (s.shippedAt) {
+            deliveryHoursSum += (s.deliveredAt.getTime() - s.shippedAt.getTime()) / 3_600_000
+            deliveryHoursSamples++
+          }
+        }
+        const mk = s.order?.marketplace ?? 'unknown'
+        byMarket[mk] = (byMarket[mk] ?? 0) + 1
+      }
+
+      return {
+        carrierCode: code,
+        windowDays,
+        shipmentCount: shipments.length,
+        totalCostCents: totalCost,
+        avgCostCents: costSamples > 0 ? Math.round(totalCost / costSamples) : null,
+        onTimeCount: onTime,
+        lateCount: late,
+        lateRate: onTime + late > 0 ? late / (onTime + late) : null,
+        deliveredCount: delivered,
+        avgDeliveryHours: deliveryHoursSamples > 0 ? Math.round(deliveryHoursSum / deliveryHoursSamples) : null,
+        byMarketplace: Object.entries(byMarket).map(([marketplace, count]) => ({ marketplace, count })).sort((a, b) => b.count - a.count),
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[carriers/:code/metrics] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // ═══════════════════════════════════════════════════════════════════
   // WAREHOUSE
   // ═══════════════════════════════════════════════════════════════════

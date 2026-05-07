@@ -58,7 +58,7 @@ interface Props {
   onChanged: () => void
 }
 
-type TabId = 'credentials' | 'services' | 'rules' | 'webhooks'
+type TabId = 'credentials' | 'services' | 'rules' | 'performance' | 'webhooks'
 
 export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: Props) {
   const { t } = useTranslations()
@@ -220,6 +220,7 @@ export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: 
     if (def.code !== 'MANUAL') {
       list.push({ id: 'rules', label: 'Rules' })
     }
+    list.push({ id: 'performance', label: 'Performance' })
     if (def.code === 'SENDCLOUD') {
       list.push({ id: 'webhooks', label: 'Webhooks' })
     }
@@ -293,6 +294,9 @@ export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: 
           )}
           {activeTab === 'rules' && (
             <RulesTab carrierCode={def.code} />
+          )}
+          {activeTab === 'performance' && (
+            <PerformanceTab carrierCode={def.code} />
           )}
           {activeTab === 'webhooks' && def.code === 'SENDCLOUD' && (
             <WebhooksTab />
@@ -753,6 +757,142 @@ function RulesTab({ carrierCode }: { carrierCode: string }) {
           Open rules workspace <ExternalLink size={10} />
         </a>
       </div>
+    </div>
+  )
+}
+
+// ── Performance tab ────────────────────────────────────────────────
+// CR.15: per-carrier metrics (volume, cost, on-time, delivery time)
+// over a selectable window. Live aggregation from Shipment +
+// TrackingEvent today; the metrics-cron (later commit) will pre-warm
+// the CarrierMetric table from CR.3 to absorb the read load when
+// volume grows.
+type Metrics = {
+  carrierCode: string
+  windowDays: number
+  shipmentCount: number
+  totalCostCents: number
+  avgCostCents: number | null
+  onTimeCount: number
+  lateCount: number
+  lateRate: number | null
+  deliveredCount: number
+  avgDeliveryHours: number | null
+  byMarketplace: Array<{ marketplace: string; count: number }>
+}
+
+const WINDOWS = [7, 30, 90, 365] as const
+
+function PerformanceTab({ carrierCode }: { carrierCode: string }) {
+  const [metrics, setMetrics] = useState<Metrics | null>(null)
+  const [windowDays, setWindowDays] = useState<number>(30)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let abort = false
+    setLoading(true)
+    fetch(
+      `${getBackendUrl()}/api/fulfillment/carriers/${carrierCode}/metrics?windowDays=${windowDays}`,
+      { cache: 'no-store' },
+    )
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (!abort) setMetrics(d) })
+      .catch(() => { /* */ })
+      .finally(() => { if (!abort) setLoading(false) })
+    return () => { abort = true }
+  }, [carrierCode, windowDays])
+
+  return (
+    <div className="space-y-4">
+      {/* Window selector */}
+      <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
+        {WINDOWS.map((w) => (
+          <button
+            key={w}
+            onClick={() => setWindowDays(w)}
+            className={`px-3 h-8 text-base border-r last:border-r-0 border-slate-200 dark:border-slate-700 ${
+              windowDays === w
+                ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
+            aria-pressed={windowDays === w}
+          >
+            {w}d
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="text-base text-slate-500 dark:text-slate-400 py-2">Loading metrics…</div>
+      ) : !metrics ? (
+        <div className="text-base text-slate-500 dark:text-slate-400 py-2">No data.</div>
+      ) : metrics.shipmentCount === 0 ? (
+        <div className="text-base text-slate-500 dark:text-slate-400 italic py-2">
+          No shipments in the last {metrics.windowDays} days.
+        </div>
+      ) : (
+        <>
+          {/* KPIs */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <Kpi label="Shipments" value={metrics.shipmentCount.toLocaleString()} />
+            <Kpi
+              label="Avg cost"
+              value={metrics.avgCostCents != null ? `€${(metrics.avgCostCents / 100).toFixed(2)}` : '—'}
+            />
+            <Kpi
+              label="On-time"
+              value={metrics.lateRate != null ? `${((1 - metrics.lateRate) * 100).toFixed(0)}%` : '—'}
+              hint={metrics.onTimeCount + metrics.lateCount > 0 ? `${metrics.onTimeCount} of ${metrics.onTimeCount + metrics.lateCount}` : undefined}
+            />
+            <Kpi
+              label="Avg delivery"
+              value={metrics.avgDeliveryHours != null ? `${(metrics.avgDeliveryHours / 24).toFixed(1)}d` : '—'}
+              hint={metrics.deliveredCount > 0 ? `${metrics.deliveredCount} delivered` : undefined}
+            />
+          </div>
+
+          {/* Total cost */}
+          <div className="text-sm text-slate-600 dark:text-slate-300">
+            Total spend: <span className="font-semibold text-slate-900 dark:text-slate-100">€{(metrics.totalCostCents / 100).toFixed(2)}</span>
+          </div>
+
+          {/* By marketplace */}
+          {metrics.byMarketplace.length > 0 && (
+            <div>
+              <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">By marketplace</div>
+              <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+                <table className="w-full text-base">
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                    {metrics.byMarketplace.map((row) => (
+                      <tr key={row.marketplace} className="text-slate-800 dark:text-slate-100">
+                        <td className="px-3 py-1.5">{row.marketplace}</td>
+                        <td className="px-3 py-1.5 text-right font-mono text-sm">{row.count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <a
+            href="/fulfillment/outbound/analytics"
+            className="text-sm text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
+          >
+            Open full outbound analytics <ExternalLink size={10} />
+          </a>
+        </>
+      )}
+    </div>
+  )
+}
+
+function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded">
+      <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">{label}</div>
+      <div className="text-lg font-semibold text-slate-900 dark:text-slate-100 mt-0.5">{value}</div>
+      {hint && <div className="text-xs text-slate-500 dark:text-slate-400">{hint}</div>}
     </div>
   )
 }
