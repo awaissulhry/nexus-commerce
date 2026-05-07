@@ -261,5 +261,56 @@ export async function fetchLabelPdf(
   return Buffer.from(arr)
 }
 
+/**
+ * CR.2 — credential verification. Calls a lightweight Sendcloud
+ * endpoint (/user — returns the integration's user record) to confirm
+ * the public/private key pair authenticates. Used by the connect
+ * endpoint before persisting credentials so a wrong key surfaces
+ * immediately rather than silently failing on the first label print.
+ *
+ * Returns ok=true with the integration username on success, ok=false
+ * with the Sendcloud-reported reason on failure. Network errors
+ * propagate as ok=false (not throws) so the connect endpoint can
+ * always render a clean 400 to the user.
+ *
+ * In dryRun mode (NEXUS_ENABLE_SENDCLOUD_REAL=false) this skips the
+ * network and returns ok=true with a "(mock)" username so the
+ * connect flow works end-to-end during local development without a
+ * real Sendcloud account.
+ */
+export async function verifyCredentials(
+  creds: SendcloudCredentials,
+): Promise<{ ok: true; username: string } | { ok: false; reason: string; status?: number }> {
+  if (!isReal()) {
+    return { ok: true, username: 'sendcloud-mock-user' }
+  }
+  if (!creds.publicKey || !creds.privateKey) {
+    return { ok: false, reason: 'publicKey + privateKey required' }
+  }
+  let res: Response
+  try {
+    res = await fetch(`${baseUrl()}/user`, {
+      headers: { Authorization: authHeader(creds) },
+    })
+  } catch (err: any) {
+    return { ok: false, reason: `Network error: ${err?.message ?? String(err)}` }
+  }
+  if (res.status === 401 || res.status === 403) {
+    return { ok: false, reason: 'Invalid public/private key', status: res.status }
+  }
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`
+    try {
+      const body: any = await res.json()
+      if (body?.error?.message) detail = body.error.message
+    } catch { /* non-JSON body */ }
+    return { ok: false, reason: detail, status: res.status }
+  }
+  let body: any = null
+  try { body = await res.json() } catch { /* */ }
+  const username = body?.user?.username ?? body?.user?.email ?? 'connected'
+  return { ok: true, username }
+}
+
 // ── Internal helpers exposed for tests / debugging ──────────────────────
 export const __test = { isReal, isSandbox, baseUrl, mockParcel }

@@ -17,6 +17,7 @@ import {
   fetchParcel,
   voidParcel,
   fetchLabelPdf,
+  verifyCredentials,
   __test,
 } from './client.js'
 import { SendcloudCredentials, SendcloudParcelInput } from './types.js'
@@ -107,6 +108,32 @@ test('fetchLabelPdf in dryRun returns a PDF-prefix buffer', async () => {
   const buf = await fetchLabelPdf(fakeCreds, 'https://example/mock')
   assert(Buffer.isBuffer(buf), 'is Buffer')
   assert(buf.toString('utf8').startsWith('%PDF'), 'PDF prefix')
+})
+
+test('verifyCredentials in dryRun returns ok=true with mock username', async () => {
+  const out = await verifyCredentials(fakeCreds)
+  assert(out.ok === true, 'dryRun verify ok')
+  // narrow the union before the property access
+  if (out.ok) {
+    assert(typeof out.username === 'string' && out.username.length > 0, 'username set')
+  }
+})
+
+test('verifyCredentials rejects missing publicKey/privateKey before dryRun even attempted in real mode', async () => {
+  // Force real mode for this case so the missing-creds short-circuit
+  // is the only failure path; restore immediately after.
+  const prev = process.env.NEXUS_ENABLE_SENDCLOUD_REAL
+  process.env.NEXUS_ENABLE_SENDCLOUD_REAL = 'true'
+  try {
+    const out = await verifyCredentials({ publicKey: '', privateKey: '' })
+    assert(out.ok === false, 'should fail')
+    if (!out.ok) {
+      assert(out.reason.includes('required'), 'reason explains why')
+    }
+  } finally {
+    if (prev === undefined) delete process.env.NEXUS_ENABLE_SENDCLOUD_REAL
+    else process.env.NEXUS_ENABLE_SENDCLOUD_REAL = prev
+  }
 })
 
 test('NEXUS_SENDCLOUD_SANDBOX_URL override switches base URL', () => {
