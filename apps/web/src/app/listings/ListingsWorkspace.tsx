@@ -12,7 +12,7 @@ import {
   ExternalLink, Filter, Settings2, X, ChevronDown,
   Eye, EyeOff, CheckCircle2, Tag, Link2,
   ArrowUpRight, Layers, Package, MoreHorizontal, Plus, Pause, Play,
-  Edit3,
+  Edit3, Bookmark, BookmarkPlus, Star, Trash2,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -40,6 +40,22 @@ import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 
 // ── Types ───────────────────────────────────────────────────────────
 type Lens = 'grid' | 'health' | 'matrix' | 'drafts'
+
+// C.11 — saved view shape returned by /api/saved-views?surface=listings.
+// Mirrors the /products SavedView used by ProductsWorkspace; alerts
+// integration isn't wired for /listings yet so alertSummary is
+// optional and treated as 0 when absent.
+type SavedListingsView = {
+  id: string
+  userId: string
+  surface: string
+  name: string
+  filters: Record<string, unknown>
+  isDefault: boolean
+  createdAt: string
+  updatedAt: string
+  alertSummary?: { active: number; total: number; firedRecently: number }
+}
 
 type Listing = {
   id: string
@@ -215,6 +231,59 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [drawerListingId, setDrawerListingId] = useState<string | null>(null)
 
+  // C.11 — saved views. Re-uses the existing /api/saved-views CRUD
+  // shipped for /products (P.3); the SavedView model has a `surface`
+  // discriminator so /listings rows are scoped separately. The
+  // dropdown sits in the lens-switcher row; auto-apply on first
+  // mount only when the URL has no filter state, so a deep link with
+  // ?listingStatus=ERROR (e.g. dashboard alert click) wins over the
+  // default view.
+  const [savedViews, setSavedViews] = useState<SavedListingsView[]>([])
+  const [savedViewMenuOpen, setSavedViewMenuOpen] = useState(false)
+  const appliedDefaultRef = useRef(false)
+  const fetchSavedViews = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/saved-views?surface=listings`,
+        { cache: 'no-store' },
+      )
+      if (!res.ok) return
+      const data = await res.json()
+      setSavedViews(data.items ?? [])
+    } catch {
+      /* swallow — header dropdown must never crash the workspace */
+    }
+  }, [])
+  useEffect(() => { fetchSavedViews() }, [fetchSavedViews])
+  useInvalidationChannel(['saved-view.changed'], () => { fetchSavedViews() })
+
+  // Auto-apply default view on first mount when the URL has no filter
+  // state. A deep link (e.g. dashboard alert) with ?listingStatus=ERROR
+  // bypasses the default — the link's intent wins.
+  useEffect(() => {
+    if (appliedDefaultRef.current) return
+    if (savedViews.length === 0) return
+    if (searchParams.toString().length > 0) {
+      appliedDefaultRef.current = true
+      return
+    }
+    const def = savedViews.find((v) => v.isDefault)
+    if (def) {
+      appliedDefaultRef.current = true
+      const next = new URLSearchParams()
+      for (const [k, v] of Object.entries(def.filters ?? {})) {
+        if (v == null || v === '') continue
+        next.set(k, Array.isArray(v) ? v.join(',') : String(v))
+      }
+      router.replace(`${pathname}?${next.toString()}`, { scroll: false })
+    } else {
+      appliedDefaultRef.current = true
+    }
+  }, [savedViews, searchParams, pathname, router])
+
+  // Toast for save-view failures (lock conflicts, network errors).
+  const savedViewToast = useToast()
+
   // Persist column choices
   useEffect(() => {
     try {
@@ -387,11 +456,83 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
         breadcrumbs={breadcrumbs}
       />
 
-      {/* Lens switcher + global stats strip */}
+      {/* Lens switcher + saved views menu + global stats strip */}
       <div className="flex items-center gap-2 flex-wrap">
         <LensTabs
           current={lens}
           onChange={(next) => updateUrl({ lens: next === 'grid' ? undefined : next, page: undefined })}
+        />
+        <SavedViewsButton
+          open={savedViewMenuOpen}
+          setOpen={setSavedViewMenuOpen}
+          views={savedViews}
+          onApply={(view) => {
+            const f = (view.filters ?? {}) as Record<string, unknown>
+            const next = new URLSearchParams()
+            for (const [k, v] of Object.entries(f)) {
+              if (v == null || v === '') continue
+              next.set(k, Array.isArray(v) ? v.join(',') : String(v))
+            }
+            router.replace(`${pathname}?${next.toString()}`, { scroll: false })
+            setSavedViewMenuOpen(false)
+          }}
+          onSaveCurrent={async (name, isDefault) => {
+            // Capture every URL-driven filter. Lens, sort, page +
+            // every chip group + every toggle. This is exactly what
+            // updateUrl writes; the apply path reverses it.
+            const filters: Record<string, unknown> = {}
+            if (search) filters.search = search
+            if (lens !== 'grid') filters.lens = lens
+            if (sortBy !== 'updatedAt') filters.sortBy = sortBy
+            if (sortDir !== 'desc') filters.sortDir = sortDir
+            if (channelFilters.length && !lockChannel) filters.channel = channelFilters
+            if (marketplaceFilters.length && !lockMarketplace) filters.marketplace = marketplaceFilters
+            if (statusFilters.length) filters.listingStatus = statusFilters
+            if (syncStatusFilters.length) filters.syncStatus = syncStatusFilters
+            if (hasError) filters.hasError = 'true'
+            if (lowStock) filters.lowStock = 'true'
+            if (publishedOnly) filters.published = 'true'
+            const res = await fetch(`${getBackendUrl()}/api/saved-views`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name, surface: 'listings', filters, isDefault }),
+            })
+            if (res.ok) {
+              fetchSavedViews()
+              emitInvalidation({
+                type: 'saved-view.changed',
+                meta: { surface: 'listings', action: 'created' },
+              })
+              return true
+            }
+            const err = await res.json().catch(() => ({}))
+            savedViewToast.toast.error(err.error ?? 'Save failed')
+            return false
+          }}
+          onDelete={async (id) => {
+            await fetch(`${getBackendUrl()}/api/saved-views/${id}`, {
+              method: 'DELETE',
+            })
+            fetchSavedViews()
+            emitInvalidation({
+              type: 'saved-view.changed',
+              id,
+              meta: { surface: 'listings', action: 'deleted' },
+            })
+          }}
+          onSetDefault={async (id) => {
+            await fetch(`${getBackendUrl()}/api/saved-views/${id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ isDefault: true }),
+            })
+            fetchSavedViews()
+            emitInvalidation({
+              type: 'saved-view.changed',
+              id,
+              meta: { surface: 'listings', action: 'set-default' },
+            })
+          }}
         />
         <div className="ml-auto flex items-center gap-3">
           {/* S.4 — live indicator. Green pulse = SSE connected (sub-200ms updates). */}
@@ -3774,6 +3915,183 @@ function ErrorRow({ error }: { error: string }) {
   return (
     <div className="text-xs text-rose-700 mt-1 ml-3 truncate" title={error}>
       ⚠ {error}
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────
+// SavedViewsButton — C.11. Dropdown menu over the user's
+// /api/saved-views?surface=listings rows. Mirrors the /products
+// SavedViewsButton layout (Bookmark icon, list with star + delete,
+// Save current view button → name input). Alert support is omitted
+// here because /listings doesn't have alert wiring yet — the bell
+// icon + alertSummary badges from /products would be dead UI.
+// ────────────────────────────────────────────────────────────────────
+function SavedViewsButton({
+  open,
+  setOpen,
+  views,
+  onApply,
+  onSaveCurrent,
+  onDelete,
+  onSetDefault,
+}: {
+  open: boolean
+  setOpen: (v: boolean) => void
+  views: SavedListingsView[]
+  onApply: (view: SavedListingsView) => void
+  onSaveCurrent: (name: string, isDefault: boolean) => Promise<boolean>
+  onDelete: (id: string) => void
+  onSetDefault: (id: string) => void
+}) {
+  const askConfirm = useConfirm()
+  const [saveMode, setSaveMode] = useState(false)
+  const [name, setName] = useState('')
+  const [isDefault, setIsDefault] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  // Click-outside dismiss. Listening on mousedown (not click) so the
+  // menu closes before any focus event from the new target lands —
+  // matches /products' SavedViewsButton pattern.
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [setOpen])
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <Bookmark size={12} /> Views <ChevronDown size={12} />
+      </button>
+      {open && (
+        <div
+          className="absolute left-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-md shadow-lg z-20 p-2"
+          role="menu"
+        >
+          {!saveMode ? (
+            <>
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1.5">
+                Saved views
+              </div>
+              {views.length === 0 ? (
+                <div className="px-2 py-3 text-base text-slate-400 text-center">
+                  No saved views yet
+                </div>
+              ) : (
+                <ul className="space-y-0.5">
+                  {views.map((v) => (
+                    <li
+                      key={v.id}
+                      className="flex items-center justify-between gap-1 px-2 py-1.5 hover:bg-slate-50 rounded"
+                    >
+                      <button
+                        onClick={() => onApply(v)}
+                        className="flex-1 min-w-0 text-left text-base text-slate-900 inline-flex items-center gap-1.5"
+                      >
+                        {v.isDefault && (
+                          <Star
+                            size={10}
+                            className="text-amber-500 fill-amber-500"
+                          />
+                        )}
+                        <span className="truncate">{v.name}</span>
+                      </button>
+                      <button
+                        onClick={() => onSetDefault(v.id)}
+                        title="Set as default"
+                        aria-label={`Set "${v.name}" as default view`}
+                        className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-amber-500"
+                      >
+                        <Star size={12} />
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const ok = await askConfirm({
+                            title: `Delete view "${v.name}"?`,
+                            description: 'This view will be removed permanently.',
+                            confirmLabel: 'Delete',
+                            tone: 'danger',
+                          })
+                          if (ok) onDelete(v.id)
+                        }}
+                        title="Delete"
+                        aria-label={`Delete saved view "${v.name}"`}
+                        className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-rose-600"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <button
+                onClick={() => setSaveMode(true)}
+                className="w-full mt-1 h-8 px-2 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center justify-center gap-1.5"
+              >
+                <BookmarkPlus size={12} /> Save current view
+              </button>
+            </>
+          ) : (
+            <div className="space-y-2">
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1">
+                Save current view
+              </div>
+              <input
+                autoFocus
+                type="text"
+                placeholder="View name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full h-8 px-2 text-md border border-slate-200 rounded"
+              />
+              <label className="flex items-center gap-2 px-2 text-base text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={isDefault}
+                  onChange={(e) => setIsDefault(e.target.checked)}
+                />
+                Use as default on page load
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    if (!name.trim()) return
+                    const ok = await onSaveCurrent(name.trim(), isDefault)
+                    if (ok) {
+                      setSaveMode(false)
+                      setName('')
+                      setIsDefault(false)
+                      setOpen(false)
+                    }
+                  }}
+                  className="flex-1 h-8 text-base bg-slate-900 text-white rounded hover:bg-slate-800"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => {
+                    setSaveMode(false)
+                    setName('')
+                  }}
+                  className="flex-1 h-8 text-base border border-slate-200 rounded hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
