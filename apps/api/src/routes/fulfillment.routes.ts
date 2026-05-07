@@ -1020,6 +1020,63 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // O.13: pack station — capture weight + dimensions + scan-verify
+  // result and transition the shipment from PICKED/READY_TO_PICK/DRAFT
+  // to PACKED. The pack-station page (apps/web/src/app/fulfillment/
+  // outbound/pack/[shipmentId]) calls this on save.
+  fastify.post('/fulfillment/shipments/:id/pack', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = request.body as {
+        weightGrams?: number
+        lengthCm?: number
+        widthCm?: number
+        heightCm?: number
+        packedBy?: string
+        notes?: string
+        // Scan-verify result. UI sends one entry per OrderItem and we
+        // record nothing here — the verification gate is enforced
+        // client-side; the server just trusts the operator's pack
+        // confirmation. Future commit can require a server-side
+        // attestation (signed scan log) if audit demands it.
+        verifiedSkus?: string[]
+      }
+
+      const shipment = await prisma.shipment.findUnique({ where: { id } })
+      if (!shipment) return reply.code(404).send({ error: 'Shipment not found' })
+
+      // Allow re-packing PACKED shipments (operator updates measurements
+      // after weighing again) but reject post-LABEL_PRINTED — once a
+      // label exists the dimensions are committed to the carrier.
+      const allowed = ['DRAFT', 'READY_TO_PICK', 'PICKED', 'PACKED']
+      if (!allowed.includes(shipment.status)) {
+        return reply.code(400).send({
+          error: `Cannot pack a shipment in status ${shipment.status}. Void the label first if you need to repack.`,
+        })
+      }
+
+      const data: any = {
+        status: 'PACKED',
+        packedAt: shipment.packedAt ?? new Date(),
+        version: { increment: 1 },
+      }
+      if (typeof body.weightGrams === 'number' && body.weightGrams > 0) {
+        data.weightGrams = body.weightGrams
+      }
+      if (typeof body.lengthCm === 'number' && body.lengthCm > 0) data.lengthCm = body.lengthCm
+      if (typeof body.widthCm === 'number' && body.widthCm > 0) data.widthCm = body.widthCm
+      if (typeof body.heightCm === 'number' && body.heightCm > 0) data.heightCm = body.heightCm
+      if (body.packedBy) data.packedBy = body.packedBy
+      if (body.notes != null) data.notes = body.notes
+
+      const updated = await prisma.shipment.update({ where: { id }, data })
+      return updated
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[shipments/:id/pack] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   fastify.post('/fulfillment/shipments/:id/mark-shipped', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }

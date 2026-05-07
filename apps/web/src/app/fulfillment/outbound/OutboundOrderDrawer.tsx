@@ -457,12 +457,30 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
               >
                 <Plus size={12} /> Create shipment
               </button>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 h-8 px-3 text-base text-emerald-700 bg-emerald-50 border border-emerald-200 rounded">
-                <CheckCircle2 size={12} />
-                Shipment in flight
-              </span>
-            )}
+            ) : (() => {
+              // O.13: surface the next-step CTA based on shipment state.
+              // Pre-PACKED shipments → "Pack & ready" → /pack page.
+              // PACKED → operator clicks Print label on the Shipments tab.
+              // LABEL_PRINTED+ → tracking is in flight.
+              const ship = activeShipments[0]
+              if (!ship) return null
+              if (['DRAFT', 'READY_TO_PICK', 'PICKED'].includes(ship.status)) {
+                return (
+                  <Link
+                    href={`/fulfillment/outbound/pack/${ship.id}`}
+                    className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5"
+                  >
+                    <Plus size={12} /> Pack &amp; ready
+                  </Link>
+                )
+              }
+              return (
+                <span className="inline-flex items-center gap-1.5 h-8 px-3 text-base text-emerald-700 bg-emerald-50 border border-emerald-200 rounded">
+                  <CheckCircle2 size={12} />
+                  {ship.status === 'PACKED' ? 'Packed — print label next' : 'Shipment in flight'}
+                </span>
+              )
+            })()}
             <Link
               href={`/orders/${data.id}`}
               className="ml-auto h-8 px-3 text-base text-slate-700 border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1.5"
