@@ -17,6 +17,7 @@ import {
   DollarSign, GitCompare, Download,
   AlignJustify, Menu as MenuIcon, Equal,
   ChevronLeft, ChevronsLeft, ChevronsRight,
+  MoreHorizontal,
 } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import PageHeader from '@/components/layout/PageHeader'
@@ -659,33 +660,18 @@ export default function ProductsWorkspace() {
         description={`${stats.total.toLocaleString()} master SKUs · ${stats.active} active · ${stats.draft} draft · ${stats.inStock} in stock · ${stats.outOfStock} out`}
         actions={
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setImageUploadOpen(true)}
-              className="h-8 px-3 text-base border border-slate-200 text-slate-700 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
-              title="Drop a folder of product photos; we match each file to its SKU"
-            >
-              <Upload size={12} /> Upload photos
-            </button>
-            {/* P.19 — CSV export of the currently-loaded grid view.
-                Pure client-side: no new endpoint, just dumps the
-                products array (filtered + sorted exactly as the grid
-                shows it) to a download. Capped by pageSize, so the
-                operator gets what they see; bumping pageSize to 500
-                captures most catalogs in one go. */}
-            <button
-              type="button"
-              onClick={() => exportProductsCsv(products)}
-              disabled={products.length === 0}
-              className="h-8 px-3 text-base border border-slate-200 text-slate-700 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
-              title={
-                products.length === 0
-                  ? 'Nothing to export'
-                  : `Download ${products.length} row${products.length === 1 ? '' : 's'} as CSV (current filter + sort)`
-              }
-            >
-              <Download size={12} /> Export CSV
-            </button>
+            {/* E.6 — secondary actions consolidated into More menu so the
+                page header stays uncluttered. New product + Refresh stay
+                first-class because they're the only frequent primary
+                actions. Upload photos / Export CSV / Bundles all go
+                under More. */}
+            <MoreActionsMenu
+              onUploadPhotos={() => setImageUploadOpen(true)}
+              onExportCsv={() => exportProductsCsv(products)}
+              onBundles={() => setBundleEditorOpen(true)}
+              canExport={products.length > 0}
+              exportCount={products.length}
+            />
             <Link href="/products/new" className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
               <Plus size={12} /> New product
             </Link>
@@ -825,9 +811,7 @@ export default function ProductsWorkspace() {
               setSavedViewMenuOpen(false)
             }}
           />
-          <button onClick={() => setBundleEditorOpen(true)} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5">
-            <Package size={12} /> Bundles
-          </button>
+          {/* E.6 — Bundles button moved to the page-header More menu. */}
         </div>
       </div>
 
@@ -976,6 +960,98 @@ function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) =>
 // ────────────────────────────────────────────────────────────────────
 // FilterBar
 // ────────────────────────────────────────────────────────────────────
+// E.6 — More actions dropdown. Consolidates secondary header actions
+// (Upload photos, Export CSV, Bundles) into a single button so the
+// header strip stays compact. New product + Refresh remain first-class
+// since they're frequent primary actions.
+function MoreActionsMenu({
+  onUploadPhotos,
+  onExportCsv,
+  onBundles,
+  canExport,
+  exportCount,
+}: {
+  onUploadPhotos: () => void
+  onExportCsv: () => void
+  onBundles: () => void
+  canExport: boolean
+  exportCount: number
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+  const item = (
+    icon: React.ReactNode,
+    label: string,
+    onClick: () => void,
+    disabled = false,
+    hint?: string,
+  ) => (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => {
+        if (disabled) return
+        onClick()
+        setOpen(false)
+      }}
+      className="w-full flex items-center gap-2 h-9 px-2.5 text-base text-left rounded text-slate-700 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:text-slate-200 dark:hover:bg-slate-800"
+    >
+      <span className="text-slate-500 dark:text-slate-400" aria-hidden="true">
+        {icon}
+      </span>
+      <span className="flex-1">{label}</span>
+      {hint && (
+        <span className="text-xs text-slate-400 tabular-nums">{hint}</span>
+      )}
+    </button>
+  )
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="More actions"
+        className="h-8 px-3 text-base border border-slate-200 text-slate-700 rounded hover:bg-slate-50 inline-flex items-center gap-1.5 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+      >
+        <MoreHorizontal size={14} /> More
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full mt-1 w-56 bg-white border border-slate-200 rounded-md shadow-lg z-30 p-1 dark:bg-slate-900 dark:border-slate-800"
+        >
+          {item(<Upload size={14} />, 'Upload photos', onUploadPhotos)}
+          {item(
+            <Download size={14} />,
+            'Export CSV',
+            onExportCsv,
+            !canExport,
+            canExport ? `${exportCount}` : undefined,
+          )}
+          {item(<Package size={14} />, 'Manage bundles', onBundles)}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function FilterBar(props: any) {
   const {
     searchInput, setSearchInput,
@@ -999,6 +1075,112 @@ function FilterBar(props: any) {
 
   const toggleArr = (current: string[], val: string) =>
     current.includes(val) ? current.filter((v: string) => v !== val) : [...current, val]
+
+  // E.5 — active-filter pills. Surfaces every active filter dimension
+  // as a removable chip above the search, so the operator sees what's
+  // narrowing the result set without opening the accordion. Click X
+  // on a pill to clear that dimension; click the pill body to open
+  // the accordion (next iteration: pill itself becomes the editor).
+  const tagsById = useMemo(
+    () => new Map<string, string>(tags.map((t: Tag) => [t.id, t.name])),
+    [tags],
+  )
+  const activePills: Array<{
+    key: string
+    label: string
+    value: string
+    clear: () => void
+  }> = []
+  if (statusFilters.length > 0) {
+    activePills.push({
+      key: 'status',
+      label: 'Status',
+      value: statusFilters
+        .map((s: string) => s[0] + s.slice(1).toLowerCase())
+        .join(', '),
+      clear: () => updateUrl({ status: undefined, page: undefined }),
+    })
+  }
+  if (channelFilters.length > 0) {
+    activePills.push({
+      key: 'channels',
+      label: 'Channel',
+      value: channelFilters
+        .map((c: string) => c[0] + c.slice(1).toLowerCase())
+        .join(', '),
+      clear: () => updateUrl({ channels: undefined, page: undefined }),
+    })
+  }
+  if (missingChannelFilters.length > 0) {
+    activePills.push({
+      key: 'missing',
+      label: 'Missing on',
+      value: missingChannelFilters
+        .map((c: string) => c[0] + c.slice(1).toLowerCase())
+        .join(', '),
+      clear: () => updateUrl({ missingChannels: undefined, page: undefined }),
+    })
+  }
+  if (marketplaceFilters.length > 0) {
+    activePills.push({
+      key: 'marketplaces',
+      label: 'Marketplace',
+      value: marketplaceFilters.join(', '),
+      clear: () => updateUrl({ marketplaces: undefined, page: undefined }),
+    })
+  }
+  if (fulfillmentFilters.length > 0) {
+    activePills.push({
+      key: 'fulfillment',
+      label: 'Fulfillment',
+      value: fulfillmentFilters.join(', '),
+      clear: () => updateUrl({ fulfillment: undefined, page: undefined }),
+    })
+  }
+  if (productTypeFilters.length > 0) {
+    activePills.push({
+      key: 'type',
+      label: 'Type',
+      value: productTypeFilters
+        .map((v: string) => IT_TERMS[v] ?? v)
+        .join(', '),
+      clear: () => updateUrl({ productTypes: undefined, page: undefined }),
+    })
+  }
+  if (brandFilters.length > 0) {
+    activePills.push({
+      key: 'brand',
+      label: 'Brand',
+      value: brandFilters.join(', '),
+      clear: () => updateUrl({ brands: undefined, page: undefined }),
+    })
+  }
+  if (tagFilters.length > 0) {
+    activePills.push({
+      key: 'tags',
+      label: 'Tag',
+      value: tagFilters
+        .map((id: string) => tagsById.get(id) ?? id)
+        .join(', '),
+      clear: () => updateUrl({ tags: undefined, page: undefined }),
+    })
+  }
+  if (stockLevel) {
+    activePills.push({
+      key: 'stock',
+      label: 'Stock',
+      value: stockLevel,
+      clear: () => updateUrl({ stockLevel: undefined, page: undefined }),
+    })
+  }
+  if (hasPhotos === 'true' || hasPhotos === 'false') {
+    activePills.push({
+      key: 'photos',
+      label: 'Photos',
+      value: hasPhotos === 'true' ? 'has photos' : 'no photos',
+      clear: () => updateUrl({ hasPhotos: undefined, page: undefined }),
+    })
+  }
 
   return (
     <Card>
@@ -1034,6 +1216,29 @@ function FilterBar(props: any) {
             </button>
           )}
         </div>
+
+        {/* E.5 — active-filter pills row. Hidden when no filters active. */}
+        {activePills.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {activePills.map((p) => (
+              <span
+                key={p.key}
+                className="inline-flex items-center gap-1 h-7 pl-2 pr-1 text-sm rounded-full bg-blue-50 text-blue-900 border border-blue-200"
+              >
+                <span className="font-medium text-blue-700">{p.label}:</span>
+                <span className="truncate max-w-[180px]">{p.value}</span>
+                <button
+                  type="button"
+                  onClick={p.clear}
+                  aria-label={`Remove ${p.label} filter`}
+                  className="inline-flex items-center justify-center w-5 h-5 rounded-full hover:bg-blue-100 text-blue-700"
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
 
         {filtersOpen && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-2 border-t border-slate-100">
