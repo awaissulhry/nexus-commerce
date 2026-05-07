@@ -175,8 +175,8 @@ export function Modal({
   //     at sm and above. The mobile sheet still keeps the right-side
   //     border for visual continuity but it sits flush.
   const panelBase = isDrawer
-    ? 'h-full w-full sm:max-w-[640px] bg-white shadow-2xl sm:border-l border-slate-200 flex flex-col'
-    : `w-full ${SIZE_CLASS[size]} bg-white rounded-lg shadow-xl border border-slate-200 flex flex-col max-h-[85dvh] sm:max-h-[90vh]`
+    ? 'h-full w-full sm:max-w-[640px] bg-white dark:bg-slate-900 shadow-2xl sm:border-l border-slate-200 dark:border-slate-800 flex flex-col'
+    : `w-full ${SIZE_CLASS[size]} bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[85dvh] sm:max-h-[90vh]`
 
   return (
     <div
@@ -210,16 +210,16 @@ function renderDefaultHeader(
 ): ReactNode {
   if (!title) return null
   return (
-    <div className="px-5 py-3 border-b border-slate-200 flex items-start justify-between gap-3 flex-shrink-0">
+    <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-start justify-between gap-3 flex-shrink-0">
       <div className="min-w-0">
         <div
           id="modal-title"
-          className="text-lg font-semibold text-slate-900 truncate"
+          className="text-lg font-semibold text-slate-900 dark:text-slate-100 truncate"
         >
           {title}
         </div>
         {description && (
-          <div className="text-sm text-slate-500 mt-0.5">
+          <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
             {description}
           </div>
         )}
@@ -228,7 +228,7 @@ function renderDefaultHeader(
         type="button"
         onClick={onClose}
         aria-label="Close"
-        className="p-1 text-slate-400 hover:text-slate-600 rounded flex-shrink-0"
+        className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded flex-shrink-0"
       >
         <X className="w-4 h-4" />
       </button>

@@ -32,7 +32,7 @@ export default function RootLayout({
         </a>
         <ToastProvider>
           <ConfirmProvider>
-            <div className="flex h-[100dvh] bg-slate-50 overflow-hidden">
+            <div className="flex h-[100dvh] bg-slate-50 dark:bg-slate-950 overflow-hidden">
               <AppSidebar />
               <div className="flex-1 flex flex-col overflow-hidden">
                 <MobileTopBar />

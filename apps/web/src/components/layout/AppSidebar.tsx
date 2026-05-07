@@ -32,8 +32,12 @@ import {
   Image as ImageIcon,
   Star,
   FileEdit,
+  Sun,
+  Moon,
+  Monitor,
   type LucideIcon,
 } from 'lucide-react'
+import { useTheme } from '@/lib/theme/use-theme'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useRecentlyViewed } from '@/lib/use-recently-viewed'
@@ -254,14 +258,20 @@ export default function AppSidebar() {
           </div>
           <span className="text-lg font-semibold text-white">Nexus</span>
         </Link>
-        <button
-          type="button"
-          onClick={dispatchCmdK}
-          className="text-slate-400 hover:text-white p-1.5 rounded hover:bg-slate-800 transition-colors"
-          title="Search (⌘K)"
-        >
-          <Search className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          {/* U.14 — theme toggle. Sits next to the ⌘K search button so
+              the chrome row stays compact. The toggle is dark-aware
+              itself via dark: variants. */}
+          <SidebarThemeToggle />
+          <button
+            type="button"
+            onClick={dispatchCmdK}
+            className="text-slate-400 hover:text-white p-1.5 rounded hover:bg-slate-800 transition-colors"
+            title="Search (⌘K)"
+          >
+            <Search className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* ── Workspace switcher ──────────────────────────────── */}
@@ -834,5 +844,32 @@ function ChannelNav({
         connectionStatus={connectionStatus}
       />
     </div>
+  )
+}
+
+/**
+ * U.14 — sidebar-styled theme toggle. The sidebar is always dark
+ * regardless of app theme, so this variant uses fixed slate-on-dark
+ * colors instead of dark: variants.
+ */
+function SidebarThemeToggle() {
+  const { mode, cycleTheme } = useTheme()
+  const Icon = mode === 'light' ? Sun : mode === 'dark' ? Moon : Monitor
+  const nextLabel =
+    mode === 'light'
+      ? 'Switch to dark mode'
+      : mode === 'dark'
+        ? 'Switch to system theme'
+        : 'Switch to light mode'
+  return (
+    <button
+      type="button"
+      onClick={cycleTheme}
+      title={nextLabel}
+      aria-label={nextLabel}
+      className="text-slate-400 hover:text-white p-1.5 rounded hover:bg-slate-800 transition-colors"
+    >
+      <Icon className="w-4 h-4" />
+    </button>
   )
 }
