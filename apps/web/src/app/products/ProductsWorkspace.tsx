@@ -580,12 +580,32 @@ export default function ProductsWorkspace() {
     [products, setSelected],
   )
 
-  // E.7 — Cmd+A selects all visible products (current page only —
-  // matches Linear / Airtable / Notion semantics). Esc clears the
-  // selection. Both ignored when the user is typing in a text input
-  // (where Cmd+A means "select text in this input"). Listener is
-  // attached to the document so the page need not be focused, but
-  // we read the active element to bail when appropriate.
+  // E.10 — focused row for J/K nav. Tracked by id (stable across
+  // pagination + sort changes; index would jump). null = no focus.
+  // The visual focus ring lives on ProductRow via the isFocused prop.
+  const [focusedRowId, setFocusedRowId] = useState<string | null>(null)
+  // Reset focus when pagination / filter / sort changes — the focused
+  // id might no longer be on the current page.
+  useEffect(() => {
+    setFocusedRowId(null)
+  }, [
+    page,
+    search,
+    statusFilters.join(','),
+    channelFilters.join(','),
+    sortBy,
+  ])
+
+  // E.7 / E.10 — keyboard shortcuts:
+  //   Cmd+A: select all visible (matches Linear / Airtable / Notion)
+  //   Esc:   clear selection (preferred when something's selected),
+  //          else clear focused row
+  //   J:     focus next row
+  //   K:     focus previous row
+  //   Enter: open drawer for focused row
+  //   Space: toggle selection for focused row (alternate path to
+  //          shift-click range select)
+  // Ignored when the user is typing in a text input.
   useEffect(() => {
     const isTextInput = (el: Element | null) => {
       if (!el) return false
@@ -608,13 +628,54 @@ export default function ProductsWorkspace() {
         })
         return
       }
-      if (e.key === 'Escape' && selected.size > 0) {
-        setSelected(new Set())
+      if (e.key === 'Escape') {
+        if (selected.size > 0) setSelected(new Set())
+        else if (focusedRowId) setFocusedRowId(null)
+        return
+      }
+      // J/K nav. Lower-case match — Shift+J shouldn't trigger.
+      if (e.key === 'j' || e.key === 'k') {
+        if (products.length === 0) return
+        e.preventDefault()
+        const idx = focusedRowId
+          ? products.findIndex((p: ProductRow) => p.id === focusedRowId)
+          : -1
+        const next =
+          e.key === 'j'
+            ? idx < 0
+              ? 0
+              : (idx + 1) % products.length
+            : idx <= 0
+              ? products.length - 1
+              : idx - 1
+        setFocusedRowId(products[next].id)
+        return
+      }
+      if (e.key === 'Enter' && focusedRowId) {
+        e.preventDefault()
+        window.dispatchEvent(
+          new CustomEvent('nexus:open-product-drawer', {
+            detail: { productId: focusedRowId },
+          }),
+        )
+        return
+      }
+      if (e.key === ' ' && focusedRowId) {
+        e.preventDefault()
+        handleRowToggle(focusedRowId, e.shiftKey)
+        return
       }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [lens, products, selected.size])
+  }, [
+    lens,
+    products,
+    selected.size,
+    focusedRowId,
+    handleRowToggle,
+    setSelected,
+  ])
 
   // Phase 10 — usePolledList above owns the 30s poll + visibility
   // refresh + invalidation-driven refetch for the Grid lens. The
@@ -943,6 +1004,7 @@ export default function ProductsWorkspace() {
           selected={selected}
           setSelected={setSelected}
           onRowToggle={handleRowToggle}
+          focusedRowId={focusedRowId}
           onPage={onPage}
           onPageSize={onPageSize}
           onTagEdit={onTagEdit}
@@ -2949,6 +3011,7 @@ function VirtualizedGrid({
   onToggleExpand,
   onTagEdit,
   onChanged,
+  focusedRowId,
 }: {
   products: ProductRow[]
   visible: typeof ALL_COLUMNS
@@ -2966,6 +3029,7 @@ function VirtualizedGrid({
   onToggleExpand: (parentId: string) => void
   onTagEdit: (id: string) => void
   onChanged: () => void
+  focusedRowId: string | null
 }) {
   // Build the flat row list. Order: each parent followed by its
   // expanded children (or a loading/empty placeholder). Memo deps
@@ -3049,6 +3113,22 @@ function VirtualizedGrid({
       return `e:${r.parentId}`
     },
   })
+
+  // E.10 — keep the J/K-focused row in view. Find its flat-row index
+  // then ask the virtualizer to scroll it within the viewport. align:
+  // 'auto' avoids unnecessary scrolling when the row is already
+  // visible.
+  useEffect(() => {
+    if (!focusedRowId) return
+    const idx = flatRows.findIndex(
+      (r) =>
+        (r.kind === 'parent' || r.kind === 'child') &&
+        r.product.id === focusedRowId,
+    )
+    if (idx >= 0) {
+      rowVirtualizer.scrollToIndex(idx, { align: 'auto' })
+    }
+  }, [focusedRowId, flatRows, rowVirtualizer])
 
   const sortKeys: Record<string, string> = {
     sku: 'sku',
@@ -3170,6 +3250,7 @@ function VirtualizedGrid({
               const isExpanded = productId
                 ? expandedParents.has(productId)
                 : false
+              const isFocused = productId ? focusedRowId === productId : false
               const productForMenu =
                 row.kind === 'parent' || row.kind === 'child'
                   ? row.product
@@ -3200,6 +3281,7 @@ function VirtualizedGrid({
                       isChild={false}
                       isSelected={isSelected}
                       isExpanded={isExpanded}
+                      isFocused={isFocused}
                       visible={visible}
                       cellPad={cellPad}
                       onToggleSelect={toggleSelect}
@@ -3214,6 +3296,7 @@ function VirtualizedGrid({
                       isChild={true}
                       isSelected={isSelected}
                       isExpanded={isExpanded}
+                      isFocused={isFocused}
                       visible={visible}
                       cellPad={cellPad}
                       onToggleSelect={toggleSelect}
@@ -3420,6 +3503,7 @@ const ProductRow = memo(function ProductRow({
   isChild,
   isSelected,
   isExpanded,
+  isFocused,
   visible,
   cellPad,
   onToggleSelect,
@@ -3431,6 +3515,7 @@ const ProductRow = memo(function ProductRow({
   isChild: boolean
   isSelected: boolean
   isExpanded: boolean
+  isFocused: boolean
   visible: typeof ALL_COLUMNS
   cellPad: string
   onToggleSelect: (id: string, shiftKey: boolean) => void
@@ -3440,13 +3525,17 @@ const ProductRow = memo(function ProductRow({
 }) {
   const childCount = product.childCount ?? 0
   const canExpand = !isChild && product.isParent && childCount > 0
+  // E.10 — focus ring (ring-2 ring-blue-500) applied to every cell of
+  // the J/K-focused row. inset-ring prevents the ring from offsetting
+  // the row position; combined with bg, gives the Linear-style glow.
+  const focusRing = isFocused ? 'ring-2 ring-inset ring-blue-500' : ''
   const rowBg = isChild
     ? isSelected
-      ? 'bg-blue-50/40'
-      : 'bg-slate-50/40 hover:bg-slate-100/60'
+      ? `bg-blue-50/40 ${focusRing}`
+      : `bg-slate-50/40 hover:bg-slate-100/60 ${focusRing}`
     : isSelected
-      ? 'bg-blue-50/30'
-      : 'hover:bg-slate-50'
+      ? `bg-blue-50/30 ${focusRing}`
+      : `hover:bg-slate-50 ${focusRing}`
   return (
     <>
       <div
@@ -3530,7 +3619,7 @@ function GridLens(props: any) {
   const {
     products, loading, error, page, pageSize, totalPages, total,
     visibleColumns, setVisibleColumns, columnPickerOpen, setColumnPickerOpen,
-    sortBy, onSort, selected, setSelected, onRowToggle, onPage, onPageSize, onTagEdit, onChanged,
+    sortBy, onSort, selected, setSelected, onRowToggle, focusedRowId, onPage, onPageSize, onTagEdit, onChanged,
     // Expand-on-chevron — see ProductsWorkspace for state ownership.
     expandedParents,
     childrenByParent,
@@ -3559,6 +3648,10 @@ function GridLens(props: any) {
      *  toggles the row + sets the range anchor; shift+click selects
      *  the range from anchor to clicked row. */
     onRowToggle: (id: string, shiftKey: boolean) => void
+    /** E.10 — id of the row currently focused for J/K navigation;
+     *  null when no row is focused. Drives the focus ring on
+     *  ProductRow + auto-scroll on change. */
+    focusedRowId: string | null
     onPage: (n: number) => void
     onPageSize: (n: number) => void
     onTagEdit: (id: string) => void
@@ -3723,6 +3816,7 @@ function GridLens(props: any) {
           onToggleExpand={onToggleExpand}
           onTagEdit={onTagEdit}
           onChanged={onChanged}
+          focusedRowId={focusedRowId}
         />
       </div>
       {/* Mobile card list — md:hidden. Shows the same product set
