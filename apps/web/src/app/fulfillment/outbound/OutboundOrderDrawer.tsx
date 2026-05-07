@@ -15,6 +15,7 @@ import Link from 'next/link'
 import {
   X, Package, ExternalLink, Truck, Crown, AlertTriangle, Clock,
   MapPin, User, CreditCard, Plus, Printer, CheckCircle2, Undo2,
+  TrendingDown,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -153,6 +154,69 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
   const [data, setData] = useState<DrawerOrder | null>(null)
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
+
+  // O.28: rate-compare panel state. Lazily fetched per shipment when
+  // operator clicks Compare. Cleared when drawer closes.
+  type Rate = {
+    source: 'SENDCLOUD' | 'AMAZON_BUY_SHIPPING'
+    carrier: string
+    serviceName: string
+    serviceCode: string
+    priceEur: number
+  }
+  const [ratesShipmentId, setRatesShipmentId] = useState<string | null>(null)
+  const [rates, setRates] = useState<Rate[] | null>(null)
+  const [ratesLoading, setRatesLoading] = useState(false)
+
+  const compareRates = async (shipmentId: string) => {
+    setRatesShipmentId(shipmentId)
+    setRates(null)
+    setRatesLoading(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/shipments/${shipmentId}/rates`,
+        { cache: 'no-store' },
+      )
+      if (res.ok) {
+        const out = await res.json()
+        setRates(out.rates ?? [])
+      } else {
+        toast.error(t('common.error'))
+      }
+    } catch {
+      toast.error(t('common.error'))
+    } finally {
+      setRatesLoading(false)
+    }
+  }
+
+  const applyRate = async (rate: Rate) => {
+    if (!ratesShipmentId) return
+    const carrierCode =
+      rate.source === 'AMAZON_BUY_SHIPPING' ? 'AMAZON_BUY_SHIPPING' : rate.carrier
+    const res = await fetch(
+      `${getBackendUrl()}/api/fulfillment/shipments/${ratesShipmentId}/service`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          carrierCode,
+          serviceCode: rate.serviceCode,
+          serviceName: rate.serviceName,
+        }),
+      },
+    )
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      toast.error(err.error ?? t('common.error'))
+      return
+    }
+    toast.success(t('rates.toast.applied', { service: rate.serviceName }))
+    setRatesShipmentId(null)
+    setRates(null)
+    emitInvalidation({ type: 'shipment.updated', id: ratesShipmentId })
+    fetchDetail()
+  }
 
   const fetchDetail = useCallback(async () => {
     if (!orderId) return
@@ -429,6 +493,16 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                                 <span className="text-sm text-slate-500"> · {s.warehouse.code}</span>
                               )}
                             </div>
+                            {/* O.28: rate-compare button — only for shipments
+                                that haven't printed a label yet. */}
+                            {!['LABEL_PRINTED', 'SHIPPED', 'IN_TRANSIT', 'DELIVERED'].includes(s.status) && (
+                              <button
+                                onClick={() => compareRates(s.id)}
+                                className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1 mt-0.5"
+                              >
+                                <TrendingDown size={9} /> {t('rates.compare')}
+                              </button>
+                            )}
                             {s.trackingNumber && (
                               s.trackingUrl ? (
                                 <a
@@ -467,6 +541,58 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                   )}
                 </div>
               </Card>
+
+              {/* O.28: Rate-compare panel (modal-like, inline) */}
+              {ratesShipmentId && (
+                <Card>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                        <TrendingDown size={12} /> {t('rates.title')}
+                      </div>
+                      <button
+                        onClick={() => { setRatesShipmentId(null); setRates(null) }}
+                        className="ml-auto h-6 w-6 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded"
+                        aria-label={t('common.close')}
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                    {ratesLoading ? (
+                      <div className="text-md text-slate-500 py-4 text-center">{t('common.loading')}</div>
+                    ) : !rates || rates.length === 0 ? (
+                      <div className="text-md text-slate-500 py-4 text-center">
+                        {t('rates.empty')}
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {rates.map((r, idx) => (
+                          <button
+                            key={`${r.source}-${r.serviceCode}`}
+                            onClick={() => applyRate(r)}
+                            className={`w-full flex items-center gap-3 px-3 py-2 border rounded hover:bg-slate-50 text-left transition-colors ${
+                              idx === 0 ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-200'
+                            }`}
+                          >
+                            {idx === 0 && (
+                              <Badge variant="success" size="sm">{t('rates.cheapest')}</Badge>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-md text-slate-900 truncate">{r.serviceName}</div>
+                              <div className="text-xs text-slate-500">
+                                {r.carrier} · {r.source === 'AMAZON_BUY_SHIPPING' ? 'Amazon Buy Shipping' : 'Sendcloud'}
+                              </div>
+                            </div>
+                            <div className="tabular-nums text-md font-semibold text-slate-900">
+                              €{r.priceEur.toFixed(2)}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              )}
 
               {/* O.20: Tracking timeline — collated across all shipments,
                    most-recent first. Empty when no carrier scans yet. */}

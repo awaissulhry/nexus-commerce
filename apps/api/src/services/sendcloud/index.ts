@@ -11,7 +11,7 @@
  */
 
 import prisma from '../../db.js'
-import { createParcel, fetchParcel, voidParcel, fetchLabelPdf } from './client.js'
+import { createParcel, fetchParcel, voidParcel, fetchLabelPdf, listShippingMethods } from './client.js'
 import {
   SendcloudCredentials,
   SendcloudError,
@@ -23,6 +23,7 @@ export {
   fetchParcel,
   voidParcel,
   fetchLabelPdf,
+  listShippingMethods,
   SendcloudError,
 }
 export type { SendcloudCredentials, ServiceMap } from './types.js'

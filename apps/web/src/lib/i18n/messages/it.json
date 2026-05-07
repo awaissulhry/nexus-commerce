@@ -59,6 +59,17 @@
   "wizard.saveFailed": "Salvataggio non riuscito",
   "wizard.finalStep": "Ultimo passaggio",
 
+  "rates.title": "Confronta tariffe",
+  "rates.compare": "Confronta tariffe",
+  "rates.cheapest": "Più economico",
+  "rates.empty": "Nessuna tariffa disponibile. Imposta prima destinazione e peso della spedizione.",
+  "rates.toast.applied": "Servizio impostato su {service}",
+  "savedViews.label": "Viste",
+  "savedViews.empty": "Nessuna vista salvata.",
+  "savedViews.saveCurrent": "Salva vista corrente…",
+  "savedViews.setDefault": "Imposta come predefinita",
+  "savedViews.unsetDefault": "Rimuovi predefinita",
+
   "outbound.title": "Spedizioni",
   "outbound.description": "Prepara, imballa e spedisci ordini su tutti i canali. In sospeso = serve creare una spedizione. Spedizioni = in transito o consegnate.",
   "outbound.tab.pending": "In sospeso",

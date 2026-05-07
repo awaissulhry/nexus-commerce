@@ -88,6 +88,17 @@
   "wizard.saveFailed": "Save failed",
   "wizard.finalStep": "Final step",
 
+  "rates.title": "Compare rates",
+  "rates.compare": "Compare rates",
+  "rates.cheapest": "Cheapest",
+  "rates.empty": "No rates available. Set the shipment's destination + weight first.",
+  "rates.toast.applied": "Service set to {service}",
+  "savedViews.label": "Views",
+  "savedViews.empty": "No saved views yet.",
+  "savedViews.saveCurrent": "Save current view…",
+  "savedViews.setDefault": "Set as default",
+  "savedViews.unsetDefault": "Unset default",
+
   "outbound.title": "Outbound",
   "outbound.description": "Pick, pack, and ship orders across all channels. Pending = needs a shipment created. Shipments = mid-flight or done.",
   "outbound.tab.pending": "Pending",

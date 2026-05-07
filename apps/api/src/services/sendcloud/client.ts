@@ -189,6 +189,51 @@ export async function fetchParcel(
 }
 
 /**
+ * O.28 — Fetch eligible Sendcloud shipping methods for a parcel
+ * weight + destination. Used by the rate-compare UI to show options.
+ * In dryRun returns three plausible mock services.
+ */
+export async function listShippingMethods(
+  creds: SendcloudCredentials,
+  filter: { weightKg: number; toCountry: string; fromCountry?: string },
+): Promise<Array<{
+  id: number
+  name: string
+  carrier: string
+  price: number // EUR
+  minWeightKg: number
+  maxWeightKg: number
+}>> {
+  if (!isReal()) {
+    return [
+      { id: 1001, name: 'BRT 0–2kg Standard', carrier: 'BRT', price: 4.5, minWeightKg: 0, maxWeightKg: 2 },
+      { id: 1002, name: 'GLS 0–3kg Business Parcel', carrier: 'GLS', price: 5.9, minWeightKg: 0, maxWeightKg: 3 },
+      { id: 1003, name: 'DHL Express 0–5kg International', carrier: 'DHL', price: 14.5, minWeightKg: 0, maxWeightKg: 5 },
+    ].filter((m) => filter.weightKg <= m.maxWeightKg)
+  }
+  // Sendcloud /shipping_methods supports query params for filtering;
+  // we keep it simple and filter client-side once we have the list.
+  const res = await fetch(`${baseUrl()}/shipping_methods?to_country=${filter.toCountry}`, {
+    headers: { Authorization: authHeader(creds) },
+  })
+  if (!res.ok) {
+    throw new SendcloudError(`HTTP ${res.status}`, res.status, null)
+  }
+  const body: any = await res.json()
+  const methods = body?.shipping_methods ?? []
+  return methods
+    .filter((m: any) => filter.weightKg >= Number(m.min_weight ?? 0) && filter.weightKg <= Number(m.max_weight ?? Infinity))
+    .map((m: any) => ({
+      id: m.id,
+      name: m.name,
+      carrier: m.carrier,
+      price: Number(m.countries?.[0]?.price ?? 0),
+      minWeightKg: Number(m.min_weight ?? 0),
+      maxWeightKg: Number(m.max_weight ?? 0),
+    }))
+}
+
+/**
  * Fetch the label PDF as a buffer. Used by the print-label endpoint
  * (O.8) when it needs to stream the PDF directly rather than redirect
  * to Sendcloud's URL (some carriers have signed URLs that expire).

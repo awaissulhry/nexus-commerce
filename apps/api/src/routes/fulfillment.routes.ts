@@ -1267,6 +1267,126 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── O.28: Rate shopping ────────────────────────────────────────────
+  // Returns available shipping services (Sendcloud + Buy Shipping if
+  // enabled) sorted ascending by rate so the drawer's compare panel
+  // shows the cheapest first. Operator picks one; PATCH below binds
+  // the chosen carrier + service to the shipment row.
+  fastify.get('/fulfillment/shipments/:id/rates', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const shipment = await prisma.shipment.findUnique({
+        where: { id },
+        include: { order: { select: { shippingAddress: true, channel: true } } },
+      })
+      if (!shipment) return reply.code(404).send({ error: 'Shipment not found' })
+      if (!shipment.order) return reply.code(400).send({ error: 'Shipment has no order' })
+
+      const ship = shipment.order.shippingAddress as any
+      const country = (ship?.CountryCode ?? ship?.countryCode ?? ship?.country ?? 'IT')
+        .toString()
+        .toUpperCase()
+      const weightKg = (shipment.weightGrams ?? 1500) / 1000
+
+      const sendcloud = await import('../services/sendcloud/index.js')
+      const rates: Array<{
+        source: 'SENDCLOUD' | 'AMAZON_BUY_SHIPPING'
+        carrier: string
+        serviceName: string
+        serviceCode: string
+        priceEur: number
+        estimatedDays?: number
+      }> = []
+
+      try {
+        const creds = await sendcloud.resolveCredentials()
+        const methods = await sendcloud.listShippingMethods(creds, { weightKg, toCountry: country })
+        for (const m of methods) {
+          rates.push({
+            source: 'SENDCLOUD',
+            carrier: m.carrier,
+            serviceName: m.name,
+            serviceCode: String(m.id),
+            priceEur: m.price,
+          })
+        }
+      } catch {
+        // Sendcloud unconnected or unavailable — skip but keep going so
+        // Buy Shipping rates still surface for Amazon orders.
+      }
+
+      // Buy Shipping is only relevant for Amazon orders.
+      if (shipment.order.channel === 'AMAZON' && process.env.NEXUS_ENABLE_AMAZON_BUY_SHIPPING) {
+        try {
+          const buyShipping = await import('../services/amazon-pushback/buy-shipping.js')
+          const services = await buyShipping.getEligibleShippingServices({
+            amazonOrderId: '',
+            itemList: [],
+            shipFromAddress: {
+              name: 'Xavia',
+              addressLine1: '',
+              city: 'Riccione',
+              postalCode: '47838',
+              countryCode: 'IT',
+            },
+            weightGrams: shipment.weightGrams ?? 1500,
+          })
+          for (const s of services) {
+            rates.push({
+              source: 'AMAZON_BUY_SHIPPING',
+              carrier: s.carrierName,
+              serviceName: s.shippingServiceName,
+              serviceCode: s.shippingServiceOfferId,
+              priceEur: s.rate.amount,
+            })
+          }
+        } catch {
+          /* Buy Shipping unavailable — skip */
+        }
+      }
+
+      rates.sort((a, b) => a.priceEur - b.priceEur)
+      return { rates, weightKg, destinationCountry: country }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[shipments/:id/rates] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // O.28: bind operator's chosen carrier + service to the shipment.
+  // Caller picks from the rates response above. Rejects post-
+  // LABEL_PRINTED — once a label exists the carrier is committed.
+  fastify.patch('/fulfillment/shipments/:id/service', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = request.body as {
+        carrierCode?: string
+        serviceCode?: string
+        serviceName?: string
+      }
+      const shipment = await prisma.shipment.findUnique({ where: { id } })
+      if (!shipment) return reply.code(404).send({ error: 'Shipment not found' })
+      if (['LABEL_PRINTED', 'SHIPPED', 'IN_TRANSIT', 'DELIVERED'].includes(shipment.status)) {
+        return reply.code(400).send({
+          error: 'Cannot change service after label printed. Void the label first.',
+        })
+      }
+      const updated = await prisma.shipment.update({
+        where: { id },
+        data: {
+          ...(body.carrierCode ? { carrierCode: body.carrierCode as any } : {}),
+          ...(body.serviceCode != null ? { serviceCode: body.serviceCode } : {}),
+          ...(body.serviceName != null ? { serviceName: body.serviceName } : {}),
+          version: { increment: 1 },
+        },
+      })
+      return updated
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[shipments/:id/service] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   fastify.post('/fulfillment/shipments/:id/mark-shipped', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
