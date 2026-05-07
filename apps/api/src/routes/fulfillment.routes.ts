@@ -1192,10 +1192,13 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       // works end-to-end in dryRun mode without ever touching
       // Sendcloud. resolveCredentials() throws SendcloudError with a
       // clean 400 message if the carrier isn't connected.
+      // CR.10: pass the shipment's warehouseId so the resolver picks
+      // up the warehouse-bound CarrierAccount when set; null/undefined
+      // falls through to the primary Carrier credentials.
       const sendcloud = await import('../services/sendcloud/index.js')
       let creds
       try {
-        creds = await sendcloud.resolveCredentials()
+        creds = await sendcloud.resolveCredentials(shipment.warehouseId)
       } catch (e: any) {
         if (e instanceof sendcloud.SendcloudError) {
           return reply.code(e.status).send({ error: e.message, code: e.code })
@@ -9113,15 +9116,29 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // CR.11 — bind a Sendcloud sender_address ID to a warehouse.
-  // PATCH /fulfillment/warehouses/:id  body: { sendcloudSenderId: number | null }
-  // null clears the binding (warehouse falls back to integration default).
+  // CR.10 — bind a CarrierAccount as the warehouse's default account.
+  //
+  // PATCH /fulfillment/warehouses/:id
+  //   body: { sendcloudSenderId?: number | null,
+  //           defaultCarrierAccountId?: string | null }
+  // null on either field clears the binding (warehouse falls back to
+  // integration / primary defaults).
   fastify.patch('/fulfillment/warehouses/:id', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const body = request.body as { sendcloudSenderId?: number | null }
-      const data: { sendcloudSenderId?: number | null } = {}
+      const body = request.body as {
+        sendcloudSenderId?: number | null
+        defaultCarrierAccountId?: string | null
+      }
+      const data: {
+        sendcloudSenderId?: number | null
+        defaultCarrierAccountId?: string | null
+      } = {}
       if (Object.prototype.hasOwnProperty.call(body, 'sendcloudSenderId')) {
         data.sendcloudSenderId = body.sendcloudSenderId ?? null
+      }
+      if (Object.prototype.hasOwnProperty.call(body, 'defaultCarrierAccountId')) {
+        data.defaultCarrierAccountId = body.defaultCarrierAccountId ?? null
       }
       const updated = await prisma.warehouse.update({ where: { id }, data })
       return { ok: true, warehouse: updated }

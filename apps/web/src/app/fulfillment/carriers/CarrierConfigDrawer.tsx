@@ -994,6 +994,7 @@ type Warehouse = {
   isDefault: boolean
   isActive: boolean
   sendcloudSenderId: number | null
+  defaultCarrierAccountId: string | null
 }
 
 type SenderAddress = {
@@ -1011,16 +1012,22 @@ function WarehousesTab({ carrierCode }: { carrierCode: string }) {
   const { toast } = useToast()
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [senders, setSenders] = useState<SenderAddress[]>([])
+  // CR.10: secondary CarrierAccount rows for the per-warehouse picker.
+  const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
     try {
-      const [wRes, sRes] = await Promise.all([
+      const [wRes, sRes, aRes] = await Promise.all([
         fetch(`${getBackendUrl()}/api/fulfillment/warehouses`, { cache: 'no-store' }),
         fetch(
           `${getBackendUrl()}/api/fulfillment/carriers/${carrierCode}/sender-addresses`,
+          { cache: 'no-store' },
+        ),
+        fetch(
+          `${getBackendUrl()}/api/fulfillment/carriers/${carrierCode}/accounts`,
           { cache: 'no-store' },
         ),
       ])
@@ -1033,6 +1040,12 @@ function WarehousesTab({ carrierCode }: { carrierCode: string }) {
         setSenders(s.items ?? [])
       } else {
         setSenders([])
+      }
+      if (aRes.ok) {
+        const a = await aRes.json()
+        setAccounts(a.items ?? [])
+      } else {
+        setAccounts([])
       }
     } finally {
       setLoading(false)
@@ -1050,6 +1063,26 @@ function WarehousesTab({ carrierCode }: { carrierCode: string }) {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sendcloudSenderId: senderId }),
+        },
+      )
+      if (!res.ok) throw new Error('Save failed')
+      await fetchAll()
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const setAccount = async (warehouseId: string, accountId: string | null) => {
+    setBusyId(warehouseId)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/warehouses/${warehouseId}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ defaultCarrierAccountId: accountId }),
         },
       )
       if (!res.ok) throw new Error('Save failed')
@@ -1088,6 +1121,7 @@ function WarehousesTab({ carrierCode }: { carrierCode: string }) {
               <tr>
                 <th className="text-left px-3 py-2 font-semibold">Warehouse</th>
                 <th className="text-left px-3 py-2 font-semibold">Sendcloud sender</th>
+                <th className="text-left px-3 py-2 font-semibold">Default account</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
@@ -1113,6 +1147,26 @@ function WarehousesTab({ carrierCode }: { carrierCode: string }) {
                         <option key={s.id} value={s.id}>
                           {s.contactName} · {s.city} {s.postalCode}
                           {s.isDefault ? ' (default)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-3 py-2">
+                    <select
+                      value={w.defaultCarrierAccountId ?? ''}
+                      disabled={busyId === w.id}
+                      onChange={(e) =>
+                        setAccount(w.id, e.target.value === '' ? null : e.target.value)
+                      }
+                      className="h-8 w-full px-2 text-base border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+                      title={accounts.length === 0 ? 'Add a secondary account in Credentials tab to bind one' : undefined}
+                    >
+                      <option value="">— primary account —</option>
+                      {accounts.map((a) => (
+                        <option key={a.id} value={a.id} disabled={!a.hasCredentials || !a.isActive}>
+                          {a.accountLabel}
+                          {a.mode === 'sandbox' ? ' (sandbox)' : ''}
+                          {!a.hasCredentials ? ' — no creds' : !a.isActive ? ' — inactive' : ''}
                         </option>
                       ))}
                     </select>

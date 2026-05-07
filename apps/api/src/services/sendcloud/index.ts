@@ -42,8 +42,35 @@ export type {
  * Read SENDCLOUD carrier creds from the DB. Throws if the carrier is
  * unconnected or the stored blob is malformed. Caller catches and maps
  * to a 400 with a clear "open /fulfillment/carriers" message.
+ *
+ * CR.10: optional warehouseId routes to the warehouse's bound
+ * CarrierAccount when set; null falls back to the primary Carrier
+ * row. Resolution order:
+ *   1. Warehouse.defaultCarrierAccountId → CarrierAccount.credentialsEncrypted
+ *   2. Carrier.credentialsEncrypted (primary, existing behavior)
+ *
+ * The CR.1 envelope works identically on both rows (same encryption
+ * helper); the only difference is which row we pull ciphertext from.
  */
-export async function resolveCredentials(): Promise<SendcloudCredentials> {
+export async function resolveCredentials(warehouseId?: string | null): Promise<SendcloudCredentials> {
+  // CR.10: try warehouse-bound account first.
+  if (warehouseId) {
+    const wh = await prisma.warehouse.findUnique({
+      where: { id: warehouseId },
+      select: { defaultCarrierAccountId: true },
+    })
+    if (wh?.defaultCarrierAccountId) {
+      const account = await prisma.carrierAccount.findUnique({
+        where: { id: wh.defaultCarrierAccountId },
+      })
+      if (account?.isActive && account.credentialsEncrypted) {
+        return parseEncryptedCreds(account.credentialsEncrypted, 'CarrierAccount')
+      }
+      // Account exists but inactive / no creds — fall through to
+      // primary rather than failing the print-label call.
+    }
+  }
+
   const carrier = await prisma.carrier.findUnique({
     where: { code: 'SENDCLOUD' },
   })
@@ -54,14 +81,29 @@ export async function resolveCredentials(): Promise<SendcloudCredentials> {
       'CARRIER_NOT_CONNECTED',
     )
   }
+  return parseEncryptedCreds(carrier.credentialsEncrypted, 'Carrier')
+}
+
+/**
+ * CR.10: shared decrypt + legacy-plaintext-migration helper. Used by
+ * resolveCredentials for both the primary Carrier row and any
+ * warehouse-bound CarrierAccount row. The `source` parameter only
+ * shapes the legacy-plaintext re-encrypt path so a Carrier-side
+ * stale plaintext row gets re-encrypted on Carrier (not on a random
+ * CarrierAccount).
+ */
+function parseEncryptedCreds(
+  ciphertext: string,
+  source: 'Carrier' | 'CarrierAccount',
+): SendcloudCredentials {
   // CR.1: credentials are AES-256-GCM enveloped. Pre-CR.1 rows were
   // plaintext JSON; we transparently re-encrypt those on first read
   // so a Railway deploy + first label-print is the migration. No
   // separate backfill window. Detection is "starts with v1:".
   let plaintext: string
-  if (isEncrypted(carrier.credentialsEncrypted)) {
+  if (isEncrypted(ciphertext)) {
     try {
-      plaintext = decryptSecret(carrier.credentialsEncrypted)
+      plaintext = decryptSecret(ciphertext)
     } catch {
       throw new SendcloudError(
         'Sendcloud credentials failed integrity check. Reconnect via /fulfillment/carriers.',
@@ -70,14 +112,21 @@ export async function resolveCredentials(): Promise<SendcloudCredentials> {
       )
     }
   } else {
-    plaintext = carrier.credentialsEncrypted
+    plaintext = ciphertext
     // Legacy plaintext row — re-encrypt in place. Fire-and-forget so
     // a write blip doesn't block label-print; next read re-tries.
     try {
       const reEncrypted = encryptSecret(plaintext)
-      void prisma.carrier
-        .update({ where: { code: 'SENDCLOUD' }, data: { credentialsEncrypted: reEncrypted } })
-        .catch(() => { /* non-fatal */ })
+      if (source === 'Carrier') {
+        void prisma.carrier
+          .update({ where: { code: 'SENDCLOUD' }, data: { credentialsEncrypted: reEncrypted } })
+          .catch(() => { /* non-fatal */ })
+      } else {
+        // CarrierAccount: we don't know the id from the ciphertext
+        // alone. Skip the in-place re-encrypt — the next operator-
+        // initiated update via the CR.9 PATCH endpoint will store
+        // it encrypted.
+      }
     } catch {
       // Encryption misconfigured — surface a clear error rather than
       // silently failing. Operator must set NEXUS_CREDENTIAL_ENC_KEY.

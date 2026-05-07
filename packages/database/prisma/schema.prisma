@@ -2592,6 +2592,13 @@ model Warehouse {
   // Sendcloud sender address mapping — Sendcloud uses sender_address_id
   sendcloudSenderId Int?
 
+  // CR.10 — bind a secondary CarrierAccount as this warehouse's
+  // default. The print-label flow consults this first; null falls
+  // back to the primary Carrier credentials. SET NULL on delete so
+  // removing an account doesn't cascade through warehouses.
+  defaultCarrierAccount   CarrierAccount? @relation(fields: [defaultCarrierAccountId], references: [id], onDelete: SetNull)
+  defaultCarrierAccountId String?
+
   stockMovements    StockMovement[]
   shipments         Shipment[]
   inboundShipments  InboundShipment[]
@@ -2605,6 +2612,7 @@ model Warehouse {
   updatedAt DateTime @updatedAt
 
   @@index([kind])
+  @@index([defaultCarrierAccountId])
 }
 
 // H.1 — Multi-location inventory model.
@@ -2968,6 +2976,9 @@ model CarrierAccount {
   lastError            String?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
+
+  // CR.10 — back-relation for warehouses bound to this account.
+  warehouses Warehouse[]
 
   @@unique([carrierId, accountLabel])
   @@index([carrierId, isActive])
