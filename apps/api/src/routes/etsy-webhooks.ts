@@ -8,6 +8,7 @@ import prisma from "../db.js";
 import { WebhookValidator, WebhookProcessor } from "../utils/webhook.js";
 import { ConfigManager } from "../utils/config.js";
 import type { EtsyConfig } from "../types/marketplace.js";
+import { publishListingEvent } from "../services/listing-events.service.js";
 
 interface EtsyWebhookPayload {
   event_type: string;
@@ -127,6 +128,14 @@ async function handleInventoryUpdate(payload: EtsyWebhookPayload): Promise<void>
           await (prisma as any).variantChannelListing.update({
             where: { id: channelListing.id },
             data: { channelQuantity: quantity },
+          });
+          // C.3 — broadcast so any open /listings tab refreshes within
+          // ~200 ms instead of waiting for the next 30 s polling tick.
+          publishListingEvent({
+            type: "listing.updated",
+            listingId: channelListing.id,
+            reason: "etsy-webhook:inventory",
+            ts: Date.now(),
           });
         }
       }

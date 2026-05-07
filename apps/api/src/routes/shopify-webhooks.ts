@@ -8,6 +8,7 @@ import prisma from "../db.js";
 import { WebhookValidator, WebhookProcessor } from "../utils/webhook.js";
 import { ConfigManager } from "../utils/config.js";
 import type { ShopifyConfig } from "../types/marketplace.js";
+import { publishListingEvent } from "../services/listing-events.service.js";
 
 interface ShopifyWebhookPayload {
   id: string;
@@ -129,6 +130,14 @@ async function handleInventoryUpdate(payload: ShopifyWebhookPayload): Promise<vo
             channelQuantity: inventory.available_quantity || 0,
             lastSyncedAt: new Date(),
           },
+        });
+        // C.3 — broadcast so any open /listings tab refreshes within
+        // ~200 ms instead of waiting for the next 30 s polling tick.
+        publishListingEvent({
+          type: "listing.updated",
+          listingId: listing.id,
+          reason: "shopify-webhook:inventory",
+          ts: Date.now(),
         });
       }
 
