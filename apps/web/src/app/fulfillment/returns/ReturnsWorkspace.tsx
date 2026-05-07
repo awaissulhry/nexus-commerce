@@ -721,6 +721,34 @@ function ReturnLabelPanel({
     }
   }
 
+  // O.75: native Sendcloud return-label generation. Replaces the
+  // copy-paste-from-Sendcloud-dashboard workflow. dryRun-default —
+  // when NEXUS_ENABLE_SENDCLOUD_REAL=false the backend returns a
+  // mock URL + tracking so this round-trip works end-to-end without
+  // touching Sendcloud. Real mode requires sandbox/production creds
+  // wired via /carriers/SENDCLOUD/connect.
+  const handleGenerate = async () => {
+    setBusy(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/returns/${returnRow.id}/generate-label`,
+        { method: 'POST' },
+      )
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`)
+      toast.success(
+        body.dryRun
+          ? 'Mock label generated (NEXUS_ENABLE_SENDCLOUD_REAL=false)'
+          : 'Sendcloud return label generated',
+      )
+      await onUpdated()
+    } catch (err) {
+      toast.error(`Generate failed: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const handleCopy = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text)
@@ -745,14 +773,24 @@ function ReturnLabelPanel({
       {!hasLabel && !editing && (
         <div className="bg-slate-50 border border-slate-200 rounded p-3">
           <p className="text-base text-slate-600 mb-2">
-            No label attached. Generate one in your carrier dashboard, then paste the URL + tracking here so the customer can be emailed and the workflow stays auditable.
+            No label attached. Generate a Sendcloud return label in one click, or attach one you've already created in another portal.
           </p>
-          <button
-            onClick={() => setEditing(true)}
-            className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5"
-          >
-            <Plus size={12} /> Attach label
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleGenerate}
+              disabled={busy}
+              className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+              title="Calls Sendcloud's parcels API with is_return=true. dryRun-default — mock label until NEXUS_ENABLE_SENDCLOUD_REAL=true."
+            >
+              <CheckCircle2 size={12} /> {busy ? 'Generating…' : 'Generate Sendcloud label'}
+            </button>
+            <button
+              onClick={() => setEditing(true)}
+              className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1.5"
+            >
+              <Plus size={12} /> Attach existing
+            </button>
+          </div>
         </div>
       )}
 

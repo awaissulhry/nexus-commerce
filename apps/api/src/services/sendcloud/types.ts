@@ -79,6 +79,13 @@ export interface SendcloudParcelInput {
   // Whether to actually request a label. False = "create parcel record
   // but don't generate label yet" (rare; we always set true).
   request_label?: boolean
+
+  // O.75: return-label flag. When true, Sendcloud generates a return-
+  // shaped label — recipient on the parcel (the customer's address)
+  // becomes the *sender* on the printed label, and the integration's
+  // default sender_address becomes the recipient. Used by the
+  // /returns/:id/generate-label endpoint.
+  is_return?: boolean
 }
 
 export interface SendcloudParcelOutput {
