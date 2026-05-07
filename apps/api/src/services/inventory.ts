@@ -149,73 +149,12 @@ export async function getStockHistory(productId: string, limit: number = 50) {
   }
 }
 
-/**
- * Sync global stock for a Master SKU
- * Calculates total available stock across all variations and updates connected channels
- * @param masterSkuId - Product ID (Master SKU)
- * @returns Updated product with recalculated global stock
- */
-export async function syncGlobalStock(masterSkuId: string) {
-  try {
-    // Fetch the product and all its variations
-    const product: any = await prisma.product.findUnique({
-      where: { id: masterSkuId },
-    })
-
-    if (!product) {
-      throw new Error(`Product with ID ${masterSkuId} not found`)
-    }
-
-    // Fetch all variations for this product
-    const variations: any[] = await (prisma as any).productVariation.findMany({
-      where: { productId: masterSkuId },
-      select: {
-        id: true,
-        sku: true,
-        stock: true,
-        stockBuffer: true,
-      },
-    })
-
-    // Calculate total available stock (sum of all variations)
-    const totalAvailable = variations.reduce((sum, variation) => {
-      return sum + variation.stock
-    }, 0)
-
-    // Calculate available stock after buffer (stock that can be listed)
-    const totalListable = variations.reduce((sum, variation) => {
-      const availableAfterBuffer = Math.max(0, variation.stock - variation.stockBuffer)
-      return sum + availableAfterBuffer
-    }, 0)
-
-    // Update product with new global stock
-    const updatedProduct = await prisma.product.update({
-      where: { id: masterSkuId },
-      data: {
-        totalStock: totalAvailable,
-      },
-    })
-
-    // Log the sync event
-    console.log(
-      `[syncGlobalStock] Master SKU ${product.sku}: Total Available=${totalAvailable}, Listable=${totalListable}`
-    )
-
-    // Return sync result with channel information
-    return {
-      success: true,
-      masterSkuId,
-      masterSku: product.sku,
-      totalAvailable,
-      totalListable,
-      variationCount: variations.length,
-      updatedProduct,
-    }
-  } catch (error) {
-    console.error('[syncGlobalStock] Error syncing global stock:', error)
-    throw error
-  }
-}
+// S.1 — `syncGlobalStock(masterSkuId)` removed. It summed
+// ProductVariation.stock (P.1-deprecated, zero rows in production) and
+// wrote Product.totalStock directly, bypassing the StockLevel ledger.
+// Product.totalStock is now maintained as SUM(StockLevel.quantity) by
+// stock-movement.service.recomputeProductTotalStock — no separate
+// syncGlobalStock layer is needed.
 
 /**
  * Get channel sync status for a product

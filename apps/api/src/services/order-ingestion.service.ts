@@ -5,7 +5,7 @@
 
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
-import { processSale } from './inventory-sync.service.js'
+import { applyStockMovement } from './stock-movement.service.js'
 import { Prisma } from '@prisma/client'
 
 /**
@@ -220,18 +220,38 @@ export async function ingestMockOrders(): Promise<IngestionStats> {
         }
       }
 
-      // Process inventory sync for each item
+      // S.1 — route stock decrement through canonical applyStockMovement
+      // so the StockLevel ledger, totalStock cache, and ChannelListing
+      // cascade all stay consistent. The audit row now also links to
+      // the Order via orderId, which the legacy processSale path didn't.
       for (const item of orderItems) {
         try {
           logger.info(`[ORDER INGESTION] Processing sale for SKU: ${item.sku}, Qty: ${item.quantity}`)
-          
-          // Call inventory sync service to deduct stock and trigger channel updates
-          await processSale(item.sku, item.quantity)
-          
-          logger.info(`[ORDER INGESTION] Inventory sync triggered for ${item.sku}`)
+
+          const product = await prisma.product.findUnique({
+            where: { sku: item.sku },
+            select: { id: true },
+          })
+          if (!product) {
+            logger.warn(`[ORDER INGESTION] No product matched SKU ${item.sku} — skipping stock decrement`)
+            continue
+          }
+
+          await applyStockMovement({
+            productId: product.id,
+            change: -item.quantity,
+            reason: 'ORDER_PLACED',
+            referenceType: 'Order',
+            referenceId: order.id,
+            orderId: order.id,
+            actor: 'mock-order-ingestion',
+            notes: `Mock order ingestion (channel=${channel})`,
+          })
+
+          logger.info(`[ORDER INGESTION] Inventory decremented for ${item.sku}`)
         } catch (error: any) {
           logger.warn(
-            `[ORDER INGESTION] Failed to sync inventory for ${item.sku}:`,
+            `[ORDER INGESTION] Failed to decrement inventory for ${item.sku}:`,
             error.message
           )
           // Continue with other items even if one fails

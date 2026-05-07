@@ -17,7 +17,6 @@ import { logger } from '../utils/logger.js'
 let _redis: Redis | null = null
 let _outboundSyncQueue: Queue | null = null
 let _channelSyncQueue: Queue | null = null
-let _stockUpdateQueue: Queue | null = null
 let _queueEvents: QueueEvents | null = null
 let _channelSyncQueueEvents: QueueEvents | null = null
 let _eventListenersAttached = false
@@ -71,16 +70,6 @@ function getChannelSyncQueue(): Queue {
     })
   }
   return _channelSyncQueue
-}
-
-function getStockUpdateQueue(): Queue {
-  if (!_stockUpdateQueue) {
-    _stockUpdateQueue = new Queue('stock-updates', {
-      connection: getRedisConnection(),
-      defaultJobOptions,
-    })
-  }
-  return _stockUpdateQueue
 }
 
 function getQueueEvents(): QueueEvents {
@@ -160,7 +149,6 @@ export const redis = {
 
 export const outboundSyncQueue: Queue = makeQueueProxy(getOutboundSyncQueue)
 export const channelSyncQueue: Queue = makeQueueProxy(getChannelSyncQueue)
-export const stockUpdateQueue: Queue = makeQueueProxy(getStockUpdateQueue)
 export const queueEvents: QueueEvents = makeQueueEventsProxy(getQueueEvents)
 export const channelSyncQueueEvents: QueueEvents = makeQueueEventsProxy(getChannelSyncQueueEvents)
 
@@ -204,7 +192,6 @@ export async function closeQueue() {
   try {
     if (_outboundSyncQueue) await _outboundSyncQueue.close()
     if (_channelSyncQueue) await _channelSyncQueue.close()
-    if (_stockUpdateQueue) await _stockUpdateQueue.close()
     if (_queueEvents) await _queueEvents.close()
     if (_channelSyncQueueEvents) await _channelSyncQueueEvents.close()
     if (_redis) await _redis.quit()
