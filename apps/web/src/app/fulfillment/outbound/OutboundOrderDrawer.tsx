@@ -21,6 +21,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -151,6 +152,7 @@ interface Props {
 
 export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
   const { toast } = useToast()
+  const askConfirm = useConfirm()
   const { t } = useTranslations()
   const [data, setData] = useState<DrawerOrder | null>(null)
   const [loading, setLoading] = useState(false)
@@ -188,6 +190,45 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
       toast.error(t('common.error'))
     } finally {
       setRatesLoading(false)
+    }
+  }
+
+  // O.48: operator-initiated cancellation. Confirm-gated; cascades
+  // void/restock via the backend. Surfaces a follow-up toast about
+  // channel pushback so operator knows to also cancel on the
+  // marketplace.
+  const cancelOrder = async () => {
+    if (!orderId) return
+    if (!(await askConfirm({
+      title: t('outbound.drawer.cancel.title'),
+      description: t('outbound.drawer.cancel.description'),
+      confirmLabel: t('outbound.drawer.cancel.confirm'),
+      tone: 'danger',
+    }))) return
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/orders/${orderId}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const out = await res.json()
+      if (!res.ok) {
+        toast.error(out.error ?? t('common.error'))
+        return
+      }
+      toast.success(t('outbound.drawer.cancel.toast'))
+      if (out.channelPushbackPending) {
+        toast.warning(
+          t('outbound.drawer.cancel.channelReminder', {
+            channel: out.channel,
+            orderId: out.channelOrderId ?? '',
+          }),
+        )
+      }
+      emitInvalidation({ type: 'shipment.deleted', meta: { orderId } })
+      fetchDetail()
+    } catch {
+      toast.error(t('common.error'))
     }
   }
 
@@ -805,6 +846,16 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
               >
                 <Undo2 size={11} /> {t('outbound.drawer.generateReturn')}
               </Link>
+            )}
+            {/* O.48: cancel order — only when not already terminal. */}
+            {data.status !== 'CANCELLED' && data.status !== 'DELIVERED' && (
+              <button
+                onClick={cancelOrder}
+                className="h-8 px-3 text-base text-rose-700 border border-rose-200 rounded hover:bg-rose-50 inline-flex items-center gap-1.5"
+                title={t('outbound.drawer.cancel.confirm')}
+              >
+                <X size={11} /> {t('outbound.drawer.cancel.button')}
+              </button>
             )}
             <Link
               href={`/orders/${data.id}`}

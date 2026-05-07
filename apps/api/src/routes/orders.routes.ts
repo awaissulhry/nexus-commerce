@@ -438,4 +438,77 @@ export async function ordersRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: error.message })
     }
   })
+
+  // ── O.48: Manual order cancellation ────────────────────────────────
+  // POST /api/orders/:id/cancel — operator-initiated cancellation.
+  // Sets Order.status=CANCELLED + cancelledAt + runs the existing
+  // O.45/O.46 cascade (void parcels + restore stock). Channel-side
+  // pushback (telling Amazon/eBay we cancelled) is a separate
+  // commit; today this only updates Nexus state, and the response
+  // surfaces { channelPushbackPending: true } so the UI can warn
+  // operator to also cancel on the channel.
+  app.post<{ Params: { id: string }; Body: { reason?: string } }>(
+    '/api/orders/:id/cancel',
+    async (request, reply) => {
+      try {
+        const { id } = request.params
+        const reason = request.body?.reason?.trim() || 'Cancelled by operator'
+
+        const existing = await prisma.order.findUnique({
+          where: { id },
+          select: { id: true, status: true, channel: true, channelOrderId: true },
+        })
+        if (!existing) return reply.status(404).send({ error: 'Order not found' })
+        if (existing.status === 'CANCELLED') {
+          return reply.status(400).send({
+            error: 'Order is already cancelled.',
+            code: 'ALREADY_CANCELLED',
+          })
+        }
+        if (['SHIPPED', 'DELIVERED'].includes(existing.status as string)) {
+          return reply.status(400).send({
+            error: `Cannot cancel a ${existing.status} order. File a return instead.`,
+            code: 'ORDER_TOO_FAR',
+          })
+        }
+
+        const updated = await prisma.order.update({
+          where: { id },
+          data: { status: 'CANCELLED', cancelledAt: new Date() },
+        })
+
+        // Cascade: void shipments + restore stock + audit + SSE.
+        const { handleOrderCancelled } = await import(
+          '../services/order-cancellation/index.js'
+        )
+        const cleanup = await handleOrderCancelled(id)
+
+        // Operator-initiated audit row distinct from the auto-cancel
+        // path (auto-cancel-from-order). Lets the audit-log surface
+        // distinguish operator vs channel-driven cancellations.
+        const { auditLogService } = await import('../services/audit-log.service.js')
+        void auditLogService.write({
+          entityType: 'Order',
+          entityId: id,
+          action: 'manual-cancel',
+          before: { status: existing.status },
+          after: { status: 'CANCELLED' },
+          metadata: { reason, channel: existing.channel, ...cleanup },
+        })
+
+        return {
+          order: updated,
+          cleanup,
+          // True until the channel-pushback service ships. UI surfaces
+          // this as a "now go cancel on Amazon/eBay" reminder.
+          channelPushbackPending: existing.channel !== 'MANUAL',
+          channel: existing.channel,
+          channelOrderId: existing.channelOrderId,
+        }
+      } catch (error: any) {
+        logger.error('orders/:id/cancel failed', { error: error?.message })
+        return reply.status(500).send({ error: error?.message ?? 'cancel failed' })
+      }
+    },
+  )
 }
