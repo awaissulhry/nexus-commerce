@@ -17,7 +17,6 @@ import {
   DollarSign, GitCompare, Download,
   AlignJustify, Menu as MenuIcon, Equal,
   ChevronLeft, ChevronsLeft, ChevronsRight,
-  MoreHorizontal,
 } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import PageHeader from '@/components/layout/PageHeader'
@@ -817,18 +816,39 @@ export default function ProductsWorkspace() {
         description={`${stats.total.toLocaleString()} master SKUs · ${stats.active} active · ${stats.draft} draft · ${stats.inStock} in stock · ${stats.outOfStock} out`}
         actions={
           <div className="flex items-center gap-2">
-            {/* E.6 — secondary actions consolidated into More menu so the
-                page header stays uncluttered. New product + Refresh stay
-                first-class because they're the only frequent primary
-                actions. Upload photos / Export CSV / Bundles all go
-                under More. */}
-            <MoreActionsMenu
-              onUploadPhotos={() => setImageUploadOpen(true)}
-              onExportCsv={() => exportProductsCsv(products)}
-              onBundles={() => setBundleEditorOpen(true)}
-              canExport={products.length > 0}
-              exportCount={products.length}
-            />
+            {/* E.21 — actions promoted from the More menu (rolled
+                back from E.6) per operator preference: every primary
+                action visible in one click, no hidden dropdowns.
+                Visual hierarchy: secondary actions are outline
+                buttons; primary "+ New product" stays solid-dark. */}
+            <button
+              type="button"
+              onClick={() => setImageUploadOpen(true)}
+              title="Drop a folder of product photos; we match each file to its SKU"
+              className="h-8 px-3 text-base border border-slate-200 text-slate-700 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+            >
+              <Upload size={12} /> Upload photos
+            </button>
+            <button
+              type="button"
+              onClick={() => exportProductsCsv(products)}
+              disabled={products.length === 0}
+              title={
+                products.length === 0
+                  ? 'Nothing to export'
+                  : `Download ${products.length} row${products.length === 1 ? '' : 's'} as CSV`
+              }
+              className="h-8 px-3 text-base border border-slate-200 text-slate-700 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
+            >
+              <Download size={12} /> Export
+            </button>
+            <button
+              type="button"
+              onClick={() => setBundleEditorOpen(true)}
+              className="h-8 px-3 text-base border border-slate-200 text-slate-700 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+            >
+              <Package size={12} /> Bundles
+            </button>
             <Link href="/products/new" className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
               <Plus size={12} /> New product
             </Link>
@@ -1120,98 +1140,6 @@ function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) =>
 // ────────────────────────────────────────────────────────────────────
 // FilterBar
 // ────────────────────────────────────────────────────────────────────
-
-// E.6 — More actions dropdown. Consolidates secondary header actions
-// (Upload photos, Export CSV, Bundles) into a single button so the
-// header strip stays compact. New product + Refresh remain first-class
-// since they're frequent primary actions.
-function MoreActionsMenu({
-  onUploadPhotos,
-  onExportCsv,
-  onBundles,
-  canExport,
-  exportCount,
-}: {
-  onUploadPhotos: () => void
-  onExportCsv: () => void
-  onBundles: () => void
-  canExport: boolean
-  exportCount: number
-}) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!open) return
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('mousedown', onClick)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onClick)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
-  const item = (
-    icon: React.ReactNode,
-    label: string,
-    onClick: () => void,
-    disabled = false,
-    hint?: string,
-  ) => (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={() => {
-        if (disabled) return
-        onClick()
-        setOpen(false)
-      }}
-      className="w-full flex items-center gap-2 h-9 px-2.5 text-base text-left rounded text-slate-700 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:text-slate-200 dark:hover:bg-slate-800"
-    >
-      <span className="text-slate-500 dark:text-slate-400" aria-hidden="true">
-        {icon}
-      </span>
-      <span className="flex-1">{label}</span>
-      {hint && (
-        <span className="text-xs text-slate-400 tabular-nums">{hint}</span>
-      )}
-    </button>
-  )
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        title="More actions"
-        className="h-8 px-3 text-base border border-slate-200 text-slate-700 rounded hover:bg-slate-50 inline-flex items-center gap-1.5 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-      >
-        <MoreHorizontal size={14} /> More
-      </button>
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 top-full mt-1 w-56 bg-white border border-slate-200 rounded-md shadow-lg z-30 p-1 dark:bg-slate-900 dark:border-slate-800"
-        >
-          {item(<Upload size={14} />, 'Upload photos', onUploadPhotos)}
-          {item(
-            <Download size={14} />,
-            'Export CSV',
-            onExportCsv,
-            !canExport,
-            canExport ? `${exportCount}` : undefined,
-          )}
-          {item(<Package size={14} />, 'Manage bundles', onBundles)}
-        </div>
-      )}
-    </div>
-  )
-}
 
 function FilterBar(props: any) {
   const {
