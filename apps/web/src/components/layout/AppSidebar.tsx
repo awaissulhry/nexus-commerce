@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -184,20 +185,24 @@ export default function AppSidebar() {
     }
   }, [])
 
-  useEffect(() => {
-    let cancelled = false
-    const fetchCounts = async () => {
-      try {
-        const res = await fetch(`${getBackendUrl()}/api/sidebar/counts`, {
-          cache: 'no-store',
-        })
-        if (!res.ok) return
-        const data = (await res.json()) as SidebarCounts
-        if (!cancelled) setCounts(data)
-      } catch {
-        /* sidebar should never crash the shell */
-      }
+  // Stable reference so the C.2 invalidation listener below can drive
+  // a refetch the same way the polling interval does.
+  const cancelledRef = useRef(false)
+  const fetchCounts = useCallback(async () => {
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/sidebar/counts`, {
+        cache: 'no-store',
+      })
+      if (!res.ok) return
+      const data = (await res.json()) as SidebarCounts
+      if (!cancelledRef.current) setCounts(data)
+    } catch {
+      /* sidebar should never crash the shell */
     }
+  }, [])
+
+  useEffect(() => {
+    cancelledRef.current = false
     fetchCounts()
     const id = window.setInterval(fetchCounts, 60_000)
     // Refetch when the user returns to the tab — covers the "I left
@@ -207,11 +212,51 @@ export default function AppSidebar() {
     const onFocus = () => fetchCounts()
     window.addEventListener('focus', onFocus)
     return () => {
-      cancelled = true
+      cancelledRef.current = true
       window.clearInterval(id)
       window.removeEventListener('focus', onFocus)
     }
-  }, [])
+  }, [fetchCounts])
+
+  // C.2 — refresh sidebar counts within ~300ms of any listing/product
+  // mutation, instead of waiting for the next 60s polling tick. Burst
+  // events (e.g. a 1000-listing bulk publish firing one
+  // `listing.created` per item) are coalesced by the trailing-edge
+  // debounce so we make at most one /api/sidebar/counts call per
+  // user-perceived action. listing.updated is intentionally NOT
+  // listened to — it fires on every cell edit and never changes the
+  // count totals the sidebar surfaces.
+  const refetchTimerRef = useRef<number | null>(null)
+  useEffect(
+    () => () => {
+      if (refetchTimerRef.current !== null) {
+        window.clearTimeout(refetchTimerRef.current)
+        refetchTimerRef.current = null
+      }
+    },
+    [],
+  )
+  const debouncedRefetch = useCallback(() => {
+    if (typeof window === 'undefined') return
+    if (refetchTimerRef.current !== null) {
+      window.clearTimeout(refetchTimerRef.current)
+    }
+    refetchTimerRef.current = window.setTimeout(() => {
+      refetchTimerRef.current = null
+      void fetchCounts()
+    }, 300)
+  }, [fetchCounts])
+  useInvalidationChannel(
+    [
+      'listing.created',
+      'listing.deleted',
+      'wizard.submitted',
+      'bulk-job.completed',
+      'product.created',
+      'product.deleted',
+    ],
+    debouncedRefetch,
+  )
 
   const toggleChannel = (channel: string) => {
     setExpandedChannels((prev) => {
