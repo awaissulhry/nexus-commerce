@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
+import type { useRouter as useRouterType } from 'next/navigation'
 import {
   Search,
   Package,
@@ -19,19 +20,32 @@ import {
   FileEdit,
   Warehouse,
   Keyboard,
+  Plus,
+  RefreshCw,
   X,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+type AppRouter = ReturnType<typeof useRouterType>
+
 interface Command {
   id: string
   label: string
   icon: LucideIcon
-  href: string
-  group: 'Navigation' | 'Catalog' | 'System'
+  /** Comma-separated extra keywords for fuzzy matching, e.g. for
+   *  "Refresh page" we want "reload" / "fetch" to also match. */
+  keywords?: string
+  group: 'Recent' | 'On this page' | 'Navigation' | 'Catalog' | 'System' | 'Action'
+  /** Either href (navigate) or run (callback). One must be set. */
+  href?: string
+  run?: (router: AppRouter) => void
   /** Optional Linear-style chord (e.g. 'g p' for "go to products"). */
   chord?: string
+  /** If set, the command only shows in the "On this page" group when
+   *  the current pathname matches. Use a string for exact match or
+   *  a RegExp for prefix-style matching. */
+  contextPath?: string | RegExp
 }
 
 const COMMANDS: Command[] = [
@@ -57,16 +71,113 @@ const COMMANDS: Command[] = [
   // System
   { id: 'connections', label: 'Manage channel connections', icon: Plug, href: '/settings/channels', group: 'System' },
   { id: 'settings', label: 'Open Settings', icon: SettingsIcon, href: '/settings/account', group: 'System' },
+  // U.11 — Actions: non-navigation commands that *do* things. Keep
+  // them generic enough to be available everywhere (no contextPath);
+  // page-specific actions go below in PAGE_COMMANDS.
+  {
+    id: 'action-new-product',
+    label: 'Create new product',
+    icon: Plus,
+    href: '/products/new',
+    group: 'Action',
+    keywords: 'add create draft sku item',
+    chord: 'g n',
+  },
+  {
+    id: 'action-upload-csv',
+    label: 'Upload products via CSV',
+    icon: Upload,
+    href: '/bulk-operations',
+    group: 'Action',
+    keywords: 'import bulk spreadsheet',
+  },
+  {
+    id: 'action-refresh',
+    label: 'Refresh current page',
+    icon: RefreshCw,
+    run: () => {
+      // Soft refresh — emit the same invalidation signal pages
+      // already listen for, so polled lists re-fetch without a full
+      // navigation round-trip.
+      window.dispatchEvent(
+        new CustomEvent('nexus:invalidation', {
+          detail: { type: 'manual.refresh', meta: { source: 'cmd-k' } },
+        }),
+      )
+    },
+    group: 'Action',
+    keywords: 'reload fetch reload poll',
+  },
+  {
+    id: 'action-show-shortcuts',
+    label: 'Show keyboard shortcuts',
+    icon: Keyboard,
+    run: () => {
+      window.dispatchEvent(new CustomEvent('nexus:open-shortcut-help'))
+    },
+    group: 'Action',
+    keywords: 'help kbd hotkey reference',
+  },
+]
+
+/**
+ * U.11 — page-scoped commands. Surfaced in an "On this page" group
+ * when the current pathname matches `contextPath`. They're emitted
+ * as window events so the page itself can pick them up without the
+ * palette knowing the page's internals.
+ *
+ * Adding a new page's commands is one entry below — the page just
+ * needs to listen for the matching event name.
+ */
+const PAGE_COMMANDS: Command[] = [
+  {
+    id: 'page-products-new',
+    label: 'New product',
+    icon: Plus,
+    run: () => window.dispatchEvent(new CustomEvent('nexus:products:new')),
+    group: 'On this page',
+    contextPath: /^\/products(\?|$)/,
+    keywords: 'create add',
+  },
+  {
+    id: 'page-products-toggle-filters',
+    label: 'Toggle filter panel',
+    icon: SettingsIcon,
+    run: () => window.dispatchEvent(new CustomEvent('nexus:products:toggle-filters')),
+    group: 'On this page',
+    contextPath: /^\/products(\?|$)/,
+    keywords: 'sidebar facets',
+  },
+  {
+    id: 'page-bulk-save',
+    label: 'Save pending changes',
+    icon: Plus,
+    run: () => window.dispatchEvent(new CustomEvent('nexus:bulk-operations:save')),
+    group: 'On this page',
+    contextPath: /^\/bulk-operations(\?|$)/,
+    keywords: 'commit persist',
+  },
+  {
+    id: 'page-bulk-undo',
+    label: 'Undo last edit',
+    icon: History,
+    run: () => window.dispatchEvent(new CustomEvent('nexus:bulk-operations:undo')),
+    group: 'On this page',
+    contextPath: /^\/bulk-operations(\?|$)/,
+    keywords: 'revert',
+  },
 ]
 
 /**
  * Chord shortcut registry — extracted from COMMANDS so the keydown
- * handler can do an O(1) lookup. e.g. { 'g p': '/products' }.
+ * handler can do an O(1) lookup. e.g. { 'g p': cmd-instance }. We
+ * store the whole command (not just href) because U.11 added
+ * run-callback commands which can also be chord-bound.
  */
-const CHORD_TO_HREF: Record<string, string> = COMMANDS.reduce((acc, cmd) => {
-  if (cmd.chord) acc[cmd.chord] = cmd.href
+const CHORD_TO_CMD: Record<string, Command> = COMMANDS.reduce((acc, cmd) => {
+  if (cmd.chord && (cmd.href || cmd.run)) acc[cmd.chord] = cmd
   return acc
-}, {} as Record<string, string>)
+}, {} as Record<string, Command>)
 
 /**
  * Window of time (ms) we wait between the leader key (e.g. 'g') and
@@ -81,7 +192,21 @@ export default function CommandPalette() {
   const [query, setQuery] = useState('')
   const [activeIdx, setActiveIdx] = useState(0)
   const router = useRouter()
+  const pathname = usePathname()
   const inputRef = useRef<HTMLInputElement | null>(null)
+
+  // U.11 — execute a command. Either navigates (href) or runs the
+  // callback; both paths close the palette so the user lands on the
+  // resulting view immediately. Centralised here so click and Enter
+  // share one code path.
+  const runCommand = (cmd: Command) => {
+    if (cmd.href) {
+      router.push(cmd.href)
+    } else if (cmd.run) {
+      cmd.run(router)
+    }
+    setOpen(false)
+  }
   // Chord state — when the user presses a leader key like 'g', the
   // next key within CHORD_TIMEOUT_MS forms the chord. Tracked in a
   // ref so the handler stays stable across renders.
@@ -185,10 +310,11 @@ export default function CommandPalette() {
         // We're mid-chord; this key is the second half.
         const chord = `${chordLeader.current} ${k}`
         cancelChord()
-        const dest = CHORD_TO_HREF[chord]
-        if (dest) {
+        const cmd = CHORD_TO_CMD[chord]
+        if (cmd) {
           e.preventDefault()
-          router.push(dest)
+          if (cmd.href) router.push(cmd.href)
+          else cmd.run?.(router)
         }
         return
       }
@@ -202,11 +328,21 @@ export default function CommandPalette() {
       }
     }
     const onOpenEvent = () => setOpen(true)
+    // U.11 — the "Show keyboard shortcuts" action dispatches this
+    // event so the help overlay opens regardless of whether the
+    // palette is currently visible. Listening here keeps the help
+    // overlay's state owned by CommandPalette.
+    const onOpenHelp = () => {
+      setOpen(false)
+      setHelpOpen(true)
+    }
     window.addEventListener('keydown', onKey)
     window.addEventListener('nexus:open-command-palette', onOpenEvent)
+    window.addEventListener('nexus:open-shortcut-help', onOpenHelp)
     return () => {
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('nexus:open-command-palette', onOpenEvent)
+      window.removeEventListener('nexus:open-shortcut-help', onOpenHelp)
       cancelChord()
     }
   }, [open, helpOpen, router])
@@ -220,18 +356,57 @@ export default function CommandPalette() {
     }
   }, [open])
 
-  const filtered = query.trim()
-    ? COMMANDS.filter((c) => c.label.toLowerCase().includes(query.toLowerCase()))
-    : COMMANDS
+  // U.11 — page-context commands: only the ones whose contextPath
+  // matches the current pathname show up. Memoised so we don't filter
+  // on every render.
+  const activePageCommands = useMemo(() => {
+    if (!pathname) return [] as Command[]
+    return PAGE_COMMANDS.filter((cmd) => {
+      if (!cmd.contextPath) return false
+      if (typeof cmd.contextPath === 'string') return pathname === cmd.contextPath
+      return cmd.contextPath.test(pathname)
+    })
+  }, [pathname])
 
-  // Group filtered list
+  // U.11 — palette pool. Page-context commands precede the global
+  // ones so "On this page" sits at the top when present, matching
+  // the ordering most users expect (current scope first).
+  const pool = useMemo(() => [...activePageCommands, ...COMMANDS], [activePageCommands])
+
+  // U.11 — fuzzy-ish match: query has to appear in label OR keywords
+  // (not full Levenshtein, but enough that "reload" → "Refresh page"
+  // when the keyword is set). Matching is space-insensitive on the
+  // query side so "create product" still hits "Create new product".
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return pool
+    return pool.filter((c) => {
+      const haystack = `${c.label} ${c.keywords ?? ''}`.toLowerCase()
+      return haystack.includes(q)
+    })
+  }, [pool, query])
+
+  // Group filtered list, preserving the canonical group order.
+  const GROUP_ORDER: Command['group'][] = [
+    'On this page',
+    'Recent',
+    'Action',
+    'Catalog',
+    'Navigation',
+    'System',
+  ]
   const grouped: Record<string, Command[]> = {}
   for (const cmd of filtered) {
     ;(grouped[cmd.group] ??= []).push(cmd)
   }
 
-  // Flat list (matches keyboard navigation order)
-  const flat = filtered
+  // Flat list (matches keyboard navigation order). Built in group
+  // order so ↓/↑ moves through what the user sees, not insertion
+  // order.
+  const flat: Command[] = []
+  for (const g of GROUP_ORDER) {
+    if (grouped[g]) flat.push(...grouped[g])
+  }
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
@@ -243,10 +418,7 @@ export default function CommandPalette() {
     } else if (e.key === 'Enter') {
       e.preventDefault()
       const cmd = flat[activeIdx]
-      if (cmd) {
-        router.push(cmd.href)
-        setOpen(false)
-      }
+      if (cmd) runCommand(cmd)
     }
   }
 
@@ -295,12 +467,12 @@ export default function CommandPalette() {
               No commands found
             </div>
           ) : (
-            Object.entries(grouped).map(([group, cmds]) => (
+            GROUP_ORDER.filter((g) => grouped[g]).map((group) => (
               <div key={group} className="mb-1 last:mb-0">
                 <div className="px-3 pt-2 pb-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">
                   {group}
                 </div>
-                {cmds.map((cmd) => {
+                {grouped[group]!.map((cmd) => {
                   const flatIdx = flat.indexOf(cmd)
                   const isActive = flatIdx === activeIdx
                   const Icon = cmd.icon
@@ -309,10 +481,7 @@ export default function CommandPalette() {
                       key={cmd.id}
                       type="button"
                       onMouseEnter={() => setActiveIdx(flatIdx)}
-                      onClick={() => {
-                        router.push(cmd.href)
-                        setOpen(false)
-                      }}
+                      onClick={() => runCommand(cmd)}
                       className={cn(
                         'w-full flex items-center gap-3 px-3 py-2 rounded-md text-md text-left transition-colors',
                         isActive
