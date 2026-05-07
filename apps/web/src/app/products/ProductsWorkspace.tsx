@@ -825,7 +825,7 @@ export default function ProductsWorkspace() {
               type="button"
               onClick={() => setImageUploadOpen(true)}
               title="Drop a folder of product photos; we match each file to its SKU"
-              className="h-8 px-3 text-base border border-slate-200 text-slate-700 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-slate-200 text-slate-700 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
             >
               <Upload size={12} /> Upload photos
             </button>
@@ -838,18 +838,18 @@ export default function ProductsWorkspace() {
                   ? 'Nothing to export'
                   : `Download ${products.length} row${products.length === 1 ? '' : 's'} as CSV`
               }
-              className="h-8 px-3 text-base border border-slate-200 text-slate-700 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-slate-200 text-slate-700 rounded-md hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
             >
               <Download size={12} /> Export
             </button>
             <button
               type="button"
               onClick={() => setBundleEditorOpen(true)}
-              className="h-8 px-3 text-base border border-slate-200 text-slate-700 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-slate-200 text-slate-700 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
             >
               <Package size={12} /> Bundles
             </button>
-            <Link href="/products/new" className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
+            <Link href="/products/new" className="h-8 px-3 text-base bg-slate-900 text-white rounded-md hover:bg-slate-800 inline-flex items-center gap-1.5">
               <Plus size={12} /> New product
             </Link>
             {lens === 'grid' ? (
@@ -860,7 +860,7 @@ export default function ProductsWorkspace() {
                 error={!!productsError}
               />
             ) : (
-              <button onClick={() => fetchProducts()} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5">
+              <button onClick={() => fetchProducts()} className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
                 <RefreshCw size={12} /> Refresh
               </button>
             )}
@@ -1309,7 +1309,7 @@ function FilterBar(props: any) {
         <button
           onClick={() => setFiltersOpen(!filtersOpen)}
           aria-expanded={filtersOpen}
-          className={`h-8 px-3 text-base border rounded inline-flex items-center gap-1.5 ${filtersOpen ? 'border-slate-900 bg-slate-900 text-white' : filterCount > 0 ? 'border-slate-300 bg-slate-50 text-slate-700' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+          className={`h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 transition-colors ${filtersOpen ? 'border-slate-900 bg-slate-900 text-white' : filterCount > 0 ? 'border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
         >
           <Filter size={12} />
           Filters
@@ -1360,25 +1360,28 @@ function FilterBar(props: any) {
       )}
 
       {filtersOpen && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-3 mt-1 border-t border-slate-200">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4 pt-3 mt-1 border-t border-slate-200">
             <FilterGroup
               label="Status"
               options={['ACTIVE', 'DRAFT', 'INACTIVE']}
               selected={statusFilters}
               counts={facets?.statuses.reduce((m: any, s: any) => { m[s.value] = s.count; return m }, {})}
               onToggle={(v: string) => updateUrl({ status: toggleArr(statusFilters, v).join(',') || undefined, page: undefined })}
+              onClear={() => updateUrl({ status: undefined, page: undefined })}
             />
             <FilterGroup
               label="Channels"
               options={['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY']}
               selected={channelFilters}
               onToggle={(v: string) => updateUrl({ channels: toggleArr(channelFilters, v).join(',') || undefined, page: undefined })}
+              onClear={() => updateUrl({ channels: undefined, page: undefined })}
             />
             <FilterGroup
               label="Missing on…"
               options={['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY']}
               selected={missingChannelFilters}
               onToggle={(v: string) => updateUrl({ missingChannels: toggleArr(missingChannelFilters, v).join(',') || undefined, page: undefined })}
+              onClear={() => updateUrl({ missingChannels: undefined, page: undefined })}
             />
             {facets?.marketplaces && facets.marketplaces.length > 0 && (() => {
               const merged = new Map<string, number>()
@@ -1407,6 +1410,7 @@ function FilterBar(props: any) {
                       page: undefined,
                     })
                   }
+                  onClear={() => updateUrl({ marketplaces: undefined, page: undefined })}
                 />
               )
             })()}
@@ -1416,24 +1420,29 @@ function FilterBar(props: any) {
               selected={fulfillmentFilters}
               counts={facets?.fulfillment.reduce((m: any, s: any) => { m[s.value] = s.count; return m }, {})}
               onToggle={(v: string) => updateUrl({ fulfillment: toggleArr(fulfillmentFilters, v).join(',') || undefined, page: undefined })}
+              onClear={() => updateUrl({ fulfillment: undefined, page: undefined })}
             />
             {facets && facets.productTypes.length > 0 && (
               <FilterGroup
                 label="Product type"
-                options={facets.productTypes.slice(0, 12).map((p: any) => p.value)}
+                options={facets.productTypes.slice(0, 24).map((p: any) => p.value)}
                 selected={productTypeFilters}
                 counts={facets.productTypes.reduce((m: any, s: any) => { m[s.value] = s.count; return m }, {})}
                 renderLabel={(v: string) => IT_TERMS[v] ? `${IT_TERMS[v]} (${v})` : v}
                 onToggle={(v: string) => updateUrl({ productTypes: toggleArr(productTypeFilters, v).join(',') || undefined, page: undefined })}
+                onClear={() => updateUrl({ productTypes: undefined, page: undefined })}
+                searchable
               />
             )}
             {facets && facets.brands.length > 0 && (
               <FilterGroup
                 label="Brand"
-                options={facets.brands.slice(0, 12).map((p: any) => p.value)}
+                options={facets.brands.slice(0, 24).map((p: any) => p.value)}
                 selected={brandFilters}
                 counts={facets.brands.reduce((m: any, s: any) => { m[s.value] = s.count; return m }, {})}
                 onToggle={(v: string) => updateUrl({ brands: toggleArr(brandFilters, v).join(',') || undefined, page: undefined })}
+                onClear={() => updateUrl({ brands: undefined, page: undefined })}
+                searchable
               />
             )}
             {tags.length > 0 && (
@@ -1443,53 +1452,157 @@ function FilterBar(props: any) {
                 selected={tagFilters}
                 renderLabel={(id: string) => tags.find((t: Tag) => t.id === id)?.name ?? id}
                 onToggle={(v: string) => updateUrl({ tags: toggleArr(tagFilters, v).join(',') || undefined, page: undefined })}
+                onClear={() => updateUrl({ tags: undefined, page: undefined })}
+                searchable
               />
             )}
-            <div className="md:col-span-2 lg:col-span-3 flex items-center gap-2 flex-wrap pt-2 border-t border-slate-100">
-              <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold mr-1">Stock</span>
-              {(['all', 'in', 'low', 'out'] as const).map((v) => (
-                <button
-                  key={v}
-                  onClick={() => updateUrl({ stockLevel: v === 'all' ? undefined : v, page: undefined })}
-                  className={`h-7 px-3 text-sm border rounded-full font-medium ${stockLevel === v ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
-                >{v}</button>
-              ))}
-              <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold ml-3 mr-1">Photos</span>
-              <button
-                onClick={() => updateUrl({ hasPhotos: hasPhotos === 'true' ? undefined : 'true', page: undefined })}
-                className={`h-7 px-3 text-sm border rounded-full font-medium ${hasPhotos === 'true' ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
-              >Has photos</button>
-              <button
-                onClick={() => updateUrl({ hasPhotos: hasPhotos === 'false' ? undefined : 'false', page: undefined })}
-                className={`h-7 px-3 text-sm border rounded-full font-medium ${hasPhotos === 'false' ? 'bg-rose-50 text-rose-700 border-rose-300' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
-              >No photos</button>
-            </div>
+            {/* E.23 — Stock + Photos rebuilt as proper FilterGroups so
+                they share the same visual language as every other group.
+                Was: separate "rail" at the bottom with different styling
+                (Photos used emerald/rose, others used slate-900). */}
+            <FilterGroup
+              label="Stock"
+              mode="single"
+              options={['in', 'low', 'out']}
+              selected={stockLevel}
+              renderLabel={(v) =>
+                v === 'in' ? 'In stock' : v === 'low' ? 'Low stock' : 'Out of stock'
+              }
+              onToggle={(v: string) =>
+                updateUrl({
+                  stockLevel: stockLevel === v ? undefined : v,
+                  page: undefined,
+                })
+              }
+              onClear={() => updateUrl({ stockLevel: undefined, page: undefined })}
+            />
+            <FilterGroup
+              label="Photos"
+              mode="single"
+              options={['true', 'false']}
+              selected={hasPhotos}
+              renderLabel={(v) => (v === 'true' ? 'Has photos' : 'No photos')}
+              onToggle={(v: string) =>
+                updateUrl({
+                  hasPhotos: hasPhotos === v ? undefined : v,
+                  page: undefined,
+                })
+              }
+              onClear={() => updateUrl({ hasPhotos: undefined, page: undefined })}
+            />
           </div>
         )}
     </div>
   )
 }
 
-function FilterGroup({ label, options, selected, onToggle, counts, renderLabel }: any) {
+// E.23 — unified FilterGroup. Supports both multi-select (default,
+// for Status/Channels/Tags/etc) and single-select (for Stock,
+// Photos) via the `mode` prop. Header row carries the group label,
+// the count of currently-selected values, and a per-group "Clear"
+// affordance when anything is selected. Chips use a single visual
+// style across every group (was: Photos used emerald/rose, others
+// used slate-900 — visual drift, fixed). Long lists (Tag, Brand,
+// Product type) get an inline filter input that shows when there
+// are >8 options, so operators can narrow without scrolling.
+function FilterGroup({
+  label,
+  options,
+  selected,
+  onToggle,
+  counts,
+  renderLabel,
+  onClear,
+  mode = 'multi',
+  searchable = false,
+}: {
+  label: string
+  options: string[]
+  selected: string[] | string | undefined
+  onToggle: (v: string) => void
+  counts?: Record<string, number>
+  renderLabel?: (v: string) => string
+  onClear?: () => void
+  mode?: 'multi' | 'single'
+  searchable?: boolean
+}) {
+  const [query, setQuery] = useState('')
+  const isActive = (opt: string) =>
+    mode === 'single'
+      ? selected === opt
+      : Array.isArray(selected)
+        ? selected.includes(opt)
+        : false
+  const selectedCount = Array.isArray(selected)
+    ? selected.length
+    : selected
+      ? 1
+      : 0
   if (options.length === 0) return null
+  // Inline search activates only when the list is long enough to
+  // benefit. Short lists (Status, Channels, Fulfillment) skip the
+  // input entirely.
+  const showSearch = searchable && options.length > 8
+  const visibleOptions = showSearch && query
+    ? options.filter((o) => {
+        const label = (renderLabel ? renderLabel(o) : o).toLowerCase()
+        return label.includes(query.toLowerCase())
+      })
+    : options
   return (
-    <div>
-      <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-1.5">{label}</div>
+    <div className="min-w-0">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 truncate">
+          {label}
+          {selectedCount > 0 && (
+            <span className="ml-1.5 text-slate-700 normal-case font-medium">
+              ({selectedCount})
+            </span>
+          )}
+        </div>
+        {selectedCount > 0 && onClear && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="text-xs text-slate-500 hover:text-slate-900"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      {showSearch && (
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={`Filter ${label.toLowerCase()}…`}
+          className="w-full h-7 px-2 mb-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-400"
+        />
+      )}
       <div className="flex items-center gap-1.5 flex-wrap">
-        {options.map((opt: string) => {
-          const active = selected.includes(opt)
+        {visibleOptions.map((opt: string) => {
+          const active = isActive(opt)
           const count = counts?.[opt]
           return (
             <button
               key={opt}
               onClick={() => onToggle(opt)}
-              className={`h-7 px-2 text-sm border rounded inline-flex items-center gap-1.5 transition-colors ${active ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'}`}
+              className={`h-7 px-2.5 text-sm border rounded-md inline-flex items-center gap-1.5 transition-colors ${active ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300'}`}
             >
               {renderLabel ? renderLabel(opt) : opt}
-              {count != null && <span className={active ? 'text-slate-300' : 'text-slate-400'}>{count}</span>}
+              {count != null && (
+                <span
+                  className={`tabular-nums ${active ? 'text-slate-300' : 'text-slate-400'}`}
+                >
+                  {count}
+                </span>
+              )}
             </button>
           )
         })}
+        {showSearch && visibleOptions.length === 0 && (
+          <div className="text-sm text-slate-400">No matches</div>
+        )}
       </div>
     </div>
   )
@@ -1512,7 +1625,7 @@ function SavedViewsButton({ open, setOpen, views, onApply, onSaveCurrent, onDele
 
   return (
     <div className="relative" ref={ref}>
-      <button onClick={() => setOpen(!open)} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5">
+      <button onClick={() => setOpen(!open)} className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
         <Bookmark size={12} /> Views <ChevronDown size={12} />
       </button>
       {open && (
@@ -1592,9 +1705,9 @@ function SavedViewsButton({ open, setOpen, views, onApply, onSaveCurrent, onDele
                     const ok = await onSaveCurrent(name.trim(), isDefault)
                     if (ok) { setSaveMode(false); setName(''); setIsDefault(false); setOpen(false) }
                   }}
-                  className="flex-1 h-8 text-base bg-slate-900 text-white rounded hover:bg-slate-800"
+                  className="flex-1 h-8 text-base bg-slate-900 text-white rounded-md hover:bg-slate-800"
                 >Save</button>
-                <button onClick={() => { setSaveMode(false); setName('') }} className="flex-1 h-8 text-base border border-slate-200 rounded hover:bg-slate-50">Cancel</button>
+                <button onClick={() => { setSaveMode(false); setName('') }} className="flex-1 h-8 text-base border border-slate-200 rounded-md hover:bg-slate-50">Cancel</button>
               </div>
             </div>
           )}
@@ -1776,7 +1889,7 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLooku
 
           {/* Tag menu */}
           <div className="relative" ref={tagMenuRef}>
-            <button onClick={() => setTagMenuOpen(!tagMenuOpen)} disabled={busy} className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5">
+            <button onClick={() => setTagMenuOpen(!tagMenuOpen)} disabled={busy} className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5">
               <TagIcon size={12} /> Tag <ChevronDown size={10} />
             </button>
             {tagMenuOpen && (
@@ -1828,7 +1941,7 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLooku
             )}
           </div>
 
-          <button onClick={duplicate} disabled={busy} className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5">
+          <button onClick={duplicate} disabled={busy} className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5">
             <Copy size={12} /> Duplicate
           </button>
 
@@ -1841,7 +1954,7 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLooku
               type="button"
               onClick={() => setCompareModalOpen(true)}
               disabled={busy || compareSubjects.length < 2}
-              className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
+              className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
               title="Side-by-side comparison of selected products"
             >
               <GitCompare size={12} /> Compare
@@ -3767,7 +3880,7 @@ function GridLens(props: any) {
               <button
                 type="button"
                 onClick={() => (props as any).onClearFilters?.()}
-                className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5"
+                className="h-8 px-3 text-base bg-slate-900 text-white rounded-md hover:bg-slate-800 inline-flex items-center gap-1.5"
               >
                 <X size={12} /> Clear all filters
               </button>
@@ -5387,7 +5500,7 @@ function TagEditor({ productId, onClose, onChanged, allTags }: { productId: stri
                 onChange={(e) => setNewTagColor(e.target.value)}
                 className="h-8 w-10 border border-slate-200 rounded"
               />
-              <button onClick={createTag} className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800">Add</button>
+              <button onClick={createTag} className="h-8 px-3 text-base bg-slate-900 text-white rounded-md hover:bg-slate-800">Add</button>
             </div>
           </div>
         </div>
