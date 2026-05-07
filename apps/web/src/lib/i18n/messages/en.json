@@ -164,6 +164,11 @@
   "outbound.pending.toast.createdPartial": "Created {ok} of {total} ({errors} skipped)",
   "outbound.pending.toast.createdNone": "No shipments created ({errors} errors)",
   "outbound.pending.toast.loadFailed": "Failed to load pending orders",
+  "outbound.onboarding.title": "Welcome to outbound shipping",
+  "outbound.onboarding.body": "Connect a carrier to start printing labels. You can also pre-set carrier and warehouse rules so new orders route automatically.",
+  "outbound.onboarding.connectCarrier": "Connect Sendcloud",
+  "outbound.onboarding.defineRules": "Define shipping rules",
+  "outbound.onboarding.warehouseRouting": "Set warehouse routing",
 
   "outbound.shipments.pipeline.all": "All",
   "outbound.shipments.pipeline.draft": "Draft",

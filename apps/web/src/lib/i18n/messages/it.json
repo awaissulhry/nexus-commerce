@@ -135,6 +135,11 @@
   "outbound.pending.toast.createdPartial": "Create {ok} di {total} ({errors} saltate)",
   "outbound.pending.toast.createdNone": "Nessuna spedizione creata ({errors} errori)",
   "outbound.pending.toast.loadFailed": "Caricamento ordini in sospeso fallito",
+  "outbound.onboarding.title": "Benvenuto in spedizioni",
+  "outbound.onboarding.body": "Collega un corriere per stampare le etichette. Puoi anche pre-impostare regole di corriere e magazzino per smistare automaticamente i nuovi ordini.",
+  "outbound.onboarding.connectCarrier": "Collega Sendcloud",
+  "outbound.onboarding.defineRules": "Definisci regole di spedizione",
+  "outbound.onboarding.warehouseRouting": "Imposta smistamento magazzini",
 
   "outbound.shipments.pipeline.all": "Tutte",
   "outbound.shipments.pipeline.draft": "Bozza",

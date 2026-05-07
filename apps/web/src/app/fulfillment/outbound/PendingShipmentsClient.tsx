@@ -10,8 +10,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Truck, Search, RefreshCw, Crown, AlertTriangle, Clock, Package, X, Plus,
-  Bookmark, BookmarkPlus, ChevronDown, Trash2, Star,
+  Bookmark, BookmarkPlus, ChevronDown, Trash2, Star, ArrowRight, Sparkles,
 } from 'lucide-react'
+import Link from 'next/link'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
@@ -224,6 +225,10 @@ export default function PendingShipmentsClient() {
     [params, router],
   )
 
+  // O.35: onboarding state — "have you ever connected a carrier?"
+  // Drives the first-run banner. Cheap GET; refetched alongside data.
+  const [carrierConnected, setCarrierConnected] = useState<boolean | null>(null)
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
@@ -232,12 +237,20 @@ export default function PendingShipmentsClient() {
       if (urgencyFilter && urgencyFilter !== 'ALL') qs.set('urgency', urgencyFilter)
       if (search) qs.set('search', search)
       if (sort) qs.set('sort', sort)
-      const res = await fetch(
-        `${getBackendUrl()}/api/fulfillment/outbound/pending-orders?${qs.toString()}`,
-        { cache: 'no-store' },
-      )
-      if (res.ok) setData(await res.json())
+      const [pendingRes, carriersRes] = await Promise.all([
+        fetch(
+          `${getBackendUrl()}/api/fulfillment/outbound/pending-orders?${qs.toString()}`,
+          { cache: 'no-store' },
+        ),
+        fetch(`${getBackendUrl()}/api/fulfillment/carriers`, { cache: 'no-store' }),
+      ])
+      if (pendingRes.ok) setData(await pendingRes.json())
       else toast.error(t('outbound.pending.toast.loadFailed'))
+      if (carriersRes.ok) {
+        const carriersData = await carriersRes.json()
+        const items: Array<{ isActive: boolean }> = carriersData.items ?? []
+        setCarrierConnected(items.some((c) => c.isActive))
+      }
     } catch (e) {
       toast.error(t('outbound.pending.toast.loadFailed'))
     } finally {
@@ -324,8 +337,53 @@ export default function PendingShipmentsClient() {
 
   const allSelected = data && data.items.length > 0 && data.items.every((o) => selected.has(o.id))
 
+  // O.35: first-run onboarding banner — only appears when no carrier
+  // is connected AND the operator has reached the surface (i.e., they
+  // probably want to ship something). Hidden once any carrier is
+  // active so it doesn't nag returning operators.
+  const showOnboarding = carrierConnected === false
+
   return (
     <div className="space-y-3">
+      {showOnboarding && (
+        <Card>
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-md bg-blue-50 text-blue-600 inline-flex items-center justify-center flex-shrink-0">
+              <Sparkles size={18} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-md font-semibold text-slate-900">
+                {t('outbound.onboarding.title')}
+              </div>
+              <div className="text-base text-slate-600 mt-1">
+                {t('outbound.onboarding.body')}
+              </div>
+              <div className="flex flex-wrap gap-2 mt-3">
+                <Link
+                  href="/fulfillment/carriers"
+                  className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5"
+                >
+                  {t('outbound.onboarding.connectCarrier')}
+                  <ArrowRight size={11} />
+                </Link>
+                <Link
+                  href="/fulfillment/outbound/rules"
+                  className="h-8 px-3 text-base text-slate-700 border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+                >
+                  {t('outbound.onboarding.defineRules')}
+                </Link>
+                <Link
+                  href="/fulfillment/routing-rules"
+                  className="h-8 px-3 text-base text-slate-700 border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+                >
+                  {t('outbound.onboarding.warehouseRouting')}
+                </Link>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* ── Urgency filter row + counts ─────────────────────────────────── */}
       <div className="flex items-center gap-2 flex-wrap">
         {URGENCY_FILTERS.map((f) => {
