@@ -186,26 +186,28 @@ export class EbayOrdersService {
   }
 
   /**
-   * Map eBay's order status to our unified OrderStatus enum (PENDING |
-   * SHIPPED | CANCELLED | DELIVERED). eBay's status taxonomy is
-   * coarser than ours; we lean conservative and default ambiguous
-   * states to PENDING. fulfillmentStatus from the API takes
-   * precedence when it's a more specific delivery state.
+   * Map eBay's order status to our unified OrderStatus enum (extended
+   * in O.1: PROCESSING for paid-but-unshipped). eBay's status taxonomy
+   * is coarser than ours; we lean conservative and default ambiguous
+   * states to PENDING. fulfillmentStatus from the API takes precedence
+   * when it's a more specific delivery state.
    */
   private mapOrderStatus(
     ebayStatus: string,
     fulfillmentStatus: string,
-  ): 'PENDING' | 'SHIPPED' | 'CANCELLED' | 'DELIVERED' {
+  ): 'PENDING' | 'PROCESSING' | 'SHIPPED' | 'CANCELLED' | 'DELIVERED' {
     if (ebayStatus === 'CANCELLED' || ebayStatus === 'INACTIVE') {
       return 'CANCELLED'
     }
     if (fulfillmentStatus === 'FULFILLED') return 'DELIVERED'
-    if (
-      ebayStatus === 'COMPLETED' ||
-      fulfillmentStatus === 'IN_PROGRESS'
-    ) {
-      return 'SHIPPED'
+    if (fulfillmentStatus === 'IN_PROGRESS') return 'SHIPPED'
+    // O.1: COMPLETED + NOT_STARTED = paid, ready to fulfill — that's
+    // PROCESSING in our taxonomy. Previously coerced to SHIPPED, which
+    // broke ship-by urgency math.
+    if (ebayStatus === 'COMPLETED' && fulfillmentStatus === 'NOT_STARTED') {
+      return 'PROCESSING'
     }
+    if (ebayStatus === 'COMPLETED') return 'SHIPPED'
     return 'PENDING'
   }
 
@@ -247,6 +249,13 @@ export class EbayOrdersService {
       purchaseDate: new Date(order.creationDate),
       // eBay is always merchant-fulfilled.
       fulfillmentMethod: 'MFN',
+      // O.1: eBay default handling time = 1 day. Per-listing override
+      // lives in the seller account and isn't exposed on the order
+      // payload here — when that wires up, replace this with the
+      // listing-level value. shipByDate is computed downstream from
+      // (purchaseDate + fulfillmentLatency days).
+      fulfillmentLatency: 1,
+      shipByDate: new Date(new Date(order.creationDate).getTime() + 24 * 60 * 60 * 1000),
       ebayMetadata: {
         orderStatus: order.orderStatus,
         fulfillmentStatus: order.fulfillmentStatus,

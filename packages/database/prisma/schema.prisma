@@ -1367,9 +1367,15 @@ enum OrderChannel {
 
 enum OrderStatus {
   PENDING
+  PROCESSING        // O.1: paid, not yet shipped (Amazon "Unshipped", Woo "processing")
+  PARTIALLY_SHIPPED // O.1: multi-package — some shipped, some not (Amazon "PartiallyShipped")
+  ON_HOLD           // O.1: fraud/address/inventory hold (Woo "on-hold")
+  AWAITING_PAYMENT  // O.1: Woo "pending", Shopify draft
   SHIPPED
-  CANCELLED
   DELIVERED
+  CANCELLED
+  REFUNDED          // O.1: Woo "refunded", Amazon refunded
+  RETURNED          // O.1: shipped → returned (distinct from REFUNDED if no money back yet)
 }
 
 model Order {
@@ -1401,6 +1407,16 @@ model Order {
   // SP-API FulfillmentChannel (AFN=FBA, MFN=FBM).
   fulfillmentMethod String?
 
+  // O.1: Fulfillment-deadline fields. Drive ship-by urgency tinting on
+  // the outbound surface (O.4), Prime SFP routing, and the late-shipment
+  // outbound risk job (O.19). All nullable — non-Amazon channels often
+  // don't supply them, and downstream code must tolerate absence.
+  shipByDate         DateTime? // Amazon LatestShipDate / eBay handling deadline / Woo+Shopify: purchaseDate + fulfillmentLatency
+  earliestShipDate   DateTime? // Amazon EarliestShipDate (don't ship before; Prime SFP gating)
+  latestDeliveryDate DateTime? // Amazon LatestDeliveryDate — customer-facing promise; drives EDD on /track/...
+  fulfillmentLatency Int? // handling-time days; lets us compute shipByDate where the channel doesn't supply it
+  isPrime            Boolean? // Amazon Prime SFP eligibility (Amazon-only; null elsewhere)
+
   // Relations
   items                 OrderItem[]
   financialTransactions FinancialTransaction[]
@@ -1426,6 +1442,11 @@ model Order {
   @@index([createdAt])
   @@index([purchaseDate])
   @@index([deliveredAt])
+  // O.1: ship-by urgency hot paths. Composite supports
+  // "actionable orders by ship-by ASC". Prime partial index lives
+  // in migration.sql (Prisma doesn't model partial indexes natively).
+  @@index([shipByDate])
+  @@index([status, shipByDate])
 }
 
 model OrderItem {

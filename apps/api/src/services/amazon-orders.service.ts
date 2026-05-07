@@ -24,24 +24,44 @@ import { logger } from '../utils/logger.js'
 
 const amazonService = new AmazonService()
 
-/** Map Amazon's two-letter codes to our `OrderStatus` enum. */
-function mapStatus(amazonStatus: string): 'PENDING' | 'SHIPPED' | 'CANCELLED' | 'DELIVERED' {
+/** Map Amazon's status strings to our `OrderStatus` enum (extended in O.1). */
+type MappedOrderStatus =
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'PARTIALLY_SHIPPED'
+  | 'SHIPPED'
+  | 'CANCELLED'
+  | 'DELIVERED'
+
+function mapStatus(amazonStatus: string): MappedOrderStatus {
   switch (amazonStatus) {
     case 'Shipped':
-    case 'PartiallyShipped':
       return 'SHIPPED'
+    case 'PartiallyShipped':
+      return 'PARTIALLY_SHIPPED'
     case 'Canceled':
     case 'Cancelled':
       return 'CANCELLED'
     case 'Delivered':
       return 'DELIVERED'
-    case 'Pending':
+    // O.1: "Unshipped" means paid + ready to fulfill — distinct from
+    // PENDING (which we keep for not-yet-ready states like
+    // PendingAvailability / InvoiceUnconfirmed).
     case 'Unshipped':
+      return 'PROCESSING'
+    case 'Pending':
     case 'PendingAvailability':
     case 'InvoiceUnconfirmed':
     default:
       return 'PENDING'
   }
+}
+
+/** Parse an Amazon timestamp string into a Date, returning null for missing/invalid. */
+function parseAmazonDate(value: string | undefined): Date | null {
+  if (!value) return null
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? null : d
 }
 
 /** AFN = Amazon Fulfilled (FBA), MFN = Merchant Fulfilled (FBM). */
@@ -211,6 +231,11 @@ export class AmazonOrdersService {
     const marketplace = mapMarketplaceCode(raw.MarketplaceId)
     const shippingAddress = (raw.ShippingAddress ?? {}) as object
 
+    // O.1: Lifecycle-timestamp gate accepts SHIPPED *or* PARTIALLY_SHIPPED
+    // for shippedAt — Amazon's PartiallyShipped is still "ship clock
+    // started" from the customer's perspective.
+    const isShippedLike = status === 'SHIPPED' || status === 'PARTIALLY_SHIPPED'
+
     const updateData = {
       status,
       totalPrice,
@@ -221,9 +246,16 @@ export class AmazonOrdersService {
       fulfillmentMethod,
       marketplace,
       purchaseDate,
-      shippedAt: status === 'SHIPPED' ? new Date(raw.LastUpdateDate ?? raw.PurchaseDate) : undefined,
+      shippedAt: isShippedLike ? new Date(raw.LastUpdateDate ?? raw.PurchaseDate) : undefined,
       cancelledAt: status === 'CANCELLED' ? new Date(raw.LastUpdateDate ?? raw.PurchaseDate) : undefined,
       deliveredAt: status === 'DELIVERED' ? new Date(raw.LastUpdateDate ?? raw.PurchaseDate) : undefined,
+      // O.1: ship-by deadline + Prime SFP gating. SP-API delivers all of
+      // these as ISO-8601 strings — parse defensively so a malformed
+      // value doesn't fail the whole upsert.
+      shipByDate: parseAmazonDate(raw.LatestShipDate),
+      earliestShipDate: parseAmazonDate(raw.EarliestShipDate),
+      latestDeliveryDate: parseAmazonDate(raw.LatestDeliveryDate),
+      isPrime: raw.IsPrime ?? null,
       amazonMetadata: raw as object,
     }
 

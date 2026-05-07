@@ -533,17 +533,26 @@ export class WooCommerceSyncService {
   }
 
   /**
-   * Map WooCommerce order status to Nexus status
+   * Map WooCommerce order status to Nexus OrderStatus enum.
+   *
+   * O.1: prior version emitted 'COMPLETED' and 'FAILED' string literals
+   * that don't exist in the enum, silently failing every WooCommerce
+   * order ingest. Now maps to real enum values, including the new
+   * AWAITING_PAYMENT / ON_HOLD / REFUNDED that O.1 added. Woo
+   * 'completed' (= delivered to customer) → DELIVERED. 'failed'
+   * (payment failed) → CANCELLED. 'pending' (= awaiting payment in
+   * WooCommerce vocabulary) → AWAITING_PAYMENT, distinct from our
+   * generic PENDING.
    */
   private mapOrderStatus(wooStatus: string): string {
     const statusMap: Record<string, string> = {
-      pending: "PENDING",
+      pending: "AWAITING_PAYMENT",
       processing: "PROCESSING",
-      "on-hold": "PENDING",
-      completed: "COMPLETED",
+      "on-hold": "ON_HOLD",
+      completed: "DELIVERED",
       cancelled: "CANCELLED",
       refunded: "REFUNDED",
-      failed: "FAILED",
+      failed: "CANCELLED",
     };
     return statusMap[wooStatus] || "PENDING";
   }

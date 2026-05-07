@@ -75,6 +75,8 @@ export interface AmazonOrderRaw {
   }
   EarliestShipDate?: string
   LatestShipDate?: string
+  EarliestDeliveryDate?: string
+  LatestDeliveryDate?: string
   IsBusinessOrder?: boolean
   IsPrime?: boolean
 }
