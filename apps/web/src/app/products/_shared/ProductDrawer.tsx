@@ -57,6 +57,7 @@ import {
 } from '@/lib/sync/invalidation-channel'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { InlineEditTrigger } from '@/components/ui/InlineEditTrigger'
 
 interface ProductDetail {
   id: string
@@ -1922,13 +1923,14 @@ function VariationsTab({
                         className="w-20 h-6 px-1.5 text-base text-right tabular-nums border border-blue-300 rounded"
                       />
                     ) : (
-                      <button
-                        type="button"
+                      <InlineEditTrigger
                         onClick={() => startEdit(c, 'price')}
-                        className="text-slate-900 hover:text-blue-700"
+                        label={`price for ${c.sku}`}
+                        align="right"
+                        size="sm"
                       >
-                        €{Number(c.basePrice ?? 0).toFixed(2)}
-                      </button>
+                        <span className="tabular-nums text-slate-900">€{Number(c.basePrice ?? 0).toFixed(2)}</span>
+                      </InlineEditTrigger>
                     )}
                     {cellErr?.field === 'price' && (
                       <div className="text-xs text-rose-700 mt-0.5">
@@ -1952,18 +1954,19 @@ function VariationsTab({
                         className="w-16 h-6 px-1.5 text-base text-right tabular-nums border border-blue-300 rounded"
                       />
                     ) : (
-                      <button
-                        type="button"
+                      <InlineEditTrigger
                         onClick={() => startEdit(c, 'stock')}
-                        className={cn(
-                          'font-semibold',
-                          (c.totalStock ?? 0) === 0
-                            ? 'text-rose-600'
-                            : 'text-slate-900 hover:text-blue-700',
-                        )}
+                        label={`stock for ${c.sku}`}
+                        align="right"
+                        size="sm"
                       >
-                        {c.totalStock ?? 0}
-                      </button>
+                        <span className={cn(
+                          'tabular-nums font-semibold',
+                          (c.totalStock ?? 0) === 0 ? 'text-rose-600' : 'text-slate-900',
+                        )}>
+                          {c.totalStock ?? 0}
+                        </span>
+                      </InlineEditTrigger>
                     )}
                     {cellErr?.field === 'stock' && (
                       <div className="text-xs text-rose-700 mt-0.5">

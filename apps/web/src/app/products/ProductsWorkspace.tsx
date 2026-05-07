@@ -22,6 +22,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { InlineEditTrigger } from '@/components/ui/InlineEditTrigger'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
@@ -3163,12 +3164,12 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
               className="w-full h-7 px-1.5 text-md border border-blue-300 rounded"
             />
           ) : (
-            <button onClick={() => startEdit(p.name)} className="block text-left max-w-full">
-              <span className="text-md text-slate-900 truncate block">
+            <InlineEditTrigger onClick={() => startEdit(p.name)} label="name" align="left">
+              <span className="text-md text-slate-900">
                 {p.name}
                 {p.isParent && <Layers size={10} className="inline ml-1 text-slate-400" />}
               </span>
-            </button>
+            </InlineEditTrigger>
           )}
           {errorBanner}
         </>
@@ -3189,9 +3190,15 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
               <option value="INACTIVE">INACTIVE</option>
             </select>
           ) : (
-            <button onClick={() => startEdit(p.status)}>
+            <InlineEditTrigger
+              onClick={() => startEdit(p.status)}
+              label="status"
+              size="sm"
+              hideIcon
+              className="w-auto"
+            >
               <Badge variant={STATUS_VARIANT[p.status] ?? 'default'} size="sm">{p.status}</Badge>
-            </button>
+            </InlineEditTrigger>
           )}
           {errorBanner}
         </>
@@ -3211,9 +3218,13 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
               className="w-20 h-7 px-1.5 text-md text-right tabular-nums border border-blue-300 rounded"
             />
           ) : (
-            <button onClick={() => startEdit(p.basePrice)} className="block text-right tabular-nums w-full">
-              €{p.basePrice.toFixed(2)}
-            </button>
+            <InlineEditTrigger
+              onClick={() => startEdit(p.basePrice)}
+              label="base price"
+              align="right"
+            >
+              <span className="tabular-nums">€{p.basePrice.toFixed(2)}</span>
+            </InlineEditTrigger>
           )}
           {errorBanner}
         </>
@@ -3234,9 +3245,13 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
               className="w-16 h-7 px-1.5 text-md text-right tabular-nums border border-blue-300 rounded"
             />
           ) : (
-            <button onClick={() => startEdit(p.totalStock)} className={`block text-right tabular-nums font-semibold w-full ${tone}`}>
-              {p.totalStock}
-            </button>
+            <InlineEditTrigger
+              onClick={() => startEdit(p.totalStock)}
+              label="total stock"
+              align="right"
+            >
+              <span className={`tabular-nums font-semibold ${tone}`}>{p.totalStock}</span>
+            </InlineEditTrigger>
           )}
           {errorBanner}
         </>
@@ -3257,9 +3272,13 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
               className="w-16 h-7 px-1.5 text-md text-right tabular-nums border border-blue-300 rounded"
             />
           ) : (
-            <button onClick={() => startEdit(p.lowStockThreshold)} className="block text-right tabular-nums text-slate-500 w-full">
-              {p.lowStockThreshold}
-            </button>
+            <InlineEditTrigger
+              onClick={() => startEdit(p.lowStockThreshold)}
+              label="low-stock threshold"
+              align="right"
+            >
+              <span className="tabular-nums text-slate-500">{p.lowStockThreshold}</span>
+            </InlineEditTrigger>
           )}
           {errorBanner}
         </>
@@ -3282,11 +3301,16 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
               className="w-full h-7 px-1.5 text-base border border-blue-300 rounded"
             />
           ) : (
-            <button onClick={() => startEdit(p.brand ?? '')} className="block text-left max-w-full">
-              <span className="text-base text-slate-700 truncate block">
-                {p.brand ?? <span className="text-slate-400">—</span>}
+            <InlineEditTrigger
+              onClick={() => startEdit(p.brand ?? '')}
+              label="brand"
+              align="left"
+              empty={!p.brand}
+            >
+              <span className="text-base text-slate-700">
+                {p.brand ?? 'Add brand'}
               </span>
-            </button>
+            </InlineEditTrigger>
           )}
           {errorBanner}
         </>
@@ -3309,11 +3333,17 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
               className="w-full h-7 px-1.5 text-sm border border-blue-300 rounded"
             />
           ) : (
-            <button onClick={() => startEdit(p.productType ?? '')} className="block text-left max-w-full">
-              <span className="text-sm text-slate-700 truncate block">
-                {p.productType ? (IT_TERMS[p.productType] ?? p.productType) : <span className="text-slate-400">—</span>}
+            <InlineEditTrigger
+              onClick={() => startEdit(p.productType ?? '')}
+              label="product type"
+              align="left"
+              size="sm"
+              empty={!p.productType}
+            >
+              <span className="text-sm text-slate-700">
+                {p.productType ? (IT_TERMS[p.productType] ?? p.productType) : 'Add type'}
               </span>
-            </button>
+            </InlineEditTrigger>
           )}
           {errorBanner}
         </>
@@ -3334,11 +3364,18 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
               <option value="FBM">FBM</option>
             </select>
           ) : (
-            <button onClick={() => startEdit(p.fulfillmentMethod ?? '')}>
+            <InlineEditTrigger
+              onClick={() => startEdit(p.fulfillmentMethod ?? '')}
+              label="fulfillment method"
+              size="sm"
+              hideIcon={!!p.fulfillmentMethod}
+              empty={!p.fulfillmentMethod}
+              className="w-auto"
+            >
               {p.fulfillmentMethod ? (
                 <Badge variant={p.fulfillmentMethod === 'FBA' ? 'warning' : 'info'} size="sm">{p.fulfillmentMethod}</Badge>
-              ) : <span className="text-slate-400 text-sm">—</span>}
-            </button>
+              ) : <span className="text-sm">Set FBA/FBM</span>}
+            </InlineEditTrigger>
           )}
           {errorBanner}
         </>
