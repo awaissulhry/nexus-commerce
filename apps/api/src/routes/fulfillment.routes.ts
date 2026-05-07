@@ -924,6 +924,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const shipment = await prisma.shipment.findUnique({
         where: { id },
         include: {
+          warehouse: true,
           order: {
             include: {
               items: {
@@ -948,28 +949,15 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(400).send({ error: 'Shipment has no order; cannot print label.' })
       }
 
-      // O.8: real Sendcloud call (replaces the B.4 stub). The
-      // sendcloud module returns mock data when
-      // NEXUS_ENABLE_SENDCLOUD_REAL=false (the default), so this path
-      // works end-to-end in dryRun mode without ever touching
-      // Sendcloud. resolveCredentials() throws SendcloudError with a
-      // clean 400 message if the carrier isn't connected.
-      const sendcloud = await import('../services/sendcloud/index.js')
-      let creds
-      try {
-        creds = await sendcloud.resolveCredentials()
-      } catch (e: any) {
-        if (e instanceof sendcloud.SendcloudError) {
-          return reply.code(e.status).send({ error: e.message, code: e.code })
-        }
-        throw e
-      }
-
       const order = shipment.order
 
-      // O.17: address preflight. Errors block (Sendcloud will reject
-      // anyway and we'd waste a round-trip); warnings get logged but
-      // don't block — operator may have override knowledge.
+      // CR.4: shared inputs that every carrier branch needs. Pulled
+      // out of the Sendcloud-specific path so AMAZON_BUY_SHIPPING +
+      // MANUAL can reuse the address normalization + weight resolver
+      // + customs item map without duplication.
+
+      // O.17: address preflight. Errors block (any carrier rejects on
+      // bad address); warnings logged but don't block.
       {
         const { validateAddress, extractAddressFromOrder } = await import('../services/address-validation/index.js')
         const validation = validateAddress(extractAddressFromOrder(order))
@@ -990,8 +978,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const ship = order.shippingAddress as any
       // The address blob arrives in two shapes — Amazon-PascalCase
       // (AddressLine1, City, ...) and generic camelCase (addressLine1,
-      // city, ...). Normalize so Sendcloud always sees its expected
-      // field names.
+      // city, ...). Normalize once for all carriers.
       const addr = {
         name: order.customerName || 'Customer',
         address: ship?.AddressLine1 ?? ship?.addressLine1 ?? ship?.street ?? '',
@@ -1006,8 +993,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Weight: prefer operator-entered shipment.weightGrams (from the
       // pack station — O.13), else aggregate from product weights, else
-      // default 1.5 kg as a reasonable motorcycle-gear baseline. The
-      // shipping rules engine (O.16) will replace this fallback.
+      // default 1.5 kg as a reasonable motorcycle-gear baseline.
       let weightKg: number
       if (shipment.weightGrams && shipment.weightGrams > 0) {
         weightKg = shipment.weightGrams / 1000
@@ -1018,6 +1004,203 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           return acc + w * factor * it.quantity
         }, 0)
         weightKg = summed > 0 ? summed : 1.5
+      }
+
+      // CR.4 — branch on carrierCode. Default fall-through is SENDCLOUD
+      // for backward compat with the O.8 contract.
+      const carrierCode = shipment.carrierCode ?? 'SENDCLOUD'
+
+      // ── MANUAL ──────────────────────────────────────────────────
+      // No live carrier integration; operator pastes a tracking number
+      // separately. Mark LABEL_PRINTED so the rest of the pipeline
+      // (pack/ship transitions, channel pushback once a tracking
+      // number is set manually) treats this shipment as ready to ship.
+      // No Sendcloud / Amazon round-trip; no labelUrl set.
+      if (carrierCode === 'MANUAL') {
+        const updated = await prisma.shipment.update({
+          where: { id },
+          data: {
+            status: 'LABEL_PRINTED',
+            labelPrintedAt: new Date(),
+            version: { increment: 1 },
+          },
+        })
+        await prisma.trackingEvent.create({
+          data: {
+            shipmentId: id,
+            occurredAt: new Date(),
+            code: 'ANNOUNCED',
+            description: 'Manual carrier — operator will paste tracking number',
+            source: 'MANUAL',
+          },
+        })
+        return {
+          ...updated,
+          _hint: 'No label generated. Open the shipment drawer and paste the carrier-issued tracking number to push it to the channel.',
+        }
+      }
+
+      // ── AMAZON_BUY_SHIPPING ────────────────────────────────────
+      // Only valid for AMAZON-channel orders. Pulls the operator's
+      // ship-from address from the bound Warehouse (was hardcoded
+      // Riccione before CR.4 — broken for any other warehouse).
+      // amazonOrderId from order.channelOrderId; itemList from the
+      // order items, mapping our internal id → Amazon's OrderItemId
+      // which lives in amazonMetadata.OrderItemId.
+      if (carrierCode === 'AMAZON_BUY_SHIPPING') {
+        if (order.channel !== 'AMAZON') {
+          return reply.code(400).send({
+            error: 'Amazon Buy Shipping is only valid for Amazon-channel orders.',
+            code: 'BUY_SHIPPING_WRONG_CHANNEL',
+          })
+        }
+        const wh = shipment.warehouse
+        if (!wh || !wh.addressLine1 || !wh.city || !wh.postalCode || !wh.country) {
+          return reply.code(400).send({
+            error: 'Bound warehouse has no address. Set ship-from in /fulfillment/stock.',
+            code: 'WAREHOUSE_ADDRESS_MISSING',
+          })
+        }
+
+        const itemList = order.items.map((it) => {
+          const meta = it.amazonMetadata as any
+          // Prefer Amazon's OrderItemId from the metadata; fall back to
+          // our internal id only if missing (rare — pre-O.x rows).
+          return {
+            orderItemId: meta?.OrderItemId ?? meta?.orderItemId ?? it.id,
+            quantity: it.quantity,
+          }
+        })
+
+        const buyShipping = await import('../services/amazon-pushback/buy-shipping.js')
+        let purchased
+        try {
+          // For Buy Shipping we go straight to createShipment with the
+          // cheapest-eligible service. Caller-driven service selection
+          // (rate-compare → bind via PATCH /service → print-label) is
+          // wired in CR.13; today the rules engine sets carrierCode +
+          // serviceCode upfront, and we honor serviceCode if present.
+          const eligibility = await buyShipping.getEligibleShippingServices({
+            amazonOrderId: order.channelOrderId,
+            itemList,
+            shipFromAddress: {
+              name: wh.name,
+              addressLine1: wh.addressLine1,
+              addressLine2: wh.addressLine2 ?? undefined,
+              city: wh.city,
+              postalCode: wh.postalCode,
+              countryCode: wh.country,
+            },
+            weightGrams: Math.round(weightKg * 1000),
+          })
+          if (eligibility.length === 0) {
+            return reply.code(400).send({
+              error: 'No eligible Amazon Buy Shipping services for this order.',
+              code: 'NO_ELIGIBLE_SERVICES',
+            })
+          }
+          // Honor pre-bound serviceCode if present, else cheapest.
+          const chosen = shipment.serviceCode
+            ? eligibility.find((s) => s.shippingServiceOfferId === shipment.serviceCode) ?? eligibility[0]
+            : eligibility.reduce((a, b) => (a.rate.amount <= b.rate.amount ? a : b))
+          purchased = await buyShipping.createShipment(
+            {
+              amazonOrderId: order.channelOrderId,
+              itemList,
+              shipFromAddress: {
+                name: wh.name,
+                addressLine1: wh.addressLine1,
+                addressLine2: wh.addressLine2 ?? undefined,
+                city: wh.city,
+                postalCode: wh.postalCode,
+                countryCode: wh.country,
+              },
+              weightGrams: Math.round(weightKg * 1000),
+            },
+            chosen.shippingServiceOfferId,
+          )
+        } catch (e: any) {
+          fastify.log.warn({ err: e, shipmentId: id }, '[print-label] Buy Shipping rejected')
+          return reply.code(502).send({
+            error: `Amazon Buy Shipping: ${e?.message ?? String(e)}`,
+            code: 'BUY_SHIPPING_FAILED',
+          })
+        }
+
+        const updated = await prisma.shipment.update({
+          where: { id },
+          data: {
+            status: 'LABEL_PRINTED',
+            trackingNumber: purchased.trackingId,
+            // Amazon doesn't expose a public tracking URL for Buy
+            // Shipping pre-pickup; the tracking page on Seller Central
+            // requires auth. Leave trackingUrl null until carrier
+            // status returns a public deeplink.
+            trackingUrl: null,
+            // Buy Shipping returns base64 PDF, not a hosted URL. We
+            // store a data: URL so the existing print flow can stream
+            // it; CR.16 will move this to S3 with a presigned URL.
+            labelUrl: purchased.labelData
+              ? `data:application/pdf;base64,${purchased.labelData}`
+              : null,
+            serviceCode: purchased.shippingServiceId,
+            serviceName: purchased.carrierName,
+            costCents: Math.round(purchased.rate.amount * 100),
+            currencyCode: purchased.rate.currencyCode,
+            labelPrintedAt: new Date(),
+            version: { increment: 1 },
+          },
+        })
+
+        await prisma.trackingEvent.create({
+          data: {
+            shipmentId: id,
+            occurredAt: new Date(),
+            code: 'ANNOUNCED',
+            description: `Buy Shipping label purchased (${purchased.carrierName})`,
+            source: 'AMAZON_BUY_SHIPPING',
+          },
+        })
+
+        const { auditLogService } = await import('../services/audit-log.service.js')
+        void auditLogService.write({
+          entityType: 'Shipment',
+          entityId: id,
+          action: 'print-label',
+          before: { status: shipment.status },
+          after: {
+            status: 'LABEL_PRINTED',
+            trackingNumber: purchased.trackingId,
+            carrierCode: 'AMAZON_BUY_SHIPPING',
+          },
+          metadata: {
+            dryRun: purchased.dryRun ?? false,
+            carrier: purchased.carrierName,
+            costCents: Math.round(purchased.rate.amount * 100),
+            weightKg,
+            country: addr.country,
+          },
+        })
+
+        return updated
+      }
+
+      // ── SENDCLOUD (default) ─────────────────────────────────────
+      // O.8: real Sendcloud call (replaces the B.4 stub). The
+      // sendcloud module returns mock data when
+      // NEXUS_ENABLE_SENDCLOUD_REAL=false (the default), so this path
+      // works end-to-end in dryRun mode without ever touching
+      // Sendcloud. resolveCredentials() throws SendcloudError with a
+      // clean 400 message if the carrier isn't connected.
+      const sendcloud = await import('../services/sendcloud/index.js')
+      let creds
+      try {
+        creds = await sendcloud.resolveCredentials()
+      } catch (e: any) {
+        if (e instanceof sendcloud.SendcloudError) {
+          return reply.code(e.status).send({ error: e.message, code: e.code })
+        }
+        throw e
       }
 
       // Parcel items for customs declaration. Sendcloud uses these for
@@ -1081,6 +1264,16 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      // CR.3: bump Carrier.lastUsedAt so the marketplace UI's "active"
+      // sort surfaces recently-used carriers first. Fire-and-forget;
+      // a counter blip shouldn't fail label-print.
+      void prisma.carrier
+        .updateMany({
+          where: { code: 'SENDCLOUD' },
+          data: { lastUsedAt: new Date() },
+        })
+        .catch(() => { /* */ })
+
       // Seed the timeline with the initial ANNOUNCED event so the
       // drawer / branded tracking page have something to render before
       // the first carrier scan webhook arrives.
@@ -1110,7 +1303,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           sendcloudParcelId: String(parcel.id),
           trackingNumber: parcel.tracking_number,
         },
-        metadata: { dryRun: mode.dryRun, env: mode.env, weightKg, country: addr.country },
+        metadata: { dryRun: mode.dryRun, env: mode.env, weightKg, country: addr.country, carrierCode: 'SENDCLOUD' },
       })
 
       return updated
@@ -2167,7 +2360,17 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const { id } = request.params as { id: string }
       const shipment = await prisma.shipment.findUnique({
         where: { id },
-        include: { order: { select: { shippingAddress: true, channel: true } } },
+        include: {
+          warehouse: true,
+          order: {
+            select: {
+              shippingAddress: true,
+              channel: true,
+              channelOrderId: true,
+              items: { select: { id: true, quantity: true, amazonMetadata: true } },
+            },
+          },
+        },
       })
       if (!shipment) return reply.code(404).send({ error: 'Shipment not found' })
       if (!shipment.order) return reply.code(400).send({ error: 'Shipment has no order' })
@@ -2205,33 +2408,50 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         // Buy Shipping rates still surface for Amazon orders.
       }
 
-      // Buy Shipping is only relevant for Amazon orders.
+      // CR.4: Buy Shipping is only relevant for Amazon orders. Pre-CR.4
+      // this passed empty amazonOrderId + empty itemList + hardcoded
+      // Riccione ship-from, which Amazon's MFN API rejects in real
+      // mode. Now: real channelOrderId + real itemList (Amazon
+      // OrderItemId from amazonMetadata) + warehouse-derived
+      // shipFromAddress. Skip silently if the warehouse is not bound
+      // or has no address — UI shows Sendcloud rates only.
       if (shipment.order.channel === 'AMAZON' && process.env.NEXUS_ENABLE_AMAZON_BUY_SHIPPING) {
-        try {
-          const buyShipping = await import('../services/amazon-pushback/buy-shipping.js')
-          const services = await buyShipping.getEligibleShippingServices({
-            amazonOrderId: '',
-            itemList: [],
-            shipFromAddress: {
-              name: 'Xavia',
-              addressLine1: '',
-              city: 'Riccione',
-              postalCode: '47838',
-              countryCode: 'IT',
-            },
-            weightGrams: shipment.weightGrams ?? 1500,
-          })
-          for (const s of services) {
-            rates.push({
-              source: 'AMAZON_BUY_SHIPPING',
-              carrier: s.carrierName,
-              serviceName: s.shippingServiceName,
-              serviceCode: s.shippingServiceOfferId,
-              priceEur: s.rate.amount,
+        const wh = shipment.warehouse
+        if (wh && wh.addressLine1 && wh.city && wh.postalCode && wh.country) {
+          try {
+            const buyShipping = await import('../services/amazon-pushback/buy-shipping.js')
+            const itemList = shipment.order.items.map((it) => {
+              const meta = it.amazonMetadata as any
+              return {
+                orderItemId: meta?.OrderItemId ?? meta?.orderItemId ?? it.id,
+                quantity: it.quantity,
+              }
             })
+            const services = await buyShipping.getEligibleShippingServices({
+              amazonOrderId: shipment.order.channelOrderId,
+              itemList,
+              shipFromAddress: {
+                name: wh.name,
+                addressLine1: wh.addressLine1,
+                addressLine2: wh.addressLine2 ?? undefined,
+                city: wh.city,
+                postalCode: wh.postalCode,
+                countryCode: wh.country,
+              },
+              weightGrams: shipment.weightGrams ?? Math.round(weightKg * 1000),
+            })
+            for (const s of services) {
+              rates.push({
+                source: 'AMAZON_BUY_SHIPPING',
+                carrier: s.carrierName,
+                serviceName: s.shippingServiceName,
+                serviceCode: s.shippingServiceOfferId,
+                priceEur: s.rate.amount,
+              })
+            }
+          } catch (err: any) {
+            fastify.log.warn({ err, shipmentId: id }, '[shipments/:id/rates] Buy Shipping rate fetch failed')
           }
-        } catch {
-          /* Buy Shipping unavailable — skip */
         }
       }
 
