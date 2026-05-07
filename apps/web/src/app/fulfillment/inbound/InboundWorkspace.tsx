@@ -3056,6 +3056,15 @@ function FbaTransportBooking({ shipmentId }: { shipmentId: string }) {
   return (
     <div className="space-y-1.5">
       <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Transport</div>
+      {/* TECH_DEBT #50 — putTransportDetails on v0 is deprecated and
+          Amazon returns 400 in production. Until the inbound surface
+          migrates to v2024-03-20, this form is a fallback only —
+          operators should book transport in Seller Central. */}
+      <div className="text-sm bg-amber-50 border border-amber-200 text-amber-900 rounded px-2 py-1.5 leading-snug">
+        <span className="font-semibold">Use Seller Central for transport booking.</span>{' '}
+        Amazon deprecated the v0 booking endpoint — this form returns
+        400 in production. Pending v2024-03-20 migration (TECH_DEBT #50).
+      </div>
       <div className="flex items-center gap-2 flex-wrap">
         <select
           value={shipmentType}
@@ -3092,9 +3101,13 @@ function FbaTransportBooking({ shipmentId }: { shipmentId: string }) {
         <button
           onClick={submit}
           disabled={busy}
-          className="h-7 px-2.5 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50"
+          // TECH_DEBT #50 — button is intentionally secondary/muted
+          // (not primary dark) since the call is known-failing and
+          // Seller Central is the recommended path.
+          title="Known-failing while Amazon deprecation is active — try Seller Central first"
+          className="h-7 px-2.5 text-sm border border-slate-300 text-slate-700 bg-white rounded hover:bg-slate-50 disabled:opacity-50"
         >
-          {busy ? 'Booking…' : transportStatus ? 'Re-book' : 'Book transport →'}
+          {busy ? 'Booking…' : transportStatus ? 'Re-book (fallback)' : 'Try v0 booking (likely fails)'}
         </button>
         {transportStatus && (
           <span className="text-xs font-mono bg-emerald-50 text-emerald-700 border border-emerald-200 rounded px-1.5 py-0.5">

@@ -980,7 +980,9 @@ Promote to 🔴 when a regression slips past the build gates and into production
 
 The flow is asynchronous — each step polls an `operationId` until the operation completes. State persistence is required because the operator can drop off and resume mid-flow. This is roughly H.9 + H.10 of complexity, not a one-commit fix.
 
-**Mitigation until then:** Update the InboundWorkspace banner from green ("fully wired") to amber ("v0 endpoints partially deprecated; transport booking flow needs v2024-03-20 migration"). Operators can still use plan-shipment + getLabels on v0 in the meantime; transport booking has to happen in Seller Central until v2024-03-20 lands.
+**Mitigations applied:**
+- Banner update: InboundWorkspace already shows the amber "Plan + Labels + Status polling live · Transport v0 deprecated by Amazon" header (H.8d).
+- 2026-05-07: `FbaTransportBooking` form now carries an inline amber notice immediately above the inputs ("Use Seller Central for transport booking — Amazon deprecated the v0 booking endpoint, this form returns 400 in production"). Submit button demoted from primary (slate-900 solid) to secondary outline + label changed to "Try v0 booking (likely fails)" so operators don't waste time on a known-broken action. v0 plan-shipment + getLabels remain the recommended path; transport booking goes through Seller Central until v2024-03-20 lands.
 
 **Estimated effort:** 4–6 commits. State machine rewrite + polling-based operation tracking + UI redesign for the multi-step flow.
 
