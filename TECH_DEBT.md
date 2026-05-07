@@ -1230,14 +1230,27 @@ searches that come up empty otherwise.
   (status enum keys, marketplace codes, channel names — all proper
   nouns or operational keys that intentionally stay English).
 
-- **Note on collision pattern**: C.9, C.10, and C.12 all got bundled
-  into parallel-agent commits during the same session — only C.11
-  (saved views) shipped under its own commit. The pattern: parallel
+- **C.17 — Markdown manager (+ Best Offer / auto-relist placeholders)**
+  shipped in `dedf226 O.39: audit log on shipment lifecycle events`.
+  Parallel-agent commit bundled the 211-LOC backend CRUD on
+  `EbayMarkdown` plus the 581-LOC `EbayMarkdownsClient` plus the
+  page route plus the EbayListingsClient KPI-tile-to-Link enhancement,
+  even though O.39's stated scope is shipment audit logging.
+  Functionally correct: `/listings/ebay/markdowns` renders, the
+  create modal with debounced listing search + live discount preview
+  works, status transitions enforce the terminal-rule, KPI tile is
+  clickable. Best Offer + auto-relist surfaced as honest placeholders
+  pending ChannelListing schema additions.
+
+- **Note on collision pattern**: 4 of 8 second-half-roadmap commits
+  got bundled (C.9, C.10, C.12, C.17). Counter-examples that shipped
+  under their own commit: C.11 saved views, C.14 schema, C.15 eBay
+  overlay, C.16 campaigns. No clean predictor — not size, not
+  standalone-vs-edit-existing, not domain. The pattern: parallel
   agents staging via `git add -A` (or equivalent) sweep up my
   uncommitted work into their own commits, attaching it to whatever
   commit message they happened to be writing. Worth investigating
   the multi-agent staging behavior before it bites again. Three
-  different "C.10" commits now exist in the session log
-  (`1dcdf06` drawer comparison, `52aff10` rates AI switching, plus
-  the parallel-C.10 from the earlier collision) which makes
-  `git log | grep C.10` ambiguous.
+  different "C.10" commits and two different "C.7"s exist in the
+  session log; `git log | grep C\.` is no longer a reliable index
+  of the syndication roadmap.
