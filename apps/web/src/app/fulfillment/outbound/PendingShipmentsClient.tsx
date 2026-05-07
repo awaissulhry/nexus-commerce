@@ -11,7 +11,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Truck, Search, RefreshCw, Crown, AlertTriangle, Clock, Package, X, Plus,
   Bookmark, BookmarkPlus, ChevronDown, Trash2, Star, ArrowRight, Sparkles,
-  Bell, BellOff,
+  Bell, BellOff, Download,
 } from 'lucide-react'
 import Link from 'next/link'
 import { Card } from '@/components/ui/Card'
@@ -956,6 +956,58 @@ export default function PendingShipmentsClient() {
                 title={t('outbound.pending.snooze.bulkTooltip')}
               >
                 <Clock size={12} /> {t('outbound.pending.snooze.bulkButton')}
+              </button>
+              {/* O.86: bulk-export selected to CSV — useful when the
+                  operator wants to send a "what's pending today" list
+                  to a warehouse partner / supplier / 3PL via email.
+                  Pure-frontend; reads from the in-memory list. */}
+              <button
+                onClick={() => {
+                  if (!data) return
+                  const rows = data.items.filter((o) => selected.has(o.id))
+                  if (rows.length === 0) return
+                  const header = ['order_id', 'channel', 'marketplace', 'channel_order_id', 'customer', 'country', 'items_units', 'items_skus', 'value', 'currency', 'ship_by', 'urgency']
+                  const escape = (v: string | number | null | undefined) => {
+                    if (v == null) return ''
+                    const s = String(v)
+                    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+                  }
+                  const csv = [
+                    header.join(','),
+                    ...rows.map((o) => {
+                      const ship = o.shippingAddress as any
+                      const country = ship?.countryCode ?? ship?.country ?? ''
+                      return [
+                        o.id,
+                        o.channel,
+                        o.marketplace ?? '',
+                        o.channelOrderId,
+                        o.customerName,
+                        country,
+                        o.totalQuantity,
+                        o.itemCount,
+                        o.totalPrice.toFixed(2),
+                        o.currencyCode ?? '',
+                        o.shipByDate ?? '',
+                        o.urgency,
+                      ].map(escape).join(',')
+                    }),
+                  ].join('\n')
+                  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `pending-orders-${new Date().toISOString().slice(0, 10)}.csv`
+                  document.body.appendChild(a)
+                  a.click()
+                  document.body.removeChild(a)
+                  URL.revokeObjectURL(url)
+                  toast.success(t('outbound.pending.exportCsv.toast', { n: rows.length }))
+                }}
+                className="h-11 md:h-7 px-4 md:px-3 text-base bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1.5"
+                title={t('outbound.pending.exportCsv.tooltip')}
+              >
+                <Download size={12} /> {t('outbound.pending.exportCsv.button')}
               </button>
               <button
                 onClick={() => setSelected(new Set())}
