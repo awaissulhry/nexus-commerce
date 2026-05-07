@@ -62,9 +62,11 @@ const COMMANDS: Command[] = [
   { id: 'goto-outbound', label: 'Go to Outbound (pending shipments)', icon: ClipboardList, href: '/fulfillment/outbound', group: 'Navigation', chord: 'g f' },
   { id: 'goto-shipping-rules', label: 'Go to Shipping Rules', icon: FileEdit, href: '/fulfillment/outbound/rules', group: 'Navigation' },
   { id: 'goto-outbound-analytics', label: 'Go to Outbound Analytics (cycle time, late rate, carrier perf)', icon: Activity, href: '/fulfillment/outbound/analytics', group: 'Navigation' },
+  { id: 'goto-carriers', label: 'Go to Carriers (Sendcloud, Buy Shipping, BRT, Poste, GLS, DHL, UPS, FedEx)', icon: Truck, href: '/fulfillment/carriers', group: 'Navigation', keywords: 'shipping providers integrations sendcloud brt poste gls dhl ups fedex amazon buy shipping spedizioni corrieri' },
   { id: 'goto-qc-queue', label: 'Go to QC Queue (inbound supervisor review)', icon: ClipboardList, href: '/fulfillment/inbound/qc-queue', group: 'Navigation', chord: 'g q' },
   { id: 'goto-routing-rules', label: 'Go to Order Routing Rules', icon: FileEdit, href: '/fulfillment/routing-rules', group: 'Navigation' },
   { id: 'goto-cycle-count', label: 'Go to Cycle Counts (physical inventory)', icon: ClipboardList, href: '/fulfillment/stock/cycle-count', group: 'Navigation' },
+  { id: 'goto-returns', label: 'Go to Returns (RMA + refund workflow)', icon: RefreshCw, href: '/fulfillment/returns', group: 'Navigation', chord: 'g t' },
   { id: 'goto-activity', label: 'Go to Activity Log', icon: Activity, href: '/sync-logs', group: 'Navigation' },
   { id: 'goto-audit-log', label: 'Go to Audit Log (every mutation)', icon: History, href: '/audit-log', group: 'Navigation', chord: 'g a' },
   { id: 'goto-health', label: 'Go to Sync Health', icon: HeartPulse, href: '/dashboard/health', group: 'Navigation', chord: 'g h' },
@@ -170,6 +172,45 @@ const PAGE_COMMANDS: Command[] = [
     group: 'On this page',
     contextPath: /^\/bulk-operations(\?|$)/,
     keywords: 'revert',
+  },
+  // R1.3 — returns commands. Surface only when we're on the returns
+  // workspace; the page listens for these events and handles them
+  // locally (no router reach-around).
+  {
+    id: 'page-returns-new',
+    label: 'New return',
+    icon: Plus,
+    run: () => window.dispatchEvent(new CustomEvent('nexus:returns:new')),
+    group: 'On this page',
+    contextPath: /^\/fulfillment\/returns(\?|$)/,
+    keywords: 'create rma',
+  },
+  {
+    id: 'page-returns-export',
+    label: 'Export returns as CSV',
+    icon: FileText,
+    run: () => window.dispatchEvent(new CustomEvent('nexus:returns:export')),
+    group: 'On this page',
+    contextPath: /^\/fulfillment\/returns(\?|$)/,
+    keywords: 'download csv export',
+  },
+  {
+    id: 'page-returns-focus-search',
+    label: 'Search returns…',
+    icon: Search,
+    run: () => window.dispatchEvent(new CustomEvent('nexus:returns:focus-search')),
+    group: 'On this page',
+    contextPath: /^\/fulfillment\/returns(\?|$)/,
+    keywords: 'find query rma',
+  },
+  {
+    id: 'page-returns-show-pending',
+    label: 'Show pending returns (REQUESTED + IN_TRANSIT)',
+    icon: ClipboardList,
+    run: () => window.dispatchEvent(new CustomEvent('nexus:returns:filter-pending')),
+    group: 'On this page',
+    contextPath: /^\/fulfillment\/returns(\?|$)/,
+    keywords: 'filter pending awaiting',
   },
 ]
 
