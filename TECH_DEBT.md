@@ -263,28 +263,15 @@ Already captured at high level in entry **13** (multi-marketplace translation fl
 
 **Action:** when entry 13 lands, also apply to the GTIN-exemption submission — the same brand letter / image package is submittable to all five EU marketplaces in one pass.
 
-## 29. 🟡 /products: "needs photos" filter
+## 29. ✅ /products: catalog hygiene filters — resolved 2026-05-08 in M.2
 
-**Friction:** "Wished I could filter by 'needs photos'."
+**Resolution:** Four hygiene tri-states shipped together (`hasPhotos`, `hasDescription`, `hasBrand`, `hasGtin`). Each renders as a single-select FilterGroup ('Has X' / 'No X'), wires through URL state, server-side `where` clauses on `/api/products`, and active-pills surfacing. The facets endpoint now returns a `hygiene: { total, missingPhotos, missingDescription, missingBrand, missingGtin }` rollup so each filter's group label shows "234 missing" inline — operator can spot the worst hygiene gap without toggling. Backend implementation uses `where.AND[]` so the hygiene clause doesn't conflict with the search OR.
 
-Catalog-hygiene filter — surface products with 0 images so the user can fix them in batches. Cheap to add: another filter pill in `ProductFilters.tsx`, server-side `where: { images: { none: {} } }` — single Prisma query.
+**Original friction:** "Wished I could filter by 'needs photos'." `hasPhotos` had been shipped earlier; this commit added the three sibling filters in the same shape per the original ticket's "while we're there" note.
 
-**Proper fix:** add a "Has images" tri-state to the filter panel (`all` / `has-images` / `no-images`). One Prisma `where` clause, one filter chip, one stats counter. Probably an afternoon's work.
+## 30. ✅ /products: surface category / productType — resolved earlier, re-verified 2026-05-08
 
-While we're there, add the same "needs description", "needs brand", "needs GTIN" hygiene filters — same shape.
-
-## 30. 🟡 /products: surface category / productType
-
-**Friction:** "Couldn't easily see which products are in which categories."
-
-`Product.productType` exists in the schema (used by D.3e for category-specific attributes) but isn't shown on the products grid or table view, and isn't a filter facet.
-
-**Proper fix:**
-- Add a "Category" column to the table view (after Brand). Show `productType` if set, em-dash otherwise.
-- Add `productType` as a filter facet in `ProductFilters.tsx` (multi-select against the distinct set of populated values — small enough to enumerate in one query at page load).
-- Optional grid-card secondary line: show `productType` next to brand.
-
-Same shape as the channels facet; mostly a typing exercise.
+**Resolution:** Already shipped before TECH_DEBT review. `productType` is a column in `ALL_COLUMNS` with key `'productType'` / label `'Type'` / width 130, and a multi-select filter facet (`productTypes`) wired through URL state, the facets endpoint, and active-pill rendering with IT_TERMS Italian labels. The optional grid-card secondary line wasn't shipped but was tagged optional in the original ticket.
 
 ---
 

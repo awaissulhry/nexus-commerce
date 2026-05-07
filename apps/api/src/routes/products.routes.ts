@@ -135,6 +135,9 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       fulfillment?: string
       marketplaces?: string
       hasPhotos?: string
+      hasDescription?: string
+      hasBrand?: string
+      hasGtin?: string
       includeCoverage?: string
       includeTags?: string
       // Lazy-load children of this parent. Pass the parent's ID
@@ -232,6 +235,31 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       }
       if (q.hasPhotos === 'true') where.images = { some: {} }
       if (q.hasPhotos === 'false') where.images = { none: {} }
+      // Catalog hygiene tri-states. Treat empty strings as missing
+      // (Postgres distinguishes NULL from '', but the operator wants
+      // both classes flagged for cleanup). We push these into AND[]
+      // rather than touching where.OR — the OR slot is already owned
+      // by `search` and combining the two via OR would mix "matches
+      // search" with "missing description" semantically.
+      const hygieneClauses: any[] = []
+      if (q.hasDescription === 'true') {
+        hygieneClauses.push({ description: { not: null }, NOT: { description: '' } })
+      } else if (q.hasDescription === 'false') {
+        hygieneClauses.push({ OR: [{ description: null }, { description: '' }] })
+      }
+      if (q.hasBrand === 'true') {
+        hygieneClauses.push({ brand: { not: null }, NOT: { brand: '' } })
+      } else if (q.hasBrand === 'false') {
+        hygieneClauses.push({ OR: [{ brand: null }, { brand: '' }] })
+      }
+      if (q.hasGtin === 'true') {
+        hygieneClauses.push({ gtin: { not: null }, NOT: { gtin: '' } })
+      } else if (q.hasGtin === 'false') {
+        hygieneClauses.push({ OR: [{ gtin: null }, { gtin: '' }] })
+      }
+      if (hygieneClauses.length > 0) {
+        where.AND = [...((where.AND as any[]) ?? []), ...hygieneClauses]
+      }
       if (stockLevel === 'in') {
         where.totalStock = { gt: 0 }
       } else if (stockLevel === 'low') {

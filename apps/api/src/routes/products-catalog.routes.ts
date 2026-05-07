@@ -59,7 +59,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       if (matches(request, etag)) {
         return reply.code(304).send()
       }
-      const [productTypes, brands, fulfillment, statusCounts, marketplaceCounts, marketplaceLookup] = await Promise.all([
+      const [productTypes, brands, fulfillment, statusCounts, marketplaceCounts, marketplaceLookup, hygieneCounts] = await Promise.all([
         prisma.product.groupBy({
           by: ['productType'],
           where: { parentId: null, productType: { not: null } },
@@ -94,6 +94,27 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
           where: { isActive: true },
           select: { channel: true, code: true, name: true, region: true },
         }),
+        // Catalog hygiene rollup — counts of top-level products missing
+        // each hygiene-relevant field. Drives the filter sidebar's
+        // "234 missing description" hint. Single $queryRaw beats four
+        // separate Prisma counts (the latter would each run their own
+        // index scan; this one fuses them into a single FILTER pass).
+        prisma.$queryRaw<Array<{
+          total: bigint
+          missing_photos: bigint
+          missing_description: bigint
+          missing_brand: bigint
+          missing_gtin: bigint
+        }>>`
+          SELECT
+            count(*)::bigint AS total,
+            count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM "Image" i WHERE i."productId" = p.id))::bigint AS missing_photos,
+            count(*) FILTER (WHERE p.description IS NULL OR p.description = '')::bigint AS missing_description,
+            count(*) FILTER (WHERE p.brand IS NULL OR p.brand = '')::bigint AS missing_brand,
+            count(*) FILTER (WHERE p.gtin IS NULL OR p.gtin = '')::bigint AS missing_gtin
+          FROM "Product" p
+          WHERE p."parentId" IS NULL
+        `,
       ])
 
       const labelByKey = new Map(
@@ -128,6 +149,13 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
             }
           })
           .sort((a, b) => b.count - a.count),
+        hygiene: {
+          total: Number(hygieneCounts[0]?.total ?? 0),
+          missingPhotos: Number(hygieneCounts[0]?.missing_photos ?? 0),
+          missingDescription: Number(hygieneCounts[0]?.missing_description ?? 0),
+          missingBrand: Number(hygieneCounts[0]?.missing_brand ?? 0),
+          missingGtin: Number(hygieneCounts[0]?.missing_gtin ?? 0),
+        },
       }
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? String(err) })

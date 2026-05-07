@@ -121,6 +121,16 @@ type Facets = {
     region: string | null
     count: number
   }>
+  // Catalog hygiene rollup. Counts of top-level products missing each
+  // hygiene-relevant field, plus the total. Drives "234 missing X"
+  // hints in the filter sidebar.
+  hygiene?: {
+    total: number
+    missingPhotos: number
+    missingDescription: number
+    missingBrand: number
+    missingGtin: number
+  }
 }
 type SavedView = {
   id: string
@@ -238,6 +248,9 @@ export default function ProductsWorkspace() {
   // internally.
   const drawerProductId = searchParams.get('drawer')
   const hasPhotos = searchParams.get('hasPhotos')
+  const hasDescription = searchParams.get('hasDescription')
+  const hasBrand = searchParams.get('hasBrand')
+  const hasGtin = searchParams.get('hasGtin')
 
   const [searchInput, setSearchInput] = useState(search)
   const [products, setProducts] = useState<ProductRow[]>([])
@@ -359,11 +372,14 @@ export default function ProductsWorkspace() {
     if (missingChannelFilters.length) qs.set('missingChannels', missingChannelFilters.join(','))
     if (stockLevel !== 'all') qs.set('stockLevel', stockLevel)
     if (hasPhotos) qs.set('hasPhotos', hasPhotos)
+    if (hasDescription) qs.set('hasDescription', hasDescription)
+    if (hasBrand) qs.set('hasBrand', hasBrand)
+    if (hasGtin) qs.set('hasGtin', hasGtin)
     qs.set('sort', sortBy)
     qs.set('includeCoverage', 'true')
     qs.set('includeTags', 'true')
     return `/api/products?${qs.toString()}`
-  }, [lens, page, pageSize, search, statusFilters, channelFilters, marketplaceFilters, productTypeFilters, brandFilters, tagFilters, fulfillmentFilters, missingChannelFilters, stockLevel, hasPhotos, sortBy])
+  }, [lens, page, pageSize, search, statusFilters, channelFilters, marketplaceFilters, productTypeFilters, brandFilters, tagFilters, fulfillmentFilters, missingChannelFilters, stockLevel, hasPhotos, hasDescription, hasBrand, hasGtin, sortBy])
 
   const {
     data: productsData,
@@ -729,7 +745,7 @@ export default function ProductsWorkspace() {
   )
 
   // Reset selection when filters change
-  useEffect(() => { setSelected(new Set()) }, [page, search, statusFilters.join(','), channelFilters.join(','), marketplaceFilters.join(','), productTypeFilters.join(','), brandFilters.join(','), tagFilters.join(','), fulfillmentFilters.join(','), missingChannelFilters.join(','), stockLevel, hasPhotos])
+  useEffect(() => { setSelected(new Set()) }, [page, search, statusFilters.join(','), channelFilters.join(','), marketplaceFilters.join(','), productTypeFilters.join(','), brandFilters.join(','), tagFilters.join(','), fulfillmentFilters.join(','), missingChannelFilters.join(','), stockLevel, hasPhotos, hasDescription, hasBrand, hasGtin])
 
   // P.15 — page-level keyboard shortcuts. Layered on top of the
   // global CommandPalette which owns Cmd+K / `?` / `/` / 'g <l>'
@@ -802,7 +818,8 @@ export default function ProductsWorkspace() {
     statusFilters.length + channelFilters.length + marketplaceFilters.length +
     productTypeFilters.length + brandFilters.length + tagFilters.length +
     fulfillmentFilters.length + missingChannelFilters.length +
-    (stockLevel !== 'all' ? 1 : 0) + (hasPhotos ? 1 : 0)
+    (stockLevel !== 'all' ? 1 : 0) + (hasPhotos ? 1 : 0) +
+    (hasDescription ? 1 : 0) + (hasBrand ? 1 : 0) + (hasGtin ? 1 : 0)
 
   return (
     // E.14 — make the debounced search term available to memo'd cells
@@ -1006,6 +1023,9 @@ export default function ProductsWorkspace() {
         missingChannelFilters={missingChannelFilters}
         stockLevel={stockLevel}
         hasPhotos={hasPhotos}
+        hasDescription={hasDescription}
+        hasBrand={hasBrand}
+        hasGtin={hasGtin}
         filterCount={filterCount}
         facets={facets}
         tags={tags}
@@ -1044,7 +1064,7 @@ export default function ProductsWorkspace() {
           onRowToggle={handleRowToggle}
           focusedRowId={focusedRowId}
           filterCount={filterCount}
-          onClearFilters={() => updateUrl({ status: '', channels: '', marketplaces: '', productTypes: '', brands: '', tags: '', fulfillment: '', missingChannels: '', stockLevel: undefined, hasPhotos: undefined, page: undefined })}
+          onClearFilters={() => updateUrl({ status: '', channels: '', marketplaces: '', productTypes: '', brands: '', tags: '', fulfillment: '', missingChannels: '', stockLevel: undefined, hasPhotos: undefined, hasDescription: undefined, hasBrand: undefined, hasGtin: undefined, page: undefined })}
           onPage={onPage}
           onPageSize={onPageSize}
           onTagEdit={onTagEdit}
@@ -1146,7 +1166,7 @@ function FilterBar(props: any) {
     searchInput, setSearchInput,
     statusFilters, channelFilters, marketplaceFilters, productTypeFilters, brandFilters, tagFilters, fulfillmentFilters,
     missingChannelFilters,
-    stockLevel, hasPhotos, filterCount, facets, tags, updateUrl,
+    stockLevel, hasPhotos, hasDescription, hasBrand, hasGtin, filterCount, facets, tags, updateUrl,
   } = props
 
   // F2 — listen for the global "/" focus-search event dispatched by
@@ -1287,6 +1307,30 @@ function FilterBar(props: any) {
       clear: () => updateUrl({ hasPhotos: undefined, page: undefined }),
     })
   }
+  if (hasDescription === 'true' || hasDescription === 'false') {
+    activePills.push({
+      key: 'description',
+      label: 'Description',
+      value: hasDescription === 'true' ? 'has description' : 'no description',
+      clear: () => updateUrl({ hasDescription: undefined, page: undefined }),
+    })
+  }
+  if (hasBrand === 'true' || hasBrand === 'false') {
+    activePills.push({
+      key: 'brand-set',
+      label: 'Brand',
+      value: hasBrand === 'true' ? 'brand set' : 'no brand',
+      clear: () => updateUrl({ hasBrand: undefined, page: undefined }),
+    })
+  }
+  if (hasGtin === 'true' || hasGtin === 'false') {
+    activePills.push({
+      key: 'gtin',
+      label: 'GTIN',
+      value: hasGtin === 'true' ? 'has GTIN' : 'no GTIN',
+      clear: () => updateUrl({ hasGtin: undefined, page: undefined }),
+    })
+  }
 
   return (
     // E.22 — no more Card wrapper around FilterBar. The "huge white
@@ -1323,7 +1367,7 @@ function FilterBar(props: any) {
         </button>
         {filterCount > 0 && (
           <button
-            onClick={() => updateUrl({ status: '', channels: '', marketplaces: '', productTypes: '', brands: '', tags: '', fulfillment: '', missingChannels: '', stockLevel: undefined, hasPhotos: undefined, page: undefined })}
+            onClick={() => updateUrl({ status: '', channels: '', marketplaces: '', productTypes: '', brands: '', tags: '', fulfillment: '', missingChannels: '', stockLevel: undefined, hasPhotos: undefined, hasDescription: undefined, hasBrand: undefined, hasGtin: undefined, page: undefined })}
             className="h-8 px-2 text-base text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
           >
             <X size={12} /> Clear all
@@ -1477,7 +1521,7 @@ function FilterBar(props: any) {
               onClear={() => updateUrl({ stockLevel: undefined, page: undefined })}
             />
             <FilterGroup
-              label="Photos"
+              label={`Photos${facets?.hygiene ? ` · ${facets.hygiene.missingPhotos} missing` : ''}`}
               mode="single"
               options={['true', 'false']}
               selected={hasPhotos}
@@ -1489,6 +1533,48 @@ function FilterBar(props: any) {
                 })
               }
               onClear={() => updateUrl({ hasPhotos: undefined, page: undefined })}
+            />
+            <FilterGroup
+              label={`Description${facets?.hygiene ? ` · ${facets.hygiene.missingDescription} missing` : ''}`}
+              mode="single"
+              options={['true', 'false']}
+              selected={hasDescription}
+              renderLabel={(v) => (v === 'true' ? 'Has description' : 'No description')}
+              onToggle={(v: string) =>
+                updateUrl({
+                  hasDescription: hasDescription === v ? undefined : v,
+                  page: undefined,
+                })
+              }
+              onClear={() => updateUrl({ hasDescription: undefined, page: undefined })}
+            />
+            <FilterGroup
+              label={`Brand set${facets?.hygiene ? ` · ${facets.hygiene.missingBrand} missing` : ''}`}
+              mode="single"
+              options={['true', 'false']}
+              selected={hasBrand}
+              renderLabel={(v) => (v === 'true' ? 'Brand set' : 'No brand')}
+              onToggle={(v: string) =>
+                updateUrl({
+                  hasBrand: hasBrand === v ? undefined : v,
+                  page: undefined,
+                })
+              }
+              onClear={() => updateUrl({ hasBrand: undefined, page: undefined })}
+            />
+            <FilterGroup
+              label={`GTIN${facets?.hygiene ? ` · ${facets.hygiene.missingGtin} missing` : ''}`}
+              mode="single"
+              options={['true', 'false']}
+              selected={hasGtin}
+              renderLabel={(v) => (v === 'true' ? 'Has GTIN' : 'No GTIN')}
+              onToggle={(v: string) =>
+                updateUrl({
+                  hasGtin: hasGtin === v ? undefined : v,
+                  page: undefined,
+                })
+              }
+              onClear={() => updateUrl({ hasGtin: undefined, page: undefined })}
             />
           </div>
         )}
