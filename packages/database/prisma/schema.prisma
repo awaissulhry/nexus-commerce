@@ -2581,6 +2581,14 @@ model Warehouse {
   isDefault    Boolean @default(false)
   isActive     Boolean @default(true)
 
+  // R3.2 — disposition routing. When a return is restocked, items
+  // are routed to the warehouse whose `kind` matches their
+  // ReturnItem.disposition. Nullable for back-compat: legacy
+  // warehouses without a kind set are treated as PRIMARY (the
+  // default sellable pool). Values: PRIMARY | SECOND_QUALITY |
+  // REFURBISH | QUARANTINE.
+  kind         String?
+
   // Sendcloud sender address mapping — Sendcloud uses sender_address_id
   sendcloudSenderId Int?
 
@@ -2595,6 +2603,8 @@ model Warehouse {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([kind])
 }
 
 // H.1 — Multi-location inventory model.
@@ -2802,6 +2812,11 @@ model Carrier {
   services        CarrierService[]
   metrics         CarrierMetric[]
   pickupSchedules PickupSchedule[]
+  // CR.9 (additive): secondary accounts of this carrier code.
+  // Primary account credentials stay on Carrier itself; this list
+  // is for operators with multiple Sendcloud integrations (e.g. one
+  // per warehouse) once CR.10 wires Warehouse.defaultCarrierAccountId.
+  accounts        CarrierAccount[]
 
   @@index([isActive])
   @@index([lastUsedAt])
@@ -2931,6 +2946,31 @@ model PickupSchedule {
 
   @@index([carrierId, status])
   @@index([warehouseId])
+}
+
+// CR.9 (additive) — secondary carrier accounts. Primary account
+// credentials stay on Carrier itself; this table is for operators
+// running multiple integrations of the same carrier code (typically
+// one per warehouse). Listing + management UI surfaces these in the
+// drawer's Credentials tab. resolveCredentials still uses the primary
+// row by default until CR.10 wires Warehouse-driven account selection.
+model CarrierAccount {
+  id                   String    @id @default(cuid())
+  carrier              Carrier   @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+  carrierId            String
+  accountLabel         String
+  credentialsEncrypted String?
+  mode                 String    @default("sandbox")
+  isActive             Boolean   @default(true)
+  lastUsedAt           DateTime?
+  lastVerifiedAt       DateTime?
+  lastErrorAt          DateTime?
+  lastError            String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@unique([carrierId, accountLabel])
+  @@index([carrierId, isActive])
 }
 
 // Outbound shipment for FBM/eBay/Shopify/Woo/Etsy orders.
@@ -3669,13 +3709,27 @@ model ReturnItem {
   //                functionalTestPassed: boolean | null,
   //                signsOfUse: 'NONE' | 'LIGHT' | 'HEAVY',
   //              }
-  photoUrls            String[] @default([])
-  inspectionChecklist  Json?
+  photoUrls           String[] @default([])
+  inspectionChecklist Json?
+
+  // R3.2 — per-item disposition. Set during inspect, consumed by
+  // restock to route the item to the matching warehouse pool.
+  // Values: SELLABLE | SECOND_QUALITY | REFURBISH | QUARANTINE | SCRAP.
+  // Nullable so the operator can leave it open until the inspect
+  // decision is made; the restock route falls back to a sensible
+  // default per condition grade (NEW/LIKE_NEW/GOOD → SELLABLE,
+  // DAMAGED/UNUSABLE → SCRAP).
+  disposition String?
+  // R3.2 — required when disposition=SCRAP and the operator wants
+  // to record *why* the item is being written off (defective,
+  // contaminated, expired, missing parts, etc.).
+  scrapReason String?
 
   return Return @relation(fields: [returnId], references: [id], onDelete: Cascade)
 
   @@index([returnId])
   @@index([productId])
+  @@index([disposition])
 }
 
 // ── R0.1 — Refund domain ──────────────────────────────────────────────

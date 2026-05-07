@@ -312,11 +312,20 @@ export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: 
 
         <div className="px-6 py-5">
           {activeTab === 'credentials' && (
-            <CredentialsTab
-              def={def}
-              fields={fields}
-              onField={updateField}
-            />
+            <>
+              <CredentialsTab
+                def={def}
+                fields={fields}
+                onField={updateField}
+              />
+              {/* CR.9: secondary-account list. Hidden until the primary
+                  is connected so operators don't add stranded accounts. */}
+              {isConnected && def.code === 'SENDCLOUD' && (
+                <div className="mt-6 pt-5 border-t border-slate-200 dark:border-slate-700">
+                  <AccountsSection carrierCode={def.code} />
+                </div>
+              )}
+            </>
           )}
           {activeTab === 'services' && def.code === 'SENDCLOUD' && (
             <ServicesTab carrierCode={def.code} />
@@ -478,6 +487,229 @@ function relTime(iso: string): string {
   const d = Math.floor(hr / 24)
   if (d < 30) return `${d}d ago`
   return `${Math.floor(d / 30)}mo ago`
+}
+
+// ── Accounts section (in Credentials tab) ────────────────────────
+// CR.9 (additive): list, add, edit, remove secondary CarrierAccount
+// rows. Primary account credentials live on Carrier itself (the
+// fields above this section). Today nothing routes shipments through
+// secondary accounts — CR.10 adds Warehouse-driven selection. This
+// section delivers the management surface so operators can stage
+// multi-account configuration before the routing logic ships.
+type Account = {
+  id: string
+  accountLabel: string
+  mode: 'sandbox' | 'production'
+  isActive: boolean
+  hasCredentials: boolean
+  lastVerifiedAt: string | null
+  lastErrorAt: string | null
+  lastError: string | null
+}
+
+function AccountsSection({ carrierCode }: { carrierCode: string }) {
+  const { toast } = useToast()
+  const askConfirm = useConfirm()
+  const [accounts, setAccounts] = useState<Account[]>([])
+  const [loading, setLoading] = useState(true)
+  const [adding, setAdding] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [draft, setDraft] = useState({
+    accountLabel: '',
+    publicKey: '',
+    privateKey: '',
+    integrationId: '',
+    mode: 'sandbox' as 'sandbox' | 'production',
+  })
+
+  const fetchAll = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/carriers/${carrierCode}/accounts`,
+        { cache: 'no-store' },
+      )
+      if (res.ok) setAccounts((await res.json()).items ?? [])
+    } finally { setLoading(false) }
+  }, [carrierCode])
+
+  useEffect(() => { fetchAll() }, [fetchAll])
+
+  const save = async () => {
+    if (!draft.accountLabel.trim()) {
+      toast.error('Account label required')
+      return
+    }
+    setBusy(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/carriers/${carrierCode}/accounts`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            accountLabel: draft.accountLabel,
+            publicKey: draft.publicKey || undefined,
+            privateKey: draft.privateKey || undefined,
+            integrationId: draft.integrationId ? Number(draft.integrationId) : undefined,
+            mode: draft.mode,
+          }),
+        },
+      )
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error ?? 'Save failed')
+      }
+      setAdding(false)
+      setDraft({ accountLabel: '', publicKey: '', privateKey: '', integrationId: '', mode: 'sandbox' })
+      fetchAll()
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally { setBusy(false) }
+  }
+
+  const remove = async (id: string, label: string) => {
+    const ok = await askConfirm({
+      title: `Remove account "${label}"?`,
+      description: 'Existing shipments are preserved. Pickups + service mappings tied to this account fall back to the primary.',
+      confirmLabel: 'Remove',
+      tone: 'danger',
+    })
+    if (!ok) return
+    const res = await fetch(
+      `${getBackendUrl()}/api/fulfillment/carriers/${carrierCode}/accounts/${id}`,
+      { method: 'DELETE' },
+    )
+    if (res.ok) fetchAll()
+    else toast.error('Delete failed')
+  }
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
+          Additional accounts
+        </div>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          For operators with multiple Sendcloud integrations (typically one per warehouse). The primary account above remains the default until per-warehouse routing is configured.
+        </p>
+      </div>
+
+      {loading ? (
+        <div className="text-base text-slate-500 dark:text-slate-400 py-1">Loading…</div>
+      ) : accounts.length === 0 ? (
+        <div className="text-base text-slate-500 dark:text-slate-400 italic py-1">
+          No additional accounts yet.
+        </div>
+      ) : (
+        <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+          <table className="w-full text-base">
+            <thead className="bg-slate-50 dark:bg-slate-800 text-xs uppercase tracking-wider text-slate-600 dark:text-slate-300">
+              <tr>
+                <th className="text-left px-3 py-2 font-semibold">Label</th>
+                <th className="text-left px-3 py-2 font-semibold w-24">Mode</th>
+                <th className="text-left px-3 py-2 font-semibold w-24">Status</th>
+                <th className="px-3 py-2 w-10" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+              {accounts.map((a) => (
+                <tr key={a.id} className="text-slate-800 dark:text-slate-100">
+                  <td className="px-3 py-2 font-medium">{a.accountLabel}</td>
+                  <td className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">{a.mode}</td>
+                  <td className="px-3 py-2">
+                    {a.lastError
+                      ? <Badge variant="warning" size="sm">Error</Badge>
+                      : a.hasCredentials
+                      ? <Badge variant="success" size="sm">Active</Badge>
+                      : <Badge variant="default" size="sm">No creds</Badge>}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <button
+                      onClick={() => remove(a.id, a.accountLabel)}
+                      className="p-1 rounded hover:bg-rose-50 dark:hover:bg-rose-900/30 text-rose-600 dark:text-rose-400"
+                      aria-label="Remove account"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {adding ? (
+        <div className="space-y-2 p-3 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded">
+          <div>
+            <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5 block">Label</label>
+            <input
+              type="text"
+              value={draft.accountLabel}
+              onChange={(e) => setDraft({ ...draft, accountLabel: e.target.value })}
+              placeholder="e.g. Sendcloud Bologna"
+              className="h-9 w-full px-2 text-base border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5 block">Public key</label>
+              <input
+                type="text"
+                value={draft.publicKey}
+                onChange={(e) => setDraft({ ...draft, publicKey: e.target.value })}
+                className="h-9 w-full px-2 text-base font-mono border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </div>
+            <div>
+              <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5 block">Private key</label>
+              <input
+                type="password"
+                value={draft.privateKey}
+                onChange={(e) => setDraft({ ...draft, privateKey: e.target.value })}
+                className="h-9 w-full px-2 text-base font-mono border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5 block">Integration ID</label>
+              <input
+                type="number"
+                value={draft.integrationId}
+                onChange={(e) => setDraft({ ...draft, integrationId: e.target.value })}
+                className="h-9 w-full px-2 text-base font-mono border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+              />
+            </div>
+            <div>
+              <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5 block">Mode</label>
+              <select
+                value={draft.mode}
+                onChange={(e) => setDraft({ ...draft, mode: e.target.value as 'sandbox' | 'production' })}
+                className="h-9 w-full px-2 text-base border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+              >
+                <option value="sandbox">Sandbox</option>
+                <option value="production">Production</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 pt-1">
+            <Button variant="primary" size="sm" onClick={save} loading={busy}>Add account</Button>
+            <Button variant="ghost" size="sm" onClick={() => setAdding(false)}>Cancel</Button>
+          </div>
+        </div>
+      ) : (
+        <Button variant="secondary" size="sm" icon={<Plus size={11} />} onClick={() => setAdding(true)}>
+          Add account
+        </Button>
+      )}
+    </div>
+  )
 }
 
 // ── Services tab ───────────────────────────────────────────────────

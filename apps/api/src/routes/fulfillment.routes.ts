@@ -8720,6 +8720,149 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // CR.9 — secondary carrier accounts.
+  //
+  // GET    /fulfillment/carriers/:code/accounts
+  //   List secondary accounts for this carrier code. The primary
+  //   account (Carrier itself) is NOT in the list — it surfaces in
+  //   the existing Credentials tab. This endpoint feeds an
+  //   "Additional accounts" section.
+  // POST   /fulfillment/carriers/:code/accounts
+  //   Body: { accountLabel, publicKey?, privateKey?, integrationId? }
+  //   Creates a new CarrierAccount, encrypting credentials with the
+  //   CR.1 envelope. Validates uniqueness on (carrierId, accountLabel).
+  // PATCH  /fulfillment/carriers/:code/accounts/:id
+  //   Body: same fields, all optional. Re-encrypts on update.
+  // DELETE /fulfillment/carriers/:code/accounts/:id
+  //   Hard-delete. Cascades pickup-schedule rows that referenced the
+  //   account directly (none today; reserved for future per-account
+  //   PickupSchedule.accountId).
+  fastify.get('/fulfillment/carriers/:code/accounts', async (request, reply) => {
+    try {
+      const { code } = request.params as { code: string }
+      const carrier = await prisma.carrier.findUnique({ where: { code: code as any } })
+      if (!carrier) return { items: [] }
+      const items = await prisma.carrierAccount.findMany({
+        where: { carrierId: carrier.id },
+        orderBy: { accountLabel: 'asc' },
+        select: {
+          id: true,
+          accountLabel: true,
+          mode: true,
+          isActive: true,
+          lastUsedAt: true,
+          lastVerifiedAt: true,
+          lastErrorAt: true,
+          lastError: true,
+          // hasCredentials reveals presence without exposing ciphertext.
+          credentialsEncrypted: true,
+        },
+      })
+      return {
+        items: items.map((a) => ({
+          id: a.id,
+          accountLabel: a.accountLabel,
+          mode: a.mode,
+          isActive: a.isActive,
+          hasCredentials: !!a.credentialsEncrypted,
+          lastUsedAt: a.lastUsedAt,
+          lastVerifiedAt: a.lastVerifiedAt,
+          lastErrorAt: a.lastErrorAt,
+          lastError: a.lastError,
+        })),
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[carriers/:code/accounts GET] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.post('/fulfillment/carriers/:code/accounts', async (request, reply) => {
+    try {
+      const { code } = request.params as { code: string }
+      const body = request.body as {
+        accountLabel?: string
+        publicKey?: string
+        privateKey?: string
+        integrationId?: number
+        mode?: 'sandbox' | 'production'
+      }
+      if (!body.accountLabel?.trim()) {
+        return reply.code(400).send({ error: 'accountLabel required' })
+      }
+      const carrier = await prisma.carrier.findUnique({ where: { code: code as any } })
+      if (!carrier) return reply.code(404).send({ error: 'Connect the primary carrier first' })
+
+      const { encryptSecret } = await import('../lib/crypto.js')
+      const hasSecret = !!(body.publicKey || body.privateKey || body.integrationId)
+      const credentialsEncrypted = hasSecret
+        ? encryptSecret(JSON.stringify({
+            publicKey: body.publicKey,
+            privateKey: body.privateKey,
+            integrationId: body.integrationId,
+          }))
+        : null
+
+      const created = await prisma.carrierAccount.create({
+        data: {
+          carrierId: carrier.id,
+          accountLabel: body.accountLabel.trim(),
+          credentialsEncrypted,
+          mode: body.mode ?? 'sandbox',
+        },
+      })
+
+      return { ok: true, account: { id: created.id, accountLabel: created.accountLabel, mode: created.mode } }
+    } catch (error: any) {
+      // Unique-constraint violation gives a clean 400.
+      if (error?.code === 'P2002') {
+        return reply.code(400).send({ error: 'An account with that label already exists for this carrier' })
+      }
+      fastify.log.error({ err: error }, '[carriers/:code/accounts POST] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.patch('/fulfillment/carriers/:code/accounts/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = request.body as {
+        accountLabel?: string
+        publicKey?: string
+        privateKey?: string
+        integrationId?: number
+        mode?: 'sandbox' | 'production'
+        isActive?: boolean
+      }
+      const data: Record<string, unknown> = {}
+      if (body.accountLabel != null) data.accountLabel = body.accountLabel.trim()
+      if (body.mode != null) data.mode = body.mode
+      if (body.isActive != null) data.isActive = body.isActive
+      if (body.publicKey || body.privateKey || body.integrationId) {
+        const { encryptSecret } = await import('../lib/crypto.js')
+        data.credentialsEncrypted = encryptSecret(
+          JSON.stringify({ publicKey: body.publicKey, privateKey: body.privateKey, integrationId: body.integrationId }),
+        )
+      }
+      const updated = await prisma.carrierAccount.update({ where: { id }, data })
+      return { ok: true, account: { id: updated.id, accountLabel: updated.accountLabel } }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[carriers/:code/accounts PATCH] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.delete('/fulfillment/carriers/:code/accounts/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      await prisma.carrierAccount.delete({ where: { id } })
+      return { ok: true }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[carriers/:code/accounts DELETE] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // CR.20 — rotate the per-carrier webhook signing secret.
   //
   // POST /carriers/:code/webhook-secret/rotate
