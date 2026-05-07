@@ -116,6 +116,58 @@ export default function Step4Attributes({
     message: string
   } | null>(null)
 
+  // C.10 — provider picker. Loads /api/ai/providers on mount + caches
+  // the operator's choice in localStorage so a switch persists across
+  // sessions. Provider preference is forwarded with each AI generate
+  // / translate call as the request body's `provider` field.
+  const [providers, setProviders] = useState<
+    Array<{ name: string; configured: boolean; defaultModel: string }>
+  >([])
+  const [provider, setProvider] = useState<string>(() => {
+    if (typeof window === 'undefined') return ''
+    return window.localStorage.getItem('nexus:ai-provider') ?? ''
+  })
+  useEffect(() => {
+    let cancelled = false
+    fetch(`${getBackendUrl()}/api/ai/providers`)
+      .then((r) => (r.ok ? r.json() : { providers: [] }))
+      .then((j) => {
+        if (cancelled) return
+        const list = Array.isArray(j?.providers) ? j.providers : []
+        setProviders(list)
+        // Seed the picker with the first configured provider when the
+        // operator hasn't chosen one yet.
+        if (!provider) {
+          const firstConfigured = list.find(
+            (p: { configured?: boolean }) => p.configured === true,
+          )
+          if (firstConfigured) setProvider(firstConfigured.name)
+        }
+      })
+      .catch(() => {
+        // Picker silently degrades — backend will fall back to the
+        // env-default provider.
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (provider) window.localStorage.setItem('nexus:ai-provider', provider)
+  }, [provider])
+
+  // C.10 — last AI cost surfaced in the chrome. Cleared on next call.
+  const [lastAiCost, setLastAiCost] = useState<{
+    fieldId: string
+    provider: string
+    model: string
+    costUSD: number
+    inputTokens: number
+    outputTokens: number
+  } | null>(null)
+
   const onTranslate = useCallback(
     async (fieldId: string, channelKey: string) => {
       const aiKind = AI_FIELD_MAP[fieldId]
@@ -220,7 +272,13 @@ export default function Step4Attributes({
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fields: [aiKind], variant: 0 }),
+            body: JSON.stringify({
+              fields: [aiKind],
+              variant: 0,
+              // C.10 — forward operator-chosen provider; backend
+              // falls back gracefully when empty.
+              ...(provider ? { provider } : {}),
+            }),
           },
         )
         const json = await res.json()
@@ -232,6 +290,33 @@ export default function Step4Attributes({
         // can per-channel override afterward.
         const firstGroup = json?.groups?.[0]?.result
         if (!firstGroup) return
+        // C.10 — capture cost telemetry from the response usage[]
+        // array. Sum across the (typically one) usage entry per group.
+        const usage = firstGroup.usage as
+          | Array<{
+              provider: string
+              model: string
+              costUSD: number
+              inputTokens: number
+              outputTokens: number
+            }>
+          | undefined
+        if (Array.isArray(usage) && usage.length > 0) {
+          const totalCost = usage.reduce((s, u) => s + (u.costUSD ?? 0), 0)
+          const totalIn = usage.reduce((s, u) => s + (u.inputTokens ?? 0), 0)
+          const totalOut = usage.reduce(
+            (s, u) => s + (u.outputTokens ?? 0),
+            0,
+          )
+          setLastAiCost({
+            fieldId,
+            provider: usage[0]!.provider,
+            model: usage[0]!.model,
+            costUSD: totalCost,
+            inputTokens: totalIn,
+            outputTokens: totalOut,
+          })
+        }
         let value: string | undefined
         if (aiKind === 'title') {
           value = firstGroup.title?.content
@@ -271,7 +356,7 @@ export default function Step4Attributes({
         })
       }
     },
-    [wizardId],
+    [wizardId, provider],
   )
 
   // Debounced persist of `values` (base) + variantAttrs →
@@ -647,8 +732,40 @@ export default function Step4Attributes({
             Smart defaults come from the master product; click "Override
             per channel" on any field that should differ between markets.
           </p>
+          {/* C.10 — last AI cost surfaced as a thin trailing line so
+              the operator sees what the previous generate run cost
+              without a popup. Cleared on next generate. */}
+          {lastAiCost && (
+            <p className="text-xs text-slate-500 mt-1.5 tabular-nums">
+              Last AI run · {lastAiCost.provider} · {lastAiCost.model}
+              {' · '}
+              {lastAiCost.inputTokens + lastAiCost.outputTokens} tok
+              {' · '}
+              ${lastAiCost.costUSD.toFixed(4)}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          {/* C.10 — provider picker. Only renders when more than one
+              configured provider is available; with a single provider
+              the picker would be a no-op clutter. */}
+          {providers.filter((p) => p.configured).length > 1 && (
+            <select
+              value={provider}
+              onChange={(e) => setProvider(e.target.value)}
+              aria-label="AI provider"
+              className="h-7 px-2 text-sm border border-slate-200 rounded-md bg-white text-slate-700 focus:outline-none focus:border-blue-300"
+              title="Choose which AI provider runs the next generation"
+            >
+              {providers
+                .filter((p) => p.configured)
+                .map((p) => (
+                  <option key={p.name} value={p.name}>
+                    {p.name}
+                  </option>
+                ))}
+            </select>
+          )}
           {manifest && manifest.optionalFieldCount > 0 && (
             <button
               type="button"

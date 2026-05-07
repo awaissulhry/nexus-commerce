@@ -1736,7 +1736,14 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
   // share each tab's content.
   fastify.post<{
     Params: { id: string }
-    Body: { fields?: string[]; variant?: number }
+    Body: {
+      fields?: string[]
+      variant?: number
+      /** C.10 — caller-chosen provider (gemini | anthropic). Falls
+       *  back to AI_PROVIDER env or first configured provider in the
+       *  registry. Validated by getProvider() in the service. */
+      provider?: string
+    }
   }>(
     '/listing-wizard/:id/generate-content',
     {
@@ -1904,6 +1911,10 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
             fields: requested,
             variant,
             terminology,
+            // C.10 — forward caller-chosen provider. Falls back to
+            // env-default + first-configured if missing/unsupported;
+            // see getProvider() resolution rules.
+            provider: request.body?.provider ?? null,
           })
           // H.7 — log per-field cost telemetry. Wizard groups are the
           // most expensive AI surface (one call per channel-language

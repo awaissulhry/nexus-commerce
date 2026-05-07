@@ -28,6 +28,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { InlineEditTrigger } from '@/components/ui/InlineEditTrigger'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useToast } from '@/components/ui/Toast'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
@@ -448,6 +449,11 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
   // cycle had fired. `connected` powers the live indicator below.
   const { connected: sseConnected } = useListingEvents()
 
+  // C.12 — t() for the workspace's own visible strings; child
+  // components grab their own useTranslations() so they don't need
+  // prop drilling.
+  const { t } = useTranslations()
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -506,7 +512,7 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
               return true
             }
             const err = await res.json().catch(() => ({}))
-            savedViewToast.toast.error(err.error ?? 'Save failed')
+            savedViewToast.toast.error(err.error ?? t('listings.savedViews.saveFailed'))
             return false
           }}
           onDelete={async (id) => {
@@ -539,13 +545,13 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
           <Tooltip
             content={
               sseConnected
-                ? 'Live updates connected. Sync events stream within 200ms.'
-                : 'Live stream disconnected — falling back to 30s polling.'
+                ? t('listings.live.tooltipConnected')
+                : t('listings.live.tooltipDisconnected')
             }
           >
             <span
               className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-500"
-              aria-label={sseConnected ? 'Live updates connected' : 'Live stream disconnected'}
+              aria-label={sseConnected ? t('listings.live.tooltipConnected') : t('listings.live.tooltipDisconnected')}
             >
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
@@ -553,15 +559,15 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
                 }`}
                 aria-hidden
               />
-              {sseConnected ? 'Live' : 'Polling'}
+              {sseConnected ? t('listings.live') : t('listings.polling')}
             </span>
           </Tooltip>
           {facets && (
             <div className="flex items-center gap-3 text-base text-slate-500">
-              <span><span className="font-semibold text-slate-700 tabular-nums">{facets.total}</span> total</span>
+              <span><span className="font-semibold text-slate-700 tabular-nums">{facets.total}</span> {t('listings.stats.total')}</span>
               <span className="text-slate-300">·</span>
               <span className={facets.errorCount > 0 ? 'text-rose-600' : ''}>
-                <span className="font-semibold tabular-nums">{facets.errorCount}</span> errors
+                <span className="font-semibold tabular-nums">{facets.errorCount}</span> {t('listings.stats.errors')}
               </span>
             </div>
           )}
@@ -673,24 +679,25 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
 // LensTabs
 // ────────────────────────────────────────────────────────────────────
 function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) => void }) {
-  const tabs: Array<{ key: Lens; label: string; icon: any }> = [
-    { key: 'grid', label: 'Grid', icon: Boxes },
-    { key: 'health', label: 'Health', icon: AlertTriangle },
-    { key: 'matrix', label: 'Matrix', icon: LayoutGrid },
-    { key: 'drafts', label: 'Drafts', icon: Sparkles },
+  const { t } = useTranslations()
+  const tabs: Array<{ key: Lens; labelKey: string; icon: any }> = [
+    { key: 'grid', labelKey: 'listings.lens.grid', icon: Boxes },
+    { key: 'health', labelKey: 'listings.lens.health', icon: AlertTriangle },
+    { key: 'matrix', labelKey: 'listings.lens.matrix', icon: LayoutGrid },
+    { key: 'drafts', labelKey: 'listings.lens.drafts', icon: Sparkles },
   ]
   return (
     <div className="inline-flex items-center bg-slate-100 rounded-md p-0.5">
-      {tabs.map((t) => (
+      {tabs.map((tab) => (
         <button
-          key={t.key}
-          onClick={() => onChange(t.key)}
+          key={tab.key}
+          onClick={() => onChange(tab.key)}
           className={`h-7 px-3 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${
-            current === t.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            current === tab.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          <t.icon size={12} />
-          {t.label}
+          <tab.icon size={12} />
+          {t(tab.labelKey)}
         </button>
       ))}
     </div>
@@ -1292,6 +1299,7 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
   const [setPriceOpen, setSetPriceOpen] = useState(false)
   const confirm = useConfirm()
   const { toast } = useToast()
+  const { t } = useTranslations()
 
   // Fire the inverse action without any further confirm or undo
   // toast. Used by the undo button on the success toast: the operator
@@ -1345,11 +1353,14 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
     // their own dedicated modal.
     if (action === 'unpublish') {
       const ok = await confirm({
-        title: `Unpublish ${selectedIds.length} listing${selectedIds.length === 1 ? '' : 's'}?`,
-        description:
-          'These listings will go offline on their marketplaces. ' +
-          'You can republish from the success banner within 30 seconds.',
-        confirmLabel: 'Unpublish',
+        title: t(
+          selectedIds.length === 1
+            ? 'listings.bulk.unpublishConfirm.title'
+            : 'listings.bulk.unpublishConfirm.titlePlural',
+          { count: selectedIds.length },
+        ),
+        description: t('listings.bulk.unpublishConfirm.description'),
+        confirmLabel: t('listings.bulk.unpublish'),
         tone: 'danger',
       })
       if (!ok) return
@@ -1368,7 +1379,7 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Bulk action failed')
       const jobId = data.jobId
-      setJobStatus('Processing…')
+      setJobStatus(t('listings.bulk.processing'))
 
       // Poll. S.0.5 / M-10 — track whether we exited via a terminal
       // status vs. the 60-second cap; the latter used to silently leave
@@ -1385,7 +1396,7 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
         if (!j.ok) break
         const job = await j.json()
         lastJob = job
-        setJobStatus(`Processing ${job.processed}/${job.total}…`)
+        setJobStatus(t('listings.bulk.processingProgress', { processed: job.processed, total: job.total }))
         if (
           job.status === 'COMPLETED' ||
           job.status === 'FAILED' ||
@@ -1393,7 +1404,7 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
         ) {
           reachedTerminal = true
           succeededCount = job.succeeded
-          setJobStatus(`Done — ${job.succeeded} succeeded, ${job.failed} failed`)
+          setJobStatus(t('listings.bulk.done', { succeeded: job.succeeded, failed: job.failed }))
           break
         }
       }
@@ -1401,7 +1412,7 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
         const progress = lastJob
           ? `${lastJob.processed}/${lastJob.total} processed`
           : 'no progress visible'
-        setJobStatus(`Job did not complete in 60s — still running (${progress}). Check back shortly.`)
+        setJobStatus(t('listings.bulk.timeout', { progress }))
       }
       // Phase 10 — broadcast so other open pages refresh. Bulk listing
       // actions (publish, unpublish, resync, set-price, follow-master)
@@ -1460,16 +1471,16 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
             {selectedIds.length} selected
           </span>
           <div className="h-4 w-px bg-slate-200" />
-          <button onClick={() => runAction('publish')} disabled={busy} className="h-7 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 disabled:opacity-50 inline-flex items-center gap-1.5"><Eye size={12} /> Publish</button>
-          <button onClick={() => runAction('unpublish')} disabled={busy} className="h-7 px-3 text-base bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-50 inline-flex items-center gap-1.5"><EyeOff size={12} /> Unpublish</button>
-          <button onClick={() => runAction('resync')} disabled={busy} className="h-7 px-3 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 disabled:opacity-50 inline-flex items-center gap-1.5"><RefreshCw size={12} /> Resync</button>
+          <button onClick={() => runAction('publish')} disabled={busy} className="h-7 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 disabled:opacity-50 inline-flex items-center gap-1.5"><Eye size={12} /> {t('listings.bulk.publish')}</button>
+          <button onClick={() => runAction('unpublish')} disabled={busy} className="h-7 px-3 text-base bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-50 inline-flex items-center gap-1.5"><EyeOff size={12} /> {t('listings.bulk.unpublish')}</button>
+          <button onClick={() => runAction('resync')} disabled={busy} className="h-7 px-3 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 disabled:opacity-50 inline-flex items-center gap-1.5"><RefreshCw size={12} /> {t('listings.bulk.resync')}</button>
           <button
             onClick={() => setSetPriceOpen(true)}
             disabled={busy}
             className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
-          ><Tag size={12} /> Set price</button>
-          <button onClick={() => runAction('follow-master')} disabled={busy} className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"><Link2 size={12} /> Follow master</button>
-          <button onClick={() => runAction('unfollow-master')} disabled={busy} className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5">Unfollow master</button>
+          ><Tag size={12} /> {t('listings.bulk.setPrice')}</button>
+          <button onClick={() => runAction('follow-master')} disabled={busy} className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"><Link2 size={12} /> {t('listings.bulk.followMaster')}</button>
+          <button onClick={() => runAction('unfollow-master')} disabled={busy} className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5">{t('listings.bulk.unfollowMaster')}</button>
           {jobStatus && <span className="text-sm text-slate-500 ml-2">{jobStatus}</span>}
           <button onClick={onClear} disabled={busy} className="ml-auto h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded disabled:opacity-50">
             <X size={14} />
@@ -1956,23 +1967,27 @@ function HealthBucketRow({
 type Coverage = 'everywhere' | 'missing-amazon' | 'missing-ebay' | 'single-channel' | 'uncovered'
 type MatrixSort = 'updated' | 'coverage-gaps' | 'most-channels' | 'name'
 
-const COVERAGE_OPTIONS: Array<{ value: Coverage | ''; label: string }> = [
-  { value: '', label: 'All products' },
-  { value: 'everywhere', label: 'Listed everywhere' },
-  { value: 'missing-amazon', label: 'Missing on Amazon' },
-  { value: 'missing-ebay', label: 'Missing on eBay' },
-  { value: 'single-channel', label: 'Single channel only' },
-  { value: 'uncovered', label: 'Uncovered (0 channels)' },
+// C.12 — labels resolved at render time via t() inside MatrixLens; this
+// array carries the keys (not literal labels) so locale changes pick
+// up without a re-mount.
+const COVERAGE_OPTIONS: Array<{ value: Coverage | ''; labelKey: string }> = [
+  { value: '', labelKey: 'listings.matrix.coverage.all' },
+  { value: 'everywhere', labelKey: 'listings.matrix.coverage.everywhere' },
+  { value: 'missing-amazon', labelKey: 'listings.matrix.coverage.missingAmazon' },
+  { value: 'missing-ebay', labelKey: 'listings.matrix.coverage.missingEbay' },
+  { value: 'single-channel', labelKey: 'listings.matrix.coverage.singleChannel' },
+  { value: 'uncovered', labelKey: 'listings.matrix.coverage.uncovered' },
 ]
 
-const SORT_OPTIONS: Array<{ value: MatrixSort; label: string }> = [
-  { value: 'updated', label: 'Recently updated' },
-  { value: 'coverage-gaps', label: 'Most coverage gaps' },
-  { value: 'most-channels', label: 'Most channels' },
-  { value: 'name', label: 'Name (A→Z)' },
+const SORT_OPTIONS: Array<{ value: MatrixSort; labelKey: string }> = [
+  { value: 'updated', labelKey: 'listings.matrix.sort.updated' },
+  { value: 'coverage-gaps', labelKey: 'listings.matrix.sort.coverageGaps' },
+  { value: 'most-channels', labelKey: 'listings.matrix.sort.mostChannels' },
+  { value: 'name', labelKey: 'listings.matrix.sort.name' },
 ]
 
 function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marketplace[] }) {
+  const { t } = useTranslations()
   const [coverage, setCoverage] = useState<Coverage | ''>('')
   const [sortBy, setSortBy] = useState<MatrixSort>('updated')
   const [drawerOpen, setDrawerOpen] = useState<string | null>(null)
@@ -2070,43 +2085,49 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1.5">
           <Filter size={14} className="text-slate-500" />
-          <span className="text-sm uppercase tracking-wider text-slate-500">Coverage:</span>
+          <span className="text-sm uppercase tracking-wider text-slate-500">{t('listings.matrix.coverage')}</span>
           <select
             value={coverage}
             onChange={(e) => setCoverage(e.target.value as Coverage | '')}
             className="h-8 px-2 text-base bg-white border border-slate-200 rounded text-slate-700 hover:border-slate-300 focus:outline-none focus:border-blue-500"
-            aria-label="Filter by channel coverage"
+            aria-label={t('listings.matrix.coverage')}
           >
             {COVERAGE_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
+              <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
             ))}
           </select>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="text-sm uppercase tracking-wider text-slate-500">Sort:</span>
+          <span className="text-sm uppercase tracking-wider text-slate-500">{t('listings.matrix.sort')}</span>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as MatrixSort)}
             className="h-8 px-2 text-base bg-white border border-slate-200 rounded text-slate-700 hover:border-slate-300 focus:outline-none focus:border-blue-500"
-            aria-label="Sort products"
+            aria-label={t('listings.matrix.sort')}
           >
             {SORT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
+              <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
             ))}
           </select>
         </div>
         <span className="text-sm text-slate-500 ml-auto">
           {data.totalMatched != null && data.totalMatched > data.count
-            ? `Showing ${data.count} of ${data.totalMatched} products`
-            : `${data.count} product${data.count === 1 ? '' : 's'}`}
+            ? t('listings.matrix.showingOf', { count: data.count, total: data.totalMatched })
+            : t(data.count === 1 ? 'listings.matrix.productsCount' : 'listings.matrix.productsCountPlural', { count: data.count })}
         </span>
       </div>
 
       {data.products.length === 0 ? (
         <EmptyState
           icon={LayoutGrid}
-          title="No matches"
-          description={coverage ? `No products match "${COVERAGE_OPTIONS.find((o) => o.value === coverage)?.label}".` : 'No products available.'}
+          title={t('listings.matrix.empty.title')}
+          description={
+            coverage
+              ? t('listings.matrix.empty.descriptionFiltered', {
+                  label: t(COVERAGE_OPTIONS.find((o) => o.value === coverage)?.labelKey ?? 'listings.matrix.coverage.all'),
+                })
+              : t('listings.matrix.empty.description')
+          }
         />
       ) : (
         <Card noPadding>
@@ -3639,6 +3660,7 @@ function ChannelsTab({
   listing: any
   onSwitchListing: (id: string) => void
 }) {
+  const { t } = useTranslations()
   const companions = (listing.companions ?? []) as any[]
   // Master reference — anchored to the product, identical across
   // every card's drift math. Falls back to product-level fields when
@@ -3655,11 +3677,16 @@ function ChannelsTab({
       listing.masterQuantity ??
       (listing.product?.totalStock ?? null),
   }
+  const totalCombos = companions.length + 1
   return (
     <div className="space-y-3">
       <div className="text-sm text-slate-600">
-        This product is on <span className="font-semibold">{companions.length + 1}</span> channel/marketplace combo{companions.length === 0 ? '' : 's'}.
-        {' '}Each card below shows drift vs master.
+        {t(
+          totalCombos === 1
+            ? 'listings.drawer.combosCount'
+            : 'listings.drawer.combosCountPlural',
+          { count: totalCombos },
+        )}
       </div>
 
       {/* Master reference card */}
@@ -3708,13 +3735,13 @@ function ChannelsTab({
 
       {companions.length === 0 && (
         <div className="border border-dashed border-slate-300 rounded-md py-6 text-center text-sm text-slate-500">
-          No other channel listings for this product yet.
+          {t('listings.drawer.empty')}
           <div className="mt-2">
             <Link
               href={`/products/${listing.productId}/list-wizard`}
               className="inline-flex items-center gap-1.5 text-blue-600 hover:underline"
             >
-              <Plus size={11} /> List on another channel
+              <Plus size={11} /> {t('listings.drawer.listOnAnother')}
             </Link>
           </div>
         </div>
@@ -3732,10 +3759,11 @@ function ComparisonMasterCard({
 }: {
   master: { title: string | null; price: number | null; quantity: number | null }
 }) {
+  const { t } = useTranslations()
   return (
     <div className="flex items-start gap-3 p-2.5 border border-slate-300 rounded-md bg-slate-50">
       <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border border-slate-300 rounded bg-white text-slate-700 flex-shrink-0">
-        Master
+        {t('listings.drawer.master')}
       </span>
       <div className="flex-1 min-w-0">
         {master.title && (
@@ -3748,7 +3776,7 @@ function ComparisonMasterCard({
           {master.quantity != null && <span>Stock {master.quantity}</span>}
         </div>
       </div>
-      <div className="text-xs text-slate-400 flex-shrink-0">reference</div>
+      <div className="text-xs text-slate-400 flex-shrink-0">{t('listings.matrix.reference')}</div>
     </div>
   )
 }
@@ -3788,6 +3816,7 @@ function CompanionCard({
   onClick?: () => void
   isCurrent?: boolean
 }) {
+  const { t } = useTranslations()
   // C.10 — drift computations + override surfacing. Logic is the same
   // shape as MatrixCell's: divergence from master regardless of the
   // followMaster flags (a "follows master" cell with stale value IS
@@ -3830,9 +3859,9 @@ function CompanionCard({
             <span className="text-slate-700 inline-flex items-center gap-1">
               {Number(price).toFixed(2)}
               {priceDrift != null && <DriftBadge delta={priceDrift} unit="price" />}
-              {hasPriceOverride && <OverridePill label="override" />}
+              {hasPriceOverride && <OverridePill labelKey="listings.drawer.override" />}
               {!hasPriceOverride && followMasterPrice === false && (
-                <OverridePill label="unfollowed" tone="amber" />
+                <OverridePill labelKey="listings.drawer.unfollowed" tone="amber" />
               )}
             </span>
           )}
@@ -3840,11 +3869,11 @@ function CompanionCard({
             <span className="text-slate-500 inline-flex items-center gap-1">
               {quantity} pcs
               {qtyDrift != null && <DriftBadge delta={qtyDrift} unit="qty" />}
-              {hasQuantityOverride && <OverridePill label="override" />}
+              {hasQuantityOverride && <OverridePill labelKey="listings.drawer.override" />}
             </span>
           )}
           {isCurrent ? (
-            <Badge variant="info" size="sm">Current</Badge>
+            <Badge variant="info" size="sm">{t('listings.drawer.current')}</Badge>
           ) : (
             <ArrowUpRight size={12} className="text-slate-400" />
           )}
@@ -3852,16 +3881,16 @@ function CompanionCard({
       </div>
       {(truncatedTitle || titleDrift || hasTitleOverride) && (
         <div className="mt-1.5 flex items-center gap-2 text-xs text-slate-500 flex-wrap">
-          <span className="text-slate-400 uppercase tracking-wider">Title</span>
+          <span className="text-slate-400 uppercase tracking-wider">{t('listings.drawer.titleLabel')}</span>
           <span className="truncate flex-1 min-w-0" title={title ?? undefined}>
             {truncatedTitle ?? '—'}
           </span>
           {titleDrift && (
             <span className="inline-flex items-center px-1 rounded border bg-amber-50 border-amber-200 text-amber-700">
-              ⚠ differs from master
+              ⚠ {t('listings.drawer.titleDiffers')}
             </span>
           )}
-          {hasTitleOverride && <OverridePill label="override" />}
+          {hasTitleOverride && <OverridePill labelKey="listings.drawer.override" />}
         </div>
       )}
     </div>
@@ -3878,7 +3907,7 @@ function CompanionCard({
           rel="noopener noreferrer"
           className="text-xs text-blue-600 hover:underline ml-3 mt-0.5 inline-flex items-center gap-1"
         >
-          <ExternalLink size={9} /> Open on marketplace
+          <ExternalLink size={9} /> {t('listings.drawer.openOnMarketplace')}
         </a>
       )}
     </div>
@@ -3891,12 +3920,14 @@ function CompanionCard({
 // explicitly set this value to be different (or is unfollowing the
 // master link)." Both can co-occur — that's expected.
 function OverridePill({
-  label,
+  labelKey,
   tone = 'blue',
 }: {
-  label: string
+  labelKey: string
   tone?: 'blue' | 'amber'
 }) {
+  const { t } = useTranslations()
+  const label = t(labelKey)
   const toneClass =
     tone === 'amber'
       ? 'bg-amber-50 border-amber-200 text-amber-700'
@@ -3945,6 +3976,7 @@ function SavedViewsButton({
   onSetDefault: (id: string) => void
 }) {
   const askConfirm = useConfirm()
+  const { t } = useTranslations()
   const [saveMode, setSaveMode] = useState(false)
   const [name, setName] = useState('')
   const [isDefault, setIsDefault] = useState(false)
@@ -3971,7 +4003,7 @@ function SavedViewsButton({
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <Bookmark size={12} /> Views <ChevronDown size={12} />
+        <Bookmark size={12} /> {t('listings.savedViews.button')} <ChevronDown size={12} />
       </button>
       {open && (
         <div
@@ -3981,11 +4013,11 @@ function SavedViewsButton({
           {!saveMode ? (
             <>
               <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1.5">
-                Saved views
+                {t('listings.savedViews.heading')}
               </div>
               {views.length === 0 ? (
                 <div className="px-2 py-3 text-base text-slate-400 text-center">
-                  No saved views yet
+                  {t('listings.savedViews.empty')}
                 </div>
               ) : (
                 <ul className="space-y-0.5">
@@ -4017,14 +4049,14 @@ function SavedViewsButton({
                       <button
                         onClick={async () => {
                           const ok = await askConfirm({
-                            title: `Delete view "${v.name}"?`,
-                            description: 'This view will be removed permanently.',
-                            confirmLabel: 'Delete',
+                            title: t('listings.savedViews.deleteConfirm.title', { name: v.name }),
+                            description: t('listings.savedViews.deleteConfirm.description'),
+                            confirmLabel: t('common.delete'),
                             tone: 'danger',
                           })
                           if (ok) onDelete(v.id)
                         }}
-                        title="Delete"
+                        title={t('common.delete')}
                         aria-label={`Delete saved view "${v.name}"`}
                         className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-rose-600"
                       >
@@ -4038,18 +4070,18 @@ function SavedViewsButton({
                 onClick={() => setSaveMode(true)}
                 className="w-full mt-1 h-8 px-2 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center justify-center gap-1.5"
               >
-                <BookmarkPlus size={12} /> Save current view
+                <BookmarkPlus size={12} /> {t('listings.savedViews.saveCurrent')}
               </button>
             </>
           ) : (
             <div className="space-y-2">
               <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1">
-                Save current view
+                {t('listings.savedViews.saveCurrent')}
               </div>
               <input
                 autoFocus
                 type="text"
-                placeholder="View name"
+                placeholder={t('listings.savedViews.namePlaceholder')}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full h-8 px-2 text-md border border-slate-200 rounded"
@@ -4060,7 +4092,7 @@ function SavedViewsButton({
                   checked={isDefault}
                   onChange={(e) => setIsDefault(e.target.checked)}
                 />
-                Use as default on page load
+                {t('listings.savedViews.useAsDefault')}
               </label>
               <div className="flex items-center gap-2">
                 <button
@@ -4076,7 +4108,7 @@ function SavedViewsButton({
                   }}
                   className="flex-1 h-8 text-base bg-slate-900 text-white rounded hover:bg-slate-800"
                 >
-                  Save
+                  {t('common.save')}
                 </button>
                 <button
                   onClick={() => {
@@ -4085,7 +4117,7 @@ function SavedViewsButton({
                   }}
                   className="flex-1 h-8 text-base border border-slate-200 rounded hover:bg-slate-50"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
               </div>
             </div>
