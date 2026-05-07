@@ -33,6 +33,7 @@ import {
   emitInvalidation,
   useInvalidationChannel,
 } from '@/lib/sync/invalidation-channel'
+import { useListingEvents } from '@/lib/sync/use-listing-events'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -370,6 +371,12 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
 
   const visible = useMemo(() => ALL_COLUMNS.filter((c) => visibleColumns.includes(c.key)), [visibleColumns])
 
+  // S.4 — open the SSE stream for the lifetime of this workspace. The
+  // hook self-dispatches every event into the invalidation channel, so
+  // the grid / matrix / drawer just refresh as if a 200ms polling
+  // cycle had fired. `connected` powers the live indicator below.
+  const { connected: sseConnected } = useListingEvents()
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -385,6 +392,27 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
           onChange={(next) => updateUrl({ lens: next === 'grid' ? undefined : next, page: undefined })}
         />
         <div className="ml-auto flex items-center gap-3">
+          {/* S.4 — live indicator. Green pulse = SSE connected (sub-200ms updates). */}
+          <Tooltip
+            content={
+              sseConnected
+                ? 'Live updates connected. Sync events stream within 200ms.'
+                : 'Live stream disconnected — falling back to 30s polling.'
+            }
+          >
+            <span
+              className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-500"
+              aria-label={sseConnected ? 'Live updates connected' : 'Live stream disconnected'}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  sseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'
+                }`}
+                aria-hidden
+              />
+              {sseConnected ? 'Live' : 'Polling'}
+            </span>
+          </Tooltip>
           {facets && (
             <div className="flex items-center gap-3 text-base text-slate-500">
               <span><span className="font-semibold text-slate-700 tabular-nums">{facets.total}</span> total</span>
@@ -3052,6 +3080,24 @@ function SyncTab({
   resyncing: boolean
   onResync: () => Promise<void>
 }) {
+  // S.4 — real history from the SyncAttempt table. Refreshes via
+  // usePolledList so SSE-driven invalidation events update the
+  // timeline without a manual refetch.
+  const historyUrl = useMemo(
+    () => `/api/listings/${listing.id}/sync-history?limit=25`,
+    [listing.id],
+  )
+  const { data: historyData, loading: historyLoading } = usePolledList<{
+    attempts: Array<{ id: string; attemptedAt: string; status: string; source: string; durationMs: number | null; error: string | null }>
+    count: number
+  }>({
+    url: historyUrl,
+    intervalMs: 30_000,
+    invalidationTypes: ['listing.updated'],
+  })
+
+  const attempts = historyData?.attempts ?? []
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 p-3 border border-slate-200 rounded-md bg-slate-50">
@@ -3093,32 +3139,48 @@ function SyncTab({
         </div>
       )}
 
-      {/* Real sync history requires a SyncAttempt table that doesn't
-          exist yet — TECH_DEBT. For now, surface what we know from the
-          listing's own fields as a single-entry timeline. */}
       <div>
-        <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">Recent activity</div>
-        <div className="border-l-2 border-slate-200 pl-3 space-y-3">
-          {listing.lastSyncedAt && (
-            <TimelineEntry
-              status={listing.lastSyncStatus ?? 'UNKNOWN'}
-              when={listing.lastSyncedAt}
-              detail={
-                listing.lastSyncStatus === 'SUCCESS'
-                  ? 'Successfully pulled latest state from channel'
-                  : listing.lastSyncError ?? 'Sync attempt'
-              }
-            />
+        <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">
+          Sync history
+          {historyData && (
+            <span className="ml-2 normal-case font-normal text-slate-400">
+              {historyData.count} attempt{historyData.count === 1 ? '' : 's'}
+            </span>
           )}
-          <TimelineEntry
-            status="CREATED"
-            when={listing.createdAt}
-            detail={`Listing record created (version ${listing.version})`}
-          />
         </div>
-        <div className="text-xs text-slate-400 mt-3 italic">
-          Full sync history requires the SyncAttempt audit table — coming with S.4 inbound queue.
-        </div>
+        {historyLoading && attempts.length === 0 ? (
+          <Skeleton variant="text" lines={3} />
+        ) : attempts.length === 0 ? (
+          <div className="border-l-2 border-slate-200 pl-3 space-y-3">
+            <TimelineEntry
+              status="CREATED"
+              when={listing.createdAt}
+              detail={`Listing record created (version ${listing.version}). No sync attempts yet.`}
+            />
+          </div>
+        ) : (
+          <div className="border-l-2 border-slate-200 pl-3 space-y-3">
+            {attempts.map((a) => (
+              <TimelineEntry
+                key={a.id}
+                status={a.status}
+                when={a.attemptedAt}
+                detail={
+                  a.status === 'SUCCESS'
+                    ? `Synced successfully${a.durationMs != null ? ` in ${a.durationMs}ms` : ''} (${a.source})`
+                    : a.status === 'IN_PROGRESS'
+                      ? `Sync in progress (${a.source})`
+                      : a.error ?? `${a.status} (${a.source})`
+                }
+              />
+            ))}
+            <TimelineEntry
+              status="CREATED"
+              when={listing.createdAt}
+              detail={`Listing record created (version ${listing.version})`}
+            />
+          </div>
+        )}
       </div>
     </div>
   )

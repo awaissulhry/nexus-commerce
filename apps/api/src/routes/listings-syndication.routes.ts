@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
 import { computeHealth, aggregateIssuesByCategory } from '../services/listings/health.service.js'
+import { publishListingEvent, subscribeListingEvents } from '../services/listing-events.service.js'
 import { listEtag, matches } from '../utils/list-etag.js'
 
 // ─────────────────────────────────────────────────────────────────────
@@ -973,11 +974,99 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
 
       data.version = { increment: 1 }
       const updated = await prisma.channelListing.update({ where: { id }, data })
+      // S.4 — broadcast so other tabs / cells refresh within 200ms.
+      publishListingEvent({ type: 'listing.updated', listingId: id, reason: 'patch', ts: Date.now() })
       return { ok: true, listing: { id: updated.id, version: updated.version } }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[listings/:id PATCH] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
+  })
+
+  // ─────────────────────────────────────────────────────────────────
+  // GET /api/listings/:id/sync-history — paginated sync timeline
+  //
+  // S.4 — backed by the SyncAttempt audit table. Drawer's Sync tab
+  // renders this as a real timeline (replaces the synthetic 2-entry
+  // version that S.2 shipped as a placeholder).
+  // ─────────────────────────────────────────────────────────────────
+  fastify.get('/listings/:id/sync-history', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const q = request.query as Record<string, string | undefined>
+      const limit = Math.min(100, Math.max(1, Math.floor(safeNum(q.limit) ?? 25)))
+
+      const exists = await prisma.channelListing.findUnique({
+        where: { id },
+        select: { id: true },
+      })
+      if (!exists) return reply.code(404).send({ error: 'Listing not found' })
+
+      const attempts = await prisma.syncAttempt.findMany({
+        where: { listingId: id },
+        orderBy: { attemptedAt: 'desc' },
+        take: limit,
+      })
+
+      return {
+        attempts: attempts.map((a) => ({
+          id: a.id,
+          attemptedAt: a.attemptedAt,
+          status: a.status,
+          source: a.source,
+          durationMs: a.durationMs,
+          error: a.error,
+        })),
+        count: attempts.length,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[listings/:id/sync-history] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ─────────────────────────────────────────────────────────────────
+  // GET /api/listings/events — SSE stream of listing events
+  //
+  // S.4 — mirrors /api/fulfillment/inbound/events. Long-lived GET;
+  // single open connection per client. 25s heartbeat keeps middleware
+  // (Railway's Envoy, Cloudflare) from closing idle connections.
+  // EventSource auto-reconnects on transient drops.
+  // ─────────────────────────────────────────────────────────────────
+  fastify.get('/listings/events', async (request, reply) => {
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    })
+    reply.raw.write(
+      `event: ping\ndata: ${JSON.stringify({ ts: Date.now(), connected: true })}\n\n`,
+    )
+
+    const send = (event: any) => {
+      try {
+        reply.raw.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+      } catch {
+        // Connection dead — cleanup runs in close handler.
+      }
+    }
+
+    const unsubscribe = subscribeListingEvents(send)
+    const heartbeat = setInterval(() => {
+      try {
+        reply.raw.write(`: heartbeat ${Date.now()}\n\n`)
+      } catch {
+        // ignore
+      }
+    }, 25_000)
+
+    request.raw.on('close', () => {
+      clearInterval(heartbeat)
+      unsubscribe()
+    })
+
+    await new Promise(() => {})
   })
 
   // ─────────────────────────────────────────────────────────────────
@@ -1024,6 +1113,21 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
     const { pullListingFromChannel, ChannelNotSupportedError, ResyncTimeoutError } =
       await import('../services/listings/resync.service.js')
 
+    // S.4 — open a SyncAttempt row up-front so the timeline records the
+    // attempt even if the channel call hangs / crashes before we can
+    // write a terminal status. We update this row at the end with the
+    // real outcome.
+    const attemptStartedAt = Date.now()
+    const source = ((request.query as any)?.source as string) ?? 'manual'
+    const attempt = await prisma.syncAttempt.create({
+      data: {
+        listingId: id,
+        status: 'IN_PROGRESS',
+        source,
+      },
+      select: { id: true },
+    })
+
     // Mark in-flight first so concurrent polls / drawer reopens see
     // SYNCING rather than the stale prior status.
     await prisma.channelListing.update({
@@ -1033,6 +1137,9 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         lastSyncStatus: 'PENDING',
       },
     })
+
+    // Notify SSE subscribers so cells / drawers flip to amber instantly.
+    publishListingEvent({ type: 'listing.syncing', listingId: id, ts: Date.now() })
 
     try {
       const remote = await pullListingFromChannel(
@@ -1044,6 +1151,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         { timeoutMs: 10_000 },
       )
 
+      const durationMs = Date.now() - attemptStartedAt
       const updated = await prisma.channelListing.update({
         where: { id },
         data: {
@@ -1065,8 +1173,20 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           version: { increment: 1 },
         },
       })
+      await prisma.syncAttempt.update({
+        where: { id: attempt.id },
+        data: { status: 'SUCCESS', durationMs },
+      })
+      publishListingEvent({
+        type: 'listing.synced',
+        listingId: id,
+        status: 'SUCCESS',
+        durationMs,
+        ts: Date.now(),
+      })
       return { ok: true, listing: updated }
     } catch (error: any) {
+      const durationMs = Date.now() - attemptStartedAt
       // Channel adapter not implemented for this channel — revert the
       // pre-call SYNCING marker and surface 501 cleanly. Don't write
       // FAILED; this isn't the listing's fault.
@@ -1074,6 +1194,17 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         await prisma.channelListing.update({
           where: { id },
           data: { syncStatus: 'IDLE', lastSyncStatus: null },
+        })
+        await prisma.syncAttempt.update({
+          where: { id: attempt.id },
+          data: { status: 'NOT_IMPLEMENTED', durationMs, error: error.message },
+        })
+        publishListingEvent({
+          type: 'listing.synced',
+          listingId: id,
+          status: 'NOT_IMPLEMENTED',
+          durationMs,
+          ts: Date.now(),
         })
         return reply.code(501).send({
           error: 'NOT_IMPLEMENTED',
@@ -1090,6 +1221,21 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           lastSyncError: error?.message ?? String(error),
           syncRetryCount: { increment: 1 },
         },
+      })
+      await prisma.syncAttempt.update({
+        where: { id: attempt.id },
+        data: {
+          status: isTimeout ? 'TIMEOUT' : 'FAILED',
+          durationMs,
+          error: error?.message ?? String(error),
+        },
+      })
+      publishListingEvent({
+        type: 'listing.synced',
+        listingId: id,
+        status: isTimeout ? 'TIMEOUT' : 'FAILED',
+        durationMs,
+        ts: Date.now(),
       })
       fastify.log.error({ err: error, listingId: id }, '[listings/:id/resync] failed')
       return reply.code(isTimeout ? 504 : 502).send({
@@ -1254,6 +1400,25 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
               // A flush failure shouldn't kill the worker — log and continue.
               fastify.log.warn({ err: e, jobId }, '[listings/bulk-action] progress flush failed')
             })
+
+          // S.4 — emit per-item progress so subscribers see the bar move
+          // without a polling round-trip. Also emit listing.updated for
+          // the touched id so individual cells refresh in real time.
+          publishListingEvent({
+            type: 'bulk.progress',
+            jobId,
+            processed: processedTotal,
+            total: ids.length,
+            succeeded,
+            failed,
+            ts: Date.now(),
+          })
+          publishListingEvent({
+            type: 'listing.updated',
+            listingId: id,
+            reason: `bulk:${action}`,
+            ts: Date.now(),
+          })
         }
 
         const finalStatus =
@@ -1270,6 +1435,12 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
             completedAt: new Date(),
             progressPercent: 100,
           },
+        })
+        publishListingEvent({
+          type: 'bulk.completed',
+          jobId,
+          status: finalStatus,
+          ts: Date.now(),
         })
       })().catch(async (e) => {
         fastify.log.error({ err: e, jobId }, '[listings/bulk-action] worker crashed')

@@ -577,6 +577,10 @@ model ChannelListing {
   images            ChannelListingImage[]
   outboundSyncQueue OutboundSyncQueue[]
   overrideHistory   ChannelListingOverride[]
+  // S.4 — per-listing sync attempt audit trail. Each manual / cron /
+  // bulk / webhook resync writes a row with status, duration, error.
+  // The drawer's Sync tab renders these as a real timeline.
+  syncAttempts      SyncAttempt[]
 
   // NN.1 — optimistic concurrency on per-channel listing edits.
   version Int @default(1)
@@ -662,6 +666,42 @@ model ChannelListingOverride {
   @@index([channelListingId])
   @@index([fieldName])
   @@index([isActive])
+}
+
+// ── S.4: SyncAttempt — per-listing sync audit ──────────────────────────────
+//
+// One row per sync attempt against a ChannelListing. The drawer's Sync
+// tab renders these as a timeline; HealthLens uses them to compute
+// recent-attempt success rates. Single-source-of-truth for "what
+// happened, when, and why."
+//
+// Source vocabulary:
+//   manual     — user clicked Sync now in the drawer / cell kebab
+//   bulk       — bulk-action endpoint resync action
+//   cron       — scheduled drift detection (S.4b — not yet running)
+//   webhook    — channel pushed a change (S.4c — not yet wired)
+//
+// Status vocabulary mirrors the resync route's transitions exactly so
+// rows can be written before AND after the channel call.
+
+model SyncAttempt {
+  id String @id @default(cuid())
+
+  channelListing   ChannelListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listingId        String
+
+  attemptedAt DateTime @default(now())
+  status      String // PENDING | IN_PROGRESS | SUCCESS | FAILED | TIMEOUT | NOT_IMPLEMENTED
+  source      String // manual | bulk | cron | webhook
+  durationMs  Int?
+  error       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([listingId, attemptedAt])
+  @@index([status])
+  @@index([source])
 }
 
 // ── PHASE 9: Offer (Fulfillment-Specific SKU & Pricing) ──────────────────
