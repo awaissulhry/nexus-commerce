@@ -1114,6 +1114,54 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── O.32: SSE event stream ──────────────────────────────────────────
+  // GET /api/fulfillment/outbound/events — long-lived text/event-stream
+  // connection that pushes shipment events to subscribed browsers.
+  // Hooked from the Sendcloud webhook (O.7) + tracking-pushback retry
+  // job (O.12) so a real-world transition (Sendcloud-reported delivery,
+  // channel ack from Amazon/eBay/Woo) auto-refreshes every open Pending
+  // tab within ~200ms of the server-side write.
+  //
+  // Pattern matches /api/listings/events (S.4): heartbeat every 25s
+  // keeps the connection alive past most proxy idle timeouts; client
+  // EventSource auto-reconnects on transient drops.
+  fastify.get('/fulfillment/outbound/events', async (request, reply) => {
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    })
+    reply.raw.write(
+      `event: ping\ndata: ${JSON.stringify({ ts: Date.now(), connected: true })}\n\n`,
+    )
+
+    const { subscribeOutboundEvents } = await import('../services/outbound-events.service.js')
+    const send = (event: any) => {
+      try {
+        reply.raw.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+      } catch {
+        // Connection dead — cleanup runs in the close handler.
+      }
+    }
+
+    const unsubscribe = subscribeOutboundEvents(send)
+    const heartbeat = setInterval(() => {
+      try {
+        reply.raw.write(`: heartbeat ${Date.now()}\n\n`)
+      } catch {
+        // ignore
+      }
+    }, 25_000)
+
+    request.raw.on('close', () => {
+      clearInterval(heartbeat)
+      unsubscribe()
+    })
+
+    await new Promise(() => {})
+  })
+
   // ── O.31: Outbound analytics ────────────────────────────────────────
   // GET /api/fulfillment/outbound/analytics?days=30
   // Aggregates: orders shipped, time-to-ship percentiles (median /

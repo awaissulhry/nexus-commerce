@@ -31,6 +31,7 @@
 import cron from 'node-cron'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { publishOutboundEvent } from '../services/outbound-events.service.js'
 import {
   submitShippingConfirmation as amazonSubmit,
   buildConfirmationInputForShipment as amazonBuild,
@@ -267,6 +268,13 @@ async function processOne(rowId: string): Promise<'SUCCESS' | 'FAILED' | 'DEAD_L
           data: { trackingPushedAt: new Date(), trackingPushError: null },
         }),
       ])
+      // O.32: push success so the open drawer's "tracking pushed" pill
+      // updates without a refresh.
+      publishOutboundEvent({
+        type: 'shipment.updated',
+        shipmentId: row.shipmentId,
+        ts: Date.now(),
+      })
       return 'SUCCESS'
     }
 

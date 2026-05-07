@@ -29,6 +29,7 @@
 import type { FastifyInstance } from 'fastify'
 import crypto from 'node:crypto'
 import prisma from '../db.js'
+import { publishOutboundEvent } from '../services/outbound-events.service.js'
 
 // ── Sendcloud parcel-status code → our normalized TrackingEvent code ──
 // Subset; full list at https://api.sendcloud.dev. Anything not in the
@@ -183,6 +184,14 @@ export async function sendcloudWebhookRoutes(app: FastifyInstance) {
       },
     })
 
+    // O.32: push to SSE subscribers so open browsers refresh in real time.
+    publishOutboundEvent({
+      type: 'tracking.event',
+      shipmentId: shipment.id,
+      code: mapped.trackingCode,
+      ts: Date.now(),
+    })
+
     // Advance Shipment.status when terminal. Don't downgrade — if the
     // shipment is already DELIVERED, ignore an IN_TRANSIT event arriving
     // out of order (Sendcloud's history-replay can produce these).
@@ -195,6 +204,13 @@ export async function sendcloudWebhookRoutes(app: FastifyInstance) {
       const currentRank = ORDER[shipment.status] ?? -1
       const newRank = ORDER[newStatus] ?? -1
       if (newRank > currentRank) {
+        // O.32: push the status transition.
+        publishOutboundEvent({
+          type: 'shipment.updated',
+          shipmentId: shipment.id,
+          status: newStatus,
+          ts: Date.now(),
+        })
         const updateData: any = {
           status: newStatus,
           version: { increment: 1 },
