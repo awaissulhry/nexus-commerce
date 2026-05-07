@@ -1345,6 +1345,108 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── O.40: bulk hold + bulk release ─────────────────────────────────
+  // Power-user paths for the holds queue. Same eligibility gates as
+  // the single endpoints, applied per-shipment with a per-row outcome
+  // returned to the caller.
+  fastify.post('/fulfillment/shipments/bulk-hold', async (request, reply) => {
+    try {
+      const body = request.body as { shipmentIds?: string[]; reason?: string }
+      const ids = Array.isArray(body.shipmentIds) ? body.shipmentIds : []
+      if (ids.length === 0) return reply.code(400).send({ error: 'shipmentIds[] required' })
+      if (ids.length > 200) return reply.code(400).send({ error: 'Max 200 shipments per call' })
+      const reason = body.reason?.trim() || 'Bulk-held by operator'
+      const heldAt = new Date()
+
+      const before = await prisma.shipment.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, status: true },
+      })
+      const eligibleIds = before
+        .filter((s) => !['LABEL_PRINTED', 'SHIPPED', 'IN_TRANSIT', 'DELIVERED', 'ON_HOLD'].includes(s.status))
+        .map((s) => s.id)
+
+      if (eligibleIds.length === 0) {
+        return { held: 0, skipped: ids.length }
+      }
+
+      const result = await prisma.shipment.updateMany({
+        where: { id: { in: eligibleIds } },
+        data: { status: 'ON_HOLD' as any, heldAt, heldReason: reason, version: { increment: 1 } },
+      })
+
+      // Bus + audit (per-row).
+      const { publishOutboundEvent } = await import('../services/outbound-events.service.js')
+      const { auditLogService } = await import('../services/audit-log.service.js')
+      for (const sid of eligibleIds) {
+        publishOutboundEvent({ type: 'shipment.updated', shipmentId: sid, status: 'ON_HOLD', ts: Date.now() })
+      }
+      void auditLogService.writeMany(
+        eligibleIds.map((sid) => {
+          const prev = before.find((b) => b.id === sid)
+          return {
+            entityType: 'Shipment',
+            entityId: sid,
+            action: 'hold',
+            before: { status: prev?.status },
+            after: { status: 'ON_HOLD', heldReason: reason },
+            metadata: { bulk: true },
+          }
+        }),
+      )
+      return { held: result.count, skipped: ids.length - eligibleIds.length }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[shipments/bulk-hold] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.post('/fulfillment/shipments/bulk-release', async (request, reply) => {
+    try {
+      const body = request.body as { shipmentIds?: string[] }
+      const ids = Array.isArray(body.shipmentIds) ? body.shipmentIds : []
+      if (ids.length === 0) return reply.code(400).send({ error: 'shipmentIds[] required' })
+      if (ids.length > 200) return reply.code(400).send({ error: 'Max 200 shipments per call' })
+
+      const before = await prisma.shipment.findMany({
+        where: { id: { in: ids }, status: 'ON_HOLD' as any },
+        select: { id: true, heldReason: true },
+      })
+      const eligibleIds = before.map((s) => s.id)
+      if (eligibleIds.length === 0) {
+        return { released: 0, skipped: ids.length }
+      }
+
+      const result = await prisma.shipment.updateMany({
+        where: { id: { in: eligibleIds } },
+        data: { status: 'DRAFT', heldAt: null, heldReason: null, version: { increment: 1 } },
+      })
+
+      const { publishOutboundEvent } = await import('../services/outbound-events.service.js')
+      const { auditLogService } = await import('../services/audit-log.service.js')
+      for (const sid of eligibleIds) {
+        publishOutboundEvent({ type: 'shipment.updated', shipmentId: sid, status: 'DRAFT', ts: Date.now() })
+      }
+      void auditLogService.writeMany(
+        eligibleIds.map((sid) => {
+          const prev = before.find((b) => b.id === sid)
+          return {
+            entityType: 'Shipment',
+            entityId: sid,
+            action: 'release',
+            before: { status: 'ON_HOLD', heldReason: prev?.heldReason },
+            after: { status: 'DRAFT' },
+            metadata: { bulk: true },
+          }
+        }),
+      )
+      return { released: result.count, skipped: ids.length - eligibleIds.length }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[shipments/bulk-release] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // ── O.32: SSE event stream ──────────────────────────────────────────
   // GET /api/fulfillment/outbound/events — long-lived text/event-stream
   // connection that pushes shipment events to subscribed browsers.

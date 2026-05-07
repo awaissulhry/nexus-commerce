@@ -174,6 +174,46 @@ export default function ShipmentsClient() {
     if (labelUrl) window.open(labelUrl, '_blank')
   }
 
+  // O.40: bulk hold / release. Eligible-status filter mirrors the
+  // server gate so a partial-success doesn't surprise the operator.
+  const bulkHold = async () => {
+    if (selected.size === 0) { toast.error(t('outbound.pending.toast.selectFirst')); return }
+    const eligible = items.filter((s) => selected.has(s.id) && !['LABEL_PRINTED', 'SHIPPED', 'IN_TRANSIT', 'DELIVERED', 'ON_HOLD'].includes(s.status))
+    if (eligible.length === 0) { toast.error(t('outbound.pending.toast.selectFirst')); return }
+    const reason = window.prompt(t('outbound.shipments.hold.prompt')) ?? ''
+    if (!reason.trim()) return
+    const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipments/bulk-hold`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shipmentIds: eligible.map((s) => s.id), reason: reason.trim() }),
+    })
+    if (!res.ok) { toast.error(t('common.error')); return }
+    const out = await res.json()
+    if (out.held === eligible.length) toast.success(t('outbound.shipments.bulk.toast.heldAll', { n: out.held }))
+    else toast.warning(t('outbound.shipments.bulk.toast.heldPartial', { ok: out.held, total: eligible.length }))
+    for (const s of eligible) emitInvalidation({ type: 'shipment.updated', id: s.id })
+    setSelected(new Set())
+    fetchShipments()
+  }
+
+  const bulkRelease = async () => {
+    if (selected.size === 0) { toast.error(t('outbound.pending.toast.selectFirst')); return }
+    const eligible = items.filter((s) => selected.has(s.id) && s.status === 'ON_HOLD')
+    if (eligible.length === 0) { toast.error(t('outbound.pending.toast.selectFirst')); return }
+    const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipments/bulk-release`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shipmentIds: eligible.map((s) => s.id) }),
+    })
+    if (!res.ok) { toast.error(t('common.error')); return }
+    const out = await res.json()
+    if (out.released === eligible.length) toast.success(t('outbound.shipments.bulk.toast.releasedAll', { n: out.released }))
+    else toast.warning(t('outbound.shipments.bulk.toast.releasedPartial', { ok: out.released, total: eligible.length }))
+    for (const s of eligible) emitInvalidation({ type: 'shipment.updated', id: s.id })
+    setSelected(new Set())
+    fetchShipments()
+  }
+
   // O.36: hold + release.
   const hold = async (id: string) => {
     const reason = window.prompt(t('outbound.shipments.hold.prompt')) ?? ''
@@ -402,6 +442,12 @@ export default function ShipmentsClient() {
               </button>
               <button onClick={bulkMarkShipped} className="h-7 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5">
                 <Send size={12} /> {t('outbound.shipments.bulk.markShipped')}
+              </button>
+              <button onClick={bulkHold} className="h-7 px-3 text-base bg-amber-50 text-amber-700 border border-amber-200 rounded hover:bg-amber-100 inline-flex items-center gap-1.5">
+                <Pause size={12} /> {t('outbound.shipments.bulk.hold')}
+              </button>
+              <button onClick={bulkRelease} className="h-7 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5">
+                <Play size={12} /> {t('outbound.shipments.bulk.release')}
               </button>
               <button onClick={bulkExportCsv} className="h-7 px-3 text-base bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-slate-100 inline-flex items-center gap-1.5">
                 <Download size={12} /> {t('outbound.shipments.bulk.exportCsv')}
