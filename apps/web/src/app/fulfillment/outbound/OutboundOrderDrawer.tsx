@@ -87,6 +87,13 @@ type DrawerOrder = {
       location: string | null
       source: string
     }>
+    activity: Array<{
+      id: string
+      action: string
+      metadata: any
+      userId: string | null
+      createdAt: string
+    }>
   }>
 }
 
@@ -738,6 +745,60 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                         ))}
                       </div>
                     )}
+                  </div>
+                </Card>
+              )}
+
+              {/* O.49: per-shipment activity log — collated across
+                  all shipments, most-recent first. Pulls from the
+                  AuditLog rows the lifecycle endpoints write (print/
+                  void/hold/release/ship/auto-cancel). */}
+              {data.shipments.some((s) => s.activity.length > 0) && (
+                <Card>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                      <Clock size={12} /> {t('outbound.drawer.activity')}
+                    </div>
+                    <div className="space-y-1.5">
+                      {data.shipments
+                        .flatMap((s) =>
+                          s.activity.map((a) => ({ ...a, shipmentId: s.id, carrier: s.carrierCode })),
+                        )
+                        .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
+                        .slice(0, 20)
+                        .map((a) => {
+                          const reason = (a.metadata as any)?.reason
+                          const dryRun = (a.metadata as any)?.dryRun
+                          const tone =
+                            a.action.includes('void') || a.action.includes('cancel')
+                              ? 'text-rose-700 bg-rose-50'
+                              : a.action.includes('hold')
+                              ? 'text-amber-700 bg-amber-50'
+                              : a.action.includes('release') || a.action.includes('shipped') || a.action.includes('print')
+                              ? 'text-emerald-700 bg-emerald-50'
+                              : 'text-slate-700 bg-slate-100'
+                          return (
+                            <div key={a.id} className="flex items-start gap-3 text-sm">
+                              <div className="text-slate-500 tabular-nums w-32 flex-shrink-0">
+                                {new Date(a.createdAt).toLocaleString('it-IT', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </div>
+                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${tone}`}>
+                                {a.action}
+                              </span>
+                              <div className="flex-1 min-w-0 text-slate-600">
+                                {a.userId ? `by ${a.userId}` : 'by system'}
+                                {reason ? ` · ${reason}` : ''}
+                                {dryRun ? ' · dryRun' : ''}
+                              </div>
+                            </div>
+                          )
+                        })}
+                    </div>
                   </div>
                 </Card>
               )}

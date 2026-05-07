@@ -236,6 +236,7 @@
   "outbound.drawer.shipments": "Shipments ({n})",
   "outbound.drawer.noShipmentYet": "No shipment yet. Click Create shipment below to start.",
   "outbound.drawer.timeline": "Tracking timeline",
+  "outbound.drawer.activity": "Operator activity",
   "outbound.drawer.channelMeta": "Channel metadata",
   "outbound.drawer.createShipment": "Create shipment",
   "outbound.drawer.shipmentInFlight": "Shipment in flight",

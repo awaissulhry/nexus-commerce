@@ -2531,9 +2531,42 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             },
             orderBy: { createdAt: 'asc' },
           },
+          // O.49: surfaces O.39's AuditLog entries. We pull rows
+          // tagged entityType='Shipment' for any shipment on this
+          // order so the drawer can render an "Activity" feed
+          // (print-label / void / hold / release / mark-shipped /
+          // auto-cancel-from-order). Capped at 50 most-recent for
+          // payload size; hot orders won't accrue more than a
+          // handful in practice.
         },
       })
       if (!order) return reply.code(404).send({ error: 'Order not found' })
+
+      // O.49: pull AuditLog rows for every shipment on this order.
+      // Single query keyed on the shipment ID set; merged into the
+      // shipment objects on the response.
+      const shipmentIds = order.shipments.map((s) => s.id)
+      const auditRows = shipmentIds.length > 0
+        ? await prisma.auditLog.findMany({
+            where: { entityType: 'Shipment', entityId: { in: shipmentIds } },
+            orderBy: { createdAt: 'desc' },
+            take: 50,
+            select: {
+              id: true,
+              entityId: true,
+              action: true,
+              metadata: true,
+              userId: true,
+              createdAt: true,
+            },
+          })
+        : []
+      const auditByShipment = new Map<string, typeof auditRows>()
+      for (const a of auditRows) {
+        const list = auditByShipment.get(a.entityId) ?? []
+        list.push(a)
+        auditByShipment.set(a.entityId, list)
+      }
 
       // Decimal → number on the wire (D.2 lesson). Only fields the
       // drawer reads; preserves channel metadata blobs verbatim.
@@ -2554,8 +2587,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         })),
         shipments: order.shipments.map((s) => ({
           ...s,
-          // Shipment has no Decimal columns today, but keep the
-          // pattern consistent for future cost fields.
+          // O.49: per-shipment audit log entries (most-recent first).
+          activity: auditByShipment.get(s.id) ?? [],
         })),
       }
     } catch (error: any) {

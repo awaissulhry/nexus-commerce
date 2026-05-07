@@ -207,6 +207,7 @@
   "outbound.drawer.shipments": "Spedizioni ({n})",
   "outbound.drawer.noShipmentYet": "Nessuna spedizione ancora. Clicca Crea spedizione qui sotto per iniziare.",
   "outbound.drawer.timeline": "Cronologia tracking",
+  "outbound.drawer.activity": "Attività operatore",
   "outbound.drawer.channelMeta": "Metadati canale",
   "outbound.drawer.createShipment": "Crea spedizione",
   "outbound.drawer.shipmentInFlight": "Spedizione in corso",
