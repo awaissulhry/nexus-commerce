@@ -82,6 +82,31 @@ export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: 
     }
   }, [open, def.code])
 
+  // CR.8: silent auto-test when the drawer opens for an already-
+  // connected carrier. Refreshes lastVerifiedAt + surfaces stale-
+  // credential errors without operator action. Throttled by the
+  // drawer-open lifecycle (only fires on open transition, not on
+  // tab switches). Toast suppressed here — the persisted state
+  // shows up in the header on next refresh; an explicit "Test"
+  // click still surfaces a toast for confirmation.
+  useEffect(() => {
+    if (!open || !carrier?.isActive) return
+    const ac = new AbortController()
+    void fetch(
+      `${getBackendUrl()}/api/fulfillment/carriers/${def.code}/test`,
+      { method: 'POST', signal: ac.signal },
+    )
+      .then((res) => res.ok ? res.json().catch(() => ({})) : null)
+      .then((body) => {
+        // Refresh the list so the marketplace card reflects the new
+        // lastVerifiedAt / lastError. The test endpoint persists; we
+        // just need the parent to re-fetch.
+        if (body) onChanged()
+      })
+      .catch(() => { /* abort or network blip — silent */ })
+    return () => ac.abort()
+  }, [open, carrier?.isActive, def.code, onChanged])
+
   const updateField = (key: string, value: string) => {
     setFields((prev) => ({ ...prev, [key]: value }))
     setDirty(true)
@@ -211,9 +236,32 @@ export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: 
           <span>{def.label}</span>
           {headerStatus}
           {carrier?.mode === 'sandbox' && <Badge variant="default" size="sm">sandbox</Badge>}
+          {carrier?.lastError && (
+            <Badge variant="warning" size="sm">{t('carriers.status.error')}</Badge>
+          )}
         </div>
       }
-      description={def.description}
+      description={
+        <div className="space-y-1">
+          <div>{def.description}</div>
+          {carrier?.isActive && (carrier?.lastVerifiedAt || carrier?.lastError) && (
+            <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+              {carrier?.lastVerifiedAt && !carrier?.lastError && (
+                <span className="inline-flex items-center gap-1">
+                  <Check size={11} className="text-emerald-500" />
+                  {t('carriers.status.verified', { when: relTime(carrier.lastVerifiedAt) })}
+                </span>
+              )}
+              {carrier?.lastError && (
+                <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300">
+                  <AlertCircle size={11} />
+                  {carrier.lastError}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      }
       dismissOnBackdrop={!dirty}
     >
       <ModalBody className="px-0 py-0">
@@ -337,6 +385,21 @@ function CredentialsTab({
       )}
     </div>
   )
+}
+
+/** CR.8: compact relative-time formatter for status chips ("2h ago"). */
+function relTime(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime()
+  if (ms < 0) return ''
+  const sec = Math.floor(ms / 1000)
+  if (sec < 60) return `${sec}s ago`
+  const min = Math.floor(sec / 60)
+  if (min < 60) return `${min}m ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}h ago`
+  const d = Math.floor(hr / 24)
+  if (d < 30) return `${d}d ago`
+  return `${Math.floor(d / 30)}mo ago`
 }
 
 // ── Services tab ───────────────────────────────────────────────────

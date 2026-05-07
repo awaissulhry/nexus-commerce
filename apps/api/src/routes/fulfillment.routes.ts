@@ -8298,12 +8298,24 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/fulfillment/carriers', async (_request, reply) => {
     try {
       const items = await prisma.carrier.findMany({ orderBy: { code: 'asc' } })
-      // Don't expose encrypted creds
+      // Don't expose encrypted creds. CR.8: surface health columns so
+      // the marketplace card + drawer can render lastVerifiedAt /
+      // lastError without a second API call.
       return {
         items: items.map((c) => ({
-          id: c.id, code: c.code, name: c.name,
-          isActive: c.isActive, hasCredentials: !!c.credentialsEncrypted,
-          defaultServiceMap: c.defaultServiceMap, updatedAt: c.updatedAt,
+          id: c.id,
+          code: c.code,
+          name: c.name,
+          isActive: c.isActive,
+          hasCredentials: !!c.credentialsEncrypted,
+          defaultServiceMap: c.defaultServiceMap,
+          lastUsedAt: c.lastUsedAt,
+          lastVerifiedAt: c.lastVerifiedAt,
+          lastErrorAt: c.lastErrorAt,
+          lastError: c.lastError,
+          accountLabel: c.accountLabel,
+          mode: c.mode,
+          updatedAt: c.updatedAt,
         })),
       }
     } catch (error: any) {
@@ -8374,11 +8386,13 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  // CR.2 — explicit "Test connection" endpoint. Used by the
-  // already-connected card's Test button (lands in CR.6/CR.8 UI) so
-  // operator can verify a stored credential without having to
-  // disconnect + reconnect. Decrypts the persisted creds and re-runs
-  // verifyCredentials. Read-only — no DB writes.
+  // CR.2 — "Test connection" endpoint.
+  // CR.8: also persists the result to Carrier.lastVerifiedAt /
+  // .lastError / .lastErrorAt so the marketplace card + drawer header
+  // can render last-checked timestamps without a separate API call.
+  // Read-mostly: only writes when the verification result actually
+  // moves the needle (success → set lastVerifiedAt + clear error;
+  // failure → set lastError + lastErrorAt).
   fastify.post('/fulfillment/carriers/:code/test', async (request, reply) => {
     try {
       const { code } = request.params as { code: string }
@@ -8394,12 +8408,39 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         creds = await sendcloud.resolveCredentials()
       } catch (e: any) {
         if (e instanceof sendcloud.SendcloudError) {
+          // Persist the failure so the UI shows it next time.
+          void prisma.carrier
+            .updateMany({
+              where: { code: 'SENDCLOUD' },
+              data: { lastError: e.message, lastErrorAt: new Date() },
+            })
+            .catch(() => { /* */ })
           return reply.code(e.status).send({ ok: false, error: e.message, code: e.code })
         }
         throw e
       }
       const result = await sendcloud.verifyCredentials(creds)
       const mode = sendcloud.getSendcloudMode()
+
+      // CR.8: persist health state. dryRun successes count as
+      // verifications so the local-dev workflow shows "Verified just
+      // now" without flipping NEXUS_ENABLE_SENDCLOUD_REAL.
+      if (result.ok === true) {
+        void prisma.carrier
+          .updateMany({
+            where: { code: 'SENDCLOUD' },
+            data: { lastVerifiedAt: new Date(), lastError: null, lastErrorAt: null },
+          })
+          .catch(() => { /* */ })
+      } else {
+        void prisma.carrier
+          .updateMany({
+            where: { code: 'SENDCLOUD' },
+            data: { lastError: result.reason, lastErrorAt: new Date() },
+          })
+          .catch(() => { /* */ })
+      }
+
       return { ...result, dryRun: mode.dryRun, env: mode.env }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[carriers/:code/test] failed')
