@@ -22,10 +22,9 @@
 
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
-  AlertCircle,
   Boxes,
   Check,
   ChevronRight,
@@ -45,6 +44,8 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { useToast } from '@/components/ui/Toast'
+import PageHeader from '@/components/layout/PageHeader'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import { usePolledList } from '@/lib/sync/use-polled-list'
@@ -130,62 +131,40 @@ const TABS: Array<{ id: Tab; label: string; description: string }> = [
 
 export default function OrganizeClient() {
   const [tab, setTab] = useState<Tab>('groups')
-  const [statusMsg, setStatusMsg] = useState<{
-    kind: 'success' | 'error'
-    text: string
-  } | null>(null)
-  useEffect(() => {
-    if (!statusMsg) return
-    const t = window.setTimeout(() => setStatusMsg(null), 4000)
-    return () => window.clearTimeout(t)
-  }, [statusMsg])
+  const { toast } = useToast()
+
+  // U.8 — adapter so the existing tab signatures
+  // (onStatus({ kind, text })) keep working while routing the message
+  // through the global toast service. Replaces the inline auto-
+  // dismissing banner that lived above the tab strip.
+  const onStatus = useCallback(
+    (s: { kind: 'success' | 'error'; text: string }) => {
+      if (s.kind === 'success') toast.success(s.text)
+      else toast.error(s.text)
+    },
+    [toast],
+  )
 
   return (
-    <div className="px-6 py-6 max-w-[1400px] mx-auto">
-      <header className="mb-5">
-        <h1 className="text-[24px] font-semibold text-slate-900">
-          Catalog Organization
-        </h1>
-        <p className="text-md text-slate-600 mt-0.5">
-          Promote standalones to parents, attach orphans to existing
-          parents, and approve auto-detected variation groups.
-          Multi-channel awareness throughout.
-        </p>
-      </header>
+    <div className="px-6 py-6 max-w-[1400px] mx-auto space-y-5">
+      {/* U.8 — switched from a custom h1 (text-[24px] arbitrary value)
+          + ad-hoc header layout to the shared PageHeader. Brings the
+          page onto the U.1 typography scale and matches the chrome of
+          /products and /products/drafts. */}
+      <PageHeader
+        title="Catalog Organization"
+        description="Promote standalones to parents, attach orphans to existing parents, and approve auto-detected variation groups. Multi-channel awareness throughout."
+        breadcrumbs={[{ label: 'Catalog', href: '/catalog' }, { label: 'Organize' }]}
+      />
 
-      {statusMsg && (
-        <div
-          className={cn(
-            'mb-4 border rounded-lg px-4 py-2 text-base flex items-start justify-between gap-3',
-            statusMsg.kind === 'success'
-              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-              : 'border-rose-200 bg-rose-50 text-rose-800',
-          )}
-        >
-          <div className="inline-flex items-start gap-2 min-w-0">
-            {statusMsg.kind === 'success' ? (
-              <Check className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-            ) : (
-              <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-            )}
-            <span className="break-words">{statusMsg.text}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setStatusMsg(null)}
-            className="opacity-60 hover:opacity-100"
-            aria-label="Dismiss"
-          >
-            <X className="w-3 h-3" />
-          </button>
-        </div>
-      )}
-
-      {/* Tab strip */}
+      {/* Tab strip — U.8 made sticky so users can swap tabs without
+          scrolling back up on long lists (Standalone tab can have
+          1000+ rows). Translucent backdrop keeps body content
+          readable behind the bar. */}
       <nav
         role="tablist"
         aria-label="Catalog organization tabs"
-        className="border-b border-slate-200 mb-5 flex items-center gap-1 overflow-x-auto"
+        className="sticky top-0 z-10 -mx-6 px-6 bg-white/85 backdrop-blur border-b border-slate-200 flex items-center gap-1 overflow-x-auto"
       >
         {TABS.map((t) => (
           <button
@@ -214,16 +193,16 @@ export default function OrganizeClient() {
         <div className="min-w-0">
           {tab === 'groups' && (
             <GroupsTab
-              onStatus={setStatusMsg}
+              onStatus={onStatus}
             />
           )}
           {tab === 'standalone' && (
             <StandaloneTab
-              onStatus={setStatusMsg}
+              onStatus={onStatus}
             />
           )}
           {tab === 'parents' && (
-            <ParentsTab onStatus={setStatusMsg} />
+            <ParentsTab onStatus={onStatus} />
           )}
         </div>
         <RightRail tab={tab} />
