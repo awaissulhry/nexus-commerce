@@ -147,7 +147,7 @@ export default function ProductEditClient({
             </button>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-[14px] font-semibold text-slate-900 truncate max-w-[480px]">
+                <h1 className="text-lg font-semibold text-slate-900 truncate max-w-[480px]">
                   {product.name}
                 </h1>
                 {product.isParent && (
@@ -160,7 +160,7 @@ export default function ProductEditClient({
                   </Badge>
                 )}
               </div>
-              <div className="flex items-center gap-3 text-[11px] text-slate-500 mt-0.5 font-mono">
+              <div className="flex items-center gap-3 text-sm text-slate-500 mt-0.5 font-mono">
                 <span>{product.sku}</span>
                 {product.amazonAsin && <span>{product.amazonAsin}</span>}
               </div>
@@ -240,10 +240,10 @@ export default function ProductEditClient({
             <div className="flex items-start gap-2 min-w-0">
               <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-600 flex-shrink-0" />
               <div className="min-w-0">
-                <div className="text-[13px] font-semibold text-emerald-900">
+                <div className="text-md font-semibold text-emerald-900">
                   {product.sku} created
                 </div>
-                <div className="text-[11px] text-emerald-800 mt-0.5">
+                <div className="text-sm text-emerald-800 mt-0.5">
                   Master data is saved. Use the <strong>List on Channel</strong>{' '}
                   dropdown above to publish to Amazon, eBay, Shopify or
                   WooCommerce — the wizard handles per-channel attributes,
@@ -283,7 +283,7 @@ export default function ProductEditClient({
 
           if (!marketInfo) {
             return (
-              <div className="text-[13px] text-slate-500">
+              <div className="text-md text-slate-500">
                 No marketplaces configured for {channel}.
               </div>
             )
@@ -345,7 +345,7 @@ function TopTabButton({
       tabIndex={active ? 0 : -1}
       onClick={onClick}
       className={cn(
-        'flex items-center gap-1.5 h-10 px-4 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap',
+        'flex items-center gap-1.5 h-10 px-4 text-md font-medium border-b-2 transition-colors whitespace-nowrap',
         active
           ? 'border-blue-600 text-blue-600'
           : 'border-transparent text-slate-600 hover:text-slate-900'
@@ -355,7 +355,7 @@ function TopTabButton({
       {count != null && (
         <span
           className={cn(
-            'inline-flex items-center justify-center rounded text-[10px] tabular-nums px-1.5 py-0.5 min-w-[18px]',
+            'inline-flex items-center justify-center rounded text-xs tabular-nums px-1.5 py-0.5 min-w-[18px]',
             active ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'
           )}
         >
@@ -382,7 +382,7 @@ function MarketplaceSidebar({
   return (
     <aside className="bg-white border border-slate-200 rounded-lg overflow-hidden h-fit sticky top-[7.5rem]">
       <div className="px-3 py-2 border-b border-slate-200">
-        <h3 className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+        <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">
           Markets
         </h3>
       </div>
@@ -395,7 +395,7 @@ function MarketplaceSidebar({
               <button
                 onClick={() => onSelect(m.code)}
                 className={cn(
-                  'w-full flex items-center justify-between gap-2 px-3 py-1.5 text-[13px] text-left transition-colors',
+                  'w-full flex items-center justify-between gap-2 px-3 py-1.5 text-md text-left transition-colors',
                   active
                     ? 'bg-blue-50 text-blue-700'
                     : 'text-slate-700 hover:bg-slate-50'
@@ -404,7 +404,7 @@ function MarketplaceSidebar({
                 <span className="flex items-center gap-2 min-w-0">
                   <span
                     className={cn(
-                      'font-mono text-[10px] tabular-nums px-1.5 py-0.5 rounded border',
+                      'font-mono text-xs tabular-nums px-1.5 py-0.5 rounded border',
                       active
                         ? 'bg-white border-blue-200 text-blue-700'
                         : 'bg-slate-100 border-slate-200 text-slate-600'

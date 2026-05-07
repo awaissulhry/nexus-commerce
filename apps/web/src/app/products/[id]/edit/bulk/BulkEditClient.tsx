@@ -1232,7 +1232,7 @@ export default function BulkEditClient({
             </button>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-[14px] font-semibold text-slate-900 truncate max-w-[480px]">
+                <h1 className="text-lg font-semibold text-slate-900 truncate max-w-[480px]">
                   Bulk edit · {product.name}
                 </h1>
                 {product.isParent && (
@@ -1240,7 +1240,7 @@ export default function BulkEditClient({
                 )}
                 <SavePill status={status} message={statusMsg} />
               </div>
-              <div className="text-[11px] text-slate-500 mt-0.5 font-mono">
+              <div className="text-sm text-slate-500 mt-0.5 font-mono">
                 {product.sku}
               </div>
             </div>
@@ -1313,7 +1313,7 @@ export default function BulkEditClient({
                   type="button"
                   onClick={() => toggleGroup(g.key)}
                   className={cn(
-                    'inline-flex items-center gap-1 h-6 px-2 text-[11px] border rounded transition-colors',
+                    'inline-flex items-center gap-1 h-6 px-2 text-sm border rounded transition-colors',
                     tone.band,
                     tone.text,
                     open ? 'opacity-100' : 'opacity-70 hover:opacity-100',
@@ -1338,13 +1338,13 @@ export default function BulkEditClient({
       {/* ── Spreadsheet ───────────────────────────────────────── */}
       <main className="flex-1 overflow-auto px-2 pb-8">
         {isMarketplaceTab && schemaIsLoading && grouped.length === 0 && (
-          <div className="text-[12px] text-slate-500 inline-flex items-center gap-1.5 px-4 py-6">
+          <div className="text-base text-slate-500 inline-flex items-center gap-1.5 px-4 py-6">
             <Loader2 className="w-3 h-3 animate-spin" />
             Loading schema for {activeTab}…
           </div>
         )}
         {isMarketplaceTab && schemaErr && (
-          <div className="m-4 text-[12px] text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2 inline-flex items-start gap-2">
+          <div className="m-4 text-base text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2 inline-flex items-start gap-2">
             <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
             <div>
               {schemaErr}
@@ -1360,12 +1360,12 @@ export default function BulkEditClient({
         )}
 
         {grouped.length > 0 && (
-          <table className="border-separate border-spacing-0 text-[12px]">
+          <table className="border-separate border-spacing-0 text-base">
             <thead className="sticky top-0 z-10 bg-white">
               {/* Group band row */}
               <tr>
                 <th
-                  className="sticky left-0 z-20 bg-white border-b border-r border-slate-200 px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                  className="sticky left-0 z-20 bg-white border-b border-r border-slate-200 px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"
                   style={{ minWidth: 240 }}
                 >
                   Variant
@@ -1379,7 +1379,7 @@ export default function BulkEditClient({
                       key={g.key}
                       colSpan={colSpan}
                       className={cn(
-                        'border-b border-r-2 px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide',
+                        'border-b border-r-2 px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide',
                         tone.band,
                         tone.text,
                       )}
@@ -1411,10 +1411,10 @@ export default function BulkEditClient({
               {/* Field name row */}
               <tr>
                 <th
-                  className="sticky left-0 z-20 bg-white border-b border-r border-slate-200 px-2 py-1 text-left text-[11px] font-medium text-slate-700"
+                  className="sticky left-0 z-20 bg-white border-b border-r border-slate-200 px-2 py-1 text-left text-sm font-medium text-slate-700"
                   style={{ minWidth: 240 }}
                 >
-                  <span className="text-slate-400 text-[10px]">SKU · Name</span>
+                  <span className="text-slate-400 text-xs">SKU · Name</span>
                 </th>
                 {grouped.flatMap((g) => {
                   const tone = TONE_BY_GROUP[g.key] ?? NEUTRAL_TONE
@@ -1424,7 +1424,7 @@ export default function BulkEditClient({
                       <th
                         key={`${g.key}__placeholder`}
                         className={cn(
-                          'border-b border-r-2 px-2 py-1 text-left text-[10px] italic text-slate-500',
+                          'border-b border-r-2 px-2 py-1 text-left text-xs italic text-slate-500',
                           tone.band,
                         )}
                         style={{ width: 80 }}
@@ -1437,7 +1437,7 @@ export default function BulkEditClient({
                     <th
                       key={f.id}
                       className={cn(
-                        'border-b px-2 py-1 text-left text-[11px] font-medium text-slate-700',
+                        'border-b px-2 py-1 text-left text-sm font-medium text-slate-700',
                         tone.band,
                         i === g.fields.length - 1
                           ? 'border-r-2'
@@ -1475,10 +1475,10 @@ export default function BulkEditClient({
                     >
                       <div className="flex items-start gap-2">
                         <div className="min-w-0">
-                          <div className="font-mono text-[11px] text-slate-700 truncate">
+                          <div className="font-mono text-sm text-slate-700 truncate">
                             {row.sku}
                           </div>
-                          <div className="text-[11px] text-slate-500 truncate">
+                          <div className="text-sm text-slate-500 truncate">
                             {row.name}
                           </div>
                         </div>
@@ -1497,7 +1497,7 @@ export default function BulkEditClient({
                           <td
                             key={`${row.id}_${g.key}__placeholder`}
                             className={cn(
-                              'border-b border-r-2 px-2 py-1 italic text-slate-400 text-[10px] align-top',
+                              'border-b border-r-2 px-2 py-1 italic text-slate-400 text-xs align-top',
                               tone.cell,
                             )}
                             style={{ width: 80 }}
@@ -1580,7 +1580,7 @@ export default function BulkEditClient({
                           onChange={(e) =>
                             setDraftVariant({ ...draftVariant, sku: e.target.value })
                           }
-                          className="h-7 px-2 text-[12px] font-mono border border-slate-300 rounded w-40"
+                          className="h-7 px-2 text-base font-mono border border-slate-300 rounded w-40"
                         />
                         <input
                           type="text"
@@ -1589,7 +1589,7 @@ export default function BulkEditClient({
                           onChange={(e) =>
                             setDraftVariant({ ...draftVariant, name: e.target.value })
                           }
-                          className="h-7 px-2 text-[12px] border border-slate-300 rounded w-64"
+                          className="h-7 px-2 text-base border border-slate-300 rounded w-64"
                         />
                         <input
                           type="number"
@@ -1598,7 +1598,7 @@ export default function BulkEditClient({
                           onChange={(e) =>
                             setDraftVariant({ ...draftVariant, basePrice: e.target.value })
                           }
-                          className="h-7 px-2 text-[12px] border border-slate-300 rounded w-24"
+                          className="h-7 px-2 text-base border border-slate-300 rounded w-24"
                         />
                         <input
                           type="number"
@@ -1607,7 +1607,7 @@ export default function BulkEditClient({
                           onChange={(e) =>
                             setDraftVariant({ ...draftVariant, totalStock: e.target.value })
                           }
-                          className="h-7 px-2 text-[12px] border border-slate-300 rounded w-24"
+                          className="h-7 px-2 text-base border border-slate-300 rounded w-24"
                         />
                         <Button variant="primary" size="sm" onClick={handleAddVariant}>
                           Create
@@ -1627,7 +1627,7 @@ export default function BulkEditClient({
                       <button
                         type="button"
                         onClick={() => setAddingVariant(true)}
-                        className="inline-flex items-center gap-1.5 text-[12px] font-medium text-emerald-700 hover:text-emerald-900"
+                        className="inline-flex items-center gap-1.5 text-base font-medium text-emerald-700 hover:text-emerald-900"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         Add variant
@@ -1666,7 +1666,7 @@ function Cell({
 
   if (disabled || field.type === 'unsupported') {
     return (
-      <div className="px-1.5 py-1 text-[12px] text-slate-500 truncate" title={display}>
+      <div className="px-1.5 py-1 text-base text-slate-500 truncate" title={display}>
         {display || '—'}
       </div>
     )
@@ -1677,7 +1677,7 @@ function Cell({
       <select
         value={display}
         onChange={(e) => onCommit(e.target.value || null)}
-        className="w-full h-6 px-1 text-[12px] border border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent rounded"
+        className="w-full h-6 px-1 text-base border border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent rounded"
       >
         <option value="">—</option>
         {(field.options ?? []).map((opt) => (
@@ -1704,7 +1704,7 @@ function Cell({
             else onCommit(raw)
           }
         }}
-        className="w-full h-6 px-1 text-[12px] tabular-nums border border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent rounded"
+        className="w-full h-6 px-1 text-base tabular-nums border border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent rounded"
       />
     )
   }
@@ -1727,7 +1727,7 @@ function Cell({
         defaultValue={display}
         rows={2}
         onBlur={(e) => onCommit(e.target.value === '' ? null : e.target.value)}
-        className="w-full px-1 py-0.5 text-[12px] border border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent rounded resize-y"
+        className="w-full px-1 py-0.5 text-base border border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent rounded resize-y"
         maxLength={field.maxLength}
       />
     )
@@ -1760,7 +1760,7 @@ function Cell({
             ? `Edit cell shows entry 1; ${arr.length - 1} more entries — open this product's edit page for full bullet editor`
             : undefined
         }
-        className="w-full h-6 px-1 text-[12px] border border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent rounded"
+        className="w-full h-6 px-1 text-base border border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent rounded"
       />
     )
   }
@@ -1772,7 +1772,7 @@ function Cell({
       defaultValue={display}
       onBlur={(e) => onCommit(e.target.value === '' ? null : e.target.value)}
       maxLength={field.maxLength}
-      className="w-full h-6 px-1 text-[12px] border border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent rounded"
+      className="w-full h-6 px-1 text-base border border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent rounded"
     />
   )
 }
@@ -1795,7 +1795,7 @@ function TabBtn({
       type="button"
       onClick={onClick}
       className={cn(
-        'px-3 py-2 text-[12px] font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 flex-shrink-0',
+        'px-3 py-2 text-base font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 flex-shrink-0',
         active
           ? 'border-blue-600 text-blue-700'
           : 'border-transparent text-slate-600 hover:text-slate-900',
@@ -1803,7 +1803,7 @@ function TabBtn({
     >
       {children}
       {typeof count === 'number' && count > 0 && (
-        <span className="text-[10px] font-mono px-1 rounded bg-slate-100 text-slate-600">
+        <span className="text-xs font-mono px-1 rounded bg-slate-100 text-slate-600">
           {count}
         </span>
       )}
@@ -1824,7 +1824,7 @@ function SavePill({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 text-[10px] px-2 py-0.5 rounded border',
+        'inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded border',
         status === 'saving' && 'border-slate-200 text-slate-600 bg-slate-50',
         status === 'saved' && 'border-emerald-200 text-emerald-700 bg-emerald-50',
         status === 'error' && 'border-rose-200 text-rose-700 bg-rose-50',
@@ -1883,7 +1883,7 @@ function CopyFromMarketplaceMenu({
         onClick={() => setOpen((s) => !s)}
         title={`Replicate every variant's listing data into ${activeChannelKey} from another marketplace`}
         className={cn(
-          'inline-flex items-center gap-1 h-7 px-2 text-[11px] font-medium border rounded transition-colors',
+          'inline-flex items-center gap-1 h-7 px-2 text-sm font-medium border rounded transition-colors',
           flash
             ? 'border-emerald-300 text-emerald-700 bg-emerald-50'
             : 'border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900',
@@ -1899,8 +1899,8 @@ function CopyFromMarketplaceMenu({
             onClick={() => setOpen(false)}
             aria-hidden="true"
           />
-          <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded shadow-md py-1 min-w-[260px] text-[12px]">
-            <div className="px-3 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+          <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded shadow-md py-1 min-w-[260px] text-base">
+            <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-slate-400">
               Replicate values from
             </div>
             {others.map((t) => {
@@ -1925,8 +1925,8 @@ function CopyFromMarketplaceMenu({
                       : 'text-slate-700',
                   )}
                 >
-                  <span className="font-mono text-[11px]">{t.channelKey}</span>
-                  <span className="text-[10px] text-slate-500 tabular-nums">
+                  <span className="font-mono text-sm">{t.channelKey}</span>
+                  <span className="text-xs text-slate-500 tabular-nums">
                     {n === 0
                       ? 'no listings'
                       : `${n} variant${n === 1 ? '' : 's'}`}
@@ -1989,7 +1989,7 @@ function ApplyToMarketplacesMenu({
         onClick={() => setOpen((s) => !s)}
         title={`Broadcast every variant's ${activeChannelKey} listing data to other marketplaces`}
         className={cn(
-          'inline-flex items-center gap-1 h-7 px-2 text-[11px] font-medium border rounded transition-colors',
+          'inline-flex items-center gap-1 h-7 px-2 text-sm font-medium border rounded transition-colors',
           flash
             ? 'border-emerald-300 text-emerald-700 bg-emerald-50'
             : 'border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900',
@@ -2008,8 +2008,8 @@ function ApplyToMarketplacesMenu({
             }}
             aria-hidden="true"
           />
-          <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded shadow-md py-1 min-w-[280px] text-[12px]">
-            <div className="px-3 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+          <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded shadow-md py-1 min-w-[280px] text-base">
+            <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-slate-400">
               Apply this marketplace's values to
             </div>
             <button
@@ -2021,7 +2021,7 @@ function ApplyToMarketplacesMenu({
                 <Globe className="w-3 h-3" />
                 All other marketplaces
               </span>
-              <span className="text-[10px] text-slate-500 tabular-nums">
+              <span className="text-xs text-slate-500 tabular-nums">
                 {others.length}
               </span>
             </button>
@@ -2035,13 +2035,13 @@ function ApplyToMarketplacesMenu({
                   <span>
                     Other {activeChannelKey.split(':')[0]} marketplaces
                   </span>
-                  <span className="text-[10px] text-slate-500 tabular-nums">
+                  <span className="text-xs text-slate-500 tabular-nums">
                     {sameChannel.length}
                   </span>
                 </button>
               )}
             <div className="border-t border-slate-100 my-1" />
-            <div className="px-3 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+            <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-slate-400">
               Or pick targets
             </div>
             {others.map((t) => {
@@ -2063,7 +2063,7 @@ function ApplyToMarketplacesMenu({
                   >
                     {checked && <CheckCircle2 className="w-2.5 h-2.5" />}
                   </span>
-                  <span className="font-mono text-[11px]">{t.channelKey}</span>
+                  <span className="font-mono text-sm">{t.channelKey}</span>
                 </button>
               )
             })}
@@ -2074,7 +2074,7 @@ function ApplyToMarketplacesMenu({
                   setOpen(false)
                   setPicked(new Set())
                 }}
-                className="text-[11px] text-slate-500 hover:text-slate-900"
+                className="text-sm text-slate-500 hover:text-slate-900"
               >
                 Cancel
               </button>
@@ -2083,7 +2083,7 @@ function ApplyToMarketplacesMenu({
                 disabled={picked.size === 0}
                 onClick={() => void submit(Array.from(picked))}
                 className={cn(
-                  'h-6 px-2 rounded text-[11px] font-medium',
+                  'h-6 px-2 rounded text-sm font-medium',
                   picked.size === 0
                     ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                     : 'bg-blue-600 text-white hover:bg-blue-700',

@@ -100,7 +100,7 @@ export default function FilterDropdown({
         type="button"
         onClick={() => onOpenChange(!open)}
         className={cn(
-          'inline-flex items-center gap-1.5 h-7 px-2 text-[11px] border rounded-md transition-colors',
+          'inline-flex items-center gap-1.5 h-7 px-2 text-sm border rounded-md transition-colors',
           activeCount > 0
             ? 'border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100'
             : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900',
@@ -111,7 +111,7 @@ export default function FilterDropdown({
         <Filter className="w-3 h-3" />
         Filters
         {activeCount > 0 && (
-          <span className="text-[10px] tabular-nums bg-blue-600 text-white rounded px-1">
+          <span className="text-xs tabular-nums bg-blue-600 text-white rounded px-1">
             {activeCount}
           </span>
         )}
@@ -123,14 +123,14 @@ export default function FilterDropdown({
           role="dialog"
         >
           <div className="px-3 py-2 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+            <span className="text-sm font-semibold text-slate-500 uppercase tracking-wide">
               Filters
             </span>
             <button
               type="button"
               onClick={onReset}
               disabled={activeCount === 0}
-              className="text-[11px] text-blue-700 hover:text-blue-900 disabled:text-slate-400 disabled:cursor-default"
+              className="text-sm text-blue-700 hover:text-blue-900 disabled:text-slate-400 disabled:cursor-default"
             >
               Reset all
             </button>
@@ -263,7 +263,7 @@ function Section({
 }) {
   return (
     <div>
-      <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+      <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
         {label}
       </div>
       <div className="space-y-1">{children}</div>
@@ -283,14 +283,14 @@ function Check({
   mono?: boolean
 }) {
   return (
-    <label className="flex items-center gap-2 text-[12px] text-slate-700 cursor-pointer hover:text-slate-900">
+    <label className="flex items-center gap-2 text-base text-slate-700 cursor-pointer hover:text-slate-900">
       <input
         type="checkbox"
         checked={checked}
         onChange={onChange}
         className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
       />
-      <span className={mono ? 'font-mono text-[11px]' : undefined}>{label}</span>
+      <span className={mono ? 'font-mono text-sm' : undefined}>{label}</span>
     </label>
   )
 }
@@ -309,7 +309,7 @@ function Radio({
   return (
     <label
       className={cn(
-        'flex items-center gap-2 text-[12px] text-slate-700 cursor-pointer hover:text-slate-900',
+        'flex items-center gap-2 text-base text-slate-700 cursor-pointer hover:text-slate-900',
         inline && 'inline-flex',
       )}
     >

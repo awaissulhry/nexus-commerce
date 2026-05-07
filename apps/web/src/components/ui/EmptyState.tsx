@@ -23,8 +23,8 @@ export function EmptyState({ icon: Icon, title, description, action }: EmptyStat
       <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center mb-3">
         <Icon className="w-6 h-6 text-slate-400" />
       </div>
-      <h3 className="text-[14px] font-semibold text-slate-900 mb-1">{title}</h3>
-      <p className="text-[13px] text-slate-500 max-w-sm mb-4">{description}</p>
+      <h3 className="text-lg font-semibold text-slate-900 mb-1">{title}</h3>
+      <p className="text-md text-slate-500 max-w-sm mb-4">{description}</p>
       {action?.href ? <Link href={action.href}>{button}</Link> : button}
     </div>
   )

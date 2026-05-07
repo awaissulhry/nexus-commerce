@@ -202,12 +202,12 @@ function renderDefaultHeader(
       <div className="min-w-0">
         <div
           id="modal-title"
-          className="text-[14px] font-semibold text-slate-900 truncate"
+          className="text-lg font-semibold text-slate-900 truncate"
         >
           {title}
         </div>
         {description && (
-          <div className="text-[11px] text-slate-500 mt-0.5">
+          <div className="text-sm text-slate-500 mt-0.5">
             {description}
           </div>
         )}

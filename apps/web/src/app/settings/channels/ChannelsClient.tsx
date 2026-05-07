@@ -312,7 +312,7 @@ export function ChannelsClient() {
       {statusMsg && (
         <div
           className={cn(
-            'border rounded-lg px-4 py-3 text-[12px] flex items-start gap-2',
+            'border rounded-lg px-4 py-3 text-base flex items-start gap-2',
             statusMsg.kind === 'success' && 'bg-green-50 border-green-200 text-green-700',
             statusMsg.kind === 'error' && 'bg-red-50 border-red-200 text-red-700',
             statusMsg.kind === 'info' && 'bg-slate-50 border-slate-200 text-slate-700'
@@ -339,10 +339,10 @@ export function ChannelsClient() {
                     <ShoppingBag className="w-4 h-4 text-slate-600" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-[14px] font-semibold text-slate-900">
+                    <h3 className="text-lg font-semibold text-slate-900">
                       {channel.name}
                     </h3>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
+                    <p className="text-sm text-slate-500 mt-0.5">
                       {channel.description}
                     </p>
                   </div>
@@ -371,7 +371,7 @@ export function ChannelsClient() {
               </div>
 
               {isConnected && connection && (
-                <div className="space-y-1.5 mb-3 text-[12px] border-t border-slate-100 pt-3">
+                <div className="space-y-1.5 mb-3 text-base border-t border-slate-100 pt-3">
                   {connection.sellerName && (
                     <div className="flex justify-between gap-2">
                       <span className="text-slate-500">Seller</span>
@@ -412,7 +412,7 @@ export function ChannelsClient() {
               {channel.type === 'EBAY' && diagnostics && (
                 <div
                   className={cn(
-                    'mt-2 mb-3 border rounded-md px-3 py-2 text-[11px]',
+                    'mt-2 mb-3 border rounded-md px-3 py-2 text-sm',
                     diagnostics.ok
                       ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                       : 'border-amber-200 bg-amber-50 text-amber-800',
@@ -426,7 +426,7 @@ export function ChannelsClient() {
                     )}
                     {diagnostics.recommendation}
                   </div>
-                  <pre className="whitespace-pre-wrap font-mono text-[10px] text-slate-600 leading-relaxed">
+                  <pre className="whitespace-pre-wrap font-mono text-xs text-slate-600 leading-relaxed">
                     {diagnostics.details}
                   </pre>
                 </div>
@@ -440,11 +440,11 @@ export function ChannelsClient() {
               <div className="flex gap-2 flex-wrap">
                 {connection?.isManagedBy === 'env' ? (
                   isConnected ? (
-                    <p className="text-[11px] text-slate-500 italic">
+                    <p className="text-sm text-slate-500 italic">
                       Managed via API server env vars. Disconnect by removing creds in Railway.
                     </p>
                   ) : (
-                    <p className="text-[11px] text-red-600">
+                    <p className="text-sm text-red-600">
                       {connection.lastSyncError ?? 'Credentials missing — set env vars in Railway.'}
                     </p>
                   )
@@ -516,7 +516,7 @@ export function ChannelsClient() {
       </div>
 
       <Card title="About marketplace connections">
-        <ul className="text-[12px] text-slate-600 space-y-1.5">
+        <ul className="text-base text-slate-600 space-y-1.5">
           <li>· Each connection authorizes Nexus to read products, listings, and orders from that channel.</li>
           <li>· OAuth tokens are refreshed automatically every 30 minutes before expiry.</li>
           <li>· Disconnecting revokes the token and stops all syncs for that channel.</li>

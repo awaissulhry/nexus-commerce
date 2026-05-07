@@ -155,7 +155,7 @@ export default function UniversalFilterBar({
           onChange={(e) => setSearchInput(e.target.value)}
           placeholder={searchPlaceholder}
           aria-label="Search"
-          className="w-full h-8 pl-8 pr-7 text-[12px] border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-300"
+          className="w-full h-8 pl-8 pr-7 text-base border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-300"
         />
         {searchInput && (
           <button
@@ -212,14 +212,14 @@ export default function UniversalFilterBar({
       {/* Clear all + active count */}
       {!empty && (
         <div className="ml-auto flex items-center gap-2">
-          <span className="text-[11px] text-slate-500 inline-flex items-center gap-1">
+          <span className="text-sm text-slate-500 inline-flex items-center gap-1">
             <Filter className="w-3 h-3" />
             {count} active
           </span>
           <button
             type="button"
             onClick={clearAll}
-            className="h-8 px-2.5 text-[11px] text-slate-700 hover:text-slate-900 border border-slate-200 rounded-md hover:bg-slate-50"
+            className="h-8 px-2.5 text-sm text-slate-700 hover:text-slate-900 border border-slate-200 rounded-md hover:bg-slate-50"
           >
             Clear all
           </button>
@@ -297,7 +297,7 @@ function MultiSelect({
         aria-expanded={open}
         aria-haspopup="listbox"
         className={cn(
-          'inline-flex items-center gap-1.5 h-8 px-2.5 text-[12px] rounded-md border transition-colors',
+          'inline-flex items-center gap-1.5 h-8 px-2.5 text-base rounded-md border transition-colors',
           selected.length > 0
             ? 'bg-blue-50 border-blue-300 text-blue-800'
             : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300',
@@ -312,7 +312,7 @@ function MultiSelect({
           className="absolute z-20 top-full mt-1 left-0 min-w-[200px] max-h-[320px] overflow-auto bg-white border border-slate-200 rounded-md shadow-lg py-1"
         >
           {options.length === 0 ? (
-            <div className="px-3 py-2 text-[11px] text-slate-400">
+            <div className="px-3 py-2 text-sm text-slate-400">
               No options
             </div>
           ) : (
@@ -326,7 +326,7 @@ function MultiSelect({
                   aria-selected={isOn}
                   onClick={() => onToggle(opt.value)}
                   className={cn(
-                    'w-full flex items-center justify-between gap-3 px-3 py-1.5 text-[12px] text-left hover:bg-slate-50',
+                    'w-full flex items-center justify-between gap-3 px-3 py-1.5 text-base text-left hover:bg-slate-50',
                     isOn && 'bg-slate-50',
                   )}
                 >
@@ -354,7 +354,7 @@ function MultiSelect({
                   onClear()
                   setOpen(false)
                 }}
-                className="w-full text-left px-1 py-1 text-[11px] text-slate-500 hover:text-slate-700"
+                className="w-full text-left px-1 py-1 text-sm text-slate-500 hover:text-slate-700"
               >
                 Clear {label.toLowerCase()}
               </button>

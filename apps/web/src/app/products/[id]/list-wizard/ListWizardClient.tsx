@@ -389,10 +389,10 @@ function NeedsChannelsBlock({
   return (
     <div className="max-w-xl mx-auto py-12 px-6">
       <div className="border border-amber-200 bg-amber-50 rounded-lg px-4 py-4 text-center">
-        <h3 className="text-[14px] font-semibold text-amber-900">
+        <h3 className="text-lg font-semibold text-amber-900">
           Pick channels first
         </h3>
-        <p className="mt-1 text-[12px] text-amber-800">
+        <p className="mt-1 text-base text-amber-800">
           The rest of the wizard adapts to your channel selection. Head
           back to Step 1 and pick at least one (platform, marketplace)
           to keep going.
@@ -400,7 +400,7 @@ function NeedsChannelsBlock({
         <button
           type="button"
           onClick={onPickChannels}
-          className="mt-3 h-8 px-3 rounded-md bg-amber-600 text-white text-[12px] font-medium hover:bg-amber-700"
+          className="mt-3 h-8 px-3 rounded-md bg-amber-600 text-white text-base font-medium hover:bg-amber-700"
         >
           Go to Step 1
         </button>

@@ -121,10 +121,10 @@ export default function MarketsModal({
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 flex-shrink-0">
           <div>
-            <h2 className="text-[15px] font-semibold text-slate-900">
+            <h2 className="text-lg font-semibold text-slate-900">
               All {channelLabel} markets
             </h2>
-            <p className="text-[11px] text-slate-500 mt-0.5 tabular-nums">
+            <p className="text-sm text-slate-500 mt-0.5 tabular-nums">
               {totalAll} marketplace{totalAll === 1 ? '' : 's'}
               {search.trim() && totalShown !== totalAll && (
                 <span className="text-slate-400">
@@ -154,7 +154,7 @@ export default function MarketsModal({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by country or code…"
-              className="w-full h-8 pl-7 pr-3 text-[13px] border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full h-8 pl-7 pr-3 text-md border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
           </div>
         </div>
@@ -162,13 +162,13 @@ export default function MarketsModal({
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-2 py-2">
           {grouped.length === 0 ? (
-            <div className="px-5 py-8 text-center text-[13px] text-slate-500">
+            <div className="px-5 py-8 text-center text-md text-slate-500">
               No markets match &quot;{search}&quot;.
             </div>
           ) : (
             grouped.map((region) => (
               <div key={region.name} className="mb-3 last:mb-0">
-                <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
                   {region.name}
                 </div>
                 <div className="space-y-0.5">
@@ -188,7 +188,7 @@ export default function MarketsModal({
                         key={code}
                         href={`${channelPath}/${code.toLowerCase()}`}
                         onClick={onClose}
-                        className="flex items-center gap-3 px-3 py-1.5 rounded-md text-[13px] text-slate-700 hover:bg-slate-50 transition-colors"
+                        className="flex items-center gap-3 px-3 py-1.5 rounded-md text-md text-slate-700 hover:bg-slate-50 transition-colors"
                       >
                         {dotClass && (
                           <span
@@ -196,23 +196,23 @@ export default function MarketsModal({
                             aria-hidden="true"
                           />
                         )}
-                        <span className="font-mono text-[11px] font-semibold bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">
+                        <span className="font-mono text-sm font-semibold bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">
                           {code}
                         </span>
                         <span className="flex-1 truncate">
                           {countryNames[code] ?? code}
                         </span>
                         {!isConnected ? (
-                          <span className="text-[11px] text-blue-700 inline-flex items-center gap-1">
+                          <span className="text-sm text-blue-700 inline-flex items-center gap-1">
                             <Plug className="w-3 h-3" />
                             Connect
                           </span>
                         ) : count > 0 ? (
-                          <span className="text-[11px] tabular-nums text-slate-600">
+                          <span className="text-sm tabular-nums text-slate-600">
                             {count} active
                           </span>
                         ) : (
-                          <span className="text-[11px] text-slate-400">
+                          <span className="text-sm text-slate-400">
                             0 listings
                           </span>
                         )}
@@ -231,7 +231,7 @@ export default function MarketsModal({
             <Link
               href="/settings/channels"
               onClick={onClose}
-              className="inline-flex items-center gap-1.5 text-[12px] text-blue-700 hover:text-blue-900"
+              className="inline-flex items-center gap-1.5 text-base text-blue-700 hover:text-blue-900"
             >
               <Plug className="w-3.5 h-3.5" />
               Connect {channelLabel} to enable listings

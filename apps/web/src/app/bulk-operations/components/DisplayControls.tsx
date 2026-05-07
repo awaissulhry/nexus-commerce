@@ -42,7 +42,7 @@ export function DisplayModeToggle({
           onClick={() => !o.disabled && onChange(o.id)}
           title={o.tooltip}
           className={cn(
-            'h-6 px-2.5 text-[11px] rounded transition-colors',
+            'h-6 px-2.5 text-sm rounded transition-colors',
             mode === o.id
               ? 'bg-slate-100 text-slate-900 font-semibold'
               : 'text-slate-600 hover:text-slate-900',
@@ -85,7 +85,7 @@ export function ExpandCollapseControls({
   const noParents = parentIds.size === 0
 
   return (
-    <div className="flex items-center gap-2 text-[11px] text-slate-500">
+    <div className="flex items-center gap-2 text-sm text-slate-500">
       <button
         type="button"
         onClick={() => onChange(new Set(parentIds))}

@@ -290,7 +290,7 @@ function SaveStatusBar({
   return (
     <div
       className={cn(
-        'inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded border',
+        'inline-flex items-center gap-1.5 text-sm px-2 py-1 rounded border',
         status === 'saving' && 'border-slate-200 text-slate-600 bg-slate-50',
         status === 'saved' && 'border-emerald-200 text-emerald-700 bg-emerald-50',
         status === 'error' && 'border-rose-200 text-rose-700 bg-rose-50',
@@ -319,11 +319,11 @@ function SelectField({
 }) {
   return (
     <div className="space-y-1">
-      <label className="text-[12px] font-medium text-slate-700">{label}</label>
+      <label className="text-base font-medium text-slate-700">{label}</label>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full h-8 rounded-md border border-slate-200 hover:border-slate-300 bg-white text-[13px] text-slate-900 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+        className="w-full h-8 rounded-md border border-slate-200 hover:border-slate-300 bg-white text-md text-slate-900 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>

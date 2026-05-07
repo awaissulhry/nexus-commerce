@@ -223,7 +223,7 @@ export default function PricingMatrixClient() {
               setChannel(e.target.value)
               setPage(0)
             }}
-            className="h-8 px-2 border border-slate-200 rounded-md text-[12px] bg-white"
+            className="h-8 px-2 border border-slate-200 rounded-md text-base bg-white"
           >
             <option value="">All channels</option>
             <option value="AMAZON">Amazon</option>
@@ -238,7 +238,7 @@ export default function PricingMatrixClient() {
               setMarketplace(e.target.value)
               setPage(0)
             }}
-            className="h-8 px-2 border border-slate-200 rounded-md text-[12px] bg-white"
+            className="h-8 px-2 border border-slate-200 rounded-md text-base bg-white"
           >
             <option value="">All marketplaces</option>
             <option value="IT">IT</option>
@@ -255,7 +255,7 @@ export default function PricingMatrixClient() {
               setSourceFilter(e.target.value)
               setPage(0)
             }}
-            className="h-8 px-2 border border-slate-200 rounded-md text-[12px] bg-white"
+            className="h-8 px-2 border border-slate-200 rounded-md text-base bg-white"
           >
             <option value="">All sources</option>
             <option value="SCHEDULED_SALE">Sale</option>
@@ -266,7 +266,7 @@ export default function PricingMatrixClient() {
             <option value="MASTER_INHERIT">Master</option>
             <option value="FALLBACK">Fallback</option>
           </select>
-          <label className="inline-flex items-center gap-1.5 text-[12px] text-slate-700 ml-2">
+          <label className="inline-flex items-center gap-1.5 text-base text-slate-700 ml-2">
             <input
               type="checkbox"
               checked={clampedOnly}
@@ -281,14 +281,14 @@ export default function PricingMatrixClient() {
             <button
               onClick={fetchData}
               disabled={loading}
-              className="h-8 px-3 text-[12px] border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
             >
               <RefreshCw size={12} /> Refresh
             </button>
             <button
               onClick={refreshAll}
               disabled={refreshing}
-              className="h-8 px-3 text-[12px] bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
             >
               {refreshing ? (
                 <>
@@ -307,7 +307,7 @@ export default function PricingMatrixClient() {
       {/* Bulk action bar */}
       {selected.size > 0 && (
         <div className="sticky top-2 z-20 bg-slate-900 text-white rounded-lg px-4 py-3 flex items-center gap-3 flex-wrap shadow-lg">
-          <span className="text-[12px] font-semibold tabular-nums">
+          <span className="text-base font-semibold tabular-nums">
             {selected.size} row{selected.size === 1 ? '' : 's'} selected
           </span>
           <div className="h-4 w-px bg-slate-700" />
@@ -316,7 +316,7 @@ export default function PricingMatrixClient() {
             onChange={(e) =>
               setBulkMode(e.target.value as typeof bulkMode)
             }
-            className="h-7 px-2 rounded border border-slate-600 bg-slate-800 text-white text-[12px]"
+            className="h-7 px-2 rounded border border-slate-600 bg-slate-800 text-white text-base"
           >
             <option value="SET_FIXED">Set fixed price</option>
             <option value="SET_PERCENT_DISCOUNT">Discount %</option>
@@ -330,13 +330,13 @@ export default function PricingMatrixClient() {
               placeholder={bulkMode === 'SET_FIXED' ? '0.00' : '0–99'}
               value={bulkValue}
               onChange={(e) => setBulkValue(e.target.value)}
-              className="h-7 w-24 px-2 rounded border border-slate-600 bg-slate-800 text-white text-[12px] tabular-nums"
+              className="h-7 w-24 px-2 rounded border border-slate-600 bg-slate-800 text-white text-base tabular-nums"
             />
           )}
           <button
             onClick={applyBulkOverride}
             disabled={bulkApplying || (bulkMode !== 'CLEAR' && !bulkValue)}
-            className="h-7 px-3 rounded bg-white text-slate-900 text-[12px] font-semibold hover:bg-slate-100 disabled:opacity-50 inline-flex items-center gap-1.5"
+            className="h-7 px-3 rounded bg-white text-slate-900 text-base font-semibold hover:bg-slate-100 disabled:opacity-50 inline-flex items-center gap-1.5"
           >
             {bulkApplying ? (
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -348,7 +348,7 @@ export default function PricingMatrixClient() {
               setSelected(new Set())
               setBulkResult(null)
             }}
-            className="h-7 px-2 rounded text-slate-400 hover:text-white text-[12px] inline-flex items-center gap-1"
+            className="h-7 px-2 rounded text-slate-400 hover:text-white text-base inline-flex items-center gap-1"
           >
             <X size={12} /> Deselect
           </button>
@@ -357,7 +357,7 @@ export default function PricingMatrixClient() {
               <div className="h-4 w-px bg-slate-700" />
               <span
                 className={cn(
-                  'text-[12px] inline-flex items-center gap-1',
+                  'text-base inline-flex items-center gap-1',
                   bulkResult.startsWith('Error') ? 'text-rose-400' : 'text-emerald-400',
                 )}
               >
@@ -376,12 +376,12 @@ export default function PricingMatrixClient() {
       {/* Table */}
       {loading && !data ? (
         <Card>
-          <div className="text-[13px] text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
+          <div className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
             <Loader2 className="w-4 h-4 animate-spin" /> Loading snapshots…
           </div>
         </Card>
       ) : error ? (
-        <div className="border border-rose-200 bg-rose-50 rounded px-3 py-2 text-[12px] text-rose-700 inline-flex items-start gap-1.5">
+        <div className="border border-rose-200 bg-rose-50 rounded px-3 py-2 text-base text-rose-700 inline-flex items-start gap-1.5">
           <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
           <span>{error}</span>
         </div>
@@ -394,7 +394,7 @@ export default function PricingMatrixClient() {
       ) : (
         <Card noPadding>
           <div className="overflow-x-auto">
-            <table className="w-full text-[13px]">
+            <table className="w-full text-md">
               <thead className="border-b border-slate-200 bg-slate-50">
                 <tr>
                   <th className="px-3 py-2 w-8">
@@ -408,22 +408,22 @@ export default function PricingMatrixClient() {
                       className="rounded"
                     />
                   </th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
                     SKU
                   </th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
                     Channel · Marketplace
                   </th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
                     FM
                   </th>
-                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
                     Price
                   </th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
                     Source
                   </th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
                     Warnings
                   </th>
                   <th className="px-3 py-2 w-10"></th>
@@ -455,7 +455,7 @@ export default function PricingMatrixClient() {
                         />
                       </td>
                       <td
-                        className="px-3 py-2 font-mono text-[12px] text-slate-800 cursor-pointer"
+                        className="px-3 py-2 font-mono text-base text-slate-800 cursor-pointer"
                         onClick={() => setDrawerKey(r.id)}
                       >
                         {r.sku}
@@ -466,10 +466,10 @@ export default function PricingMatrixClient() {
                       >
                         <span className="font-medium">{r.channel}</span>
                         <span className="text-slate-400"> · </span>
-                        <span className="font-mono text-[11px]">{r.marketplace}</span>
+                        <span className="font-mono text-sm">{r.marketplace}</span>
                       </td>
                       <td
-                        className="px-3 py-2 text-[11px] text-slate-500 cursor-pointer"
+                        className="px-3 py-2 text-sm text-slate-500 cursor-pointer"
                         onClick={() => setDrawerKey(r.id)}
                       >
                         {r.fulfillmentMethod ?? '—'}
@@ -487,7 +487,7 @@ export default function PricingMatrixClient() {
                         onClick={() => setDrawerKey(r.id)}
                       >
                         {Number(r.computedPrice).toFixed(2)}{' '}
-                        <span className="text-[11px] text-slate-500 font-normal">
+                        <span className="text-sm text-slate-500 font-normal">
                           {r.currency}
                         </span>
                       </td>
@@ -497,7 +497,7 @@ export default function PricingMatrixClient() {
                       >
                         <span
                           className={cn(
-                            'inline-block text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded',
+                            'inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded',
                             SOURCE_TONE[r.source] ?? SOURCE_TONE.FALLBACK,
                           )}
                         >
@@ -510,13 +510,13 @@ export default function PricingMatrixClient() {
                       >
                         {r.warnings.length > 0 ? (
                           <span
-                            className="text-[11px] text-amber-700 inline-flex items-center gap-1"
+                            className="text-sm text-amber-700 inline-flex items-center gap-1"
                             title={r.warnings.join('; ')}
                           >
                             <AlertCircle size={11} /> {r.warnings.length}
                           </span>
                         ) : (
-                          <span className="text-[11px] text-slate-400">—</span>
+                          <span className="text-sm text-slate-400">—</span>
                         )}
                       </td>
                       <td
@@ -533,7 +533,7 @@ export default function PricingMatrixClient() {
           </div>
 
           {/* Pagination */}
-          <div className="px-4 py-2.5 border-t border-slate-200 flex items-center justify-between text-[12px] text-slate-600">
+          <div className="px-4 py-2.5 border-t border-slate-200 flex items-center justify-between text-base text-slate-600">
             <span>
               {data.total} snapshot{data.total === 1 ? '' : 's'} · page {data.page + 1} / {Math.max(1, totalPages)}
               {selected.size > 0 && (
@@ -546,14 +546,14 @@ export default function PricingMatrixClient() {
               <button
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={page === 0 || loading}
-                className="h-7 px-2 border border-slate-200 rounded text-[12px] disabled:opacity-40"
+                className="h-7 px-2 border border-slate-200 rounded text-base disabled:opacity-40"
               >
                 Prev
               </button>
               <button
                 onClick={() => setPage((p) => p + 1)}
                 disabled={page + 1 >= totalPages || loading}
-                className="h-7 px-2 border border-slate-200 rounded text-[12px] disabled:opacity-40"
+                className="h-7 px-2 border border-slate-200 rounded text-base disabled:opacity-40"
               >
                 Next
               </button>
@@ -626,10 +626,10 @@ function PricingDetailDrawer({
       <div className="w-full max-w-xl bg-white border-l border-slate-200 shadow-xl flex flex-col">
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
           <div className="min-w-0">
-            <div className="text-[13px] font-semibold text-slate-900 truncate font-mono">
+            <div className="text-md font-semibold text-slate-900 truncate font-mono">
               {row.sku}
             </div>
-            <div className="text-[11px] text-slate-500 mt-0.5">
+            <div className="text-sm text-slate-500 mt-0.5">
               {row.channel} · {row.marketplace}
               {row.fulfillmentMethod ? ` · ${row.fulfillmentMethod}` : ''}
             </div>
@@ -645,16 +645,16 @@ function PricingDetailDrawer({
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           {/* Resolved */}
           <div className="bg-slate-50 rounded p-3">
-            <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">
+            <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1">
               Resolved price
             </div>
             <div className="text-[24px] font-semibold tabular-nums text-slate-900">
               {Number(row.computedPrice).toFixed(2)}{' '}
-              <span className="text-[14px] font-normal text-slate-500">
+              <span className="text-lg font-normal text-slate-500">
                 {row.currency}
               </span>
             </div>
-            <div className="text-[11px] text-slate-500 mt-1">
+            <div className="text-sm text-slate-500 mt-1">
               Source:{' '}
               <span className="font-mono">{row.source}</span>
               {row.isClamped && (
@@ -667,10 +667,10 @@ function PricingDetailDrawer({
 
           {/* Breakdown */}
           <div>
-            <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
+            <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
               Breakdown
             </div>
-            <dl className="grid grid-cols-2 gap-y-1 text-[12px]">
+            <dl className="grid grid-cols-2 gap-y-1 text-base">
               <Item label="Master price" value={breakdown.masterPrice} suffix="EUR" />
               <Item label="FX rate" value={breakdown.fxRate} format="rate" />
               <Item label="Cost" value={breakdown.costPrice} suffix="EUR" />
@@ -693,10 +693,10 @@ function PricingDetailDrawer({
           {/* Warnings */}
           {row.warnings.length > 0 && (
             <div className="border border-amber-200 bg-amber-50 rounded p-3">
-              <div className="text-[11px] uppercase tracking-wider text-amber-800 font-semibold mb-1">
+              <div className="text-sm uppercase tracking-wider text-amber-800 font-semibold mb-1">
                 Warnings
               </div>
-              <ul className="text-[12px] text-amber-800 space-y-0.5">
+              <ul className="text-base text-amber-800 space-y-0.5">
                 {row.warnings.map((w, i) => (
                   <li key={i}>• {w}</li>
                 ))}
@@ -706,10 +706,10 @@ function PricingDetailDrawer({
 
           {/* Push action */}
           <div className="border border-slate-200 rounded p-3">
-            <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-2">
+            <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-2">
               Push to marketplace
             </div>
-            <div className="text-[12px] text-slate-600 mb-2">
+            <div className="text-base text-slate-600 mb-2">
               Sends this resolved price to {row.channel} via the channel API.
               Logs to ChannelListingOverride for audit; respects 5-minute
               hold window if the channel is configured for it.
@@ -718,7 +718,7 @@ function PricingDetailDrawer({
               type="button"
               onClick={push}
               disabled={pushing}
-              className="h-8 px-3 text-[12px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
             >
               {pushing ? (
                 <>
@@ -733,7 +733,7 @@ function PricingDetailDrawer({
             {pushResult && (
               <div
                 className={cn(
-                  'mt-2 text-[12px] inline-flex items-center gap-1.5',
+                  'mt-2 text-base inline-flex items-center gap-1.5',
                   pushResult.startsWith('Pushed') ? 'text-emerald-700' : 'text-rose-700',
                 )}
               >
@@ -747,7 +747,7 @@ function PricingDetailDrawer({
             )}
           </div>
 
-          <div className="text-[11px] text-slate-400">
+          <div className="text-sm text-slate-400">
             Last computed {new Date(row.computedAt).toLocaleString()}
           </div>
         </div>

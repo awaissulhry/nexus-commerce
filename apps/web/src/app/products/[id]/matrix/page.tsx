@@ -44,17 +44,17 @@ export default async function ProductMatrixPage({ params }: PageProps) {
   if (!product.isParent) {
     return (
       <div className="max-w-2xl mx-auto py-16 px-6 text-center space-y-3">
-        <h1 className="text-[18px] font-semibold text-slate-900">
+        <h1 className="text-2xl font-semibold text-slate-900">
           No matrix for this product
         </h1>
-        <p className="text-[13px] text-slate-600">
+        <p className="text-md text-slate-600">
           The matrix view is for parent SKUs that have variations across
           colour / size / etc. <span className="font-mono">{product.sku}</span>{' '}
           is a standalone — open it directly to edit master fields.
         </p>
         <a
           href={`/products/${id}`}
-          className="inline-block h-8 px-3 text-[12px] bg-slate-900 text-white rounded hover:bg-slate-800"
+          className="inline-block h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800"
         >
           Open product
         </a>

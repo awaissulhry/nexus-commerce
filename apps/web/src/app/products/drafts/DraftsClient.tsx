@@ -108,7 +108,7 @@ export default function DraftsClient() {
           <h1 className="text-[24px] font-semibold text-slate-900">
             Listing wizard drafts
           </h1>
-          <p className="text-[13px] text-slate-600 mt-0.5">
+          <p className="text-md text-slate-600 mt-0.5">
             In-progress wizards that haven&rsquo;t been submitted yet. Click any
             row to resume where you left off. Wizards expire after 30 days of
             inactivity.
@@ -130,14 +130,14 @@ export default function DraftsClient() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by SKU or product name…"
-            className="w-full h-8 pl-8 pr-3 text-[12px] border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-300"
+            className="w-full h-8 pl-8 pr-3 text-base border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-300"
           />
         </div>
         <button
           type="button"
           onClick={() => setStaleOnly((v) => !v)}
           className={cn(
-            'inline-flex items-center gap-1.5 h-8 px-2.5 text-[12px] rounded-md border transition-colors',
+            'inline-flex items-center gap-1.5 h-8 px-2.5 text-base rounded-md border transition-colors',
             staleOnly
               ? 'bg-amber-50 border-amber-300 text-amber-800'
               : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300',
@@ -147,7 +147,7 @@ export default function DraftsClient() {
           <Clock className="w-3 h-3" />
           Stale only
           {staleCount > 0 && !staleOnly && (
-            <span className="text-[10px] text-amber-700 font-semibold ml-1">
+            <span className="text-xs text-amber-700 font-semibold ml-1">
               {staleCount}
             </span>
           )}
@@ -155,16 +155,16 @@ export default function DraftsClient() {
       </div>
 
       {error && (
-        <div className="mb-3 border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-[12px] text-rose-800 flex items-start gap-2">
+        <div className="mb-3 border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800 flex items-start gap-2">
           <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
           <span>Failed to load drafts: {error}</span>
         </div>
       )}
 
       <div className="border border-slate-200 rounded-lg bg-white overflow-hidden">
-        <table className="w-full text-[12px]">
+        <table className="w-full text-base">
           <thead className="bg-slate-50 border-b border-slate-200">
-            <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <tr className="text-left text-sm font-semibold uppercase tracking-wide text-slate-500">
               <th className="px-4 py-2.5">Product</th>
               <th className="px-4 py-2.5">Channels</th>
               <th className="px-4 py-2.5">Step</th>
@@ -189,7 +189,7 @@ export default function DraftsClient() {
                       ? 'No drafts match these filters.'
                       : 'No drafts in progress.'}
                   </div>
-                  <div className="mt-1 text-[11px] text-slate-400">
+                  <div className="mt-1 text-sm text-slate-400">
                     Wizards started from /products/:id/list-wizard appear here
                     until submitted.
                   </div>
@@ -209,10 +209,10 @@ export default function DraftsClient() {
                     <div className="text-slate-900 truncate max-w-[420px]">
                       {d.productName ?? <em className="text-slate-400">Untitled</em>}
                     </div>
-                    <div className="text-[11px] text-slate-500 font-mono mt-0.5 flex items-center gap-2">
+                    <div className="text-sm text-slate-500 font-mono mt-0.5 flex items-center gap-2">
                       <span>{d.productSku ?? '—'}</span>
                       {d.productIsParent && (
-                        <span className="inline-flex items-center h-4 px-1 rounded text-[10px] font-medium bg-blue-50 text-blue-700">
+                        <span className="inline-flex items-center h-4 px-1 rounded text-xs font-medium bg-blue-50 text-blue-700">
                           parent
                         </span>
                       )}
@@ -222,12 +222,12 @@ export default function DraftsClient() {
                 <td className="px-4 py-2.5">
                   <div className="flex flex-wrap gap-1">
                     {d.channels.length === 0 && (
-                      <span className="text-slate-400 text-[11px]">none yet</span>
+                      <span className="text-slate-400 text-sm">none yet</span>
                     )}
                     {d.channels.map((c, i) => (
                       <span
                         key={`${c.platform}:${c.marketplace}:${i}`}
-                        className="inline-flex items-center h-5 px-1.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700"
+                        className="inline-flex items-center h-5 px-1.5 rounded text-xs font-medium bg-slate-100 text-slate-700"
                       >
                         <span className="font-mono">{c.platform}</span>
                         <span className="text-slate-400 mx-0.5">·</span>
@@ -237,24 +237,24 @@ export default function DraftsClient() {
                   </div>
                 </td>
                 <td className="px-4 py-2.5">
-                  <span className="inline-flex items-center h-5 px-1.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700">
+                  <span className="inline-flex items-center h-5 px-1.5 rounded text-xs font-semibold bg-blue-50 text-blue-700">
                     {d.currentStep}/9
                   </span>
-                  <span className="text-slate-500 ml-1.5 text-[11px]">
+                  <span className="text-slate-500 ml-1.5 text-sm">
                     {STEP_LABELS[d.currentStep] ?? `Step ${d.currentStep}`}
                   </span>
                 </td>
                 <td className="px-4 py-2.5">
                   <span
                     className={cn(
-                      'text-[11px]',
+                      'text-sm',
                       d.isStale ? 'text-amber-700' : 'text-slate-500',
                     )}
                     title={new Date(d.updatedAt).toLocaleString()}
                   >
                     {formatRelative(d.updatedAt)}
                     {d.isStale && (
-                      <span className="ml-1 text-[10px] uppercase tracking-wide font-semibold text-amber-700">
+                      <span className="ml-1 text-xs uppercase tracking-wide font-semibold text-amber-700">
                         stale
                       </span>
                     )}
@@ -263,7 +263,7 @@ export default function DraftsClient() {
                 <td className="px-4 py-2.5 text-right">
                   <Link
                     href={`/products/${d.productId}/list-wizard`}
-                    className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-700 hover:underline"
+                    className="inline-flex items-center gap-1 text-sm font-medium text-blue-700 hover:underline"
                   >
                     Resume
                     <ArrowRight className="w-3 h-3" />
@@ -276,7 +276,7 @@ export default function DraftsClient() {
       </div>
 
       {!loading && drafts.length > 0 && (
-        <div className="text-[11px] text-slate-500 mt-3">
+        <div className="text-sm text-slate-500 mt-3">
           Showing {drafts.length} of {total} drafts
           {staleCount > 0 && !staleOnly && (
             <>

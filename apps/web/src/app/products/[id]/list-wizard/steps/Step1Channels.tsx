@@ -217,7 +217,7 @@ export default function Step1Channels({
     return (
       <div className="max-w-3xl mx-auto py-12 px-6 text-center">
         <Loader2 className="w-5 h-5 animate-spin mx-auto text-slate-400" />
-        <p className="mt-2 text-[12px] text-slate-500">
+        <p className="mt-2 text-base text-slate-500">
           Loading channel connections…
         </p>
       </div>
@@ -227,7 +227,7 @@ export default function Step1Channels({
   if (error) {
     return (
       <div className="max-w-2xl mx-auto py-12 px-6">
-        <div className="border border-rose-200 bg-rose-50 rounded-lg px-4 py-3 text-[13px] text-rose-700 flex items-start gap-2">
+        <div className="border border-rose-200 bg-rose-50 rounded-lg px-4 py-3 text-md text-rose-700 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           {error}
         </div>
@@ -243,7 +243,7 @@ export default function Step1Channels({
         <h2 className="text-[20px] font-semibold text-slate-900">
           Channels &amp; Markets
         </h2>
-        <p className="text-[13px] text-slate-600 mt-1">
+        <p className="text-md text-slate-600 mt-1">
           Pick every (platform, marketplace) tuple this listing should
           publish to. Every downstream step adapts to the set you pick
           here — categories per channel, attribute unions, content tabs,
@@ -274,14 +274,14 @@ export default function Step1Channels({
           className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50"
         >
           <div className="min-w-0">
-            <div className="text-[13px] font-semibold text-slate-900">
+            <div className="text-md font-semibold text-slate-900">
               SKU strategy
             </div>
-            <div className="text-[11px] text-slate-500 mt-0.5 truncate">
+            <div className="text-sm text-slate-500 mt-0.5 truncate">
               {summarizeSkuStrategy(skuStrategy)}
             </div>
           </div>
-          <span className="text-[11px] text-slate-500 flex-shrink-0">
+          <span className="text-sm text-slate-500 flex-shrink-0">
             {strategyExpanded ? 'Hide' : 'Edit'}
           </span>
         </button>
@@ -353,7 +353,7 @@ export default function Step1Channels({
 
       <div className="mt-6">
         {disconnectedSelected.length > 0 && (
-          <div className="mb-3 border border-amber-200 bg-amber-50 rounded-md px-3 py-2 text-[12px] text-amber-800 flex items-start gap-2">
+          <div className="mb-3 border border-amber-200 bg-amber-50 rounded-md px-3 py-2 text-base text-amber-800 flex items-start gap-2">
             <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
             <span>
               {disconnectedSelected.length} selected channel
@@ -365,7 +365,7 @@ export default function Step1Channels({
         )}
 
         <div className="flex items-center justify-between gap-3">
-          <span className="text-[12px] text-slate-600">
+          <span className="text-base text-slate-600">
             {channelTuples.length === 0 ? (
               <span className="text-slate-400">
                 Pick at least one (platform, marketplace) to continue
@@ -382,7 +382,7 @@ export default function Step1Channels({
             onClick={onContinue}
             disabled={channelTuples.length === 0}
             className={cn(
-              'h-8 px-4 rounded-md text-[13px] font-medium',
+              'h-8 px-4 rounded-md text-md font-medium',
               channelTuples.length === 0
                 ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                 : 'bg-blue-600 text-white hover:bg-blue-700',
@@ -442,12 +442,12 @@ function PlatformCard({
           <Icon className="w-4 h-4 text-slate-500 flex-shrink-0" />
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <div className="text-[13px] font-semibold text-slate-900 truncate">
+              <div className="text-md font-semibold text-slate-900 truncate">
                 {label}
               </div>
               {isComingSoon && (
                 <span
-                  className="inline-flex items-center h-5 px-1.5 rounded text-[10px] uppercase tracking-wide font-semibold bg-amber-50 text-amber-800 border border-amber-200"
+                  className="inline-flex items-center h-5 px-1.5 rounded text-xs uppercase tracking-wide font-semibold bg-amber-50 text-amber-800 border border-amber-200"
                   title="Available in next release"
                 >
                   Coming soon
@@ -455,7 +455,7 @@ function PlatformCard({
               )}
             </div>
             {reasonLabel && (
-              <div className="text-[11px] text-slate-500 truncate">
+              <div className="text-sm text-slate-500 truncate">
                 {reasonLabel}
               </div>
             )}
@@ -469,7 +469,7 @@ function PlatformCard({
             <Link
               href="/settings/channels"
               target="_blank"
-              className="inline-flex items-center gap-1 h-6 px-2 text-[11px] font-medium text-blue-700 border border-blue-200 rounded-md hover:bg-blue-50"
+              className="inline-flex items-center gap-1 h-6 px-2 text-sm font-medium text-blue-700 border border-blue-200 rounded-md hover:bg-blue-50"
             >
               Connect {label}
               <ExternalLink className="w-3 h-3" />
@@ -497,7 +497,7 @@ function PlatformCard({
               aria-disabled={isComingSoon}
               title={buttonTitle}
               className={cn(
-                'inline-flex items-center gap-1.5 h-7 px-2 text-[12px] rounded-md border transition-colors',
+                'inline-flex items-center gap-1.5 h-7 px-2 text-base rounded-md border transition-colors',
                 isComingSoon
                   ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed'
                   : isSelected
@@ -505,10 +505,10 @@ function PlatformCard({
                   : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300',
               )}
             >
-              <span className="font-mono text-[11px] font-medium">
+              <span className="font-mono text-sm font-medium">
                 {m.code}
               </span>
-              <span className={cn('text-[11px]', isComingSoon ? 'text-slate-400' : 'text-slate-500')}>
+              <span className={cn('text-sm', isComingSoon ? 'text-slate-400' : 'text-slate-500')}>
                 {m.label}
               </span>
               {isSelected && !isComingSoon && (
@@ -538,9 +538,9 @@ function SkuStrategyRow({
   return (
     <div>
       <div className="flex items-baseline justify-between gap-3 mb-1.5">
-        <div className="text-[12px] font-semibold text-slate-800">{label}</div>
+        <div className="text-base font-semibold text-slate-800">{label}</div>
       </div>
-      <div className="text-[11px] text-slate-500 mb-2 leading-relaxed">{hint}</div>
+      <div className="text-sm text-slate-500 mb-2 leading-relaxed">{hint}</div>
       <div className="flex flex-wrap gap-1.5">
         {options.map((o) => {
           const active = value === o.value
@@ -550,7 +550,7 @@ function SkuStrategyRow({
               type="button"
               onClick={() => onChange(o.value)}
               className={cn(
-                'inline-flex items-center gap-1.5 h-7 px-2.5 text-[11px] rounded-md border transition-colors',
+                'inline-flex items-center gap-1.5 h-7 px-2.5 text-sm rounded-md border transition-colors',
                 active
                   ? 'bg-blue-50 border-blue-300 text-blue-800'
                   : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300',
@@ -578,13 +578,13 @@ function SkuStrategyRow({
 function ConnectionBadge({ connected }: { connected: boolean }) {
   if (connected) {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
         <CheckCircle2 className="w-3 h-3" /> Connected
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded">
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded">
       <XCircle className="w-3 h-3" /> Not connected
     </span>
   )

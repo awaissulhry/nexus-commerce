@@ -57,7 +57,7 @@ export default function ListOnChannelDropdown({ productId }: Props) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          'inline-flex items-center gap-1.5 h-7 px-2.5 text-[12px] font-medium rounded-md border transition-colors',
+          'inline-flex items-center gap-1.5 h-7 px-2.5 text-base font-medium rounded-md border transition-colors',
           'border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100',
         )}
         aria-haspopup="menu"
@@ -98,9 +98,9 @@ export default function ListOnChannelDropdown({ productId }: Props) {
               <button
                 type="button"
                 onClick={() => launch('SHOPIFY', 'GLOBAL')}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-left text-slate-700 hover:bg-slate-50"
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-base text-left text-slate-700 hover:bg-slate-50"
               >
-                <span className="font-mono text-[10px] tabular-nums px-1.5 py-0.5 rounded border bg-slate-100 border-slate-200 text-slate-600">
+                <span className="font-mono text-xs tabular-nums px-1.5 py-0.5 rounded border bg-slate-100 border-slate-200 text-slate-600">
                   SHOPIFY
                 </span>
                 <span>Shopify (all stores)</span>
@@ -108,9 +108,9 @@ export default function ListOnChannelDropdown({ productId }: Props) {
               <button
                 type="button"
                 onClick={() => launch('WOOCOMMERCE', 'GLOBAL')}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-left text-slate-700 hover:bg-slate-50"
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-base text-left text-slate-700 hover:bg-slate-50"
               >
-                <span className="font-mono text-[10px] tabular-nums px-1.5 py-0.5 rounded border bg-slate-100 border-slate-200 text-slate-600">
+                <span className="font-mono text-xs tabular-nums px-1.5 py-0.5 rounded border bg-slate-100 border-slate-200 text-slate-600">
                   WOO
                 </span>
                 <span>WooCommerce</span>
@@ -132,7 +132,7 @@ function Section({
 }) {
   return (
     <div>
-      <div className="px-3 pt-2 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+      <div className="px-3 pt-2 pb-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">
         {label}
       </div>
       <div>{children}</div>
@@ -153,9 +153,9 @@ function MarketRow({
     <button
       type="button"
       onClick={onClick}
-      className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-left text-slate-700 hover:bg-slate-50"
+      className="w-full flex items-center gap-2 px-3 py-1.5 text-base text-left text-slate-700 hover:bg-slate-50"
     >
-      <span className="font-mono text-[10px] tabular-nums px-1.5 py-0.5 rounded border bg-slate-100 border-slate-200 text-slate-600">
+      <span className="font-mono text-xs tabular-nums px-1.5 py-0.5 rounded border bg-slate-100 border-slate-200 text-slate-600">
         {code}
       </span>
       <span className="truncate">{label}</span>

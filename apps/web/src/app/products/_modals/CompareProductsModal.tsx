@@ -116,7 +116,7 @@ export default function CompareProductsModal({
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-center justify-between px-4 py-3 border-b border-slate-200 flex-shrink-0">
-          <div className="text-[14px] font-semibold text-slate-900">
+          <div className="text-lg font-semibold text-slate-900">
             Compare {products.length} products
           </div>
           <button
@@ -130,10 +130,10 @@ export default function CompareProductsModal({
         </header>
 
         <div className="flex-1 overflow-auto">
-          <table className="w-full text-[12px] border-collapse">
+          <table className="w-full text-base border-collapse">
             <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
               <tr>
-                <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500 w-32">
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 w-32">
                   Field
                 </th>
                 {products.map((p) => (
@@ -165,12 +165,12 @@ export default function CompareProductsModal({
                             )
                             onClose()
                           }}
-                          className="text-left text-[12px] font-semibold text-slate-900 hover:text-blue-700 truncate block max-w-[220px]"
+                          className="text-left text-base font-semibold text-slate-900 hover:text-blue-700 truncate block max-w-[220px]"
                           title={p.name}
                         >
                           {p.name}
                         </button>
-                        <div className="text-[10px] text-slate-500 font-mono truncate max-w-[220px]">
+                        <div className="text-xs text-slate-500 font-mono truncate max-w-[220px]">
                           {p.sku}
                         </div>
                       </div>
@@ -190,7 +190,7 @@ export default function CompareProductsModal({
                   }
                   title={row.differs ? 'Values differ across products' : undefined}
                 >
-                  <td className="px-3 py-1.5 text-[11px] text-slate-500 uppercase tracking-wider font-semibold align-top">
+                  <td className="px-3 py-1.5 text-sm text-slate-500 uppercase tracking-wider font-semibold align-top">
                     {row.label}
                   </td>
                   {row.values.map((v, i) => (
@@ -201,7 +201,7 @@ export default function CompareProductsModal({
                         (row.tone === 'numeric'
                           ? 'text-right tabular-nums'
                           : row.tone === 'mono'
-                          ? 'font-mono text-[11px]'
+                          ? 'font-mono text-sm'
                           : '') +
                         (row.differs ? ' text-amber-900' : ' text-slate-800')
                       }
@@ -229,7 +229,7 @@ export default function CompareProductsModal({
                         : 'border-b border-slate-100'
                     }
                   >
-                    <td className="px-3 py-1.5 text-[11px] text-slate-500 uppercase tracking-wider font-semibold align-top">
+                    <td className="px-3 py-1.5 text-sm text-slate-500 uppercase tracking-wider font-semibold align-top">
                       Channels
                     </td>
                     {products.map((p) => (
@@ -244,7 +244,7 @@ export default function CompareProductsModal({
                               return (
                                 <span
                                   key={ch}
-                                  className="inline-flex items-center px-1.5 h-5 text-[10px] font-mono border border-dashed border-slate-300 bg-white text-slate-400 rounded"
+                                  className="inline-flex items-center px-1.5 h-5 text-xs font-mono border border-dashed border-slate-300 bg-white text-slate-400 rounded"
                                   title={`Not on ${ch}`}
                                 >
                                   {ch.slice(0, 3)}
@@ -255,7 +255,7 @@ export default function CompareProductsModal({
                               <span
                                 key={ch}
                                 title={`${ch}: ${c.live} live, ${c.draft} draft, ${c.error} error / ${c.total}`}
-                                className={`inline-flex items-center gap-0.5 px-1.5 h-5 text-[10px] font-mono border rounded ${CHANNEL_TONE[ch]}`}
+                                className={`inline-flex items-center gap-0.5 px-1.5 h-5 text-xs font-mono border rounded ${CHANNEL_TONE[ch]}`}
                               >
                                 {ch.slice(0, 3)}
                                 <span className="opacity-60">{c.total}</span>
@@ -273,7 +273,7 @@ export default function CompareProductsModal({
         </div>
 
         <footer className="flex items-center justify-between px-4 py-2.5 border-t border-slate-200 bg-slate-50 flex-shrink-0">
-          <span className="text-[11px] text-slate-500">
+          <span className="text-sm text-slate-500">
             Amber rows differ across products. Click a header to open in drawer.
           </span>
           <div className="flex items-center gap-3">
@@ -281,7 +281,7 @@ export default function CompareProductsModal({
               <a
                 key={p.id}
                 href={`/products/${p.id}/edit`}
-                className="text-[11px] text-blue-700 hover:underline inline-flex items-center gap-0.5"
+                className="text-sm text-blue-700 hover:underline inline-flex items-center gap-0.5"
                 title={`Open ${p.sku} edit page`}
               >
                 <ExternalLink className="w-3 h-3" /> {p.sku.slice(0, 12)}

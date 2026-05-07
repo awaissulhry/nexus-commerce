@@ -73,7 +73,7 @@ export default function WizardStepper({
                     : `Step ${step.id}: ${step.title}`
                 }
                 className={cn(
-                  'relative flex items-center justify-center w-7 h-7 rounded-full text-[11px] font-medium transition-colors flex-shrink-0',
+                  'relative flex items-center justify-center w-7 h-7 rounded-full text-sm font-medium transition-colors flex-shrink-0',
                   isCurrent &&
                     'bg-blue-600 text-white ring-4 ring-blue-100',
                   isSkipped &&

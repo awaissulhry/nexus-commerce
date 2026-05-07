@@ -298,21 +298,21 @@ export default function Step5Variations({
     <div className="max-w-3xl mx-auto py-10 px-6">
       <div className="mb-6">
         <h2 className="text-[20px] font-semibold text-slate-900">Variations</h2>
-        <p className="text-[13px] text-slate-600 mt-1">
+        <p className="text-md text-slate-600 mt-1">
           Pick a theme that applies across every selected channel, or
           override per channel when their schemas diverge.
         </p>
       </div>
 
       {loading && !payload && (
-        <div className="border border-slate-200 rounded-lg bg-white px-6 py-12 text-center text-[13px] text-slate-500 flex items-center justify-center gap-2">
+        <div className="border border-slate-200 rounded-lg bg-white px-6 py-12 text-center text-md text-slate-500 flex items-center justify-center gap-2">
           <Loader2 className="w-4 h-4 animate-spin" />
           Loading variations…
         </div>
       )}
 
       {error && !loading && (
-        <div className="border border-rose-200 rounded-lg bg-rose-50 px-4 py-3 text-[13px] text-rose-700 flex items-start gap-2">
+        <div className="border border-rose-200 rounded-lg bg-rose-50 px-4 py-3 text-md text-rose-700 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           {error}
         </div>
@@ -322,11 +322,11 @@ export default function Step5Variations({
         <>
           {/* Channel-with-missing-themes warning */}
           {payload.channelsMissingThemes.length > 0 && (
-            <div className="mb-4 border border-amber-200 bg-amber-50 rounded-md px-3 py-2 text-[12px] text-amber-800">
+            <div className="mb-4 border border-amber-200 bg-amber-50 rounded-md px-3 py-2 text-base text-amber-800">
               <div className="font-medium mb-1">
                 Themes unavailable for some channels
               </div>
-              <ul className="space-y-0.5 text-[11px]">
+              <ul className="space-y-0.5 text-sm">
                 {payload.channelsMissingThemes.map((m) => (
                   <li key={m.channelKey}>
                     <span className="font-mono">{m.channelKey}</span> —{' '}
@@ -340,11 +340,11 @@ export default function Step5Variations({
           {/* Common theme picker */}
           <div className="border border-slate-200 rounded-lg bg-white px-4 py-3 mb-4">
             <div className="flex items-baseline justify-between gap-2 mb-2">
-              <label className="text-[12px] font-medium text-slate-700">
+              <label className="text-base font-medium text-slate-700">
                 Common theme (applies to every selected channel)
               </label>
               {payload.commonThemes.length === 0 && (
-                <span className="text-[10px] uppercase tracking-wide text-amber-700">
+                <span className="text-xs uppercase tracking-wide text-amber-700">
                   No theme common to all channels
                 </span>
               )}
@@ -352,7 +352,7 @@ export default function Step5Variations({
             <select
               value={commonTheme ?? ''}
               onChange={(e) => setCommonTheme(e.target.value || null)}
-              className="w-full h-8 px-2 text-[13px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+              className="w-full h-8 px-2 text-md border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
               disabled={payload.commonThemes.length === 0}
             >
               {payload.commonThemes.length === 0 ? (
@@ -369,7 +369,7 @@ export default function Step5Variations({
               )}
             </select>
             {commonTheme && (
-              <p className="mt-1.5 text-[11px] text-slate-500">
+              <p className="mt-1.5 text-sm text-slate-500">
                 Required per variation:{' '}
                 <span className="font-mono">
                   {payload.commonThemes
@@ -385,11 +385,11 @@ export default function Step5Variations({
               common) plus a "Same as" / custom path. */}
           {channelKeys.length > 0 && (
             <div className="mb-4 border border-slate-200 rounded-lg bg-white">
-              <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between text-[12px]">
+              <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between text-base">
                 <span className="font-medium text-slate-700">
                   Per-marketplace themes
                 </span>
-                <span className="text-[11px] text-slate-500">
+                <span className="text-sm text-slate-500">
                   {Object.keys(themeByChannel).length > 0
                     ? `${Object.keys(themeByChannel).length} override${
                         Object.keys(themeByChannel).length === 1 ? '' : 's'
@@ -412,7 +412,7 @@ export default function Step5Variations({
                         className="flex flex-col gap-1.5"
                       >
                         <div className="flex items-center gap-2">
-                          <span className="text-[11px] font-mono text-slate-600 w-24 flex-shrink-0">
+                          <span className="text-sm font-mono text-slate-600 w-24 flex-shrink-0">
                             {channelKey}
                           </span>
                           <select
@@ -470,7 +470,7 @@ export default function Step5Variations({
                                 })
                               }
                             }}
-                            className="flex-1 h-7 px-2 text-[12px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+                            className="flex-1 h-7 px-2 text-base border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
                           >
                             <option value="">
                               {inherits && commonTheme
@@ -512,7 +512,7 @@ export default function Step5Variations({
                         {/* Custom theme inline editor */}
                         {(isCustom || customDraft[channelKey] !== undefined) && (
                           <div className="ml-[6.5rem] flex items-center gap-2">
-                            <span className="text-[10px] uppercase tracking-wide text-slate-500 flex-shrink-0">
+                            <span className="text-xs uppercase tracking-wide text-slate-500 flex-shrink-0">
                               Attrs:
                             </span>
                             <input
@@ -573,7 +573,7 @@ export default function Step5Variations({
                                 })
                               }}
                               placeholder="size, color, material"
-                              className="flex-1 h-7 px-2 text-[12px] font-mono border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                              className="flex-1 h-7 px-2 text-base font-mono border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                             />
                           </div>
                         )}
@@ -586,7 +586,7 @@ export default function Step5Variations({
 
           {/* Children list */}
           <div className="border border-slate-200 rounded-lg bg-white">
-            <div className="px-3 py-2 border-b border-slate-200 flex items-center justify-between text-[12px]">
+            <div className="px-3 py-2 border-b border-slate-200 flex items-center justify-between text-base">
               <span className="text-slate-700">
                 <span className="font-medium">{includedSkus.size}</span> of{' '}
                 {payload.children.length} variations included
@@ -610,7 +610,7 @@ export default function Step5Variations({
             </div>
             <div className="max-h-[420px] overflow-y-auto">
               {childrenWithLiveAnnotations.length === 0 ? (
-                <div className="px-3 py-6 text-[12px] text-slate-500 text-center">
+                <div className="px-3 py-6 text-base text-slate-500 text-center">
                   No children found. Add variations on the master product
                   before listing.
                 </div>
@@ -636,10 +636,10 @@ export default function Step5Variations({
                         className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="font-mono text-[12px] text-slate-900 truncate">
+                        <div className="font-mono text-base text-slate-900 truncate">
                           {c.sku}
                         </div>
-                        <div className="text-[11px] text-slate-500 truncate">
+                        <div className="text-sm text-slate-500 truncate">
                           {Object.keys(c.attributes).length === 0
                             ? '(no attributes set)'
                             : Object.entries(c.attributes)
@@ -647,7 +647,7 @@ export default function Step5Variations({
                                 .join(' · ')}
                         </div>
                       </div>
-                      <div className="text-[11px] text-slate-500 tabular-nums whitespace-nowrap">
+                      <div className="text-sm text-slate-500 tabular-nums whitespace-nowrap">
                         €{c.price.toFixed(2)} · {c.stock}
                       </div>
                       {hasBlocking && (
@@ -655,14 +655,14 @@ export default function Step5Variations({
                           {blockingChannels.slice(0, 2).map((b) => (
                             <span
                               key={b.channelKey}
-                              className="text-[10px] font-medium text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded font-mono"
+                              className="text-xs font-medium text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded font-mono"
                               title={`Missing for ${b.channelKey}: ${b.missing.join(', ')}`}
                             >
                               {b.channelKey}: −{b.missing.length}
                             </span>
                           ))}
                           {blockingChannels.length > 2 && (
-                            <span className="text-[10px] text-amber-600">
+                            <span className="text-xs text-amber-600">
                               +{blockingChannels.length - 2} more
                             </span>
                           )}
@@ -693,7 +693,7 @@ export default function Step5Variations({
                     blockingChildren.length > 0))
               }
               className={cn(
-                'h-8 px-4 rounded-md text-[13px] font-medium',
+                'h-8 px-4 rounded-md text-md font-medium',
                 !payload ||
                   (payload.children.length > 0 &&
                     (includedChildren.length === 0 ||
@@ -725,18 +725,18 @@ function ContinueStatus({
   hasChildren: boolean
 }) {
   if (!hasChildren) {
-    return <span className="text-[12px] text-slate-500">No variations</span>
+    return <span className="text-base text-slate-500">No variations</span>
   }
   if (includedCount === 0) {
     return (
-      <span className="text-[12px] text-amber-700">
+      <span className="text-base text-amber-700">
         Pick at least one variation
       </span>
     )
   }
   if (blockingCount > 0) {
     return (
-      <span className="text-[12px] text-amber-700">
+      <span className="text-base text-amber-700">
         {blockingCount} variation{blockingCount === 1 ? '' : 's'} missing
         attributes for the selected theme
       </span>
@@ -744,13 +744,13 @@ function ContinueStatus({
   }
   if (!commonTheme && channelKeys.length > 0) {
     return (
-      <span className="text-[12px] text-slate-500">
+      <span className="text-base text-slate-500">
         {includedCount} included — pick a theme to continue
       </span>
     )
   }
   return (
-    <span className="text-[12px] text-emerald-700 inline-flex items-center gap-1.5">
+    <span className="text-base text-emerald-700 inline-flex items-center gap-1.5">
       <CheckCircle2 className="w-3.5 h-3.5" />
       {includedCount} variation{includedCount === 1 ? '' : 's'} ready
     </span>
@@ -864,7 +864,7 @@ function SingleProductSetup({
     <div className="max-w-3xl mx-auto py-10 px-6">
       <div className="mb-6">
         <h2 className="text-[20px] font-semibold text-slate-900">Variations</h2>
-        <p className="text-[13px] text-slate-600 mt-1">
+        <p className="text-md text-slate-600 mt-1">
           <span className="font-mono">{productSku}</span> — {productName}.
           Pick how this product fits into your catalog.
         </p>
@@ -933,8 +933,8 @@ function ModeCard({
           active ? 'text-blue-600' : 'text-slate-500',
         )}
       />
-      <div className="text-[13px] font-semibold text-slate-900 mb-1">{title}</div>
-      <div className="text-[11px] text-slate-600 leading-snug">{subtitle}</div>
+      <div className="text-md font-semibold text-slate-900 mb-1">{title}</div>
+      <div className="text-sm text-slate-600 leading-snug">{subtitle}</div>
     </button>
   )
 }
@@ -950,7 +950,7 @@ function StandalonePanel({
     <div className="border border-slate-200 rounded-lg bg-white px-5 py-4">
       <div className="flex items-start gap-3">
         <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-600 flex-shrink-0" />
-        <div className="text-[12px] text-slate-700">
+        <div className="text-base text-slate-700">
           <span className="font-mono">{sku}</span> ships as a single SKU.
           Click Continue to move on to attributes.
         </div>
@@ -959,7 +959,7 @@ function StandalonePanel({
         <button
           type="button"
           onClick={onAdvance}
-          className="h-8 px-4 rounded-md bg-blue-600 text-white text-[13px] font-medium hover:bg-blue-700"
+          className="h-8 px-4 rounded-md bg-blue-600 text-white text-md font-medium hover:bg-blue-700"
         >
           Continue
         </button>
@@ -1111,7 +1111,7 @@ function LinkParentPanel({ onLinked }: { onLinked: () => void }) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search parent SKU or name (min 2 chars)"
-            className="flex-1 h-8 text-[12px] border-0 focus:outline-none bg-transparent"
+            className="flex-1 h-8 text-base border-0 focus:outline-none bg-transparent"
             autoFocus
           />
           {searching && (
@@ -1123,7 +1123,7 @@ function LinkParentPanel({ onLinked }: { onLinked: () => void }) {
       {!selected && (
         <div className="max-h-[260px] overflow-y-auto">
           {results.length === 0 && search.trim().length >= 2 && !searching && (
-            <div className="px-5 py-4 text-[12px] text-slate-500 text-center">
+            <div className="px-5 py-4 text-base text-slate-500 text-center">
               No parent products match.
             </div>
           )}
@@ -1132,10 +1132,10 @@ function LinkParentPanel({ onLinked }: { onLinked: () => void }) {
               key={p.id}
               type="button"
               onClick={() => setSelected(p)}
-              className="w-full text-left px-5 py-2.5 text-[12px] hover:bg-slate-50 border-b border-slate-100 last:border-b-0"
+              className="w-full text-left px-5 py-2.5 text-base hover:bg-slate-50 border-b border-slate-100 last:border-b-0"
             >
               <div className="font-mono text-slate-900">{p.sku}</div>
-              <div className="text-[11px] text-slate-500 truncate">{p.name}</div>
+              <div className="text-sm text-slate-500 truncate">{p.name}</div>
             </button>
           ))}
         </div>
@@ -1145,11 +1145,11 @@ function LinkParentPanel({ onLinked }: { onLinked: () => void }) {
         <div className="px-5 py-4">
           <div className="flex items-start justify-between gap-3 mb-3 pb-3 border-b border-slate-100">
             <div>
-              <div className="text-[12px] text-slate-500">Linking under:</div>
-              <div className="font-mono text-[14px] text-slate-900 mt-0.5">
+              <div className="text-base text-slate-500">Linking under:</div>
+              <div className="font-mono text-lg text-slate-900 mt-0.5">
                 {selected.sku}
               </div>
-              <div className="text-[12px] text-slate-600">{selected.name}</div>
+              <div className="text-base text-slate-600">{selected.name}</div>
             </div>
             <button
               type="button"
@@ -1162,16 +1162,16 @@ function LinkParentPanel({ onLinked }: { onLinked: () => void }) {
           </div>
 
           <div className="mb-4">
-            <div className="text-[11px] font-medium text-slate-700 mb-1.5">
+            <div className="text-sm font-medium text-slate-700 mb-1.5">
               Existing variants under this parent
             </div>
             {variantsLoading ? (
-              <div className="text-[11px] text-slate-500 inline-flex items-center gap-1.5">
+              <div className="text-sm text-slate-500 inline-flex items-center gap-1.5">
                 <Loader2 className="w-3 h-3 animate-spin" />
                 Fetching variants…
               </div>
             ) : parentVariants.length === 0 ? (
-              <div className="text-[11px] text-slate-500 italic">
+              <div className="text-sm text-slate-500 italic">
                 No variants yet — yours will be the first child.
               </div>
             ) : (
@@ -1179,7 +1179,7 @@ function LinkParentPanel({ onLinked }: { onLinked: () => void }) {
                 {parentVariants.map((v) => (
                   <li
                     key={v.sku}
-                    className="text-[11px] flex items-center gap-2"
+                    className="text-sm flex items-center gap-2"
                   >
                     <span className="font-mono text-slate-700">{v.sku}</span>
                     <span className="text-slate-500">
@@ -1194,7 +1194,7 @@ function LinkParentPanel({ onLinked }: { onLinked: () => void }) {
           </div>
 
           {error && (
-            <div className="mb-3 px-3 py-2 border border-rose-200 bg-rose-50 rounded-md text-[11px] text-rose-700 inline-flex items-start gap-1.5">
+            <div className="mb-3 px-3 py-2 border border-rose-200 bg-rose-50 rounded-md text-sm text-rose-700 inline-flex items-start gap-1.5">
               <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
               <span className="break-words">{error}</span>
             </div>
@@ -1205,7 +1205,7 @@ function LinkParentPanel({ onLinked }: { onLinked: () => void }) {
               type="button"
               onClick={handleLink}
               disabled={linking}
-              className="h-8 px-4 rounded-md bg-blue-600 text-white text-[13px] font-medium hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+              className="h-8 px-4 rounded-md bg-blue-600 text-white text-md font-medium hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
             >
               {linking && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               Link as variant
@@ -1308,7 +1308,7 @@ function PromotePanel({ onPromoted }: { onPromoted: () => void }) {
   return (
     <div className="border border-slate-200 rounded-lg bg-white">
       <div className="px-5 py-4 border-b border-slate-100">
-        <div className="text-[12px] text-slate-700">
+        <div className="text-base text-slate-700">
           Add at least one variant. After save, this product becomes the
           parent and the wizard refreshes to let you pick variation themes
           per channel.
@@ -1317,13 +1317,13 @@ function PromotePanel({ onPromoted }: { onPromoted: () => void }) {
       <div className="px-5 py-4 space-y-3">
         {variants.length === 0 ? (
           <div className="text-center py-6 border border-dashed border-slate-200 rounded-lg">
-            <p className="text-[12px] text-slate-500 mb-3">
+            <p className="text-base text-slate-500 mb-3">
               No variants yet.
             </p>
             <button
               type="button"
               onClick={addRow}
-              className="h-7 px-3 text-[11px] rounded-md border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-1"
+              className="h-7 px-3 text-sm rounded-md border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-1"
             >
               <Plus className="w-3 h-3" />
               Add variant
@@ -1343,7 +1343,7 @@ function PromotePanel({ onPromoted }: { onPromoted: () => void }) {
             <button
               type="button"
               onClick={addRow}
-              className="w-full h-7 text-[11px] rounded-md border border-dashed border-slate-200 hover:bg-slate-50 inline-flex items-center justify-center gap-1"
+              className="w-full h-7 text-sm rounded-md border border-dashed border-slate-200 hover:bg-slate-50 inline-flex items-center justify-center gap-1"
             >
               <Plus className="w-3 h-3" />
               Add another variant
@@ -1352,7 +1352,7 @@ function PromotePanel({ onPromoted }: { onPromoted: () => void }) {
         )}
 
         {error && (
-          <div className="px-3 py-2 border border-rose-200 bg-rose-50 rounded-md text-[11px] text-rose-700 inline-flex items-start gap-1.5">
+          <div className="px-3 py-2 border border-rose-200 bg-rose-50 rounded-md text-sm text-rose-700 inline-flex items-start gap-1.5">
             <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
             <span className="break-words">{error}</span>
           </div>
@@ -1363,7 +1363,7 @@ function PromotePanel({ onPromoted }: { onPromoted: () => void }) {
             type="button"
             onClick={handlePromote}
             disabled={!valid || submitting}
-            className="h-8 px-4 rounded-md bg-blue-600 text-white text-[13px] font-medium hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+            className="h-8 px-4 rounded-md bg-blue-600 text-white text-md font-medium hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
           >
             {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             Promote to parent &amp; add {variants.length || 0} variant
@@ -1403,7 +1403,7 @@ function PromoteVariantRow({
   return (
     <div className="border border-slate-200 rounded-md p-3 bg-slate-50/50">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] uppercase tracking-wide text-slate-500 font-medium">
+        <span className="text-xs uppercase tracking-wide text-slate-500 font-medium">
           Variant #{index + 1}
         </span>
         <button
@@ -1421,14 +1421,14 @@ function PromoteVariantRow({
           value={row.sku}
           onChange={(e) => onChange({ sku: e.target.value })}
           placeholder="Variant SKU"
-          className="h-7 px-2 text-[12px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+          className="h-7 px-2 text-base border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
         />
         <input
           type="text"
           value={row.name}
           onChange={(e) => onChange({ name: e.target.value })}
           placeholder="Variant name"
-          className="h-7 px-2 text-[12px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+          className="h-7 px-2 text-base border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
         />
       </div>
       <div className="grid grid-cols-2 gap-2 mb-2">
@@ -1439,7 +1439,7 @@ function PromoteVariantRow({
           value={row.price}
           onChange={(e) => onChange({ price: e.target.value })}
           placeholder="Price (opt)"
-          className="h-7 px-2 text-[12px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+          className="h-7 px-2 text-base border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
         />
         <input
           type="number"
@@ -1447,7 +1447,7 @@ function PromoteVariantRow({
           value={row.stock}
           onChange={(e) => onChange({ stock: e.target.value })}
           placeholder="Stock (opt)"
-          className="h-7 px-2 text-[12px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+          className="h-7 px-2 text-base border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
         />
       </div>
       {Object.entries(row.attrs).length > 0 && (
@@ -1455,7 +1455,7 @@ function PromoteVariantRow({
           {Object.entries(row.attrs).map(([k, val]) => (
             <span
               key={k}
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[10px]"
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white border border-slate-200 text-xs"
             >
               <span className="font-mono">{k}</span>: {val}
               <button
@@ -1476,7 +1476,7 @@ function PromoteVariantRow({
           value={attrKeyDraft}
           onChange={(e) => setAttrKeyDraft(e.target.value)}
           placeholder="key (color)"
-          className="flex-1 h-6 px-2 text-[11px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+          className="flex-1 h-6 px-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
         />
         <input
           type="text"
@@ -1489,13 +1489,13 @@ function PromoteVariantRow({
             }
           }}
           placeholder="value (red)"
-          className="flex-1 h-6 px-2 text-[11px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+          className="flex-1 h-6 px-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
         />
         <button
           type="button"
           onClick={addAttr}
           disabled={!attrKeyDraft.trim() || !attrValDraft.trim()}
-          className="h-6 px-2 text-[11px] rounded-md border border-slate-200 hover:bg-white disabled:opacity-40 bg-white"
+          className="h-6 px-2 text-sm rounded-md border border-slate-200 hover:bg-white disabled:opacity-40 bg-white"
         >
           Add
         </button>

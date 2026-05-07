@@ -146,7 +146,7 @@ export default function OrganizeClient() {
         <h1 className="text-[24px] font-semibold text-slate-900">
           Catalog Organization
         </h1>
-        <p className="text-[13px] text-slate-600 mt-0.5">
+        <p className="text-md text-slate-600 mt-0.5">
           Promote standalones to parents, attach orphans to existing
           parents, and approve auto-detected variation groups.
           Multi-channel awareness throughout.
@@ -156,7 +156,7 @@ export default function OrganizeClient() {
       {statusMsg && (
         <div
           className={cn(
-            'mb-4 border rounded-lg px-4 py-2 text-[12px] flex items-start justify-between gap-3',
+            'mb-4 border rounded-lg px-4 py-2 text-base flex items-start justify-between gap-3',
             statusMsg.kind === 'success'
               ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
               : 'border-rose-200 bg-rose-50 text-rose-800',
@@ -196,7 +196,7 @@ export default function OrganizeClient() {
             tabIndex={tab === t.id ? 0 : -1}
             onClick={() => setTab(t.id)}
             className={cn(
-              'inline-flex items-center gap-2 h-10 px-4 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap',
+              'inline-flex items-center gap-2 h-10 px-4 text-md font-medium border-b-2 transition-colors whitespace-nowrap',
               tab === t.id
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-600 hover:text-slate-900',
@@ -354,10 +354,10 @@ function GroupsTab({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search base name or master SKU"
-              className="w-full h-8 pl-8 pr-2 text-[12px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full h-8 pl-8 pr-2 text-base border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
           </div>
-          <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-600">
+          <label className="inline-flex items-center gap-1.5 text-sm text-slate-600">
             Min confidence
             <input
               type="range"
@@ -374,7 +374,7 @@ function GroupsTab({
             type="button"
             onClick={() => void fetchDetection()}
             disabled={loading}
-            className="inline-flex items-center gap-1 h-7 px-2 text-[11px] font-medium text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50"
+            className="inline-flex items-center gap-1 h-7 px-2 text-sm font-medium text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50"
           >
             {loading ? (
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -407,7 +407,7 @@ function GroupsTab({
             Apply {approved.size || ''}
           </Button>
         </div>
-        <div className="mt-2 flex items-center gap-4 text-[11px] text-slate-600">
+        <div className="mt-2 flex items-center gap-4 text-sm text-slate-600">
           <span>
             <strong className="text-slate-900">{filtered.length}</strong> group
             {filtered.length === 1 ? '' : 's'} ·{' '}
@@ -527,10 +527,10 @@ function GroupRow({
           />
         </button>
         <div className="flex-1 min-w-0">
-          <div className="text-[13px] font-semibold text-slate-900 truncate">
+          <div className="text-md font-semibold text-slate-900 truncate">
             {group.baseName}
           </div>
-          <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
+          <div className="text-sm text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
             <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">
               {group.suggestedMasterSku}
             </span>
@@ -543,7 +543,7 @@ function GroupRow({
             {group.detectionMethod && (
               <>
                 <span>·</span>
-                <span className="uppercase tracking-wide text-[10px] text-slate-400">
+                <span className="uppercase tracking-wide text-xs text-slate-400">
                   {group.detectionMethod.replace(/_/g, ' ')}
                 </span>
               </>
@@ -591,10 +591,10 @@ function GroupRow({
                 className="bg-white border border-slate-200 rounded-md p-2.5 flex items-center justify-between gap-3"
               >
                 <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-medium text-slate-900 truncate font-mono">
+                  <div className="text-md font-medium text-slate-900 truncate font-mono">
                     {m.sku}
                   </div>
-                  <div className="text-[11px] text-slate-500 truncate">
+                  <div className="text-sm text-slate-500 truncate">
                     {m.name}
                   </div>
                 </div>
@@ -683,13 +683,13 @@ function StandaloneTab({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search SKU, name, brand"
-              className="w-full h-8 pl-8 pr-2 text-[12px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full h-8 pl-8 pr-2 text-base border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
           </div>
           <select
             value={coverage}
             onChange={(e) => setCoverage(e.target.value as any)}
-            className="h-8 px-2 text-[12px] border border-slate-200 rounded-md bg-white"
+            className="h-8 px-2 text-base border border-slate-200 rounded-md bg-white"
           >
             <option value="all">All</option>
             <option value="unlisted">Unlisted only</option>
@@ -700,7 +700,7 @@ function StandaloneTab({
             type="button"
             onClick={() => void refetch()}
             disabled={loading}
-            className="inline-flex items-center gap-1 h-7 px-2 text-[11px] font-medium text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50"
+            className="inline-flex items-center gap-1 h-7 px-2 text-sm font-medium text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50"
           >
             {loading ? (
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -721,7 +721,7 @@ function StandaloneTab({
             </Button>
           )}
         </div>
-        <div className="mt-2 text-[11px] text-slate-500">
+        <div className="mt-2 text-sm text-slate-500">
           <strong className="text-slate-900">{items.length}</strong> shown of{' '}
           {total} standalone product{total === 1 ? '' : 's'}.
         </div>
@@ -744,7 +744,7 @@ function StandaloneTab({
         />
       ) : (
         <div className="border border-slate-200 rounded-lg bg-white overflow-hidden">
-          <table className="w-full text-[12px]">
+          <table className="w-full text-base">
             <thead className="bg-slate-50">
               <tr>
                 <th className="px-3 py-2 text-left">
@@ -760,22 +760,22 @@ function StandaloneTab({
                     }
                   />
                 </th>
-                <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 font-semibold">
                   SKU
                 </th>
-                <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 font-semibold">
                   Name
                 </th>
-                <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 font-semibold">
                   Channels
                 </th>
-                <th className="px-3 py-2 text-right text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-slate-500 font-semibold">
                   Price
                 </th>
-                <th className="px-3 py-2 text-right text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-slate-500 font-semibold">
                   Stock
                 </th>
-                <th className="px-3 py-2 text-right text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-slate-500 font-semibold">
                   Actions
                 </th>
               </tr>
@@ -800,7 +800,7 @@ function StandaloneTab({
                       }
                     />
                   </td>
-                  <td className="px-3 py-2 font-mono text-[11px]">
+                  <td className="px-3 py-2 font-mono text-sm">
                     <Link
                       href={`/products/${p.id}/edit`}
                       className="text-blue-600 hover:underline"
@@ -811,7 +811,7 @@ function StandaloneTab({
                   <td className="px-3 py-2 max-w-[260px]">
                     <div className="truncate text-slate-800">{p.name}</div>
                     {p.brand && (
-                      <div className="text-[10px] text-slate-500">
+                      <div className="text-xs text-slate-500">
                         {p.brand}
                       </div>
                     )}
@@ -836,7 +836,7 @@ function StandaloneTab({
                       <button
                         type="button"
                         onClick={() => setPromoteId(p)}
-                        className="h-6 px-2 text-[10px] rounded-md border border-slate-200 hover:bg-slate-100 text-slate-700"
+                        className="h-6 px-2 text-xs rounded-md border border-slate-200 hover:bg-slate-100 text-slate-700"
                         title="Mark as parent (will accept variants)"
                       >
                         Promote
@@ -846,7 +846,7 @@ function StandaloneTab({
                         onClick={() =>
                           setAttachOpen({ productIds: [p.id] })
                         }
-                        className="h-6 px-2 text-[10px] rounded-md bg-blue-600 text-white hover:bg-blue-700"
+                        className="h-6 px-2 text-xs rounded-md bg-blue-600 text-white hover:bg-blue-700"
                       >
                         Attach to parent
                       </button>
@@ -902,7 +902,7 @@ function StandaloneTab({
 function CoverageBadge({ cov }: { cov: StandaloneItem['channelCoverage'] }) {
   if (cov.status === 'unlisted') {
     return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded border border-slate-200 bg-slate-50 text-slate-600">
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded border border-slate-200 bg-slate-50 text-slate-600">
         unlisted
       </span>
     )
@@ -1120,7 +1120,7 @@ function AttachModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
-          <h2 className="text-[15px] font-semibold text-slate-900">
+          <h2 className="text-lg font-semibold text-slate-900">
             Attach {productIds.length} product{productIds.length === 1 ? '' : 's'}{' '}
             to parent
           </h2>
@@ -1137,7 +1137,7 @@ function AttachModal({
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           {!selected && (
             <div>
-              <label className="block text-[11px] font-medium text-slate-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
                 Search parent SKU or name
               </label>
               <div className="relative">
@@ -1147,19 +1147,19 @@ function AttachModal({
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Min 2 characters"
-                  className="w-full h-8 pl-8 pr-2 text-[12px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="w-full h-8 pl-8 pr-2 text-base border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   autoFocus
                 />
               </div>
               <div className="mt-2 max-h-[200px] overflow-y-auto border border-slate-100 rounded-md">
                 {searching && (
-                  <div className="px-3 py-2 text-[11px] text-slate-500 inline-flex items-center gap-1.5">
+                  <div className="px-3 py-2 text-sm text-slate-500 inline-flex items-center gap-1.5">
                     <Loader2 className="w-3 h-3 animate-spin" />
                     Searching…
                   </div>
                 )}
                 {!searching && results.length === 0 && search.trim().length >= 2 && (
-                  <div className="px-3 py-3 text-[11px] text-slate-500 text-center">
+                  <div className="px-3 py-3 text-sm text-slate-500 text-center">
                     No parents match.
                   </div>
                 )}
@@ -1168,10 +1168,10 @@ function AttachModal({
                     key={p.id}
                     type="button"
                     onClick={() => setSelected(p)}
-                    className="w-full text-left px-3 py-2 text-[12px] hover:bg-slate-50 border-b border-slate-100 last:border-b-0"
+                    className="w-full text-left px-3 py-2 text-base hover:bg-slate-50 border-b border-slate-100 last:border-b-0"
                   >
                     <div className="font-mono text-slate-900">{p.sku}</div>
-                    <div className="text-[10px] text-slate-500 truncate">
+                    <div className="text-xs text-slate-500 truncate">
                       {p.name}
                     </div>
                   </button>
@@ -1184,18 +1184,18 @@ function AttachModal({
             <>
               <div className="border border-slate-200 rounded-md px-3 py-2 flex items-center justify-between">
                 <div>
-                  <div className="text-[11px] text-slate-500">Parent</div>
-                  <div className="font-mono text-[13px] text-slate-900">
+                  <div className="text-sm text-slate-500">Parent</div>
+                  <div className="font-mono text-md text-slate-900">
                     {selected.sku}
                   </div>
-                  <div className="text-[11px] text-slate-600">
+                  <div className="text-sm text-slate-600">
                     {selected.name}
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setSelected(null)}
-                  className="text-[10px] text-slate-500 hover:underline"
+                  className="text-xs text-slate-500 hover:underline"
                 >
                   change
                 </button>
@@ -1203,10 +1203,10 @@ function AttachModal({
 
               {parentAxes.length > 0 && parentVariants.length > 0 && (
                 <div className="border border-slate-200 rounded-md px-3 py-2">
-                  <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold mb-1">
+                  <div className="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-1">
                     Existing variants under this parent
                   </div>
-                  <div className="text-[11px] text-slate-600 max-h-[100px] overflow-y-auto">
+                  <div className="text-sm text-slate-600 max-h-[100px] overflow-y-auto">
                     {parentVariants.slice(0, 8).map((v) => (
                       <div
                         key={v.sku}
@@ -1221,7 +1221,7 @@ function AttachModal({
                       </div>
                     ))}
                     {parentVariants.length > 8 && (
-                      <div className="text-[10px] text-slate-400">
+                      <div className="text-xs text-slate-400">
                         …and {parentVariants.length - 8} more
                       </div>
                     )}
@@ -1230,11 +1230,11 @@ function AttachModal({
               )}
 
               <div>
-                <div className="text-[11px] font-medium text-slate-700 mb-1">
+                <div className="text-sm font-medium text-slate-700 mb-1">
                   Set axis values per product (optional but recommended)
                 </div>
                 {parentAxes.length === 0 ? (
-                  <p className="text-[11px] text-slate-500 italic">
+                  <p className="text-sm text-slate-500 italic">
                     The parent has no defined axes yet — your values
                     here will set them.
                   </p>
@@ -1299,7 +1299,7 @@ function ProductAxisRow({
 }) {
   return (
     <div className="border border-slate-200 rounded-md p-2.5 bg-slate-50/30">
-      <div className="text-[10px] font-mono text-slate-500 mb-1.5 truncate">
+      <div className="text-xs font-mono text-slate-500 mb-1.5 truncate">
         {productId}
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -1309,14 +1309,14 @@ function ProductAxisRow({
           const isCustom = v !== '' && !known.includes(v)
           return (
             <div key={axis}>
-              <div className="text-[10px] text-slate-500 mb-0.5">{axis}</div>
+              <div className="text-xs text-slate-500 mb-0.5">{axis}</div>
               <select
                 value={isCustom ? '__custom__' : v}
                 onChange={(e) => {
                   if (e.target.value === '__custom__') onChange(axis, '')
                   else onChange(axis, e.target.value)
                 }}
-                className="w-full h-7 px-2 text-[12px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+                className="w-full h-7 px-2 text-base border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
               >
                 <option value="">— Select —</option>
                 {known.map((k) => (
@@ -1332,7 +1332,7 @@ function ProductAxisRow({
                   value={v}
                   onChange={(e) => onChange(axis, e.target.value)}
                   placeholder={`New ${axis} value`}
-                  className="mt-1 w-full h-7 px-2 text-[11px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+                  className="mt-1 w-full h-7 px-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
                 />
               )}
             </div>
@@ -1368,20 +1368,20 @@ function PromoteModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-5 py-3 border-b border-slate-200">
-          <h2 className="text-[15px] font-semibold text-slate-900">
+          <h2 className="text-lg font-semibold text-slate-900">
             Promote {product.sku} to parent
           </h2>
         </div>
         <div className="px-5 py-4 space-y-3">
-          <p className="text-[12px] text-slate-700">
+          <p className="text-base text-slate-700">
             Marks this product as a parent. You can then add child variants
             from the Variations tab on its edit page, or attach existing
             standalones to it from this page.
           </p>
           <div>
-            <label className="block text-[11px] font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-slate-700 mb-1">
               Variation theme (optional)
-              <span className="ml-2 font-normal text-[10px] text-slate-500">
+              <span className="ml-2 font-normal text-xs text-slate-500">
                 e.g. "Size / Color"
               </span>
             </label>
@@ -1390,7 +1390,7 @@ function PromoteModal({
               value={theme}
               onChange={(e) => setTheme(e.target.value)}
               placeholder="Size / Color"
-              className="w-full h-8 px-2.5 text-[12px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full h-8 px-2.5 text-base border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               disabled={submitting}
             />
           </div>
@@ -1503,10 +1503,10 @@ function ParentsTab({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search parent SKU or name"
-              className="w-full h-8 pl-8 pr-2 text-[12px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full h-8 pl-8 pr-2 text-base border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
           </div>
-          <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-700">
+          <label className="inline-flex items-center gap-1.5 text-sm text-slate-700">
             <input
               type="checkbox"
               checked={incompleteOnly}
@@ -1518,7 +1518,7 @@ function ParentsTab({
             type="button"
             onClick={() => void refetch()}
             disabled={loading}
-            className="inline-flex items-center gap-1 h-7 px-2 text-[11px] font-medium text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50"
+            className="inline-flex items-center gap-1 h-7 px-2 text-sm font-medium text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50"
           >
             {loading ? (
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -1528,7 +1528,7 @@ function ParentsTab({
             Refresh
           </button>
         </div>
-        <div className="mt-2 text-[11px] text-slate-500">
+        <div className="mt-2 text-sm text-slate-500">
           <strong className="text-slate-900">{items.length}</strong> shown of{' '}
           {total} parent product{total === 1 ? '' : 's'}.
         </div>
@@ -1551,28 +1551,28 @@ function ParentsTab({
         />
       ) : (
         <div className="border border-slate-200 rounded-lg bg-white overflow-hidden">
-          <table className="w-full text-[12px]">
+          <table className="w-full text-base">
             <thead className="bg-slate-50">
               <tr>
-                <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 font-semibold">
                   SKU
                 </th>
-                <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 font-semibold">
                   Name
                 </th>
-                <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 font-semibold">
                   Theme
                 </th>
-                <th className="px-3 py-2 text-right text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-slate-500 font-semibold">
                   Children
                 </th>
-                <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 font-semibold">
                   Listings
                 </th>
-                <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 font-semibold">
                   Channels
                 </th>
-                <th className="px-3 py-2 text-right text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-slate-500 font-semibold">
                   Actions
                 </th>
               </tr>
@@ -1583,7 +1583,7 @@ function ParentsTab({
                   key={p.id}
                   className="border-t border-slate-100 hover:bg-slate-50/50"
                 >
-                  <td className="px-3 py-2 font-mono text-[11px]">
+                  <td className="px-3 py-2 font-mono text-sm">
                     <Link
                       href={`/products/${p.id}/edit`}
                       className="text-blue-600 hover:underline"
@@ -1594,7 +1594,7 @@ function ParentsTab({
                   <td className="px-3 py-2 max-w-[260px]">
                     <div className="truncate text-slate-800">{p.name}</div>
                     {p.brand && (
-                      <div className="text-[10px] text-slate-500">
+                      <div className="text-xs text-slate-500">
                         {p.brand}
                       </div>
                     )}
@@ -1652,7 +1652,7 @@ function ParentsTab({
                   <td className="px-3 py-2 text-right">
                     <Link
                       href={`/products/${p.id}/edit`}
-                      className="inline-flex items-center gap-1 h-6 px-2 text-[10px] rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700"
+                      className="inline-flex items-center gap-1 h-6 px-2 text-xs rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700"
                     >
                       Open
                       <ChevronRight className="w-3 h-3" />
@@ -1676,7 +1676,7 @@ function RightRail({ tab }: { tab: Tab }) {
   return (
     <aside className="space-y-4">
       <Card title="Tab help">
-        <div className="text-[11px] text-slate-600 leading-snug space-y-2">
+        <div className="text-sm text-slate-600 leading-snug space-y-2">
           {tab === 'groups' && (
             <p>
               Auto-detected variation clusters. Approve the ones that
@@ -1703,7 +1703,7 @@ function RightRail({ tab }: { tab: Tab }) {
       </Card>
 
       <Card title="Quick actions">
-        <ul className="text-[12px] text-slate-700 space-y-1">
+        <ul className="text-base text-slate-700 space-y-1">
           <li>
             <Link
               href="/products/new"

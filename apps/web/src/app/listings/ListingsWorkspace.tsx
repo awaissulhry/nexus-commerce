@@ -358,7 +358,7 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
         />
         <div className="ml-auto flex items-center gap-3">
           {facets && (
-            <div className="flex items-center gap-3 text-[12px] text-slate-500">
+            <div className="flex items-center gap-3 text-base text-slate-500">
               <span><span className="font-semibold text-slate-700 tabular-nums">{facets.total}</span> total</span>
               <span className="text-slate-300">·</span>
               <span className={facets.errorCount > 0 ? 'text-rose-600' : ''}>
@@ -377,7 +377,7 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
           {lens !== 'grid' && (
             <button
               onClick={() => { fetchGrid(); fetchFacets() }}
-              className="h-8 px-3 text-[12px] border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
             >
               <RefreshCw size={12} /> Refresh
             </button>
@@ -486,7 +486,7 @@ function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) =>
         <button
           key={t.key}
           onClick={() => onChange(t.key)}
-          className={`h-7 px-3 text-[12px] font-medium inline-flex items-center gap-1.5 rounded transition-colors ${
+          className={`h-7 px-3 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${
             current === t.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
@@ -564,7 +564,7 @@ function FilterBar(props: {
           </div>
           <button
             onClick={() => setFiltersOpen(!filtersOpen)}
-            className={`h-8 px-3 text-[12px] border rounded-md inline-flex items-center gap-1.5 ${
+            className={`h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 ${
               filtersOpen || activeFilterCount > 0
                 ? 'border-slate-300 bg-slate-50 text-slate-900'
                 : 'border-slate-200 hover:bg-slate-50 text-slate-600'
@@ -573,7 +573,7 @@ function FilterBar(props: {
             <Filter size={12} />
             Filters
             {activeFilterCount > 0 && (
-              <span className="bg-slate-700 text-white text-[10px] px-1.5 py-0.5 rounded-full font-semibold">{activeFilterCount}</span>
+              <span className="bg-slate-700 text-white text-xs px-1.5 py-0.5 rounded-full font-semibold">{activeFilterCount}</span>
             )}
             <ChevronDown size={12} className={filtersOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
           </button>
@@ -589,7 +589,7 @@ function FilterBar(props: {
                 published: undefined,
                 page: undefined,
               })}
-              className="h-8 px-2 text-[12px] text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
+              className="h-8 px-2 text-base text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
             >
               <X size={12} /> Clear
             </button>
@@ -671,7 +671,7 @@ function FilterGroup({
   if (options.length === 0) return null
   return (
     <div>
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">{label}</div>
+      <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-1.5">{label}</div>
       <div className="flex items-center gap-1.5 flex-wrap">
         {options.map((opt) => {
           const active = selected.includes(opt)
@@ -680,7 +680,7 @@ function FilterGroup({
             <button
               key={opt}
               onClick={() => onToggle(opt)}
-              className={`h-7 px-2 text-[11px] border rounded inline-flex items-center gap-1.5 transition-colors ${
+              className={`h-7 px-2 text-sm border rounded inline-flex items-center gap-1.5 transition-colors ${
                 active ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
               }`}
             >
@@ -705,7 +705,7 @@ function ToggleChip({ active, label, onClick, tone }: { active: boolean; label: 
   return (
     <button
       onClick={onClick}
-      className={`h-7 px-3 text-[11px] border rounded-full font-medium transition-colors ${
+      className={`h-7 px-3 text-sm border rounded-full font-medium transition-colors ${
         active ? activeClasses : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
       }`}
     >
@@ -756,10 +756,10 @@ function GridLens(props: {
   }
 
   if (grid.loading && grid.listings.length === 0) {
-    return <Card><div className="text-[13px] text-slate-500 py-8 text-center">Loading listings…</div></Card>
+    return <Card><div className="text-md text-slate-500 py-8 text-center">Loading listings…</div></Card>
   }
   if (grid.error) {
-    return <Card><div className="text-[13px] text-rose-600 py-8 text-center">Failed to load: {grid.error}</div></Card>
+    return <Card><div className="text-md text-rose-600 py-8 text-center">Failed to load: {grid.error}</div></Card>
   }
   if (grid.listings.length === 0) {
     return (
@@ -778,7 +778,7 @@ function GridLens(props: {
         <div className="relative">
           <button
             onClick={() => setColumnPickerOpen(!columnPickerOpen)}
-            className="h-7 px-2 text-[12px] border border-slate-200 rounded inline-flex items-center gap-1.5 hover:bg-slate-50"
+            className="h-7 px-2 text-base border border-slate-200 rounded inline-flex items-center gap-1.5 hover:bg-slate-50"
           >
             <Settings2 size={12} /> Columns ({visibleColumns.length})
           </button>
@@ -794,7 +794,7 @@ function GridLens(props: {
 
       <Card noPadding>
         <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
+          <table className="w-full text-md">
             <thead className="border-b border-slate-200 bg-slate-50 sticky top-0">
               <tr>
                 <th className="px-3 py-2 w-8">
@@ -808,7 +808,7 @@ function GridLens(props: {
                 {visible.map((col) => (
                   <th
                     key={col.key}
-                    className={`px-3 py-2 text-[11px] font-semibold text-slate-700 uppercase tracking-wider text-left ${col.key !== 'thumb' && col.key !== 'actions' ? 'cursor-pointer hover:bg-slate-100' : ''}`}
+                    className={`px-3 py-2 text-sm font-semibold text-slate-700 uppercase tracking-wider text-left ${col.key !== 'thumb' && col.key !== 'actions' ? 'cursor-pointer hover:bg-slate-100' : ''}`}
                     style={{ width: col.width, minWidth: col.width }}
                     onClick={() => {
                       const sortableKeys: Record<string, string> = {
@@ -875,23 +875,23 @@ function CellRenderer({ col, listing, onOpenDrawer, onResync }: { col: string; l
         <div className="min-w-0">
           <button
             onClick={() => onOpenDrawer(l.id)}
-            className="text-[13px] font-medium text-slate-900 hover:text-blue-600 text-left truncate block max-w-full"
+            className="text-md font-medium text-slate-900 hover:text-blue-600 text-left truncate block max-w-full"
           >
             {l.product.name}
             {l.product.isParent && <Layers size={11} className="inline ml-1 text-slate-400" />}
           </button>
-          <div className="text-[11px] text-slate-500 font-mono truncate">{l.product.sku}</div>
+          <div className="text-sm text-slate-500 font-mono truncate">{l.product.sku}</div>
         </div>
       )
     case 'channel':
       return (
-        <span className={`inline-block text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[l.channel] ?? 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+        <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[l.channel] ?? 'bg-slate-50 text-slate-600 border-slate-200'}`}>
           {l.channel}
         </span>
       )
     case 'marketplace':
       return (
-        <span className="font-mono text-[11px] font-semibold bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">
+        <span className="font-mono text-sm font-semibold bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">
           {l.marketplace}
         </span>
       )
@@ -903,7 +903,7 @@ function CellRenderer({ col, listing, onOpenDrawer, onResync }: { col: string; l
       return (
         <div className="flex items-center gap-1">
           <Badge variant={variant} size="sm">{status}</Badge>
-          {l.syncRetryCount > 0 && <span className="text-[10px] text-slate-400 tabular-nums">×{l.syncRetryCount}</span>}
+          {l.syncRetryCount > 0 && <span className="text-xs text-slate-400 tabular-nums">×{l.syncRetryCount}</span>}
         </div>
       )
     }
@@ -912,15 +912,15 @@ function CellRenderer({ col, listing, onOpenDrawer, onResync }: { col: string; l
         <div className="text-right tabular-nums">
           {l.price != null ? (
             <>
-              <div className="text-[13px] text-slate-900">{l.currency ?? ''} {l.price.toFixed(2)}</div>
-              {l.salePrice != null && <div className="text-[11px] text-rose-600">Sale {l.salePrice.toFixed(2)}</div>}
+              <div className="text-md text-slate-900">{l.currency ?? ''} {l.price.toFixed(2)}</div>
+              {l.salePrice != null && <div className="text-sm text-rose-600">Sale {l.salePrice.toFixed(2)}</div>}
             </>
           ) : <span className="text-slate-400">—</span>}
         </div>
       )
     case 'pricingRule':
       return (
-        <span className="text-[11px] text-slate-600">
+        <span className="text-sm text-slate-600">
           {l.pricingRule === 'PERCENT_OF_MASTER' && l.priceAdjustmentPercent != null
             ? `${l.priceAdjustmentPercent > 0 ? '+' : ''}${l.priceAdjustmentPercent}% master`
             : l.pricingRule === 'MATCH_AMAZON' ? 'Match Amazon'
@@ -934,7 +934,7 @@ function CellRenderer({ col, listing, onOpenDrawer, onResync }: { col: string; l
       const pct = l.masterPrice > 0 ? (delta / l.masterPrice) * 100 : 0
       const tone = Math.abs(pct) < 0.5 ? 'text-slate-500' : pct > 0 ? 'text-emerald-600' : 'text-rose-600'
       return (
-        <span className={`text-[11px] tabular-nums ${tone}`}>
+        <span className={`text-sm tabular-nums ${tone}`}>
           {delta >= 0 ? '+' : ''}{delta.toFixed(2)} ({pct >= 0 ? '+' : ''}{pct.toFixed(0)}%)
         </span>
       )
@@ -947,7 +947,7 @@ function CellRenderer({ col, listing, onOpenDrawer, onResync }: { col: string; l
     }
     case 'follow':
       return (
-        <span className="text-[10px] text-slate-500">
+        <span className="text-xs text-slate-500">
           {[
             l.followMasterTitle && 'T',
             l.followMasterPrice && 'P',
@@ -958,17 +958,17 @@ function CellRenderer({ col, listing, onOpenDrawer, onResync }: { col: string; l
     case 'externalId':
       return l.externalListingId ? (
         l.listingUrl ? (
-          <a href={l.listingUrl} target="_blank" rel="noreferrer" className="text-[12px] text-blue-600 hover:underline font-mono inline-flex items-center gap-1">
+          <a href={l.listingUrl} target="_blank" rel="noreferrer" className="text-base text-blue-600 hover:underline font-mono inline-flex items-center gap-1">
             {l.externalListingId.slice(0, 14)}{l.externalListingId.length > 14 ? '…' : ''}
             <ExternalLink size={10} />
           </a>
         ) : (
-          <span className="text-[12px] font-mono text-slate-700">{l.externalListingId}</span>
+          <span className="text-base font-mono text-slate-700">{l.externalListingId}</span>
         )
       ) : <span className="text-slate-400">—</span>
     case 'lastSync':
       return (
-        <span className="text-[12px] text-slate-500">
+        <span className="text-base text-slate-500">
           {l.lastSyncedAt
             ? new Date(l.lastSyncedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
             : 'Never'}
@@ -986,7 +986,7 @@ function CellRenderer({ col, listing, onOpenDrawer, onResync }: { col: string; l
           </button>
           <Link
             href={`/products/${l.productId}/edit?channel=${l.channel}&marketplace=${l.marketplace}`}
-            className="h-6 px-2 text-[11px] inline-flex items-center text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded"
+            className="h-6 px-2 text-sm inline-flex items-center text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded"
           >
             Edit
           </Link>
@@ -1012,9 +1012,9 @@ function ColumnPickerMenu({ visible, setVisible, onClose }: { visible: string[];
   const togglable = ALL_COLUMNS.filter((c) => c.key !== 'thumb')
   return (
     <div ref={ref} className="absolute right-0 top-full mt-1 w-56 bg-white border border-slate-200 rounded-md shadow-lg z-10 p-1.5">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 px-2 py-1.5">Visible columns</div>
+      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1.5">Visible columns</div>
       {togglable.map((c) => (
-        <label key={c.key} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-[12px] cursor-pointer">
+        <label key={c.key} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-base cursor-pointer">
           <input
             type="checkbox"
             checked={visible.includes(c.key)}
@@ -1027,8 +1027,8 @@ function ColumnPickerMenu({ visible, setVisible, onClose }: { visible: string[];
         </label>
       ))}
       <div className="border-t border-slate-100 mt-1.5 pt-1.5 px-2 py-1 flex items-center justify-between">
-        <button onClick={() => setVisible(DEFAULT_VISIBLE)} className="text-[11px] text-slate-500 hover:text-slate-900">Reset</button>
-        <button onClick={onClose} className="text-[11px] text-slate-500 hover:text-slate-900">Close</button>
+        <button onClick={() => setVisible(DEFAULT_VISIBLE)} className="text-sm text-slate-500 hover:text-slate-900">Reset</button>
+        <button onClick={onClose} className="text-sm text-slate-500 hover:text-slate-900">Close</button>
       </div>
     </div>
   )
@@ -1040,7 +1040,7 @@ function ColumnPickerMenu({ visible, setVisible, onClose }: { visible: string[];
 function Pagination({ page, totalPages, onPage }: { page: number; totalPages: number; onPage: (p: number) => void }) {
   if (totalPages <= 1) return null
   return (
-    <div className="flex items-center justify-between text-[12px] text-slate-500">
+    <div className="flex items-center justify-between text-base text-slate-500">
       <span>Page <span className="font-semibold text-slate-700 tabular-nums">{page}</span> of <span className="tabular-nums">{totalPages}</span></span>
       <div className="flex items-center gap-1">
         <button
@@ -1123,13 +1123,13 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
     <div className="sticky top-2 z-20">
       <Card>
         <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-[12px] font-semibold text-slate-700">
+          <span className="text-base font-semibold text-slate-700">
             {selectedIds.length} selected
           </span>
           <div className="h-4 w-px bg-slate-200" />
-          <button onClick={() => runAction('publish')} disabled={busy} className="h-7 px-3 text-[12px] bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 disabled:opacity-50 inline-flex items-center gap-1.5"><Eye size={12} /> Publish</button>
-          <button onClick={() => runAction('unpublish')} disabled={busy} className="h-7 px-3 text-[12px] bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-50 inline-flex items-center gap-1.5"><EyeOff size={12} /> Unpublish</button>
-          <button onClick={() => runAction('resync')} disabled={busy} className="h-7 px-3 text-[12px] bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 disabled:opacity-50 inline-flex items-center gap-1.5"><RefreshCw size={12} /> Resync</button>
+          <button onClick={() => runAction('publish')} disabled={busy} className="h-7 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 disabled:opacity-50 inline-flex items-center gap-1.5"><Eye size={12} /> Publish</button>
+          <button onClick={() => runAction('unpublish')} disabled={busy} className="h-7 px-3 text-base bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-50 inline-flex items-center gap-1.5"><EyeOff size={12} /> Unpublish</button>
+          <button onClick={() => runAction('resync')} disabled={busy} className="h-7 px-3 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 disabled:opacity-50 inline-flex items-center gap-1.5"><RefreshCw size={12} /> Resync</button>
           <button
             onClick={() => {
               const v = window.prompt('Set price for selected listings (number)')
@@ -1139,11 +1139,11 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
               runAction('set-price', { price: n })
             }}
             disabled={busy}
-            className="h-7 px-3 text-[12px] bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
+            className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
           ><Tag size={12} /> Set price</button>
-          <button onClick={() => runAction('follow-master')} disabled={busy} className="h-7 px-3 text-[12px] bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"><Link2 size={12} /> Follow master</button>
-          <button onClick={() => runAction('unfollow-master')} disabled={busy} className="h-7 px-3 text-[12px] bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5">Unfollow master</button>
-          {jobStatus && <span className="text-[11px] text-slate-500 ml-2">{jobStatus}</span>}
+          <button onClick={() => runAction('follow-master')} disabled={busy} className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"><Link2 size={12} /> Follow master</button>
+          <button onClick={() => runAction('unfollow-master')} disabled={busy} className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5">Unfollow master</button>
+          {jobStatus && <span className="text-sm text-slate-500 ml-2">{jobStatus}</span>}
           <button onClick={onClear} disabled={busy} className="ml-auto h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded disabled:opacity-50">
             <X size={14} />
           </button>
@@ -1171,8 +1171,8 @@ function HealthLens({ lockChannel, onOpenDrawer }: { lockChannel?: string; onOpe
 
   useEffect(() => { fetchHealth() }, [fetchHealth])
 
-  if (loading) return <Card><div className="text-[13px] text-slate-500 py-8 text-center">Loading health…</div></Card>
-  if (!data) return <Card><div className="text-[13px] text-rose-600 py-8 text-center">Failed to load health rollup.</div></Card>
+  if (loading) return <Card><div className="text-md text-slate-500 py-8 text-center">Loading health…</div></Card>
+  if (!data) return <Card><div className="text-md text-rose-600 py-8 text-center">Failed to load health rollup.</div></Card>
 
   const allClear = data.errorCount === 0 && data.failedSyncCount === 0 && data.suppressedCount === 0
 
@@ -1190,7 +1190,7 @@ function HealthLens({ lockChannel, onOpenDrawer }: { lockChannel?: string; onOpe
           <div className="space-y-1">
             {data.topReasons.map((r: any) => (
               <div key={r.reason} className="flex items-center justify-between gap-3 py-1.5 border-b border-slate-100 last:border-0">
-                <span className="text-[12px] text-slate-700 flex-1 min-w-0 truncate" title={r.reason}>{r.reason}</span>
+                <span className="text-base text-slate-700 flex-1 min-w-0 truncate" title={r.reason}>{r.reason}</span>
                 <Badge variant="danger" size="sm">{r.count}</Badge>
               </div>
             ))}
@@ -1202,8 +1202,8 @@ function HealthLens({ lockChannel, onOpenDrawer }: { lockChannel?: string; onOpe
         {data.recentErrors.length === 0 ? (
           <div className="py-8 text-center">
             <CheckCircle2 className="text-emerald-500 mx-auto mb-2" size={32} />
-            <div className="text-[13px] text-slate-700 font-medium">No errors right now.</div>
-            <div className="text-[11px] text-slate-500">All listings are syncing cleanly.</div>
+            <div className="text-md text-slate-700 font-medium">No errors right now.</div>
+            <div className="text-sm text-slate-500">All listings are syncing cleanly.</div>
           </div>
         ) : (
           <ul className="space-y-1 -my-1">
@@ -1214,18 +1214,18 @@ function HealthLens({ lockChannel, onOpenDrawer }: { lockChannel?: string; onOpe
                   className="w-full flex items-start justify-between gap-3 py-2 px-3 -mx-3 rounded-md hover:bg-slate-50 text-left transition-colors"
                 >
                   <div className="flex items-start gap-3 min-w-0">
-                    <span className={`inline-block text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded mt-0.5 ${CHANNEL_TONE[e.channel] ?? ''}`}>{e.channel}</span>
-                    <span className="font-mono text-[11px] font-semibold bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 mt-0.5">{e.marketplace}</span>
+                    <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded mt-0.5 ${CHANNEL_TONE[e.channel] ?? ''}`}>{e.channel}</span>
+                    <span className="font-mono text-sm font-semibold bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 mt-0.5">{e.marketplace}</span>
                     <div className="min-w-0">
-                      <div className="text-[13px] text-slate-900 truncate">{e.productName}</div>
-                      <div className="text-[11px] text-slate-500 font-mono truncate">{e.productSku}</div>
+                      <div className="text-md text-slate-900 truncate">{e.productName}</div>
+                      <div className="text-sm text-slate-500 font-mono truncate">{e.productSku}</div>
                       {e.lastSyncError && (
-                        <div className="text-[11px] text-rose-600 mt-1 truncate">{e.lastSyncError}</div>
+                        <div className="text-sm text-rose-600 mt-1 truncate">{e.lastSyncError}</div>
                       )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {e.syncRetryCount > 0 && <span className="text-[10px] text-slate-400 tabular-nums">×{e.syncRetryCount}</span>}
+                    {e.syncRetryCount > 0 && <span className="text-xs text-slate-400 tabular-nums">×{e.syncRetryCount}</span>}
                     <Badge variant="danger" size="sm">{e.lastSyncStatus ?? e.listingStatus}</Badge>
                   </div>
                 </button>
@@ -1254,7 +1254,7 @@ function HealthStat({ icon: Icon, tone, label, value }: { icon: any; tone: 'dang
         </div>
         <div>
           <div className="text-[24px] font-semibold text-slate-900 tabular-nums leading-none">{value}</div>
-          <div className="text-[11px] text-slate-500 uppercase tracking-wider mt-1">{label}</div>
+          <div className="text-sm text-slate-500 uppercase tracking-wider mt-1">{label}</div>
         </div>
       </div>
     </Card>
@@ -1280,7 +1280,7 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
     })()
   }, [lockChannel])
 
-  if (loading) return <Card><div className="text-[13px] text-slate-500 py-8 text-center">Loading matrix…</div></Card>
+  if (loading) return <Card><div className="text-md text-slate-500 py-8 text-center">Loading matrix…</div></Card>
   if (!data || !data.products?.length) return <EmptyState icon={LayoutGrid} title="Nothing to show" description="No products available." />
 
   // Compute distinct (channel, marketplace) columns from the data
@@ -1291,16 +1291,16 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
   return (
     <Card noPadding>
       <div className="overflow-x-auto">
-        <table className="text-[12px]">
+        <table className="text-base">
           <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
             <tr>
-              <th className="px-3 py-2 text-left text-[11px] font-semibold text-slate-700 uppercase tracking-wider sticky left-0 bg-slate-50 z-10 min-w-[260px]">Product</th>
+              <th className="px-3 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wider sticky left-0 bg-slate-50 z-10 min-w-[260px]">Product</th>
               {columns.map((key) => {
                 const [ch, mp] = key.split(':')
                 return (
-                  <th key={key} className="px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-wider min-w-[110px]">
+                  <th key={key} className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wider min-w-[110px]">
                     <div className={`inline-block px-1.5 py-0.5 rounded border ${CHANNEL_TONE[ch] ?? ''}`}>{ch}</div>
-                    <div className="text-[10px] text-slate-500 font-mono mt-1">{mp}</div>
+                    <div className="text-xs text-slate-500 font-mono mt-1">{mp}</div>
                   </th>
                 )
               })}
@@ -1314,8 +1314,8 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
                 <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50/50">
                   <td className="px-3 py-2 sticky left-0 bg-white border-r border-slate-100 z-10">
                     <Link href={`/products/${p.id}/edit`} className="hover:text-blue-600 block">
-                      <div className="text-[13px] font-medium text-slate-900 truncate max-w-xs">{p.name}</div>
-                      <div className="text-[11px] text-slate-500 font-mono">{p.sku}</div>
+                      <div className="text-md font-medium text-slate-900 truncate max-w-xs">{p.name}</div>
+                      <div className="text-sm text-slate-500 font-mono">{p.sku}</div>
                     </Link>
                   </td>
                   {columns.map((key) => {
@@ -1345,10 +1345,10 @@ function MatrixCell({ cell }: { cell: any }) {
     : cell.listingStatus === 'SUPPRESSED' ? 'bg-amber-50 text-amber-700 border-amber-200'
     : 'bg-white text-slate-600 border-slate-200'
   return (
-    <div className={`inline-block min-w-[90px] px-1.5 py-1 border rounded text-[10px] ${tone}`}>
+    <div className={`inline-block min-w-[90px] px-1.5 py-1 border rounded text-xs ${tone}`}>
       <div className="font-semibold uppercase tracking-wider">{cell.listingStatus}</div>
-      {cell.price != null && <div className="tabular-nums text-[11px] mt-0.5">{cell.price.toFixed(2)}</div>}
-      {cell.quantity != null && <div className="tabular-nums text-[10px] opacity-70">{cell.quantity} pcs</div>}
+      {cell.price != null && <div className="tabular-nums text-sm mt-0.5">{cell.price.toFixed(2)}</div>}
+      {cell.quantity != null && <div className="tabular-nums text-xs opacity-70">{cell.quantity} pcs</div>}
     </div>
   )
 }
@@ -1377,12 +1377,12 @@ function DraftsLens({ lockChannel, lockMarketplace, search }: { lockChannel?: st
     <div className="space-y-3">
       {!lockChannel && (
         <div className="flex items-center gap-1 flex-wrap">
-          <span className="text-[11px] uppercase tracking-wider text-slate-500 mr-2">Drafts for:</span>
+          <span className="text-sm uppercase tracking-wider text-slate-500 mr-2">Drafts for:</span>
           {['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY'].map((ch) => (
             <button
               key={ch}
               onClick={() => setActiveChannel(ch)}
-              className={`h-7 px-3 text-[11px] border rounded inline-flex items-center transition-colors ${
+              className={`h-7 px-3 text-sm border rounded inline-flex items-center transition-colors ${
                 activeChannel === ch ? `${CHANNEL_TONE[ch]} font-semibold` : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
               }`}
             >{ch}</button>
@@ -1390,24 +1390,24 @@ function DraftsLens({ lockChannel, lockMarketplace, search }: { lockChannel?: st
         </div>
       )}
 
-      {loading && <Card><div className="text-[13px] text-slate-500 py-8 text-center">Loading drafts…</div></Card>}
+      {loading && <Card><div className="text-md text-slate-500 py-8 text-center">Loading drafts…</div></Card>}
 
       {!loading && data && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card title={`Drafts (${data.draftCount})`} description="Created but not yet published — review and publish.">
             {data.drafts.length === 0 ? (
-              <div className="py-6 text-[12px] text-slate-500 text-center">No drafts on this channel.</div>
+              <div className="py-6 text-base text-slate-500 text-center">No drafts on this channel.</div>
             ) : (
               <ul className="space-y-1 -my-1">
                 {data.drafts.slice(0, 25).map((d: any) => (
                   <li key={d.id} className="flex items-center justify-between gap-3 py-2 px-3 -mx-3 rounded-md hover:bg-slate-50">
                     <div className="min-w-0 flex-1">
-                      <div className="text-[13px] text-slate-900 truncate">{d.product.name}</div>
-                      <div className="text-[11px] text-slate-500 font-mono">{d.product.sku} · {d.marketplace}</div>
+                      <div className="text-md text-slate-900 truncate">{d.product.name}</div>
+                      <div className="text-sm text-slate-500 font-mono">{d.product.sku} · {d.marketplace}</div>
                     </div>
                     <Link
                       href={`/products/${d.productId}/list-wizard?channel=${d.channel}&marketplace=${d.marketplace}`}
-                      className="h-7 px-3 text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100"
+                      className="h-7 px-3 text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100"
                     >Publish →</Link>
                   </li>
                 ))}
@@ -1417,18 +1417,18 @@ function DraftsLens({ lockChannel, lockMarketplace, search }: { lockChannel?: st
 
           <Card title={`Uncovered products (${data.uncoveredCount})`} description={`Products not yet listed on ${activeChannel}.`}>
             {data.uncovered.length === 0 ? (
-              <div className="py-6 text-[12px] text-slate-500 text-center">All products covered.</div>
+              <div className="py-6 text-base text-slate-500 text-center">All products covered.</div>
             ) : (
               <ul className="space-y-1 -my-1">
                 {data.uncovered.slice(0, 25).map((p: any) => (
                   <li key={p.id} className="flex items-center justify-between gap-3 py-2 px-3 -mx-3 rounded-md hover:bg-slate-50">
                     <div className="min-w-0 flex-1">
-                      <div className="text-[13px] text-slate-900 truncate">{p.name}</div>
-                      <div className="text-[11px] text-slate-500 font-mono">{p.sku}</div>
+                      <div className="text-md text-slate-900 truncate">{p.name}</div>
+                      <div className="text-sm text-slate-500 font-mono">{p.sku}</div>
                     </div>
                     <Link
                       href={`/products/${p.id}/list-wizard?channel=${activeChannel}`}
-                      className="h-7 px-3 text-[11px] bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100"
+                      className="h-7 px-3 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100"
                     >List on {activeChannel.charAt(0) + activeChannel.slice(1).toLowerCase()} →</Link>
                   </li>
                 ))}
@@ -1473,24 +1473,24 @@ function ListingDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
         className="relative h-full w-full max-w-lg bg-white shadow-2xl overflow-y-auto"
       >
         <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white">
-          <div className="text-[13px] font-semibold text-slate-900">Listing detail</div>
+          <div className="text-md font-semibold text-slate-900">Listing detail</div>
           <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100">
             <X size={16} />
           </button>
         </header>
         <div className="p-5 space-y-4">
           {loading || !listing ? (
-            <div className="text-[12px] text-slate-500">Loading…</div>
+            <div className="text-base text-slate-500">Loading…</div>
           ) : (
             <>
               <div className="flex items-start gap-3">
                 {listing.product?.images?.[0] && <img src={listing.product.images[0]} alt="" className="w-16 h-16 rounded-md object-cover bg-slate-100" />}
                 <div className="min-w-0 flex-1">
-                  <div className="text-[14px] font-semibold text-slate-900">{listing.product?.name}</div>
-                  <div className="text-[11px] text-slate-500 font-mono">{listing.product?.sku}</div>
+                  <div className="text-lg font-semibold text-slate-900">{listing.product?.name}</div>
+                  <div className="text-sm text-slate-500 font-mono">{listing.product?.sku}</div>
                   <div className="flex items-center gap-2 mt-1.5">
-                    <span className={`inline-block text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[listing.channel] ?? ''}`}>{listing.channel}</span>
-                    <span className="font-mono text-[11px] font-semibold bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">{listing.marketplace}</span>
+                    <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[listing.channel] ?? ''}`}>{listing.channel}</span>
+                    <span className="font-mono text-sm font-semibold bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">{listing.marketplace}</span>
                     <Badge variant={STATUS_VARIANT[listing.listingStatus] ?? 'default'} size="sm">{listing.listingStatus}</Badge>
                   </div>
                 </div>
@@ -1498,8 +1498,8 @@ function ListingDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
 
               {listing.lastSyncError && (
                 <div className="bg-rose-50 border border-rose-200 rounded-md p-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-wider text-rose-700 mb-1">Last sync error</div>
-                  <div className="text-[12px] text-rose-700">{listing.lastSyncError}</div>
+                  <div className="text-sm font-semibold uppercase tracking-wider text-rose-700 mb-1">Last sync error</div>
+                  <div className="text-base text-rose-700">{listing.lastSyncError}</div>
                 </div>
               )}
 
@@ -1515,7 +1515,7 @@ function ListingDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
               </div>
 
               {listing.listingUrl && (
-                <a href={listing.listingUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[12px] text-blue-600 hover:underline">
+                <a href={listing.listingUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-base text-blue-600 hover:underline">
                   Open on {listing.channel.charAt(0) + listing.channel.slice(1).toLowerCase()} <ExternalLink size={12} />
                 </a>
               )}
@@ -1524,13 +1524,13 @@ function ListingDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
                 <button
                   onClick={resync}
                   disabled={resyncing}
-                  className="h-8 px-3 text-[12px] bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 disabled:opacity-50 inline-flex items-center gap-1.5"
+                  className="h-8 px-3 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 disabled:opacity-50 inline-flex items-center gap-1.5"
                 >
                   <RefreshCw size={12} className={resyncing ? 'animate-spin' : ''} /> Resync from channel
                 </button>
                 <Link
                   href={`/products/${listing.productId}/edit?channel=${listing.channel}&marketplace=${listing.marketplace}`}
-                  className="h-8 px-3 text-[12px] bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+                  className="h-8 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
                 ><ArrowUpRight size={12} /> Open in editor</Link>
               </div>
             </>
@@ -1544,8 +1544,8 @@ function ListingDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
 function Detail({ label, value }: { label: string; value: any }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{label}</div>
-      <div className="text-[12px] text-slate-900 mt-0.5">{String(value)}</div>
+      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">{label}</div>
+      <div className="text-base text-slate-900 mt-0.5">{String(value)}</div>
     </div>
   )
 }

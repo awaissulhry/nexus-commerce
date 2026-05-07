@@ -21,8 +21,8 @@ const VARIANT: Record<Variant, string> = {
 }
 
 const SIZE: Record<Size, string> = {
-  sm: 'text-[10px] px-1.5 py-0.5',
-  md: 'text-[11px] px-2 py-0.5',
+  sm: 'text-xs px-1.5 py-0.5',
+  md: 'text-sm px-2 py-0.5',
 }
 
 export function Badge({

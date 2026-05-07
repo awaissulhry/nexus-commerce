@@ -132,7 +132,7 @@ export default function Step9Review({
           <h2 className="text-[20px] font-semibold text-slate-900">
             Review &amp; Verify
           </h2>
-          <p className="text-[13px] text-slate-600 mt-1">
+          <p className="text-md text-slate-600 mt-1">
             Per-channel pre-submit checklist. Expand any card to see its
             full step-by-step status or the prepared channel payload.
           </p>
@@ -141,21 +141,21 @@ export default function Step9Review({
           type="button"
           onClick={() => setReloadKey((k) => k + 1)}
           disabled={loading}
-          className="text-[12px] text-blue-600 hover:underline disabled:opacity-40"
+          className="text-base text-blue-600 hover:underline disabled:opacity-40"
         >
           Refresh
         </button>
       </div>
 
       {loading && (
-        <div className="border border-slate-200 rounded-lg bg-white px-6 py-12 text-center text-[13px] text-slate-500 flex items-center justify-center gap-2">
+        <div className="border border-slate-200 rounded-lg bg-white px-6 py-12 text-center text-md text-slate-500 flex items-center justify-center gap-2">
           <Loader2 className="w-4 h-4 animate-spin" />
           Loading review…
         </div>
       )}
 
       {error && !loading && (
-        <div className="border border-rose-200 rounded-lg bg-rose-50 px-4 py-3 text-[13px] text-rose-700 flex items-start gap-2">
+        <div className="border border-rose-200 rounded-lg bg-rose-50 px-4 py-3 text-md text-rose-700 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           {error}
         </div>
@@ -165,7 +165,7 @@ export default function Step9Review({
         <>
           {/* Top summary */}
           <div className="mb-4 border border-slate-200 rounded-lg bg-white px-4 py-3 flex items-center justify-between">
-            <div className="text-[13px] text-slate-700">
+            <div className="text-md text-slate-700">
               <span className="font-semibold">
                 {data.validation.channels.length}
               </span>{' '}
@@ -208,7 +208,7 @@ export default function Step9Review({
 
           {/* Continue */}
           <div className="mt-6 flex items-center justify-between gap-3">
-            <span className="text-[12px] text-slate-600">
+            <span className="text-base text-slate-600">
               {data.validation.allReady
                 ? 'All channels complete — proceed to submit.'
                 : `${data.validation.blockingChannels.length} channel${
@@ -220,7 +220,7 @@ export default function Step9Review({
               onClick={onContinue}
               disabled={!data.validation.allReady}
               className={cn(
-                'h-8 px-4 rounded-md text-[13px] font-medium',
+                'h-8 px-4 rounded-md text-md font-medium',
                 !data.validation.allReady
                   ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                   : 'bg-blue-600 text-white hover:bg-blue-700',
@@ -264,27 +264,27 @@ function ChannelCard({
             <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
           )}
           <div className="min-w-0">
-            <div className="font-mono text-[13px] text-slate-900 font-medium truncate">
+            <div className="font-mono text-md text-slate-900 font-medium truncate">
               {report.channelKey}
             </div>
-            <div className="text-[11px] text-slate-500 truncate">
+            <div className="text-sm text-slate-500 truncate">
               {report.platform} · {report.marketplace}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {report.ready ? (
-            <span className="text-[10px] uppercase tracking-wide font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+            <span className="text-xs uppercase tracking-wide font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
               Ready
             </span>
           ) : (
-            <span className="text-[10px] uppercase tracking-wide font-medium text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+            <span className="text-xs uppercase tracking-wide font-medium text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
               {report.blockingCount} blocking
             </span>
           )}
           {payload?.unsupported && (
             <span
-              className="text-[10px] uppercase tracking-wide font-medium text-slate-600 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded"
+              className="text-xs uppercase tracking-wide font-medium text-slate-600 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded"
               title={payload.reason}
             >
               Adapter not wired
@@ -312,7 +312,7 @@ function ChannelCard({
           composition time so the user knows specific picks were dropped. */}
       {payload?.missingChildSkus && payload.missingChildSkus.length > 0 && (
         <div className="px-4 py-2 border-b border-slate-100 bg-amber-50/40">
-          <div className="text-[12px] text-amber-800 inline-flex items-start gap-1.5">
+          <div className="text-base text-amber-800 inline-flex items-start gap-1.5">
             <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
             <span>
               <span className="font-semibold">
@@ -321,7 +321,7 @@ function ChannelCard({
               picked child SKU
               {payload.missingChildSkus.length === 1 ? '' : 's'} no longer
               exist and will be skipped:{' '}
-              <span className="font-mono text-[11px]">
+              <span className="font-mono text-sm">
                 {payload.missingChildSkus.slice(0, 5).join(', ')}
                 {payload.missingChildSkus.length > 5
                   ? ` +${payload.missingChildSkus.length - 5} more`
@@ -338,7 +338,7 @@ function ChannelCard({
           {incomplete.map((it, i) => (
             <div
               key={`i-${i}`}
-              className="text-[12px] text-amber-700 inline-flex items-start gap-1.5"
+              className="text-base text-amber-700 inline-flex items-start gap-1.5"
             >
               <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
               <span>
@@ -349,7 +349,7 @@ function ChannelCard({
           {report.warnings.map((w, i) => (
             <div
               key={`w-${i}`}
-              className="text-[12px] text-slate-600 inline-flex items-start gap-1.5"
+              className="text-base text-slate-600 inline-flex items-start gap-1.5"
             >
               <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
               <span>{w}</span>
@@ -362,7 +362,7 @@ function ChannelCard({
       <button
         type="button"
         onClick={onToggleChecklist}
-        className="w-full flex items-center justify-between gap-2 px-4 py-2 text-[12px] text-slate-700 hover:bg-slate-50"
+        className="w-full flex items-center justify-between gap-2 px-4 py-2 text-base text-slate-700 hover:bg-slate-50"
       >
         <span className="inline-flex items-center gap-1.5">
           {checklistExpanded ? (
@@ -372,7 +372,7 @@ function ChannelCard({
           )}
           {checklistExpanded ? 'Hide' : 'Show'} full step checklist
         </span>
-        <span className="text-[10px] text-slate-400 font-mono">
+        <span className="text-xs text-slate-400 font-mono">
           {report.items.filter((i) => i.status === 'complete').length}/
           {report.items.length}
         </span>
@@ -382,15 +382,15 @@ function ChannelCard({
           {report.items.map((it) => (
             <div
               key={it.step}
-              className="flex items-center gap-2 text-[12px]"
+              className="flex items-center gap-2 text-base"
             >
               <StatusIcon status={it.status} />
-              <span className="font-mono text-slate-500 w-12 text-[11px]">
+              <span className="font-mono text-slate-500 w-12 text-sm">
                 Step {it.step}
               </span>
               <span className="text-slate-700">{it.title}</span>
               {it.message && (
-                <span className="text-slate-500 text-[11px] truncate">
+                <span className="text-slate-500 text-sm truncate">
                   · {it.message}
                 </span>
               )}
@@ -405,7 +405,7 @@ function ChannelCard({
           <button
             type="button"
             onClick={onTogglePayload}
-            className="w-full flex items-center justify-between gap-2 px-4 py-2 text-[12px] text-slate-700 border-t border-slate-100 hover:bg-slate-50"
+            className="w-full flex items-center justify-between gap-2 px-4 py-2 text-base text-slate-700 border-t border-slate-100 hover:bg-slate-50"
           >
             <span className="inline-flex items-center gap-1.5">
               {payloadExpanded ? (
@@ -415,19 +415,19 @@ function ChannelCard({
               )}
               {payloadExpanded ? 'Hide' : 'Show'} prepared payload
             </span>
-            <span className="text-[10px] text-slate-400 font-mono">
+            <span className="text-xs text-slate-400 font-mono">
               {payload.platform}
             </span>
           </button>
           {payloadExpanded && (
-            <pre className="px-4 py-3 text-[11px] font-mono text-slate-700 bg-slate-50 max-h-[360px] overflow-auto border-t border-slate-100">
+            <pre className="px-4 py-3 text-sm font-mono text-slate-700 bg-slate-50 max-h-[360px] overflow-auto border-t border-slate-100">
               {JSON.stringify(payload.payload, null, 2)}
             </pre>
           )}
         </>
       )}
       {payload?.unsupported && (
-        <div className="px-4 py-2 border-t border-slate-100 text-[12px] text-slate-500">
+        <div className="px-4 py-2 border-t border-slate-100 text-base text-slate-500">
           {payload.reason}
         </div>
       )}
@@ -504,7 +504,7 @@ function ListingSummary({
   return (
     <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/40">
       {/* Top metadata row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px] mb-2">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm mb-2">
         <SummaryField
           label="Parent SKU"
           value={parentSku ?? '—'}
@@ -530,7 +530,7 @@ function ListingSummary({
 
       {/* Variation summary */}
       {isAmazon && (variationTheme || children.length > 0) && (
-        <div className="text-[11px] text-slate-600 mb-2">
+        <div className="text-sm text-slate-600 mb-2">
           <span className="text-slate-500">Variations: </span>
           {children.length > 0 ? (
             <>
@@ -559,7 +559,7 @@ function ListingSummary({
 
       {/* Expected ASIN behaviour */}
       {asinExpectation && (
-        <div className="mt-2 text-[11px] text-slate-500 italic">
+        <div className="mt-2 text-sm text-slate-500 italic">
           {asinExpectation}
         </div>
       )}
@@ -578,13 +578,13 @@ function SummaryField({
 }) {
   return (
     <div className="min-w-0">
-      <div className="text-[10px] uppercase tracking-wide text-slate-500 font-medium">
+      <div className="text-xs uppercase tracking-wide text-slate-500 font-medium">
         {label}
       </div>
       <div
         className={cn(
           'truncate text-slate-800',
-          mono ? 'font-mono text-[11px]' : 'text-[12px]',
+          mono ? 'font-mono text-sm' : 'text-base',
         )}
         title={value}
       >
@@ -612,7 +612,7 @@ function ChildSkuMap({
   )
   if (!hasOverrides) {
     return (
-      <div className="text-[11px] text-slate-500">
+      <div className="text-sm text-slate-500">
         Child SKUs: shared across marketplaces ·{' '}
         <span className="text-slate-400">no ASINs assigned yet</span>
       </div>
@@ -620,7 +620,7 @@ function ChildSkuMap({
   }
   return (
     <div className="border border-slate-200 rounded bg-white overflow-hidden">
-      <div className="grid grid-cols-3 gap-2 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-500 font-medium border-b border-slate-100 bg-slate-50">
+      <div className="grid grid-cols-3 gap-2 px-2 py-1 text-xs uppercase tracking-wide text-slate-500 font-medium border-b border-slate-100 bg-slate-50">
         <div>Master SKU</div>
         <div>Marketplace SKU</div>
         <div>Child ASIN</div>
@@ -629,7 +629,7 @@ function ChildSkuMap({
         {children.map((c) => (
           <div
             key={c.masterSku}
-            className="grid grid-cols-3 gap-2 px-2 py-1 text-[11px] font-mono border-b border-slate-50 last:border-b-0"
+            className="grid grid-cols-3 gap-2 px-2 py-1 text-sm font-mono border-b border-slate-50 last:border-b-0"
           >
             <div className="truncate text-slate-700" title={c.masterSku}>
               {c.masterSku}
@@ -672,13 +672,13 @@ function StatusIcon({ status }: { status: SliceStatus }) {
 function ReadyBadge({ allReady }: { allReady: boolean }) {
   if (allReady) {
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+      <span className="inline-flex items-center gap-1 text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
         <CheckCircle2 className="w-3 h-3" /> Ready to submit
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+    <span className="inline-flex items-center gap-1 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
       <AlertCircle className="w-3 h-3" /> Not ready
     </span>
   )

@@ -82,7 +82,7 @@ export default function FreshnessIndicator({
           : undefined
       }
       className={cn(
-        'inline-flex items-center gap-1.5 h-6 px-2 text-[11px] rounded-md border transition-colors',
+        'inline-flex items-center gap-1.5 h-6 px-2 text-sm rounded-md border transition-colors',
         tone,
         interactive && 'hover:border-slate-300 cursor-pointer',
         className,

@@ -34,9 +34,9 @@ export default function MobileTopBar() {
       </button>
       <Link href="/" className="ml-2 inline-flex items-center gap-2">
         <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center">
-          <span className="text-white text-[11px] font-bold leading-none">N</span>
+          <span className="text-white text-sm font-bold leading-none">N</span>
         </div>
-        <span className="text-[13px] font-semibold text-white">Nexus</span>
+        <span className="text-md font-semibold text-white">Nexus</span>
       </Link>
     </div>
   )

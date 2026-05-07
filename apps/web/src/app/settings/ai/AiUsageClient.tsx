@@ -135,11 +135,11 @@ export default function AiUsageClient({
     <div className="space-y-6">
       <header className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-[18px] font-semibold text-slate-900 inline-flex items-center gap-2">
+          <h1 className="text-2xl font-semibold text-slate-900 inline-flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-purple-600" />
             AI providers + spend
           </h1>
-          <p className="text-[12px] text-slate-500 mt-1 max-w-2xl">
+          <p className="text-base text-slate-500 mt-1 max-w-2xl">
             Per-provider configuration and token + cost telemetry across
             every server-side AI call. Costs are computed at the moment
             each call ran against the provider&apos;s rate card —
@@ -150,7 +150,7 @@ export default function AiUsageClient({
           type="button"
           onClick={() => void refresh()}
           disabled={refreshing}
-          className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-50"
+          className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-50"
         >
           {refreshing ? (
             <Loader2 className="w-3 h-3 animate-spin" />
@@ -162,14 +162,14 @@ export default function AiUsageClient({
       </header>
 
       {error && (
-        <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-[12px] text-rose-800">
+        <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800">
           {error}
         </div>
       )}
 
       {/* Providers */}
       <section className="space-y-2">
-        <h2 className="text-[13px] font-semibold text-slate-700 uppercase tracking-wider">
+        <h2 className="text-md font-semibold text-slate-700 uppercase tracking-wider">
           Providers
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -180,20 +180,20 @@ export default function AiUsageClient({
             >
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <div className="text-[14px] font-medium text-slate-900">
+                  <div className="text-lg font-medium text-slate-900">
                     {PROVIDER_LABEL[p.name] ?? p.name}
                   </div>
-                  <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+                  <div className="text-sm text-slate-500 font-mono mt-0.5">
                     {p.defaultModel}
                   </div>
                 </div>
                 {p.configured ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">
+                  <span className="inline-flex items-center gap-1 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">
                     <CheckCircle2 className="w-3 h-3" />
                     Configured
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                  <span className="inline-flex items-center gap-1 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
                     Set{' '}
                     <span className="font-mono">
                       {p.name === 'gemini'
@@ -206,7 +206,7 @@ export default function AiUsageClient({
             </div>
           ))}
         </div>
-        <div className="text-[11px] text-slate-500">
+        <div className="text-sm text-slate-500">
           Default provider: <span className="font-mono">AI_PROVIDER</span> env
           var (currently{' '}
           <span className="font-mono">
@@ -231,12 +231,12 @@ export default function AiUsageClient({
 
       {/* Recent calls live tail */}
       <section className="space-y-2">
-        <h2 className="text-[13px] font-semibold text-slate-700 uppercase tracking-wider inline-flex items-center gap-1.5">
+        <h2 className="text-md font-semibold text-slate-700 uppercase tracking-wider inline-flex items-center gap-1.5">
           <Activity className="w-3 h-3" />
           Recent calls
         </h2>
         <div className="border border-slate-200 rounded-md overflow-hidden bg-white">
-          <table className="w-full text-[11px]">
+          <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="px-3 py-2 text-left font-semibold text-slate-700 uppercase tracking-wider w-24">
@@ -332,8 +332,8 @@ function RollupCard({
   if (!summary) {
     return (
       <div className="border border-slate-200 rounded-md p-3 bg-white">
-        <div className="text-[13px] font-semibold text-slate-700">{title}</div>
-        <div className="text-[12px] text-slate-500 mt-2 italic">
+        <div className="text-md font-semibold text-slate-700">{title}</div>
+        <div className="text-base text-slate-500 mt-2 italic">
           No data
         </div>
       </div>
@@ -342,33 +342,33 @@ function RollupCard({
   return (
     <div className="border border-slate-200 rounded-md bg-white">
       <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between gap-2">
-        <div className="text-[13px] font-semibold text-slate-700">{title}</div>
-        <div className="text-[18px] font-semibold tabular-nums text-slate-900">
+        <div className="text-md font-semibold text-slate-700">{title}</div>
+        <div className="text-2xl font-semibold tabular-nums text-slate-900">
           {fmtUSD(summary.totals.costUSD)}
         </div>
       </div>
-      <div className="px-3 py-2 grid grid-cols-3 gap-2 text-[11px] text-slate-600 border-b border-slate-100">
+      <div className="px-3 py-2 grid grid-cols-3 gap-2 text-sm text-slate-600 border-b border-slate-100">
         <div>
-          <div className="text-slate-400 uppercase tracking-wider text-[10px]">
+          <div className="text-slate-400 uppercase tracking-wider text-xs">
             Calls
           </div>
-          <div className="text-[14px] font-medium text-slate-900 tabular-nums">
+          <div className="text-lg font-medium text-slate-900 tabular-nums">
             {summary.totals.calls.toLocaleString()}
           </div>
         </div>
         <div>
-          <div className="text-slate-400 uppercase tracking-wider text-[10px]">
+          <div className="text-slate-400 uppercase tracking-wider text-xs">
             Input
           </div>
-          <div className="text-[14px] font-medium text-slate-900 tabular-nums">
+          <div className="text-lg font-medium text-slate-900 tabular-nums">
             {fmtTokens(summary.totals.inputTokens)}
           </div>
         </div>
         <div>
-          <div className="text-slate-400 uppercase tracking-wider text-[10px]">
+          <div className="text-slate-400 uppercase tracking-wider text-xs">
             Output
           </div>
-          <div className="text-[14px] font-medium text-slate-900 tabular-nums">
+          <div className="text-lg font-medium text-slate-900 tabular-nums">
             {fmtTokens(summary.totals.outputTokens)}
           </div>
         </div>
@@ -376,12 +376,12 @@ function RollupCard({
 
       {summary.byProvider.length > 0 && (
         <div className="px-3 py-2 border-b border-slate-100">
-          <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">
+          <div className="text-xs text-slate-400 uppercase tracking-wider mb-1">
             By provider
           </div>
           <div className="space-y-1">
             {summary.byProvider.map((p) => (
-              <div key={p.name} className="flex items-center justify-between text-[12px]">
+              <div key={p.name} className="flex items-center justify-between text-base">
                 <span className="text-slate-700">
                   {PROVIDER_LABEL[p.name] ?? p.name}
                 </span>
@@ -399,12 +399,12 @@ function RollupCard({
 
       {summary.byFeature.length > 0 && (
         <div className="px-3 py-2">
-          <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">
+          <div className="text-xs text-slate-400 uppercase tracking-wider mb-1">
             By feature
           </div>
           <div className="space-y-1">
             {summary.byFeature.map((f) => (
-              <div key={f.name} className="flex items-center justify-between text-[12px]">
+              <div key={f.name} className="flex items-center justify-between text-base">
                 <span className="text-slate-700 truncate">{f.name}</span>
                 <span className="text-slate-500 tabular-nums">
                   {f.calls} call{f.calls === 1 ? '' : 's'} ·{' '}

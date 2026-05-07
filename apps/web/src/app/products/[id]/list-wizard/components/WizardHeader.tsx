@@ -38,10 +38,10 @@ export default function WizardHeader({
           <ArrowLeft className="w-4 h-4" />
         </Link>
         <div className="min-w-0">
-          <div className="font-mono text-[13px] text-slate-700 truncate">
+          <div className="font-mono text-md text-slate-700 truncate">
             {productSku}
           </div>
-          <div className="text-[11px] text-slate-500 truncate">
+          <div className="text-sm text-slate-500 truncate">
             {productName}
           </div>
         </div>
@@ -64,7 +64,7 @@ export default function WizardHeader({
 function ChannelsSummary({ channels }: { channels: ChannelTuple[] }) {
   if (channels.length === 0) {
     return (
-      <span className="text-[12px] text-slate-400 italic">
+      <span className="text-base text-slate-400 italic">
         No channels picked yet
       </span>
     )
@@ -76,14 +76,14 @@ function ChannelsSummary({ channels }: { channels: ChannelTuple[] }) {
     const marketLabel =
       c.marketplace === 'GLOBAL' ? '' : COUNTRY_NAMES[c.marketplace] ?? c.marketplace
     return (
-      <div className="text-[12px] text-slate-600">
+      <div className="text-base text-slate-600">
         Listing on{' '}
         <span className="font-semibold text-slate-900">{channelLabel}</span>
         {marketLabel && (
           <>
             {' '}
             <span className="text-slate-500">·</span>{' '}
-            <span className="font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">
+            <span className="font-mono text-sm bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">
               {c.marketplace}
             </span>{' '}
             <span className="text-slate-700">{marketLabel}</span>
@@ -109,7 +109,7 @@ function ChannelsSummary({ channels }: { channels: ChannelTuple[] }) {
 
   return (
     <div
-      className="text-[12px] text-slate-600 max-w-[400px] truncate"
+      className="text-base text-slate-600 max-w-[400px] truncate"
       title={summary}
     >
       Publishing to{' '}

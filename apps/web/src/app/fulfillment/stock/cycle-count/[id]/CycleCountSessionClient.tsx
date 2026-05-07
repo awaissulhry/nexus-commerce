@@ -313,7 +313,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
       </Button>
 
       {error && (
-        <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-center gap-2">
+        <div className="text-base text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-center gap-2">
           <AlertCircle className="w-3.5 h-3.5" />
           {error}
         </div>
@@ -338,19 +338,19 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                   <Badge variant={statusVariant(data.status)} size="sm">
                     {data.status.replace(/_/g, ' ')}
                   </Badge>
-                  <span className="text-[14px] font-semibold text-slate-900">
+                  <span className="text-lg font-semibold text-slate-900">
                     {data.location.name}
                   </span>
-                  <span className="text-[11px] font-mono text-slate-500">
+                  <span className="text-sm font-mono text-slate-500">
                     ({data.location.code})
                   </span>
                 </div>
                 {data.notes && (
-                  <div className="text-[12px] text-slate-600 mt-1 italic">
+                  <div className="text-base text-slate-600 mt-1 italic">
                     {data.notes}
                   </div>
                 )}
-                <div className="text-[11px] text-slate-500 mt-1">
+                <div className="text-sm text-slate-500 mt-1">
                   {data.startedAt && <>Started {new Date(data.startedAt).toLocaleString()}</>}
                   {data.completedAt && <> · Completed {new Date(data.completedAt).toLocaleString()}</>}
                   {data.cancelledAt && (
@@ -375,7 +375,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                       type="button"
                       onClick={handleCancel}
                       disabled={busyTopAction !== null}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-red-700 bg-white border border-red-200 rounded hover:bg-red-50 disabled:opacity-50"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-sm font-medium text-red-700 bg-white border border-red-200 rounded hover:bg-red-50 disabled:opacity-50"
                     >
                       <Ban className="w-3 h-3" />
                       Cancel
@@ -406,7 +406,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                       type="button"
                       onClick={handleCancel}
                       disabled={busyTopAction !== null}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-red-700 bg-white border border-red-200 rounded hover:bg-red-50 disabled:opacity-50"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-sm font-medium text-red-700 bg-white border border-red-200 rounded hover:bg-red-50 disabled:opacity-50"
                     >
                       <Ban className="w-3 h-3" />
                       Cancel
@@ -422,7 +422,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
             {/* Progress bar */}
             {data.items.length > 0 && data.status !== 'CANCELLED' && (
               <div className="mt-3">
-                <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
+                <div className="flex items-center justify-between text-sm text-slate-500 mb-1">
                   <span>
                     {(counts.RECONCILED ?? 0) + (counts.IGNORED ?? 0)} of {data.items.length} resolved
                   </span>
@@ -455,7 +455,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                 type="button"
                 onClick={() => setFilter(f.key)}
                 className={cn(
-                  'px-2.5 py-1 text-[11px] font-medium rounded border transition-colors',
+                  'px-2.5 py-1 text-sm font-medium rounded border transition-colors',
                   filter === f.key
                     ? 'bg-slate-900 text-white border-slate-900'
                     : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300',
@@ -469,8 +469,8 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
 
           {/* Items table */}
           <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-            <table className="w-full text-[12px]">
-              <thead className="bg-slate-50 text-[11px] text-slate-600 border-b border-slate-200">
+            <table className="w-full text-base">
+              <thead className="bg-slate-50 text-sm text-slate-600 border-b border-slate-200">
                 <tr>
                   <th className="text-left font-medium px-3 py-2">SKU</th>
                   <th className="text-right font-medium px-3 py-2 w-24">Expected</th>
@@ -483,7 +483,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
               <tbody>
                 {filteredItems.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-3 py-8 text-center text-[12px] text-slate-500">
+                    <td colSpan={6} className="px-3 py-8 text-center text-base text-slate-500">
                       No items match this filter.
                     </td>
                   </tr>
@@ -502,9 +502,9 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                   return (
                     <tr key={it.id} className="border-b border-slate-100 last:border-0 align-middle">
                       <td className="px-3 py-2">
-                        <div className="font-mono text-[11px] text-slate-900">{it.sku}</div>
+                        <div className="font-mono text-sm text-slate-900">{it.sku}</div>
                         {it.productName && (
-                          <div className="text-[11px] text-slate-500 truncate max-w-md">
+                          <div className="text-sm text-slate-500 truncate max-w-md">
                             {it.productName}
                           </div>
                         )}
@@ -529,7 +529,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                               }
                             }}
                             disabled={actingId === it.id}
-                            className="w-24 h-8 px-2 text-right tabular-nums text-[12px] border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            className="w-24 h-8 px-2 text-right tabular-nums text-base border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-300"
                             placeholder="—"
                           />
                         ) : (
@@ -569,7 +569,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                               type="button"
                               onClick={() => handleReconcile(it)}
                               disabled={actingId === it.id}
-                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-white bg-green-600 border border-green-600 rounded hover:bg-green-700 disabled:opacity-50"
+                              className="inline-flex items-center gap-1 px-2 py-1 text-sm font-medium text-white bg-green-600 border border-green-600 rounded hover:bg-green-700 disabled:opacity-50"
                               title={
                                 isVarianceZero
                                   ? 'Mark reconciled (no variance)'
@@ -588,7 +588,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                                 type="button"
                                 onClick={() => handleIgnore(it)}
                                 disabled={actingId === it.id}
-                                className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
+                                className="inline-flex items-center gap-1 px-2 py-1 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
                                 title="Don't apply this variance"
                               >
                                 <SkipForward className="w-3 h-3" />

@@ -80,7 +80,7 @@ export default function MarketplaceTabs({
               title={`${m.name} — ${m.currency} · ${m.language.toUpperCase()}`}
             >
               <span className="font-mono">{m.code}</span>
-              <span className="text-slate-400 text-[10px] uppercase">
+              <span className="text-slate-400 text-xs uppercase">
                 {channel === 'AMAZON' ? 'amz' : 'ebay'}
               </span>
             </TabBtn>
@@ -108,7 +108,7 @@ function TabBtn({
       onClick={onClick}
       title={title}
       className={cn(
-        'flex-shrink-0 inline-flex items-center gap-1.5 h-7 px-3 text-[12px] font-medium border-b-2 -mb-px transition-colors',
+        'flex-shrink-0 inline-flex items-center gap-1.5 h-7 px-3 text-base font-medium border-b-2 -mb-px transition-colors',
         active
           ? 'border-blue-600 text-blue-700 bg-white'
           : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50',

@@ -215,7 +215,7 @@ export const EditableCell = memo(
 
     if (isEditing) {
       const baseInputClass =
-        'w-full h-full px-2 outline-none ring-2 ring-blue-500 bg-white text-[13px] select-text'
+        'w-full h-full px-2 outline-none ring-2 ring-blue-500 bg-white text-md select-text'
       if (meta.fieldType === 'select') {
         return (
           <select
@@ -272,7 +272,7 @@ export const EditableCell = memo(
         onDoubleClick={() => enterEdit()}
         title={cellError ?? (cellCascading && isDirty ? 'Will cascade to children' : undefined)}
         className={cn(
-          'w-full h-full px-2 flex items-center text-[13px] cursor-cell',
+          'w-full h-full px-2 flex items-center text-md cursor-cell',
           isDirty && !cellError && !cellCascading && 'bg-yellow-50',
           isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
           cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',

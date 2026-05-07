@@ -111,7 +111,7 @@ export function ProductTypeCell({ ctx }: Props) {
   // No marketplace tab selected: keep the cell read-only with a hint.
   if (!ctxScope) {
     return (
-      <span className="px-2 text-[12px] text-slate-700 truncate">
+      <span className="px-2 text-base text-slate-700 truncate">
         {initialValue || (
           <span className="italic text-amber-600">
             Pick a marketplace tab to edit
@@ -127,7 +127,7 @@ export function ProductTypeCell({ ctx }: Props) {
         ref={buttonRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full h-7 flex items-center justify-between gap-1 rounded-md border border-transparent hover:border-slate-200 hover:bg-white px-2 text-[12px] text-left"
+        className="w-full h-7 flex items-center justify-between gap-1 rounded-md border border-transparent hover:border-slate-200 hover:bg-white px-2 text-base text-left"
         title={`${channel}${marketplace ? ':' + marketplace : ''} category`}
       >
         <span className="truncate">

@@ -107,12 +107,12 @@ export default function ActiveJobsStrip() {
     <div className="px-6 pb-2 flex-shrink-0">
       <div className="bg-blue-50 border border-blue-200 rounded-lg overflow-hidden">
         <div className="px-3 py-2 flex items-center justify-between border-b border-blue-200">
-          <div className="text-[11px] font-semibold text-blue-900 uppercase tracking-wide">
+          <div className="text-sm font-semibold text-blue-900 uppercase tracking-wide">
             Active Jobs · {jobs.length}
           </div>
           <Link
             href="/bulk-operations/history"
-            className="text-[11px] font-medium text-blue-700 hover:text-blue-900"
+            className="text-sm font-medium text-blue-700 hover:text-blue-900"
           >
             View all →
           </Link>
@@ -130,7 +130,7 @@ export default function ActiveJobsStrip() {
                 <StatusIcon status={job.status} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-[12px] font-medium text-slate-900 truncate">
+                    <span className="text-base font-medium text-slate-900 truncate">
                       {job.jobName}
                     </span>
                     <Badge variant="info" size="sm">
@@ -141,7 +141,7 @@ export default function ActiveJobsStrip() {
                         {job.channel}
                       </Badge>
                     )}
-                    <span className="text-[10px] text-slate-500 uppercase tracking-wide">
+                    <span className="text-xs text-slate-500 uppercase tracking-wide">
                       {job.status.replace(/_/g, ' ')}
                     </span>
                   </div>
@@ -161,7 +161,7 @@ export default function ActiveJobsStrip() {
                         }}
                       />
                     </div>
-                    <span className="text-[10px] text-slate-600 tabular-nums whitespace-nowrap">
+                    <span className="text-xs text-slate-600 tabular-nums whitespace-nowrap">
                       {job.processedItems} / {job.totalItems}
                       {job.failedItems > 0 && (
                         <span className="text-red-700 ml-1">
@@ -176,7 +176,7 @@ export default function ActiveJobsStrip() {
                     type="button"
                     onClick={() => cancelJob(job.id)}
                     disabled={cancellingId === job.id}
-                    className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 text-[11px] text-red-700 hover:bg-red-50 rounded disabled:opacity-50"
+                    className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 text-sm text-red-700 hover:bg-red-50 rounded disabled:opacity-50"
                     title={`Cancel ${job.jobName}`}
                   >
                     <Ban className="w-3 h-3" />
@@ -188,7 +188,7 @@ export default function ActiveJobsStrip() {
           })}
         </div>
         {error && (
-          <div className="px-3 py-1.5 bg-red-50 border-t border-red-200 text-[11px] text-red-700">
+          <div className="px-3 py-1.5 bg-red-50 border-t border-red-200 text-sm text-red-700">
             {error}
           </div>
         )}

@@ -868,7 +868,7 @@ export default function ChannelFieldEditor({
               onClick={() => setShowAllOptional((s) => !s)}
               disabled={loading}
               className={cn(
-                'inline-flex items-center gap-1 h-7 px-2 text-[11px] border rounded disabled:opacity-40',
+                'inline-flex items-center gap-1 h-7 px-2 text-sm border rounded disabled:opacity-40',
                 showAllOptional
                   ? 'border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100'
                   : 'border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900',
@@ -883,7 +883,7 @@ export default function ChannelFieldEditor({
             type="button"
             onClick={() => setReloadKey((k) => k + 1)}
             disabled={loading}
-            className="inline-flex items-center gap-1 h-7 px-2 text-[11px] text-slate-600 border border-slate-200 rounded hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40"
+            className="inline-flex items-center gap-1 h-7 px-2 text-sm text-slate-600 border border-slate-200 rounded hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40"
             title="Re-fetch the schema from cache"
           >
             {loading ? (
@@ -901,7 +901,7 @@ export default function ChannelFieldEditor({
               window.setTimeout(() => setForceRefresh(false), 100)
             }}
             disabled={loading}
-            className="inline-flex items-center gap-1 h-7 px-2 text-[11px] text-blue-700 border border-blue-200 rounded hover:bg-blue-50 disabled:opacity-40"
+            className="inline-flex items-center gap-1 h-7 px-2 text-sm text-blue-700 border border-blue-200 rounded hover:bg-blue-50 disabled:opacity-40"
             title="Force-refresh from Amazon SP-API (bypasses 24h cache)"
           >
             <RefreshCw className="w-3 h-3" />
@@ -911,21 +911,21 @@ export default function ChannelFieldEditor({
       </div>
 
       {loading && !manifest && (
-        <div className="border border-slate-200 rounded-lg bg-white px-6 py-12 text-center text-[13px] text-slate-500 flex items-center justify-center gap-2">
+        <div className="border border-slate-200 rounded-lg bg-white px-6 py-12 text-center text-md text-slate-500 flex items-center justify-center gap-2">
           <Loader2 className="w-4 h-4 animate-spin" />
           Loading schema…
         </div>
       )}
 
       {error && !loading && (
-        <div className="border border-rose-200 rounded-lg bg-rose-50 px-4 py-3 text-[13px] text-rose-700 flex items-start gap-2">
+        <div className="border border-rose-200 rounded-lg bg-rose-50 px-4 py-3 text-md text-rose-700 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           <div>
             <div>{error}</div>
             <button
               type="button"
               onClick={() => setReloadKey((k) => k + 1)}
-              className="mt-1 text-[12px] font-medium underline hover:no-underline"
+              className="mt-1 text-base font-medium underline hover:no-underline"
             >
               Try again
             </button>
@@ -970,7 +970,7 @@ export default function ChannelFieldEditor({
       )}
 
       {manifest && manifest.fields.length === 0 && !loading && (
-        <div className="border border-slate-200 rounded-lg bg-white px-4 py-6 text-center text-[12px] text-slate-500">
+        <div className="border border-slate-200 rounded-lg bg-white px-4 py-6 text-center text-base text-slate-500">
           No fields surfaced for this channel yet.
         </div>
       )}
@@ -1092,7 +1092,7 @@ export default function ChannelFieldEditor({
       )}
 
       {manifest && unsatisfied.length > 0 && (
-        <div className="text-[12px] text-amber-700">
+        <div className="text-base text-amber-700">
           {unsatisfied.length} required field
           {unsatisfied.length === 1 ? '' : 's'} still unfilled
         </div>
@@ -1140,7 +1140,7 @@ function CopyFromSiblingMenu({
         onClick={() => setOpen((s) => !s)}
         title="Copy field values from another marketplace listing"
         className={cn(
-          'inline-flex items-center gap-1 border rounded text-[11px] font-medium',
+          'inline-flex items-center gap-1 border rounded text-sm font-medium',
           compact ? 'h-7 px-2' : 'h-7 px-2.5',
           flash
             ? 'border-emerald-300 text-emerald-700 bg-emerald-50'
@@ -1157,8 +1157,8 @@ function CopyFromSiblingMenu({
             onClick={() => setOpen(false)}
             aria-hidden="true"
           />
-          <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded shadow-md py-1 min-w-[220px] text-[12px]">
-            <div className="px-3 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+          <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded shadow-md py-1 min-w-[220px] text-base">
+            <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-slate-400">
               Copy values from
             </div>
             {others.map(({ channelKey: sourceKey }) => {
@@ -1183,8 +1183,8 @@ function CopyFromSiblingMenu({
                       : 'text-slate-700',
                   )}
                 >
-                  <span className="font-mono text-[11px]">{sourceKey}</span>
-                  <span className="text-[10px] text-slate-500 tabular-nums">
+                  <span className="font-mono text-sm">{sourceKey}</span>
+                  <span className="text-xs text-slate-500 tabular-nums">
                     {n === 0 ? 'no values' : `${n} field${n === 1 ? '' : 's'}`}
                   </span>
                 </button>
@@ -1208,7 +1208,7 @@ function SaveStatusPill({
   return (
     <div
       className={cn(
-        'inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded border',
+        'inline-flex items-center gap-1.5 text-sm px-2 py-1 rounded border',
         status === 'saving' && 'border-slate-200 text-slate-600 bg-slate-50',
         status === 'saved' && 'border-emerald-200 text-emerald-700 bg-emerald-50',
         status === 'error' && 'border-rose-200 text-rose-700 bg-rose-50',
@@ -1260,7 +1260,7 @@ function GtinStatusBanner({
   return (
     <div
       className={cn(
-        'border rounded-md px-3 py-2 text-[12px] inline-flex items-start gap-1.5 w-full',
+        'border rounded-md px-3 py-2 text-base inline-flex items-start gap-1.5 w-full',
         tone,
       )}
     >
@@ -1305,7 +1305,7 @@ function ListingSetupCard({
     <div className="border border-slate-200 rounded-lg bg-white px-4 py-3">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
         <div className="space-y-1">
-          <label className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+          <label className="text-sm font-medium uppercase tracking-wide text-slate-500">
             {channel} product type
           </label>
           <ProductTypePicker
@@ -1319,14 +1319,14 @@ function ListingSetupCard({
                 : `Pick a ${channel} product type`
             }
           />
-          <p className="text-[10px] text-slate-400">
+          <p className="text-xs text-slate-400">
             {inheriting
               ? 'Using the master product’s product type. Override here if this listing should map to a different category.'
               : 'Per-listing override active. Schema below reflects this product type.'}
           </p>
         </div>
         <div className="space-y-1">
-          <label className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+          <label className="text-sm font-medium uppercase tracking-wide text-slate-500">
             Variation theme
           </label>
           <input
@@ -1334,9 +1334,9 @@ function ListingSetupCard({
             value={variationTheme}
             onChange={(e) => onChange('variationTheme', e.target.value)}
             placeholder="e.g. SIZE, COLOR, SIZE_NAME/COLOR_NAME"
-            className="w-full h-8 px-2 text-[13px] font-mono border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="w-full h-8 px-2 text-md font-mono border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
-          <p className="text-[10px] text-slate-400">
+          <p className="text-xs text-slate-400">
             Defines how this listing’s variant axes are reported to the
             channel. Leave empty for non-variant listings.
           </p>

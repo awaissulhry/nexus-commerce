@@ -22,13 +22,13 @@ export default function PlaceholderStep({ step }: Props) {
         <h2 className="text-[20px] font-semibold text-slate-900">
           {step.title}
         </h2>
-        <p className="text-[14px] text-slate-600 mt-1">
+        <p className="text-lg text-slate-600 mt-1">
           {step.description}
         </p>
       </div>
 
       <div className="border border-slate-200 rounded-lg bg-white px-6 py-8 text-center">
-        <p className="text-[13px] text-slate-700 mb-2">
+        <p className="text-md text-slate-700 mb-2">
           This step ships in{' '}
           <span className="font-semibold text-blue-700">
             {/* Some filledIn values already include the word "Phase". */}
@@ -37,12 +37,12 @@ export default function PlaceholderStep({ step }: Props) {
               : `Phase ${step.filledIn}`}
           </span>
         </p>
-        <p className="text-[12px] text-slate-500 max-w-md mx-auto">
+        <p className="text-base text-slate-500 max-w-md mx-auto">
           {step.preview}
         </p>
       </div>
 
-      <div className="mt-6 text-[12px] text-slate-400 text-center">
+      <div className="mt-6 text-base text-slate-400 text-center">
         For now, click Continue to walk through the wizard shell.
       </div>
     </div>

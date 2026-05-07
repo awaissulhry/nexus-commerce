@@ -1999,10 +1999,10 @@ export default function BulkOperationsClient() {
               className="flex items-center gap-1 px-1 w-full text-left"
             >
               <ChevronRight className="w-3 h-3 flex-shrink-0" />
-              <span className="truncate normal-case font-semibold text-[10px]">
+              <span className="truncate normal-case font-semibold text-xs">
                 {groupLabel}
               </span>
-              <span className="ml-auto text-[10px] tabular-nums opacity-60">
+              <span className="ml-auto text-xs tabular-nums opacity-60">
                 {fieldCount}
               </span>
             </button>
@@ -2010,7 +2010,7 @@ export default function BulkOperationsClient() {
           cell: () => (
             <div
               className={cn(
-                'h-full flex items-center justify-center text-[11px] italic select-none',
+                'h-full flex items-center justify-center text-sm italic select-none',
                 tone.text,
               )}
               aria-hidden="true"
@@ -2995,7 +2995,7 @@ export default function BulkOperationsClient() {
   return (
     <div className="flex-1 min-h-0 px-6 pb-6 flex flex-col">
       {!online && (
-        <div className="flex-shrink-0 mb-3 flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-[12px] text-amber-800">
+        <div className="flex-shrink-0 mb-3 flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-base text-amber-800">
           <WifiOff className="w-3.5 h-3.5 flex-shrink-0" />
           <span>You're offline. Changes are kept locally and will save when you reconnect.</span>
         </div>
@@ -3006,7 +3006,7 @@ export default function BulkOperationsClient() {
           knows they're in a filtered slice rather than the full
           catalog, and can drop back to the full view in one click. */}
       {isScoped && (
-        <div className="flex-shrink-0 mb-3 flex items-center justify-between gap-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded-md text-[12px] text-blue-900">
+        <div className="flex-shrink-0 mb-3 flex items-center justify-between gap-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded-md text-base text-blue-900">
           <div className="flex items-center gap-2 min-w-0">
             <span className="inline-block w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
             <span className="truncate">
@@ -3029,7 +3029,7 @@ export default function BulkOperationsClient() {
           <button
             type="button"
             onClick={clearScope}
-            className="flex-shrink-0 h-7 px-2 text-[11px] text-blue-700 hover:text-blue-900 hover:bg-blue-100 rounded inline-flex items-center gap-1"
+            className="flex-shrink-0 h-7 px-2 text-sm text-blue-700 hover:text-blue-900 hover:bg-blue-100 rounded inline-flex items-center gap-1"
           >
             <X className="w-3 h-3" />
             Show all products
@@ -3102,7 +3102,7 @@ export default function BulkOperationsClient() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search SKU, name, brand…"
-                className="h-7 pl-7 pr-7 text-[12px] border border-slate-200 rounded-md w-40 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="h-7 pl-7 pr-7 text-base border border-slate-200 rounded-md w-40 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
               {searchQuery && (
                 <button
@@ -3218,7 +3218,7 @@ export default function BulkOperationsClient() {
         </div>
 
         {/* ── Row 2 — secondary tools + status ──────────────────────── */}
-        <div className="flex items-center gap-2 flex-wrap text-[11px]">
+        <div className="flex items-center gap-2 flex-wrap text-sm">
           {/* Left: history. V.2 — count badges show stack depth at a
               glance so undo/redo state is visible in real time. */}
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -3239,7 +3239,7 @@ export default function BulkOperationsClient() {
               >
                 <Undo2 className="w-3.5 h-3.5" />
                 {canUndo && (
-                  <span className="text-[10px] tabular-nums text-slate-500">
+                  <span className="text-xs tabular-nums text-slate-500">
                     {historyIndex + 1}
                   </span>
                 )}
@@ -3263,7 +3263,7 @@ export default function BulkOperationsClient() {
               >
                 <Redo2 className="w-3.5 h-3.5" />
                 {canRedo && (
-                  <span className="text-[10px] tabular-nums text-slate-500">
+                  <span className="text-xs tabular-nums text-slate-500">
                     {history.length - 1 - historyIndex}
                   </span>
                 )}
@@ -3317,7 +3317,7 @@ export default function BulkOperationsClient() {
                       ? `Add every schema-driven category attribute plus channel-specific fields for ${scopeLabel} as columns`
                       : 'Add every schema-driven category attribute (attr_*) for the loaded productTypes as columns'
                   }
-                  className="inline-flex items-center gap-1 h-7 px-2 text-[11px] font-medium text-blue-700 border border-blue-200 rounded-md hover:bg-blue-50"
+                  className="inline-flex items-center gap-1 h-7 px-2 text-sm font-medium text-blue-700 border border-blue-200 rounded-md hover:bg-blue-50"
                 >
                   + {missingFields.length}
                   {scopeLabel
@@ -3349,7 +3349,7 @@ export default function BulkOperationsClient() {
                 disabled={updateFlash === 'saving'}
                 title={`Save current columns + filters back to "${activeView?.name}"`}
                 className={cn(
-                  'inline-flex items-center gap-1 h-7 px-2 text-[11px] font-medium border rounded-md transition-colors',
+                  'inline-flex items-center gap-1 h-7 px-2 text-sm font-medium border rounded-md transition-colors',
                   updateFlash === 'saved'
                     ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
                     : 'border-slate-200 text-slate-700 hover:bg-slate-50',
@@ -3377,7 +3377,7 @@ export default function BulkOperationsClient() {
                 it's always reachable; clicking the band chevrons one
                 by one is fine for a few groups but tedious past 5+. */}
             {groupedFields.length > 1 && (
-              <div className="inline-flex items-center gap-0.5 h-7 px-1 text-[11px] text-slate-600 border border-slate-200 rounded-md bg-white">
+              <div className="inline-flex items-center gap-0.5 h-7 px-1 text-sm text-slate-600 border border-slate-200 rounded-md bg-white">
                 <span className="px-1.5 text-slate-400">Groups</span>
                 <button
                   type="button"
@@ -3538,7 +3538,7 @@ export default function BulkOperationsClient() {
                     type="button"
                     onClick={() => toggleGroupCollapse(g.key)}
                     className={cn(
-                      'w-full h-full flex items-center gap-1 px-2 text-[10px] font-semibold uppercase tracking-wider transition-colors cursor-grab active:cursor-grabbing',
+                      'w-full h-full flex items-center gap-1 px-2 text-xs font-semibold uppercase tracking-wider transition-colors cursor-grab active:cursor-grabbing',
                       tone.band,
                       tone.text,
                       'hover:brightness-95',
@@ -3687,7 +3687,7 @@ export default function BulkOperationsClient() {
                   setDragOverColumnSide(null)
                 }}
                 className={cn(
-                  'relative flex items-center gap-1 px-3 text-[11px] font-semibold uppercase tracking-wider transition-colors',
+                  'relative flex items-center gap-1 px-3 text-sm font-semibold uppercase tracking-wider transition-colors',
                   // JJ — per-group tone classes mirror the per-product
                   // bulk editor so users get a consistent colour
                   // identity across both grids. System columns (sku,
@@ -3825,7 +3825,7 @@ export default function BulkOperationsClient() {
 
         {error && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/90">
-            <div className="text-[13px] text-red-700 bg-red-50 border border-red-200 rounded-md px-4 py-2">
+            <div className="text-md text-red-700 bg-red-50 border border-red-200 rounded-md px-4 py-2">
               Failed to load: {error}
             </div>
           </div>

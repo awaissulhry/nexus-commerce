@@ -281,7 +281,7 @@ function ItemsPanel({ jobId }: { jobId: string }) {
               type="button"
               onClick={() => setStatusFilter(f.key)}
               className={cn(
-                'px-2.5 py-1 text-[11px] font-medium rounded border transition-colors',
+                'px-2.5 py-1 text-sm font-medium rounded border transition-colors',
                 statusFilter === f.key
                   ? 'bg-slate-900 text-white border-slate-900'
                   : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300',
@@ -300,7 +300,7 @@ function ItemsPanel({ jobId }: { jobId: string }) {
               type="button"
               onClick={retryFailed}
               disabled={retrying}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-red-700 bg-white border border-red-200 rounded hover:bg-red-50 disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-sm font-medium text-red-700 bg-white border border-red-200 rounded hover:bg-red-50 disabled:opacity-50 transition-colors"
               title={`Create a new job that re-runs only the ${counts.FAILED} failed items`}
             >
               <RotateCw className={cn('w-3 h-3', retrying && 'animate-spin')} />
@@ -313,7 +313,7 @@ function ItemsPanel({ jobId }: { jobId: string }) {
             type="button"
             onClick={fetchItems}
             disabled={loading}
-            className="text-[11px] text-slate-500 hover:text-slate-900 inline-flex items-center gap-1 disabled:opacity-50"
+            className="text-sm text-slate-500 hover:text-slate-900 inline-flex items-center gap-1 disabled:opacity-50"
           >
             <RefreshCw className={cn('w-3 h-3', loading && 'animate-spin')} />
             Refresh
@@ -322,14 +322,14 @@ function ItemsPanel({ jobId }: { jobId: string }) {
       </div>
 
       {retryNotice && (
-        <div className="text-[12px] text-green-800 bg-green-50 border border-green-200 rounded px-3 py-2 mb-3 inline-flex items-center gap-2">
+        <div className="text-base text-green-800 bg-green-50 border border-green-200 rounded px-3 py-2 mb-3 inline-flex items-center gap-2">
           <CheckCircle2 className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
           {retryNotice}
         </div>
       )}
 
       {error && (
-        <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 mb-3">
+        <div className="text-base text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 mb-3">
           {error}
         </div>
       )}
@@ -346,15 +346,15 @@ function ItemsPanel({ jobId }: { jobId: string }) {
       )}
 
       {items && items.length === 0 && !loading && (
-        <div className="text-center py-6 text-[12px] text-slate-500">
+        <div className="text-center py-6 text-base text-slate-500">
           No items match this filter.
         </div>
       )}
 
       {items && items.length > 0 && (
         <div className="bg-white border border-slate-200 rounded overflow-hidden">
-          <table className="w-full text-[12px]">
-            <thead className="bg-slate-50 text-[11px] text-slate-600 border-b border-slate-200">
+          <table className="w-full text-base">
+            <thead className="bg-slate-50 text-sm text-slate-600 border-b border-slate-200">
               <tr>
                 <th className="text-left font-medium px-3 py-2 w-32">Status</th>
                 <th className="text-left font-medium px-3 py-2">Target</th>
@@ -375,28 +375,28 @@ function ItemsPanel({ jobId }: { jobId: string }) {
                       </Badge>
                     </td>
                     <td className="px-3 py-2">
-                      <div className="font-mono text-[11px] text-slate-900">
+                      <div className="font-mono text-sm text-slate-900">
                         {it.sku ?? <span className="text-slate-400">(deleted)</span>}
                       </div>
                       {it.channelLabel && (
-                        <div className="text-[10px] text-slate-500 mt-0.5">
+                        <div className="text-xs text-slate-500 mt-0.5">
                           {it.channelLabel}
                         </div>
                       )}
                     </td>
                     <td className="px-3 py-2">
                       {it.errorMessage ? (
-                        <div className="text-red-700 text-[11px]">
+                        <div className="text-red-700 text-sm">
                           {it.errorMessage}
                         </div>
                       ) : changed.length === 0 ? (
-                        <span className="text-slate-400 text-[11px]">no change</span>
+                        <span className="text-slate-400 text-sm">no change</span>
                       ) : (
                         <div className="space-y-0.5">
                           {changed.map((d) => (
                             <div
                               key={d.key}
-                              className="flex items-center gap-1.5 text-[11px]"
+                              className="flex items-center gap-1.5 text-sm"
                             >
                               <span className="text-slate-500 font-medium">
                                 {d.key}:
@@ -413,7 +413,7 @@ function ItemsPanel({ jobId }: { jobId: string }) {
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-[11px] text-slate-500">
+                    <td className="px-3 py-2 text-sm text-slate-500">
                       {relativeTime(it.completedAt ?? it.createdAt)}
                     </td>
                   </tr>
@@ -502,7 +502,7 @@ function JobCard({ job, onChanged }: { job: JobRow; onChanged: () => Promise<voi
         <StatusIcon status={job.status} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="font-medium text-slate-900 text-[13px] truncate">
+            <h3 className="font-medium text-slate-900 text-md truncate">
               {job.jobName}
             </h3>
             <Badge variant="default" size="sm">
@@ -519,7 +519,7 @@ function JobCard({ job, onChanged }: { job: JobRow; onChanged: () => Promise<voi
               </Badge>
             )}
           </div>
-          <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-500">
+          <div className="flex items-center gap-3 mt-1 text-sm text-slate-500">
             <Badge variant={statusVariant(job.status)} size="sm">
               {job.status.replace(/_/g, ' ')}
             </Badge>
@@ -546,7 +546,7 @@ function JobCard({ job, onChanged }: { job: JobRow; onChanged: () => Promise<voi
             </span>
           </div>
           {job.lastError && job.status !== 'COMPLETED' && (
-            <div className="mt-1.5 text-[11px] text-red-700 truncate">
+            <div className="mt-1.5 text-sm text-red-700 truncate">
               {job.lastError}
             </div>
           )}
@@ -556,7 +556,7 @@ function JobCard({ job, onChanged }: { job: JobRow; onChanged: () => Promise<voi
             type="button"
             onClick={handleRollback}
             disabled={rollingBack}
-            className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded hover:bg-amber-100 disabled:opacity-50"
+            className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-base font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded hover:bg-amber-100 disabled:opacity-50"
             title="Apply each item's beforeState (basePrice / totalStock / status) back through the master cascade"
           >
             {rollingBack ? (
@@ -642,7 +642,7 @@ export default function HistoryClient() {
               type="button"
               onClick={() => setStatusFilter(f.key)}
               className={cn(
-                'px-3 py-1 text-[11px] font-medium rounded border transition-colors',
+                'px-3 py-1 text-sm font-medium rounded border transition-colors',
                 statusFilter === f.key
                   ? 'bg-slate-900 text-white border-slate-900'
                   : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300',
@@ -660,7 +660,7 @@ export default function HistoryClient() {
 
       {/* Error */}
       {error && (
-        <div className="text-[13px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+        <div className="text-md text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
           Failed to load: {error}
         </div>
       )}

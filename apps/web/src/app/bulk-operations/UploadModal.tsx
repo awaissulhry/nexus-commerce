@@ -180,11 +180,11 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
         <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <FileSpreadsheet className="w-4 h-4 text-slate-500" />
-            <h2 className="text-[14px] font-semibold text-slate-900">
+            <h2 className="text-lg font-semibold text-slate-900">
               Upload products
             </h2>
             {preview && (
-              <span className="text-[12px] text-slate-500 truncate max-w-[280px]">
+              <span className="text-base text-slate-500 truncate max-w-[280px]">
                 {preview.filename}
               </span>
             )}
@@ -234,16 +234,16 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
                   }}
                 />
                 <Upload className="w-7 h-7 mx-auto text-slate-400 mb-3" />
-                <div className="text-[13px] font-medium text-slate-700">
+                <div className="text-md font-medium text-slate-700">
                   Drop CSV, Excel, or ZIP file here
                 </div>
-                <div className="text-[12px] text-slate-500 mt-0.5">
+                <div className="text-base text-slate-500 mt-0.5">
                   or click to browse
                 </div>
-                <div className="text-[11px] text-slate-400 mt-3">
+                <div className="text-sm text-slate-400 mt-3">
                   Supported: .csv, .xlsx, .xls, .zip · Max 50 MB · 50,000 rows
                 </div>
-                <div className="text-[11px] text-slate-400 mt-1">
+                <div className="text-sm text-slate-400 mt-1">
                   ZIP layout: <code className="font-mono">SKU/data.json</code> +{' '}
                   <code className="font-mono">SKU/description.html</code> per
                   product folder
@@ -251,10 +251,10 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
               </div>
 
               <div className="border border-slate-200 rounded-md px-4 py-3 bg-slate-50/50">
-                <div className="text-[12px] font-semibold text-slate-700 mb-1.5">
+                <div className="text-base font-semibold text-slate-700 mb-1.5">
                   Need a template?
                 </div>
-                <div className="flex flex-col gap-1 text-[12px]">
+                <div className="flex flex-col gap-1 text-base">
                   <a
                     href={`${templateBase}?view=full`}
                     className="text-blue-700 hover:text-blue-900 hover:underline"
@@ -280,7 +280,7 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
                     ↓ Download CSV template — physical / dimensions
                   </a>
                 </div>
-                <div className="text-[11px] text-slate-500 mt-2">
+                <div className="text-sm text-slate-500 mt-2">
                   Templates include a sample row demonstrating the format
                   (e.g. <code className="bg-white px-1 rounded">5kg</code> for
                   weight, <code className="bg-white px-1 rounded">60cm</code>{' '}
@@ -289,7 +289,7 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
               </div>
 
               {error && (
-                <div className="flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-md text-[12px] text-red-800">
+                <div className="flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-md text-base text-red-800">
                   <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                   <span>{error}</span>
                 </div>
@@ -300,7 +300,7 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
           {stage === 'uploading' && (
             <div className="flex flex-col items-center justify-center py-10 gap-3 text-slate-600">
               <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
-              <div className="text-[13px]">Parsing and validating…</div>
+              <div className="text-md">Parsing and validating…</div>
             </div>
           )}
 
@@ -313,7 +313,7 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
                   {preview.warnings.map((w, i) => (
                     <div
                       key={i}
-                      className="flex items-start gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-md text-[12px] text-amber-900"
+                      className="flex items-start gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-md text-base text-amber-900"
                     >
                       <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
                       <span>{w}</span>
@@ -331,7 +331,7 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
                   {preview.errors.slice(0, PREVIEW_LIMIT).map((e, i) => (
                     <li
                       key={`${e.row}:${e.field ?? ''}:${i}`}
-                      className="px-3 py-1.5 flex items-center gap-2 text-[12px]"
+                      className="px-3 py-1.5 flex items-center gap-2 text-base"
                     >
                       <span className="text-slate-400 tabular-nums w-12">
                         Row {e.row}
@@ -346,7 +346,7 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
                     </li>
                   ))}
                   {preview.errors.length > PREVIEW_LIMIT && (
-                    <li className="px-3 py-1.5 text-[11px] text-slate-500 italic">
+                    <li className="px-3 py-1.5 text-sm text-slate-500 italic">
                       + {preview.errors.length - PREVIEW_LIMIT} more
                     </li>
                   )}
@@ -364,7 +364,7 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
                     .map((c, i) => (
                       <li
                         key={`${c.row}:${c.field}:${i}`}
-                        className="px-3 py-1.5 flex items-center gap-2 text-[12px]"
+                        className="px-3 py-1.5 flex items-center gap-2 text-base"
                       >
                         <span className="text-slate-400 tabular-nums w-12">
                           Row {c.row}
@@ -383,7 +383,7 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
                       </li>
                     ))}
                   {preview.totalChanges > preview.sampleChanges.length && (
-                    <li className="px-3 py-1.5 text-[11px] text-slate-500 italic">
+                    <li className="px-3 py-1.5 text-sm text-slate-500 italic">
                       + {preview.totalChanges - preview.sampleChanges.length}{' '}
                       more changes across {preview.toUpdate} rows
                     </li>
@@ -392,7 +392,7 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
               )}
 
               {error && (
-                <div className="flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-md text-[12px] text-red-800">
+                <div className="flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-md text-base text-red-800">
                   <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                   <span>{error}</span>
                 </div>
@@ -403,7 +403,7 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
           {stage === 'applying' && (
             <div className="flex flex-col items-center justify-center py-10 gap-3 text-slate-600">
               <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
-              <div className="text-[13px]">
+              <div className="text-md">
                 Applying {preview?.totalChanges ?? 0} change
                 {preview?.totalChanges === 1 ? '' : 's'}…
               </div>
@@ -470,10 +470,10 @@ function PreviewSummaryGrid({ preview }: { preview: PreviewSummary }) {
           key={c.label}
           className="border border-slate-200 rounded-md px-3 py-2 bg-white"
         >
-          <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
             {c.label}
           </div>
-          <div className={cn('text-[18px] font-semibold tabular-nums mt-0.5', c.tone)}>
+          <div className={cn('text-2xl font-semibold tabular-nums mt-0.5', c.tone)}>
             {c.value}
           </div>
         </div>
@@ -496,7 +496,7 @@ function PreviewSection({
   const Icon = title.startsWith('Errors') ? AlertCircle : CheckCircle2
   return (
     <div>
-      <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+      <div className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
         <Icon className={cn('w-3 h-3', iconClass)} />
         {title}
       </div>

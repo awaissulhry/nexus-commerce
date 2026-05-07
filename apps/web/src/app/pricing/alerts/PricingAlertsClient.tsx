@@ -70,7 +70,7 @@ export default function PricingAlertsClient() {
   if (loading && !data) {
     return (
       <Card>
-        <div className="text-[13px] text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
+        <div className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
           <Loader2 className="w-4 h-4 animate-spin" /> Loading alerts…
         </div>
       </Card>
@@ -79,7 +79,7 @@ export default function PricingAlertsClient() {
 
   if (error) {
     return (
-      <div className="border border-rose-200 bg-rose-50 rounded px-3 py-2 text-[12px] text-rose-700 inline-flex items-start gap-1.5">
+      <div className="border border-rose-200 bg-rose-50 rounded px-3 py-2 text-base text-rose-700 inline-flex items-start gap-1.5">
         <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
         <span>{error}</span>
       </div>
@@ -124,7 +124,7 @@ export default function PricingAlertsClient() {
       <div className="flex items-center justify-end">
         <button
           onClick={fetchData}
-          className="h-8 px-3 text-[12px] border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+          className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
         >
           <RefreshCw size={12} /> Refresh
         </button>
@@ -133,22 +133,22 @@ export default function PricingAlertsClient() {
       {/* Table */}
       <Card noPadding>
         <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
+          <table className="w-full text-md">
             <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
-                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">
+                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
                   Severity
                 </th>
-                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">
+                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
                   SKU
                 </th>
-                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">
+                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
                   Where
                 </th>
-                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">
+                <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
                   Price
                 </th>
-                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">
+                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
                   Reason
                 </th>
                 <th className="px-3 py-2 w-24"></th>
@@ -176,30 +176,30 @@ export default function PricingAlertsClient() {
                     <td className="px-3 py-2">
                       <SeverityChip tone={severity.tone} label={severity.label} />
                     </td>
-                    <td className="px-3 py-2 font-mono text-[12px] text-slate-800">
+                    <td className="px-3 py-2 font-mono text-base text-slate-800">
                       {r.sku}
                     </td>
                     <td className="px-3 py-2 text-slate-700">
                       {r.channel}{' '}
                       <span className="text-slate-400">·</span>{' '}
-                      <span className="font-mono text-[11px]">{r.marketplace}</span>
+                      <span className="font-mono text-sm">{r.marketplace}</span>
                       {r.fulfillmentMethod && (
-                        <span className="ml-1 text-[10px] text-slate-500">
+                        <span className="ml-1 text-xs text-slate-500">
                           {r.fulfillmentMethod}
                         </span>
                       )}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-800">
                       {Number(r.computedPrice).toFixed(2)}{' '}
-                      <span className="text-[11px] text-slate-500">{r.currency}</span>
+                      <span className="text-sm text-slate-500">{r.currency}</span>
                     </td>
-                    <td className="px-3 py-2 text-[12px] text-slate-700">
+                    <td className="px-3 py-2 text-base text-slate-700">
                       {reason}
                     </td>
                     <td className="px-3 py-2">
                       <Link
                         href={`/pricing?search=${encodeURIComponent(r.sku)}`}
-                        className="text-[11px] text-blue-600 hover:underline"
+                        className="text-sm text-blue-600 hover:underline"
                       >
                         Open in pricing →
                       </Link>
@@ -244,8 +244,8 @@ function CountTile({
           <div className={cn('text-[24px] font-semibold tabular-nums', textTone)}>
             {value}
           </div>
-          <div className="text-[12px] text-slate-700 font-medium">{label}</div>
-          <div className="text-[11px] text-slate-500 mt-0.5">{hint}</div>
+          <div className="text-base text-slate-700 font-medium">{label}</div>
+          <div className="text-sm text-slate-500 mt-0.5">{hint}</div>
         </div>
       </div>
     </Card>
@@ -262,7 +262,7 @@ function SeverityChip({ tone, label }: { tone: string; label: string }) {
   return (
     <span
       className={cn(
-        'inline-block text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded',
+        'inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded',
         cls,
       )}
     >

@@ -40,7 +40,7 @@ export default function TopBar() {
             onBlur={() => setSearchFocused(false)}
             className="w-full pl-10 pr-4 py-2 text-sm bg-transparent border-none outline-none placeholder-gray-400"
           />
-          <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 mr-2 text-[10px] font-mono text-gray-400 bg-gray-200 rounded">
+          <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 mr-2 text-xs font-mono text-gray-400 bg-gray-200 rounded">
             ⌘K
           </kbd>
         </div>
@@ -52,13 +52,13 @@ export default function TopBar() {
         <div className="hidden md:flex items-center gap-2 mr-2">
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-50 border border-orange-200">
             <span className="w-2 h-2 rounded-full bg-green-500" />
-            <span className="text-[11px] font-medium text-orange-800">
+            <span className="text-sm font-medium text-orange-800">
               Amazon IT
             </span>
           </div>
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200">
             <span className="w-2 h-2 rounded-full bg-green-500" />
-            <span className="text-[11px] font-medium text-blue-800">eBay</span>
+            <span className="text-sm font-medium text-blue-800">eBay</span>
           </div>
         </div>
 

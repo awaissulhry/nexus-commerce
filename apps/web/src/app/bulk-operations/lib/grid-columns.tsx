@@ -67,7 +67,7 @@ export function ReadOnlyCell({
   }
   if (MONO_FIELDS.has(field.id)) {
     return (
-      <span className="font-mono text-[11px] text-slate-700 px-2 truncate">
+      <span className="font-mono text-sm text-slate-700 px-2 truncate">
         {String(value)}
       </span>
     )
@@ -79,13 +79,13 @@ export function ReadOnlyCell({
     }
     const formatted = PRICE_FIELDS.has(field.id) ? `€${n.toFixed(2)}` : String(n)
     return (
-      <span className="text-[12px] tabular-nums text-slate-700 px-2">
+      <span className="text-base tabular-nums text-slate-700 px-2">
         {formatted}
       </span>
     )
   }
   return (
-    <span className="text-[12px] text-slate-700 px-2 truncate">
+    <span className="text-base text-slate-700 px-2 truncate">
       {String(value)}
     </span>
   )
@@ -235,7 +235,7 @@ function SkuCell({
 
   return (
     <div
-      className="flex items-center gap-1.5 h-full text-[13px]"
+      className="flex items-center gap-1.5 h-full text-md"
       style={{ paddingLeft: indent + 12 }}
     >
       {isParent ? (
@@ -259,7 +259,7 @@ function SkuCell({
       ) : null}
       <span
         className={cn(
-          'font-mono text-[12px] truncate min-w-0',
+          'font-mono text-base truncate min-w-0',
           isParent ? 'text-slate-900 font-semibold' : 'text-slate-700',
         )}
       >
@@ -275,14 +275,14 @@ function SkuCell({
           {visibleVariations.map(([k, v]) => (
             <span
               key={k}
-              className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-medium whitespace-nowrap"
+              className="text-xs bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-medium whitespace-nowrap"
             >
               {k}: {v}
             </span>
           ))}
           {hiddenVariations.length > 0 && (
             <span
-              className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-medium cursor-help whitespace-nowrap"
+              className="text-xs bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-medium cursor-help whitespace-nowrap"
               title={hiddenVariations
                 .map(([k, v]) => `${k}: ${v}`)
                 .join(', ')}
@@ -351,7 +351,7 @@ export function buildColumnFromField(field: FieldDef): ColumnDef<BulkProduct> {
         cell: (ctx) => {
           if (!hasMarketplaceContextRef.current) {
             return (
-              <span className="px-2 text-[11px] italic text-amber-600 truncate">
+              <span className="px-2 text-sm italic text-amber-600 truncate">
                 Select marketplace
               </span>
             )
@@ -370,7 +370,7 @@ export function buildColumnFromField(field: FieldDef): ColumnDef<BulkProduct> {
         cell: (ctx) => {
           if (!fieldAppliesToProduct(field, ctx.row.original)) {
             return (
-              <span className="px-2 text-[12px] text-slate-300 truncate">
+              <span className="px-2 text-base text-slate-300 truncate">
                 —
               </span>
             )
@@ -396,7 +396,7 @@ export function buildColumnFromField(field: FieldDef): ColumnDef<BulkProduct> {
           ) {
             const display = aggregateDisplayValue(row as HierarchyRow, field.id)
             return (
-              <span className="px-2 text-[12px] tabular-nums italic text-slate-500 truncate">
+              <span className="px-2 text-base tabular-nums italic text-slate-500 truncate">
                 {display ?? '—'}
               </span>
             )

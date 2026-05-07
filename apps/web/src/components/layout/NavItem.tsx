@@ -32,7 +32,7 @@ export default function NavItem({ item, collapsed }: NavItemProps) {
           <span className="truncate flex-1">{item.label}</span>
         )}
         {!collapsed && (
-          <span className="text-[10px] bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded-full">
+          <span className="text-xs bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded-full">
             Soon
           </span>
         )}
@@ -59,7 +59,7 @@ export default function NavItem({ item, collapsed }: NavItemProps) {
         <>
           <span className="truncate flex-1">{item.label}</span>
           {item.badge !== undefined && item.badge > 0 && (
-            <span className="min-w-[20px] h-5 flex items-center justify-center text-[10px] font-bold bg-red-500 text-white rounded-full px-1.5">
+            <span className="min-w-[20px] h-5 flex items-center justify-center text-xs font-bold bg-red-500 text-white rounded-full px-1.5">
               {item.badge > 99 ? "99+" : item.badge}
             </span>
           )}

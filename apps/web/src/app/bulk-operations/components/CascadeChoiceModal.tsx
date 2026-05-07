@@ -115,7 +115,7 @@ export default function CascadeChoiceModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 flex-shrink-0">
-          <h2 className="text-[15px] font-semibold text-slate-900">
+          <h2 className="text-lg font-semibold text-slate-900">
             {confirmStep ? 'Confirm large cascade' : 'Apply change to'}
           </h2>
           <button
@@ -132,7 +132,7 @@ export default function CascadeChoiceModal({
           <>
             <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
               {/* Field summary */}
-              <dl className="space-y-1.5 text-[13px]">
+              <dl className="space-y-1.5 text-md">
                 <div className="flex gap-3">
                   <dt className="text-slate-500 w-16 flex-shrink-0">Field</dt>
                   <dd className="text-slate-900 font-medium">{fieldLabel}</dd>
@@ -178,10 +178,10 @@ export default function CascadeChoiceModal({
               {/* Child preview */}
               {cascade && childCount > 0 && (
                 <div className="border border-slate-200 rounded-md p-3 bg-slate-50">
-                  <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+                  <div className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
                     Will update {childCount} {childCount === 1 ? 'child' : 'children'}
                   </div>
-                  <ul className="text-[12px] font-mono text-slate-700 space-y-0.5 max-h-32 overflow-y-auto">
+                  <ul className="text-base font-mono text-slate-700 space-y-0.5 max-h-32 overflow-y-auto">
                     {visibleChildren.map((c) => (
                       <li key={c.id} className="truncate">
                         · {c.sku}
@@ -192,7 +192,7 @@ export default function CascadeChoiceModal({
                     <button
                       type="button"
                       onClick={() => setShowAll(true)}
-                      className="mt-2 text-[11px] text-blue-600 hover:underline"
+                      className="mt-2 text-sm text-blue-600 hover:underline"
                     >
                       Show all {childCount}
                     </button>
@@ -201,7 +201,7 @@ export default function CascadeChoiceModal({
               )}
 
               {childCount > LARGE_CASCADE_THRESHOLD && cascade && (
-                <div className="flex items-start gap-2 text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                <div className="flex items-start gap-2 text-base text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
                   <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                   <span>
                     This is a large cascade. You'll be asked to type{' '}
@@ -236,10 +236,10 @@ export default function CascadeChoiceModal({
                 <div className="w-9 h-9 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center flex-shrink-0">
                   <AlertTriangle className="w-4 h-4 text-amber-600" />
                 </div>
-                <div className="text-[13px] text-slate-700">
+                <div className="text-md text-slate-700">
                   This will update <strong>{fieldLabel}</strong> on{' '}
                   <strong className="tabular-nums">{1 + childCount}</strong> products:
-                  <ul className="mt-1.5 ml-4 list-disc text-[12px] text-slate-600 space-y-0.5">
+                  <ul className="mt-1.5 ml-4 list-disc text-base text-slate-600 space-y-0.5">
                     <li>{parentSku} (parent)</li>
                     <li>
                       All {childCount} {childCount === 1 ? 'child' : 'children'}
@@ -248,7 +248,7 @@ export default function CascadeChoiceModal({
                 </div>
               </div>
               <div className="space-y-1.5">
-                <label className="text-[12px] font-medium text-slate-700 block">
+                <label className="text-base font-medium text-slate-700 block">
                   Type{' '}
                   <code className="px-1 bg-slate-100 rounded font-mono text-slate-900">
                     {CONFIRM_TOKEN}
@@ -261,7 +261,7 @@ export default function CascadeChoiceModal({
                   onChange={(e) => setConfirmText(e.target.value)}
                   placeholder={CONFIRM_TOKEN}
                   className={cn(
-                    'w-full h-8 px-3 text-[13px] font-mono border rounded',
+                    'w-full h-8 px-3 text-md font-mono border rounded',
                     'focus:outline-none focus:ring-2 focus:ring-blue-500/20',
                     confirmText === CONFIRM_TOKEN
                       ? 'border-green-400 focus:border-green-500'
@@ -330,8 +330,8 @@ function Choice({
         {selected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
       </span>
       <span className="min-w-0">
-        <span className="block text-[13px] font-medium text-slate-900">{title}</span>
-        <span className="block text-[11px] text-slate-500 mt-0.5">{subtitle}</span>
+        <span className="block text-md font-medium text-slate-900">{title}</span>
+        <span className="block text-sm text-slate-500 mt-0.5">{subtitle}</span>
       </span>
     </button>
   )

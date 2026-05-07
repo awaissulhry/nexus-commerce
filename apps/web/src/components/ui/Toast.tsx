@@ -257,12 +257,12 @@ function ToastItem({
       <ToneIcon tone={tone} className={cn('mt-0.5', style.iconCls)} />
       <div className="min-w-0 flex-1">
         {toast.title && (
-          <div className="text-[13px] font-semibold leading-tight mb-0.5">
+          <div className="text-md font-semibold leading-tight mb-0.5">
             {toast.title}
           </div>
         )}
         {toast.description && (
-          <div className="text-[12px] text-slate-700 leading-snug break-words">
+          <div className="text-base text-slate-700 leading-snug break-words">
             {toast.description}
           </div>
         )}
@@ -275,7 +275,7 @@ function ToastItem({
               toast.action?.onClick()
               onDismiss()
             }}
-            className="text-[11px] font-medium text-blue-700 hover:text-blue-900 px-1.5 py-0.5 rounded hover:bg-blue-50"
+            className="text-sm font-medium text-blue-700 hover:text-blue-900 px-1.5 py-0.5 rounded hover:bg-blue-50"
           >
             {toast.action.label}
           </button>

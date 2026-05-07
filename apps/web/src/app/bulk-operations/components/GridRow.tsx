@@ -174,7 +174,7 @@ export function SelectionOverlays({
               it follows the dashed preview as it grows. Two cancel
               paths, both surfaced. */}
           <div
-            className="absolute pointer-events-none z-30 bg-slate-900 text-white text-[10px] font-medium px-1.5 py-0.5 rounded shadow"
+            className="absolute pointer-events-none z-30 bg-slate-900 text-white text-xs font-medium px-1.5 py-0.5 rounded shadow"
             style={{
               top: Math.max(0, fillRect.top - 22),
               left: fillRect.left + fillRect.width - 110,

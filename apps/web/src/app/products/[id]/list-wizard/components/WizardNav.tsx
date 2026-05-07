@@ -28,7 +28,7 @@ export default function WizardNav({
   const isLast = currentStep >= STEPS.length
   return (
     <div className="px-6 py-3 border-t border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
-      <div className="flex items-center gap-3 text-[12px] text-slate-500">
+      <div className="flex items-center gap-3 text-base text-slate-500">
         <button
           type="button"
           onClick={onSaveAndExit}

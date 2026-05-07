@@ -161,7 +161,7 @@ export default function CycleCountListClient() {
               type="button"
               onClick={() => setStatusFilter(f.key)}
               className={cn(
-                'px-3 py-1 text-[11px] font-medium rounded border transition-colors',
+                'px-3 py-1 text-sm font-medium rounded border transition-colors',
                 statusFilter === f.key
                   ? 'bg-slate-900 text-white border-slate-900'
                   : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300',
@@ -184,7 +184,7 @@ export default function CycleCountListClient() {
       </div>
 
       {error && (
-        <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-center gap-2">
+        <div className="text-base text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-center gap-2">
           <AlertCircle className="w-3.5 h-3.5" />
           {error}
         </div>
@@ -230,12 +230,12 @@ export default function CycleCountListClient() {
                       <span className="font-medium text-slate-900 inline-flex items-center gap-1">
                         <WarehouseIcon className="w-3.5 h-3.5 text-slate-400" />
                         {c.location.name}
-                        <span className="text-[11px] font-mono text-slate-500 ml-1">
+                        <span className="text-sm font-mono text-slate-500 ml-1">
                           ({c.location.code})
                         </span>
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-500 flex-wrap">
+                    <div className="flex items-center gap-3 mt-1 text-sm text-slate-500 flex-wrap">
                       <span>
                         {c.totalItems} items · {pending} pending · {counted} counted ·{' '}
                         <span className="text-green-700 font-medium">{c.itemTotals.RECONCILED ?? 0}</span> reconciled
@@ -255,7 +255,7 @@ export default function CycleCountListClient() {
                       )}
                     </div>
                     {c.notes && (
-                      <div className="text-[11px] text-slate-600 mt-1 italic truncate">
+                      <div className="text-sm text-slate-600 mt-1 italic truncate">
                         {c.notes}
                       </div>
                     )}
@@ -292,7 +292,7 @@ export default function CycleCountListClient() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
-              <h2 className="text-[14px] font-semibold text-slate-900">New cycle count</h2>
+              <h2 className="text-lg font-semibold text-slate-900">New cycle count</h2>
               <button
                 type="button"
                 onClick={() => setCreateOpen(false)}
@@ -305,13 +305,13 @@ export default function CycleCountListClient() {
             </div>
             <div className="p-5 space-y-3">
               <div>
-                <label className="text-[11px] font-medium text-slate-700 uppercase tracking-wide">
+                <label className="text-sm font-medium text-slate-700 uppercase tracking-wide">
                   Location <span className="text-red-600">*</span>
                 </label>
                 <select
                   value={newLocationId}
                   onChange={(e) => setNewLocationId(e.target.value)}
-                  className="mt-1 w-full px-3 py-1.5 text-[13px] border border-slate-200 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  className="mt-1 w-full px-3 py-1.5 text-md border border-slate-200 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
                 >
                   <option value="">Select…</option>
                   {locations.map((l) => (
@@ -320,12 +320,12 @@ export default function CycleCountListClient() {
                     </option>
                   ))}
                 </select>
-                <p className="text-[10px] text-slate-500 mt-1">
+                <p className="text-xs text-slate-500 mt-1">
                   Every product with a stock level at this location will be snapshotted.
                 </p>
               </div>
               <div>
-                <label className="text-[11px] font-medium text-slate-700 uppercase tracking-wide">
+                <label className="text-sm font-medium text-slate-700 uppercase tracking-wide">
                   Notes (optional)
                 </label>
                 <Input

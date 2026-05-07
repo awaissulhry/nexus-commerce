@@ -610,3 +610,130 @@ removal is sequenced in `TECH_DEBT.md` entry #43.
   marketplace values; restoring the master values + re-enabling
   follow flags is a manual operator decision (see
   `scripts/reconcile-master-drift.mjs` dry-run for current state).
+
+---
+
+## Design tokens (U.1, 2026-05-07)
+
+The whole catalog management workflow is data-dense operator UI. Tailwind's
+default scale (12-72px) doesn't fit. `apps/web/tailwind.config.ts` overrides
+the defaults with a 10-32px scale tuned to the codebase's actual usage.
+JS-side constants live in `apps/web/src/lib/theme/index.ts`.
+
+### Typography
+
+Override of Tailwind defaults. Use named classes; never `text-[Npx]`.
+
+| Class | px | line-height | Use |
+|---|---|---|---|
+| `text-xs`   | 10 | 14 | Captions, badges, metadata |
+| `text-sm`   | 11 | 15 | Compact-density rows, sidebar items |
+| `text-base` | 12 | 16 | Default body / grid chrome |
+| `text-md`   | 13 | 18 | Cell content, primary body |
+| `text-lg`   | 14 | 20 | Modal headers, list items |
+| `text-xl`   | 16 | 22 | Card titles, drawer headers |
+| `text-2xl`  | 18 | 24 | Page titles, section headings |
+| `text-3xl`  | 24 | 30 | Hero / dashboard numbers |
+| `text-4xl`  | 32 | 38 | Marketing only |
+
+### Border radius
+
+| Class | px | Use |
+|---|---|---|
+| `rounded-sm`  | 2 | Tight chips, status pills |
+| `rounded-md`  | 4 | Buttons, inputs (default) |
+| `rounded-lg`  | 6 | Cards, surfaces |
+| `rounded-xl`  | 8 | Modals |
+| `rounded-2xl` | 12 | Hero / large overlays |
+| `rounded-full` | 9999 | Avatars, full pills |
+
+Bare `rounded` (1095 uses today) maps to `rounded-md` (4px) — same as
+Tailwind default. Migration of existing `rounded-*` deferred to U.17.
+
+### Shadows
+
+Semantic. Use intent, not numeric scale.
+
+| Class | Use |
+|---|---|
+| `shadow-subtle`   | Inline chips, raised inline elements |
+| `shadow-default`  | Cards |
+| `shadow-elevated` | Hover/raised state |
+| `shadow-modal`    | Centered dialogs |
+| `shadow-drawer`   | Slide-in panels (asymmetric) |
+
+### Animation
+
+| Token | ms | Use |
+|---|---|---|
+| `duration-fast` | 150 | Hover, press, micro-state |
+| `duration-base` | 200 | Cell/menu/transition default |
+| `duration-slow` | 300 | Drawer, modal slide-ins |
+| `ease-out`      | —   | App-wide cubic-bezier(0.16,1,0.3,1) |
+
+JS sync via `import { DURATION_MS } from '@/lib/theme'`.
+
+### Z-index
+
+Semantic, not magic numbers. Migration mapping (U.17 sweep):
+
+| Token | Numeric | Replaces |
+|---|---|---|
+| `z-dropdown` | 10 | `z-10` |
+| `z-sticky`   | 20 | `z-20` |
+| `z-drawer`   | 30 | `z-30` |
+| `z-modal`    | 40 | `z-40` |
+| `z-toast`    | 50 | `z-50`, `z-[100]` |
+| `z-popover`  | 60 | `z-[60]` |
+
+### Semantic colors
+
+Each maps to a Tailwind family chosen by the codebase's actual usage:
+
+| Token | Maps to | Rationale |
+|---|---|---|
+| `success` | `emerald` | 433 uses, conventional |
+| `warning` | `amber`   | 518 uses, conventional |
+| `danger`  | `rose`    | 554 uses, preferred over red for tone |
+| `info`    | `blue`    | 1434 uses, primary action color |
+| `neutral` | `slate`   | 5213 uses, dominant |
+
+Use as `bg-success-50`, `text-warning-700`, `border-danger-200` etc.
+JS-side via `import { STATUS_PALETTE } from '@/lib/theme'`.
+
+### Surface tokens
+
+For dark-mode pivoting in U.14. Use these for bg/border decisions
+that should flip with the theme.
+
+| Token | Light value |
+|---|---|
+| `bg-surface-background` | `#ffffff` |
+| `bg-surface-card`       | `#ffffff` |
+| `bg-surface-elevated`   | `#fafbfc` |
+| `bg-surface-overlay`    | rgb(15 23 42 / 0.4) |
+| `border-surface-border` | `#e2e8f0` (slate-200) |
+| `border-surface-border-strong` | `#cbd5e1` (slate-300) |
+
+### Channel tones
+
+Per-channel chip styling — not Tailwind utilities, JS constant in
+`@/lib/theme` because the bg+text+border triple is needed at the
+call site:
+
+```ts
+import { CHANNEL_TONE } from '@/lib/theme'
+<span className={CHANNEL_TONE['AMAZON']}>AMAZON</span>
+// → 'bg-orange-50 text-orange-700 border-orange-200'
+```
+
+Adding a channel propagates to every chip across the app.
+
+### Migration history
+
+- 2026-05-07 (U.1): all 2,816 arbitrary `text-[Npx]` classes across
+  115 files replaced with the named scale. 16 sites consolidated
+  15px → 14px (`text-lg`); per-site review documented in commit
+  `<sha>`.
+- Color/radius/shadow/z-index migration deferred to U.17 (component
+  adoption sweep) where context-aware judgment is needed per site.

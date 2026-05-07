@@ -270,13 +270,13 @@ export default function ProductDrawer({
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="text-[14px] font-semibold text-slate-900 truncate">
+              <h2 className="text-lg font-semibold text-slate-900 truncate">
                 {data?.name ?? (loading ? 'Loading…' : 'Product')}
               </h2>
               {data?.isParent && (
                 <a
                   href={`/products/${data.id}/matrix`}
-                  className="inline-flex items-center h-5 px-1.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 hover:bg-blue-100"
+                  className="inline-flex items-center h-5 px-1.5 rounded text-xs font-medium bg-blue-50 text-blue-700 hover:bg-blue-100"
                   title="Open the variant matrix editor"
                 >
                   Parent · {data._count?.variations ?? 0} variants
@@ -286,7 +286,7 @@ export default function ProductDrawer({
                 <StatusBadge status={data.status} />
               )}
             </div>
-            <div className="flex items-center gap-3 text-[11px] text-slate-500 font-mono mt-0.5">
+            <div className="flex items-center gap-3 text-sm text-slate-500 font-mono mt-0.5">
               <span>{data?.sku ?? '—'}</span>
               {data?.amazonAsin && (
                 <a
@@ -360,12 +360,12 @@ export default function ProductDrawer({
         {/* Body */}
         <div className="flex-1 overflow-y-auto">
           {loading && !data && (
-            <div className="flex items-center justify-center py-12 text-slate-400 text-[12px]">
+            <div className="flex items-center justify-center py-12 text-slate-400 text-base">
               <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading…
             </div>
           )}
           {error && (
-            <div className="m-5 border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-[12px] text-rose-800 flex items-start gap-2">
+            <div className="m-5 border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800 flex items-start gap-2">
               <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
               <span>Failed to load: {error}</span>
             </div>
@@ -426,12 +426,12 @@ export default function ProductDrawer({
         {/* Footer */}
         {data && (
           <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 bg-slate-50">
-            <span className="text-[11px] text-slate-500">
+            <span className="text-sm text-slate-500">
               Updated {new Date(data.updatedAt).toLocaleString()}
             </span>
             <Link
               href={`/products/${data.id}/edit`}
-              className="inline-flex items-center gap-1 text-[12px] font-medium text-blue-700 hover:underline"
+              className="inline-flex items-center gap-1 text-base font-medium text-blue-700 hover:underline"
             >
               Open full edit
               <ChevronRight className="w-3 h-3" />
@@ -461,7 +461,7 @@ function DrawerTab({
       role="tab"
       aria-selected={active}
       className={cn(
-        'inline-flex items-center gap-1.5 px-3 py-2.5 text-[12px] font-medium border-b-2 -mb-px transition-colors',
+        'inline-flex items-center gap-1.5 px-3 py-2.5 text-base font-medium border-b-2 -mb-px transition-colors',
         active
           ? 'border-blue-500 text-blue-700'
           : 'border-transparent text-slate-600 hover:text-slate-900',
@@ -469,7 +469,7 @@ function DrawerTab({
     >
       {children}
       {count != null && count > 0 && (
-        <span className="text-[10px] text-slate-500 font-normal">{count}</span>
+        <span className="text-xs text-slate-500 font-normal">{count}</span>
       )}
     </button>
   )
@@ -520,14 +520,14 @@ function HealthCard({
   return (
     <div className="border border-slate-200 rounded-md p-3 space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
           Health
         </div>
         {score != null && (
           <div className="flex items-center gap-2">
             <span
               className={cn(
-                'inline-flex items-center h-6 px-2 rounded border text-[12px] font-semibold tabular-nums',
+                'inline-flex items-center h-6 px-2 rounded border text-base font-semibold tabular-nums',
                 scoreTone,
               )}
               title="Composite score 0-100. Each error -10, warning -3, info -1, capped at 0."
@@ -535,7 +535,7 @@ function HealthCard({
               {score}
               <span className="text-[9px] opacity-60 ml-0.5">/100</span>
             </span>
-            <span className="text-[11px] text-slate-500 tabular-nums">
+            <span className="text-sm text-slate-500 tabular-nums">
               {errors.length > 0 && (
                 <span className="text-rose-700">{errors.length}E</span>
               )}
@@ -555,7 +555,7 @@ function HealthCard({
       </div>
 
       {issues.length === 0 ? (
-        <div className="text-[12px] text-slate-500 italic">
+        <div className="text-base text-slate-500 italic">
           No issues. The product passes every readiness check.
         </div>
       ) : (
@@ -576,13 +576,13 @@ function HealthCard({
             return (
               <li
                 key={idx}
-                className={cn('flex items-start gap-1.5 text-[12px]', tone)}
+                className={cn('flex items-start gap-1.5 text-base', tone)}
               >
                 <Icon className="w-3 h-3 mt-0.5 flex-shrink-0" />
                 <span className="min-w-0">
                   {i.message}
                   {(i.channel || i.marketplace) && (
-                    <span className="text-slate-500 text-[10px] ml-1">
+                    <span className="text-slate-500 text-xs ml-1">
                       ({[i.channel, i.marketplace].filter(Boolean).join(' / ')})
                     </span>
                   )}
@@ -606,7 +606,7 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center h-5 px-1.5 rounded text-[10px] font-medium',
+        'inline-flex items-center h-5 px-1.5 rounded text-xs font-medium',
         tone,
       )}
     >
@@ -707,7 +707,7 @@ function DetailsTab({
         />
       </div>
       {savedAt && (
-        <div className="text-[11px] text-emerald-700">Saved.</div>
+        <div className="text-sm text-emerald-700">Saved.</div>
       )}
 
       {/* Master read-only summary */}
@@ -729,10 +729,10 @@ function DetailsTab({
       {/* Description */}
       {product.description && (
         <div>
-          <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
             Description
           </div>
-          <p className="text-[12px] text-slate-700 whitespace-pre-line">
+          <p className="text-base text-slate-700 whitespace-pre-line">
             {product.description}
           </p>
         </div>
@@ -780,7 +780,7 @@ function ForecastCard({ productId }: { productId: string }) {
 
   if (loading) {
     return (
-      <div className="border border-slate-200 rounded-md p-3 text-[11px] text-slate-400 italic">
+      <div className="border border-slate-200 rounded-md p-3 text-sm text-slate-400 italic">
         <Loader2 className="w-3 h-3 animate-spin inline mr-1.5" /> Loading
         forecast…
       </div>
@@ -800,21 +800,21 @@ function ForecastCard({ productId }: { productId: string }) {
   return (
     <div className={`border rounded-md p-3 ${tone.ring}`}>
       <div className="flex items-center justify-between gap-2 mb-2">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-700">
+        <div className="text-sm font-semibold uppercase tracking-wider text-slate-700">
           Forecast
         </div>
         <span
-          className={`text-[10px] font-semibold uppercase tracking-wider ${tone.text}`}
+          className={`text-xs font-semibold uppercase tracking-wider ${tone.text}`}
         >
           {projection.urgency}
         </span>
       </div>
-      <div className="grid grid-cols-3 gap-2 text-[11px]">
+      <div className="grid grid-cols-3 gap-2 text-sm">
         <div>
           <div className="text-slate-400 uppercase tracking-wider text-[9px]">
             Days of cover
           </div>
-          <div className="text-[14px] font-semibold tabular-nums text-slate-900">
+          <div className="text-lg font-semibold tabular-nums text-slate-900">
             {projection.daysOfCover != null
               ? `${projection.daysOfCover}d`
               : '—'}
@@ -824,7 +824,7 @@ function ForecastCard({ productId }: { productId: string }) {
           <div className="text-slate-400 uppercase tracking-wider text-[9px]">
             Velocity
           </div>
-          <div className="text-[14px] font-semibold tabular-nums text-slate-900">
+          <div className="text-lg font-semibold tabular-nums text-slate-900">
             {projection.velocity != null
               ? `${projection.velocity.toFixed(1)}/d`
               : '—'}
@@ -834,14 +834,14 @@ function ForecastCard({ productId }: { productId: string }) {
           <div className="text-slate-400 uppercase tracking-wider text-[9px]">
             Stocks out
           </div>
-          <div className="text-[12px] font-medium tabular-nums text-slate-900">
+          <div className="text-base font-medium tabular-nums text-slate-900">
             {projection.stockoutDate
               ? new Date(projection.stockoutDate).toLocaleDateString()
               : '—'}
           </div>
         </div>
       </div>
-      <div className="text-[10px] text-slate-500 mt-2 pt-2 border-t border-slate-200/50">
+      <div className="text-xs text-slate-500 mt-2 pt-2 border-t border-slate-200/50">
         {projection.basis === 'forecast'
           ? `Based on ${projection.forecastDays} days of demand data.`
           : projection.basis === 'threshold'
@@ -954,7 +954,7 @@ function DetailGrid({ product }: { product: ProductDetail }) {
   ]
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[12px]">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-base">
         {fields.map((f) => (
           <div key={f.label} className="flex items-baseline justify-between gap-2">
             <span className="text-slate-500">{f.label}</span>
@@ -972,7 +972,7 @@ function DetailGrid({ product }: { product: ProductDetail }) {
               type="button"
               onClick={runSuggest}
               disabled={suggesting}
-              className="text-[11px] text-purple-700 hover:text-purple-900 disabled:opacity-50 inline-flex items-center gap-1"
+              className="text-sm text-purple-700 hover:text-purple-900 disabled:opacity-50 inline-flex items-center gap-1"
             >
               {suggesting ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -986,11 +986,11 @@ function DetailGrid({ product }: { product: ProductDetail }) {
           )}
           {suggestion && (
             <>
-              <div className="text-[10px] uppercase tracking-wider text-purple-700 font-semibold">
+              <div className="text-xs uppercase tracking-wider text-purple-700 font-semibold">
                 AI suggestion
               </div>
               {suggestion.brand && needsBrand && (
-                <div className="flex items-center justify-between gap-2 text-[12px]">
+                <div className="flex items-center justify-between gap-2 text-base">
                   <span className="text-slate-700">
                     Brand: <span className="font-medium">{suggestion.brand}</span>
                   </span>
@@ -1003,7 +1003,7 @@ function DetailGrid({ product }: { product: ProductDetail }) {
                       type="button"
                       onClick={() => apply('brand', suggestion.brand!)}
                       disabled={applying === 'brand'}
-                      className="text-[11px] text-blue-700 hover:underline disabled:opacity-50"
+                      className="text-sm text-blue-700 hover:underline disabled:opacity-50"
                     >
                       {applying === 'brand' ? 'Applying…' : 'Apply'}
                     </button>
@@ -1011,7 +1011,7 @@ function DetailGrid({ product }: { product: ProductDetail }) {
                 </div>
               )}
               {suggestion.productType && needsType && (
-                <div className="flex items-center justify-between gap-2 text-[12px]">
+                <div className="flex items-center justify-between gap-2 text-base">
                   <span className="text-slate-700">
                     Type: <span className="font-medium">{suggestion.productType}</span>
                   </span>
@@ -1024,7 +1024,7 @@ function DetailGrid({ product }: { product: ProductDetail }) {
                       type="button"
                       onClick={() => apply('productType', suggestion.productType!)}
                       disabled={applying === 'productType'}
-                      className="text-[11px] text-blue-700 hover:underline disabled:opacity-50"
+                      className="text-sm text-blue-700 hover:underline disabled:opacity-50"
                     >
                       {applying === 'productType' ? 'Applying…' : 'Apply'}
                     </button>
@@ -1032,7 +1032,7 @@ function DetailGrid({ product }: { product: ProductDetail }) {
                 </div>
               )}
               {suggestion.reasoning && (
-                <div className="text-[10px] text-slate-500 italic">
+                <div className="text-xs text-slate-500 italic">
                   {suggestion.reasoning}
                 </div>
               )}
@@ -1042,14 +1042,14 @@ function DetailGrid({ product }: { product: ProductDetail }) {
                   setSuggestion(null)
                   setApplied(new Set())
                 }}
-                className="text-[10px] text-slate-500 hover:text-slate-700"
+                className="text-xs text-slate-500 hover:text-slate-700"
               >
                 Dismiss
               </button>
             </>
           )}
           {suggestError && (
-            <div className="text-[10px] text-rose-700">{suggestError}</div>
+            <div className="text-xs text-rose-700">{suggestError}</div>
           )}
         </div>
       )}
@@ -1077,12 +1077,12 @@ function QuickField({
   const [focused, setFocused] = useState(false)
   return (
     <div>
-      <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+      <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
         {label}
       </div>
       <div className="relative">
         {prefix && (
-          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[12px] text-slate-500 pointer-events-none">
+          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-slate-500 pointer-events-none">
             {prefix}
           </span>
         )}
@@ -1101,7 +1101,7 @@ function QuickField({
             }
           }}
           className={cn(
-            'w-full h-8 text-[12px] border rounded-md bg-white focus:outline-none transition-colors',
+            'w-full h-8 text-base border rounded-md bg-white focus:outline-none transition-colors',
             prefix ? 'pl-6 pr-2' : 'px-2',
             focused
               ? 'border-blue-300 ring-1 ring-blue-200'
@@ -1219,10 +1219,10 @@ function ListingsTab({
 
   if (listings.length === 0) {
     return (
-      <div className="px-5 py-10 text-center text-[12px] text-slate-500">
+      <div className="px-5 py-10 text-center text-base text-slate-500">
         <Boxes className="w-6 h-6 mx-auto text-slate-300 mb-2" />
         No listings yet.
-        <div className="text-[11px] text-slate-400 mt-1">
+        <div className="text-sm text-slate-400 mt-1">
           Use the listing wizard to publish this product.
         </div>
       </div>
@@ -1233,12 +1233,12 @@ function ListingsTab({
     <div className="p-5 space-y-4">
       {grouped.map(([channel, rows]) => (
         <section key={channel}>
-          <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
             {channel}
           </div>
           <div className="border border-slate-200 rounded-lg overflow-hidden">
-            <table className="w-full text-[12px]">
-              <thead className="bg-slate-50 border-b border-slate-200 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            <table className="w-full text-base">
+              <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-3 py-1.5 text-left">Market</th>
                   <th className="px-3 py-1.5 text-left">Status</th>
@@ -1284,7 +1284,7 @@ function ListingsTab({
                     snapError?.listingId === l.id ? snapError : null
                   return (
                   <tr key={l.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-3 py-2 font-mono text-[11px] text-slate-700 align-top">
+                    <td className="px-3 py-2 font-mono text-sm text-slate-700 align-top">
                       {l.marketplace}
                     </td>
                     <td className="px-3 py-2 align-top">
@@ -1294,7 +1294,7 @@ function ListingsTab({
                       />
                       {(priceDrift || qtyDrift) && (
                         <span
-                          className="ml-1 inline-flex items-center h-5 px-1.5 rounded text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200"
+                          className="ml-1 inline-flex items-center h-5 px-1.5 rounded text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200"
                           title={
                             priceDrift && qtyDrift
                               ? 'Both price and quantity differ from the master snapshot'
@@ -1314,7 +1314,7 @@ function ListingsTab({
                           from "deliberately overridden AND drifted". */}
                       {hasOverride && !priceDrift && !qtyDrift && (
                         <span
-                          className="ml-1 inline-flex items-center h-5 px-1.5 rounded text-[10px] font-medium bg-blue-50 text-blue-800 border border-blue-200"
+                          className="ml-1 inline-flex items-center h-5 px-1.5 rounded text-xs font-medium bg-blue-50 text-blue-800 border border-blue-200"
                           title={
                             l.followMasterPrice === false &&
                             l.followMasterQuantity === false
@@ -1331,14 +1331,14 @@ function ListingsTab({
                           The badge already encodes status; this surfaces
                           the WHEN and the WHY so triage doesn't need to
                           open the dedicated /listings/<id> page. */}
-                      <div className="text-[10px] text-slate-500 mt-1">
+                      <div className="text-xs text-slate-500 mt-1">
                         {l.lastSyncedAt
                           ? `Synced ${new Date(l.lastSyncedAt).toLocaleString()}`
                           : 'Not yet synced'}
                       </div>
                       {l.lastSyncError && l.lastSyncStatus === 'FAILED' && (
                         <div
-                          className="text-[10px] text-rose-700 mt-0.5 truncate max-w-[200px]"
+                          className="text-xs text-rose-700 mt-0.5 truncate max-w-[200px]"
                           title={l.lastSyncError}
                         >
                           {l.lastSyncError}
@@ -1348,7 +1348,7 @@ function ListingsTab({
                     <td className="px-3 py-2 text-right tabular-nums align-top">
                       {l.price != null ? `€${Number(l.price).toFixed(2)}` : '—'}
                       {priceDrift && (
-                        <div className="text-[10px] text-amber-700 mt-0.5">
+                        <div className="text-xs text-amber-700 mt-0.5">
                           master €{Number(l.masterPrice).toFixed(2)}
                         </div>
                       )}
@@ -1356,7 +1356,7 @@ function ListingsTab({
                     <td className="px-3 py-2 text-right tabular-nums align-top">
                       {l.quantity ?? '—'}
                       {qtyDrift && (
-                        <div className="text-[10px] text-amber-700 mt-0.5">
+                        <div className="text-xs text-amber-700 mt-0.5">
                           master {l.masterQuantity}
                         </div>
                       )}
@@ -1374,7 +1374,7 @@ function ListingsTab({
                           onClick={() => resync(l.id)}
                           disabled={isResyncing}
                           title="Re-queue this listing for the next sync tick"
-                          className="text-[11px] text-slate-500 hover:text-blue-700 disabled:opacity-50 inline-flex items-center gap-0.5"
+                          className="text-sm text-slate-500 hover:text-blue-700 disabled:opacity-50 inline-flex items-center gap-0.5"
                         >
                           {isResyncing ? (
                             <Loader2 className="w-3 h-3 animate-spin" />
@@ -1398,7 +1398,7 @@ function ListingsTab({
                             onClick={() => snapToMaster(l.id)}
                             disabled={isSnapping}
                             title="Re-enable follow-master for every field. Next sync resets local values to master."
-                            className="text-[11px] text-amber-700 hover:text-amber-900 disabled:opacity-50 inline-flex items-center gap-0.5"
+                            className="text-sm text-amber-700 hover:text-amber-900 disabled:opacity-50 inline-flex items-center gap-0.5"
                           >
                             {isSnapping ? (
                               <Loader2 className="w-3 h-3 animate-spin" />
@@ -1408,18 +1408,18 @@ function ListingsTab({
                         )}
                         <Link
                           href={`/listings/${l.id}`}
-                          className="text-[11px] text-blue-700 hover:underline inline-flex items-center gap-0.5"
+                          className="text-sm text-blue-700 hover:underline inline-flex items-center gap-0.5"
                         >
                           Open <ChevronRight className="w-3 h-3" />
                         </Link>
                       </div>
                       {cellResyncErr && (
-                        <div className="text-[10px] text-rose-700 mt-1 max-w-[200px] truncate" title={cellResyncErr.message}>
+                        <div className="text-xs text-rose-700 mt-1 max-w-[200px] truncate" title={cellResyncErr.message}>
                           {cellResyncErr.message}
                         </div>
                       )}
                       {cellSnapErr && (
-                        <div className="text-[10px] text-rose-700 mt-1 max-w-[200px] truncate" title={cellSnapErr.message}>
+                        <div className="text-xs text-rose-700 mt-1 max-w-[200px] truncate" title={cellSnapErr.message}>
                           {cellSnapErr.message}
                         </div>
                       )}
@@ -1454,7 +1454,7 @@ function ListingStatusBadge({
   return (
     <span
       className={cn(
-        'inline-flex items-center h-5 px-1.5 rounded text-[10px] font-medium',
+        'inline-flex items-center h-5 px-1.5 rounded text-xs font-medium',
         tone,
       )}
     >
@@ -1518,14 +1518,14 @@ function ActivityTab({ productId }: { productId: string }) {
 
   if (loading && items.length === 0) {
     return (
-      <div className="flex items-center justify-center py-12 text-slate-400 text-[12px]">
+      <div className="flex items-center justify-center py-12 text-slate-400 text-base">
         <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading activity…
       </div>
     )
   }
   if (error) {
     return (
-      <div className="m-5 border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-[12px] text-rose-800 flex items-start gap-2">
+      <div className="m-5 border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800 flex items-start gap-2">
         <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
         <span>Failed to load activity: {error}</span>
       </div>
@@ -1533,10 +1533,10 @@ function ActivityTab({ productId }: { productId: string }) {
   }
   if (items.length === 0) {
     return (
-      <div className="px-5 py-10 text-center text-[12px] text-slate-500">
+      <div className="px-5 py-10 text-center text-base text-slate-500">
         <Activity className="w-6 h-6 mx-auto text-slate-300 mb-2" />
         No activity recorded yet.
-        <div className="text-[11px] text-slate-400 mt-1">
+        <div className="text-sm text-slate-400 mt-1">
           Edits, bulk operations, and master-data changes show up here.
         </div>
       </div>
@@ -1546,7 +1546,7 @@ function ActivityTab({ productId }: { productId: string }) {
   return (
     <div className="p-5 space-y-3">
       {total > items.length && (
-        <div className="text-[11px] text-slate-500">
+        <div className="text-sm text-slate-500">
           Showing {items.length} of {total} entries (most recent first)
         </div>
       )}
@@ -1577,7 +1577,7 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
 
   return (
     <li className="border border-slate-200 rounded-md bg-white px-3 py-2">
-      <div className="flex items-baseline justify-between gap-2 text-[11px] text-slate-500">
+      <div className="flex items-baseline justify-between gap-2 text-sm text-slate-500">
         <span>
           <span className="font-semibold text-slate-700 capitalize">{entry.action}</span>
           {' · '}
@@ -1593,10 +1593,10 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
         </time>
       </div>
       {diff.length > 0 && (
-        <ul className="mt-1.5 space-y-0.5 text-[12px]">
+        <ul className="mt-1.5 space-y-0.5 text-base">
           {diff.map((d) => (
             <li key={d.field} className="flex items-baseline gap-2">
-              <span className="text-slate-500 font-mono text-[11px] flex-shrink-0">
+              <span className="text-slate-500 font-mono text-sm flex-shrink-0">
                 {d.field}
               </span>
               <span className="text-rose-700 line-through">{formatValue(d.before)}</span>
@@ -1607,7 +1607,7 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
         </ul>
       )}
       {typeof bulkOpId === 'string' && (
-        <div className="mt-1.5 text-[10px] text-slate-400">
+        <div className="mt-1.5 text-xs text-slate-400">
           via bulk operation <span className="font-mono">{bulkOpId.slice(0, 12)}…</span>
         </div>
       )}
@@ -1812,14 +1812,14 @@ function VariationsTab({
 
   if (loading && children.length === 0) {
     return (
-      <div className="flex items-center justify-center py-12 text-slate-400 text-[12px]">
+      <div className="flex items-center justify-center py-12 text-slate-400 text-base">
         <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading variations…
       </div>
     )
   }
   if (error) {
     return (
-      <div className="m-5 border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-[12px] text-rose-800 flex items-start gap-2">
+      <div className="m-5 border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800 flex items-start gap-2">
         <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
         <span>Failed to load variations: {error}</span>
       </div>
@@ -1827,10 +1827,10 @@ function VariationsTab({
   }
   if (children.length === 0) {
     return (
-      <div className="px-5 py-10 text-center text-[12px] text-slate-500">
+      <div className="px-5 py-10 text-center text-base text-slate-500">
         <Layers className="w-6 h-6 mx-auto text-slate-300 mb-2" />
         No variations under {parentSku} yet.
-        <div className="text-[11px] text-slate-400 mt-1">
+        <div className="text-sm text-slate-400 mt-1">
           Add child products from the catalog organize page.
         </div>
       </div>
@@ -1848,15 +1848,15 @@ function VariationsTab({
 
   return (
     <div className="p-5 space-y-3">
-      <div className="text-[11px] text-slate-500">
+      <div className="text-sm text-slate-500">
         {children.length} variation{children.length === 1 ? '' : 's'} under{' '}
         <span className="font-mono text-slate-700">{parentSku}</span>. Click
         price or stock to edit inline.
       </div>
       <div className="overflow-x-auto -mx-5 px-5">
-        <table className="w-full text-[12px]">
+        <table className="w-full text-base">
           <thead>
-            <tr className="text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-200">
+            <tr className="text-xs uppercase tracking-wider text-slate-500 border-b border-slate-200">
               <th className="text-left py-1.5 px-2 font-semibold">SKU</th>
               {axisKeys.map((k) => (
                 <th key={k} className="text-left py-1.5 px-2 font-semibold">
@@ -1893,7 +1893,7 @@ function VariationsTab({
                           }),
                         )
                       }}
-                      className="text-left text-blue-700 hover:underline font-mono text-[11px]"
+                      className="text-left text-blue-700 hover:underline font-mono text-sm"
                     >
                       {c.sku}
                     </button>
@@ -1916,7 +1916,7 @@ function VariationsTab({
                           if (e.key === 'Enter') commit(c, 'price')
                           if (e.key === 'Escape') setEditing(null)
                         }}
-                        className="w-20 h-6 px-1.5 text-[12px] text-right tabular-nums border border-blue-300 rounded"
+                        className="w-20 h-6 px-1.5 text-base text-right tabular-nums border border-blue-300 rounded"
                       />
                     ) : (
                       <button
@@ -1928,7 +1928,7 @@ function VariationsTab({
                       </button>
                     )}
                     {cellErr?.field === 'price' && (
-                      <div className="text-[10px] text-rose-700 mt-0.5">
+                      <div className="text-xs text-rose-700 mt-0.5">
                         {cellErr.message}
                       </div>
                     )}
@@ -1946,7 +1946,7 @@ function VariationsTab({
                           if (e.key === 'Enter') commit(c, 'stock')
                           if (e.key === 'Escape') setEditing(null)
                         }}
-                        className="w-16 h-6 px-1.5 text-[12px] text-right tabular-nums border border-blue-300 rounded"
+                        className="w-16 h-6 px-1.5 text-base text-right tabular-nums border border-blue-300 rounded"
                       />
                     ) : (
                       <button
@@ -1963,7 +1963,7 @@ function VariationsTab({
                       </button>
                     )}
                     {cellErr?.field === 'stock' && (
-                      <div className="text-[10px] text-rose-700 mt-0.5">
+                      <div className="text-xs text-rose-700 mt-0.5">
                         {cellErr.message}
                       </div>
                     )}
@@ -1977,7 +1977,7 @@ function VariationsTab({
           </tbody>
         </table>
       </div>
-      <div className="text-[11px] text-slate-500">
+      <div className="text-sm text-slate-500">
         Bulk variant operations live on{' '}
         <Link
           href={`/products/${parentId}/matrix`}
@@ -2179,7 +2179,7 @@ function TranslationsTab({
 
   if (loading) {
     return (
-      <div className="px-5 py-8 text-center text-[12px] text-slate-400 italic">
+      <div className="px-5 py-8 text-center text-base text-slate-400 italic">
         <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Loading…
       </div>
     )
@@ -2188,7 +2188,7 @@ function TranslationsTab({
   return (
     <div className="px-5 py-4 space-y-3">
       {error && (
-        <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-[12px] text-rose-800">
+        <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800">
           {error}
         </div>
       )}
@@ -2197,29 +2197,29 @@ function TranslationsTab({
       <div className="border border-blue-200 bg-blue-50/40 rounded-md p-3">
         <div className="flex items-center justify-between gap-2 mb-1">
           <div className="inline-flex items-center gap-2">
-            <span className="text-[10px] uppercase tracking-wider font-semibold text-blue-700 bg-blue-100 rounded px-1.5 py-0.5">
+            <span className="text-xs uppercase tracking-wider font-semibold text-blue-700 bg-blue-100 rounded px-1.5 py-0.5">
               Master
             </span>
-            <span className="text-[12px] font-medium text-slate-900">
+            <span className="text-base font-medium text-slate-900">
               {languageLabel(primaryLanguage)}
             </span>
           </div>
-          <span className="text-[10px] text-blue-600 italic">
+          <span className="text-xs text-blue-600 italic">
             Edit on the Details tab
           </span>
         </div>
-        <div className="text-[12px] text-slate-700 truncate">
+        <div className="text-base text-slate-700 truncate">
           {masterName || <span className="text-slate-400">—</span>}
         </div>
         {masterDescription && (
-          <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">
+          <div className="text-sm text-slate-500 mt-0.5 line-clamp-2">
             {masterDescription.replace(/<[^>]+>/g, ' ').trim()}
           </div>
         )}
       </div>
 
       {rows.length === 0 && !adding && (
-        <div className="text-center py-6 text-[12px] text-slate-500 space-y-2">
+        <div className="text-center py-6 text-base text-slate-500 space-y-2">
           <Globe className="w-5 h-5 mx-auto text-slate-300" />
           <div>No translations yet.</div>
         </div>
@@ -2252,14 +2252,14 @@ function TranslationsTab({
 
       {adding ? (
         <div className="border border-purple-200 bg-purple-50/40 rounded-md p-3 space-y-2">
-          <div className="text-[11px] font-semibold text-purple-700 uppercase tracking-wider">
+          <div className="text-sm font-semibold text-purple-700 uppercase tracking-wider">
             Add translation
           </div>
           <div className="grid grid-cols-2 gap-2">
             <select
               value={newLang}
               onChange={(e) => setNewLang(e.target.value)}
-              className="h-8 px-2 text-[12px] border border-slate-200 rounded bg-white"
+              className="h-8 px-2 text-base border border-slate-200 rounded bg-white"
             >
               {KNOWN_LANGUAGES.filter(
                 (l) =>
@@ -2276,14 +2276,14 @@ function TranslationsTab({
               value={newLangCustom}
               onChange={(e) => setNewLangCustom(e.target.value)}
               placeholder="or type code"
-              className="h-8 px-2 text-[12px] border border-slate-200 rounded bg-white font-mono uppercase"
+              className="h-8 px-2 text-base border border-slate-200 rounded bg-white font-mono uppercase"
             />
           </div>
           <div className="flex items-center justify-end gap-1.5">
             <button
               type="button"
               onClick={() => setAdding(false)}
-              className="h-7 px-2 text-[11px] text-slate-600 hover:bg-slate-100 rounded"
+              className="h-7 px-2 text-sm text-slate-600 hover:bg-slate-100 rounded"
             >
               Cancel
             </button>
@@ -2291,7 +2291,7 @@ function TranslationsTab({
               type="button"
               onClick={create}
               disabled={busy}
-              className="h-7 px-3 text-[11px] bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+              className="h-7 px-3 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
             >
               Create
             </button>
@@ -2301,13 +2301,13 @@ function TranslationsTab({
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="w-full h-8 text-[12px] border border-dashed border-slate-300 rounded text-slate-600 hover:bg-slate-50 inline-flex items-center justify-center gap-1.5"
+          className="w-full h-8 text-base border border-dashed border-slate-300 rounded text-slate-600 hover:bg-slate-50 inline-flex items-center justify-center gap-1.5"
         >
           <Plus className="w-3 h-3" /> Add translation
         </button>
       )}
 
-      <div className="text-[10px] text-slate-500 pt-2 border-t border-slate-100">
+      <div className="text-xs text-slate-500 pt-2 border-t border-slate-100">
         AI-generated translations stay marked &ldquo;unreviewed&rdquo; until
         you confirm them. Generation happens via /products bulk AI fill —
         pick a non-{primaryLanguage.toUpperCase()} marketplace and the
@@ -2393,22 +2393,22 @@ function TranslationRowCard({
         onClick={onToggle}
         className="w-full px-3 py-2 flex items-start gap-2 text-left hover:bg-slate-50"
       >
-        <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-700 bg-slate-100 rounded px-1.5 py-0.5 flex-shrink-0 mt-0.5">
+        <span className="text-xs uppercase tracking-wider font-semibold text-slate-700 bg-slate-100 rounded px-1.5 py-0.5 flex-shrink-0 mt-0.5">
           {row.language.toUpperCase()}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-[12px] font-medium text-slate-900 truncate">
+          <div className="text-base font-medium text-slate-900 truncate">
             {summaryName}
           </div>
           {summaryDesc && (
-            <div className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
+            <div className="text-sm text-slate-500 line-clamp-1 mt-0.5">
               {summaryDesc}
             </div>
           )}
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           {needsReview && (
-            <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+            <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
               <Sparkles className="w-2.5 h-2.5" /> AI · review
             </span>
           )}
@@ -2421,7 +2421,7 @@ function TranslationRowCard({
       {expanded && (
         <div className="border-t border-slate-100 p-3 space-y-2">
           <div>
-            <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
+            <label className="text-xs uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
               Name
             </label>
             <input
@@ -2429,11 +2429,11 @@ function TranslationRowCard({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={masterFallback.name}
-              className="w-full h-8 px-2 text-[12px] border border-slate-200 rounded bg-white"
+              className="w-full h-8 px-2 text-base border border-slate-200 rounded bg-white"
             />
           </div>
           <div>
-            <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
+            <label className="text-xs uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
               Description
             </label>
             <textarea
@@ -2441,34 +2441,34 @@ function TranslationRowCard({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder={masterFallback.description ?? ''}
-              className="w-full px-2 py-1.5 text-[12px] border border-slate-200 rounded bg-white"
+              className="w-full px-2 py-1.5 text-base border border-slate-200 rounded bg-white"
             />
           </div>
           <div>
-            <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
+            <label className="text-xs uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
               Bullets · one per line
             </label>
             <textarea
               rows={5}
               value={bullets}
               onChange={(e) => setBullets(e.target.value)}
-              className="w-full px-2 py-1.5 text-[12px] border border-slate-200 rounded bg-white"
+              className="w-full px-2 py-1.5 text-base border border-slate-200 rounded bg-white"
             />
           </div>
           <div>
-            <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
+            <label className="text-xs uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
               Keywords · comma-separated
             </label>
             <input
               type="text"
               value={keywords}
               onChange={(e) => setKeywords(e.target.value)}
-              className="w-full h-8 px-2 text-[12px] border border-slate-200 rounded bg-white"
+              className="w-full h-8 px-2 text-base border border-slate-200 rounded bg-white"
             />
           </div>
 
           {row.source && (
-            <div className="text-[10px] text-slate-500 pt-1 border-t border-slate-100">
+            <div className="text-xs text-slate-500 pt-1 border-t border-slate-100">
               Source: <span className="font-mono">{row.source}</span>
               {row.sourceModel && <> · {row.sourceModel}</>}
               {row.reviewedAt && (
@@ -2486,7 +2486,7 @@ function TranslationRowCard({
                 type="button"
                 onClick={onReview}
                 disabled={busy}
-                className="h-7 px-2 text-[11px] bg-amber-50 text-amber-800 border border-amber-200 rounded hover:bg-amber-100 inline-flex items-center gap-1"
+                className="h-7 px-2 text-sm bg-amber-50 text-amber-800 border border-amber-200 rounded hover:bg-amber-100 inline-flex items-center gap-1"
               >
                 <Check className="w-3 h-3" /> Mark reviewed
               </button>
@@ -2495,7 +2495,7 @@ function TranslationRowCard({
               type="button"
               onClick={onDelete}
               disabled={busy}
-              className="h-7 px-2 text-[11px] text-rose-700 hover:bg-rose-50 rounded inline-flex items-center gap-1"
+              className="h-7 px-2 text-sm text-rose-700 hover:bg-rose-50 rounded inline-flex items-center gap-1"
             >
               <Trash2 className="w-3 h-3" /> Delete
             </button>
@@ -2503,7 +2503,7 @@ function TranslationRowCard({
               type="button"
               onClick={save}
               disabled={busy || !dirty}
-              className="ml-auto h-7 px-3 text-[11px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-40"
+              className="ml-auto h-7 px-3 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-40"
             >
               Save
             </button>
@@ -2730,7 +2730,7 @@ function RelatedTab({
 
   if (loading) {
     return (
-      <div className="px-5 py-8 text-center text-[12px] text-slate-400 italic">
+      <div className="px-5 py-8 text-center text-base text-slate-400 italic">
         <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Loading…
       </div>
     )
@@ -2739,7 +2739,7 @@ function RelatedTab({
   return (
     <div className="px-5 py-4 space-y-4">
       {error && (
-        <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-[12px] text-rose-800">
+        <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800">
           {error}
         </div>
       )}
@@ -2751,12 +2751,12 @@ function RelatedTab({
           <section key={t.code} className="space-y-1.5">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-[12px] font-semibold text-slate-700">
+                <div className="text-base font-semibold text-slate-700">
                   {t.label}
                 </div>
-                <div className="text-[10px] text-slate-500">{t.hint}</div>
+                <div className="text-xs text-slate-500">{t.hint}</div>
               </div>
-              <span className="text-[10px] text-slate-400">
+              <span className="text-xs text-slate-400">
                 {rows.length} item{rows.length === 1 ? '' : 's'}
               </span>
             </div>
@@ -2781,10 +2781,10 @@ function RelatedTab({
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
-                    <div className="text-[12px] text-slate-900 font-medium truncate">
+                    <div className="text-base text-slate-900 font-medium truncate">
                       {p.name}
                     </div>
-                    <div className="text-[10px] text-slate-500 font-mono truncate">
+                    <div className="text-xs text-slate-500 font-mono truncate">
                       {p.sku}
                       {p.basePrice != null && (
                         <span className="ml-1.5 tabular-nums">
@@ -2824,7 +2824,7 @@ function RelatedTab({
       })}
 
       {outgoing.length === 0 && !adding && (
-        <div className="text-center py-6 text-[12px] text-slate-500 space-y-2">
+        <div className="text-center py-6 text-base text-slate-500 space-y-2">
           <Network className="w-5 h-5 mx-auto text-slate-300" />
           <div>No related products yet.</div>
         </div>
@@ -2832,17 +2832,17 @@ function RelatedTab({
 
       {adding ? (
         <div className="border border-purple-200 bg-purple-50/40 rounded-md p-3 space-y-2">
-          <div className="text-[11px] font-semibold text-purple-700 uppercase tracking-wider">
+          <div className="text-sm font-semibold text-purple-700 uppercase tracking-wider">
             Add related
           </div>
           <div>
-            <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
+            <label className="text-xs uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
               Type
             </label>
             <select
               value={pickedType}
               onChange={(e) => setPickedType(e.target.value)}
-              className="w-full h-8 px-2 text-[12px] border border-slate-200 rounded bg-white"
+              className="w-full h-8 px-2 text-base border border-slate-200 rounded bg-white"
             >
               {RELATION_TYPES.map((t) => (
                 <option key={t.code} value={t.code}>
@@ -2852,7 +2852,7 @@ function RelatedTab({
             </select>
           </div>
           <div>
-            <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
+            <label className="text-xs uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
               Search product
             </label>
             <div className="relative">
@@ -2863,11 +2863,11 @@ function RelatedTab({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="SKU, name, brand…"
-                className="w-full h-8 pl-7 pr-2 text-[12px] border border-slate-200 rounded bg-white"
+                className="w-full h-8 pl-7 pr-2 text-base border border-slate-200 rounded bg-white"
               />
             </div>
             {searching && (
-              <div className="text-[10px] text-slate-400 mt-1 italic">
+              <div className="text-xs text-slate-400 mt-1 italic">
                 Searching…
               </div>
             )}
@@ -2894,10 +2894,10 @@ function RelatedTab({
                       <div className="w-6 h-6 rounded bg-slate-100 flex-shrink-0" />
                     )}
                     <div className="min-w-0 flex-1">
-                      <div className="text-[12px] text-slate-900 truncate">
+                      <div className="text-base text-slate-900 truncate">
                         {r.name}
                       </div>
-                      <div className="text-[10px] text-slate-500 font-mono truncate">
+                      <div className="text-xs text-slate-500 font-mono truncate">
                         {r.sku}
                       </div>
                     </div>
@@ -2918,10 +2918,10 @@ function RelatedTab({
                   <div className="w-6 h-6 rounded bg-slate-100 flex-shrink-0" />
                 )}
                 <div className="min-w-0 flex-1">
-                  <div className="text-[12px] text-slate-900 truncate font-medium">
+                  <div className="text-base text-slate-900 truncate font-medium">
                     {selectedTo.name}
                   </div>
-                  <div className="text-[10px] text-slate-500 font-mono truncate">
+                  <div className="text-xs text-slate-500 font-mono truncate">
                     {selectedTo.sku}
                   </div>
                 </div>
@@ -2935,7 +2935,7 @@ function RelatedTab({
               </div>
             )}
           </div>
-          <label className="flex items-start gap-2 text-[11px] text-slate-700 cursor-pointer">
+          <label className="flex items-start gap-2 text-sm text-slate-700 cursor-pointer">
             <input
               type="checkbox"
               checked={reciprocal}
@@ -2944,7 +2944,7 @@ function RelatedTab({
             />
             <div>
               <div>Create the reverse link too</div>
-              <div className="text-[10px] text-slate-500">
+              <div className="text-xs text-slate-500">
                 Most cross-sells should be symmetric. Untick for asymmetric
                 relations like Replacement.
               </div>
@@ -2959,7 +2959,7 @@ function RelatedTab({
                 setSearch('')
                 setResults([])
               }}
-              className="h-7 px-2 text-[11px] text-slate-600 hover:bg-slate-100 rounded"
+              className="h-7 px-2 text-sm text-slate-600 hover:bg-slate-100 rounded"
             >
               Cancel
             </button>
@@ -2967,7 +2967,7 @@ function RelatedTab({
               type="button"
               onClick={create}
               disabled={busy || !selectedTo}
-              className="h-7 px-3 text-[11px] bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+              className="h-7 px-3 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
             >
               Add
             </button>
@@ -2977,7 +2977,7 @@ function RelatedTab({
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="w-full h-8 text-[12px] border border-dashed border-slate-300 rounded text-slate-600 hover:bg-slate-50 inline-flex items-center justify-center gap-1.5"
+          className="w-full h-8 text-base border border-dashed border-slate-300 rounded text-slate-600 hover:bg-slate-50 inline-flex items-center justify-center gap-1.5"
         >
           <Plus className="w-3 h-3" /> Add related product
         </button>
@@ -2987,11 +2987,11 @@ function RelatedTab({
           to this one. Useful when editing/removing this product. */}
       {incoming.length > 0 && (
         <section className="pt-3 border-t border-slate-100 space-y-1.5">
-          <div className="text-[11px] font-semibold text-slate-700">
+          <div className="text-sm font-semibold text-slate-700">
             Linked from {incoming.length} product
             {incoming.length === 1 ? '' : 's'}
           </div>
-          <div className="text-[10px] text-slate-500">
+          <div className="text-xs text-slate-500">
             These products have an outgoing link to this one. Editing
             them happens in their own drawer.
           </div>
@@ -3021,10 +3021,10 @@ function RelatedTab({
                   <div className="w-6 h-6 rounded bg-slate-100 flex-shrink-0" />
                 )}
                 <div className="min-w-0 flex-1">
-                  <div className="text-[12px] text-slate-700 truncate">
+                  <div className="text-base text-slate-700 truncate">
                     {p.name}
                   </div>
-                  <div className="text-[10px] text-slate-500 font-mono truncate">
+                  <div className="text-xs text-slate-500 font-mono truncate">
                     {p.sku} ·{' '}
                     <span className="uppercase">{relationLabel(r.type)}</span>
                   </div>

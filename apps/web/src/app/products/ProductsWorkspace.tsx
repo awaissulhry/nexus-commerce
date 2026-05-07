@@ -610,7 +610,7 @@ export default function ProductsWorkspace() {
             <button
               type="button"
               onClick={() => setImageUploadOpen(true)}
-              className="h-8 px-3 text-[12px] border border-slate-200 text-slate-700 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-slate-200 text-slate-700 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
               title="Drop a folder of product photos; we match each file to its SKU"
             >
               <Upload size={12} /> Upload photos
@@ -625,7 +625,7 @@ export default function ProductsWorkspace() {
               type="button"
               onClick={() => exportProductsCsv(products)}
               disabled={products.length === 0}
-              className="h-8 px-3 text-[12px] border border-slate-200 text-slate-700 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-slate-200 text-slate-700 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
               title={
                 products.length === 0
                   ? 'Nothing to export'
@@ -634,7 +634,7 @@ export default function ProductsWorkspace() {
             >
               <Download size={12} /> Export CSV
             </button>
-            <Link href="/products/new" className="h-8 px-3 text-[12px] bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
+            <Link href="/products/new" className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
               <Plus size={12} /> New product
             </Link>
             {lens === 'grid' ? (
@@ -645,7 +645,7 @@ export default function ProductsWorkspace() {
                 error={!!productsError}
               />
             ) : (
-              <button onClick={() => fetchProducts()} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5">
+              <button onClick={() => fetchProducts()} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5">
                 <RefreshCw size={12} /> Refresh
               </button>
             )}
@@ -773,7 +773,7 @@ export default function ProductsWorkspace() {
               setSavedViewMenuOpen(false)
             }}
           />
-          <button onClick={() => setBundleEditorOpen(true)} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5">
+          <button onClick={() => setBundleEditorOpen(true)} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5">
             <Package size={12} /> Bundles
           </button>
         </div>
@@ -911,7 +911,7 @@ function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) =>
         <button
           key={t.key}
           onClick={() => onChange(t.key)}
-          className={`h-7 px-3 text-[12px] font-medium inline-flex items-center gap-1.5 rounded transition-colors ${current === t.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+          className={`h-7 px-3 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${current === t.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
         >
           <t.icon size={12} />
           {t.label}
@@ -964,19 +964,19 @@ function FilterBar(props: any) {
           </div>
           <button
             onClick={() => setFiltersOpen(!filtersOpen)}
-            className={`h-8 px-3 text-[12px] border rounded inline-flex items-center gap-1.5 ${filtersOpen || filterCount > 0 ? 'border-slate-300 bg-slate-50' : 'border-slate-200 hover:bg-slate-50'}`}
+            className={`h-8 px-3 text-base border rounded inline-flex items-center gap-1.5 ${filtersOpen || filterCount > 0 ? 'border-slate-300 bg-slate-50' : 'border-slate-200 hover:bg-slate-50'}`}
           >
             <Filter size={12} />
             Filters
             {filterCount > 0 && (
-              <span className="bg-slate-700 text-white text-[10px] px-1.5 py-0.5 rounded-full font-semibold">{filterCount}</span>
+              <span className="bg-slate-700 text-white text-xs px-1.5 py-0.5 rounded-full font-semibold">{filterCount}</span>
             )}
             <ChevronDown size={12} className={filtersOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
           </button>
           {filterCount > 0 && (
             <button
               onClick={() => updateUrl({ status: '', channels: '', marketplaces: '', productTypes: '', brands: '', tags: '', fulfillment: '', missingChannels: '', stockLevel: undefined, hasPhotos: undefined, page: undefined })}
-              className="h-8 px-2 text-[12px] text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
+              className="h-8 px-2 text-base text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
             >
               <X size={12} /> Clear
             </button>
@@ -1085,22 +1085,22 @@ function FilterBar(props: any) {
               />
             )}
             <div className="md:col-span-2 lg:col-span-3 flex items-center gap-2 flex-wrap pt-2 border-t border-slate-100">
-              <span className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mr-1">Stock</span>
+              <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold mr-1">Stock</span>
               {(['all', 'in', 'low', 'out'] as const).map((v) => (
                 <button
                   key={v}
                   onClick={() => updateUrl({ stockLevel: v === 'all' ? undefined : v, page: undefined })}
-                  className={`h-7 px-3 text-[11px] border rounded-full font-medium ${stockLevel === v ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
+                  className={`h-7 px-3 text-sm border rounded-full font-medium ${stockLevel === v ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
                 >{v}</button>
               ))}
-              <span className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold ml-3 mr-1">Photos</span>
+              <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold ml-3 mr-1">Photos</span>
               <button
                 onClick={() => updateUrl({ hasPhotos: hasPhotos === 'true' ? undefined : 'true', page: undefined })}
-                className={`h-7 px-3 text-[11px] border rounded-full font-medium ${hasPhotos === 'true' ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
+                className={`h-7 px-3 text-sm border rounded-full font-medium ${hasPhotos === 'true' ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
               >Has photos</button>
               <button
                 onClick={() => updateUrl({ hasPhotos: hasPhotos === 'false' ? undefined : 'false', page: undefined })}
-                className={`h-7 px-3 text-[11px] border rounded-full font-medium ${hasPhotos === 'false' ? 'bg-rose-50 text-rose-700 border-rose-300' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
+                className={`h-7 px-3 text-sm border rounded-full font-medium ${hasPhotos === 'false' ? 'bg-rose-50 text-rose-700 border-rose-300' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
               >No photos</button>
             </div>
           </div>
@@ -1114,7 +1114,7 @@ function FilterGroup({ label, options, selected, onToggle, counts, renderLabel }
   if (options.length === 0) return null
   return (
     <div>
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">{label}</div>
+      <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-1.5">{label}</div>
       <div className="flex items-center gap-1.5 flex-wrap">
         {options.map((opt: string) => {
           const active = selected.includes(opt)
@@ -1123,7 +1123,7 @@ function FilterGroup({ label, options, selected, onToggle, counts, renderLabel }
             <button
               key={opt}
               onClick={() => onToggle(opt)}
-              className={`h-7 px-2 text-[11px] border rounded inline-flex items-center gap-1.5 transition-colors ${active ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'}`}
+              className={`h-7 px-2 text-sm border rounded inline-flex items-center gap-1.5 transition-colors ${active ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'}`}
             >
               {renderLabel ? renderLabel(opt) : opt}
               {count != null && <span className={active ? 'text-slate-300' : 'text-slate-400'}>{count}</span>}
@@ -1151,16 +1151,16 @@ function SavedViewsButton({ open, setOpen, views, onApply, onSaveCurrent, onDele
 
   return (
     <div className="relative" ref={ref}>
-      <button onClick={() => setOpen(!open)} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5">
+      <button onClick={() => setOpen(!open)} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5">
         <Bookmark size={12} /> Views <ChevronDown size={12} />
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-md shadow-lg z-20 p-2">
           {!saveMode ? (
             <>
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 px-2 py-1.5">Saved views</div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1.5">Saved views</div>
               {views.length === 0 ? (
-                <div className="px-2 py-3 text-[12px] text-slate-400 text-center">No saved views yet</div>
+                <div className="px-2 py-3 text-base text-slate-400 text-center">No saved views yet</div>
               ) : (
                 <ul className="space-y-0.5">
                   {views.map((v: SavedView) => {
@@ -1178,7 +1178,7 @@ function SavedViewsButton({ open, setOpen, views, onApply, onSaveCurrent, onDele
                         : 'text-slate-400 hover:text-purple-600'
                     return (
                     <li key={v.id} className="flex items-center justify-between gap-1 px-2 py-1.5 hover:bg-slate-50 rounded">
-                      <button onClick={() => onApply(v)} className="flex-1 min-w-0 text-left text-[12px] text-slate-900 inline-flex items-center gap-1.5">
+                      <button onClick={() => onApply(v)} className="flex-1 min-w-0 text-left text-base text-slate-900 inline-flex items-center gap-1.5">
                         {v.isDefault && <Star size={10} className="text-amber-500 fill-amber-500" />}
                         <span className="truncate">{v.name}</span>
                       </button>
@@ -1195,7 +1195,7 @@ function SavedViewsButton({ open, setOpen, views, onApply, onSaveCurrent, onDele
                       >
                         <Bell size={12} />
                         {alertCount > 0 && (
-                          <span className="text-[10px] font-semibold tabular-nums">{alertCount}</span>
+                          <span className="text-xs font-semibold tabular-nums">{alertCount}</span>
                         )}
                       </button>
                       <button onClick={() => onSetDefault(v.id)} title="Set as default" aria-label={`Set "${v.name}" as default view`} className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-amber-500"><Star size={12} /></button>
@@ -1205,22 +1205,22 @@ function SavedViewsButton({ open, setOpen, views, onApply, onSaveCurrent, onDele
                   })}
                 </ul>
               )}
-              <button onClick={() => setSaveMode(true)} className="w-full mt-1 h-8 px-2 text-[12px] bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center justify-center gap-1.5">
+              <button onClick={() => setSaveMode(true)} className="w-full mt-1 h-8 px-2 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center justify-center gap-1.5">
                 <BookmarkPlus size={12} /> Save current view
               </button>
             </>
           ) : (
             <div className="space-y-2">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 px-2 py-1">Save current view</div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1">Save current view</div>
               <input
                 autoFocus
                 type="text"
                 placeholder="View name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full h-8 px-2 text-[13px] border border-slate-200 rounded"
+                className="w-full h-8 px-2 text-md border border-slate-200 rounded"
               />
-              <label className="flex items-center gap-2 px-2 text-[12px] text-slate-700">
+              <label className="flex items-center gap-2 px-2 text-base text-slate-700">
                 <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
                 Use as default on page load
               </label>
@@ -1231,9 +1231,9 @@ function SavedViewsButton({ open, setOpen, views, onApply, onSaveCurrent, onDele
                     const ok = await onSaveCurrent(name.trim(), isDefault)
                     if (ok) { setSaveMode(false); setName(''); setIsDefault(false); setOpen(false) }
                   }}
-                  className="flex-1 h-8 text-[12px] bg-slate-900 text-white rounded hover:bg-slate-800"
+                  className="flex-1 h-8 text-base bg-slate-900 text-white rounded hover:bg-slate-800"
                 >Save</button>
-                <button onClick={() => { setSaveMode(false); setName('') }} className="flex-1 h-8 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Cancel</button>
+                <button onClick={() => { setSaveMode(false); setName('') }} className="flex-1 h-8 text-base border border-slate-200 rounded hover:bg-slate-50">Cancel</button>
               </div>
             </div>
           )}
@@ -1388,33 +1388,33 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLooku
     <div className="sticky top-2 z-20">
       <Card>
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[12px] font-semibold text-slate-700">{selectedIds.length} selected</span>
+          <span className="text-base font-semibold text-slate-700">{selectedIds.length} selected</span>
           <div className="h-4 w-px bg-slate-200" />
 
-          <button onClick={() => setStatusBulk('ACTIVE')} disabled={busy} className="h-7 px-3 text-[12px] bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 disabled:opacity-50 inline-flex items-center gap-1.5"><CheckCircle2 size={12} /> Activate</button>
-          <button onClick={() => setStatusBulk('DRAFT')} disabled={busy} className="h-7 px-3 text-[12px] bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-50 inline-flex items-center gap-1.5"><EyeOff size={12} /> Draft</button>
-          <button onClick={() => setStatusBulk('INACTIVE')} disabled={busy} className="h-7 px-3 text-[12px] bg-rose-50 text-rose-700 border border-rose-200 rounded hover:bg-rose-100 disabled:opacity-50 inline-flex items-center gap-1.5"><XCircle size={12} /> Inactive</button>
+          <button onClick={() => setStatusBulk('ACTIVE')} disabled={busy} className="h-7 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 disabled:opacity-50 inline-flex items-center gap-1.5"><CheckCircle2 size={12} /> Activate</button>
+          <button onClick={() => setStatusBulk('DRAFT')} disabled={busy} className="h-7 px-3 text-base bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-50 inline-flex items-center gap-1.5"><EyeOff size={12} /> Draft</button>
+          <button onClick={() => setStatusBulk('INACTIVE')} disabled={busy} className="h-7 px-3 text-base bg-rose-50 text-rose-700 border border-rose-200 rounded hover:bg-rose-100 disabled:opacity-50 inline-flex items-center gap-1.5"><XCircle size={12} /> Inactive</button>
 
           <div className="h-4 w-px bg-slate-200" />
 
           {/* Tag menu */}
           <div className="relative" ref={tagMenuRef}>
-            <button onClick={() => setTagMenuOpen(!tagMenuOpen)} disabled={busy} className="h-7 px-3 text-[12px] bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5">
+            <button onClick={() => setTagMenuOpen(!tagMenuOpen)} disabled={busy} className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5">
               <TagIcon size={12} /> Tag <ChevronDown size={10} />
             </button>
             {tagMenuOpen && (
               <div className="absolute left-0 top-full mt-1 w-64 bg-white border border-slate-200 rounded-md shadow-lg z-30 p-2 max-h-72 overflow-y-auto">
                 {allTags.length === 0 ? (
-                  <div className="text-[12px] text-slate-400 text-center py-3">No tags yet — create one from a product detail.</div>
+                  <div className="text-base text-slate-400 text-center py-3">No tags yet — create one from a product detail.</div>
                 ) : allTags.map((t) => (
                   <div key={t.id} className="flex items-center justify-between px-2 py-1 hover:bg-slate-50 rounded">
-                    <span className="text-[12px] text-slate-700 inline-flex items-center gap-1.5">
+                    <span className="text-base text-slate-700 inline-flex items-center gap-1.5">
                       {t.color && <span className="w-2 h-2 rounded-full" style={{ background: t.color }} />}
                       {t.name}
                     </span>
                     <div className="flex items-center gap-1">
-                      <button onClick={() => tagBulk('add', [t.id])} className="text-[10px] text-emerald-600 hover:underline">add</button>
-                      <button onClick={() => tagBulk('remove', [t.id])} className="text-[10px] text-rose-600 hover:underline">remove</button>
+                      <button onClick={() => tagBulk('add', [t.id])} className="text-xs text-emerald-600 hover:underline">add</button>
+                      <button onClick={() => tagBulk('remove', [t.id])} className="text-xs text-rose-600 hover:underline">remove</button>
                     </div>
                   </div>
                 ))}
@@ -1424,26 +1424,26 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLooku
 
           {/* Publish menu */}
           <div className="relative" ref={pubMenuRef}>
-            <button onClick={() => setPublishMenuOpen(!publishMenuOpen)} disabled={busy} className="h-7 px-3 text-[12px] bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 disabled:opacity-50 inline-flex items-center gap-1.5">
+            <button onClick={() => setPublishMenuOpen(!publishMenuOpen)} disabled={busy} className="h-7 px-3 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 disabled:opacity-50 inline-flex items-center gap-1.5">
               <Eye size={12} /> Publish <ChevronDown size={10} />
             </button>
             {publishMenuOpen && (
               <div className="absolute left-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-md shadow-lg z-30 p-2 max-h-96 overflow-y-auto">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 px-2 py-1">Amazon EU</div>
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1">Amazon EU</div>
                 {['IT', 'DE', 'FR', 'ES', 'UK'].map((m) => (
-                  <button key={`amz-${m}`} onClick={() => { publish('AMAZON', m); setPublishMenuOpen(false) }} className="w-full text-left px-2 py-1 text-[12px] text-slate-700 hover:bg-slate-50 rounded">
+                  <button key={`amz-${m}`} onClick={() => { publish('AMAZON', m); setPublishMenuOpen(false) }} className="w-full text-left px-2 py-1 text-base text-slate-700 hover:bg-slate-50 rounded">
                     Amazon {m} ({COUNTRY_NAMES[m] ?? m})
                   </button>
                 ))}
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 px-2 py-1 mt-2">eBay EU</div>
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1 mt-2">eBay EU</div>
                 {['IT', 'DE', 'FR', 'ES', 'UK'].map((m) => (
-                  <button key={`ebay-${m}`} onClick={() => { publish('EBAY', m); setPublishMenuOpen(false) }} className="w-full text-left px-2 py-1 text-[12px] text-slate-700 hover:bg-slate-50 rounded">
+                  <button key={`ebay-${m}`} onClick={() => { publish('EBAY', m); setPublishMenuOpen(false) }} className="w-full text-left px-2 py-1 text-base text-slate-700 hover:bg-slate-50 rounded">
                     eBay {m} ({COUNTRY_NAMES[m] ?? m})
                   </button>
                 ))}
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 px-2 py-1 mt-2">Single-store</div>
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1 mt-2">Single-store</div>
                 {['SHOPIFY', 'WOOCOMMERCE', 'ETSY'].map((c) => (
-                  <button key={c} onClick={() => { publish(c, 'GLOBAL'); setPublishMenuOpen(false) }} className="w-full text-left px-2 py-1 text-[12px] text-slate-700 hover:bg-slate-50 rounded">
+                  <button key={c} onClick={() => { publish(c, 'GLOBAL'); setPublishMenuOpen(false) }} className="w-full text-left px-2 py-1 text-base text-slate-700 hover:bg-slate-50 rounded">
                     {c.charAt(0) + c.slice(1).toLowerCase()}
                   </button>
                 ))}
@@ -1451,7 +1451,7 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLooku
             )}
           </div>
 
-          <button onClick={duplicate} disabled={busy} className="h-7 px-3 text-[12px] bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5">
+          <button onClick={duplicate} disabled={busy} className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5">
             <Copy size={12} /> Duplicate
           </button>
 
@@ -1464,7 +1464,7 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLooku
               type="button"
               onClick={() => setCompareModalOpen(true)}
               disabled={busy || compareSubjects.length < 2}
-              className="h-7 px-3 text-[12px] bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
+              className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
               title="Side-by-side comparison of selected products"
             >
               <GitCompare size={12} /> Compare
@@ -1477,7 +1477,7 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLooku
           <button
             onClick={() => setAiModalOpen(true)}
             disabled={busy}
-            className="h-7 px-3 text-[12px] bg-purple-50 text-purple-700 border border-purple-200 rounded hover:bg-purple-100 disabled:opacity-50 inline-flex items-center gap-1.5"
+            className="h-7 px-3 text-base bg-purple-50 text-purple-700 border border-purple-200 rounded hover:bg-purple-100 disabled:opacity-50 inline-flex items-center gap-1.5"
             title="Generate descriptions / bullets / keywords with AI"
           >
             <Sparkles size={12} /> AI fill
@@ -1485,12 +1485,12 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLooku
 
           <Link
             href={`/bulk-operations?productIds=${selectedIds.join(',')}`}
-            className="h-7 px-3 text-[12px] bg-violet-50 text-violet-700 border border-violet-200 rounded hover:bg-violet-100 inline-flex items-center gap-1.5"
+            className="h-7 px-3 text-base bg-violet-50 text-violet-700 border border-violet-200 rounded hover:bg-violet-100 inline-flex items-center gap-1.5"
           >
             <ExternalLink size={12} /> Power edit
           </Link>
 
-          {status && <span className="text-[11px] text-slate-500 ml-2">{status}</span>}
+          {status && <span className="text-sm text-slate-500 ml-2">{status}</span>}
           <button onClick={onClear} disabled={busy} className="ml-auto h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded">
             <X size={14} />
           </button>
@@ -1788,10 +1788,10 @@ function BulkImageUploadModal({
       >
         <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
           <div>
-            <div className="text-[14px] font-semibold text-slate-900">
+            <div className="text-lg font-semibold text-slate-900">
               Upload product photos
             </div>
-            <div className="text-[11px] text-slate-500">
+            <div className="text-sm text-slate-500">
               We match each file to its SKU by filename. Add{' '}
               <span className="font-mono">-1</span>,{' '}
               <span className="font-mono">-2</span>,{' '}
@@ -1817,7 +1817,7 @@ function BulkImageUploadModal({
                 e.stopPropagation()
               }}
               onDrop={onDrop}
-              className="border-2 border-dashed border-slate-300 rounded-lg p-10 text-center text-[12px] text-slate-600 hover:border-purple-300 hover:bg-purple-50/40 transition-colors"
+              className="border-2 border-dashed border-slate-300 rounded-lg p-10 text-center text-base text-slate-600 hover:border-purple-300 hover:bg-purple-50/40 transition-colors"
             >
               {resolving ? (
                 <div className="inline-flex items-center gap-2">
@@ -1830,21 +1830,21 @@ function BulkImageUploadModal({
                   <div className="text-slate-700 font-medium mb-1">
                     Drop a folder or files here
                   </div>
-                  <div className="text-[11px] text-slate-500">
+                  <div className="text-sm text-slate-500">
                     or pick from disk
                   </div>
                   <div className="mt-3 flex items-center justify-center gap-2">
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="h-7 px-3 text-[11px] border border-slate-200 rounded hover:bg-white"
+                      className="h-7 px-3 text-sm border border-slate-200 rounded hover:bg-white"
                     >
                       Choose files
                     </button>
                     <button
                       type="button"
                       onClick={() => folderInputRef.current?.click()}
-                      className="h-7 px-3 text-[11px] border border-slate-200 rounded hover:bg-white"
+                      className="h-7 px-3 text-sm border border-slate-200 rounded hover:bg-white"
                     >
                       Choose folder
                     </button>
@@ -1882,12 +1882,12 @@ function BulkImageUploadModal({
               )}
             </div>
             {error && (
-              <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-[12px] text-rose-800 flex items-start gap-2">
+              <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800 flex items-start gap-2">
                 <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
                 <span>{error}</span>
               </div>
             )}
-            <div className="text-[11px] text-slate-500 pt-1 border-t border-slate-100">
+            <div className="text-sm text-slate-500 pt-1 border-t border-slate-100">
               <div className="font-medium mb-1">Filename conventions</div>
               <ul className="space-y-0.5 list-disc pl-4">
                 <li>
@@ -1919,7 +1919,7 @@ function BulkImageUploadModal({
 
         {(phase === 'preview' || phase === 'uploading') && (
           <>
-            <div className="px-5 py-2 border-b border-slate-100 flex items-center justify-between gap-3 flex-shrink-0 text-[12px] text-slate-700">
+            <div className="px-5 py-2 border-b border-slate-100 flex items-center justify-between gap-3 flex-shrink-0 text-base text-slate-700">
               <div>
                 {counts.matched} matched
                 {counts.unmatched > 0 && (
@@ -1956,7 +1956,7 @@ function BulkImageUploadModal({
                         })),
                       )
                     }
-                    className="h-7 px-2 text-[11px] text-slate-700 hover:bg-slate-100 rounded-md"
+                    className="h-7 px-2 text-sm text-slate-700 hover:bg-slate-100 rounded-md"
                   >
                     Select matched
                   </button>
@@ -1967,7 +1967,7 @@ function BulkImageUploadModal({
                         prev.map((q) => ({ ...q, selected: false })),
                       )
                     }
-                    className="h-7 px-2 text-[11px] text-slate-700 hover:bg-slate-100 rounded-md"
+                    className="h-7 px-2 text-sm text-slate-700 hover:bg-slate-100 rounded-md"
                   >
                     Clear
                   </button>
@@ -1982,7 +1982,7 @@ function BulkImageUploadModal({
                 return (
                   <div
                     key={q.filename}
-                    className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-[12px] border ${
+                    className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-base border ${
                       q.status === 'success'
                         ? 'bg-emerald-50 border-emerald-200'
                         : q.status === 'failed'
@@ -2011,22 +2011,22 @@ function BulkImageUploadModal({
                         ) : q.status === 'uploading' ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-600" />
                         ) : q.status === 'skipped' ? (
-                          <span className="text-slate-400 text-[10px]">—</span>
+                          <span className="text-slate-400 text-xs">—</span>
                         ) : (
-                          <span className="text-slate-300 text-[10px]">·</span>
+                          <span className="text-slate-300 text-xs">·</span>
                         )}
                       </span>
                     )}
-                    <span className="font-mono text-[11px] text-slate-700 min-w-0 flex-1 truncate">
+                    <span className="font-mono text-sm text-slate-700 min-w-0 flex-1 truncate">
                       {q.filename}
                     </span>
                     {matched ? (
                       <>
-                        <span className="text-slate-400 text-[10px]">→</span>
+                        <span className="text-slate-400 text-xs">→</span>
                         <span className="text-slate-900 font-medium">
                           {sku}
                         </span>
-                        <span className="text-[10px] text-slate-500 uppercase tracking-wider">
+                        <span className="text-xs text-slate-500 uppercase tracking-wider">
                           {q.preview.type ?? 'ALT'}
                           {q.preview.position
                             ? ` · #${q.preview.position}`
@@ -2042,13 +2042,13 @@ function BulkImageUploadModal({
                           onChange={(e) =>
                             setOverrideSku(q.file, e.target.value.trim())
                           }
-                          className="h-6 px-1.5 text-[11px] border border-amber-300 rounded bg-white w-32 font-mono"
+                          className="h-6 px-1.5 text-sm border border-amber-300 rounded bg-white w-32 font-mono"
                         />
                       )
                     )}
                     {q.status === 'failed' && (
                       <span
-                        className="text-[10px] text-rose-700 truncate max-w-[200px]"
+                        className="text-xs text-rose-700 truncate max-w-[200px]"
                         title={q.error}
                       >
                         {q.error}
@@ -2060,7 +2060,7 @@ function BulkImageUploadModal({
             </div>
 
             {error && (
-              <div className="mx-5 mb-3 border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-[12px] text-rose-800 flex items-start gap-2 flex-shrink-0">
+              <div className="mx-5 mb-3 border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800 flex items-start gap-2 flex-shrink-0">
                 <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
                 <span>{error}</span>
               </div>
@@ -2075,7 +2075,7 @@ function BulkImageUploadModal({
                     setError(null)
                     setPhase('drop')
                   }}
-                  className="h-8 px-3 text-[12px] text-slate-700 hover:bg-slate-100 rounded-md"
+                  className="h-8 px-3 text-base text-slate-700 hover:bg-slate-100 rounded-md"
                 >
                   Back
                 </button>
@@ -2083,7 +2083,7 @@ function BulkImageUploadModal({
                   type="button"
                   onClick={upload}
                   disabled={counts.selected === 0}
-                  className="h-8 px-3 text-[12px] bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+                  className="h-8 px-3 text-base bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
                 >
                   <Upload className="w-3 h-3" />
                   Upload {counts.selected} photo
@@ -2093,7 +2093,7 @@ function BulkImageUploadModal({
             )}
 
             {phase === 'uploading' && (
-              <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0 text-[11px] text-slate-500">
+              <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0 text-sm text-slate-500">
                 <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
                 <span className="flex-1 text-slate-700">
                   Uploading {counts.inFlight} in flight ·{' '}
@@ -2107,7 +2107,7 @@ function BulkImageUploadModal({
 
         {phase === 'done' && (
           <div className="p-5 space-y-3">
-            <div className="text-[12px] text-slate-700">
+            <div className="text-base text-slate-700">
               <span className="text-emerald-700 font-medium">
                 {counts.succeeded} uploaded
               </span>
@@ -2120,7 +2120,7 @@ function BulkImageUploadModal({
               .
             </div>
             {counts.failed > 0 && (
-              <ul className="border border-rose-200 bg-rose-50 rounded-md p-2 max-h-48 overflow-y-auto text-[11px] text-rose-800 space-y-1">
+              <ul className="border border-rose-200 bg-rose-50 rounded-md p-2 max-h-48 overflow-y-auto text-sm text-rose-800 space-y-1">
                 {queue
                   .filter((q) => q.status === 'failed')
                   .map((q) => (
@@ -2139,14 +2139,14 @@ function BulkImageUploadModal({
                   setError(null)
                   setPhase('drop')
                 }}
-                className="h-8 px-3 text-[12px] text-slate-700 hover:bg-slate-100 rounded-md"
+                className="h-8 px-3 text-base text-slate-700 hover:bg-slate-100 rounded-md"
               >
                 Upload more
               </button>
               <button
                 type="button"
                 onClick={onComplete}
-                className="h-8 px-3 text-[12px] bg-slate-900 text-white rounded-md hover:bg-slate-800"
+                className="h-8 px-3 text-base bg-slate-900 text-white rounded-md hover:bg-slate-800"
               >
                 Done
               </button>
@@ -2236,7 +2236,7 @@ function MobileProductList({
   }
   if (products.length === 0) {
     return (
-      <div className="border border-slate-200 rounded-md py-12 text-center text-[13px] text-slate-400">
+      <div className="border border-slate-200 rounded-md py-12 text-center text-md text-slate-400">
         No products match these filters
       </div>
     )
@@ -2270,11 +2270,11 @@ function MobileProductList({
             {isExpanded && (
               <div className="ml-6 space-y-1 border-l-2 border-slate-200 pl-2">
                 {isLoading ? (
-                  <div className="text-[12px] text-slate-500 italic px-2 py-1.5 bg-slate-50/60 rounded">
+                  <div className="text-base text-slate-500 italic px-2 py-1.5 bg-slate-50/60 rounded">
                     Loading variants…
                   </div>
                 ) : kids.length === 0 ? (
-                  <div className="text-[12px] text-slate-500 italic px-2 py-1.5 bg-slate-50/60 rounded">
+                  <div className="text-base text-slate-500 italic px-2 py-1.5 bg-slate-50/60 rounded">
                     No variants found
                   </div>
                 ) : (
@@ -2365,10 +2365,10 @@ function MobileProductCard({
         </div>
       )}
       <div className="min-w-0 flex-1">
-        <div className="text-[13px] text-slate-900 font-medium truncate">
+        <div className="text-md text-slate-900 font-medium truncate">
           {p.name ?? '—'}
         </div>
-        <div className="text-[11px] text-slate-500 font-mono truncate flex items-center gap-1.5">
+        <div className="text-sm text-slate-500 font-mono truncate flex items-center gap-1.5">
           <span>{p.sku}</span>
           {chevron && (
             <span className="text-slate-300">
@@ -2377,7 +2377,7 @@ function MobileProductCard({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2 mt-1 text-[11px]">
+        <div className="flex items-center gap-2 mt-1 text-sm">
           <span className="tabular-nums text-slate-700">
             €{Number(p.basePrice ?? 0).toFixed(2)}
           </span>
@@ -2386,7 +2386,7 @@ function MobileProductCard({
             {stock.toLocaleString()} pcs
           </span>
           <span
-            className={`ml-auto inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+            className={`ml-auto inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border ${
               statusColor[status] ?? statusColor.DRAFT
             }`}
           >
@@ -2614,7 +2614,7 @@ function VirtualizedGrid({
                       onSort(sortKeys[col.key])
                     }
                   }}
-                  className={`px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-700 text-left flex items-center ${sortable ? 'cursor-pointer hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:bg-slate-100' : ''}`}
+                  className={`px-3 py-2 text-sm font-semibold uppercase tracking-wider text-slate-700 text-left flex items-center ${sortable ? 'cursor-pointer hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:bg-slate-100' : ''}`}
                   style={{ width: col.width, minWidth: col.width }}
                   onClick={() => {
                     if (sortable) onSort(sortKeys[col.key])
@@ -2688,7 +2688,7 @@ function VirtualizedGrid({
                     })}
                   {row.kind === 'loading' && (
                     <div
-                      className="bg-slate-50/60 px-3 py-2 text-[12px] text-slate-500 italic flex-1"
+                      className="bg-slate-50/60 px-3 py-2 text-base text-slate-500 italic flex-1"
                       role="cell"
                       aria-colspan={totalCols}
                     >
@@ -2697,7 +2697,7 @@ function VirtualizedGrid({
                   )}
                   {row.kind === 'empty' && (
                     <div
-                      className="bg-slate-50/60 px-3 py-2 text-[12px] text-slate-500 italic flex-1"
+                      className="bg-slate-50/60 px-3 py-2 text-base text-slate-500 italic flex-1"
                       role="cell"
                       aria-colspan={totalCols}
                     >
@@ -2907,10 +2907,10 @@ function GridLens(props: any) {
   }
 
   if (loading && products.length === 0) {
-    return <Card><div role="status" aria-live="polite" className="text-[13px] text-slate-500 py-8 text-center">Loading products…</div></Card>
+    return <Card><div role="status" aria-live="polite" className="text-md text-slate-500 py-8 text-center">Loading products…</div></Card>
   }
   if (error) {
-    return <Card><div role="alert" aria-live="assertive" className="text-[13px] text-rose-600 py-8 text-center">Failed to load: {error}</div></Card>
+    return <Card><div role="alert" aria-live="assertive" className="text-md text-rose-600 py-8 text-center">Failed to load: {error}</div></Card>
   }
   if (products.length === 0) {
     return <EmptyState icon={Boxes} title="No products match these filters" description="Adjust filters or import products." action={{ label: 'New product', href: '/products/new' }} />
@@ -2927,20 +2927,20 @@ function GridLens(props: any) {
       </div>
       <div className="flex items-center gap-2 justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-slate-500">
+          <span className="text-sm text-slate-500">
             <span className="font-semibold text-slate-700 tabular-nums">{total}</span> products · page {page} of {totalPages}
           </span>
           <select
             value={pageSize}
             onChange={(e) => onPageSize(Number(e.target.value))}
-            className="h-7 px-2 text-[11px] border border-slate-200 rounded"
+            className="h-7 px-2 text-sm border border-slate-200 rounded"
           >
             {[50, 100, 200, 500].map((n) => <option key={n} value={n}>{n}/page</option>)}
           </select>
         </div>
         {/* F7 — density picker. Three-segment toggle adjacent to the
             columns picker. Persisted per-user via localStorage. */}
-        <div className="inline-flex items-center border border-slate-200 rounded overflow-hidden h-7 text-[11px]">
+        <div className="inline-flex items-center border border-slate-200 rounded overflow-hidden h-7 text-sm">
           {(['compact', 'comfortable', 'spacious'] as const).map((d) => (
             <button
               key={d}
@@ -2964,7 +2964,7 @@ function GridLens(props: any) {
         <div className="relative">
           <button
             onClick={() => setColumnPickerOpen(!columnPickerOpen)}
-            className="h-7 px-2 text-[12px] border border-slate-200 rounded inline-flex items-center gap-1.5 hover:bg-slate-50"
+            className="h-7 px-2 text-base border border-slate-200 rounded inline-flex items-center gap-1.5 hover:bg-slate-50"
           >
             <Settings2 size={12} /> Columns ({visibleColumns.length})
           </button>
@@ -3013,7 +3013,7 @@ function GridLens(props: any) {
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between text-[12px] text-slate-500">
+        <div className="flex items-center justify-between text-base text-slate-500">
           <span>Page <span className="font-semibold text-slate-700 tabular-nums">{page}</span> of <span className="tabular-nums">{totalPages}</span></span>
           <div className="flex items-center gap-1">
             <button
@@ -3117,7 +3117,7 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
   // edit clears it automatically. Kept tiny so it doesn't push the
   // row height meaningfully; long messages truncate.
   const errorBanner = cellError ? (
-    <div className="mt-0.5 inline-flex items-start gap-1 px-1.5 py-0.5 text-[10px] text-rose-700 bg-rose-50 border border-rose-200 rounded max-w-full">
+    <div className="mt-0.5 inline-flex items-start gap-1 px-1.5 py-0.5 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded max-w-full">
       <AlertCircle size={10} className="mt-0.5 flex-shrink-0" />
       <span className="truncate" title={cellError}>{cellError}</span>
       <button
@@ -3141,7 +3141,7 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
       )
     case 'sku':
       return (
-        <Link href={`/products/${p.id}/edit`} className="text-[12px] font-mono text-slate-700 hover:text-blue-600 truncate block">
+        <Link href={`/products/${p.id}/edit`} className="text-base font-mono text-slate-700 hover:text-blue-600 truncate block">
           {p.sku}
         </Link>
       )
@@ -3156,11 +3156,11 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
               onChange={(e) => setDraft(e.target.value)}
               onBlur={() => commit('name')}
               onKeyDown={(e) => { if (e.key === 'Enter') commit('name'); if (e.key === 'Escape') setEditing(false) }}
-              className="w-full h-7 px-1.5 text-[13px] border border-blue-300 rounded"
+              className="w-full h-7 px-1.5 text-md border border-blue-300 rounded"
             />
           ) : (
             <button onClick={() => startEdit(p.name)} className="block text-left max-w-full">
-              <span className="text-[13px] text-slate-900 truncate block">
+              <span className="text-md text-slate-900 truncate block">
                 {p.name}
                 {p.isParent && <Layers size={10} className="inline ml-1 text-slate-400" />}
               </span>
@@ -3178,7 +3178,7 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
               value={draft}
               onChange={(e) => { setDraft(e.target.value); commit('status') }}
               onBlur={() => setEditing(false)}
-              className="h-6 px-1 text-[11px] border border-blue-300 rounded"
+              className="h-6 px-1 text-sm border border-blue-300 rounded"
             >
               <option value="ACTIVE">ACTIVE</option>
               <option value="DRAFT">DRAFT</option>
@@ -3204,7 +3204,7 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
               onChange={(e) => setDraft(e.target.value)}
               onBlur={() => commit('price')}
               onKeyDown={(e) => { if (e.key === 'Enter') commit('price'); if (e.key === 'Escape') setEditing(false) }}
-              className="w-20 h-7 px-1.5 text-[13px] text-right tabular-nums border border-blue-300 rounded"
+              className="w-20 h-7 px-1.5 text-md text-right tabular-nums border border-blue-300 rounded"
             />
           ) : (
             <button onClick={() => startEdit(p.basePrice)} className="block text-right tabular-nums w-full">
@@ -3227,7 +3227,7 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
               onChange={(e) => setDraft(e.target.value)}
               onBlur={() => commit('stock')}
               onKeyDown={(e) => { if (e.key === 'Enter') commit('stock'); if (e.key === 'Escape') setEditing(false) }}
-              className="w-16 h-7 px-1.5 text-[13px] text-right tabular-nums border border-blue-300 rounded"
+              className="w-16 h-7 px-1.5 text-md text-right tabular-nums border border-blue-300 rounded"
             />
           ) : (
             <button onClick={() => startEdit(p.totalStock)} className={`block text-right tabular-nums font-semibold w-full ${tone}`}>
@@ -3250,7 +3250,7 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
               onChange={(e) => setDraft(e.target.value)}
               onBlur={() => commit('threshold')}
               onKeyDown={(e) => { if (e.key === 'Enter') commit('threshold'); if (e.key === 'Escape') setEditing(false) }}
-              className="w-16 h-7 px-1.5 text-[13px] text-right tabular-nums border border-blue-300 rounded"
+              className="w-16 h-7 px-1.5 text-md text-right tabular-nums border border-blue-300 rounded"
             />
           ) : (
             <button onClick={() => startEdit(p.lowStockThreshold)} className="block text-right tabular-nums text-slate-500 w-full">
@@ -3275,11 +3275,11 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
               onChange={(e) => setDraft(e.target.value)}
               onBlur={() => commit('brand')}
               onKeyDown={(e) => { if (e.key === 'Enter') commit('brand'); if (e.key === 'Escape') setEditing(false) }}
-              className="w-full h-7 px-1.5 text-[12px] border border-blue-300 rounded"
+              className="w-full h-7 px-1.5 text-base border border-blue-300 rounded"
             />
           ) : (
             <button onClick={() => startEdit(p.brand ?? '')} className="block text-left max-w-full">
-              <span className="text-[12px] text-slate-700 truncate block">
+              <span className="text-base text-slate-700 truncate block">
                 {p.brand ?? <span className="text-slate-400">—</span>}
               </span>
             </button>
@@ -3302,11 +3302,11 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
               onChange={(e) => setDraft(e.target.value)}
               onBlur={() => commit('productType')}
               onKeyDown={(e) => { if (e.key === 'Enter') commit('productType'); if (e.key === 'Escape') setEditing(false) }}
-              className="w-full h-7 px-1.5 text-[11px] border border-blue-300 rounded"
+              className="w-full h-7 px-1.5 text-sm border border-blue-300 rounded"
             />
           ) : (
             <button onClick={() => startEdit(p.productType ?? '')} className="block text-left max-w-full">
-              <span className="text-[11px] text-slate-700 truncate block">
+              <span className="text-sm text-slate-700 truncate block">
                 {p.productType ? (IT_TERMS[p.productType] ?? p.productType) : <span className="text-slate-400">—</span>}
               </span>
             </button>
@@ -3323,7 +3323,7 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
               value={draft}
               onChange={(e) => { setDraft(e.target.value); commit('fulfillment') }}
               onBlur={() => setEditing(false)}
-              className="h-6 px-1 text-[11px] border border-blue-300 rounded"
+              className="h-6 px-1 text-sm border border-blue-300 rounded"
             >
               <option value="">—</option>
               <option value="FBA">FBA</option>
@@ -3333,7 +3333,7 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
             <button onClick={() => startEdit(p.fulfillmentMethod ?? '')}>
               {p.fulfillmentMethod ? (
                 <Badge variant={p.fulfillmentMethod === 'FBA' ? 'warning' : 'info'} size="sm">{p.fulfillmentMethod}</Badge>
-              ) : <span className="text-slate-400 text-[11px]">—</span>}
+              ) : <span className="text-slate-400 text-sm">—</span>}
             </button>
           )}
           {errorBanner}
@@ -3352,7 +3352,7 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
       return (
         <div className="flex items-center gap-1 flex-wrap">
           <span
-            className="text-[10px] text-slate-400 mr-0.5 tabular-nums"
+            className="text-xs text-slate-400 mr-0.5 tabular-nums"
             title={`${coveredCount} of ${ALL_CHANNELS.length} channels listed`}
           >
             {coveredCount}/{ALL_CHANNELS.length}
@@ -3373,7 +3373,7 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
                   key={ch}
                   href={`/listings/${ch.toLowerCase()}?search=${encodeURIComponent(p.sku)}`}
                   title={`${ch}: ${c.live} live, ${c.draft} draft, ${c.error} error / ${c.total} total`}
-                  className={`inline-flex items-center gap-1 px-1.5 h-5 text-[10px] font-mono border rounded ${tone} hover:opacity-80`}
+                  className={`inline-flex items-center gap-1 px-1.5 h-5 text-xs font-mono border rounded ${tone} hover:opacity-80`}
                 >
                   {ch.slice(0, 3)}
                   <span className="opacity-60">{c.total}</span>
@@ -3388,10 +3388,10 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
                 key={ch}
                 href={`/products/${p.id}/list-wizard?channel=${ch}`}
                 title={`Not listed on ${ch} — click to start a listing`}
-                className="inline-flex items-center gap-0.5 px-1.5 h-5 text-[10px] font-mono border border-dashed border-slate-300 bg-white text-slate-400 rounded hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50"
+                className="inline-flex items-center gap-0.5 px-1.5 h-5 text-xs font-mono border border-dashed border-slate-300 bg-white text-slate-400 rounded hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50"
               >
                 {ch.slice(0, 3)}
-                <span className="text-[10px] leading-none">+</span>
+                <span className="text-xs leading-none">+</span>
               </Link>
             )
           })}
@@ -3402,21 +3402,21 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
       return (
         <div className="flex items-center gap-1 flex-wrap">
           {(p.tags ?? []).slice(0, 3).map((t) => (
-            <span key={t.id} className="inline-flex items-center px-1.5 py-0.5 text-[10px] rounded" style={{ background: t.color ? `${t.color}20` : '#f1f5f9', color: t.color ?? '#64748b' }}>
+            <span key={t.id} className="inline-flex items-center px-1.5 py-0.5 text-xs rounded" style={{ background: t.color ? `${t.color}20` : '#f1f5f9', color: t.color ?? '#64748b' }}>
               {t.name}
             </span>
           ))}
-          <button onClick={() => onTagEdit(p.id)} className="h-4 w-4 inline-flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded text-[10px]">+</button>
+          <button onClick={() => onTagEdit(p.id)} className="h-4 w-4 inline-flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded text-xs">+</button>
         </div>
       )
     case 'photos': {
       const tone = p.photoCount === 0 ? 'text-rose-600' : p.photoCount < 3 ? 'text-amber-600' : 'text-emerald-600'
-      return <span className={`text-[12px] tabular-nums font-semibold ${tone}`}>{p.photoCount}</span>
+      return <span className={`text-base tabular-nums font-semibold ${tone}`}>{p.photoCount}</span>
     }
     case 'variants':
-      return <span className="text-[12px] tabular-nums text-slate-600">{p.variantCount}</span>
+      return <span className="text-base tabular-nums text-slate-600">{p.variantCount}</span>
     case 'updated':
-      return <span className="text-[11px] text-slate-500">{new Date(p.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+      return <span className="text-sm text-slate-500">{new Date(p.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
     case 'actions':
       return (
         <div className="flex items-center gap-1 justify-end">
@@ -3433,12 +3433,12 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
                 }),
               )
             }}
-            className="h-6 px-2 text-[11px] text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded"
+            className="h-6 px-2 text-sm text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded"
             title="Quick view (Esc closes)"
           >
             View
           </button>
-          <Link href={`/products/${p.id}/list-wizard`} className="h-6 px-2 text-[11px] text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded">List</Link>
+          <Link href={`/products/${p.id}/list-wizard`} className="h-6 px-2 text-sm text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded">List</Link>
         </div>
       )
     default:
@@ -3499,7 +3499,7 @@ function ColumnPickerMenu({ visible, setVisible, onClose }: { visible: string[];
 
   return (
     <div ref={ref} className="absolute right-0 top-full mt-1 w-64 bg-white border border-slate-200 rounded-md shadow-lg z-20 p-1.5 max-h-[480px] overflow-y-auto">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 px-2 py-1.5 flex items-center justify-between">
+      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1.5 flex items-center justify-between">
         <span>Visible (drag to reorder)</span>
       </div>
       {visibleTogglable.map((c) => (
@@ -3509,7 +3509,7 @@ function ColumnPickerMenu({ visible, setVisible, onClose }: { visible: string[];
           onDragStart={onDragStart(c.key)}
           onDragOver={onDragOver}
           onDrop={onDrop(c.key)}
-          className={`flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-[12px] cursor-move ${dragKey === c.key ? 'opacity-40' : ''}`}
+          className={`flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-base cursor-move ${dragKey === c.key ? 'opacity-40' : ''}`}
         >
           <span className="text-slate-300 font-mono select-none">⠿</span>
           <input
@@ -3522,11 +3522,11 @@ function ColumnPickerMenu({ visible, setVisible, onClose }: { visible: string[];
       ))}
       {hiddenTogglable.length > 0 && (
         <>
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 px-2 py-1.5 mt-1">
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1.5 mt-1">
             Hidden
           </div>
           {hiddenTogglable.map((c) => (
-            <label key={c.key} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-[12px] cursor-pointer">
+            <label key={c.key} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-base cursor-pointer">
               <span className="text-transparent select-none">⠿</span>
               <input
                 type="checkbox"
@@ -3539,8 +3539,8 @@ function ColumnPickerMenu({ visible, setVisible, onClose }: { visible: string[];
         </>
       )}
       <div className="border-t border-slate-100 mt-1.5 pt-1.5 px-2 py-1 flex items-center justify-between">
-        <button onClick={() => setVisible(DEFAULT_VISIBLE)} className="text-[11px] text-slate-500 hover:text-slate-900">Reset order</button>
-        <button onClick={onClose} className="text-[11px] text-slate-500 hover:text-slate-900">Close</button>
+        <button onClick={() => setVisible(DEFAULT_VISIBLE)} className="text-sm text-slate-500 hover:text-slate-900">Reset order</button>
+        <button onClick={onClose} className="text-sm text-slate-500 hover:text-slate-900">Close</button>
       </div>
     </div>
   )
@@ -3563,19 +3563,19 @@ function HierarchyLens({ search }: { search: string }) {
       .finally(() => setLoading(false))
   }, [search])
 
-  if (loading) return <Card><div className="text-[13px] text-slate-500 py-8 text-center">Loading hierarchy…</div></Card>
+  if (loading) return <Card><div className="text-md text-slate-500 py-8 text-center">Loading hierarchy…</div></Card>
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <Card title={`Parents (${parents.length})`} description="Products with at least one child variation">
-        {parents.length === 0 ? <div className="py-6 text-[12px] text-slate-400 text-center">No parents</div> : (
+        {parents.length === 0 ? <div className="py-6 text-base text-slate-400 text-center">No parents</div> : (
           <ul className="space-y-1 -my-1">
             {parents.slice(0, 50).map((p) => (
               <li key={p.id}>
                 <Link href={`/products/${p.id}/edit?tab=variations`} className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 rounded hover:bg-slate-50">
                   <div className="min-w-0 flex-1">
-                    <div className="text-[13px] text-slate-900 truncate">{p.name}</div>
-                    <div className="text-[11px] text-slate-500 font-mono">{p.sku} · {p.childCount ?? 0} children</div>
+                    <div className="text-md text-slate-900 truncate">{p.name}</div>
+                    <div className="text-sm text-slate-500 font-mono">{p.sku} · {p.childCount ?? 0} children</div>
                   </div>
                   <ChevronDown size={14} className="text-slate-400 -rotate-90" />
                 </Link>
@@ -3585,15 +3585,15 @@ function HierarchyLens({ search }: { search: string }) {
         )}
       </Card>
       <Card title={`Standalones (${standalones.length})`} description="Products that aren't parents (could be promoted, attached, or kept standalone)">
-        {standalones.length === 0 ? <div className="py-6 text-[12px] text-slate-400 text-center">No standalones</div> : (
+        {standalones.length === 0 ? <div className="py-6 text-base text-slate-400 text-center">No standalones</div> : (
           <ul className="space-y-1 -my-1">
             {standalones.slice(0, 50).map((p) => (
               <li key={p.id} className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 rounded hover:bg-slate-50">
                 <div className="min-w-0 flex-1">
-                  <div className="text-[13px] text-slate-900 truncate">{p.name}</div>
-                  <div className="text-[11px] text-slate-500 font-mono">{p.sku}</div>
+                  <div className="text-md text-slate-900 truncate">{p.name}</div>
+                  <div className="text-sm text-slate-500 font-mono">{p.sku}</div>
                 </div>
-                <Link href="/catalog/organize" className="text-[11px] text-blue-600 hover:underline">Group →</Link>
+                <Link href="/catalog/organize" className="text-sm text-blue-600 hover:underline">Group →</Link>
               </li>
             ))}
           </ul>
@@ -3607,7 +3607,7 @@ function HierarchyLens({ search }: { search: string }) {
 // CoverageLens — channel matrix per product
 // ────────────────────────────────────────────────────────────────────
 function CoverageLens({ products, loading }: { products: ProductRow[]; loading: boolean }) {
-  if (loading) return <Card><div className="text-[13px] text-slate-500 py-8 text-center">Loading coverage…</div></Card>
+  if (loading) return <Card><div className="text-md text-slate-500 py-8 text-center">Loading coverage…</div></Card>
   if (products.length === 0) return <EmptyState icon={Network} title="Nothing to show" description="No products in current filter" />
 
   const channels = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY']
@@ -3634,8 +3634,8 @@ function CoverageLens({ products, loading }: { products: ProductRow[]; loading: 
   return (
     <div className="space-y-3">
       <Card>
-        <div className="flex items-center gap-3 flex-wrap text-[12px]">
-          <span className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+        <div className="flex items-center gap-3 flex-wrap text-base">
+          <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
             Coverage across {visible.length} product{visible.length === 1 ? '' : 's'}
           </span>
           <div className="flex items-center gap-2 flex-wrap ml-auto">
@@ -3652,11 +3652,11 @@ function CoverageLens({ products, loading }: { products: ProductRow[]; loading: 
                   className={`inline-flex items-center gap-1.5 px-2 py-1 border rounded ${CHANNEL_TONE[s.channel]}`}
                   title={`${s.live} live, ${s.listed - s.live} listed but not live, ${s.missing} missing`}
                 >
-                  <span className="font-semibold text-[10px]">{s.channel.slice(0, 3)}</span>
+                  <span className="font-semibold text-xs">{s.channel.slice(0, 3)}</span>
                   <span className={`tabular-nums font-semibold ${pctTone}`}>
                     {s.pct}%
                   </span>
-                  <span className="text-[10px] opacity-70 tabular-nums">
+                  <span className="text-xs opacity-70 tabular-nums">
                     {s.live}/{visible.length}
                   </span>
                 </span>
@@ -3667,12 +3667,12 @@ function CoverageLens({ products, loading }: { products: ProductRow[]; loading: 
       </Card>
       <Card noPadding>
       <div className="overflow-x-auto">
-        <table className="w-full text-[12px]">
+        <table className="w-full text-base">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
-              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase text-slate-700 sticky left-0 bg-slate-50 z-10 min-w-[260px]">Product</th>
+              <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700 sticky left-0 bg-slate-50 z-10 min-w-[260px]">Product</th>
               {channels.map((c) => (
-                <th key={c} className="px-3 py-2 text-center text-[10px] font-semibold uppercase text-slate-500">
+                <th key={c} className="px-3 py-2 text-center text-xs font-semibold uppercase text-slate-500">
                   <span className={`inline-block px-1.5 py-0.5 rounded border ${CHANNEL_TONE[c]}`}>{c}</span>
                 </th>
               ))}
@@ -3683,8 +3683,8 @@ function CoverageLens({ products, loading }: { products: ProductRow[]; loading: 
               <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50/50">
                 <td className="px-3 py-2 sticky left-0 bg-white border-r border-slate-100">
                   <Link href={`/products/${p.id}/edit`} className="block hover:text-blue-600">
-                    <div className="text-[13px] font-medium text-slate-900 truncate max-w-xs">{p.name}</div>
-                    <div className="text-[11px] text-slate-500 font-mono">{p.sku}</div>
+                    <div className="text-md font-medium text-slate-900 truncate max-w-xs">{p.name}</div>
+                    <div className="text-sm text-slate-500 font-mono">{p.sku}</div>
                   </Link>
                 </td>
                 {channels.map((ch) => {
@@ -3693,7 +3693,7 @@ function CoverageLens({ products, loading }: { products: ProductRow[]; loading: 
                   const tone = c.error > 0 ? 'bg-rose-50 text-rose-700 border-rose-200' : c.live > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : c.draft > 0 ? 'bg-slate-50 text-slate-600 border-slate-200' : 'bg-white text-slate-400 border-slate-200'
                   return (
                     <td key={ch} className="px-2 py-2 text-center">
-                      <Link href={`/listings/${ch.toLowerCase()}?search=${encodeURIComponent(p.sku)}`} className={`inline-flex items-center px-2 py-1 border rounded text-[11px] hover:opacity-80 ${tone}`}>
+                      <Link href={`/listings/${ch.toLowerCase()}?search=${encodeURIComponent(p.sku)}`} className={`inline-flex items-center px-2 py-1 border rounded text-sm hover:opacity-80 ${tone}`}>
                         <span className="font-semibold tabular-nums">{c.live}</span>
                         <span className="opacity-60 mx-0.5">/</span>
                         <span className="opacity-70 tabular-nums">{c.total}</span>
@@ -3804,7 +3804,7 @@ function PricingLens({
   if (loading || snapLoading) {
     return (
       <Card>
-        <div className="text-[13px] text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
+        <div className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
           <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading pricing matrix…
         </div>
       </Card>
@@ -3813,7 +3813,7 @@ function PricingLens({
   if (error) {
     return (
       <Card>
-        <div className="text-[13px] text-rose-600 py-8 text-center">
+        <div className="text-md text-rose-600 py-8 text-center">
           Failed to load pricing matrix: {error}
         </div>
       </Card>
@@ -3846,7 +3846,7 @@ function PricingLens({
   return (
     <div className="space-y-3">
       <Card>
-        <div className="flex items-center gap-4 text-[12px]">
+        <div className="flex items-center gap-4 text-base">
           <span className="text-slate-700">
             <span className="font-semibold tabular-nums">{cellCount}</span> cells
           </span>
@@ -3870,7 +3870,7 @@ function PricingLens({
           )}
           <Link
             href="/pricing"
-            className="ml-auto text-[12px] text-blue-700 hover:underline inline-flex items-center gap-1"
+            className="ml-auto text-base text-blue-700 hover:underline inline-flex items-center gap-1"
           >
             Open full pricing matrix <ChevronRight size={12} />
           </Link>
@@ -3878,16 +3878,16 @@ function PricingLens({
       </Card>
       <Card noPadding>
         <div className="overflow-x-auto">
-          <table className="w-full text-[12px]">
+          <table className="w-full text-base">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase text-slate-700 sticky left-0 bg-slate-50 z-10 min-w-[260px]">
+                <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700 sticky left-0 bg-slate-50 z-10 min-w-[260px]">
                   Product
                 </th>
                 {MARKETPLACES.map((mp) => (
                   <th
                     key={mp}
-                    className="px-3 py-2 text-center text-[10px] font-semibold uppercase text-slate-500"
+                    className="px-3 py-2 text-center text-xs font-semibold uppercase text-slate-500"
                   >
                     {mp}
                   </th>
@@ -3899,10 +3899,10 @@ function PricingLens({
                 <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50/50">
                   <td className="px-3 py-2 sticky left-0 bg-white border-r border-slate-100">
                     <Link href={`/products/${p.id}/edit`} className="block hover:text-blue-600">
-                      <div className="text-[13px] font-medium text-slate-900 truncate max-w-xs">
+                      <div className="text-md font-medium text-slate-900 truncate max-w-xs">
                         {p.name}
                       </div>
-                      <div className="text-[11px] text-slate-500 font-mono">{p.sku}</div>
+                      <div className="text-sm text-slate-500 font-mono">{p.sku}</div>
                     </Link>
                   </td>
                   {MARKETPLACES.map((mp) => {
@@ -3911,7 +3911,7 @@ function PricingLens({
                       return (
                         <td
                           key={mp}
-                          className="px-2 py-2 text-center text-slate-300 text-[11px]"
+                          className="px-2 py-2 text-center text-slate-300 text-sm"
                           title="No pricing snapshot — rule may not have run yet"
                         >
                           —
@@ -3932,7 +3932,7 @@ function PricingLens({
                         <Link
                           href={`/pricing?search=${encodeURIComponent(p.sku)}&marketplace=${mp}`}
                           title={titleParts.join(' · ') || 'Open in pricing matrix'}
-                          className={`inline-flex items-center px-2 py-1 border rounded text-[11px] tabular-nums hover:opacity-80 ${tone}`}
+                          className={`inline-flex items-center px-2 py-1 border rounded text-sm tabular-nums hover:opacity-80 ${tone}`}
                         >
                           {Number(cell.price).toFixed(2)} {cell.currency}
                         </Link>
@@ -3946,7 +3946,7 @@ function PricingLens({
         </div>
       </Card>
       {products.length > 100 && (
-        <div className="text-[11px] text-slate-500 text-center">
+        <div className="text-sm text-slate-500 text-center">
           Showing first 100 products. Open the full pricing matrix or
           narrow filters to see more.
         </div>
@@ -3991,8 +3991,8 @@ function HealthLens() {
     () => { void refresh() },
   )
 
-  if (loading && !data) return <Card><div className="text-[13px] text-slate-500 py-8 text-center">Loading health…</div></Card>
-  if (error) return <Card><div className="text-[13px] text-rose-600 py-8 text-center">Failed to load health: {error}</div></Card>
+  if (loading && !data) return <Card><div className="text-md text-slate-500 py-8 text-center">Loading health…</div></Card>
+  if (error) return <Card><div className="text-md text-rose-600 py-8 text-center">Failed to load health: {error}</div></Card>
   if (!data) return null
 
   return (
@@ -4005,19 +4005,19 @@ function HealthLens() {
       </div>
       <Card title="Recent failed listings">
         {data.recentErrors.length === 0 ? (
-          <div className="py-6 text-[12px] text-slate-400 text-center">No errors right now</div>
+          <div className="py-6 text-base text-slate-400 text-center">No errors right now</div>
         ) : (
           <ul className="space-y-1 -my-1">
             {data.recentErrors.slice(0, 30).map((e: any) => (
               <li key={e.id}>
                 <Link href={`/listings/${e.channel.toLowerCase()}?search=${encodeURIComponent(e.productSku)}`} className="flex items-start justify-between gap-3 py-1.5 px-2 -mx-2 rounded hover:bg-slate-50">
                   <div className="flex items-start gap-2 min-w-0 flex-1">
-                    <span className={`inline-block text-[10px] font-semibold uppercase px-1.5 py-0.5 border rounded ${CHANNEL_TONE[e.channel]}`}>{e.channel}</span>
-                    <span className="text-[11px] font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">{e.marketplace}</span>
+                    <span className={`inline-block text-xs font-semibold uppercase px-1.5 py-0.5 border rounded ${CHANNEL_TONE[e.channel]}`}>{e.channel}</span>
+                    <span className="text-sm font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">{e.marketplace}</span>
                     <div className="min-w-0">
-                      <div className="text-[12px] text-slate-900 truncate">{e.productName}</div>
-                      <div className="text-[10px] text-slate-500 font-mono">{e.productSku}</div>
-                      {e.lastSyncError && <div className="text-[10px] text-rose-600 truncate mt-0.5">{e.lastSyncError}</div>}
+                      <div className="text-base text-slate-900 truncate">{e.productName}</div>
+                      <div className="text-xs text-slate-500 font-mono">{e.productSku}</div>
+                      {e.lastSyncError && <div className="text-xs text-rose-600 truncate mt-0.5">{e.lastSyncError}</div>}
                     </div>
                   </div>
                 </Link>
@@ -4045,7 +4045,7 @@ function HealthStat({ label, value, tone }: { label: string; value: number; tone
         </div>
         <div>
           <div className="text-[24px] font-semibold tabular-nums text-slate-900">{value}</div>
-          <div className="text-[11px] uppercase tracking-wider text-slate-500">{label}</div>
+          <div className="text-sm uppercase tracking-wider text-slate-500">{label}</div>
         </div>
       </div>
     </Card>
@@ -4071,43 +4071,43 @@ function DraftsLens() {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-1">
-        <span className="text-[11px] uppercase tracking-wider text-slate-500 mr-2">Channel:</span>
+        <span className="text-sm uppercase tracking-wider text-slate-500 mr-2">Channel:</span>
         {['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY'].map((c) => (
           <button
             key={c}
             onClick={() => setChannel(c)}
-            className={`h-7 px-3 text-[11px] border rounded inline-flex items-center transition-colors ${channel === c ? `${CHANNEL_TONE[c]} font-semibold` : 'bg-white text-slate-600 border-slate-200'}`}
+            className={`h-7 px-3 text-sm border rounded inline-flex items-center transition-colors ${channel === c ? `${CHANNEL_TONE[c]} font-semibold` : 'bg-white text-slate-600 border-slate-200'}`}
           >{c}</button>
         ))}
       </div>
-      {loading && <Card><div className="text-[13px] text-slate-500 py-8 text-center">Loading drafts…</div></Card>}
+      {loading && <Card><div className="text-md text-slate-500 py-8 text-center">Loading drafts…</div></Card>}
       {!loading && data && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card title={`Drafts (${data.draftCount})`}>
-            {data.drafts.length === 0 ? <div className="py-6 text-[12px] text-slate-400 text-center">No drafts</div> : (
+            {data.drafts.length === 0 ? <div className="py-6 text-base text-slate-400 text-center">No drafts</div> : (
               <ul className="space-y-1 -my-1">
                 {data.drafts.slice(0, 30).map((d: any) => (
                   <li key={d.id} className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 rounded hover:bg-slate-50">
                     <div className="min-w-0 flex-1">
-                      <div className="text-[12px] text-slate-900 truncate">{d.product.name}</div>
-                      <div className="text-[11px] text-slate-500 font-mono">{d.product.sku} · {d.marketplace}</div>
+                      <div className="text-base text-slate-900 truncate">{d.product.name}</div>
+                      <div className="text-sm text-slate-500 font-mono">{d.product.sku} · {d.marketplace}</div>
                     </div>
-                    <Link href={`/products/${d.productId}/list-wizard?channel=${d.channel}`} className="h-7 px-3 text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100">Publish</Link>
+                    <Link href={`/products/${d.productId}/list-wizard?channel=${d.channel}`} className="h-7 px-3 text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100">Publish</Link>
                   </li>
                 ))}
               </ul>
             )}
           </Card>
           <Card title={`Uncovered (${data.uncoveredCount})`}>
-            {data.uncovered.length === 0 ? <div className="py-6 text-[12px] text-slate-400 text-center">All covered</div> : (
+            {data.uncovered.length === 0 ? <div className="py-6 text-base text-slate-400 text-center">All covered</div> : (
               <ul className="space-y-1 -my-1">
                 {data.uncovered.slice(0, 30).map((p: any) => (
                   <li key={p.id} className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 rounded hover:bg-slate-50">
                     <div className="min-w-0 flex-1">
-                      <div className="text-[12px] text-slate-900 truncate">{p.name}</div>
-                      <div className="text-[11px] text-slate-500 font-mono">{p.sku}</div>
+                      <div className="text-base text-slate-900 truncate">{p.name}</div>
+                      <div className="text-sm text-slate-500 font-mono">{p.sku}</div>
                     </div>
-                    <Link href={`/products/${p.id}/list-wizard?channel=${channel}`} className="h-7 px-3 text-[11px] bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100">List</Link>
+                    <Link href={`/products/${p.id}/list-wizard?channel=${channel}`} className="h-7 px-3 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100">List</Link>
                   </li>
                 ))}
               </ul>
@@ -4189,13 +4189,13 @@ function TagEditor({ productId, onClose, onChanged, allTags }: { productId: stri
       <div className="absolute inset-0 bg-slate-900/30" />
       <aside onClick={(e) => e.stopPropagation()} className="relative h-full w-full max-w-md bg-white shadow-2xl overflow-y-auto">
         <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white">
-          <div className="text-[13px] font-semibold text-slate-900 inline-flex items-center gap-1.5"><TagIcon size={14} /> Tags</div>
+          <div className="text-md font-semibold text-slate-900 inline-flex items-center gap-1.5"><TagIcon size={14} /> Tags</div>
           <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
         </header>
         <div className="p-5 space-y-4">
           <div>
-            <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-2">Available tags</div>
-            {loading ? <div className="text-[12px] text-slate-500">Loading…</div> : (
+            <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-2">Available tags</div>
+            {loading ? <div className="text-base text-slate-500">Loading…</div> : (
               <div className="flex items-center gap-1.5 flex-wrap">
                 {allTags.map((t) => {
                   const active = productTags.some((p) => p.id === t.id)
@@ -4203,7 +4203,7 @@ function TagEditor({ productId, onClose, onChanged, allTags }: { productId: stri
                     <button
                       key={t.id}
                       onClick={() => toggle(t)}
-                      className={`inline-flex items-center gap-1 px-2 py-1 text-[11px] border rounded transition-colors ${active ? 'border-slate-900' : 'border-slate-200 hover:border-slate-300'}`}
+                      className={`inline-flex items-center gap-1 px-2 py-1 text-sm border rounded transition-colors ${active ? 'border-slate-900' : 'border-slate-200 hover:border-slate-300'}`}
                       style={active ? { background: t.color ? `${t.color}20` : '#f1f5f9', color: t.color ?? '#64748b' } : undefined}
                     >
                       {t.color && <span className="w-1.5 h-1.5 rounded-full" style={{ background: t.color }} />}
@@ -4212,19 +4212,19 @@ function TagEditor({ productId, onClose, onChanged, allTags }: { productId: stri
                     </button>
                   )
                 })}
-                {allTags.length === 0 && <span className="text-[12px] text-slate-400">No tags yet — create one below.</span>}
+                {allTags.length === 0 && <span className="text-base text-slate-400">No tags yet — create one below.</span>}
               </div>
             )}
           </div>
           <div className="border-t border-slate-100 pt-4 space-y-2">
-            <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Create new tag</div>
+            <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">Create new tag</div>
             <div className="flex items-center gap-2">
               <input
                 type="text"
                 value={newTagName}
                 onChange={(e) => setNewTagName(e.target.value)}
                 placeholder="Tag name"
-                className="flex-1 h-8 px-2 text-[13px] border border-slate-200 rounded"
+                className="flex-1 h-8 px-2 text-md border border-slate-200 rounded"
               />
               <input
                 type="color"
@@ -4232,7 +4232,7 @@ function TagEditor({ productId, onClose, onChanged, allTags }: { productId: stri
                 onChange={(e) => setNewTagColor(e.target.value)}
                 className="h-8 w-10 border border-slate-200 rounded"
               />
-              <button onClick={createTag} className="h-8 px-3 text-[12px] bg-slate-900 text-white rounded hover:bg-slate-800">Add</button>
+              <button onClick={createTag} className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800">Add</button>
             </div>
           </div>
         </div>

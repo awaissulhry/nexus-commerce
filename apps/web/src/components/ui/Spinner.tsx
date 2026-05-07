@@ -46,7 +46,7 @@ export function Spinner({
     return (
       <span
         className={cn(
-          'inline-flex items-center gap-1.5 text-[12px]',
+          'inline-flex items-center gap-1.5 text-base',
           TONE[tone],
           className,
         )}

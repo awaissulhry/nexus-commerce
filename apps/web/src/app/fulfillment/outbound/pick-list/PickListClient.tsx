@@ -144,7 +144,7 @@ function ShipmentBlock({
         <Package className="w-4 h-4 text-slate-500 flex-shrink-0" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono font-medium text-slate-900 text-[13px]">
+            <span className="font-mono font-medium text-slate-900 text-md">
               {shipment.orderRef}
             </span>
             <Badge variant="info" size="sm">
@@ -159,7 +159,7 @@ function ShipmentBlock({
               {shipment.carrierCode}
             </Badge>
           </div>
-          <div className="flex items-center gap-3 mt-0.5 text-[11px] text-slate-500 flex-wrap">
+          <div className="flex items-center gap-3 mt-0.5 text-sm text-slate-500 flex-wrap">
             {shipment.customerName && (
               <span className="truncate max-w-[260px]">{shipment.customerName}</span>
             )}
@@ -182,8 +182,8 @@ function ShipmentBlock({
 
       {expanded && (
         <div className="border-t border-slate-200 print:border-t-2 print:border-slate-400">
-          <table className="w-full text-[12px]">
-            <thead className="bg-slate-50 text-[11px] text-slate-600 border-b border-slate-200 print:bg-white">
+          <table className="w-full text-base">
+            <thead className="bg-slate-50 text-sm text-slate-600 border-b border-slate-200 print:bg-white">
               <tr>
                 <th className="text-left font-medium px-3 py-1.5 w-8 print:hidden"></th>
                 <th className="text-left font-medium px-3 py-1.5 w-28">Location</th>
@@ -222,21 +222,21 @@ function ShipmentBlock({
                     </td>
                     <td className="px-3 py-1.5">
                       {it.location ? (
-                        <span className="font-mono text-[11px] inline-flex items-center gap-1 px-1.5 py-0.5 bg-slate-100 rounded">
+                        <span className="font-mono text-sm inline-flex items-center gap-1 px-1.5 py-0.5 bg-slate-100 rounded">
                           {it.location.locationCode}
                         </span>
                       ) : (
-                        <span className="text-[10px] italic text-amber-700">
+                        <span className="text-xs italic text-amber-700">
                           unlocated
                         </span>
                       )}
                     </td>
                     <td className="px-3 py-1.5">
-                      <div className="font-mono text-[11px] text-slate-900">
+                      <div className="font-mono text-sm text-slate-900">
                         {it.sku}
                       </div>
                       {it.productName && (
-                        <div className="text-[11px] text-slate-500 truncate max-w-md">
+                        <div className="text-sm text-slate-500 truncate max-w-md">
                           {it.productName}
                         </div>
                       )}
@@ -249,7 +249,7 @@ function ShipmentBlock({
                     >
                       {it.quantity}
                     </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-[11px] text-slate-500 print:hidden">
+                    <td className="px-3 py-1.5 text-right tabular-nums text-sm text-slate-500 print:hidden">
                       {it.location ? (
                         <span
                           className={cn(
@@ -274,7 +274,7 @@ function ShipmentBlock({
           </table>
 
           <div className="px-3 py-2 bg-slate-50 border-t border-slate-200 flex items-center justify-between print:hidden">
-            <div className="text-[11px] text-slate-500">
+            <div className="text-sm text-slate-500">
               {pickedItems.size === 0
                 ? 'Tick items as you pick them; mark the shipment when complete'
                 : allChecked
@@ -286,7 +286,7 @@ function ShipmentBlock({
               onClick={handleMarkPicked}
               disabled={picking}
               className={cn(
-                'inline-flex items-center gap-1.5 px-3 py-1 text-[12px] font-medium rounded border transition-colors disabled:opacity-50',
+                'inline-flex items-center gap-1.5 px-3 py-1 text-base font-medium rounded border transition-colors disabled:opacity-50',
                 allChecked
                   ? 'bg-green-600 text-white border-green-600 hover:bg-green-700'
                   : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50',
@@ -400,7 +400,7 @@ export default function PickListClient() {
               type="button"
               onClick={() => setStatusFilter(f.key)}
               className={cn(
-                'px-3 py-1 text-[11px] font-medium rounded border transition-colors',
+                'px-3 py-1 text-sm font-medium rounded border transition-colors',
                 statusFilter === f.key
                   ? 'bg-slate-900 text-white border-slate-900'
                   : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300',
@@ -424,7 +424,7 @@ export default function PickListClient() {
 
       {/* Totals strip (visible in print, marks the doc) */}
       {data && data.totals.shipments > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-[12px] text-slate-700 flex items-center gap-4 flex-wrap print:bg-white print:border-none print:px-0 print:text-[13px]">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-base text-slate-700 flex items-center gap-4 flex-wrap print:bg-white print:border-none print:px-0 print:text-md">
           <ClipboardList className="w-4 h-4 text-blue-700 flex-shrink-0 print:hidden" />
           <span>
             <span className="font-semibold text-slate-900">{data.totals.shipments}</span>{' '}
@@ -439,14 +439,14 @@ export default function PickListClient() {
             <span className="font-semibold text-slate-900">{data.totals.warehouses}</span>{' '}
             warehouses
           </span>
-          <span className="ml-auto text-[11px] text-slate-500 hidden print:inline">
+          <span className="ml-auto text-sm text-slate-500 hidden print:inline">
             Generated {new Date().toLocaleString()}
           </span>
         </div>
       )}
 
       {error && (
-        <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-center gap-2 print:hidden">
+        <div className="text-base text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-center gap-2 print:hidden">
           <AlertCircle className="w-3.5 h-3.5" />
           {error}
         </div>
@@ -479,10 +479,10 @@ export default function PickListClient() {
         <div className="space-y-6">
           {data.warehouses.map((w) => (
             <div key={w.warehouseId ?? 'no-wh'} className="space-y-2">
-              <div className="flex items-center gap-2 text-[13px] font-semibold text-slate-900 print:text-[14px]">
+              <div className="flex items-center gap-2 text-md font-semibold text-slate-900 print:text-lg">
                 <WarehouseIcon className="w-4 h-4 text-slate-500" />
                 {w.name}
-                <span className="text-[11px] font-normal text-slate-500">
+                <span className="text-sm font-normal text-slate-500">
                   ({w.code} · {w.shipmentCount}{' '}
                   {w.shipmentCount === 1 ? 'shipment' : 'shipments'})
                 </span>

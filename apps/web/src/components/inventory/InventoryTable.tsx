@@ -91,7 +91,7 @@ export default function InventoryTable({ data, onEditItem }: InventoryTableProps
     <div className="space-y-3">
       {/* ── Toolbar ──────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
-        <div className="text-[11px] text-slate-500 font-medium tracking-tight">
+        <div className="text-sm text-slate-500 font-medium tracking-tight">
           {data.length} products
           {expandedIds.size > 0 && (
             <span className="text-slate-400 ml-1">
@@ -116,7 +116,7 @@ export default function InventoryTable({ data, onEditItem }: InventoryTableProps
                   {headerGroup.headers.map((header) => (
                     <th
                       key={header.id}
-                      className="px-3 py-2 text-left text-[11px] font-semibold text-slate-900 uppercase tracking-tight border-r border-slate-200 last:border-r-0"
+                      className="px-3 py-2 text-left text-sm font-semibold text-slate-900 uppercase tracking-tight border-r border-slate-200 last:border-r-0"
                       style={{ width: header.getSize() }}
                     >
                       {header.isPlaceholder

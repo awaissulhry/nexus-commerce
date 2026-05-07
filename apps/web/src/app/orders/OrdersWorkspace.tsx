@@ -241,10 +241,10 @@ export default function OrdersWorkspace() {
         }
         actions={
           <div className="flex items-center gap-2">
-            <Link href="/orders/reviews/rules" className="h-8 px-3 text-[12px] bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5">
+            <Link href="/orders/reviews/rules" className="h-8 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5">
               <Star size={12} /> Review rules
             </Link>
-            <button onClick={() => fetchOrders()} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5">
+            <button onClick={() => fetchOrders()} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5">
               <RefreshCw size={12} /> Refresh
             </button>
           </div>
@@ -334,7 +334,7 @@ function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) =>
         <button
           key={t.key}
           onClick={() => onChange(t.key)}
-          className={`h-7 px-3 text-[12px] font-medium inline-flex items-center gap-1.5 rounded transition-colors ${current === t.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+          className={`h-7 px-3 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${current === t.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
         >
           <t.icon size={12} />
           {t.label}
@@ -367,17 +367,17 @@ function FilterBar(props: any) {
           </div>
           <button
             onClick={() => setFiltersOpen(!filtersOpen)}
-            className={`h-8 px-3 text-[12px] border rounded inline-flex items-center gap-1.5 ${filtersOpen || filterCount > 0 ? 'border-slate-300 bg-slate-50' : 'border-slate-200 hover:bg-slate-50'}`}
+            className={`h-8 px-3 text-base border rounded inline-flex items-center gap-1.5 ${filtersOpen || filterCount > 0 ? 'border-slate-300 bg-slate-50' : 'border-slate-200 hover:bg-slate-50'}`}
           >
             <Filter size={12} />
             Filters
-            {filterCount > 0 && <span className="bg-slate-700 text-white text-[10px] px-1.5 py-0.5 rounded-full font-semibold">{filterCount}</span>}
+            {filterCount > 0 && <span className="bg-slate-700 text-white text-xs px-1.5 py-0.5 rounded-full font-semibold">{filterCount}</span>}
             <ChevronDown size={12} className={filtersOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
           </button>
           {filterCount > 0 && (
             <button
               onClick={() => updateUrl({ channel: '', marketplace: '', status: '', fulfillment: '', reviewStatus: '', hasReturn: undefined, hasRefund: undefined, reviewEligible: undefined, customerEmail: undefined, page: undefined })}
-              className="h-8 px-2 text-[12px] text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
+              className="h-8 px-2 text-base text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
             ><X size={12} /> Clear</button>
           )}
         </div>
@@ -435,7 +435,7 @@ function FilterGroup({ label, options, selected, onToggle, counts, renderLabel }
   if (options.length === 0) return null
   return (
     <div>
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">{label}</div>
+      <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-1.5">{label}</div>
       <div className="flex items-center gap-1.5 flex-wrap">
         {options.map((opt: string) => {
           const active = selected.includes(opt)
@@ -444,7 +444,7 @@ function FilterGroup({ label, options, selected, onToggle, counts, renderLabel }
             <button
               key={opt}
               onClick={() => onToggle(opt)}
-              className={`h-7 px-2 text-[11px] border rounded inline-flex items-center gap-1.5 ${active ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'}`}
+              className={`h-7 px-2 text-sm border rounded inline-flex items-center gap-1.5 ${active ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'}`}
             >
               {renderLabel ? renderLabel(opt) : opt}
               {count != null && <span className={active ? 'text-slate-300' : 'text-slate-400'}>{count}</span>}
@@ -462,7 +462,7 @@ function ToggleChip({ active, label, onClick, tone }: { active: boolean; label: 
     warning: 'bg-amber-50 text-amber-700 border-amber-300',
     success: 'bg-emerald-50 text-emerald-700 border-emerald-300',
   }[tone] : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
-  return <button onClick={onClick} className={`h-7 px-3 text-[11px] border rounded-full font-medium ${cls}`}>{label}</button>
+  return <button onClick={onClick} className={`h-7 px-3 text-sm border rounded-full font-medium ${cls}`}>{label}</button>
 }
 
 function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: string[]; onClear: () => void; onComplete: () => void }) {
@@ -510,18 +510,18 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
     <div className="sticky top-2 z-20">
       <Card>
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[12px] font-semibold text-slate-700">{selectedIds.length} selected</span>
+          <span className="text-base font-semibold text-slate-700">{selectedIds.length} selected</span>
           <div className="h-4 w-px bg-slate-200" />
-          <button onClick={createShipments} disabled={busy} className="h-7 px-3 text-[12px] bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 disabled:opacity-50 inline-flex items-center gap-1.5">
+          <button onClick={createShipments} disabled={busy} className="h-7 px-3 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 disabled:opacity-50 inline-flex items-center gap-1.5">
             <Truck size={12} /> Create shipments
           </button>
-          <button onClick={markShipped} disabled={busy} className="h-7 px-3 text-[12px] bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 disabled:opacity-50 inline-flex items-center gap-1.5">
+          <button onClick={markShipped} disabled={busy} className="h-7 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 disabled:opacity-50 inline-flex items-center gap-1.5">
             <Package size={12} /> Mark shipped
           </button>
-          <button onClick={requestReviews} disabled={busy} className="h-7 px-3 text-[12px] bg-amber-50 text-amber-700 border border-amber-200 rounded hover:bg-amber-100 disabled:opacity-50 inline-flex items-center gap-1.5">
+          <button onClick={requestReviews} disabled={busy} className="h-7 px-3 text-base bg-amber-50 text-amber-700 border border-amber-200 rounded hover:bg-amber-100 disabled:opacity-50 inline-flex items-center gap-1.5">
             <Star size={12} /> Request reviews
           </button>
-          {status && <span className="text-[11px] text-slate-500 ml-2">{status}</span>}
+          {status && <span className="text-sm text-slate-500 ml-2">{status}</span>}
           <button onClick={onClear} disabled={busy} className="ml-auto h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded">
             <X size={14} />
           </button>
@@ -551,23 +551,23 @@ function GridLens(props: any) {
     setSelected(next)
   }
 
-  if (loading && orders.length === 0) return <Card><div className="text-[13px] text-slate-500 py-8 text-center">Loading orders…</div></Card>
-  if (error) return <Card><div className="text-[13px] text-rose-600 py-8 text-center">Failed to load: {error}</div></Card>
+  if (loading && orders.length === 0) return <Card><div className="text-md text-slate-500 py-8 text-center">Loading orders…</div></Card>
+  if (error) return <Card><div className="text-md text-rose-600 py-8 text-center">Failed to load: {error}</div></Card>
   if (orders.length === 0) return <EmptyState icon={ShoppingCart} title="No orders match these filters" description="Adjust filters or wait for new orders to ingest." />
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-slate-500">
+          <span className="text-sm text-slate-500">
             <span className="font-semibold text-slate-700 tabular-nums">{total}</span> orders · page {page} of {totalPages}
           </span>
-          <select value={pageSize} onChange={(e) => onPageSize(Number(e.target.value))} className="h-7 px-2 text-[11px] border border-slate-200 rounded">
+          <select value={pageSize} onChange={(e) => onPageSize(Number(e.target.value))} className="h-7 px-2 text-sm border border-slate-200 rounded">
             {[25, 50, 100, 200, 500].map((n) => <option key={n} value={n}>{n}/page</option>)}
           </select>
         </div>
         <div className="relative">
-          <button onClick={() => setColumnPickerOpen(!columnPickerOpen)} className="h-7 px-2 text-[12px] border border-slate-200 rounded inline-flex items-center gap-1.5 hover:bg-slate-50">
+          <button onClick={() => setColumnPickerOpen(!columnPickerOpen)} className="h-7 px-2 text-base border border-slate-200 rounded inline-flex items-center gap-1.5 hover:bg-slate-50">
             <Settings2 size={12} /> Columns ({visibleColumns.length})
           </button>
           {columnPickerOpen && <ColumnPickerMenu visible={visibleColumns} setVisible={setVisibleColumns} onClose={() => setColumnPickerOpen(false)} />}
@@ -576,14 +576,14 @@ function GridLens(props: any) {
 
       <Card noPadding>
         <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
+          <table className="w-full text-md">
             <thead className="border-b border-slate-200 bg-slate-50 sticky top-0 z-10">
               <tr>
                 {visible.map((col) => (
                   <th
                     key={col.key}
                     style={{ width: col.width, minWidth: col.width }}
-                    className={`px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-700 text-left ${['date', 'customer', 'total', 'status'].includes(col.key) ? 'cursor-pointer hover:bg-slate-100' : ''}`}
+                    className={`px-3 py-2 text-sm font-semibold uppercase tracking-wider text-slate-700 text-left ${['date', 'customer', 'total', 'status'].includes(col.key) ? 'cursor-pointer hover:bg-slate-100' : ''}`}
                     onClick={() => {
                       const map: Record<string, string> = { date: 'purchaseDate', customer: 'customer', total: 'totalPrice', status: 'status' }
                       if (map[col.key]) onSort(map[col.key])
@@ -621,7 +621,7 @@ function GridLens(props: any) {
       </Card>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between text-[12px] text-slate-500">
+        <div className="flex items-center justify-between text-base text-slate-500">
           <span>Page <span className="font-semibold text-slate-700 tabular-nums">{page}</span> of <span className="tabular-nums">{totalPages}</span></span>
           <div className="flex items-center gap-1">
             <button onClick={() => onPage(Math.max(1, page - 1))} disabled={page === 1} className="h-7 px-3 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Previous</button>
@@ -640,19 +640,19 @@ function OrderCell({ col, order, isSelected, onToggle }: { col: string; order: O
     case 'channel':
       return (
         <div className="flex flex-col gap-0.5">
-          <span className={`inline-block text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded w-fit ${CHANNEL_TONE[o.channel] ?? 'bg-slate-50 text-slate-600 border-slate-200'}`}>{o.channel}</span>
-          {o.marketplace && <span className="text-[10px] text-slate-500 font-mono">{o.marketplace}</span>}
+          <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded w-fit ${CHANNEL_TONE[o.channel] ?? 'bg-slate-50 text-slate-600 border-slate-200'}`}>{o.channel}</span>
+          {o.marketplace && <span className="text-xs text-slate-500 font-mono">{o.marketplace}</span>}
         </div>
       )
     case 'orderId':
       return (
-        <Link href={`/orders/${o.id}`} className="text-[12px] font-mono text-blue-600 hover:underline truncate block">
+        <Link href={`/orders/${o.id}`} className="text-base font-mono text-blue-600 hover:underline truncate block">
           {o.channelOrderId}
         </Link>
       )
     case 'date':
       return (
-        <span className="text-[12px] text-slate-700">
+        <span className="text-base text-slate-700">
           {o.purchaseDate
             ? new Date(o.purchaseDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })
             : new Date(o.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })}
@@ -661,46 +661,46 @@ function OrderCell({ col, order, isSelected, onToggle }: { col: string; order: O
     case 'customer':
       return (
         <div className="min-w-0">
-          <div className="text-[12px] text-slate-900 truncate">{o.customerName}</div>
-          <div className="text-[11px] text-slate-500 truncate">{o.customerEmail}</div>
+          <div className="text-base text-slate-900 truncate">{o.customerName}</div>
+          <div className="text-sm text-slate-500 truncate">{o.customerEmail}</div>
         </div>
       )
     case 'items':
-      return <span className="text-[12px] tabular-nums text-slate-700">{o.itemCount}</span>
+      return <span className="text-base tabular-nums text-slate-700">{o.itemCount}</span>
     case 'total':
-      return <span className="text-[13px] tabular-nums font-semibold text-slate-900">{o.currencyCode === 'EUR' || !o.currencyCode ? '€' : ''}{o.totalPrice.toFixed(2)}{o.currencyCode && o.currencyCode !== 'EUR' ? ` ${o.currencyCode}` : ''}</span>
+      return <span className="text-md tabular-nums font-semibold text-slate-900">{o.currencyCode === 'EUR' || !o.currencyCode ? '€' : ''}{o.totalPrice.toFixed(2)}{o.currencyCode && o.currencyCode !== 'EUR' ? ` ${o.currencyCode}` : ''}</span>
     case 'status':
       return <Badge variant={STATUS_VARIANT[o.status] ?? 'default'} size="sm">{o.status}</Badge>
     case 'fulfillment':
       return o.fulfillmentMethod
         ? <Badge variant={o.fulfillmentMethod === 'FBA' ? 'warning' : 'info'} size="sm">{o.fulfillmentMethod}</Badge>
-        : <span className="text-slate-400 text-[11px]">—</span>
+        : <span className="text-slate-400 text-sm">—</span>
     case 'returnRefund':
       return (
         <div className="flex items-center gap-1">
-          {o.hasActiveReturn && <span title="Active return" className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded">R</span>}
-          {o.hasRefund && <span title="Has refund" className="text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-1 py-0.5 rounded">$</span>}
-          {!o.hasActiveReturn && !o.hasRefund && <span className="text-slate-400 text-[10px]">—</span>}
+          {o.hasActiveReturn && <span title="Active return" className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded">R</span>}
+          {o.hasRefund && <span title="Has refund" className="text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-1 py-0.5 rounded">$</span>}
+          {!o.hasActiveReturn && !o.hasRefund && <span className="text-slate-400 text-xs">—</span>}
         </div>
       )
     case 'review': {
       const rr = o.reviewRequests[0]
-      if (!rr) return <span className="text-[10px] text-slate-400">—</span>
+      if (!rr) return <span className="text-xs text-slate-400">—</span>
       return (
-        <span className={`inline-block text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 border rounded ${REVIEW_STATUS_TONE[rr.status]}`}>
+        <span className={`inline-block text-xs uppercase tracking-wider font-semibold px-1.5 py-0.5 border rounded ${REVIEW_STATUS_TONE[rr.status]}`}>
           {rr.status.slice(0, 4)}
         </span>
       )
     }
     case 'repeat':
       return o.customerOrderCount > 1
-        ? <span title={`${o.customerOrderCount} orders from this customer`} className="text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">×{o.customerOrderCount}</span>
-        : <span className="text-slate-400 text-[10px]">new</span>
+        ? <span title={`${o.customerOrderCount} orders from this customer`} className="text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">×{o.customerOrderCount}</span>
+        : <span className="text-slate-400 text-xs">new</span>
     case 'tags':
       return (
         <div className="flex items-center gap-1 flex-wrap">
           {(o.tags ?? []).slice(0, 3).map((t) => (
-            <span key={t.id} className="inline-flex items-center px-1.5 py-0.5 text-[10px] rounded" style={{ background: t.color ? `${t.color}20` : '#f1f5f9', color: t.color ?? '#64748b' }}>
+            <span key={t.id} className="inline-flex items-center px-1.5 py-0.5 text-xs rounded" style={{ background: t.color ? `${t.color}20` : '#f1f5f9', color: t.color ?? '#64748b' }}>
               {t.name}
             </span>
           ))}
@@ -708,7 +708,7 @@ function OrderCell({ col, order, isSelected, onToggle }: { col: string; order: O
       )
     case 'actions':
       return (
-        <Link href={`/orders/${o.id}`} className="h-6 px-2 text-[11px] text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded inline-flex items-center gap-1">
+        <Link href={`/orders/${o.id}`} className="h-6 px-2 text-sm text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded inline-flex items-center gap-1">
           Open <ChevronRight size={11} />
         </Link>
       )
@@ -726,16 +726,16 @@ function ColumnPickerMenu({ visible, setVisible, onClose }: { visible: string[];
   const togglable = ALL_COLUMNS.filter((c) => !c.locked && c.label)
   return (
     <div ref={ref} className="absolute right-0 top-full mt-1 w-56 bg-white border border-slate-200 rounded-md shadow-lg z-20 p-1.5">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 px-2 py-1.5">Visible columns</div>
+      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1.5">Visible columns</div>
       {togglable.map((c) => (
-        <label key={c.key} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-[12px] cursor-pointer">
+        <label key={c.key} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-base cursor-pointer">
           <input type="checkbox" checked={visible.includes(c.key)} onChange={() => visible.includes(c.key) ? setVisible(visible.filter((k) => k !== c.key)) : setVisible([...visible, c.key])} />
           <span className="text-slate-700">{c.label}</span>
         </label>
       ))}
       <div className="border-t border-slate-100 mt-1.5 pt-1.5 px-2 py-1 flex items-center justify-between">
-        <button onClick={() => setVisible(DEFAULT_VISIBLE)} className="text-[11px] text-slate-500 hover:text-slate-900">Reset</button>
-        <button onClick={onClose} className="text-[11px] text-slate-500 hover:text-slate-900">Close</button>
+        <button onClick={() => setVisible(DEFAULT_VISIBLE)} className="text-sm text-slate-500 hover:text-slate-900">Reset</button>
+        <button onClick={onClose} className="text-sm text-slate-500 hover:text-slate-900">Close</button>
       </div>
     </div>
   )
@@ -775,24 +775,24 @@ function CustomerLens() {
           <Input placeholder="Search customer email…" value={search} onChange={(e: any) => setSearch(e.target.value)} className="pl-7" />
         </div>
       </div>
-      {loading ? <Card><div className="text-[13px] text-slate-500 py-8 text-center">Loading customers…</div></Card> :
+      {loading ? <Card><div className="text-md text-slate-500 py-8 text-center">Loading customers…</div></Card> :
         groups.length === 0 ? <EmptyState icon={User} title="No customers" description="No orders found yet." /> : (
           <Card noPadding>
             <div className="overflow-x-auto">
-              <table className="w-full text-[13px]">
+              <table className="w-full text-md">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase text-slate-700">Customer</th>
-                    <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase text-slate-700">Orders</th>
-                    <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase text-slate-700">LTV</th>
-                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase text-slate-700">Last order</th>
+                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">Customer</th>
+                    <th className="px-3 py-2 text-right text-sm font-semibold uppercase text-slate-700">Orders</th>
+                    <th className="px-3 py-2 text-right text-sm font-semibold uppercase text-slate-700">LTV</th>
+                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">Last order</th>
                   </tr>
                 </thead>
                 <tbody>
                   {groups.map((g) => (
                     <tr key={g.email} className="border-b border-slate-100 hover:bg-slate-50">
                       <td className="px-3 py-2">
-                        <Link href={`/orders?customerEmail=${encodeURIComponent(g.email)}`} className="text-[12px] text-blue-600 hover:underline inline-flex items-center gap-1">
+                        <Link href={`/orders?customerEmail=${encodeURIComponent(g.email)}`} className="text-base text-blue-600 hover:underline inline-flex items-center gap-1">
                           <Mail size={11} /> {g.email}
                         </Link>
                       </td>
@@ -802,7 +802,7 @@ function CustomerLens() {
                           : <span className="text-slate-500">{g.orderCount}</span>}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900">€{g.totalSpent.toFixed(2)}</td>
-                      <td className="px-3 py-2 text-[11px] text-slate-500">{g.lastOrderAt ? new Date(g.lastOrderAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' }) : '—'}</td>
+                      <td className="px-3 py-2 text-sm text-slate-500">{g.lastOrderAt ? new Date(g.lastOrderAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' }) : '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -827,33 +827,33 @@ function FinancialsLens({ orders }: { orders: Order[] }) {
       <Card>
         <div className="flex items-center gap-6">
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Page total</div>
+            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Page total</div>
             <div className="text-[24px] font-semibold tabular-nums text-slate-900">€{totals.gross.toFixed(2)}</div>
           </div>
-          <div className="text-[12px] text-slate-500">
-            Gross only — fees + net are computed per order on the detail page (<code className="font-mono text-[11px]">/orders/[id]/financials</code>).
-            Channel-level fee aggregation will land on the dashboard once <code className="font-mono text-[11px]">FinancialTransaction</code> rows are seeded by the SP-API + eBay sync.
+          <div className="text-base text-slate-500">
+            Gross only — fees + net are computed per order on the detail page (<code className="font-mono text-sm">/orders/[id]/financials</code>).
+            Channel-level fee aggregation will land on the dashboard once <code className="font-mono text-sm">FinancialTransaction</code> rows are seeded by the SP-API + eBay sync.
           </div>
         </div>
       </Card>
       <Card noPadding>
         <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
+          <table className="w-full text-md">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase text-slate-700">Order</th>
-                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase text-slate-700">Channel</th>
-                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase text-slate-700">Gross</th>
-                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase text-slate-700">Tx count</th>
+                <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">Order</th>
+                <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">Channel</th>
+                <th className="px-3 py-2 text-right text-sm font-semibold uppercase text-slate-700">Gross</th>
+                <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">Tx count</th>
               </tr>
             </thead>
             <tbody>
               {orders.map((o) => (
                 <tr key={o.id} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="px-3 py-2"><Link href={`/orders/${o.id}`} className="font-mono text-[12px] text-blue-600 hover:underline">{o.channelOrderId}</Link></td>
-                  <td className="px-3 py-2"><span className={`inline-block text-[10px] font-semibold uppercase px-1.5 py-0.5 border rounded ${CHANNEL_TONE[o.channel]}`}>{o.channel}</span></td>
+                  <td className="px-3 py-2"><Link href={`/orders/${o.id}`} className="font-mono text-base text-blue-600 hover:underline">{o.channelOrderId}</Link></td>
+                  <td className="px-3 py-2"><span className={`inline-block text-xs font-semibold uppercase px-1.5 py-0.5 border rounded ${CHANNEL_TONE[o.channel]}`}>{o.channel}</span></td>
                   <td className="px-3 py-2 text-right tabular-nums">€{o.totalPrice.toFixed(2)}</td>
-                  <td className="px-3 py-2 text-[12px] text-slate-700"><Link href={`/orders/${o.id}#financials`} className="text-blue-600 hover:underline">{o.itemCount} items</Link></td>
+                  <td className="px-3 py-2 text-base text-slate-700"><Link href={`/orders/${o.id}#financials`} className="text-blue-600 hover:underline">{o.itemCount} items</Link></td>
                 </tr>
               ))}
             </tbody>
@@ -874,32 +874,32 @@ function ReturnsLens() {
       .then((data) => setItems(data.items ?? []))
       .finally(() => setLoading(false))
   }, [])
-  if (loading) return <Card><div className="text-[13px] text-slate-500 py-8 text-center">Loading returns…</div></Card>
+  if (loading) return <Card><div className="text-md text-slate-500 py-8 text-center">Loading returns…</div></Card>
   if (items.length === 0) return <EmptyState icon={Undo2} title="No returns" description="Returns mirrored from channels show up here." />
   return (
     <Card noPadding>
       <div className="overflow-x-auto">
-        <table className="w-full text-[13px]">
+        <table className="w-full text-md">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
-              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase text-slate-700">RMA</th>
-              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase text-slate-700">Channel</th>
-              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase text-slate-700">Status</th>
-              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase text-slate-700">Order</th>
-              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase text-slate-700">Refund</th>
-              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase text-slate-700"></th>
+              <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">RMA</th>
+              <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">Channel</th>
+              <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">Status</th>
+              <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">Order</th>
+              <th className="px-3 py-2 text-right text-sm font-semibold uppercase text-slate-700">Refund</th>
+              <th className="px-3 py-2 text-right text-sm font-semibold uppercase text-slate-700"></th>
             </tr>
           </thead>
           <tbody>
             {items.map((r) => (
               <tr key={r.id} className="border-b border-slate-100 hover:bg-slate-50">
-                <td className="px-3 py-2 font-mono text-[12px] text-slate-700">{r.rmaNumber ?? '—'}</td>
-                <td className="px-3 py-2"><span className={`inline-block text-[10px] font-semibold uppercase px-1.5 py-0.5 border rounded ${CHANNEL_TONE[r.channel] ?? 'bg-slate-50 text-slate-600 border-slate-200'}`}>{r.channel}</span></td>
+                <td className="px-3 py-2 font-mono text-base text-slate-700">{r.rmaNumber ?? '—'}</td>
+                <td className="px-3 py-2"><span className={`inline-block text-xs font-semibold uppercase px-1.5 py-0.5 border rounded ${CHANNEL_TONE[r.channel] ?? 'bg-slate-50 text-slate-600 border-slate-200'}`}>{r.channel}</span></td>
                 <td className="px-3 py-2"><Badge variant="warning" size="sm">{r.status.replace(/_/g, ' ')}</Badge></td>
-                <td className="px-3 py-2">{r.orderId ? <Link href={`/orders/${r.orderId}`} className="text-[12px] text-blue-600 hover:underline">View order</Link> : <span className="text-slate-400 text-[11px]">—</span>}</td>
-                <td className="px-3 py-2 text-right tabular-nums text-[12px] text-slate-700">{r.refundCents != null ? `€${(r.refundCents / 100).toFixed(2)}` : '—'}</td>
+                <td className="px-3 py-2">{r.orderId ? <Link href={`/orders/${r.orderId}`} className="text-base text-blue-600 hover:underline">View order</Link> : <span className="text-slate-400 text-sm">—</span>}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-base text-slate-700">{r.refundCents != null ? `€${(r.refundCents / 100).toFixed(2)}` : '—'}</td>
                 <td className="px-3 py-2 text-right">
-                  <Link href={`/fulfillment/returns?id=${r.id}`} className="text-[11px] text-blue-600 hover:underline">Manage</Link>
+                  <Link href={`/fulfillment/returns?id=${r.id}`} className="text-sm text-blue-600 hover:underline">Manage</Link>
                 </td>
               </tr>
             ))}
@@ -939,42 +939,42 @@ function ReviewsLens() {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <Link href="/orders/reviews/rules" className="h-8 px-3 text-[12px] bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5">
+        <Link href="/orders/reviews/rules" className="h-8 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5">
           <Sparkles size={12} /> Manage rules
         </Link>
-        <button onClick={tickEngine} disabled={running} className="h-8 px-3 text-[12px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5">
+        <button onClick={tickEngine} disabled={running} className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5">
           <RefreshCw size={12} className={running ? 'animate-spin' : ''} /> Run engine now
         </button>
-        <button onClick={refresh} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5">
+        <button onClick={refresh} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5">
           <RefreshCw size={12} /> Refresh
         </button>
       </div>
-      {loading ? <Card><div className="text-[13px] text-slate-500 py-8 text-center">Loading review requests…</div></Card> :
+      {loading ? <Card><div className="text-md text-slate-500 py-8 text-center">Loading review requests…</div></Card> :
         requests.length === 0 ? <EmptyState icon={Star} title="No review requests yet" description="Create a rule, run it, or send manually from an order detail." action={{ label: 'Manage rules', href: '/orders/reviews/rules' }} /> : (
           <Card noPadding>
             <div className="overflow-x-auto">
-              <table className="w-full text-[13px]">
+              <table className="w-full text-md">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase text-slate-700">Order</th>
-                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase text-slate-700">Channel</th>
-                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase text-slate-700">Status</th>
-                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase text-slate-700">Rule</th>
-                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase text-slate-700">Sent / Scheduled</th>
-                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase text-slate-700">Reason</th>
+                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">Order</th>
+                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">Channel</th>
+                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">Status</th>
+                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">Rule</th>
+                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">Sent / Scheduled</th>
+                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">Reason</th>
                   </tr>
                 </thead>
                 <tbody>
                   {requests.map((r) => (
                     <tr key={r.id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="px-3 py-2"><Link href={`/orders/${r.orderId}`} className="font-mono text-[12px] text-blue-600 hover:underline">{r.order?.channelOrderId ?? r.orderId.slice(0, 12)}</Link></td>
-                      <td className="px-3 py-2"><span className={`inline-block text-[10px] font-semibold uppercase px-1.5 py-0.5 border rounded ${CHANNEL_TONE[r.channel]}`}>{r.channel}</span></td>
-                      <td className="px-3 py-2"><span className={`inline-block text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 border rounded ${REVIEW_STATUS_TONE[r.status]}`}>{r.status}</span></td>
-                      <td className="px-3 py-2 text-[11px] text-slate-600">{r.rule?.name ?? <span className="text-slate-400">—</span>}</td>
-                      <td className="px-3 py-2 text-[11px] text-slate-500">
+                      <td className="px-3 py-2"><Link href={`/orders/${r.orderId}`} className="font-mono text-base text-blue-600 hover:underline">{r.order?.channelOrderId ?? r.orderId.slice(0, 12)}</Link></td>
+                      <td className="px-3 py-2"><span className={`inline-block text-xs font-semibold uppercase px-1.5 py-0.5 border rounded ${CHANNEL_TONE[r.channel]}`}>{r.channel}</span></td>
+                      <td className="px-3 py-2"><span className={`inline-block text-xs uppercase tracking-wider font-semibold px-1.5 py-0.5 border rounded ${REVIEW_STATUS_TONE[r.status]}`}>{r.status}</span></td>
+                      <td className="px-3 py-2 text-sm text-slate-600">{r.rule?.name ?? <span className="text-slate-400">—</span>}</td>
+                      <td className="px-3 py-2 text-sm text-slate-500">
                         {r.sentAt ? new Date(r.sentAt).toLocaleString() : r.scheduledFor ? `→ ${new Date(r.scheduledFor).toLocaleString()}` : '—'}
                       </td>
-                      <td className="px-3 py-2 text-[11px] text-slate-500 max-w-[260px] truncate">{r.errorMessage ?? r.suppressedReason ?? '—'}</td>
+                      <td className="px-3 py-2 text-sm text-slate-500 max-w-[260px] truncate">{r.errorMessage ?? r.suppressedReason ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>

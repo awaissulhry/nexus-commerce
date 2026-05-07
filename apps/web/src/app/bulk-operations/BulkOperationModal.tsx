@@ -238,7 +238,7 @@ const OPERATIONS: OperationConfig[] = [
           : set({ ...p, [key]: true })
       return (
         <>
-          <div className="text-[11px] text-slate-500 mb-1">
+          <div className="text-sm text-slate-500 mb-1">
             Tick a field to include it in this bulk update. Untouched fields
             keep their existing per-listing values.
           </div>
@@ -273,7 +273,7 @@ const OPERATIONS: OperationConfig[] = [
           />
 
           <div className="border border-slate-200 rounded-md p-2 space-y-1">
-            <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold mb-1">
+            <div className="text-sm uppercase tracking-wide text-slate-500 font-semibold mb-1">
               SSOT toggles
             </div>
             {[
@@ -297,10 +297,10 @@ const OPERATIONS: OperationConfig[] = [
           </div>
 
           <div className="border border-slate-200 rounded-md p-2 space-y-1">
-            <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold mb-1">
+            <div className="text-sm uppercase tracking-wide text-slate-500 font-semibold mb-1">
               Pricing rule
             </div>
-            <label className="flex items-center gap-2 text-[12px]">
+            <label className="flex items-center gap-2 text-base">
               <input
                 type="checkbox"
                 checked={'pricingRule' in p}
@@ -870,7 +870,7 @@ export default function BulkOperationModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 flex-shrink-0">
-          <h2 className="text-[15px] font-semibold text-slate-900">
+          <h2 className="text-lg font-semibold text-slate-900">
             Bulk apply
           </h2>
           <button
@@ -900,8 +900,8 @@ export default function BulkOperationModal({
                       : 'border-slate-200 hover:border-slate-300',
                   )}
                 >
-                  <div className="text-[13px] font-medium">{o.label}</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">
+                  <div className="text-md font-medium">{o.label}</div>
+                  <div className="text-sm text-slate-500 mt-0.5 line-clamp-2">
                     {o.description}
                   </div>
                 </button>
@@ -916,11 +916,11 @@ export default function BulkOperationModal({
                     : 'border-slate-200 hover:border-slate-300',
                 )}
               >
-                <div className="text-[13px] font-medium inline-flex items-center gap-1.5">
+                <div className="text-md font-medium inline-flex items-center gap-1.5">
                   <Globe className="w-3.5 h-3.5" />
                   Set channel attribute
                 </div>
-                <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">
+                <div className="text-sm text-slate-500 mt-0.5 line-clamp-2">
                   Schema-driven update of any Amazon attribute across the
                   selected marketplaces. Operates on visible products in
                   the grid.
@@ -944,13 +944,13 @@ export default function BulkOperationModal({
               <SchemaTargetsBanner targets={marketplaceTargets} />
               <div className="mt-3 space-y-3">
                 {schemaLoading && (
-                  <div className="text-[12px] text-slate-500 inline-flex items-center gap-1.5">
+                  <div className="text-base text-slate-500 inline-flex items-center gap-1.5">
                     <Loader2 className="w-3 h-3 animate-spin" />
                     Loading schema fields…
                   </div>
                 )}
                 {schemaError && (
-                  <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-start gap-2">
+                  <div className="text-base text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-start gap-2">
                     <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
                     <div>{schemaError}</div>
                   </div>
@@ -985,7 +985,7 @@ export default function BulkOperationModal({
                             onChange={(v) => setSchemaValue(v)}
                           />
                           {schemaField.description && (
-                            <p className="mt-1 text-[10px] text-slate-500">
+                            <p className="mt-1 text-xs text-slate-500">
                               {schemaField.description}
                             </p>
                           )}
@@ -994,7 +994,7 @@ export default function BulkOperationModal({
                     </>
                   )}
               </div>
-              <div className="mt-3 text-[11px] text-slate-500">
+              <div className="mt-3 text-sm text-slate-500">
                 Targets {visibleProductIds.length.toLocaleString()} visible
                 product{visibleProductIds.length === 1 ? '' : 's'} ×{' '}
                 {marketplaceTargets.length} marketplace
@@ -1009,7 +1009,7 @@ export default function BulkOperationModal({
                 .
               </div>
               {schemaResult && (
-                <div className="mt-3 text-[12px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+                <div className="mt-3 text-base text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
                   Updated {schemaResult.updated.toLocaleString()} listing
                   {schemaResult.updated === 1 ? '' : 's'}.
                   {schemaResult.errors.length > 0 && (
@@ -1149,27 +1149,27 @@ export default function BulkOperationModal({
           {!isSchemaOp && payloadValid && (
             <Section title="Preview">
               {previewLoading && (
-                <div className="text-[12px] text-slate-500 inline-flex items-center gap-1.5">
+                <div className="text-base text-slate-500 inline-flex items-center gap-1.5">
                   <Loader2 className="w-3 h-3 animate-spin" />
                   Computing…
                 </div>
               )}
               {previewError && (
-                <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-start gap-2">
+                <div className="text-base text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-start gap-2">
                   <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
                   <div>{previewError}</div>
                 </div>
               )}
               {!previewLoading && !previewError && preview && (
                 <>
-                  <div className="text-[13px] font-medium text-slate-900 mb-2">
+                  <div className="text-md font-medium text-slate-900 mb-2">
                     {preview.affectedCount.toLocaleString()}{' '}
                     {preview.affectedCount === 1 ? 'item' : 'items'} will be
                     affected.
                   </div>
                   {preview.sampleItems.length > 0 && (
                     <div className="border border-slate-200 rounded-md overflow-hidden">
-                      <table className="w-full text-[12px]">
+                      <table className="w-full text-base">
                         <thead className="bg-slate-50 text-slate-500">
                           <tr>
                             <th className="text-left px-3 py-1.5 font-medium">
@@ -1192,7 +1192,7 @@ export default function BulkOperationModal({
                               key={s.id}
                               className="border-t border-slate-100"
                             >
-                              <td className="px-3 py-1.5 font-mono text-[11px] text-slate-700 truncate max-w-[220px]">
+                              <td className="px-3 py-1.5 font-mono text-sm text-slate-700 truncate max-w-[220px]">
                                 {s.sku ?? '—'}
                               </td>
                               <td className="px-3 py-1.5 text-slate-600 tabular-nums">
@@ -1204,7 +1204,7 @@ export default function BulkOperationModal({
                               <td className="px-3 py-1.5">
                                 <span
                                   className={cn(
-                                    'text-[10px] px-1.5 py-0.5 rounded',
+                                    'text-xs px-1.5 py-0.5 rounded',
                                     s.status === 'processed'
                                       ? 'bg-emerald-100 text-emerald-800'
                                       : 'bg-amber-100 text-amber-800',
@@ -1218,7 +1218,7 @@ export default function BulkOperationModal({
                         </tbody>
                       </table>
                       {preview.affectedCount > preview.sampleItems.length && (
-                        <div className="px-3 py-1.5 text-[11px] text-slate-500 bg-slate-50 border-t border-slate-100">
+                        <div className="px-3 py-1.5 text-sm text-slate-500 bg-slate-50 border-t border-slate-100">
                           + {preview.affectedCount - preview.sampleItems.length}{' '}
                           more
                         </div>
@@ -1234,7 +1234,7 @@ export default function BulkOperationModal({
           {job && (
             <Section title="Execution">
               <div className="space-y-2">
-                <div className="text-[12px] text-slate-700 inline-flex items-center gap-2">
+                <div className="text-base text-slate-700 inline-flex items-center gap-2">
                   {executing && !jobTerminal && (
                     <Loader2 className="w-3 h-3 animate-spin" />
                   )}
@@ -1265,14 +1265,14 @@ export default function BulkOperationModal({
                   />
                 </div>
                 {jobTerminal && (
-                  <div className="text-[12px] text-slate-700 grid grid-cols-3 gap-2 mt-2">
+                  <div className="text-base text-slate-700 grid grid-cols-3 gap-2 mt-2">
                     <Stat label="Processed" value={job.processedItems} tone="ok" />
                     <Stat label="Skipped" value={job.skippedItems} tone="warn" />
                     <Stat label="Failed" value={job.failedItems} tone="danger" />
                   </div>
                 )}
                 {job.lastError && (
-                  <div className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 mt-2">
+                  <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 mt-2">
                     Last error: {job.lastError}
                   </div>
                 )}
@@ -1284,7 +1284,7 @@ export default function BulkOperationModal({
               touch overlapping products + same actionType. Operator
               must explicitly check "Run anyway" before Execute unlocks. */}
           {conflicts.length > 0 && !job && !isSchemaOp && (
-            <div className="text-[12px] bg-amber-50 border border-amber-300 rounded px-3 py-2.5 space-y-2">
+            <div className="text-base bg-amber-50 border border-amber-300 rounded px-3 py-2.5 space-y-2">
               <div className="flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-600" />
                 <div className="space-y-1.5 flex-1">
@@ -1304,18 +1304,18 @@ export default function BulkOperationModal({
                     {conflicts.map((c) => (
                       <li
                         key={c.jobId}
-                        className="text-[11px] text-amber-900 bg-white/60 border border-amber-200 rounded px-2 py-1.5 flex items-center justify-between gap-3"
+                        className="text-sm text-amber-900 bg-white/60 border border-amber-200 rounded px-2 py-1.5 flex items-center justify-between gap-3"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="font-medium truncate">
                             {c.jobName}
                           </div>
-                          <div className="text-amber-700 text-[10px]">
+                          <div className="text-amber-700 text-xs">
                             {c.status} · {c.progressPercent}% · {c.totalItems.toLocaleString()} items
                             {c.createdBy ? ` · by ${c.createdBy}` : ''}
                           </div>
                         </div>
-                        <div className="flex-shrink-0 text-[10px] font-mono bg-amber-100 text-amber-900 border border-amber-200 rounded px-1.5 py-0.5">
+                        <div className="flex-shrink-0 text-xs font-mono bg-amber-100 text-amber-900 border border-amber-200 rounded px-1.5 py-0.5">
                           ~{c.overlapCount.toLocaleString()}
                           {c.overlapTruncated ? '+' : ''} overlap
                         </div>
@@ -1329,7 +1329,7 @@ export default function BulkOperationModal({
                       onChange={(e) => setConflictsAck(e.target.checked)}
                       className="cursor-pointer"
                     />
-                    <span className="text-[12px]">
+                    <span className="text-base">
                       Run anyway — I accept that this may overwrite changes from the in-flight run.
                     </span>
                   </label>
@@ -1339,7 +1339,7 @@ export default function BulkOperationModal({
           )}
 
           {executeError && (
-            <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-start gap-2">
+            <div className="text-base text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-start gap-2">
               <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
               <div>{executeError}</div>
             </div>
@@ -1414,7 +1414,7 @@ function Section({
 }) {
   return (
     <div>
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-2">
+      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
         {title}
       </div>
       {children}
@@ -1431,7 +1431,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <div className="text-[11px] text-slate-600 mb-1">{label}</div>
+      <div className="text-sm text-slate-600 mb-1">{label}</div>
       {children}
     </label>
   )
@@ -1463,12 +1463,12 @@ function OverrideNumber({
   const display = raw === null || raw === undefined ? '' : String(raw)
   return (
     <div className="border border-slate-200 rounded-md p-2">
-      <label className="flex items-center gap-2 text-[12px] text-slate-700 mb-1">
+      <label className="flex items-center gap-2 text-base text-slate-700 mb-1">
         <input type="checkbox" checked={enabled} onChange={onToggle} />
         <span className="font-medium">{label}</span>
       </label>
       {hint && (
-        <div className="text-[11px] text-slate-500 mb-1.5 ml-5">{hint}</div>
+        <div className="text-sm text-slate-500 mb-1.5 ml-5">{hint}</div>
       )}
       {enabled && (
         <input
@@ -1510,7 +1510,7 @@ function BoolField({
   const enabled = field in payload
   const value = enabled ? (payload[field] as boolean) : false
   return (
-    <label className="flex items-center gap-2 text-[12px]">
+    <label className="flex items-center gap-2 text-base">
       <input type="checkbox" checked={enabled} onChange={onToggle} />
       <span className={enabled ? 'text-slate-800' : 'text-slate-500'}>
         {label}
@@ -1520,7 +1520,7 @@ function BoolField({
           <button
             type="button"
             onClick={() => onChange(true)}
-            className={`h-5 px-2 text-[10px] uppercase tracking-wide font-medium rounded border ${
+            className={`h-5 px-2 text-xs uppercase tracking-wide font-medium rounded border ${
               value
                 ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
                 : 'bg-white border-slate-200 text-slate-500'
@@ -1531,7 +1531,7 @@ function BoolField({
           <button
             type="button"
             onClick={() => onChange(false)}
-            className={`h-5 px-2 text-[10px] uppercase tracking-wide font-medium rounded border ${
+            className={`h-5 px-2 text-xs uppercase tracking-wide font-medium rounded border ${
               !value
                 ? 'bg-rose-50 border-rose-300 text-rose-700'
                 : 'bg-white border-slate-200 text-slate-500'
@@ -1555,7 +1555,7 @@ function Radio({
   label: React.ReactNode
 }) {
   return (
-    <label className="flex items-start gap-2 text-[13px] text-slate-700 cursor-pointer hover:text-slate-900">
+    <label className="flex items-start gap-2 text-md text-slate-700 cursor-pointer hover:text-slate-900">
       <input
         type="radio"
         checked={checked}
@@ -1584,10 +1584,10 @@ function Stat({
         : 'text-red-700'
   return (
     <div className="text-center bg-slate-50 rounded px-2 py-1.5">
-      <div className={cn('text-[16px] font-semibold tabular-nums', toneClass)}>
+      <div className={cn('text-xl font-semibold tabular-nums', toneClass)}>
         {value.toLocaleString()}
       </div>
-      <div className="text-[10px] text-slate-500 uppercase tracking-wide">
+      <div className="text-xs text-slate-500 uppercase tracking-wide">
         {label}
       </div>
     </div>
@@ -1601,7 +1601,7 @@ function SchemaTargetsBanner({
 }) {
   if (targets.length === 0) {
     return (
-      <div className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 inline-flex items-start gap-2">
+      <div className="text-base text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 inline-flex items-start gap-2">
         <Globe className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
         <div>
           No marketplace targets selected. Use the marketplace picker in
@@ -1612,7 +1612,7 @@ function SchemaTargetsBanner({
     )
   }
   return (
-    <div className="text-[12px] text-blue-800 bg-blue-50 border border-blue-200 rounded px-3 py-2 inline-flex items-start gap-2">
+    <div className="text-base text-blue-800 bg-blue-50 border border-blue-200 rounded px-3 py-2 inline-flex items-start gap-2">
       <Globe className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
       <div>
         Will fan out to{' '}
@@ -1626,4 +1626,4 @@ function SchemaTargetsBanner({
 }
 
 const inputCls =
-  'w-full h-7 px-2 text-[12px] border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+  'w-full h-7 px-2 text-base border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500'

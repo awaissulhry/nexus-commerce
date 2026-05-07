@@ -162,7 +162,7 @@ export default function CompanySettingsClient() {
   if (loading) {
     return (
       <Card>
-        <div className="text-[13px] text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
+        <div className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
           <Loader2 className="w-4 h-4 animate-spin" />
           Loading…
         </div>
@@ -173,13 +173,13 @@ export default function CompanySettingsClient() {
   return (
     <div className="space-y-4 max-w-3xl">
       {error && (
-        <div className="border border-rose-200 bg-rose-50 rounded px-3 py-2 text-[12px] text-rose-700 inline-flex items-start gap-1.5">
+        <div className="border border-rose-200 bg-rose-50 rounded px-3 py-2 text-base text-rose-700 inline-flex items-start gap-1.5">
           <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
           <span>{error}</span>
         </div>
       )}
       {savedAt && Date.now() - savedAt < 4000 && (
-        <div className="border border-emerald-200 bg-emerald-50 rounded px-3 py-2 text-[12px] text-emerald-700 inline-flex items-center gap-1.5">
+        <div className="border border-emerald-200 bg-emerald-50 rounded px-3 py-2 text-base text-emerald-700 inline-flex items-center gap-1.5">
           <CheckCircle2 size={14} /> Saved
         </div>
       )}
@@ -188,10 +188,10 @@ export default function CompanySettingsClient() {
       <Card>
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
-            <div className="text-[13px] font-semibold text-slate-900 mb-1">
+            <div className="text-md font-semibold text-slate-900 mb-1">
               Letterhead logo
             </div>
-            <div className="text-[12px] text-slate-500 mb-3">
+            <div className="text-base text-slate-500 mb-3">
               Hosted on Cloudinary. ~600×200px transparent PNG works best at
               letter size.
             </div>
@@ -207,7 +207,7 @@ export default function CompanySettingsClient() {
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
-                className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
+                className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
               >
                 {uploading ? (
                   <>
@@ -223,7 +223,7 @@ export default function CompanySettingsClient() {
                 <button
                   type="button"
                   onClick={removeLogo}
-                  className="h-8 px-2 text-[12px] border border-slate-200 text-slate-500 rounded hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 inline-flex items-center gap-1.5"
+                  className="h-8 px-2 text-base border border-slate-200 text-slate-500 rounded hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 inline-flex items-center gap-1.5"
                 >
                   <Trash2 size={12} /> Remove
                 </button>
@@ -231,7 +231,7 @@ export default function CompanySettingsClient() {
             </div>
 
             <div className="mt-3">
-              <label className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+              <label className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
                 Or paste a hosted URL
               </label>
               <Input
@@ -255,7 +255,7 @@ export default function CompanySettingsClient() {
             ) : (
               <div className="text-slate-400 inline-flex flex-col items-center gap-1">
                 <ImageIcon size={20} />
-                <span className="text-[10px]">no logo</span>
+                <span className="text-xs">no logo</span>
               </div>
             )}
           </div>
@@ -264,7 +264,7 @@ export default function CompanySettingsClient() {
 
       {/* Identity */}
       <Card>
-        <div className="text-[13px] font-semibold text-slate-900 mb-3">
+        <div className="text-md font-semibold text-slate-900 mb-3">
           Company identity
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -329,14 +329,14 @@ export default function CompanySettingsClient() {
             onChange={(e) => setAddressDraft(e.target.value)}
             placeholder={'Via Aurelia 123\n00165 Roma RM\nItalia'}
             rows={4}
-            className="w-full border border-slate-200 rounded px-3 py-2 text-[13px] resize-y"
+            className="w-full border border-slate-200 rounded px-3 py-2 text-md resize-y"
           />
         </Field>
       </Card>
 
       {/* PDF defaults */}
       <Card>
-        <div className="text-[13px] font-semibold text-slate-900 mb-3">
+        <div className="text-md font-semibold text-slate-900 mb-3">
           Factory PO defaults
         </div>
         <Field label="Signature block text">
@@ -356,7 +356,7 @@ export default function CompanySettingsClient() {
             }
             placeholder="All goods inspected on arrival. Pre-payment terms net 30."
             rows={3}
-            className="w-full border border-slate-200 rounded px-3 py-2 text-[13px] resize-y"
+            className="w-full border border-slate-200 rounded px-3 py-2 text-md resize-y"
           />
         </Field>
       </Card>
@@ -366,7 +366,7 @@ export default function CompanySettingsClient() {
           type="button"
           onClick={reload}
           disabled={saving}
-          className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
+          className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
         >
           Discard changes
         </button>
@@ -374,7 +374,7 @@ export default function CompanySettingsClient() {
           type="button"
           onClick={save}
           disabled={saving}
-          className="h-8 px-4 text-[12px] bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+          className="h-8 px-4 text-base bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
         >
           {saving ? (
             <>
@@ -400,7 +400,7 @@ function Field({
 }) {
   return (
     <label className={`block ${className}`}>
-      <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">
+      <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1">
         {label}
       </div>
       {children}

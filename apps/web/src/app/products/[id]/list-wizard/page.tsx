@@ -128,13 +128,13 @@ function FailureView({
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
       <div className="max-w-md w-full bg-white border border-slate-200 rounded-lg shadow-sm p-6 text-center">
-        <h1 className="text-[16px] font-semibold text-slate-900 mb-2">
+        <h1 className="text-xl font-semibold text-slate-900 mb-2">
           {title}
         </h1>
-        <p className="text-[13px] text-slate-600 mb-4">{detail}</p>
+        <p className="text-md text-slate-600 mb-4">{detail}</p>
         <a
           href={`/products/${productId}/edit`}
-          className="inline-flex items-center justify-center h-8 px-3 text-[12px] font-medium text-blue-700 hover:text-blue-900 hover:underline"
+          className="inline-flex items-center justify-center h-8 px-3 text-base font-medium text-blue-700 hover:text-blue-900 hover:underline"
         >
           ← Back to product
         </a>

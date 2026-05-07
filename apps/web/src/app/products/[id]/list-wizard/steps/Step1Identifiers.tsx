@@ -160,7 +160,7 @@ export default function Step1Identifiers(props: StepProps) {
         <h2 className="text-[20px] font-semibold text-slate-900">
           Product Identifiers
         </h2>
-        <p className="text-[13px] text-slate-600 mt-1">
+        <p className="text-md text-slate-600 mt-1">
           {hasAmazon
             ? 'Amazon needs a UPC / EAN / GTIN — or proof that your brand is exempted. Pick the path that fits your situation.'
             : 'Enter a UPC / EAN / GTIN if you have one. eBay accepts "Does Not Apply" for many categories — leave blank to use it.'}
@@ -170,13 +170,13 @@ export default function Step1Identifiers(props: StepProps) {
       {/* Cache surfaces ABOVE the radios so the user notices it before
        *  picking a path. */}
       {cacheLoading && (
-        <div className="mb-4 flex items-center gap-2 text-[12px] text-slate-500">
+        <div className="mb-4 flex items-center gap-2 text-base text-slate-500">
           <Loader2 className="w-3.5 h-3.5 animate-spin" />
           Checking brand exemption status…
         </div>
       )}
       {cache?.approved && (
-        <div className="mb-4 px-4 py-3 rounded-md bg-emerald-50 border border-emerald-200 text-[12px] text-emerald-900 flex items-start gap-2">
+        <div className="mb-4 px-4 py-3 rounded-md bg-emerald-50 border border-emerald-200 text-base text-emerald-900 flex items-start gap-2">
           <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5 text-emerald-600" />
           <div>
             <div className="font-semibold">
@@ -196,7 +196,7 @@ export default function Step1Identifiers(props: StepProps) {
         </div>
       )}
       {cache?.pending && !cache.approved && (
-        <div className="mb-4 px-4 py-3 rounded-md bg-amber-50 border border-amber-200 text-[12px] text-amber-900 flex items-start gap-2">
+        <div className="mb-4 px-4 py-3 rounded-md bg-amber-50 border border-amber-200 text-base text-amber-900 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600" />
           <div>
             <div className="font-semibold">
@@ -211,7 +211,7 @@ export default function Step1Identifiers(props: StepProps) {
         </div>
       )}
       {cacheError && (
-        <div className="mb-4 px-4 py-3 rounded-md bg-amber-50 border border-amber-200 text-[12px] text-amber-900">
+        <div className="mb-4 px-4 py-3 rounded-md bg-amber-50 border border-amber-200 text-base text-amber-900">
           {cacheError}
         </div>
       )}
@@ -228,12 +228,12 @@ export default function Step1Identifiers(props: StepProps) {
                 value={gtinValue}
                 onChange={(e) => setGtinValue(e.target.value)}
                 placeholder="e.g. 1234567890123"
-                className="flex-1 h-8 px-2 text-[13px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="flex-1 h-8 px-2 text-md border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
               {gtinValue.trim().length > 0 && (
                 <span
                   className={cn(
-                    'text-[11px]',
+                    'text-sm',
                     gtinValid ? 'text-emerald-700' : 'text-amber-700',
                   )}
                 >
@@ -241,7 +241,7 @@ export default function Step1Identifiers(props: StepProps) {
                 </span>
               )}
             </div>
-            <p className="text-[11px] text-slate-500">
+            <p className="text-sm text-slate-500">
               Accepts any GS1 identifier — UPC (12 digits), EAN-13, ITF-14.
             </p>
           </div>
@@ -257,25 +257,25 @@ export default function Step1Identifiers(props: StepProps) {
           label="My brand already has GTIN exemption on Amazon"
         >
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-[12px] text-slate-700">
+            <div className="flex items-center gap-2 text-base text-slate-700">
               Brand:{' '}
               <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">
                 {product.brand ?? '(no brand on product)'}
               </span>
             </div>
             <div>
-              <label className="block text-[11px] text-slate-500 mb-0.5">
+              <label className="block text-sm text-slate-500 mb-0.5">
                 Trademark number (optional, helps approval rate)
               </label>
               <input
                 value={trademarkNumber}
                 onChange={(e) => setTrademarkNumber(e.target.value)}
                 placeholder="e.g. EU 018937481"
-                className="w-full h-8 px-2 text-[13px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="w-full h-8 px-2 text-md border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
             </div>
             {!cache?.approved && (
-              <p className="text-[11px] text-amber-700">
+              <p className="text-sm text-amber-700">
                 Heads-up: we don't have a record of an approved exemption
                 for this brand. Pick the next option to apply.
               </p>
@@ -290,7 +290,7 @@ export default function Step1Identifiers(props: StepProps) {
           onChange={() => setPath('apply-now')}
           label="I need to apply for a GTIN exemption"
         >
-          <p className="text-[12px] text-slate-600">
+          <p className="text-base text-slate-600">
             We generate the brand letter PDF and a submission package
             you upload to Amazon Seller Central — most sellers spend
             2–3 days on the prep; ours takes about 5 minutes. The form
@@ -300,7 +300,7 @@ export default function Step1Identifiers(props: StepProps) {
         )}
 
         {!hasAmazon && (
-          <div className="text-[11px] text-slate-500 px-2 py-1.5 italic">
+          <div className="text-sm text-slate-500 px-2 py-1.5 italic">
             No Amazon channels selected — only the GTIN/UPC/EAN code
             path is shown here. Brand exemptions are an Amazon-only
             concept; eBay / Shopify / WooCommerce handle identifiers
@@ -324,7 +324,7 @@ export default function Step1Identifiers(props: StepProps) {
           onClick={onContinue}
           disabled={continueDisabled}
           className={cn(
-            'h-8 px-4 rounded-md text-[13px] font-medium',
+            'h-8 px-4 rounded-md text-md font-medium',
             continueDisabled
               ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
               : 'bg-blue-600 text-white hover:bg-blue-700',
@@ -365,7 +365,7 @@ function Option({
           className="mt-0.5 w-3.5 h-3.5 text-blue-600 border-slate-300 focus:ring-blue-500"
         />
         <div className="flex-1">
-          <div className="text-[13px] font-medium text-slate-900">
+          <div className="text-md font-medium text-slate-900">
             {label}
           </div>
           {checked && children && <div className="mt-2">{children}</div>}

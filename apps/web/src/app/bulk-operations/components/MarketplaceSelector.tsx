@@ -126,7 +126,7 @@ export default function MarketplaceSelector({
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={cn(
-          'inline-flex items-center gap-2 h-7 px-2.5 text-[12px] border rounded-md transition-colors',
+          'inline-flex items-center gap-2 h-7 px-2.5 text-base border rounded-md transition-colors',
           value.length > 0
             ? 'border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100'
             : pulse
@@ -142,7 +142,7 @@ export default function MarketplaceSelector({
       </button>
 
       {value.length === 0 && pulse && (
-        <span className="ml-2 text-[11px] text-amber-700">
+        <span className="ml-2 text-sm text-amber-700">
           Pick a marketplace
         </span>
       )}
@@ -155,10 +155,10 @@ export default function MarketplaceSelector({
           aria-multiselectable="true"
         >
           <div className="px-3 py-2 border-b border-slate-200 flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+            <span className="text-sm font-semibold text-slate-500 uppercase tracking-wide">
               Edit targets
             </span>
-            <span className="text-[11px] text-slate-500">
+            <span className="text-sm text-slate-500">
               {value.length === 0
                 ? 'Pick to edit channel fields'
                 : `${value.length} target${value.length === 1 ? '' : 's'}`}
@@ -169,7 +169,7 @@ export default function MarketplaceSelector({
               type="button"
               onClick={() => onChange([])}
               className={cn(
-                'w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-left',
+                'w-full flex items-center gap-2 px-3 py-1.5 text-base text-left',
                 value.length === 0
                   ? 'bg-blue-50 text-blue-700'
                   : 'text-slate-600 hover:bg-slate-50',
@@ -186,7 +186,7 @@ export default function MarketplaceSelector({
               return (
                 <div key={channel}>
                   <div className="px-3 pt-2 pb-1 flex items-center justify-between">
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                       {channel === 'AMAZON' ? 'Amazon' : 'eBay'}
                       {selectedInChannel > 0 && (
                         <span className="ml-1.5 text-blue-600">
@@ -202,7 +202,7 @@ export default function MarketplaceSelector({
                             ? clearChannel(channel as 'AMAZON' | 'EBAY')
                             : selectAllInChannel(channel as 'AMAZON' | 'EBAY')
                         }
-                        className="text-[10px] text-blue-600 hover:underline"
+                        className="text-xs text-blue-600 hover:underline"
                       >
                         {allSelected ? 'Clear' : 'All'}
                       </button>
@@ -238,7 +238,7 @@ export default function MarketplaceSelector({
                           </span>
                           <span
                             className={cn(
-                              'font-mono text-[10px] tabular-nums px-1.5 py-0.5 rounded border',
+                              'font-mono text-xs tabular-nums px-1.5 py-0.5 rounded border',
                               active
                                 ? 'bg-white border-blue-200 text-blue-700'
                                 : 'bg-slate-100 border-slate-200 text-slate-600',
@@ -246,9 +246,9 @@ export default function MarketplaceSelector({
                           >
                             {o.code}
                           </span>
-                          <span className="text-[12px] truncate">{o.name}</span>
+                          <span className="text-base truncate">{o.name}</span>
                         </span>
-                        <span className="text-[10px] text-slate-400 flex-shrink-0">
+                        <span className="text-xs text-slate-400 flex-shrink-0">
                           {COUNTRY_NAMES[o.code] ?? o.currency}
                         </span>
                       </button>
@@ -258,7 +258,7 @@ export default function MarketplaceSelector({
               )
             })}
           </div>
-          <div className="border-t border-slate-200 px-3 py-2 text-[10px] text-slate-500">
+          <div className="border-t border-slate-200 px-3 py-2 text-xs text-slate-500">
             Channel-field edits fan out to every selected target in one
             save.
           </div>
@@ -279,7 +279,7 @@ export function MarketplaceContextBanner({
 }: BannerProps) {
   if (!visible) return null
   return (
-    <div className="flex-shrink-0 mb-3 flex items-start gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-[12px] text-amber-800">
+    <div className="flex-shrink-0 mb-3 flex items-start gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-base text-amber-800">
       <Globe className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
       <span>
         <strong>Select one or more marketplaces</strong> to edit

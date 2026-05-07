@@ -282,22 +282,22 @@ export default function CommandPalette() {
             }}
             onKeyDown={onKeyDown}
             placeholder="Type a command or search…"
-            className="flex-1 bg-transparent text-[14px] text-slate-900 placeholder:text-slate-400 outline-none"
+            className="flex-1 bg-transparent text-lg text-slate-900 placeholder:text-slate-400 outline-none"
           />
-          <kbd className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-mono">
+          <kbd className="text-xs bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-mono">
             ESC
           </kbd>
         </div>
 
         <div className="max-h-[400px] overflow-y-auto p-2">
           {flat.length === 0 ? (
-            <div className="text-center text-[13px] text-slate-500 py-8">
+            <div className="text-center text-md text-slate-500 py-8">
               No commands found
             </div>
           ) : (
             Object.entries(grouped).map(([group, cmds]) => (
               <div key={group} className="mb-1 last:mb-0">
-                <div className="px-3 pt-2 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                <div className="px-3 pt-2 pb-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">
                   {group}
                 </div>
                 {cmds.map((cmd) => {
@@ -314,7 +314,7 @@ export default function CommandPalette() {
                         setOpen(false)
                       }}
                       className={cn(
-                        'w-full flex items-center gap-3 px-3 py-2 rounded-md text-[13px] text-left transition-colors',
+                        'w-full flex items-center gap-3 px-3 py-2 rounded-md text-md text-left transition-colors',
                         isActive
                           ? 'bg-blue-50 text-blue-700'
                           : 'text-slate-700 hover:bg-slate-50'
@@ -330,7 +330,7 @@ export default function CommandPalette() {
                       {cmd.chord && (
                         <kbd
                           className={cn(
-                            'text-[10px] font-mono px-1.5 py-0.5 rounded',
+                            'text-xs font-mono px-1.5 py-0.5 rounded',
                             isActive
                               ? 'bg-blue-100 text-blue-700'
                               : 'bg-slate-100 text-slate-500',
@@ -347,7 +347,7 @@ export default function CommandPalette() {
           )}
         </div>
 
-        <div className="border-t border-slate-100 px-3 py-1.5 text-[10px] text-slate-400 flex items-center justify-between gap-2">
+        <div className="border-t border-slate-100 px-3 py-1.5 text-xs text-slate-400 flex items-center justify-between gap-2">
           <span>↑↓ navigate · ↵ open</span>
           <button
             type="button"
@@ -426,7 +426,7 @@ function ShortcutHelp({ onClose }: { onClose: () => void }) {
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
           <div className="flex items-center gap-2">
             <Keyboard className="w-4 h-4 text-slate-500" />
-            <h2 className="text-[14px] font-semibold text-slate-900">
+            <h2 className="text-lg font-semibold text-slate-900">
               Keyboard shortcuts
             </h2>
           </div>
@@ -442,17 +442,17 @@ function ShortcutHelp({ onClose }: { onClose: () => void }) {
 
         <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
           <section>
-            <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
               General
             </div>
             <ul className="space-y-1.5">
               {generalShortcuts.map((s) => (
                 <li
                   key={s.keys}
-                  className="flex items-center justify-between text-[13px] text-slate-700"
+                  className="flex items-center justify-between text-md text-slate-700"
                 >
                   <span>{s.label}</span>
-                  <kbd className="text-[10px] font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">
+                  <kbd className="text-xs font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">
                     {s.keys}
                   </kbd>
                 </li>
@@ -462,17 +462,17 @@ function ShortcutHelp({ onClose }: { onClose: () => void }) {
 
           {pageShortcuts && (
             <section>
-              <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
                 On {pageShortcuts.title}
               </div>
               <ul className="space-y-1.5">
                 {pageShortcuts.items.map((s) => (
                   <li
                     key={s.keys}
-                    className="flex items-center justify-between text-[13px] text-slate-700"
+                    className="flex items-center justify-between text-md text-slate-700"
                   >
                     <span>{s.label}</span>
-                    <kbd className="text-[10px] font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">
+                    <kbd className="text-xs font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">
                       {s.keys}
                     </kbd>
                   </li>
@@ -482,17 +482,17 @@ function ShortcutHelp({ onClose }: { onClose: () => void }) {
           )}
 
           <section>
-            <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
               Navigation (chord — press {'g'} then …)
             </div>
             <ul className="space-y-1.5">
               {navChords.map((cmd) => (
                 <li
                   key={cmd.id}
-                  className="flex items-center justify-between text-[13px] text-slate-700"
+                  className="flex items-center justify-between text-md text-slate-700"
                 >
                   <span>{cmd.label}</span>
-                  <kbd className="text-[10px] font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">
+                  <kbd className="text-xs font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">
                     {cmd.chord}
                   </kbd>
                 </li>
@@ -500,7 +500,7 @@ function ShortcutHelp({ onClose }: { onClose: () => void }) {
             </ul>
           </section>
 
-          <p className="text-[11px] text-slate-500 leading-relaxed">
+          <p className="text-sm text-slate-500 leading-relaxed">
             Shortcuts are skipped while you&rsquo;re typing in a field. The
             command palette also accepts ⌘ P / ⌘ L / ⌘ O / ⌘ , as direct
             navigation (legacy).

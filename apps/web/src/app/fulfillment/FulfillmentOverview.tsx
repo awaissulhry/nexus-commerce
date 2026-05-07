@@ -47,14 +47,14 @@ export default function FulfillmentOverview() {
         title="Fulfillment"
         description={data?.defaultWarehouse ? `Operating from ${data.defaultWarehouse.name} · ${data.defaultWarehouse.country}` : 'Multi-channel inventory + shipments + returns + replenishment'}
         actions={
-          <button onClick={fetchData} className="h-8 px-3 text-[12px] border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
+          <button onClick={fetchData} className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
             <RefreshCw size={12} /> Refresh
           </button>
         }
       />
 
       {loading && !data ? (
-        <Card><div className="text-[13px] text-slate-500 py-8 text-center">Loading…</div></Card>
+        <Card><div className="text-md text-slate-500 py-8 text-center">Loading…</div></Card>
       ) : data ? (
         <>
           {/* Top alerts row */}
@@ -63,12 +63,12 @@ export default function FulfillmentOverview() {
               <div className="flex items-center gap-3 flex-wrap">
                 <AlertTriangle size={18} className="text-rose-600" />
                 {data.replenishment.critical > 0 && (
-                  <Link href="/fulfillment/replenishment" className="text-[13px] text-rose-700 hover:underline font-medium">
+                  <Link href="/fulfillment/replenishment" className="text-md text-rose-700 hover:underline font-medium">
                     {data.replenishment.critical} SKU{data.replenishment.critical === 1 ? '' : 's'} need urgent reorder →
                   </Link>
                 )}
                 {data.stock.outOfStock > 0 && (
-                  <Link href="/fulfillment/stock?outOfStock=true" className="text-[13px] text-rose-700 hover:underline font-medium ml-auto">
+                  <Link href="/fulfillment/stock?outOfStock=true" className="text-md text-rose-700 hover:underline font-medium ml-auto">
                     {data.stock.outOfStock} out of stock →
                   </Link>
                 )}
@@ -185,15 +185,15 @@ function SectionCard({
           </div>
           <ArrowRight size={14} className="text-slate-400 group-hover:translate-x-0.5 transition-transform" />
         </div>
-        <div className="text-[15px] font-semibold text-slate-900">{title}</div>
-        <div className="text-[11px] text-slate-500 mb-3">{cta}</div>
+        <div className="text-lg font-semibold text-slate-900">{title}</div>
+        <div className="text-sm text-slate-500 mb-3">{cta}</div>
         <div className="grid grid-cols-3 gap-3">
           {stats.map((s, i) => {
             const valueTone = s.tone === 'danger' ? 'text-rose-600' : s.tone === 'warning' ? 'text-amber-600' : 'text-slate-900'
             return (
               <div key={i}>
                 <div className={`text-[20px] font-semibold tabular-nums ${valueTone}`}>{s.value}</div>
-                <div className="text-[10px] uppercase tracking-wider text-slate-500">{s.label}</div>
+                <div className="text-xs uppercase tracking-wider text-slate-500">{s.label}</div>
               </div>
             )
           })}

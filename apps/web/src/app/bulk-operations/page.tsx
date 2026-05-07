@@ -25,7 +25,7 @@ export default function BulkOperationsPage() {
           actions={
             <Link
               href="/bulk-operations/history"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-slate-700 bg-white border border-slate-200 rounded hover:border-slate-300 hover:bg-slate-50 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-base font-medium text-slate-700 bg-white border border-slate-200 rounded hover:border-slate-300 hover:bg-slate-50 transition-colors"
             >
               <HistoryIcon className="w-3.5 h-3.5" />
               Job History

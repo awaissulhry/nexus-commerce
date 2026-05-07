@@ -272,7 +272,7 @@ export default function ColumnSelector({
         aria-expanded={open}
       >
         Columns
-        <span className="ml-1 text-[10px] text-slate-500 tabular-nums">
+        <span className="ml-1 text-xs text-slate-500 tabular-nums">
           {visibleColumnIds.length}/{allFields.length}
         </span>
       </Button>
@@ -293,7 +293,7 @@ export default function ColumnSelector({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search fields"
-                className="w-full h-7 pl-7 pr-2 text-[12px] border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                className="w-full h-7 pl-7 pr-2 text-base border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 autoFocus
               />
             </div>
@@ -307,7 +307,7 @@ export default function ColumnSelector({
                   <li
                     key={v.id}
                     className={cn(
-                      'group flex items-center justify-between px-2 py-1 rounded text-[12px] cursor-pointer',
+                      'group flex items-center justify-between px-2 py-1 rounded text-base cursor-pointer',
                       v.id === activeViewId
                         ? 'bg-blue-50 text-blue-700'
                         : 'hover:bg-slate-50 text-slate-700'
@@ -324,7 +324,7 @@ export default function ColumnSelector({
                         )}
                       />
                       <span className="truncate">{v.name}</span>
-                      <span className="text-[10px] text-slate-400 flex-shrink-0">
+                      <span className="text-xs text-slate-400 flex-shrink-0">
                         {v.columnIds.length}
                       </span>
                     </span>
@@ -360,14 +360,14 @@ export default function ColumnSelector({
                       }
                     }}
                     placeholder="View name"
-                    className="flex-1 h-6 px-2 text-[12px] border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    className="flex-1 h-6 px-2 text-base border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                     autoFocus
                   />
                   <button
                     type="button"
                     onClick={handleSaveSubmit}
                     disabled={!savePromptName.trim()}
-                    className="h-6 px-2 text-[11px] bg-blue-600 hover:bg-blue-700 text-white rounded disabled:opacity-50"
+                    className="h-6 px-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded disabled:opacity-50"
                   >
                     Save
                   </button>
@@ -386,7 +386,7 @@ export default function ColumnSelector({
                 <button
                   type="button"
                   onClick={() => setSavePromptOpen(true)}
-                  className="mt-1 flex items-center gap-1.5 px-2 py-1 text-[11px] text-slate-500 hover:text-slate-900 w-full"
+                  className="mt-1 flex items-center gap-1.5 px-2 py-1 text-sm text-slate-500 hover:text-slate-900 w-full"
                 >
                   <Save className="w-3 h-3" />
                   Save current as new view
@@ -415,7 +415,7 @@ export default function ColumnSelector({
                         <ChevronDown className="w-3 h-3" />
                       )}
                       <span>{label}</span>
-                      <span className="text-[10px] text-slate-400 tabular-nums">
+                      <span className="text-xs text-slate-400 tabular-nums">
                         {visibleInSection}/{fields.length}
                       </span>
                     </button>
@@ -453,7 +453,7 @@ export default function ColumnSelector({
                       onClick={(e) => e.stopPropagation()}
                       className="w-3 h-3 rounded border-slate-300 text-blue-600"
                     />
-                    <span className="text-[12px] text-slate-700">{c.label}</span>
+                    <span className="text-base text-slate-700">{c.label}</span>
                   </li>
                 ))}
               </ul>
@@ -490,7 +490,7 @@ export default function ColumnSelector({
                       onClick={(e) => e.stopPropagation()}
                       className="w-3 h-3 rounded border-slate-300 text-blue-600"
                     />
-                    <span className="text-[12px] text-slate-700">{c.label}</span>
+                    <span className="text-base text-slate-700">{c.label}</span>
                   </li>
                 ))}
               </ul>
@@ -514,7 +514,7 @@ export default function ColumnSelector({
                 </ul>
               )}
               {visibleChannelCategoryCount > 0 && (
-                <p className="mt-1 px-2 text-[10px] text-amber-700">
+                <p className="mt-1 px-2 text-xs text-amber-700">
                   Channel and category fields are read-only until D.3 ships their
                   write logic.
                 </p>
@@ -527,7 +527,7 @@ export default function ColumnSelector({
             <button
               type="button"
               onClick={handleResetToDefault}
-              className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-900"
+              className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900"
             >
               <RotateCcw className="w-3 h-3" />
               Reset to Default
@@ -535,7 +535,7 @@ export default function ColumnSelector({
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="text-[11px] text-slate-700 hover:text-slate-900 px-2 py-1"
+              className="text-sm text-slate-700 hover:text-slate-900 px-2 py-1"
             >
               Done
             </button>
@@ -555,7 +555,7 @@ function Section({
 }) {
   return (
     <div className="px-3 py-2 border-b border-slate-100 last:border-b-0">
-      <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+      <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center justify-between">
         <span>{title}</span>
       </div>
       {children}
@@ -589,10 +589,10 @@ function FieldRow({
         onClick={(e) => e.stopPropagation()}
         className="w-3 h-3 rounded border-slate-300 text-blue-600"
       />
-      <span className="text-[12px] text-slate-700 flex-1 truncate">{field.label}</span>
+      <span className="text-base text-slate-700 flex-1 truncate">{field.label}</span>
       {!field.editable && (
         <span
-          className="flex items-center gap-0.5 text-[10px] text-slate-400"
+          className="flex items-center gap-0.5 text-xs text-slate-400"
           title={field.helpText ?? 'Read-only'}
         >
           <Lock className="w-2.5 h-2.5" />

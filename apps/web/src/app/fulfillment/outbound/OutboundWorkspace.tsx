@@ -158,10 +158,10 @@ export default function OutboundWorkspace() {
           <div className="flex items-center gap-3">
             <AlertTriangle size={18} className="text-amber-600 flex-shrink-0" />
             <div className="flex-1">
-              <div className="text-[13px] font-semibold text-slate-900">Sendcloud not connected</div>
-              <div className="text-[12px] text-slate-500">Label printing and tracking sync need a Sendcloud connection.</div>
+              <div className="text-md font-semibold text-slate-900">Sendcloud not connected</div>
+              <div className="text-base text-slate-500">Label printing and tracking sync need a Sendcloud connection.</div>
             </div>
-            <Link href="/fulfillment/carriers" className="h-8 px-3 text-[12px] bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center">
+            <Link href="/fulfillment/carriers" className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center">
               Connect Sendcloud →
             </Link>
           </div>
@@ -173,7 +173,7 @@ export default function OutboundWorkspace() {
           <button
             key={p.key}
             onClick={() => setStatusFilter(p.key)}
-            className={`h-7 px-3 text-[12px] border rounded-full inline-flex items-center gap-1.5 transition-colors ${statusFilter === p.key ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'}`}
+            className={`h-7 px-3 text-base border rounded-full inline-flex items-center gap-1.5 transition-colors ${statusFilter === p.key ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'}`}
           >
             {p.label}
             {counts[p.key] != null && (
@@ -191,7 +191,7 @@ export default function OutboundWorkspace() {
               className="pl-7 w-56"
             />
           </div>
-          <button onClick={fetchShipments} className="h-8 px-3 text-[12px] border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
+          <button onClick={fetchShipments} className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
             <RefreshCw size={12} /> Refresh
           </button>
         </div>
@@ -201,9 +201,9 @@ export default function OutboundWorkspace() {
         <div className="sticky top-2 z-20">
           <Card>
             <div className="flex items-center gap-3">
-              <span className="text-[12px] font-semibold text-slate-700">{selected.size} selected</span>
+              <span className="text-base font-semibold text-slate-700">{selected.size} selected</span>
               <div className="h-4 w-px bg-slate-200" />
-              <button onClick={bulkPrint} className="h-7 px-3 text-[12px] bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center gap-1.5">
+              <button onClick={bulkPrint} className="h-7 px-3 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center gap-1.5">
                 <Printer size={12} /> Print labels ({selected.size})
               </button>
               <button onClick={() => setSelected(new Set())} className="ml-auto h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded">
@@ -215,7 +215,7 @@ export default function OutboundWorkspace() {
       )}
 
       {loading && items.length === 0 ? (
-        <Card><div className="text-[13px] text-slate-500 py-8 text-center">Loading shipments…</div></Card>
+        <Card><div className="text-md text-slate-500 py-8 text-center">Loading shipments…</div></Card>
       ) : items.length === 0 ? (
         <EmptyState
           icon={Truck}
@@ -225,7 +225,7 @@ export default function OutboundWorkspace() {
       ) : (
         <Card noPadding>
           <div className="overflow-x-auto">
-            <table className="w-full text-[13px]">
+            <table className="w-full text-md">
               <thead className="border-b border-slate-200 bg-slate-50">
                 <tr>
                   <th className="px-3 py-2 w-8">
@@ -238,13 +238,13 @@ export default function OutboundWorkspace() {
                       }}
                     />
                   </th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">Order</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">Status</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">Items</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">Carrier</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">Tracking</th>
-                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">Cost</th>
-                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700"></th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">Order</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">Status</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">Items</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">Carrier</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">Tracking</th>
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">Cost</th>
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700"></th>
                 </tr>
               </thead>
               <tbody>
@@ -259,40 +259,40 @@ export default function OutboundWorkspace() {
                     </td>
                     <td className="px-3 py-2">
                       {s.orderId ? (
-                        <Link href={`/orders/${s.orderId}`} className="text-[12px] font-mono text-blue-600 hover:underline">{s.orderId.slice(0, 12)}…</Link>
-                      ) : <span className="text-slate-400 text-[12px]">—</span>}
+                        <Link href={`/orders/${s.orderId}`} className="text-base font-mono text-blue-600 hover:underline">{s.orderId.slice(0, 12)}…</Link>
+                      ) : <span className="text-slate-400 text-base">—</span>}
                     </td>
                     <td className="px-3 py-2">
                       <Badge variant={STATUS_TONE[s.status] ?? 'default'} size="sm">{s.status.replace(/_/g, ' ')}</Badge>
                     </td>
-                    <td className="px-3 py-2 text-[12px] text-slate-700">
+                    <td className="px-3 py-2 text-base text-slate-700">
                       <span className="tabular-nums">{s.items.reduce((n, i) => n + i.quantity, 0)}</span> units · {s.items.length} SKU{s.items.length === 1 ? '' : 's'}
                     </td>
-                    <td className="px-3 py-2 text-[12px] text-slate-700">{s.carrierCode}</td>
+                    <td className="px-3 py-2 text-base text-slate-700">{s.carrierCode}</td>
                     <td className="px-3 py-2">
                       {s.trackingNumber ? (
                         s.trackingUrl ? (
-                          <a href={s.trackingUrl} target="_blank" rel="noreferrer" className="text-[12px] font-mono text-blue-600 hover:underline inline-flex items-center gap-1">
+                          <a href={s.trackingUrl} target="_blank" rel="noreferrer" className="text-base font-mono text-blue-600 hover:underline inline-flex items-center gap-1">
                             {s.trackingNumber.slice(0, 16)}{s.trackingNumber.length > 16 ? '…' : ''}
                             <ExternalLink size={10} />
                           </a>
                         ) : (
-                          <span className="text-[12px] font-mono text-slate-700">{s.trackingNumber}</span>
+                          <span className="text-base font-mono text-slate-700">{s.trackingNumber}</span>
                         )
-                      ) : <span className="text-slate-400 text-[12px]">—</span>}
+                      ) : <span className="text-slate-400 text-base">—</span>}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-[12px] text-slate-600">
+                    <td className="px-3 py-2 text-right tabular-nums text-base text-slate-600">
                       {s.costCents != null ? `€${(s.costCents / 100).toFixed(2)}` : '—'}
                     </td>
                     <td className="px-3 py-2 text-right">
                       <div className="flex items-center gap-1 justify-end">
                         {(s.status === 'DRAFT' || s.status === 'READY_TO_PICK' || s.status === 'PACKED') && (
-                          <button onClick={() => printLabel(s.id)} title="Print label" className="h-6 px-2 text-[11px] bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center gap-1">
+                          <button onClick={() => printLabel(s.id)} title="Print label" className="h-6 px-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center gap-1">
                             <Printer size={11} /> Label
                           </button>
                         )}
                         {s.status === 'LABEL_PRINTED' && (
-                          <button onClick={() => markShipped(s.id)} title="Mark shipped" className="h-6 px-2 text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1">
+                          <button onClick={() => markShipped(s.id)} title="Mark shipped" className="h-6 px-2 text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1">
                             <CheckCircle2 size={11} /> Ship
                           </button>
                         )}

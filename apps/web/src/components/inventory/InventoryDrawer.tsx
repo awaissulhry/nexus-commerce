@@ -52,11 +52,11 @@ function FieldRow({
 }) {
   return (
     <div className="flex items-center justify-between py-2 border-b border-slate-100 last:border-b-0">
-      <span className="text-[11px] font-medium text-slate-500 uppercase tracking-tight">
+      <span className="text-sm font-medium text-slate-500 uppercase tracking-tight">
         {label}
       </span>
       <span
-        className={`text-[13px] text-slate-900 ${mono ? "font-mono" : ""}`}
+        className={`text-md text-slate-900 ${mono ? "font-mono" : ""}`}
       >
         {value ?? "—"}
       </span>
@@ -88,7 +88,7 @@ function ChannelSyncCard({
         <p className="text-xs text-slate-400">
           Not listed on {channelName}. Create a listing to start selling.
         </p>
-        <button className="mt-3 px-3 py-1.5 text-[11px] font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors">
+        <button className="mt-3 px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors">
           + Create Listing
         </button>
       </div>
@@ -168,7 +168,7 @@ function MasterDataTab({ item }: { item: InventoryItem }) {
     <div className="space-y-4">
       {/* Product Info */}
       <div className="rounded-md border border-slate-200 bg-white p-4">
-        <h4 className="text-[11px] font-semibold text-slate-500 uppercase tracking-tight mb-3">
+        <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-tight mb-3">
           Product Information
         </h4>
         <FieldRow label="SKU" value={item.sku} mono />
@@ -180,7 +180,7 @@ function MasterDataTab({ item }: { item: InventoryItem }) {
 
       {/* Pricing & Inventory */}
       <div className="rounded-md border border-slate-200 bg-white p-4">
-        <h4 className="text-[11px] font-semibold text-slate-500 uppercase tracking-tight mb-3">
+        <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-tight mb-3">
           Pricing & Inventory
         </h4>
         <FieldRow label="Base Price" value={price} />
@@ -190,7 +190,7 @@ function MasterDataTab({ item }: { item: InventoryItem }) {
 
       {/* Identifiers */}
       <div className="rounded-md border border-slate-200 bg-white p-4">
-        <h4 className="text-[11px] font-semibold text-slate-500 uppercase tracking-tight mb-3">
+        <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-tight mb-3">
           Marketplace Identifiers
         </h4>
         <FieldRow label="Amazon ASIN" value={item.asin} mono />
@@ -200,7 +200,7 @@ function MasterDataTab({ item }: { item: InventoryItem }) {
       {/* Variations Summary */}
       {item.subRows && item.subRows.length > 0 && (
         <div className="rounded-md border border-slate-200 bg-white p-4">
-          <h4 className="text-[11px] font-semibold text-slate-500 uppercase tracking-tight mb-3">
+          <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-tight mb-3">
             Variations ({item.subRows.length})
           </h4>
           <div className="space-y-2">
@@ -210,16 +210,16 @@ function MasterDataTab({ item }: { item: InventoryItem }) {
                 className="flex items-center justify-between py-1.5 border-b border-slate-100 last:border-b-0"
               >
                 <div className="min-w-0">
-                  <p className="text-[12px] text-slate-900 font-medium truncate">
+                  <p className="text-base text-slate-900 font-medium truncate">
                     {v.variationName && v.variationValue
                       ? `${v.variationName}: ${v.variationValue}`
                       : v.sku}
                   </p>
-                  <p className="text-[10px] text-slate-400 font-mono">
+                  <p className="text-xs text-slate-400 font-mono">
                     {v.sku}
                   </p>
                 </div>
-                <div className="flex items-center gap-3 text-[12px] shrink-0">
+                <div className="flex items-center gap-3 text-base shrink-0">
                   <span
                     className={`font-semibold tabular-nums ${
                       v.stock === 0
@@ -267,7 +267,7 @@ function AmazonSyncTab({ item }: { item: InventoryItem }) {
 
       {amazonListed && (
         <div className="rounded-md border border-slate-200 bg-white p-4">
-          <h4 className="text-[11px] font-semibold text-slate-500 uppercase tracking-tight mb-3">
+          <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-tight mb-3">
             Amazon Actions
           </h4>
           <div className="space-y-2">
@@ -290,7 +290,7 @@ function AmazonSyncTab({ item }: { item: InventoryItem }) {
       {/* Variation-level channel data */}
       {item.subRows && item.subRows.length > 0 && (
         <div className="rounded-md border border-slate-200 bg-white p-4">
-          <h4 className="text-[11px] font-semibold text-slate-500 uppercase tracking-tight mb-3">
+          <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-tight mb-3">
             Variation Channel Status
           </h4>
           <div className="space-y-2">
@@ -305,13 +305,13 @@ function AmazonSyncTab({ item }: { item: InventoryItem }) {
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <SyncStatusIcon status={vAmazon?.syncStatus} />
-                    <span className="text-[12px] text-slate-700 truncate">
+                    <span className="text-base text-slate-700 truncate">
                       {v.variationName && v.variationValue
                         ? `${v.variationName}: ${v.variationValue}`
                         : v.sku}
                     </span>
                   </div>
-                  <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                  <span className="text-xs text-slate-400 font-mono shrink-0">
                     {vAmazon?.listingId || "—"}
                   </span>
                 </div>
@@ -343,7 +343,7 @@ function EbaySyncTab({ item }: { item: InventoryItem }) {
 
       {ebayListed && (
         <div className="rounded-md border border-slate-200 bg-white p-4">
-          <h4 className="text-[11px] font-semibold text-slate-500 uppercase tracking-tight mb-3">
+          <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-tight mb-3">
             eBay Actions
           </h4>
           <div className="space-y-2">
@@ -366,7 +366,7 @@ function EbaySyncTab({ item }: { item: InventoryItem }) {
       {/* Variation-level channel data */}
       {item.subRows && item.subRows.length > 0 && (
         <div className="rounded-md border border-slate-200 bg-white p-4">
-          <h4 className="text-[11px] font-semibold text-slate-500 uppercase tracking-tight mb-3">
+          <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-tight mb-3">
             Variation Channel Status
           </h4>
           <div className="space-y-2">
@@ -379,13 +379,13 @@ function EbaySyncTab({ item }: { item: InventoryItem }) {
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <SyncStatusIcon status={vEbay?.syncStatus} />
-                    <span className="text-[12px] text-slate-700 truncate">
+                    <span className="text-base text-slate-700 truncate">
                       {v.variationName && v.variationValue
                         ? `${v.variationName}: ${v.variationValue}`
                         : v.sku}
                     </span>
                   </div>
-                  <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                  <span className="text-xs text-slate-400 font-mono shrink-0">
                     {vEbay?.listingId || "—"}
                   </span>
                 </div>
@@ -405,7 +405,7 @@ function ImagesTab({ item }: { item: InventoryItem }) {
   return (
     <div className="space-y-4">
       <div className="rounded-md border border-slate-200 bg-white p-4">
-        <h4 className="text-[11px] font-semibold text-slate-500 uppercase tracking-tight mb-3">
+        <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-tight mb-3">
           Product Images
         </h4>
 
@@ -426,7 +426,7 @@ function ImagesTab({ item }: { item: InventoryItem }) {
             <p className="text-xs text-slate-500 mb-3">
               No images uploaded yet
             </p>
-            <button className="px-3 py-1.5 text-[11px] font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors">
+            <button className="px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors">
               + Upload Images
             </button>
           </div>
@@ -434,10 +434,10 @@ function ImagesTab({ item }: { item: InventoryItem }) {
       </div>
 
       <div className="rounded-md border border-slate-200 bg-white p-4">
-        <h4 className="text-[11px] font-semibold text-slate-500 uppercase tracking-tight mb-3">
+        <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-tight mb-3">
           Image Guidelines
         </h4>
-        <ul className="space-y-1.5 text-[11px] text-slate-500">
+        <ul className="space-y-1.5 text-sm text-slate-500">
           <li>• Main image: white background, 1000×1000px minimum</li>
           <li>• Up to 9 images per listing (Amazon)</li>
           <li>• JPEG, PNG, or GIF format</li>
@@ -522,10 +522,10 @@ export default function InventoryDrawer({ item, onClose }: InventoryDrawerProps)
             {/* ── Header ──────────────────────────────────────────── */}
             <div className="flex items-center justify-between px-5 py-4 bg-white border-b border-slate-200">
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-bold text-slate-900 truncate tracking-tight">
+                <p className="text-md font-bold text-slate-900 truncate tracking-tight">
                   {item.sku}
                 </p>
-                <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                <p className="text-sm text-slate-500 truncate mt-0.5">
                   {item.name}
                 </p>
               </div>
@@ -545,7 +545,7 @@ export default function InventoryDrawer({ item, onClose }: InventoryDrawerProps)
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`
-                    flex items-center gap-1.5 px-3 py-2.5 text-[11px] font-medium border-b-2 transition-colors tracking-tight
+                    flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors tracking-tight
                     ${
                       activeTab === tab.id
                         ? "border-blue-600 text-slate-900"

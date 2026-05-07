@@ -199,7 +199,7 @@ export default function Sidebar() {
             </div>
             <div>
               <h1 className="text-lg font-bold leading-tight">Nexus</h1>
-              <p className="text-[10px] text-gray-400 leading-tight">
+              <p className="text-xs text-gray-400 leading-tight">
                 Commerce Dashboard
               </p>
             </div>

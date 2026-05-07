@@ -94,7 +94,7 @@ export default function ManageInventoryClient({
   return (
     <div className="space-y-4">
       {/* ── Amazon Top Links ────────────────────────────────────────── */}
-      <div className="flex items-center gap-4 text-[13px] text-[#007185] font-medium">
+      <div className="flex items-center gap-4 text-md text-[#007185] font-medium">
         <button className="hover:text-[#0066a1] transition-colors">
           Manage products
         </button>
@@ -232,14 +232,14 @@ export default function ManageInventoryClient({
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-0 py-3 text-[13px] font-medium border-b-2 transition-colors tracking-tight ${
+            className={`px-0 py-3 text-md font-medium border-b-2 transition-colors tracking-tight ${
               activeTab === tab
                 ? "border-[#FF9900] text-slate-900"
                 : "border-transparent text-slate-600 hover:text-slate-900"
             }`}
           >
             {tab}
-            <span className="ml-2 text-[11px] text-slate-500">
+            <span className="ml-2 text-sm text-slate-500">
               ({counts[tab]})
             </span>
           </button>

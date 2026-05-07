@@ -159,7 +159,7 @@ export default function ReplicateModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
-          <h2 className="text-[15px] font-semibold text-slate-900">
+          <h2 className="text-lg font-semibold text-slate-900">
             Replicate marketplace data
           </h2>
           <button
@@ -174,7 +174,7 @@ export default function ReplicateModal({
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
-          <p className="text-[12px] text-slate-600">
+          <p className="text-base text-slate-600">
             Pull listing values (title, description, bullet points,
             price, stock, attributes) from a source marketplace and
             replicate them to one or more targets across{' '}
@@ -187,7 +187,7 @@ export default function ReplicateModal({
             <div className="space-y-2">
               {byChannel.map(([channel, list]) => (
                 <div key={channel}>
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
                     {channel === 'AMAZON' ? 'Amazon' : 'eBay'}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
@@ -205,7 +205,7 @@ export default function ReplicateModal({
                             })
                           }
                           className={cn(
-                            'h-7 px-2 text-[11px] font-mono border rounded transition-colors',
+                            'h-7 px-2 text-sm font-mono border rounded transition-colors',
                             active
                               ? 'bg-blue-50 border-blue-500 text-blue-900'
                               : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50',
@@ -238,7 +238,7 @@ export default function ReplicateModal({
                 return (
                   <div key={channel}>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                         {channel === 'AMAZON' ? 'Amazon' : 'eBay'}
                       </span>
                       {list.length > 0 && (
@@ -260,7 +260,7 @@ export default function ReplicateModal({
                                   ]
                             })
                           }}
-                          className="text-[10px] text-blue-600 hover:underline"
+                          className="text-xs text-blue-600 hover:underline"
                         >
                           {allSelected ? 'Clear' : 'All'}
                         </button>
@@ -268,7 +268,7 @@ export default function ReplicateModal({
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {list.length === 0 ? (
-                        <span className="text-[11px] text-slate-400 italic">
+                        <span className="text-sm text-slate-400 italic">
                           source disabled
                         </span>
                       ) : (
@@ -289,7 +289,7 @@ export default function ReplicateModal({
                                 })
                               }
                               className={cn(
-                                'h-7 px-2 text-[11px] font-mono border rounded transition-colors',
+                                'h-7 px-2 text-sm font-mono border rounded transition-colors',
                                 active
                                   ? 'bg-emerald-50 border-emerald-500 text-emerald-900'
                                   : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50',
@@ -309,7 +309,7 @@ export default function ReplicateModal({
 
           {/* Options */}
           <Section title="Options">
-            <label className="flex items-start gap-2 text-[12px] text-slate-700 cursor-pointer">
+            <label className="flex items-start gap-2 text-base text-slate-700 cursor-pointer">
               <input
                 type="checkbox"
                 checked={columnsOnly}
@@ -330,7 +330,7 @@ export default function ReplicateModal({
 
           {/* Result / error */}
           {result && (
-            <div className="text-[12px] bg-emerald-50 border border-emerald-200 rounded px-3 py-2 inline-flex items-start gap-2">
+            <div className="text-base bg-emerald-50 border border-emerald-200 rounded px-3 py-2 inline-flex items-start gap-2">
               <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-emerald-600" />
               <div>
                 <div className="text-emerald-800">
@@ -359,7 +359,7 @@ export default function ReplicateModal({
             </div>
           )}
           {error && (
-            <div className="text-[12px] text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2 inline-flex items-start gap-2">
+            <div className="text-base text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2 inline-flex items-start gap-2">
               <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
               <div>{error}</div>
             </div>
@@ -367,7 +367,7 @@ export default function ReplicateModal({
         </div>
 
         <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-slate-200">
-          <span className="text-[11px] text-slate-500 tabular-nums">
+          <span className="text-sm text-slate-500 tabular-nums">
             {productIds.length} {scopeLabel} ×{' '}
             {targets.length || '0'} target
             {targets.length === 1 ? '' : 's'} ={' '}
@@ -419,7 +419,7 @@ function Section({
 }) {
   return (
     <div>
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-2">
+      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
         {title}
       </div>
       {children}

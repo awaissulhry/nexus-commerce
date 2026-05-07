@@ -119,21 +119,21 @@ function EntryRow({ entry }: { entry: AuditEntry }) {
         </Badge>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[12px] font-medium text-slate-900">
+            <span className="text-base font-medium text-slate-900">
               {entry.entityType}
             </span>
-            <span className="font-mono text-[11px] text-slate-600">
+            <span className="font-mono text-sm text-slate-600">
               {entry.entityId.slice(0, 16)}
               {entry.entityId.length > 16 && '…'}
             </span>
           </div>
-          <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500">
+          <div className="flex items-center gap-2 mt-0.5 text-sm text-slate-500">
             <span title={new Date(entry.createdAt).toLocaleString()}>
               {relativeTime(entry.createdAt)}
             </span>
             {entry.userId && <span>· {entry.userId}</span>}
             {entry.ip && (
-              <span className="font-mono text-[10px] text-slate-400">
+              <span className="font-mono text-xs text-slate-400">
                 · {entry.ip}
               </span>
             )}
@@ -145,7 +145,7 @@ function EntryRow({ entry }: { entry: AuditEntry }) {
         <div className="bg-slate-50 border-t border-slate-200 px-4 py-3 space-y-3">
           {changed.length > 0 ? (
             <div className="bg-white border border-slate-200 rounded">
-              <div className="px-3 py-1.5 border-b border-slate-200 text-[11px] font-semibold text-slate-700 uppercase tracking-wide">
+              <div className="px-3 py-1.5 border-b border-slate-200 text-sm font-semibold text-slate-700 uppercase tracking-wide">
                 Diff ({changed.length} changed{diffs.length !== changed.length && ` of ${diffs.length}`})
               </div>
               <div className="divide-y divide-slate-100">
@@ -153,7 +153,7 @@ function EntryRow({ entry }: { entry: AuditEntry }) {
                   <div
                     key={d.key}
                     className={cn(
-                      'px-3 py-1.5 text-[11px] flex items-start gap-2',
+                      'px-3 py-1.5 text-sm flex items-start gap-2',
                       !d.changed && 'opacity-60',
                     )}
                   >
@@ -181,17 +181,17 @@ function EntryRow({ entry }: { entry: AuditEntry }) {
               </div>
             </div>
           ) : (
-            <div className="text-[11px] text-slate-500 italic">
+            <div className="text-sm text-slate-500 italic">
               No diff available (before/after empty).
             </div>
           )}
 
           {entry.metadata && Object.keys(entry.metadata).length > 0 && (
             <div className="bg-white border border-slate-200 rounded">
-              <div className="px-3 py-1.5 border-b border-slate-200 text-[11px] font-semibold text-slate-700 uppercase tracking-wide">
+              <div className="px-3 py-1.5 border-b border-slate-200 text-sm font-semibold text-slate-700 uppercase tracking-wide">
                 Metadata
               </div>
-              <pre className="px-3 py-1.5 text-[11px] text-slate-700 overflow-x-auto whitespace-pre-wrap break-all">
+              <pre className="px-3 py-1.5 text-sm text-slate-700 overflow-x-auto whitespace-pre-wrap break-all">
                 {JSON.stringify(entry.metadata, null, 2)}
               </pre>
             </div>
@@ -330,7 +330,7 @@ export default function AuditLogClient() {
 
         {/* Time chips */}
         <div className="flex items-center gap-1 flex-wrap">
-          <span className="text-[11px] text-slate-500 font-medium uppercase tracking-wide mr-1">
+          <span className="text-sm text-slate-500 font-medium uppercase tracking-wide mr-1">
             Time:
           </span>
           {SINCE_PRESETS.map((p) => {
@@ -341,7 +341,7 @@ export default function AuditLogClient() {
                 type="button"
                 onClick={() => updateUrl({ since: p.key })}
                 className={cn(
-                  'px-2 py-0.5 text-[11px] font-medium rounded border transition-colors',
+                  'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                   active
                     ? 'bg-slate-900 text-white border-slate-900'
                     : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
@@ -356,14 +356,14 @@ export default function AuditLogClient() {
         {/* Entity type chips */}
         {data?.facets?.entityType && data.facets.entityType.length > 0 && (
           <div className="flex items-center gap-1 flex-wrap">
-            <span className="text-[11px] text-slate-500 font-medium uppercase tracking-wide mr-1">
+            <span className="text-sm text-slate-500 font-medium uppercase tracking-wide mr-1">
               Type:
             </span>
             <button
               type="button"
               onClick={() => updateUrl({ entityType: '' })}
               className={cn(
-                'px-2 py-0.5 text-[11px] font-medium rounded border transition-colors',
+                'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                 !urlEntityType
                   ? 'bg-slate-900 text-white border-slate-900'
                   : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
@@ -377,7 +377,7 @@ export default function AuditLogClient() {
                 type="button"
                 onClick={() => updateUrl({ entityType: f.value })}
                 className={cn(
-                  'px-2 py-0.5 text-[11px] font-medium rounded border transition-colors',
+                  'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                   urlEntityType === f.value
                     ? 'bg-slate-900 text-white border-slate-900'
                     : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
@@ -393,14 +393,14 @@ export default function AuditLogClient() {
         {/* Action chips */}
         {data?.facets?.action && data.facets.action.length > 0 && (
           <div className="flex items-center gap-1 flex-wrap">
-            <span className="text-[11px] text-slate-500 font-medium uppercase tracking-wide mr-1">
+            <span className="text-sm text-slate-500 font-medium uppercase tracking-wide mr-1">
               Action:
             </span>
             <button
               type="button"
               onClick={() => updateUrl({ action: '' })}
               className={cn(
-                'px-2 py-0.5 text-[11px] font-medium rounded border transition-colors',
+                'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                 !urlAction
                   ? 'bg-slate-900 text-white border-slate-900'
                   : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
@@ -414,7 +414,7 @@ export default function AuditLogClient() {
                 type="button"
                 onClick={() => updateUrl({ action: f.value })}
                 className={cn(
-                  'px-2 py-0.5 text-[11px] font-medium rounded border transition-colors',
+                  'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                   urlAction === f.value
                     ? 'bg-slate-900 text-white border-slate-900'
                     : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
@@ -429,7 +429,7 @@ export default function AuditLogClient() {
       </div>
 
       {error && (
-        <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-center gap-2">
+        <div className="text-base text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-center gap-2">
           <AlertCircle className="w-3.5 h-3.5" />
           {error}
         </div>
@@ -466,7 +466,7 @@ export default function AuditLogClient() {
                 onClick={() => {
                   toast.info('Pagination — load more not yet wired (PR follow-up)')
                 }}
-                className="text-[11px] text-slate-500 hover:text-slate-900 italic"
+                className="text-sm text-slate-500 hover:text-slate-900 italic"
               >
                 More entries available · cursor pagination coming
               </button>

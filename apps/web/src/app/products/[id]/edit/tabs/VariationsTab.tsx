@@ -201,7 +201,7 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
       {statusMsg && (
         <div
           className={cn(
-            'border rounded-lg px-4 py-2.5 text-[12px] flex items-start justify-between gap-3',
+            'border rounded-lg px-4 py-2.5 text-base flex items-start justify-between gap-3',
             statusMsg.kind === 'success'
               ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
               : 'bg-rose-50 border-rose-200 text-rose-800',
@@ -250,7 +250,7 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
               onClick={() => void refetch()}
               disabled={refreshing}
               title="Refresh prices & quantities from the database"
-              className="inline-flex items-center gap-1 h-7 px-2 text-[11px] font-medium text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50"
+              className="inline-flex items-center gap-1 h-7 px-2 text-sm font-medium text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50"
             >
               {refreshing ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -279,7 +279,7 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
             ))}
           </div>
         ) : (
-          <p className="text-[11px] text-slate-400 italic">
+          <p className="text-sm text-slate-400 italic">
             No variation axes set yet — your first variant defines them
             (e.g. add a Color/Size pair and they become this product's
             axes).
@@ -289,30 +289,30 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
 
       <Card noPadding>
         <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
+          <table className="w-full text-md">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-4 py-2 text-left text-[11px] font-semibold text-slate-700 uppercase tracking-wide">
+                <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wide">
                   SKU
                 </th>
                 {variationAxes.map((axis) => (
                   <th
                     key={axis}
-                    className="px-4 py-2 text-left text-[11px] font-semibold text-slate-700 uppercase tracking-wide"
+                    className="px-4 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wide"
                   >
                     {axis}
                   </th>
                 ))}
-                <th className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700 uppercase tracking-wide">
+                <th className="px-4 py-2 text-right text-sm font-semibold text-slate-700 uppercase tracking-wide">
                   Price
                 </th>
-                <th className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700 uppercase tracking-wide">
+                <th className="px-4 py-2 text-right text-sm font-semibold text-slate-700 uppercase tracking-wide">
                   Stock
                 </th>
-                <th className="px-4 py-2 text-left text-[11px] font-semibold text-slate-700 uppercase tracking-wide">
+                <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wide">
                   ASIN
                 </th>
-                <th className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700 uppercase tracking-wide">
+                <th className="px-4 py-2 text-right text-sm font-semibold text-slate-700 uppercase tracking-wide">
                   Actions
                 </th>
               </tr>
@@ -322,7 +322,7 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
                 <tr>
                   <td
                     colSpan={5 + variationAxes.length}
-                    className="px-4 py-6 text-center text-[12px] text-slate-400"
+                    className="px-4 py-6 text-center text-base text-slate-400"
                   >
                     No variations linked to this product. Click{' '}
                     <strong>Add Variation</strong> to create one.
@@ -334,7 +334,7 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
                   key={child.id}
                   className="border-b border-slate-100 hover:bg-slate-50"
                 >
-                  <td className="px-4 py-2 font-mono text-[12px] text-slate-900">
+                  <td className="px-4 py-2 font-mono text-base text-slate-900">
                     {child.sku}
                   </td>
                   {variationAxes.map((axis) => {
@@ -342,7 +342,7 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
                     return (
                       <td
                         key={axis}
-                        className="px-4 py-2 text-[12px] text-slate-700"
+                        className="px-4 py-2 text-base text-slate-700"
                       >
                         {value ?? <span className="text-slate-400">—</span>}
                       </td>
@@ -362,7 +362,7 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
                       {child.totalStock ?? 0}
                     </span>
                   </td>
-                  <td className="px-4 py-2 font-mono text-[12px] text-slate-700">
+                  <td className="px-4 py-2 font-mono text-base text-slate-700">
                     {child.amazonAsin ?? <span className="text-slate-400">—</span>}
                   </td>
                   <td className="px-4 py-2 text-right">
@@ -805,7 +805,7 @@ function VariantFormModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
-          <h2 className="text-[15px] font-semibold text-slate-900">
+          <h2 className="text-lg font-semibold text-slate-900">
             {mode === 'create' ? 'Add Variation' : `Edit ${initial?.sku}`}
           </h2>
           <button
@@ -835,7 +835,7 @@ function VariantFormModal({
                 autoFocus
               />
               {isDuplicateSku && (
-                <p className="mt-0.5 text-[11px] text-rose-600">
+                <p className="mt-0.5 text-sm text-rose-600">
                   Already used by another variant in this parent.
                 </p>
               )}
@@ -881,7 +881,7 @@ function VariantFormModal({
               free-text fallback. */}
           {variationAxes.length > 0 && (
             <div>
-              <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-2">
                 Variation axes
               </h3>
               <div className="grid grid-cols-2 gap-3">
@@ -943,7 +943,7 @@ function VariantFormModal({
               promoted parent goes through this path. */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
                 {variationAxes.length === 0
                   ? 'Define axes (first variant)'
                   : 'Add new axis'}
@@ -954,13 +954,13 @@ function VariantFormModal({
                   setNewAxes((s) => [...s, { key: '', value: '' }])
                 }
                 disabled={submitting}
-                className="text-[11px] text-blue-600 hover:underline disabled:opacity-50"
+                className="text-sm text-blue-600 hover:underline disabled:opacity-50"
               >
                 + Add axis
               </button>
             </div>
             {newAxes.length === 0 && variationAxes.length === 0 && (
-              <p className="text-[11px] text-slate-500 italic">
+              <p className="text-sm text-slate-500 italic">
                 You haven't defined any axes yet. Click + Add axis to set
                 them — e.g. <span className="font-mono">color: Red</span>{' '}
                 and <span className="font-mono">size: L</span>.
@@ -1016,7 +1016,7 @@ function VariantFormModal({
           </div>
 
           {(validation.length > 0 || error) && (
-            <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-[12px] text-rose-700">
+            <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-700">
               <div className="font-semibold mb-1 inline-flex items-center gap-1.5">
                 <AlertCircle className="w-3.5 h-3.5" />
                 {error ? 'Save failed' : 'Fix the following:'}
@@ -1024,7 +1024,7 @@ function VariantFormModal({
               {error ? (
                 <p className="break-words">{error}</p>
               ) : (
-                <ul className="list-disc list-inside space-y-0.5 text-[11px]">
+                <ul className="list-disc list-inside space-y-0.5 text-sm">
                   {validation.map((v, i) => (
                     <li key={i}>{v}</li>
                   ))}
@@ -1135,18 +1135,18 @@ function DeleteConfirmModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-5 py-4 border-b border-slate-200">
-          <h2 className="text-[15px] font-semibold text-slate-900">
+          <h2 className="text-lg font-semibold text-slate-900">
             Delete variant?
           </h2>
         </div>
         <div className="px-5 py-4 space-y-3">
-          <p className="text-[13px] text-slate-700">
+          <p className="text-md text-slate-700">
             This will permanently delete{' '}
             <span className="font-mono">{variant.sku}</span> and every
             channel listing linked to it. Cannot be undone.
           </p>
           {linkCount !== null && linkCount > 0 && (
-            <div className="border border-amber-200 bg-amber-50 rounded-md px-3 py-2 text-[12px] text-amber-800 inline-flex items-start gap-1.5">
+            <div className="border border-amber-200 bg-amber-50 rounded-md px-3 py-2 text-base text-amber-800 inline-flex items-start gap-1.5">
               <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
               <span>
                 <strong>{linkCount}</strong> channel listing
@@ -1156,7 +1156,7 @@ function DeleteConfirmModal({
             </div>
           )}
           {error && (
-            <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-[12px] text-rose-700">
+            <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-700">
               {error}
             </div>
           )}
@@ -1206,7 +1206,7 @@ function RelativeTimestamp({ at }: { at: number }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 text-[10px] tabular-nums',
+        'inline-flex items-center gap-1 text-xs tabular-nums',
         seconds < 30
           ? 'text-emerald-600'
           : seconds < 120
@@ -1232,7 +1232,7 @@ function FormField({
 }) {
   return (
     <div>
-      <label className="block text-[11px] font-medium text-slate-700 mb-1">
+      <label className="block text-sm font-medium text-slate-700 mb-1">
         {label}
         {required && <span className="text-rose-600 ml-0.5">*</span>}
       </label>
@@ -1242,4 +1242,4 @@ function FormField({
 }
 
 const inputCls =
-  'w-full h-8 px-2.5 text-[12px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white disabled:bg-slate-50 disabled:text-slate-500'
+  'w-full h-8 px-2.5 text-base border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white disabled:bg-slate-50 disabled:text-slate-500'

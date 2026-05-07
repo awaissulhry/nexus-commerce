@@ -250,9 +250,9 @@ export default function AppSidebar() {
       <div className="h-14 flex items-center justify-between px-4 border-b border-slate-800 flex-shrink-0">
         <Link href="/" className="flex items-center gap-2">
           <div className="w-7 h-7 bg-blue-600 rounded-md flex items-center justify-center">
-            <span className="text-white text-[12px] font-bold leading-none">N</span>
+            <span className="text-white text-base font-bold leading-none">N</span>
           </div>
-          <span className="text-[14px] font-semibold text-white">Nexus</span>
+          <span className="text-lg font-semibold text-white">Nexus</span>
         </Link>
         <button
           type="button"
@@ -271,8 +271,8 @@ export default function AppSidebar() {
           className="w-full flex items-center justify-between text-left hover:bg-slate-800 rounded-md px-2 py-1.5 transition-colors"
         >
           <div className="min-w-0">
-            <div className="text-[12px] font-medium text-white truncate">Xavia Racing</div>
-            <div className="text-[10px] text-slate-400 truncate">Workspace</div>
+            <div className="text-base font-medium text-white truncate">Xavia Racing</div>
+            <div className="text-xs text-slate-400 truncate">Workspace</div>
           </div>
           <ChevronDown className="w-3 h-3 text-slate-400 flex-shrink-0" />
         </button>
@@ -508,18 +508,18 @@ export default function AppSidebar() {
 
       {/* ── Recently viewed ──────────────────────────────────── */}
       <div className="border-t border-slate-800 px-4 py-3 flex-shrink-0">
-        <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
+        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
           Recently viewed
         </div>
         {recent.length === 0 ? (
-          <div className="text-[11px] text-slate-500">No recent items</div>
+          <div className="text-sm text-slate-500">No recent items</div>
         ) : (
           <ul className="space-y-1">
             {recent.map((item) => (
               <li key={item.id}>
                 <Link
                   href={item.href}
-                  className="block text-[11px] text-slate-400 hover:text-white truncate transition-colors"
+                  className="block text-sm text-slate-400 hover:text-white truncate transition-colors"
                   title={item.label}
                 >
                   {item.label}
@@ -537,11 +537,11 @@ export default function AppSidebar() {
           className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-slate-800 transition-colors"
         >
           <div className="w-7 h-7 bg-slate-700 rounded-full flex items-center justify-center flex-shrink-0">
-            <span className="text-[11px] font-medium text-white">A</span>
+            <span className="text-sm font-medium text-white">A</span>
           </div>
           <div className="flex-1 min-w-0 text-left">
-            <div className="text-[12px] font-medium text-white truncate">Awa</div>
-            <div className="text-[11px] text-slate-400 truncate">Xavia Racing</div>
+            <div className="text-base font-medium text-white truncate">Awa</div>
+            <div className="text-sm text-slate-400 truncate">Xavia Racing</div>
           </div>
         </button>
       </div>
@@ -556,7 +556,7 @@ function NavGroup({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="mb-4">
       <div className="px-4 mb-1">
-        <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
           {label}
         </h3>
       </div>
@@ -586,7 +586,7 @@ function NavItem({ href, icon: Icon, label, count, indicator, active }: NavItemP
     <Link
       href={href}
       className={cn(
-        'flex items-center gap-2.5 mx-2 px-3 py-1.5 rounded-md text-[13px] transition-colors group',
+        'flex items-center gap-2.5 mx-2 px-3 py-1.5 rounded-md text-md transition-colors group',
         active
           ? 'bg-blue-600 text-white font-medium'
           : 'text-slate-300 hover:bg-slate-800 hover:text-white',
@@ -597,7 +597,7 @@ function NavItem({ href, icon: Icon, label, count, indicator, active }: NavItemP
       <span className="flex-1 truncate">{label}</span>
 
       {indicator === 'disconnected' ? (
-        <span className="text-[10px] text-slate-500 group-hover:text-slate-300">
+        <span className="text-xs text-slate-500 group-hover:text-slate-300">
           Connect
         </span>
       ) : (
@@ -605,7 +605,7 @@ function NavItem({ href, icon: Icon, label, count, indicator, active }: NavItemP
           {count !== undefined && count > 0 && (
             <span
               className={cn(
-                'text-[10px] tabular-nums px-1.5 py-0.5 rounded',
+                'text-xs tabular-nums px-1.5 py-0.5 rounded',
                 active
                   ? 'bg-blue-700 text-blue-100'
                   : 'bg-slate-800 text-slate-400'
@@ -698,7 +698,7 @@ function ChannelNav({
         <Link
           href={channelPath}
           className={cn(
-            'flex-1 min-w-0 flex items-center gap-2.5 px-3 py-1.5 text-[13px] rounded-l-md',
+            'flex-1 min-w-0 flex items-center gap-2.5 px-3 py-1.5 text-md rounded-l-md',
             isOnChannel
               ? 'text-white font-medium'
               : 'text-slate-300 hover:text-white',
@@ -710,7 +710,7 @@ function ChannelNav({
           {count !== undefined && count > 0 && (
             <span
               className={cn(
-                'text-[10px] tabular-nums px-1.5 py-0.5 rounded',
+                'text-xs tabular-nums px-1.5 py-0.5 rounded',
                 isOnChannel
                   ? 'bg-blue-700 text-blue-100'
                   : 'bg-slate-800 text-slate-400',
@@ -764,7 +764,7 @@ function ChannelNav({
                 key={code}
                 href={marketHref}
                 className={cn(
-                  'flex items-center gap-2.5 mx-2 ml-9 px-3 py-1 rounded-md text-[12px] transition-colors',
+                  'flex items-center gap-2.5 mx-2 ml-9 px-3 py-1 rounded-md text-base transition-colors',
                   active
                     ? 'bg-blue-600/30 text-white'
                     : 'text-slate-400 hover:bg-slate-800 hover:text-white',
@@ -776,20 +776,20 @@ function ChannelNav({
                     aria-hidden="true"
                   />
                 )}
-                <span className="font-mono text-[10px] font-semibold bg-slate-800 px-1.5 py-0.5 rounded text-slate-300">
+                <span className="font-mono text-xs font-semibold bg-slate-800 px-1.5 py-0.5 rounded text-slate-300">
                   {code}
                 </span>
                 <span className="flex-1 truncate">
                   {countryNames?.[code] ?? COUNTRY_NAMES[code] ?? code}
                 </span>
                 {connectionStatus === 'not-connected' ? (
-                  <span className="text-[10px] text-slate-500">—</span>
+                  <span className="text-xs text-slate-500">—</span>
                 ) : mcount > 0 ? (
-                  <span className="text-[10px] tabular-nums text-slate-500">
+                  <span className="text-xs tabular-nums text-slate-500">
                     {mcount}
                   </span>
                 ) : (
-                  <span className="text-[10px] text-slate-600">0</span>
+                  <span className="text-xs text-slate-600">0</span>
                 )}
               </Link>
             )
@@ -798,7 +798,7 @@ function ChannelNav({
             <button
               type="button"
               onClick={() => setModalOpen(true)}
-              className="w-[calc(100%-16px)] flex items-center gap-2.5 mx-2 ml-9 px-3 py-1 rounded-md text-[11px] text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors"
+              className="w-[calc(100%-16px)] flex items-center gap-2.5 mx-2 ml-9 px-3 py-1 rounded-md text-sm text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors"
             >
               <Search className="w-3 h-3" />
               <span>See all {fullMarkets.size} markets</span>
@@ -807,7 +807,7 @@ function ChannelNav({
           {connectionStatus === 'not-connected' ? (
             <Link
               href="/settings/channels"
-              className="flex items-center gap-2.5 mx-2 ml-9 px-3 py-1 rounded-md text-[11px] text-blue-400 hover:bg-slate-800 hover:text-blue-300 transition-colors"
+              className="flex items-center gap-2.5 mx-2 ml-9 px-3 py-1 rounded-md text-sm text-blue-400 hover:bg-slate-800 hover:text-blue-300 transition-colors"
             >
               <Plug className="w-3 h-3" />
               <span>Connect {label}</span>
@@ -815,7 +815,7 @@ function ChannelNav({
           ) : (
             <Link
               href={`${channelPath}/add-market`}
-              className="flex items-center gap-2.5 mx-2 ml-9 px-3 py-1 rounded-md text-[11px] text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors"
+              className="flex items-center gap-2.5 mx-2 ml-9 px-3 py-1 rounded-md text-sm text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors"
             >
               <Plus className="w-3 h-3" />
               <span>Add Market</span>

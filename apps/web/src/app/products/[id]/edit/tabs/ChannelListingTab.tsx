@@ -199,10 +199,10 @@ export default function ChannelListingTab({
               {marketInfo.code}
             </Badge>
             <div className="min-w-0">
-              <div className="text-[13px] font-semibold text-slate-900 truncate">
+              <div className="text-md font-semibold text-slate-900 truncate">
                 {marketInfo.name}
               </div>
-              <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+              <div className="text-sm text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
                 {isNew ? (
                   <span>Not yet listed on this marketplace</span>
                 ) : (
@@ -260,7 +260,7 @@ export default function ChannelListingTab({
         {statusMsg && (
           <div
             className={cn(
-              'border-t px-4 py-2 text-[12px] flex items-center gap-2',
+              'border-t px-4 py-2 text-base flex items-center gap-2',
               statusMsg.kind === 'success' && 'border-green-200 bg-green-50 text-green-700',
               statusMsg.kind === 'error' && 'border-red-200 bg-red-50 text-red-700',
               statusMsg.kind === 'info' && 'border-slate-200 bg-slate-50 text-slate-700',

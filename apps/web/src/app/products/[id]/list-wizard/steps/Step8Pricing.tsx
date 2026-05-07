@@ -327,7 +327,7 @@ export default function Step8Pricing({
   if (channels.length === 0) {
     return (
       <div className="max-w-2xl mx-auto py-12 px-6 text-center">
-        <p className="text-[13px] text-slate-600">
+        <p className="text-md text-slate-600">
           Pick channels in Step 1 first.
         </p>
       </div>
@@ -338,7 +338,7 @@ export default function Step8Pricing({
     <div className="max-w-3xl mx-auto py-10 px-6">
       <div className="mb-6">
         <h2 className="text-[20px] font-semibold text-slate-900">Pricing</h2>
-        <p className="text-[13px] text-slate-600 mt-1">
+        <p className="text-md text-slate-600 mt-1">
           Set a base price; every channel inherits it. Override per
           marketplace when local fees, currency, or competitive pressure
           calls for a different number.
@@ -346,14 +346,14 @@ export default function Step8Pricing({
       </div>
 
       {loading && (
-        <div className="border border-slate-200 rounded-lg bg-white px-6 py-12 text-center text-[13px] text-slate-500 flex items-center justify-center gap-2">
+        <div className="border border-slate-200 rounded-lg bg-white px-6 py-12 text-center text-md text-slate-500 flex items-center justify-center gap-2">
           <Loader2 className="w-4 h-4 animate-spin" />
           Loading pricing context…
         </div>
       )}
 
       {error && !loading && (
-        <div className="border border-rose-200 rounded-lg bg-rose-50 px-4 py-3 text-[13px] text-rose-700 flex items-start gap-2">
+        <div className="border border-rose-200 rounded-lg bg-rose-50 px-4 py-3 text-md text-rose-700 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           {error}
         </div>
@@ -363,7 +363,7 @@ export default function Step8Pricing({
         <>
           {/* Base pricing */}
           <div className="border border-slate-200 rounded-lg bg-white px-4 py-3 mb-4">
-            <div className="text-[12px] font-medium text-slate-700 mb-2">
+            <div className="text-base font-medium text-slate-700 mb-2">
               Base pricing (applies to every channel by default)
             </div>
             <div className="grid grid-cols-3 gap-3">
@@ -385,7 +385,7 @@ export default function Step8Pricing({
               />
             </div>
             {ctx.product.costPrice !== null && (
-              <p className="mt-2 text-[11px] text-slate-500">
+              <p className="mt-2 text-sm text-slate-500">
                 Master cost: {formatMoney(ctx.product.costPrice, 'EUR')}
                 {ctx.product.buyBoxPrice !== null &&
                   ` · Buy Box: ${formatMoney(ctx.product.buyBoxPrice, 'EUR')}`}
@@ -440,13 +440,13 @@ export default function Step8Pricing({
 
           {/* Per-channel override grid */}
           <div className="border border-slate-200 rounded-lg bg-white overflow-hidden">
-            <div className="px-3 py-2 border-b border-slate-200 text-[12px] font-medium text-slate-700">
+            <div className="px-3 py-2 border-b border-slate-200 text-base font-medium text-slate-700">
               Per-channel overrides &amp; margins
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-[12px]">
+              <table className="w-full text-base">
                 <thead>
-                  <tr className="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-wide">
+                  <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
                     <th className="text-left px-3 py-1.5">Channel</th>
                     <th className="text-left px-2 py-1.5">Price</th>
                     <th className="text-left px-2 py-1.5">Min</th>
@@ -497,10 +497,10 @@ export default function Step8Pricing({
                         )}
                       >
                         <td className="px-3 py-2">
-                          <div className="font-mono text-[11px] text-slate-700 font-medium">
+                          <div className="font-mono text-sm text-slate-700 font-medium">
                             {c.channelKey}
                           </div>
-                          <div className="text-[10px] text-slate-500">
+                          <div className="text-xs text-slate-500">
                             {c.currency}{' '}
                             {r.inheritsBase && (
                               <span className="ml-1 text-slate-400 italic">
@@ -572,7 +572,7 @@ export default function Step8Pricing({
                             )}
                             {formatMoney(r.netMargin, c.currency)}
                           </span>
-                          <div className="text-[10px] text-slate-500">
+                          <div className="text-xs text-slate-500">
                             {r.netMarginPct.toFixed(1)}%
                           </div>
                         </td>
@@ -594,7 +594,7 @@ export default function Step8Pricing({
                   return null
                 }
                 return (
-                  <div key={chKey} className="text-[11px]">
+                  <div key={chKey} className="text-sm">
                     {v.blocking.map((m, i) => (
                       <div
                         key={`b-${i}`}
@@ -625,7 +625,7 @@ export default function Step8Pricing({
 
           {/* Continue */}
           <div className="mt-6 flex items-center justify-between gap-3">
-            <div className="text-[12px]">
+            <div className="text-base">
               {totalBlocking === 0 ? (
                 <span className="inline-flex items-center gap-1.5 text-emerald-700">
                   <CheckCircle2 className="w-3.5 h-3.5" />
@@ -643,7 +643,7 @@ export default function Step8Pricing({
               onClick={onContinue}
               disabled={totalBlocking > 0}
               className={cn(
-                'h-8 px-4 rounded-md text-[13px] font-medium',
+                'h-8 px-4 rounded-md text-md font-medium',
                 totalBlocking > 0
                   ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                   : 'bg-blue-600 text-white hover:bg-blue-700',
@@ -671,7 +671,7 @@ function BaseField({
 }) {
   return (
     <div>
-      <label className="block text-[11px] font-medium text-slate-600 mb-0.5">
+      <label className="block text-sm font-medium text-slate-600 mb-0.5">
         {label}
       </label>
       <input
@@ -680,7 +680,7 @@ function BaseField({
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full h-8 px-2 text-[13px] border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+        className="w-full h-8 px-2 text-md border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
       />
     </div>
   )
@@ -702,7 +702,7 @@ function CompactInput({
       value={value}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
-      className="w-20 h-7 px-1.5 text-[12px] border border-slate-200 rounded text-right tabular-nums focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-300"
+      className="w-20 h-7 px-1.5 text-base border border-slate-200 rounded text-right tabular-nums focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-300"
     />
   )
 }
@@ -743,19 +743,19 @@ function GroupBulkActions({
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   return (
     <div className="border border-slate-200 rounded-lg bg-white px-3 py-2 mb-3">
-      <div className="text-[11px] font-medium text-slate-700 mb-1.5">
+      <div className="text-sm font-medium text-slate-700 mb-1.5">
         Set price per channel group (bulk)
       </div>
       <div className="space-y-1.5">
         {channelGroups.map((g) => (
           <div
             key={g.id}
-            className="flex items-center gap-2 text-[12px]"
+            className="flex items-center gap-2 text-base"
           >
             <span className="font-medium text-slate-700 flex-shrink-0 w-32 truncate">
               {g.name}
             </span>
-            <span className="text-[10px] font-mono text-slate-500 truncate flex-1 min-w-0">
+            <span className="text-xs font-mono text-slate-500 truncate flex-1 min-w-0">
               {g.channelKeys.join(', ')}
             </span>
             <input
@@ -766,7 +766,7 @@ function GroupBulkActions({
                 setDrafts((prev) => ({ ...prev, [g.id]: e.target.value }))
               }
               placeholder="price"
-              className="w-24 h-7 px-1.5 text-[12px] border border-slate-200 rounded text-right tabular-nums focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-300"
+              className="w-24 h-7 px-1.5 text-base border border-slate-200 rounded text-right tabular-nums focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-300"
             />
             <button
               type="button"
@@ -783,7 +783,7 @@ function GroupBulkActions({
                 })
               }}
               disabled={!drafts[g.id]}
-              className="h-7 px-2 text-[11px] font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:bg-slate-100 disabled:text-slate-400"
+              className="h-7 px-2 text-sm font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:bg-slate-100 disabled:text-slate-400"
             >
               Apply
             </button>

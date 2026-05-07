@@ -79,10 +79,10 @@ export default function PastePreviewModal({ preview, onCancel, onApply }: Props)
         <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ClipboardPaste className="w-4 h-4 text-slate-500" />
-            <h2 className="text-[14px] font-semibold text-slate-900">
+            <h2 className="text-lg font-semibold text-slate-900">
               Paste preview
             </h2>
-            <span className="text-[12px] text-slate-500 tabular-nums">
+            <span className="text-base text-slate-500 tabular-nums">
               {plan.length} change{plan.length === 1 ? '' : 's'}
               {errors.length > 0 && ` · ${errors.length} skipped`}
             </span>
@@ -100,14 +100,14 @@ export default function PastePreviewModal({ preview, onCancel, onApply }: Props)
         <div className="flex-1 overflow-y-auto px-5 py-3 space-y-3">
           {hasChanges ? (
             <div>
-              <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
+              <div className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">
                 Changes
               </div>
               <ul className="divide-y divide-slate-100 border border-slate-200 rounded-md bg-slate-50/50">
                 {previewItems.map((c) => (
                   <li
                     key={`${c.rowId}:${c.columnId}`}
-                    className="px-3 py-1.5 flex items-center gap-2 text-[12px]"
+                    className="px-3 py-1.5 flex items-center gap-2 text-base"
                   >
                     <span className="font-mono text-slate-500 truncate max-w-[180px]">
                       {c.sku}
@@ -124,20 +124,20 @@ export default function PastePreviewModal({ preview, onCancel, onApply }: Props)
                 ))}
               </ul>
               {hiddenCount > 0 && (
-                <div className="mt-1 text-[11px] text-slate-500">
+                <div className="mt-1 text-sm text-slate-500">
                   + {hiddenCount} more
                 </div>
               )}
             </div>
           ) : (
-            <div className="text-[12px] text-slate-500 italic">
+            <div className="text-base text-slate-500 italic">
               Nothing applicable to paste.
             </div>
           )}
 
           {errors.length > 0 && (
             <div>
-              <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <div className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                 <AlertCircle className="w-3 h-3 text-amber-600" />
                 Skipped ({errors.length})
               </div>
@@ -145,7 +145,7 @@ export default function PastePreviewModal({ preview, onCancel, onApply }: Props)
                 {errors.slice(0, PREVIEW_LIMIT).map((e, i) => (
                   <li
                     key={`${e.rowIdx}:${e.colIdx}:${i}`}
-                    className="px-3 py-1.5 flex items-center gap-2 text-[12px]"
+                    className="px-3 py-1.5 flex items-center gap-2 text-base"
                   >
                     <span className="font-mono text-slate-500 truncate max-w-[180px]">
                       {e.sku}
@@ -156,7 +156,7 @@ export default function PastePreviewModal({ preview, onCancel, onApply }: Props)
                 ))}
               </ul>
               {errors.length > PREVIEW_LIMIT && (
-                <div className="mt-1 text-[11px] text-slate-500">
+                <div className="mt-1 text-sm text-slate-500">
                   + {errors.length - PREVIEW_LIMIT} more
                 </div>
               )}

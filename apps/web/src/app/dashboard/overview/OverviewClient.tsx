@@ -223,18 +223,18 @@ export default function OverviewClient() {
       />
 
       {loading && !data && (
-        <div className="border border-slate-200 rounded-lg bg-white px-6 py-12 text-center text-[13px] text-slate-500 inline-flex items-center justify-center gap-2 w-full">
+        <div className="border border-slate-200 rounded-lg bg-white px-6 py-12 text-center text-md text-slate-500 inline-flex items-center justify-center gap-2 w-full">
           <Loader2 className="w-4 h-4 animate-spin" />
           Loading overview…
         </div>
       )}
 
       {error && !loading && (
-        <div className="border border-rose-200 rounded-lg bg-rose-50 px-4 py-3 text-[13px] text-rose-700 flex items-start gap-2">
+        <div className="border border-rose-200 rounded-lg bg-rose-50 px-4 py-3 text-md text-rose-700 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           <div>
             <div className="font-semibold">Couldn't load overview</div>
-            <div className="text-[11px] text-rose-600">{error}</div>
+            <div className="text-sm text-rose-600">{error}</div>
           </div>
         </div>
       )}
@@ -283,7 +283,7 @@ function Header({
         <h1 className="text-[24px] font-semibold text-slate-900">
           Command Center
         </h1>
-        <p className="text-[13px] text-slate-600 mt-0.5">
+        <p className="text-md text-slate-600 mt-0.5">
           Real-time operations across every channel and marketplace.
         </p>
       </div>
@@ -295,7 +295,7 @@ function Header({
               type="button"
               onClick={() => onWindowChange(w.id)}
               className={cn(
-                'h-6 px-2.5 text-[11px] rounded transition-colors',
+                'h-6 px-2.5 text-sm rounded transition-colors',
                 w.id === currentWindow
                   ? 'bg-slate-900 text-white font-semibold'
                   : 'text-slate-600 hover:text-slate-900',
@@ -309,7 +309,7 @@ function Header({
           type="button"
           onClick={onRefresh}
           disabled={refreshing}
-          className="inline-flex items-center gap-1.5 h-7 px-2.5 text-[11px] font-medium text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 h-7 px-2.5 text-sm font-medium text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50"
         >
           {refreshing ? (
             <Loader2 className="w-3 h-3 animate-spin" />
@@ -370,7 +370,7 @@ function KpiCard({
 }) {
   return (
     <div className="border border-slate-200 rounded-lg bg-white px-4 py-3">
-      <div className="text-[11px] text-slate-500 uppercase tracking-wide font-medium">
+      <div className="text-sm text-slate-500 uppercase tracking-wide font-medium">
         {label}
       </div>
       <div className="mt-1 flex items-baseline justify-between gap-2 flex-wrap">
@@ -379,7 +379,7 @@ function KpiCard({
         </div>
         <DeltaPill delta={delta} />
       </div>
-      <div className="mt-1 text-[10px] text-slate-400">
+      <div className="mt-1 text-xs text-slate-400">
         prev: <span className="tabular-nums">{prevValue}</span>
       </div>
     </div>
@@ -406,7 +406,7 @@ function DeltaPill({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[10px] font-medium tabular-nums',
+        'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-xs font-medium tabular-nums',
         tone,
       )}
     >
@@ -424,10 +424,10 @@ function Sparkline({ points }: { points: OverviewPayload['sparkline'] }) {
   return (
     <div className="border border-slate-200 rounded-lg bg-white px-4 py-3">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-[13px] font-semibold text-slate-900">
+        <h2 className="text-md font-semibold text-slate-900">
           30-day trend
         </h2>
-        <div className="text-[11px] text-slate-500 tabular-nums">
+        <div className="text-sm text-slate-500 tabular-nums">
           {formatCurrency(totalRev)} · {NUM_FMT.format(totalOrders)} orders
         </div>
       </div>
@@ -482,7 +482,7 @@ function SvgLineChart({ points }: { points: OverviewPayload['sparkline'] }) {
           opacity="0.6"
         />
       </svg>
-      <div className="flex items-center gap-3 mt-1 text-[10px] text-slate-500">
+      <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
         <span className="inline-flex items-center gap-1">
           <span className="inline-block w-2 h-0.5 bg-emerald-500" />
           Revenue
@@ -509,10 +509,10 @@ function ChannelGrid({
   if (visible.length === 0) {
     return (
       <div className="border border-slate-200 rounded-lg bg-white px-4 py-3">
-        <h2 className="text-[13px] font-semibold text-slate-900 mb-2">
+        <h2 className="text-md font-semibold text-slate-900 mb-2">
           Channels
         </h2>
-        <div className="text-[12px] text-slate-500 italic">
+        <div className="text-base text-slate-500 italic">
           No channel activity in this window.
         </div>
       </div>
@@ -520,7 +520,7 @@ function ChannelGrid({
   }
   return (
     <div>
-      <h2 className="text-[13px] font-semibold text-slate-900 mb-2">
+      <h2 className="text-md font-semibold text-slate-900 mb-2">
         Channels
       </h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -538,25 +538,25 @@ function ChannelGrid({
               )}
             >
               <div className="flex items-center justify-between">
-                <span className={cn('text-[12px] font-semibold', tone.text)}>
+                <span className={cn('text-base font-semibold', tone.text)}>
                   {CHANNEL_LABELS[c.channel] ?? c.channel}
                 </span>
-                <span className="text-[10px] text-slate-500 tabular-nums">
+                <span className="text-xs text-slate-500 tabular-nums">
                   {NUM_FMT.format(c.listings.total)} listing
                   {c.listings.total === 1 ? '' : 's'}
                 </span>
               </div>
               <div className="mt-1 flex items-baseline gap-3 flex-wrap">
-                <div className="text-[18px] font-semibold text-slate-900 tabular-nums">
+                <div className="text-2xl font-semibold text-slate-900 tabular-nums">
                   {formatCurrency(c.revenue)}
                 </div>
-                <div className="text-[11px] text-slate-600 tabular-nums">
+                <div className="text-sm text-slate-600 tabular-nums">
                   {NUM_FMT.format(c.orders)} order
                   {c.orders === 1 ? '' : 's'} · AOV{' '}
                   {formatCurrency(c.aov)}
                 </div>
               </div>
-              <div className="mt-1.5 flex items-center gap-2 text-[10px]">
+              <div className="mt-1.5 flex items-center gap-2 text-xs">
                 <Pill tone="emerald">{c.listings.live} live</Pill>
                 <Pill tone="amber">{c.listings.draft} draft</Pill>
                 {c.listings.failed > 0 && (
@@ -588,32 +588,32 @@ function MarketplaceMatrix({
   return (
     <div className="border border-slate-200 rounded-lg bg-white">
       <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-        <h2 className="text-[13px] font-semibold text-slate-900">
+        <h2 className="text-md font-semibold text-slate-900">
           Listings by channel × marketplace
         </h2>
         <Link
           href="/bulk-operations"
-          className="text-[11px] text-blue-600 hover:underline inline-flex items-center gap-1"
+          className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1"
         >
           Open <ChevronRight className="w-3 h-3" />
         </Link>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-[12px]">
+        <table className="w-full text-base">
           <thead className="bg-slate-50">
             <tr>
-              <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+              <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 font-semibold">
                 Channel
               </th>
               {marketplaces.map((m) => (
                 <th
                   key={m}
-                  className="px-3 py-2 text-right text-[10px] uppercase tracking-wide text-slate-500 font-semibold font-mono"
+                  className="px-3 py-2 text-right text-xs uppercase tracking-wide text-slate-500 font-semibold font-mono"
                 >
                   {m}
                 </th>
               ))}
-              <th className="px-3 py-2 text-right text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+              <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-slate-500 font-semibold">
                 Total
               </th>
             </tr>
@@ -672,7 +672,7 @@ function TopProducts({ items }: { items: OverviewPayload['topProducts'] }) {
   return (
     <div className="border border-slate-200 rounded-lg bg-white">
       <div className="px-4 py-3 border-b border-slate-100">
-        <h2 className="text-[13px] font-semibold text-slate-900">
+        <h2 className="text-md font-semibold text-slate-900">
           Top SKUs by revenue
         </h2>
       </div>
@@ -688,20 +688,20 @@ function TopProducts({ items }: { items: OverviewPayload['topProducts'] }) {
                 {it.productId ? (
                   <Link
                     href={`/products/${it.productId}/edit`}
-                    className="font-mono text-[12px] text-blue-600 hover:underline truncate"
+                    className="font-mono text-base text-blue-600 hover:underline truncate"
                   >
                     {it.sku}
                   </Link>
                 ) : (
-                  <span className="font-mono text-[12px] text-slate-700 truncate">
+                  <span className="font-mono text-base text-slate-700 truncate">
                     {it.sku}
                   </span>
                 )}
                 <div className="flex items-center gap-3 flex-shrink-0">
-                  <span className="text-[11px] text-slate-500 tabular-nums">
+                  <span className="text-sm text-slate-500 tabular-nums">
                     {NUM_FMT.format(it.units)} units
                   </span>
-                  <span className="text-[12px] font-semibold text-slate-900 tabular-nums">
+                  <span className="text-base font-semibold text-slate-900 tabular-nums">
                     {formatCurrency(it.revenue)}
                   </span>
                 </div>
@@ -773,14 +773,14 @@ function AlertsPanel({
   return (
     <div className="border border-slate-200 rounded-lg bg-white">
       <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-        <h2 className="text-[13px] font-semibold text-slate-900">Alerts</h2>
-        <span className="text-[10px] text-slate-500">
+        <h2 className="text-md font-semibold text-slate-900">Alerts</h2>
+        <span className="text-xs text-slate-500">
           {items.length === 0 ? 'all clear' : `${items.length} active`}
         </span>
       </div>
       <div className="px-4 py-3 space-y-2">
         {items.length === 0 && (
-          <div className="text-[11px] text-slate-500 italic">
+          <div className="text-sm text-slate-500 italic">
             Nothing requires attention right now.
           </div>
         )}
@@ -789,7 +789,7 @@ function AlertsPanel({
             key={it.label}
             href={it.href}
             className={cn(
-              'flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-md border text-[12px] hover:bg-slate-50',
+              'flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-md border text-base hover:bg-slate-50',
               it.tone === 'rose'
                 ? 'border-rose-200 bg-rose-50/40'
                 : it.tone === 'amber'
@@ -807,21 +807,21 @@ function AlertsPanel({
         {/* Channel connectivity */}
         {alerts.channelConnections.length > 0 && (
           <div className="border-t border-slate-100 pt-2 mt-2">
-            <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold mb-1">
+            <div className="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-1">
               Channel connections
             </div>
             <ul className="space-y-1">
               {alerts.channelConnections.map((c, idx) => (
                 <li
                   key={idx}
-                  className="flex items-center justify-between text-[11px]"
+                  className="flex items-center justify-between text-sm"
                 >
                   <span className="text-slate-700">
                     {CHANNEL_LABELS[c.channelType] ?? c.channelType}
                   </span>
                   <span
                     className={cn(
-                      'inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px]',
+                      'inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-xs',
                       c.isActive
                         ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                         : 'border-slate-200 text-slate-500',
@@ -840,15 +840,15 @@ function AlertsPanel({
           </div>
         )}
         {/* Catalog touchpoints */}
-        <div className="border-t border-slate-100 pt-2 mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-700">
+        <div className="border-t border-slate-100 pt-2 mt-2 grid grid-cols-2 gap-2 text-sm text-slate-700">
           <div>
-            <div className="text-slate-500 text-[10px]">Live listings</div>
+            <div className="text-slate-500 text-xs">Live listings</div>
             <div className="font-semibold tabular-nums">
               {NUM_FMT.format(catalog.liveListings)}
             </div>
           </div>
           <div>
-            <div className="text-slate-500 text-[10px]">Variants</div>
+            <div className="text-slate-500 text-xs">Variants</div>
             <div className="font-semibold tabular-nums">
               {NUM_FMT.format(catalog.totalVariants)}
             </div>
@@ -869,11 +869,11 @@ function CatalogSnapshot({
   return (
     <div className="border border-slate-200 rounded-lg bg-white">
       <div className="px-4 py-3 border-b border-slate-100">
-        <h2 className="text-[13px] font-semibold text-slate-900">
+        <h2 className="text-md font-semibold text-slate-900">
           Catalog snapshot
         </h2>
       </div>
-      <div className="px-4 py-3 grid grid-cols-2 gap-3 text-[12px]">
+      <div className="px-4 py-3 grid grid-cols-2 gap-3 text-base">
         <SnapshotCell
           label="Products"
           value={NUM_FMT.format(catalog.totalProducts)}
@@ -921,10 +921,10 @@ function SnapshotCell({
       : 'text-slate-900'
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wide text-slate-500 font-medium">
+      <div className="text-xs uppercase tracking-wide text-slate-500 font-medium">
         {label}
       </div>
-      <div className={cn('mt-0.5 text-[16px] font-semibold tabular-nums', valueClass)}>
+      <div className={cn('mt-0.5 text-xl font-semibold tabular-nums', valueClass)}>
         {value}
       </div>
     </div>
@@ -942,7 +942,7 @@ function ActivityFeed({
   return (
     <div className="border border-slate-200 rounded-lg bg-white">
       <div className="px-4 py-3 border-b border-slate-100">
-        <h2 className="text-[13px] font-semibold text-slate-900">
+        <h2 className="text-md font-semibold text-slate-900">
           Recent activity
         </h2>
       </div>
@@ -952,7 +952,7 @@ function ActivityFeed({
             key={idx}
             className="px-4 py-2 border-b border-slate-100 last:border-b-0 flex items-start justify-between gap-3"
           >
-            <div className="text-[11px] text-slate-700 break-words flex-1">
+            <div className="text-sm text-slate-700 break-words flex-1">
               {a.summary}
             </div>
             <RelativeTimestamp at={Date.parse(a.ts)} compact />
@@ -975,7 +975,7 @@ function QuickActions() {
   return (
     <div className="border border-slate-200 rounded-lg bg-white">
       <div className="px-4 py-3 border-b border-slate-100">
-        <h2 className="text-[13px] font-semibold text-slate-900">
+        <h2 className="text-md font-semibold text-slate-900">
           Quick actions
         </h2>
       </div>
@@ -986,7 +986,7 @@ function QuickActions() {
             <Link
               key={a.label}
               href={a.href}
-              className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 text-[12px] text-slate-700"
+              className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 text-base text-slate-700"
             >
               <Icon className="w-3.5 h-3.5 text-slate-500" />
               <span className="flex-1">{a.label}</span>
@@ -1017,7 +1017,7 @@ function Pill({
   return (
     <span
       className={cn(
-        'inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] tabular-nums',
+        'inline-flex items-center px-1.5 py-0.5 rounded border text-xs tabular-nums',
         cls,
       )}
     >
@@ -1051,7 +1051,7 @@ function RelativeTimestamp({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 text-[10px] tabular-nums whitespace-nowrap',
+        'inline-flex items-center gap-1 text-xs tabular-nums whitespace-nowrap',
         seconds < 30
           ? 'text-emerald-600'
           : seconds < 120

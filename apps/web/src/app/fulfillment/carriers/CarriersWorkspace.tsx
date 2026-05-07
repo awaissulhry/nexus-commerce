@@ -75,7 +75,7 @@ export default function CarriersWorkspace() {
       />
 
       {loading && carriers.length === 0 ? (
-        <Card><div className="text-[13px] text-slate-500 py-8 text-center">Loading…</div></Card>
+        <Card><div className="text-md text-slate-500 py-8 text-center">Loading…</div></Card>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           {CARRIER_DEFS.map((def) => {
@@ -93,9 +93,9 @@ export default function CarriersWorkspace() {
       )}
 
       <Card>
-        <div className="text-[12px] text-slate-600 space-y-1">
+        <div className="text-base text-slate-600 space-y-1">
           <div className="font-semibold text-slate-900">How carrier connections work</div>
-          <ul className="list-disc list-inside space-y-0.5 text-[12px]">
+          <ul className="list-disc list-inside space-y-0.5 text-base">
             <li>Sendcloud is the recommended setup for Italian operations — one integration covers BRT, GLS, Poste, DHL, UPS, FedEx.</li>
             <li>When a shipment is created at /fulfillment/outbound, Nexus calls Sendcloud to print the label and pulls the tracking number.</li>
             <li>Tracking numbers automatically push back to the originating channel (Amazon, eBay, Shopify, Woo, Etsy).</li>
@@ -162,50 +162,50 @@ function CarrierCard({
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-[14px] font-semibold text-slate-900">{def.label}</span>
+              <span className="text-lg font-semibold text-slate-900">{def.label}</span>
               {isConnected ? (
                 <Badge variant="success" size="sm">Connected</Badge>
               ) : (
                 <Badge variant="default" size="sm">Not connected</Badge>
               )}
             </div>
-            <div className="text-[11px] text-slate-500 mt-1">{def.description}</div>
+            <div className="text-sm text-slate-500 mt-1">{def.description}</div>
           </div>
         </div>
 
         {def.docsUrl && (
-          <a href={def.docsUrl} target="_blank" rel="noreferrer" className="text-[11px] text-blue-600 hover:underline inline-flex items-center gap-1">
+          <a href={def.docsUrl} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1">
             API docs <ExternalLink size={10} />
           </a>
         )}
 
         {def.code === 'AMAZON_BUY_SHIPPING' || def.code === 'MANUAL' ? (
-          <div className="text-[11px] text-slate-500">No setup required — uses existing Seller Central credentials or no credentials at all.</div>
+          <div className="text-sm text-slate-500">No setup required — uses existing Seller Central credentials or no credentials at all.</div>
         ) : open ? (
           <div className="space-y-2 pt-2 border-t border-slate-100">
             {def.fields.map((f) => (
               <div key={f.key}>
-                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-0.5">{f.label}</div>
+                <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-0.5">{f.label}</div>
                 <input
                   type={f.password ? 'password' : f.type === 'number' ? 'number' : 'text'}
                   value={fields[f.key] ?? ''}
                   onChange={(e) => setFields({ ...fields, [f.key]: e.target.value })}
-                  className="h-7 w-full px-2 text-[12px] font-mono border border-slate-200 rounded"
+                  className="h-7 w-full px-2 text-base font-mono border border-slate-200 rounded"
                 />
               </div>
             ))}
             <div className="flex items-center gap-2 pt-1">
-              <button onClick={connect} disabled={busy} className="h-7 px-3 text-[12px] bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">Save</button>
-              <button onClick={() => setOpen(false)} className="h-7 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Cancel</button>
+              <button onClick={connect} disabled={busy} className="h-7 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">Save</button>
+              <button onClick={() => setOpen(false)} className="h-7 px-3 text-base border border-slate-200 rounded hover:bg-slate-50">Cancel</button>
             </div>
           </div>
         ) : isConnected ? (
           <div className="flex items-center gap-2">
-            <button onClick={() => setOpen(true)} className="h-7 px-3 text-[12px] bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50">Update credentials</button>
-            <button onClick={disconnect} className="h-7 px-3 text-[12px] bg-rose-50 text-rose-700 border border-rose-200 rounded hover:bg-rose-100">Disconnect</button>
+            <button onClick={() => setOpen(true)} className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50">Update credentials</button>
+            <button onClick={disconnect} className="h-7 px-3 text-base bg-rose-50 text-rose-700 border border-rose-200 rounded hover:bg-rose-100">Disconnect</button>
           </div>
         ) : (
-          <button onClick={() => setOpen(true)} className="h-8 px-3 text-[12px] bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5">
+          <button onClick={() => setOpen(true)} className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5">
             <Lock size={12} /> Connect
           </button>
         )}

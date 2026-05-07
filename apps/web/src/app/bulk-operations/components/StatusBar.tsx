@@ -62,7 +62,7 @@ export function StatusBar({
       return (
         <span>
           {pendingCount} unsaved change{pendingCount === 1 ? '' : 's'} ·{' '}
-          <kbd className="text-[10px] bg-slate-100 px-1 rounded">Cmd+S</kbd>{' '}
+          <kbd className="text-xs bg-slate-100 px-1 rounded">Cmd+S</kbd>{' '}
           to save
         </span>
       )
@@ -72,7 +72,7 @@ export function StatusBar({
   return (
     <div
       className={cn(
-        'flex-shrink-0 mt-2 flex items-center justify-between text-[11px] px-1',
+        'flex-shrink-0 mt-2 flex items-center justify-between text-sm px-1',
         status.kind === 'saved' && 'text-green-700',
         status.kind === 'partial' && 'text-amber-700',
         status.kind === 'error' && 'text-red-700',
@@ -83,7 +83,7 @@ export function StatusBar({
       )}
     >
       <span className="flex items-center gap-1.5">{left}</span>
-      <span className="flex items-center gap-2 text-slate-500 text-[12px]">
+      <span className="flex items-center gap-2 text-slate-500 text-base">
         {copyFlashCount != null ? (
           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-green-50 border border-green-200 rounded">
             <CheckCircle2 className="w-3 h-3 text-green-600" />

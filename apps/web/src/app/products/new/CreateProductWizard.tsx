@@ -92,10 +92,10 @@ export default function CreateProductWizard() {
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-50 text-blue-600 mb-4">
               <Loader2 className="w-6 h-6 animate-spin" />
             </div>
-            <h1 className="text-[18px] font-semibold text-slate-900 mb-1">
+            <h1 className="text-2xl font-semibold text-slate-900 mb-1">
               Setting up your new product…
             </h1>
-            <p className="text-[13px] text-slate-600">
+            <p className="text-md text-slate-600">
               We're creating a draft and dropping you into the listing
               wizard. You'll be able to rename the SKU and master name
               later from the edit page.
@@ -106,10 +106,10 @@ export default function CreateProductWizard() {
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-rose-50 text-rose-600 mb-4">
               <AlertCircle className="w-6 h-6" />
             </div>
-            <h1 className="text-[18px] font-semibold text-slate-900 mb-1">
+            <h1 className="text-2xl font-semibold text-slate-900 mb-1">
               Couldn't start a new product
             </h1>
-            <p className="text-[13px] text-slate-600 mb-4 break-words">
+            <p className="text-md text-slate-600 mb-4 break-words">
               {error}
             </p>
             <div className="flex items-center justify-center gap-2">

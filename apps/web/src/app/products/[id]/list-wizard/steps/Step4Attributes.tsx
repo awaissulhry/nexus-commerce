@@ -435,7 +435,7 @@ export default function Step4Attributes({
   if (channels.length === 0) {
     return (
       <div className="max-w-2xl mx-auto py-12 px-6 text-center">
-        <p className="text-[13px] text-slate-600">
+        <p className="text-md text-slate-600">
           Pick channels in Step 1 before configuring attributes.
         </p>
       </div>
@@ -449,7 +449,7 @@ export default function Step4Attributes({
           <h2 className="text-[20px] font-semibold text-slate-900">
             Required Attributes
           </h2>
-          <p className="text-[13px] text-slate-600 mt-1">
+          <p className="text-md text-slate-600 mt-1">
             Union of every required field across the selected channels.
             Smart defaults come from the master product; click "Override
             per channel" on any field that should differ between markets.
@@ -462,7 +462,7 @@ export default function Step4Attributes({
               onClick={() => setShowAllOptional((s) => !s)}
               disabled={loading}
               className={cn(
-                'inline-flex items-center gap-1 h-7 px-2 text-[11px] border rounded disabled:opacity-40',
+                'inline-flex items-center gap-1 h-7 px-2 text-sm border rounded disabled:opacity-40',
                 showAllOptional
                   ? 'border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100'
                   : 'border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900',
@@ -482,7 +482,7 @@ export default function Step4Attributes({
             type="button"
             onClick={() => setReloadKey((k) => k + 1)}
             disabled={loading}
-            className="inline-flex items-center gap-1 h-7 px-2 text-[11px] text-slate-600 border border-slate-200 rounded hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40"
+            className="inline-flex items-center gap-1 h-7 px-2 text-sm text-slate-600 border border-slate-200 rounded hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40"
             title="Re-fetch the required-fields manifest from cache"
           >
             {loading ? (
@@ -501,7 +501,7 @@ export default function Step4Attributes({
               window.setTimeout(() => setForceRefresh(false), 100)
             }}
             disabled={loading}
-            className="inline-flex items-center gap-1 h-7 px-2 text-[11px] text-blue-700 border border-blue-200 rounded hover:bg-blue-50 disabled:opacity-40"
+            className="inline-flex items-center gap-1 h-7 px-2 text-sm text-blue-700 border border-blue-200 rounded hover:bg-blue-50 disabled:opacity-40"
             title="Force-refresh schemas from Amazon SP-API (bypasses 24h cache). Use after Amazon updates required fields, enums, etc."
           >
             <RefreshCw className="w-3 h-3" />
@@ -511,21 +511,21 @@ export default function Step4Attributes({
       </div>
 
       {loading && !manifest && (
-        <div className="border border-slate-200 rounded-lg bg-white px-6 py-12 text-center text-[13px] text-slate-500 flex items-center justify-center gap-2">
+        <div className="border border-slate-200 rounded-lg bg-white px-6 py-12 text-center text-md text-slate-500 flex items-center justify-center gap-2">
           <Loader2 className="w-4 h-4 animate-spin" />
           Loading required fields…
         </div>
       )}
 
       {error && !loading && (
-        <div className="border border-rose-200 rounded-lg bg-rose-50 px-4 py-3 text-[13px] text-rose-700 flex items-start gap-2">
+        <div className="border border-rose-200 rounded-lg bg-rose-50 px-4 py-3 text-md text-rose-700 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           <div>
             <div>{error}</div>
             <button
               type="button"
               onClick={() => setReloadKey((k) => k + 1)}
-              className="mt-1 text-[12px] font-medium underline hover:no-underline"
+              className="mt-1 text-base font-medium underline hover:no-underline"
             >
               Try again
             </button>
@@ -534,11 +534,11 @@ export default function Step4Attributes({
       )}
 
       {manifest && manifest.channelsMissingSchema.length > 0 && (
-        <div className="mb-4 border border-amber-200 bg-amber-50 rounded-md px-3 py-2 text-[12px] text-amber-800">
+        <div className="mb-4 border border-amber-200 bg-amber-50 rounded-md px-3 py-2 text-base text-amber-800">
           <div className="font-medium mb-1">
             Schema unavailable for some channels — union may be incomplete
           </div>
-          <ul className="space-y-0.5 text-[11px]">
+          <ul className="space-y-0.5 text-sm">
             {manifest.channelsMissingSchema.map((m) => (
               <li key={m.channelKey}>
                 <span className="font-mono">{m.channelKey}</span> —{' '}
@@ -560,11 +560,11 @@ export default function Step4Attributes({
         const span = computeVariantSpan(manifest.variations)
         if (!span.suspicious) return null
         return (
-          <div className="mb-4 border border-amber-200 bg-amber-50 rounded-md px-3 py-2 text-[12px] text-amber-800">
+          <div className="mb-4 border border-amber-200 bg-amber-50 rounded-md px-3 py-2 text-base text-amber-800">
             <div className="font-medium mb-1">
               Variants span very different attribute shapes
             </div>
-            <p className="text-[11px] text-amber-700 mb-1.5">
+            <p className="text-sm text-amber-700 mb-1.5">
               The master product has {manifest.variations.length} variants
               with {span.uniqueKeyCount} distinct attribute keys across
               them. Amazon's listing model expects every variant under a
@@ -573,7 +573,7 @@ export default function Step4Attributes({
               means these are separate products that should be split into
               their own listings — submission may be rejected otherwise.
             </p>
-            <details className="text-[11px] text-amber-700">
+            <details className="text-sm text-amber-700">
               <summary className="cursor-pointer font-medium">
                 Show per-variant attribute keys
               </summary>
@@ -590,7 +590,7 @@ export default function Step4Attributes({
       })()}
 
       {manifest && manifest.fields.length === 0 && !loading && (
-        <div className="border border-slate-200 rounded-lg bg-white px-4 py-6 text-center text-[12px] text-slate-500">
+        <div className="border border-slate-200 rounded-lg bg-white px-4 py-6 text-center text-base text-slate-500">
           No required fields across the selected channels.
         </div>
       )}
@@ -634,7 +634,7 @@ export default function Step4Attributes({
           they're editing in the active tab so eBay aspects don't read
           as generic attributes alongside Amazon's. */}
       {manifest && manifest.fields.length > 0 && activeTab !== 'base' && (
-        <div className="mt-3 mb-1 text-[12px] font-semibold text-slate-700">
+        <div className="mt-3 mb-1 text-base font-semibold text-slate-700">
           {activeTab.startsWith('EBAY:')
             ? `Item Specifics for eBay ${activeTab.split(':')[1] ?? ''}`
             : activeTab.startsWith('AMAZON:')
@@ -760,7 +760,7 @@ export default function Step4Attributes({
       )}
 
       <div className="mt-8 flex items-center justify-between gap-3">
-        <div className="text-[12px]">
+        <div className="text-base">
           {unsatisfied.length === 0 && manifest ? (
             <span className="inline-flex items-center gap-1.5 text-emerald-700">
               <CheckCircle2 className="w-3.5 h-3.5" />
@@ -778,7 +778,7 @@ export default function Step4Attributes({
           onClick={onContinue}
           disabled={!manifest || unsatisfied.length > 0}
           className={cn(
-            'h-8 px-4 rounded-md text-[13px] font-medium',
+            'h-8 px-4 rounded-md text-md font-medium',
             !manifest || unsatisfied.length > 0
               ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
               : 'bg-blue-600 text-white hover:bg-blue-700',
@@ -793,7 +793,7 @@ export default function Step4Attributes({
           Click × to dismiss. Classification drives the headline so
           a quota error reads differently from a network blip. */}
       {aiError && (
-        <div className="fixed bottom-4 right-4 max-w-md z-40 border border-rose-200 bg-rose-50 rounded-lg shadow-lg px-4 py-3 text-[12px] text-rose-900">
+        <div className="fixed bottom-4 right-4 max-w-md z-40 border border-rose-200 bg-rose-50 rounded-lg shadow-lg px-4 py-3 text-base text-rose-900">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="font-semibold mb-0.5">
@@ -808,7 +808,7 @@ export default function Step4Attributes({
               <div className="text-rose-800 break-words">
                 {aiError.message}
               </div>
-              <div className="text-[10px] text-rose-600 mt-1">
+              <div className="text-xs text-rose-600 mt-1">
                 Field: <span className="font-mono">{aiError.field}</span>
                 {aiError.channelKey ? (
                   <>

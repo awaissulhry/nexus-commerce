@@ -178,7 +178,7 @@ export default function QcQueueClient() {
               type="button"
               onClick={() => setFilter(f)}
               className={cn(
-                'px-3 py-1 text-[11px] font-medium rounded border transition-colors',
+                'px-3 py-1 text-sm font-medium rounded border transition-colors',
                 filter === f
                   ? 'bg-slate-900 text-white border-slate-900'
                   : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300',
@@ -198,7 +198,7 @@ export default function QcQueueClient() {
       </div>
 
       {error && (
-        <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-center gap-2">
+        <div className="text-base text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-center gap-2">
           <AlertCircle className="w-3.5 h-3.5" />
           {error}
         </div>
@@ -251,7 +251,7 @@ export default function QcQueueClient() {
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-[13px] font-medium text-slate-900">
+                      <span className="font-mono text-md font-medium text-slate-900">
                         {item.sku}
                       </span>
                       <Badge
@@ -260,18 +260,18 @@ export default function QcQueueClient() {
                       >
                         {item.qcStatus}
                       </Badge>
-                      <span className="text-[12px] text-slate-700">
+                      <span className="text-base text-slate-700">
                         {item.quantityExpected} expected · {item.quantityReceived} received
                       </span>
                     </div>
 
                     {item.productName && (
-                      <div className="text-[12px] text-slate-600 mt-0.5 truncate max-w-xl">
+                      <div className="text-base text-slate-600 mt-0.5 truncate max-w-xl">
                         {item.productName}
                       </div>
                     )}
 
-                    <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-500 flex-wrap">
+                    <div className="flex items-center gap-3 mt-1 text-sm text-slate-500 flex-wrap">
                       <span>
                         Shipment{' '}
                         <span className="font-mono">
@@ -286,7 +286,7 @@ export default function QcQueueClient() {
                     </div>
 
                     {item.qcNotes && (
-                      <div className="mt-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded text-[11px] text-slate-700 whitespace-pre-wrap break-words">
+                      <div className="mt-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded text-sm text-slate-700 whitespace-pre-wrap break-words">
                         {item.qcNotes}
                       </div>
                     )}
@@ -300,7 +300,7 @@ export default function QcQueueClient() {
                             sku: item.sku,
                           })
                         }
-                        className="mt-2 inline-flex items-center gap-1 text-[11px] text-blue-700 hover:text-blue-900"
+                        className="mt-2 inline-flex items-center gap-1 text-sm text-blue-700 hover:text-blue-900"
                       >
                         <ImageIcon className="w-3 h-3" />
                         {photoCount} {photoCount === 1 ? 'photo' : 'photos'}
@@ -313,7 +313,7 @@ export default function QcQueueClient() {
                       type="button"
                       onClick={() => handleRelease(item)}
                       disabled={actingId === item.itemId}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-[11px] font-medium text-white bg-green-600 border border-green-600 rounded hover:bg-green-700 disabled:opacity-50"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-white bg-green-600 border border-green-600 rounded hover:bg-green-700 disabled:opacity-50"
                       title="Pass QC and release into stock"
                     >
                       {actingId === item.itemId ? (
@@ -327,7 +327,7 @@ export default function QcQueueClient() {
                       type="button"
                       onClick={() => handleScrap(item)}
                       disabled={actingId === item.itemId}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-[11px] font-medium text-red-700 bg-white border border-red-200 rounded hover:bg-red-50 disabled:opacity-50"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-red-700 bg-white border border-red-200 rounded hover:bg-red-50 disabled:opacity-50"
                       title="Mark as scrapped (terminal — write-off / supplier claim)"
                     >
                       <Trash2 className="w-3 h-3" />

@@ -150,7 +150,7 @@ export default function TerminologyClient({ initial, initialError }: Props) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-[12px] text-slate-500">
+        <p className="text-base text-slate-500">
           {items.length.toLocaleString()} preference
           {items.length === 1 ? '' : 's'}
         </p>
@@ -161,7 +161,7 @@ export default function TerminologyClient({ initial, initialError }: Props) {
       </div>
 
       {error && (
-        <div className="px-3 py-2 rounded-md bg-red-50 border border-red-200 text-[12px] text-red-900 flex items-start gap-2">
+        <div className="px-3 py-2 rounded-md bg-red-50 border border-red-200 text-base text-red-900 flex items-start gap-2">
           <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
           <div className="flex-1">{error}</div>
           <button
@@ -177,10 +177,10 @@ export default function TerminologyClient({ initial, initialError }: Props) {
 
       {items.length === 0 ? (
         <div className="border border-slate-200 rounded-lg bg-white px-6 py-12 text-center">
-          <p className="text-[14px] text-slate-700 mb-2">
+          <p className="text-lg text-slate-700 mb-2">
             No terminology preferences configured yet.
           </p>
-          <p className="text-[12px] text-slate-500 mb-4">
+          <p className="text-base text-slate-500 mb-4">
             Add a preference to steer AI-generated titles, bullets, and
             descriptions toward (or away from) specific words.
           </p>
@@ -191,7 +191,7 @@ export default function TerminologyClient({ initial, initialError }: Props) {
         </div>
       ) : (
         <div className="border border-slate-200 rounded-lg bg-white overflow-hidden">
-          <table className="w-full text-[13px]">
+          <table className="w-full text-md">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <Th>Brand</Th>
@@ -283,7 +283,7 @@ function Th({
   return (
     <th
       className={cn(
-        'text-left px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500',
+        'text-left px-3 py-2 text-sm font-semibold uppercase tracking-wide text-slate-500',
         className,
       )}
     >
@@ -357,7 +357,7 @@ function Modal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between mb-3">
-          <h3 className="text-[15px] font-semibold text-slate-900">
+          <h3 className="text-lg font-semibold text-slate-900">
             {editor.id ? 'Edit preference' : 'Add preference'}
           </h3>
           <button
@@ -500,14 +500,14 @@ function Field({
 }) {
   return (
     <label className="block">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1">
+      <div className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-1">
         {label}
       </div>
       {children}
-      {help && <div className="text-[11px] text-slate-500 mt-1">{help}</div>}
+      {help && <div className="text-sm text-slate-500 mt-1">{help}</div>}
     </label>
   )
 }
 
 const inputCls =
-  'w-full h-8 px-2 text-[13px] border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+  'w-full h-8 px-2 text-md border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500'

@@ -195,7 +195,7 @@ export default function NotificationsBell() {
         )}
         {unreadCount > 0 && (
           <span
-            className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] font-semibold inline-flex items-center justify-center tabular-nums"
+            className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-xs font-semibold inline-flex items-center justify-center tabular-nums"
             aria-hidden
           >
             {unreadCount > 99 ? '99+' : unreadCount}
@@ -206,10 +206,10 @@ export default function NotificationsBell() {
       {open && (
         <div className="absolute top-10 right-0 w-[380px] max-h-[70vh] bg-white rounded-lg border border-slate-200 shadow-xl flex flex-col">
           <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between gap-2 flex-shrink-0">
-            <div className="text-[13px] font-semibold text-slate-900">
+            <div className="text-md font-semibold text-slate-900">
               Notifications
               {unreadCount > 0 && (
-                <span className="ml-1.5 text-[11px] text-slate-500 font-normal">
+                <span className="ml-1.5 text-sm text-slate-500 font-normal">
                   · {unreadCount} unread
                 </span>
               )}
@@ -220,7 +220,7 @@ export default function NotificationsBell() {
                   type="button"
                   onClick={markAllRead}
                   title="Mark all read"
-                  className="h-6 px-2 text-[11px] text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded inline-flex items-center gap-1"
+                  className="h-6 px-2 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded inline-flex items-center gap-1"
                 >
                   <CheckCheck className="w-3 h-3" />
                   All read
@@ -238,16 +238,16 @@ export default function NotificationsBell() {
 
           <div className="flex-1 overflow-y-auto">
             {error && (
-              <div className="px-3 py-2 text-[12px] text-rose-700 bg-rose-50 border-b border-rose-200">
+              <div className="px-3 py-2 text-base text-rose-700 bg-rose-50 border-b border-rose-200">
                 {error}
               </div>
             )}
             {loading && rows.length === 0 ? (
-              <div className="px-3 py-8 text-center text-[12px] text-slate-400 italic">
+              <div className="px-3 py-8 text-center text-base text-slate-400 italic">
                 Loading…
               </div>
             ) : rows.length === 0 ? (
-              <div className="px-3 py-8 text-center text-[12px] text-slate-400">
+              <div className="px-3 py-8 text-center text-base text-slate-400">
                 <Bell className="w-5 h-5 mx-auto mb-1 text-slate-300" />
                 No notifications yet
               </div>
@@ -272,7 +272,7 @@ export default function NotificationsBell() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start gap-1">
-                        <div className="text-[12px] text-slate-900 font-medium leading-snug flex-1 min-w-0">
+                        <div className="text-base text-slate-900 font-medium leading-snug flex-1 min-w-0">
                           {r.title}
                         </div>
                         {unread && (
@@ -283,11 +283,11 @@ export default function NotificationsBell() {
                         )}
                       </div>
                       {r.body && (
-                        <div className="text-[11px] text-slate-600 mt-0.5 leading-snug">
+                        <div className="text-sm text-slate-600 mt-0.5 leading-snug">
                           {r.body}
                         </div>
                       )}
-                      <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-400">
+                      <div className="flex items-center gap-2 mt-1 text-xs text-slate-400">
                         <span>{fmtRelative(r.createdAt)}</span>
                         {r.href && (
                           <span className="inline-flex items-center gap-0.5">
@@ -314,7 +314,7 @@ export default function NotificationsBell() {
             )}
           </div>
 
-          <div className="px-3 py-2 border-t border-slate-100 flex-shrink-0 text-[11px] text-slate-500 flex items-center justify-between">
+          <div className="px-3 py-2 border-t border-slate-100 flex-shrink-0 text-sm text-slate-500 flex items-center justify-between">
             <span>Polls every 30s</span>
             <button
               type="button"

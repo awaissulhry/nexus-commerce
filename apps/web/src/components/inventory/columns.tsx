@@ -22,7 +22,7 @@ function ActionsButton({ item }: { item: InventoryItem }) {
     <div className="relative inline-block">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-900 text-white text-[13px] font-medium rounded hover:bg-slate-800 transition-colors"
+        className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-900 text-white text-md font-medium rounded hover:bg-slate-800 transition-colors"
       >
         Edit
         <ChevronDown className="w-3.5 h-3.5" />
@@ -31,20 +31,20 @@ function ActionsButton({ item }: { item: InventoryItem }) {
         <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded shadow-lg z-10">
           <Link
             href={`/catalog/${item.id}/edit`}
-            className="block px-4 py-2 text-[13px] text-slate-700 hover:bg-slate-50 border-b border-slate-100"
+            className="block px-4 py-2 text-md text-slate-700 hover:bg-slate-50 border-b border-slate-100"
           >
             Edit Listing
           </Link>
           <Link
             href={`/products/${item.id}/edit`}
-            className="block px-4 py-2 text-[13px] text-slate-700 hover:bg-slate-50 border-b border-slate-100"
+            className="block px-4 py-2 text-md text-slate-700 hover:bg-slate-50 border-b border-slate-100"
           >
             Edit (Multi-channel)
           </Link>
-          <button className="w-full text-left px-4 py-2 text-[13px] text-slate-700 hover:bg-slate-50 border-b border-slate-100">
+          <button className="w-full text-left px-4 py-2 text-md text-slate-700 hover:bg-slate-50 border-b border-slate-100">
             View on Amazon
           </button>
-          <button className="w-full text-left px-4 py-2 text-[13px] text-slate-700 hover:bg-slate-50">
+          <button className="w-full text-left px-4 py-2 text-md text-slate-700 hover:bg-slate-50">
             Sync Now
           </button>
         </div>
@@ -120,11 +120,11 @@ export const inventoryColumns = [
 
       return (
         <div className="min-w-0">
-          <p className="text-[13px] font-bold text-[#007185] line-clamp-2 leading-snug">
+          <p className="text-md font-bold text-[#007185] line-clamp-2 leading-snug">
             {item.name}
           </p>
 
-          <div className="mt-1 flex items-center gap-1 text-[13px] text-gray-600 flex-wrap">
+          <div className="mt-1 flex items-center gap-1 text-md text-gray-600 flex-wrap">
             {item.asin && (
               <>
                 <span className="font-semibold">{item.asin}</span>
@@ -137,11 +137,11 @@ export const inventoryColumns = [
           {/* Parent: show variation count + theme */}
           {hasChildren && (
             <div className="mt-1 flex items-center gap-2">
-              <span className="text-[11px] text-gray-500">
+              <span className="text-sm text-gray-500">
                 {item.childCount} variation{item.childCount !== 1 ? "s" : ""}
               </span>
               {item.variationTheme && (
-                <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded font-medium">
+                <span className="text-xs px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded font-medium">
                   by {item.variationTheme}
                 </span>
               )}
@@ -154,7 +154,7 @@ export const inventoryColumns = [
               {Object.entries(item.variations).map(([attrName, attrValue]) => (
                 <span
                   key={attrName}
-                  className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded font-medium"
+                  className="text-xs px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded font-medium"
                 >
                   <span className="text-slate-500">{attrName}:</span>{" "}
                   <span>{attrValue}</span>
@@ -167,14 +167,14 @@ export const inventoryColumns = [
           {isChild &&
             (!item.variations || Object.keys(item.variations).length === 0) &&
             item.variationName && (
-              <p className="text-[11px] text-slate-400 mt-0.5">{item.variationName}</p>
+              <p className="text-sm text-slate-400 mt-0.5">{item.variationName}</p>
             )}
 
           {/* Standalone (non-parent, non-child): variation details link */}
           {!hasChildren && !isChild && item.variationName && (
             <Link
               href={`/catalog/${item.id}/edit`}
-              className="text-[11px] text-[#007185] hover:text-[#0066a1] font-medium mt-1 inline-block"
+              className="text-sm text-[#007185] hover:text-[#0066a1] font-medium mt-1 inline-block"
             >
               Variation details
             </Link>
@@ -196,13 +196,13 @@ export const inventoryColumns = [
       const isOutOfStock = item.status === "Out of Stock";
       return (
         <div className="min-w-0">
-          <p className={`text-[13px] font-medium ${isOutOfStock ? "text-red-600" : "text-emerald-600"}`}>
+          <p className={`text-md font-medium ${isOutOfStock ? "text-red-600" : "text-emerald-600"}`}>
             {item.status}
           </p>
           {isOutOfStock && (
             <Link
               href={`/catalog/${item.id}/edit`}
-              className="text-[11px] text-[#007185] hover:text-[#0066a1] font-medium mt-1 inline-block"
+              className="text-sm text-[#007185] hover:text-[#0066a1] font-medium mt-1 inline-block"
             >
               Replenish inventory
             </Link>
@@ -220,7 +220,7 @@ export const inventoryColumns = [
     cell: ({ row }) => {
       if ((row.original.childCount ?? 0) > 0) return null;
       return (
-        <p className="text-[13px] font-semibold text-slate-900 tabular-nums">
+        <p className="text-md font-semibold text-slate-900 tabular-nums">
           {formatCurrency(0)}
         </p>
       );
@@ -239,8 +239,8 @@ export const inventoryColumns = [
       const isFBA = (item.fulfillmentChannel || "FBM") === "FBA";
       return (
         <div className="min-w-0">
-          <p className="text-[13px] font-semibold text-slate-900 tabular-nums">{item.stock}</p>
-          <div className="text-[11px] text-gray-500 mt-1">
+          <p className="text-md font-semibold text-slate-900 tabular-nums">{item.stock}</p>
+          <div className="text-sm text-gray-500 mt-1">
             {isFBA ? (
               <>
                 <p>Available (Fulfilment by Amazon)</p>
@@ -270,9 +270,9 @@ export const inventoryColumns = [
       const formatted = formatCurrency(item.price);
       return (
         <div className="min-w-0">
-          <p className="text-[13px] font-semibold text-slate-900">{formatted}</p>
-          <p className="text-[11px] text-gray-500 mt-1">{formatted} + {formatCurrency(0)}</p>
-          <Link href={`/catalog/${item.id}/edit`} className="text-[11px] text-[#007185] hover:text-[#0066a1] font-medium mt-1 inline-block">
+          <p className="text-md font-semibold text-slate-900">{formatted}</p>
+          <p className="text-sm text-gray-500 mt-1">{formatted} + {formatCurrency(0)}</p>
+          <Link href={`/catalog/${item.id}/edit`} className="text-sm text-[#007185] hover:text-[#0066a1] font-medium mt-1 inline-block">
             Edit prices
           </Link>
         </div>
@@ -291,8 +291,8 @@ export const inventoryColumns = [
 
       return (
         <div className="min-w-0">
-          <p className="text-[13px] font-semibold text-slate-900">{formatCurrency(item.price * 0.15)}</p>
-          <button className="text-[11px] text-[#007185] hover:text-[#0066a1] font-medium mt-1">
+          <p className="text-md font-semibold text-slate-900">{formatCurrency(item.price * 0.15)}</p>
+          <button className="text-sm text-[#007185] hover:text-[#0066a1] font-medium mt-1">
             Calculate revenue
           </button>
         </div>

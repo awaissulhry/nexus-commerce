@@ -786,7 +786,7 @@ export default function ReplenishmentWorkspace() {
                 key={t}
                 onClick={() => setFilter(t)}
                 className={cn(
-                  'h-7 px-3 text-[12px] font-medium rounded transition-colors',
+                  'h-7 px-3 text-base font-medium rounded transition-colors',
                   filter === t
                     ? 'bg-white text-slate-900 shadow-sm'
                     : 'text-slate-600 hover:text-slate-900',
@@ -802,7 +802,7 @@ export default function ReplenishmentWorkspace() {
         <select
           value={channelFilter}
           onChange={(e) => setChannelFilter(e.target.value)}
-          className="h-8 px-2 border border-slate-200 rounded-md text-[12px] bg-white"
+          className="h-8 px-2 border border-slate-200 rounded-md text-base bg-white"
         >
           <option value="">All channels</option>
           <option value="AMAZON">Amazon</option>
@@ -813,7 +813,7 @@ export default function ReplenishmentWorkspace() {
         <select
           value={marketplaceFilter}
           onChange={(e) => setMarketplaceFilter(e.target.value)}
-          className="h-8 px-2 border border-slate-200 rounded-md text-[12px] bg-white"
+          className="h-8 px-2 border border-slate-200 rounded-md text-base bg-white"
         >
           <option value="">All marketplaces</option>
           {marketplaceOptions.map((m) => (
@@ -854,7 +854,7 @@ export default function ReplenishmentWorkspace() {
           <select
             value={autoRefreshMin}
             onChange={(e) => setAutoRefreshMin(Number(e.target.value) as 0 | 5 | 15)}
-            className="h-8 px-2 text-[11px] border border-slate-200 rounded-md bg-white"
+            className="h-8 px-2 text-sm border border-slate-200 rounded-md bg-white"
             title="Auto-refresh interval (paused when tab hidden)"
           >
             <option value={0}>Auto-refresh: Off</option>
@@ -863,14 +863,14 @@ export default function ReplenishmentWorkspace() {
           </select>
           <button
             onClick={fetchData}
-            className="h-8 px-3 text-[12px] border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+            className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
           >
             <RefreshCw size={12} /> Refresh
           </button>
           {/* R.5 — CSV export of currently filtered + sorted suggestions */}
           <button
             onClick={() => exportSuggestionsCsv(filtered)}
-            className="h-8 px-3 text-[12px] border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+            className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
             title="Export the currently filtered + sorted suggestions to CSV"
             disabled={filtered.length === 0}
           >
@@ -878,7 +878,7 @@ export default function ReplenishmentWorkspace() {
           </button>
           <button
             onClick={() => setHelpOpen(true)}
-            className="h-8 w-8 grid place-items-center text-[12px] border border-slate-200 rounded-md hover:bg-slate-50 text-slate-500"
+            className="h-8 w-8 grid place-items-center text-base border border-slate-200 rounded-md hover:bg-slate-50 text-slate-500"
             title="Keyboard shortcuts (?)"
             aria-label="Keyboard shortcuts"
           >
@@ -890,7 +890,7 @@ export default function ReplenishmentWorkspace() {
       {/* Bulk action bar — visible only when rows are selected */}
       {selectedIds.size > 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-md px-3 py-2 flex items-center justify-between gap-3">
-          <div className="text-[13px] text-slate-700">
+          <div className="text-md text-slate-700">
             <span className="font-semibold">{selectedIds.size}</span>{' '}
             selected
           </div>
@@ -898,7 +898,7 @@ export default function ReplenishmentWorkspace() {
             <button
               type="button"
               onClick={clearSelection}
-              className="h-7 px-2 text-[12px] border border-slate-200 rounded hover:bg-slate-50"
+              className="h-7 px-2 text-base border border-slate-200 rounded hover:bg-slate-50"
             >
               Clear
             </button>
@@ -910,7 +910,7 @@ export default function ReplenishmentWorkspace() {
                 )
                 if (reason !== null) bulkDismissSelected(reason.trim() || null)
               }}
-              className="h-7 px-3 text-[12px] bg-white text-red-700 border border-red-200 rounded hover:bg-red-50 inline-flex items-center gap-1.5"
+              className="h-7 px-3 text-base bg-white text-red-700 border border-red-200 rounded hover:bg-red-50 inline-flex items-center gap-1.5"
               title="Dismiss all selected recommendations"
             >
               <X size={12} /> Bulk dismiss
@@ -918,7 +918,7 @@ export default function ReplenishmentWorkspace() {
             <button
               type="button"
               onClick={() => setBulkOpen(true)}
-              className="h-7 px-3 text-[12px] bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5"
+              className="h-7 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5"
             >
               <ShoppingCart size={12} /> Bulk-create POs
             </button>
@@ -929,7 +929,7 @@ export default function ReplenishmentWorkspace() {
       {/* Table */}
       {loading && !data ? (
         <Card>
-          <div className="text-[13px] text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
+          <div className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
             <Loader2 className="w-4 h-4 animate-spin" />
             Reading forecast layer…
           </div>
@@ -961,7 +961,7 @@ export default function ReplenishmentWorkspace() {
         </div>
         <Card noPadding className="hidden lg:block">
           <div className="overflow-x-auto">
-            <table className="w-full text-[13px]">
+            <table className="w-full text-md">
               <thead className="border-b border-slate-200 bg-slate-50">
                 <tr>
                   <th className="px-3 py-2 text-left w-9">
@@ -1043,10 +1043,10 @@ export default function ReplenishmentWorkspace() {
 }
 
 function th() {
-  return 'px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700'
+  return 'px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700'
 }
 function thRight() {
-  return 'px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700'
+  return 'px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700'
 }
 
 function UrgencyTile({
@@ -1068,13 +1068,13 @@ function UrgencyTile({
             <div className="text-[24px] font-semibold tabular-nums text-slate-900">
               {value}
             </div>
-            <div className="text-[11px] uppercase tracking-wider text-slate-500 mt-1">
+            <div className="text-sm uppercase tracking-wider text-slate-500 mt-1">
               {label}
             </div>
           </div>
           <span
             className={cn(
-              'inline-block text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded',
+              'inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded',
               URGENCY_TONE[tone],
             )}
           >
@@ -1091,7 +1091,7 @@ function UpcomingEventsBanner({ events }: { events: UpcomingEvent[] }) {
     <div className="border border-violet-200 bg-violet-50/60 rounded-md p-3">
       <div className="flex items-center gap-2 mb-2">
         <CalendarClock className="w-4 h-4 text-violet-700" />
-        <span className="text-[12px] uppercase tracking-wider text-violet-800 font-semibold">
+        <span className="text-base uppercase tracking-wider text-violet-800 font-semibold">
           Upcoming retail events
         </span>
       </div>
@@ -1101,7 +1101,7 @@ function UpcomingEventsBanner({ events }: { events: UpcomingEvent[] }) {
           return (
             <div
               key={e.id}
-              className="flex items-center justify-between gap-3 text-[12px]"
+              className="flex items-center justify-between gap-3 text-base"
             >
               <div className="flex items-center gap-2 min-w-0">
                 <span className="font-semibold text-slate-900 truncate">
@@ -1117,14 +1117,14 @@ function UpcomingEventsBanner({ events }: { events: UpcomingEvent[] }) {
                   expected lift {e.expectedLift.toFixed(1)}×
                 </span>
                 {(e.channel || e.marketplace) && (
-                  <span className="text-slate-400 font-mono text-[10px]">
+                  <span className="text-slate-400 font-mono text-xs">
                     {[e.channel, e.marketplace].filter(Boolean).join(':')}
                   </span>
                 )}
               </div>
               <span
                 className={cn(
-                  'text-[11px] font-medium tabular-nums',
+                  'text-sm font-medium tabular-nums',
                   isPastDeadline ? 'text-rose-700' : 'text-amber-700',
                 )}
               >
@@ -1217,8 +1217,8 @@ function MobileSuggestionCard({
         />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-[11px] text-slate-700">{s.sku}</span>
-            <span className={cn('text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border', tone)}>
+            <span className="font-mono text-sm text-slate-700">{s.sku}</span>
+            <span className={cn('text-xs uppercase tracking-wider px-1.5 py-0.5 rounded border', tone)}>
               {s.urgency}
             </span>
             {/* R.14 — channel badge on mobile too */}
@@ -1228,11 +1228,11 @@ function MobileSuggestionCard({
               </span>
             )}
           </div>
-          <div className="text-[12px] text-slate-900 truncate mt-0.5">{s.name}</div>
+          <div className="text-base text-slate-900 truncate mt-0.5">{s.name}</div>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 text-[11px]">
+      <div className="grid grid-cols-3 gap-2 text-sm">
         <div>
           <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">Stock</div>
           <div className="tabular-nums font-semibold text-slate-900">{s.effectiveStock}</div>
@@ -1252,7 +1252,7 @@ function MobileSuggestionCard({
       <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
         <button
           onClick={onDraftPo}
-          className="flex-1 h-8 text-[11px] bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center justify-center gap-1"
+          className="flex-1 h-8 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center justify-center gap-1"
         >
           {s.isManufactured ? <><Factory size={11} /> WO</> : <><ShoppingCart size={11} /> PO</>}
         </button>
@@ -1263,14 +1263,14 @@ function MobileSuggestionCard({
             )
             if (reason !== null) onDismiss(reason.trim() || null)
           }}
-          className="h-8 px-2 text-[11px] border border-red-200 text-red-700 rounded hover:bg-red-50 inline-flex items-center gap-1"
+          className="h-8 px-2 text-sm border border-red-200 text-red-700 rounded hover:bg-red-50 inline-flex items-center gap-1"
           title="Dismiss this recommendation"
         >
           <X size={11} />
         </button>
         <button
           onClick={onOpenDrawer}
-          className="h-8 px-3 text-[11px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1"
+          className="h-8 px-3 text-sm border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1"
         >
           Details <ChevronRight size={11} />
         </button>
@@ -1382,11 +1382,11 @@ function SuggestionRow({
       <td className="px-3 py-2">
         <Link
           href={`/products/${s.productId}/edit`}
-          className="text-[13px] text-slate-900 hover:text-blue-600 truncate block max-w-md"
+          className="text-md text-slate-900 hover:text-blue-600 truncate block max-w-md"
         >
           {s.name}
         </Link>
-        <div className="text-[11px] text-slate-500 font-mono inline-flex items-center gap-1.5">
+        <div className="text-sm text-slate-500 font-mono inline-flex items-center gap-1.5">
           {s.sku}
           {s.isManufactured && <Factory size={10} className="text-violet-600" />}
         </div>
@@ -1395,7 +1395,7 @@ function SuggestionRow({
         <div className="inline-flex items-center gap-1 flex-wrap">
           <span
             className={cn(
-              'inline-block text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded',
+              'inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded',
               URGENCY_TONE[s.urgency],
             )}
           >
@@ -1457,7 +1457,7 @@ function SuggestionRow({
       <td className="px-3 py-2 text-right tabular-nums text-slate-700">
         {s.velocity}/d
         {s.forecastSource === 'TRAILING_VELOCITY' && (
-          <span className="ml-1 text-[10px] text-slate-400">trailing</span>
+          <span className="ml-1 text-xs text-slate-400">trailing</span>
         )}
       </td>
       <td className="px-3 py-2 text-right tabular-nums text-slate-700">
@@ -1480,7 +1480,7 @@ function SuggestionRow({
           {s.needsReorder ? (
             <button
               onClick={onDraftPo}
-              className="h-7 px-2 text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1"
+              className="h-7 px-2 text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1"
               title={s.isManufactured ? 'Create work order' : 'Create draft PO'}
             >
               {s.isManufactured ? (
@@ -1494,7 +1494,7 @@ function SuggestionRow({
               )}
             </button>
           ) : (
-            <span className="text-[10px] text-slate-400">OK</span>
+            <span className="text-xs text-slate-400">OK</span>
           )}
           <button
             onClick={() => {
@@ -1503,7 +1503,7 @@ function SuggestionRow({
               )
               if (reason !== null) onDismiss(reason.trim() || null)
             }}
-            className="h-7 w-7 flex items-center justify-center text-[11px] text-slate-400 hover:text-red-700 hover:bg-red-50 border border-transparent hover:border-red-200 rounded"
+            className="h-7 w-7 flex items-center justify-center text-sm text-slate-400 hover:text-red-700 hover:bg-red-50 border border-transparent hover:border-red-200 rounded"
             title="Dismiss this recommendation"
             aria-label="Dismiss recommendation"
           >
@@ -1674,15 +1674,15 @@ function ForecastDetailDrawer({
           <div className="min-w-0">
             {detail ? (
               <>
-                <div className="text-[14px] font-semibold text-slate-900 truncate">
+                <div className="text-lg font-semibold text-slate-900 truncate">
                   {detail.product.name}
                 </div>
-                <div className="text-[11px] text-slate-500 font-mono">
+                <div className="text-sm text-slate-500 font-mono">
                   {detail.product.sku}
                 </div>
               </>
             ) : (
-              <div className="text-[13px] text-slate-500">Loading detail…</div>
+              <div className="text-md text-slate-500">Loading detail…</div>
             )}
           </div>
           <button
@@ -1696,22 +1696,22 @@ function ForecastDetailDrawer({
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           {loading && !error && (
-            <div className="text-[13px] text-slate-500 inline-flex items-center gap-2 py-6">
+            <div className="text-md text-slate-500 inline-flex items-center gap-2 py-6">
               <Loader2 className="w-4 h-4 animate-spin" /> Loading forecast…
             </div>
           )}
           {/* R.5 — error UI with retry. Pre-R.5 a fetch failure left
               the spinner running indefinitely. */}
           {!loading && error && (
-            <div className="bg-rose-50 border border-rose-200 rounded p-4 text-[13px] text-rose-800">
+            <div className="bg-rose-50 border border-rose-200 rounded p-4 text-md text-rose-800">
               <div className="flex items-start gap-2">
                 <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold mb-1">Couldn't load forecast detail</div>
-                  <div className="text-[12px] mb-3">{error}</div>
+                  <div className="text-base mb-3">{error}</div>
                   <button
                     onClick={() => setRetryTick((n) => n + 1)}
-                    className="h-7 px-2.5 text-[11px] bg-rose-600 text-white rounded hover:bg-rose-700 inline-flex items-center gap-1"
+                    className="h-7 px-2.5 text-sm bg-rose-600 text-white rounded hover:bg-rose-700 inline-flex items-center gap-1"
                   >
                     <RefreshCw size={11} /> Retry
                   </button>
@@ -1723,7 +1723,7 @@ function ForecastDetailDrawer({
             <>
               {/* 90-day chart */}
               <div>
-                <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">
+                <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1">
                   60-day actual + 90-day forecast
                 </div>
                 <div className="h-56 w-full">
@@ -1789,7 +1789,7 @@ function ForecastDetailDrawer({
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-500">
+                <div className="mt-1 flex items-center gap-3 text-sm text-slate-500">
                   <span className="inline-flex items-center gap-1">
                     <span className="w-3 h-px bg-slate-900" /> actual
                   </span>
@@ -1800,7 +1800,7 @@ function ForecastDetailDrawer({
                     <span className="w-3 h-2 bg-blue-200 rounded-sm" /> 80% interval
                   </span>
                   {detail.generationTag && (
-                    <span className="ml-auto text-[10px] uppercase tracking-wider text-amber-700">
+                    <span className="ml-auto text-xs uppercase tracking-wider text-amber-700">
                       {detail.generationTag.replace(/_/g, ' ').toLowerCase()}
                     </span>
                   )}
@@ -1819,7 +1819,7 @@ function ForecastDetailDrawer({
                   suggest. */}
               {detail.recommendation?.urgencySource === 'CHANNEL' &&
                 detail.recommendation?.worstChannelKey && (
-                <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
+                <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-base text-rose-800">
                   <span className="font-semibold">{detail.recommendation.urgency}</span>{' '}
                   driven by{' '}
                   <span className="font-mono">
@@ -1894,27 +1894,27 @@ function ForecastDetailDrawer({
               {/* Open shipments */}
               {detail.atp && detail.atp.openShipments.length > 0 && (
                 <div>
-                  <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-2">
+                  <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-2">
                     Open inbound shipments
                   </div>
                   <div className="border border-slate-200 rounded overflow-hidden">
                     {detail.atp.openShipments.map((sh) => (
                       <div
                         key={sh.shipmentId}
-                        className="flex items-center justify-between px-3 py-1.5 text-[12px] border-b border-slate-100 last:border-0"
+                        className="flex items-center justify-between px-3 py-1.5 text-base border-b border-slate-100 last:border-0"
                       >
                         <div>
-                          <span className="font-mono text-[11px] text-slate-700">
+                          <span className="font-mono text-sm text-slate-700">
                             {sh.reference ?? sh.shipmentId.slice(-8)}
                           </span>
-                          <span className="ml-2 text-[10px] uppercase tracking-wider text-slate-500">
+                          <span className="ml-2 text-xs uppercase tracking-wider text-slate-500">
                             {sh.type} · {sh.status}
                           </span>
                         </div>
                         <div className="text-slate-700 tabular-nums">
                           +{sh.remainingUnits} units
                           {sh.expectedAt && (
-                            <span className="ml-2 text-[11px] text-slate-500">
+                            <span className="ml-2 text-sm text-slate-500">
                               {new Date(sh.expectedAt)
                                 .toISOString()
                                 .slice(0, 10)}
@@ -1948,7 +1948,7 @@ function ForecastDetailDrawer({
 
               {/* Model */}
               {detail.model && (
-                <div className="text-[11px] text-slate-500">
+                <div className="text-sm text-slate-500">
                   Generated by{' '}
                   <span className="font-mono text-slate-700">{detail.model}</span>
                 </div>
@@ -1969,10 +1969,10 @@ function SignalsPanel({ signals }: { signals: any }) {
   ) {
     return (
       <div>
-        <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">
+        <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1">
           External signals
         </div>
-        <div className="text-[12px] text-slate-500">
+        <div className="text-base text-slate-500">
           Neutral — baseline forecast applies.
         </div>
       </div>
@@ -1980,20 +1980,20 @@ function SignalsPanel({ signals }: { signals: any }) {
   }
   return (
     <div>
-      <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-2">
+      <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-2">
         External signals (combined ×
         <span className="font-mono text-slate-700 ml-1">
           {Number(combined).toFixed(2)}
         </span>
         )
       </div>
-      <div className="grid grid-cols-3 gap-2 mb-2 text-[12px]">
+      <div className="grid grid-cols-3 gap-2 mb-2 text-base">
         <SignalChip label="Holiday" factor={holiday} />
         <SignalChip label="Weather" factor={weather} />
         <SignalChip label="Retail" factor={retail} />
       </div>
       {Array.isArray(notes) && notes.length > 0 && (
-        <ul className="text-[11px] text-slate-600 space-y-0.5">
+        <ul className="text-sm text-slate-600 space-y-0.5">
           {notes.slice(0, 5).map((n: any, i: number) => (
             <li key={i} className="inline-flex items-center gap-1">
               <span className="text-slate-400 capitalize">{n.source}:</span>
@@ -2017,7 +2017,7 @@ function SignalChip({ label, factor }: { label: string; factor: number }) {
       ? 'text-rose-700 bg-rose-50 border-rose-200'
       : 'text-slate-600 bg-slate-50 border-slate-200'
   return (
-    <div className={cn('border rounded px-2 py-1 text-[11px]', tone)}>
+    <div className={cn('border rounded px-2 py-1 text-sm', tone)}>
       <div className="uppercase tracking-wider text-[9px] font-semibold opacity-70">
         {label}
       </div>
@@ -2044,20 +2044,20 @@ function StockByLocationPanel({ atp }: { atp: any }) {
   return (
     <div className="border border-slate-200 rounded p-3 bg-slate-50/50">
       <div className="flex items-center justify-between mb-2">
-        <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+        <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
           Stock by location
         </div>
-        <div className="text-[10px] text-slate-500">
+        <div className="text-xs text-slate-500">
           Lead time:{' '}
           <span className="font-semibold text-slate-700">{atp.leadTimeDays}d</span>{' '}
-          <span className="font-mono text-[10px]">
+          <span className="font-mono text-xs">
             ({String(atp.leadTimeSource).toLowerCase().replace(/_/g, ' ')})
           </span>
         </div>
       </div>
 
       {isFallback && (
-        <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-2">
+        <div className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-2">
           This product hasn't been migrated to per-location tracking yet.
           Totals below are inferred from <span className="font-mono">Product.totalStock</span>;
           reconcile via the Stock workspace for accurate numbers.
@@ -2065,16 +2065,16 @@ function StockByLocationPanel({ atp }: { atp: any }) {
       )}
 
       {byLocation.length === 0 ? (
-        <div className="text-[12px] text-slate-500 italic py-2">
+        <div className="text-base text-slate-500 italic py-2">
           No stock at any location. Receive inventory or update via Stock workspace.
         </div>
       ) : (
-        <ul className="space-y-1.5 text-[12px]">
+        <ul className="space-y-1.5 text-base">
           {byLocation.map((loc: any) => (
             <li key={loc.locationId} className="flex items-center justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <div className="font-mono text-[11px] text-slate-700 truncate">{loc.locationCode}</div>
-                <div className="text-[10px] text-slate-500 truncate">
+                <div className="font-mono text-sm text-slate-700 truncate">{loc.locationCode}</div>
+                <div className="text-xs text-slate-500 truncate">
                   {String(loc.locationType).toLowerCase().replace('_', ' ')}
                   {loc.servesMarketplaces && loc.servesMarketplaces.length > 0 && (
                     <span> · {loc.servesMarketplaces.join(', ')}</span>
@@ -2084,7 +2084,7 @@ function StockByLocationPanel({ atp }: { atp: any }) {
               <div className="text-right tabular-nums flex-shrink-0">
                 <div className="font-semibold text-slate-900">{loc.available}</div>
                 {loc.reserved > 0 && (
-                  <div className="text-[10px] text-slate-500">
+                  <div className="text-xs text-slate-500">
                     {loc.quantity} − {loc.reserved} reserved
                   </div>
                 )}
@@ -2094,7 +2094,7 @@ function StockByLocationPanel({ atp }: { atp: any }) {
         </ul>
       )}
 
-      <div className="mt-2 pt-2 border-t border-slate-200 grid grid-cols-3 gap-2 text-[12px]">
+      <div className="mt-2 pt-2 border-t border-slate-200 grid grid-cols-3 gap-2 text-base">
         <div>
           <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">Available</div>
           <div className="tabular-nums font-semibold text-slate-900">{totalAvailable}</div>
@@ -2131,10 +2131,10 @@ function ChannelCoverPanel({
 
   return (
     <div>
-      <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-2">
+      <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-2">
         Days of cover by channel
       </div>
-      <ul className="space-y-1.5 text-[12px]">
+      <ul className="space-y-1.5 text-base">
         {channelCover.map((c: any, i: number) => {
           const tone =
             c.daysOfCover == null
@@ -2151,7 +2151,7 @@ function ChannelCoverPanel({
             <li key={i} className={cn('border rounded px-2 py-1.5', tone)}>
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <span className="font-mono text-[11px]">
+                  <span className="font-mono text-sm">
                     {c.channel} · {c.marketplace}
                   </span>
                   {c.source !== 'EXACT_MATCH' && (
@@ -2160,7 +2160,7 @@ function ChannelCoverPanel({
                     </span>
                   )}
                 </div>
-                <div className="tabular-nums text-[11px] flex-shrink-0">
+                <div className="tabular-nums text-sm flex-shrink-0">
                   {c.available} ÷ {c.velocityPerDay}/d ={' '}
                   <span className="font-semibold">
                     {c.daysOfCover == null ? '—' : `${c.daysOfCover}d`}
@@ -2211,22 +2211,22 @@ function ForecastModelsCard() {
   return (
     <Card>
       <div>
-        <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+        <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
           Forecast model A/B
         </div>
         <div className="mt-1 flex items-baseline gap-3 flex-wrap">
-          <span className="text-[12px] text-slate-700">
+          <span className="text-base text-slate-700">
             Champion: <span className="font-mono">{data.champion?.modelId ?? data.defaultModelId}</span>
             <span className="text-slate-500 ml-1">({data.champion?.skuCount ?? 0} SKUs)</span>
           </span>
           {challengers.map((c) => (
-            <span key={c.modelId} className="text-[12px] text-violet-700">
+            <span key={c.modelId} className="text-base text-violet-700">
               Challenger: <span className="font-mono">{c.modelId}</span>
               <span className="text-violet-500 ml-1">({c.skuCount} SKUs)</span>
             </span>
           ))}
         </div>
-        <div className="text-[10px] text-slate-500 mt-0.5">
+        <div className="text-xs text-slate-500 mt-0.5">
           Compare MAPE per model in the Forecast Health card. Promote via
           <span className="font-mono"> POST /forecast-models/promote</span>.
         </div>
@@ -2262,7 +2262,7 @@ function StockoutImpactCard() {
     <Card>
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+          <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
             Stockout impact (last {data.windowDays} days)
           </div>
           <div className="mt-1 flex items-baseline gap-3 flex-wrap">
@@ -2270,19 +2270,19 @@ function StockoutImpactCard() {
               {lostMargin.toFixed(0)}€ lost margin
             </span>
             {data.openCount > 0 && (
-              <span className="text-[11px] text-rose-700 font-semibold">
+              <span className="text-sm text-rose-700 font-semibold">
                 {data.openCount} ongoing
               </span>
             )}
           </div>
-          <div className="text-[11px] text-slate-500 mt-0.5">
+          <div className="text-sm text-slate-500 mt-0.5">
             {data.eventsInWindow} event{data.eventsInWindow === 1 ? '' : 's'} ·{' '}
             {Number(data.totalDurationDays).toFixed(1)} days total ·{' '}
             {data.totalLostUnits} units lost ·{' '}
             {lostRev.toFixed(0)}€ lost revenue
           </div>
           {data.worstSku && (
-            <div className="text-[11px] text-slate-500 mt-0.5">
+            <div className="text-sm text-slate-500 mt-0.5">
               Worst: <span className="font-mono">{data.worstSku.sku}</span>
               {' '}({Number(data.worstSku.durationDays).toFixed(1)}d
               {data.worstSku.estimatedLostMargin != null
@@ -2293,7 +2293,7 @@ function StockoutImpactCard() {
         </div>
         <button
           onClick={() => setRefreshTick((n) => n + 1)}
-          className="h-7 px-2 text-[11px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1"
+          className="h-7 px-2 text-sm border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1"
           title="Refresh"
         >
           <RefreshCw size={11} /> Refresh
@@ -2385,15 +2385,15 @@ function SupplierAlternativesPanel({
         className="flex items-center gap-2 text-sm font-semibold text-slate-900 w-full"
       >
         <span>Supplier alternatives</span>
-        <span className="text-[10px] text-slate-400">
+        <span className="text-xs text-slate-400">
           {open ? '▼' : '▶'} {data ? `${data.candidates.length} suppliers` : ''}
         </span>
       </button>
       {open && loading && (
-        <div className="mt-2 text-[12px] text-slate-400">Loading…</div>
+        <div className="mt-2 text-base text-slate-400">Loading…</div>
       )}
       {open && !loading && data && data.candidates.length === 0 && (
-        <p className="mt-2 text-[12px] text-slate-500">
+        <p className="mt-2 text-base text-slate-500">
           No supplier rows for this product. Add a SupplierProduct entry to enable comparison.
         </p>
       )}
@@ -2403,7 +2403,7 @@ function SupplierAlternativesPanel({
             <li
               key={c.supplierId}
               className={cn(
-                'rounded border p-2 text-[12px]',
+                'rounded border p-2 text-base',
                 c.isCurrentlyPreferred
                   ? 'border-indigo-300 bg-indigo-50/40'
                   : 'border-slate-200',
@@ -2411,19 +2411,19 @@ function SupplierAlternativesPanel({
             >
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-[10px] text-slate-400">#{c.rank}</span>
+                  <span className="font-mono text-xs text-slate-400">#{c.rank}</span>
                   <span className="font-semibold text-slate-900">{c.supplierName}</span>
                   {c.isCurrentlyPreferred && (
-                    <span className="text-[10px] uppercase tracking-wider text-indigo-700">
+                    <span className="text-xs uppercase tracking-wider text-indigo-700">
                       preferred
                     </span>
                   )}
                 </div>
-                <div className="font-mono text-[11px] text-slate-700">
+                <div className="font-mono text-sm text-slate-700">
                   score {(c.compositeScore * 100).toFixed(0)}
                 </div>
               </div>
-              <div className="grid grid-cols-4 gap-2 text-[11px] text-slate-600">
+              <div className="grid grid-cols-4 gap-2 text-sm text-slate-600">
                 <div>
                   <div className="text-slate-400">Cost</div>
                   <div className="font-mono">
@@ -2446,7 +2446,7 @@ function SupplierAlternativesPanel({
                 </div>
               </div>
               {c.notes.length > 0 && (
-                <p className="mt-1 text-[10px] text-slate-500 leading-snug">
+                <p className="mt-1 text-xs text-slate-500 leading-snug">
                   {c.notes.join(' · ')}
                 </p>
               )}
@@ -2455,7 +2455,7 @@ function SupplierAlternativesPanel({
                   type="button"
                   onClick={() => switchPreferred(c.supplierId)}
                   disabled={switching === c.supplierId}
-                  className="mt-1 text-[11px] text-indigo-600 hover:underline disabled:opacity-50"
+                  className="mt-1 text-sm text-indigo-600 hover:underline disabled:opacity-50"
                 >
                   {switching === c.supplierId ? 'switching…' : 'set as preferred'}
                 </button>
@@ -2527,10 +2527,10 @@ function FbaRestockHealthCard() {
     <Card className="p-4 mb-3">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+          <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
             Amazon Restock signal
           </span>
-          <span className="text-[10px] text-slate-400">
+          <span className="text-xs text-slate-400">
             staleness cutoff {data.staleDays}d
           </span>
         </div>
@@ -2538,7 +2538,7 @@ function FbaRestockHealthCard() {
           type="button"
           onClick={manualRefresh}
           disabled={refreshing}
-          className="text-[11px] text-indigo-600 hover:underline disabled:opacity-50"
+          className="text-sm text-indigo-600 hover:underline disabled:opacity-50"
         >
           {refreshing ? 'refreshing…' : 'refresh now'}
         </button>
@@ -2548,13 +2548,13 @@ function FbaRestockHealthCard() {
           <div
             key={it.marketplaceCode}
             className={cn(
-              'border rounded p-2 text-[11px]',
+              'border rounded p-2 text-sm',
               it.hasFreshData ? 'border-slate-200 bg-slate-50/50' : 'border-amber-200 bg-amber-50/40',
             )}
           >
             <div className="flex items-center justify-between mb-0.5">
               <span className="font-mono font-semibold">{it.marketplaceCode}</span>
-              <span className={cn('text-[10px]', it.hasFreshData ? 'text-emerald-700' : 'text-amber-700')}>
+              <span className={cn('text-xs', it.hasFreshData ? 'text-emerald-700' : 'text-amber-700')}>
                 {it.hasFreshData ? 'fresh' : 'stale'}
               </span>
             </div>
@@ -2595,12 +2595,12 @@ function FbaRestockSignalPanel({ rec }: { rec: NonNullable<DetailResponse['recom
   return (
     <div className={cn('border rounded p-3', tint)}>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+        <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
           {label}
         </span>
-        <span className="text-[10px] text-slate-400">Amazon Restock · {ageLabel}</span>
+        <span className="text-xs text-slate-400">Amazon Restock · {ageLabel}</span>
       </div>
-      <div className="grid grid-cols-3 gap-2 text-[12px]">
+      <div className="grid grid-cols-3 gap-2 text-base">
         <div>
           <div className="text-slate-500">Ours</div>
           <div className="font-mono font-semibold text-slate-900">{ours}u</div>
@@ -2622,7 +2622,7 @@ function FbaRestockSignalPanel({ rec }: { rec: NonNullable<DetailResponse['recom
         </div>
       </div>
       {!isAligned && (
-        <p className="mt-2 text-[10px] text-slate-600 leading-snug">
+        <p className="mt-2 text-xs text-slate-600 leading-snug">
           {amazonHigher && 'Amazon sees demand we may not — check for a regional spike or post-event lift on this SKU. '}
           {ourHigher && 'Our blended view suggests more inventory than Amazon alone — likely non-Amazon channel demand. '}
           Advisory only; the engine has not changed the recommended qty.
@@ -2699,10 +2699,10 @@ function CashFlowCard() {
   if (loading) {
     return (
       <Card className="p-4 mb-3">
-        <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+        <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
           Cash flow projection
         </div>
-        <div className="text-[12px] text-slate-400 mt-2">Loading…</div>
+        <div className="text-base text-slate-400 mt-2">Loading…</div>
       </Card>
     )
   }
@@ -2718,14 +2718,14 @@ function CashFlowCard() {
     <Card className="p-4 mb-3">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+          <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
             Cash flow projection
           </span>
-          <span className="text-[10px] text-slate-400">
+          <span className="text-xs text-slate-400">
             {buckets.length} weeks · {data.openPoCount} open POs · {data.speculativeRecCount} recs
           </span>
         </div>
-        <div className="flex items-center gap-2 text-[11px]">
+        <div className="flex items-center gap-2 text-sm">
           {data.cashOnHandCents != null && !editingCash && (
             <button
               type="button"
@@ -2829,7 +2829,7 @@ function CashFlowCard() {
           )
         })}
       </div>
-      <div className="mt-2 text-[10px] text-slate-500 flex items-center gap-3">
+      <div className="mt-2 text-xs text-slate-500 flex items-center gap-3">
         <span className="inline-flex items-center gap-1">
           <span className="inline-block w-2 h-2 bg-rose-400 rounded-sm" /> outflow
         </span>
@@ -2851,10 +2851,10 @@ function ContainerFillCard({ entries }: { entries: ContainerFillEntry[] }) {
   return (
     <Card className="p-4 mb-3">
       <div className="flex items-center gap-2 mb-3">
-        <span className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+        <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
           Container fill
         </span>
-        <span className="text-[10px] text-slate-400">
+        <span className="text-xs text-slate-400">
           {entries.length} supplier{entries.length === 1 ? '' : 's'} with shipping profile
         </span>
       </div>
@@ -2869,9 +2869,9 @@ function ContainerFillCard({ entries }: { entries: ContainerFillEntry[] }) {
             : 'bg-amber-500'
           return (
             <div key={e.supplierId} className="border border-slate-200 rounded p-2">
-              <div className="flex items-center justify-between text-[12px] mb-1.5">
+              <div className="flex items-center justify-between text-base mb-1.5">
                 <span className="font-semibold text-slate-900">{e.supplierName}</span>
-                <span className="text-slate-500 font-mono text-[10px]">{e.mode}</span>
+                <span className="text-slate-500 font-mono text-xs">{e.mode}</span>
               </div>
               {isFcl && fill != null && (
                 <>
@@ -2881,7 +2881,7 @@ function ContainerFillCard({ entries }: { entries: ContainerFillEntry[] }) {
                       style={{ width: `${Math.min(100, fill)}%` }}
                     />
                   </div>
-                  <div className="flex items-center justify-between text-[11px] text-slate-500">
+                  <div className="flex items-center justify-between text-sm text-slate-500">
                     <span>{fill.toFixed(1)}% by volume</span>
                     <span className="font-mono">
                       {e.totalCbm.toFixed(2)} m³ · {(e.freightCostCents / 100).toFixed(0)} EUR
@@ -2890,7 +2890,7 @@ function ContainerFillCard({ entries }: { entries: ContainerFillEntry[] }) {
                 </>
               )}
               {!isFcl && (
-                <div className="flex items-center justify-between text-[11px] text-slate-500">
+                <div className="flex items-center justify-between text-sm text-slate-500">
                   <span className="font-mono">
                     {e.totalCbm.toFixed(2)} m³ · {e.totalKg.toFixed(0)} kg
                   </span>
@@ -2901,12 +2901,12 @@ function ContainerFillCard({ entries }: { entries: ContainerFillEntry[] }) {
               )}
               {e.topUpSuggestions.length > 0 && (
                 <div className="mt-2 pt-2 border-t border-slate-200">
-                  <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">
+                  <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">
                     Top-up suggestions
                   </div>
                   <ul className="space-y-0.5">
                     {e.topUpSuggestions.slice(0, 3).map((t) => (
-                      <li key={t.productId} className="text-[11px] flex items-center justify-between">
+                      <li key={t.productId} className="text-sm flex items-center justify-between">
                         <span className="font-mono truncate">{t.sku}</span>
                         <span className="text-slate-600">
                           +{t.addUnits}u → save{' '}
@@ -2939,10 +2939,10 @@ function ReorderMathPanel({ rec }: { rec: NonNullable<DetailResponse['recommenda
 
   return (
     <div className="border border-slate-200 rounded p-3 bg-slate-50/50">
-      <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-2">
+      <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-2">
         Reorder math
       </div>
-      <div className="grid grid-cols-2 gap-y-1.5 gap-x-4 text-[12px]">
+      <div className="grid grid-cols-2 gap-y-1.5 gap-x-4 text-base">
         <div className="flex items-center justify-between">
           <span className="text-slate-500">EOQ</span>
           <span className="tabular-nums font-semibold text-slate-900">
@@ -2969,7 +2969,7 @@ function ReorderMathPanel({ rec }: { rec: NonNullable<DetailResponse['recommenda
         </div>
       </div>
       {(hasMoq || hasCasePack || hasEoqBelowMoq) && (
-        <ul className="mt-2 pt-2 border-t border-slate-200 space-y-0.5 text-[11px] text-slate-600">
+        <ul className="mt-2 pt-2 border-t border-slate-200 space-y-0.5 text-sm text-slate-600">
           {hasEoqBelowMoq && (
             <li>↑ EOQ was below supplier MOQ — ordering more than the math optimum</li>
           )}
@@ -2978,7 +2978,7 @@ function ReorderMathPanel({ rec }: { rec: NonNullable<DetailResponse['recommenda
         </ul>
       )}
       {rec.unitCostCents != null && (
-        <div className="mt-2 pt-2 border-t border-slate-200 text-[10px] text-slate-500">
+        <div className="mt-2 pt-2 border-t border-slate-200 text-xs text-slate-500">
           {/* R.15 — show native currency + EUR conversion when supplier
               quotes in something other than EUR. */}
           {rec.unitCostCurrency && rec.unitCostCurrency !== 'EUR' && rec.fxRateUsed ? (
@@ -3020,7 +3020,7 @@ function ReorderMathPanel({ rec }: { rec: NonNullable<DetailResponse['recommenda
           formula collapses to deterministic-LT and there's nothing to
           show. */}
       {rec.leadTimeStdDevDays != null && Number(rec.leadTimeStdDevDays) > 0 && (
-        <div className="mt-1 text-[10px] text-slate-500">
+        <div className="mt-1 text-xs text-slate-500">
           Lead-time variance: <span className="font-mono">σ_LT = {Number(rec.leadTimeStdDevDays).toFixed(2)}d</span>
           <span className="text-slate-400"> · safety stock includes σ_LT term</span>
         </div>
@@ -3278,7 +3278,7 @@ function RecommendationHistoryCard({ productId }: { productId: string | null }) 
     <div>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold inline-flex items-center gap-1 hover:text-slate-700"
+        className="text-sm uppercase tracking-wider text-slate-500 font-semibold inline-flex items-center gap-1 hover:text-slate-700"
       >
         History {open ? '▾' : '▸'}
         {data?.history && (
@@ -3289,9 +3289,9 @@ function RecommendationHistoryCard({ productId }: { productId: string | null }) 
       </button>
       {open && (
         <div className="mt-2">
-          {loading && <div className="text-[12px] text-slate-400">Loading…</div>}
+          {loading && <div className="text-base text-slate-400">Loading…</div>}
           {!loading && allHistory.length === 0 && (
-            <div className="text-[11px] text-slate-500 italic">
+            <div className="text-sm text-slate-500 italic">
               No history yet — recommendations are persisted starting from this commit.
             </div>
           )}
@@ -3312,7 +3312,7 @@ function RecommendationHistoryCard({ productId }: { productId: string | null }) 
                           setShowAll(false)
                         }}
                         className={cn(
-                          'px-2 py-0.5 text-[10px] font-medium rounded border transition-colors',
+                          'px-2 py-0.5 text-xs font-medium rounded border transition-colors',
                           statusFilter === f.key
                             ? 'bg-slate-900 text-white border-slate-900'
                             : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
@@ -3325,7 +3325,7 @@ function RecommendationHistoryCard({ productId }: { productId: string | null }) 
                   })}
                 </div>
               )}
-              <ul className="space-y-1 text-[11px]">
+              <ul className="space-y-1 text-sm">
                 {visible.map((h: any) => {
                 const tone =
                   h.status === 'ACTIVE' ? 'bg-blue-50 border-blue-200 text-blue-700'
@@ -3337,7 +3337,7 @@ function RecommendationHistoryCard({ productId }: { productId: string | null }) 
                     <span className="text-slate-500 tabular-nums w-28 flex-shrink-0">
                       {new Date(h.generatedAt).toISOString().slice(0, 16).replace('T', ' ')}
                     </span>
-                    <span className={cn('text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border w-20 text-center flex-shrink-0', tone)}>
+                    <span className={cn('text-xs uppercase tracking-wider px-1.5 py-0.5 rounded border w-20 text-center flex-shrink-0', tone)}>
                       {h.status === 'SUPERSEDED' ? 'SUPER.' : h.status}
                     </span>
                     <span className="text-slate-700 flex-shrink-0">{h.urgency}</span>
@@ -3359,7 +3359,7 @@ function RecommendationHistoryCard({ productId }: { productId: string | null }) 
                 <button
                   type="button"
                   onClick={() => setShowAll(true)}
-                  className="mt-2 text-[11px] text-blue-700 hover:text-blue-900 font-medium"
+                  className="mt-2 text-sm text-blue-700 hover:text-blue-900 font-medium"
                 >
                   Show all {filtered.length}
                 </button>
@@ -3368,13 +3368,13 @@ function RecommendationHistoryCard({ productId }: { productId: string | null }) 
                 <button
                   type="button"
                   onClick={() => setShowAll(false)}
-                  className="mt-2 text-[11px] text-slate-500 hover:text-slate-700 font-medium"
+                  className="mt-2 text-sm text-slate-500 hover:text-slate-700 font-medium"
                 >
                   Show less
                 </button>
               )}
               {filtered.length === 0 && statusFilter !== 'all' && (
-                <div className="text-[11px] text-slate-500 italic">
+                <div className="text-sm text-slate-500 italic">
                   No {statusFilter.toLowerCase()} entries.
                 </div>
               )}
@@ -3419,8 +3419,8 @@ function ForecastAccuracyCard({
   if (loading) {
     return (
       <div>
-        <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Forecast accuracy (last 30d)</div>
-        <div className="text-[12px] text-slate-400">Loading…</div>
+        <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1">Forecast accuracy (last 30d)</div>
+        <div className="text-base text-slate-400">Loading…</div>
       </div>
     )
   }
@@ -3430,8 +3430,8 @@ function ForecastAccuracyCard({
   if (sampleCount < 7) {
     return (
       <div>
-        <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Forecast accuracy (last 30d)</div>
-        <div className="text-[12px] text-slate-500 italic">
+        <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1">Forecast accuracy (last 30d)</div>
+        <div className="text-base text-slate-500 italic">
           Not enough history yet (n={sampleCount}). Need ≥7 days.
         </div>
       </div>
@@ -3447,10 +3447,10 @@ function ForecastAccuracyCard({
 
   return (
     <div>
-      <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">
+      <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1">
         Forecast accuracy (last 30d)
       </div>
-      <div className="grid grid-cols-3 gap-2 text-[12px] mb-2">
+      <div className="grid grid-cols-3 gap-2 text-base mb-2">
         <div className="border border-slate-200 rounded px-2 py-1 bg-slate-50">
           <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">MAPE</div>
           <div className="tabular-nums font-semibold text-slate-900">{mape}</div>
@@ -3464,13 +3464,13 @@ function ForecastAccuracyCard({
           <div className="tabular-nums font-semibold text-slate-900">{cal} <span className="text-[9px] text-slate-500 font-normal">/ 80%</span></div>
         </div>
       </div>
-      <div className="text-[10px] text-slate-500">n = {sampleCount} days</div>
+      <div className="text-xs text-slate-500">n = {sampleCount} days</div>
       {regimes.length > 1 && (
         <div className="mt-2">
           <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold mb-1">By regime</div>
           <ul className="space-y-0.5">
             {regimes.map(([key, s]: any) => (
-              <li key={key} className="flex items-center justify-between text-[11px]">
+              <li key={key} className="flex items-center justify-between text-sm">
                 <span className="font-mono text-slate-700">{key}</span>
                 <span className="tabular-nums text-slate-700">
                   {s.mape == null ? '—' : `${Number(s.mape).toFixed(1)}%`} <span className="text-slate-400">(n={s.sampleCount})</span>
@@ -3517,30 +3517,30 @@ function ForecastHealthCard() {
     <Card>
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+          <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
             Forecast health (last 30d)
           </div>
           <div className="mt-1 flex items-baseline gap-3">
             <span className="text-[20px] font-semibold tabular-nums text-slate-900">{mape}</span>
-            <span className="text-[11px] text-slate-500">MAPE · n={sampleCount}</span>
-            <span className="text-[11px] text-slate-500">Calibration {cal} / 80%</span>
+            <span className="text-sm text-slate-500">MAPE · n={sampleCount}</span>
+            <span className="text-sm text-slate-500">Calibration {cal} / 80%</span>
           </div>
           {data.worstSku && (
-            <div className="text-[11px] text-slate-500 mt-0.5">
+            <div className="text-sm text-slate-500 mt-0.5">
               Worst: <span className="font-mono">{data.worstSku.sku}</span> ({Number(data.worstSku.mape).toFixed(1)}% MAPE, n={data.worstSku.sampleCount})
             </div>
           )}
         </div>
         <button
           onClick={() => setRefreshTick((n) => n + 1)}
-          className="h-7 px-2 text-[11px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1"
+          className="h-7 px-2 text-sm border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1"
           title="Refresh"
         >
           <RefreshCw size={11} /> Refresh
         </button>
       </div>
       {groups.length > 0 && (
-        <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+        <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
           {groups.map((g) => (
             <div key={g.key} className="border border-slate-200 rounded px-2 py-1.5">
               <div className="uppercase tracking-wider text-[9px] text-slate-500 font-semibold">
@@ -3549,7 +3549,7 @@ function ForecastHealthCard() {
               <div className="tabular-nums font-semibold text-slate-900 mt-0.5">
                 {g.mape == null ? '—' : `${Number(g.mape).toFixed(1)}%`}
               </div>
-              <div className="text-[10px] text-slate-500">n={g.sampleCount}</div>
+              <div className="text-xs text-slate-500">n={g.sampleCount}</div>
             </div>
           ))}
         </div>
@@ -3679,12 +3679,12 @@ function BulkPoModal({
       <div className="relative bg-white border border-slate-200 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
           <div>
-            <div className="text-[14px] font-semibold text-slate-900">
+            <div className="text-lg font-semibold text-slate-900">
               {createdPos
                 ? `Created ${createdPos.length} draft PO${createdPos.length === 1 ? '' : 's'}`
                 : 'Bulk-create draft POs'}
             </div>
-            <div className="text-[12px] text-slate-500 mt-0.5">
+            <div className="text-base text-slate-500 mt-0.5">
               {createdPos
                 ? 'Review each PO and download the factory-ready PDF.'
                 : `${suggestions.length} item${suggestions.length === 1 ? '' : 's'} · ${grouped.size} supplier${grouped.size === 1 ? '' : 's'} → one PO per supplier`}
@@ -3703,7 +3703,7 @@ function BulkPoModal({
             PO, email-to-supplier mailto: action, and Work Order separation. */}
         {createdPos ? (
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-            <div className="text-[12px] text-emerald-700 inline-flex items-center gap-1.5">
+            <div className="text-base text-emerald-700 inline-flex items-center gap-1.5">
               <CheckCircle2 size={14} />
               <span>
                 All POs land as DRAFT. Open each PDF, review with the factory,
@@ -3713,7 +3713,7 @@ function BulkPoModal({
 
             {createdPos.length > 0 && (
               <div>
-                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
+                <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
                   Purchase orders
                 </div>
                 <div className="space-y-1.5">
@@ -3726,7 +3726,7 @@ function BulkPoModal({
 
             {createdWorkOrders && createdWorkOrders.length > 0 && (
               <div>
-                <div className="text-[10px] uppercase tracking-wider text-violet-700 font-semibold mb-1.5 inline-flex items-center gap-1">
+                <div className="text-xs uppercase tracking-wider text-violet-700 font-semibold mb-1.5 inline-flex items-center gap-1">
                   <Factory size={10} /> Work orders (manufactured items)
                 </div>
                 <div className="space-y-1.5">
@@ -3736,14 +3736,14 @@ function BulkPoModal({
                       className="border border-violet-200 bg-violet-50/40 rounded px-3 py-2 flex items-center justify-between gap-3"
                     >
                       <div>
-                        <div className="text-[12px] font-mono text-slate-900">
+                        <div className="text-base font-mono text-slate-900">
                           WO {wo.id.slice(-10)}
                         </div>
-                        <div className="text-[11px] text-slate-500">
+                        <div className="text-sm text-slate-500">
                           {wo.quantity} units · status PLANNED
                         </div>
                       </div>
-                      <span className="text-[10px] uppercase tracking-wider font-semibold text-violet-700 bg-violet-100 border border-violet-200 px-1.5 py-0.5 rounded">
+                      <span className="text-xs uppercase tracking-wider font-semibold text-violet-700 bg-violet-100 border border-violet-200 px-1.5 py-0.5 rounded">
                         Manufacturing
                       </span>
                     </div>
@@ -3758,7 +3758,7 @@ function BulkPoModal({
             <div key={supplierKey} className="mb-3 last:mb-0">
               <div
                 className={cn(
-                  'text-[11px] uppercase tracking-wider font-semibold mb-1.5',
+                  'text-sm uppercase tracking-wider font-semibold mb-1.5',
                   supplierKey === '__no_supplier__'
                     ? 'text-amber-700'
                     : 'text-slate-500',
@@ -3777,11 +3777,11 @@ function BulkPoModal({
                 {items.map((s) => (
                   <div
                     key={s.productId}
-                    className="flex items-center justify-between gap-3 px-3 py-1.5 border-b border-slate-100 last:border-0 text-[12px]"
+                    className="flex items-center justify-between gap-3 px-3 py-1.5 border-b border-slate-100 last:border-0 text-base"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="text-slate-800 truncate">{s.name}</div>
-                      <div className="text-[10px] text-slate-500 font-mono">
+                      <div className="text-xs text-slate-500 font-mono">
                         {s.sku}
                       </div>
                     </div>
@@ -3796,7 +3796,7 @@ function BulkPoModal({
                             parseInt(e.target.value, 10) || s.reorderQuantity,
                         }))
                       }
-                      className="w-20 h-7 px-2 border border-slate-200 rounded text-[12px] tabular-nums text-right"
+                      className="w-20 h-7 px-2 border border-slate-200 rounded text-base tabular-nums text-right"
                     />
                   </div>
                 ))}
@@ -3808,15 +3808,15 @@ function BulkPoModal({
 
         <div className="px-5 py-3 border-t border-slate-200 flex items-center justify-between">
           {error ? (
-            <span className="text-[12px] text-rose-700 inline-flex items-center gap-1">
+            <span className="text-base text-rose-700 inline-flex items-center gap-1">
               <AlertCircle size={12} /> {error}
             </span>
           ) : createdPos ? (
-            <span className="text-[12px] text-slate-500 inline-flex items-center gap-1">
+            <span className="text-base text-slate-500 inline-flex items-center gap-1">
               <CheckCircle2 size={12} /> Done — close to refresh the workspace
             </span>
           ) : (
-            <span className="text-[12px] text-slate-500 inline-flex items-center gap-1">
+            <span className="text-base text-slate-500 inline-flex items-center gap-1">
               <CheckCircle2 size={12} /> All POs land as DRAFT — review before
               submitting
             </span>
@@ -3825,7 +3825,7 @@ function BulkPoModal({
             {createdPos ? (
               <button
                 onClick={finishAndClose}
-                className="h-8 px-3 text-[12px] bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5"
+                className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5"
               >
                 <CheckCircle2 size={12} /> Close
               </button>
@@ -3834,14 +3834,14 @@ function BulkPoModal({
                 <button
                   onClick={onClose}
                   disabled={submitting}
-                  className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
+                  className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={submit}
                   disabled={submitting}
-                  className="h-8 px-3 text-[12px] bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+                  className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
                 >
                   {submitting ? (
                     <>
@@ -3898,10 +3898,10 @@ function PoSuccessRow({
   return (
     <div className="border border-slate-200 rounded px-3 py-2 flex items-center justify-between gap-3">
       <div className="min-w-0">
-        <div className="text-[13px] font-mono font-medium text-slate-900">
+        <div className="text-md font-mono font-medium text-slate-900">
           {po.poNumber}
         </div>
-        <div className="text-[11px] text-slate-500">
+        <div className="text-sm text-slate-500">
           {po.itemCount} item{po.itemCount === 1 ? '' : 's'} · {po.totalUnits} units
           {po.supplierName ? (
             <> · {po.supplierName}</>
@@ -3914,7 +3914,7 @@ function PoSuccessRow({
         {mailtoUrl ? (
           <a
             href={mailtoUrl}
-            className="h-7 px-2.5 text-[12px] border border-slate-200 text-slate-700 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+            className="h-7 px-2.5 text-base border border-slate-200 text-slate-700 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
             title={`Email ${po.supplierEmail}`}
           >
             <Mail size={12} /> Email
@@ -3923,7 +3923,7 @@ function PoSuccessRow({
           <button
             type="button"
             disabled
-            className="h-7 px-2.5 text-[12px] border border-slate-200 text-slate-400 rounded cursor-not-allowed inline-flex items-center gap-1.5"
+            className="h-7 px-2.5 text-base border border-slate-200 text-slate-400 rounded cursor-not-allowed inline-flex items-center gap-1.5"
             title={
               po.supplierId
                 ? 'Supplier has no email on file — set it in Suppliers'
@@ -3937,7 +3937,7 @@ function PoSuccessRow({
           <button
             type="button"
             onClick={copyEmail}
-            className="h-7 px-2 text-[12px] border border-slate-200 text-slate-500 rounded hover:bg-slate-50"
+            className="h-7 px-2 text-base border border-slate-200 text-slate-500 rounded hover:bg-slate-50"
             title="Copy supplier email to clipboard"
           >
             <Copy size={12} />
@@ -3947,7 +3947,7 @@ function PoSuccessRow({
           href={pdfUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="h-7 px-3 text-[12px] bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5"
+          className="h-7 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5"
         >
           <FileText size={12} /> Factory PDF
         </a>
@@ -4130,12 +4130,12 @@ function SavedViewsButton({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="h-8 px-2.5 text-[12px] border border-slate-200 rounded-md bg-white hover:bg-slate-50 inline-flex items-center gap-1.5"
+        className="h-8 px-2.5 text-base border border-slate-200 rounded-md bg-white hover:bg-slate-50 inline-flex items-center gap-1.5"
       >
         <Bookmark size={12} />
         Views
         {views && views.length > 0 && (
-          <span className="text-[10px] text-slate-500">({views.length})</span>
+          <span className="text-xs text-slate-500">({views.length})</span>
         )}
       </button>
 
@@ -4151,13 +4151,13 @@ function SavedViewsButton({
           />
           <div className="absolute right-0 mt-1 z-50 w-72 bg-white border border-slate-200 rounded-md shadow-lg">
             <div className="px-3 py-2 border-b border-slate-200 flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-slate-700 uppercase tracking-wide">
+              <span className="text-sm font-semibold text-slate-700 uppercase tracking-wide">
                 Saved Views
               </span>
               <button
                 type="button"
                 onClick={() => setShowSaveForm((v) => !v)}
-                className="text-[11px] text-blue-700 hover:text-blue-900 inline-flex items-center gap-0.5"
+                className="text-sm text-blue-700 hover:text-blue-900 inline-flex items-center gap-0.5"
               >
                 <Plus size={11} /> Save current
               </button>
@@ -4170,10 +4170,10 @@ function SavedViewsButton({
                   value={saveName}
                   onChange={(e) => setSaveName(e.target.value)}
                   placeholder='e.g. "CRITICAL on Amazon IT"'
-                  className="w-full h-7 px-2 text-[12px] border border-slate-200 rounded"
+                  className="w-full h-7 px-2 text-base border border-slate-200 rounded"
                   autoFocus
                 />
-                <label className="flex items-center gap-1.5 text-[11px] text-slate-700">
+                <label className="flex items-center gap-1.5 text-sm text-slate-700">
                   <input
                     type="checkbox"
                     checked={saveDefault}
@@ -4186,7 +4186,7 @@ function SavedViewsButton({
                     type="button"
                     onClick={handleSave}
                     disabled={saving || !saveName.trim()}
-                    className="h-7 px-2.5 text-[11px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1"
+                    className="h-7 px-2.5 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1"
                   >
                     {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check size={11} />}
                     Save
@@ -4198,7 +4198,7 @@ function SavedViewsButton({
                       setSaveName('')
                       setSaveDefault(false)
                     }}
-                    className="h-7 px-2 text-[11px] border border-slate-200 rounded hover:bg-white"
+                    className="h-7 px-2 text-sm border border-slate-200 rounded hover:bg-white"
                   >
                     Cancel
                   </button>
@@ -4208,12 +4208,12 @@ function SavedViewsButton({
 
             <div className="max-h-80 overflow-y-auto">
               {loading && (
-                <div className="px-3 py-3 text-[12px] text-slate-500 inline-flex items-center gap-1.5">
+                <div className="px-3 py-3 text-base text-slate-500 inline-flex items-center gap-1.5">
                   <Loader2 className="w-3 h-3 animate-spin" /> Loading…
                 </div>
               )}
               {!loading && views && views.length === 0 && (
-                <div className="px-3 py-3 text-[11px] text-slate-500 italic">
+                <div className="px-3 py-3 text-sm text-slate-500 italic">
                   No saved views yet — click "Save current" to add one.
                 </div>
               )}
@@ -4234,12 +4234,12 @@ function SavedViewsButton({
                           }}
                           className="flex-1 text-left px-3 py-2 min-w-0"
                         >
-                          <div className="text-[12px] font-medium text-slate-900 truncate inline-flex items-center gap-1.5">
+                          <div className="text-base font-medium text-slate-900 truncate inline-flex items-center gap-1.5">
                             {v.isDefault && <Star size={10} className="text-amber-500 fill-amber-500" />}
                             {v.name}
                           </div>
                           {v.description && (
-                            <div className="text-[10px] text-slate-500 truncate mt-0.5">
+                            <div className="text-xs text-slate-500 truncate mt-0.5">
                               {v.description}
                             </div>
                           )}
@@ -4328,7 +4328,7 @@ function KeyboardHelpOverlay({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-slate-200 px-5 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-[14px] font-semibold text-slate-900">
+          <div className="flex items-center gap-2 text-lg font-semibold text-slate-900">
             <Keyboard size={16} className="text-slate-500" />
             Keyboard shortcuts
           </div>
@@ -4343,18 +4343,18 @@ function KeyboardHelpOverlay({ onClose }: { onClose: () => void }) {
         <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
           {groups.map((g) => (
             <div key={g.title} className="space-y-2">
-              <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+              <div className="text-sm uppercase tracking-wider font-semibold text-slate-500">
                 {g.title}
               </div>
               <div className="space-y-1.5">
                 {g.rows.map((r, i) => (
-                  <div key={i} className="flex items-center justify-between gap-3 text-[12px]">
+                  <div key={i} className="flex items-center justify-between gap-3 text-base">
                     <span className="text-slate-700">{r.label}</span>
                     <span className="flex items-center gap-1">
                       {r.keys.map((k, j) => (
                         <kbd
                           key={j}
-                          className="font-mono text-[10px] px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded shadow-[0_1px_0_0_rgb(226_232_240)] min-w-[20px] text-center text-slate-700"
+                          className="font-mono text-xs px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded shadow-[0_1px_0_0_rgb(226_232_240)] min-w-[20px] text-center text-slate-700"
                         >
                           {k}
                         </kbd>
@@ -4366,7 +4366,7 @@ function KeyboardHelpOverlay({ onClose }: { onClose: () => void }) {
             </div>
           ))}
         </div>
-        <div className="border-t border-slate-200 px-5 py-3 text-[11px] text-slate-500">
+        <div className="border-t border-slate-200 px-5 py-3 text-sm text-slate-500">
           Tip: shortcuts pause while typing in inputs. Press{' '}
           <kbd className="font-mono px-1 py-0.5 bg-slate-50 border border-slate-200 rounded">
             Esc

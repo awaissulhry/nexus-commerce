@@ -242,11 +242,11 @@ export default function ManageAlertsModal({
       >
         <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
           <div>
-            <div className="text-[14px] font-semibold text-slate-900 inline-flex items-center gap-1.5">
+            <div className="text-lg font-semibold text-slate-900 inline-flex items-center gap-1.5">
               <Bell className="w-4 h-4 text-purple-600" />
               Alerts for &ldquo;{view.name}&rdquo;
             </div>
-            <div className="text-[11px] text-slate-500 mt-0.5">
+            <div className="text-sm text-slate-500 mt-0.5">
               The 5-minute cron checks every active alert against this
               view&apos;s filter and fires an in-app notification when
               the condition trips.
@@ -263,19 +263,19 @@ export default function ManageAlertsModal({
 
         <div className="flex-1 overflow-y-auto p-5 space-y-3">
           {error && (
-            <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-[12px] text-rose-800">
+            <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800">
               {error}
             </div>
           )}
 
           {loading ? (
-            <div className="text-[12px] text-slate-400 italic text-center py-6">
+            <div className="text-base text-slate-400 italic text-center py-6">
               Loading…
             </div>
           ) : alerts.length === 0 && !creating ? (
             <div className="text-center py-6 space-y-2">
               <Bell className="w-6 h-6 mx-auto text-slate-300" />
-              <div className="text-[12px] text-slate-500">
+              <div className="text-base text-slate-500">
                 No alerts on this view yet.
               </div>
             </div>
@@ -291,10 +291,10 @@ export default function ManageAlertsModal({
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <div className="text-[13px] font-medium text-slate-900 truncate">
+                    <div className="text-md font-medium text-slate-900 truncate">
                       {a.name}
                     </div>
-                    <div className="text-[11px] text-slate-500 mt-0.5">
+                    <div className="text-sm text-slate-500 mt-0.5">
                       {COMPARISON_LABELS[a.comparison] ?? a.comparison}{' '}
                       <span className="font-medium text-slate-700">
                         {fmtThreshold(a.comparison, a.threshold)}
@@ -307,7 +307,7 @@ export default function ManageAlertsModal({
                     type="button"
                     onClick={() => patchAlert(a.id, { isActive: !a.isActive })}
                     disabled={busy}
-                    className={`h-6 px-2 text-[11px] rounded ${
+                    className={`h-6 px-2 text-sm rounded ${
                       a.isActive
                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
                         : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
@@ -317,7 +317,7 @@ export default function ManageAlertsModal({
                   </button>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 text-[11px] text-slate-600 mt-2">
+                <div className="grid grid-cols-3 gap-2 text-sm text-slate-600 mt-2">
                   <div>
                     <div className="text-slate-400 uppercase tracking-wider text-[9px]">
                       Last count
@@ -351,7 +351,7 @@ export default function ManageAlertsModal({
                     type="button"
                     onClick={() => evaluateNow(a.id)}
                     disabled={busy}
-                    className="h-6 px-2 text-[11px] text-slate-700 hover:bg-slate-100 rounded inline-flex items-center gap-1"
+                    className="h-6 px-2 text-sm text-slate-700 hover:bg-slate-100 rounded inline-flex items-center gap-1"
                   >
                     <RefreshCw className="w-3 h-3" />
                     Test now
@@ -361,7 +361,7 @@ export default function ManageAlertsModal({
                     onClick={() => rebaseline(a.id)}
                     disabled={busy}
                     title="Reset baseline to last observed count"
-                    className="h-6 px-2 text-[11px] text-slate-700 hover:bg-slate-100 rounded"
+                    className="h-6 px-2 text-sm text-slate-700 hover:bg-slate-100 rounded"
                   >
                     Rebaseline
                   </button>
@@ -369,7 +369,7 @@ export default function ManageAlertsModal({
                     type="button"
                     onClick={() => deleteAlert(a.id)}
                     disabled={busy}
-                    className="ml-auto h-6 px-2 text-[11px] text-rose-700 hover:bg-rose-50 rounded inline-flex items-center gap-1"
+                    className="ml-auto h-6 px-2 text-sm text-rose-700 hover:bg-rose-50 rounded inline-flex items-center gap-1"
                   >
                     <Trash2 className="w-3 h-3" />
                     Delete
@@ -381,11 +381,11 @@ export default function ManageAlertsModal({
 
           {creating && (
             <div className="border border-purple-200 bg-purple-50/40 rounded-md p-3 space-y-2">
-              <div className="text-[11px] font-semibold text-purple-700 uppercase tracking-wider">
+              <div className="text-sm font-semibold text-purple-700 uppercase tracking-wider">
                 New alert
               </div>
               <div>
-                <label className="text-[11px] text-slate-700 block mb-1">
+                <label className="text-sm text-slate-700 block mb-1">
                   Name (optional)
                 </label>
                 <input
@@ -393,11 +393,11 @@ export default function ManageAlertsModal({
                   value={draftName}
                   onChange={(e) => setDraftName(e.target.value)}
                   placeholder={view.name}
-                  className="w-full h-8 px-2 text-[12px] border border-slate-200 rounded bg-white"
+                  className="w-full h-8 px-2 text-base border border-slate-200 rounded bg-white"
                 />
               </div>
               <div>
-                <label className="text-[11px] text-slate-700 block mb-1">
+                <label className="text-sm text-slate-700 block mb-1">
                   Condition
                 </label>
                 <select
@@ -411,7 +411,7 @@ export default function ManageAlertsModal({
                         | 'CHANGE_PCT',
                     )
                   }
-                  className="w-full h-8 px-2 text-[12px] border border-slate-200 rounded bg-white"
+                  className="w-full h-8 px-2 text-base border border-slate-200 rounded bg-white"
                 >
                   {Object.entries(COMPARISON_LABELS).map(([k, v]) => (
                     <option key={k} value={k}>
@@ -419,13 +419,13 @@ export default function ManageAlertsModal({
                     </option>
                   ))}
                 </select>
-                <div className="text-[10px] text-slate-500 mt-1">
+                <div className="text-xs text-slate-500 mt-1">
                   {COMPARISON_HINT[draftComparison]}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[11px] text-slate-700 block mb-1">
+                  <label className="text-sm text-slate-700 block mb-1">
                     Threshold
                   </label>
                   <input
@@ -435,11 +435,11 @@ export default function ManageAlertsModal({
                     }
                     value={draftThreshold}
                     onChange={(e) => setDraftThreshold(e.target.value)}
-                    className="w-full h-8 px-2 text-[12px] border border-slate-200 rounded bg-white tabular-nums"
+                    className="w-full h-8 px-2 text-base border border-slate-200 rounded bg-white tabular-nums"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] text-slate-700 block mb-1">
+                  <label className="text-sm text-slate-700 block mb-1">
                     Cooldown (min)
                   </label>
                   <input
@@ -447,7 +447,7 @@ export default function ManageAlertsModal({
                     min="1"
                     value={draftCooldown}
                     onChange={(e) => setDraftCooldown(e.target.value)}
-                    className="w-full h-8 px-2 text-[12px] border border-slate-200 rounded bg-white tabular-nums"
+                    className="w-full h-8 px-2 text-base border border-slate-200 rounded bg-white tabular-nums"
                   />
                 </div>
               </div>
@@ -455,7 +455,7 @@ export default function ManageAlertsModal({
                 <button
                   type="button"
                   onClick={() => setCreating(false)}
-                  className="h-7 px-2 text-[11px] text-slate-600 hover:bg-slate-100 rounded"
+                  className="h-7 px-2 text-sm text-slate-600 hover:bg-slate-100 rounded"
                 >
                   Cancel
                 </button>
@@ -463,7 +463,7 @@ export default function ManageAlertsModal({
                   type="button"
                   onClick={create}
                   disabled={busy || !draftThreshold}
-                  className="h-7 px-3 text-[11px] bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+                  className="h-7 px-3 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
                 >
                   Create alert
                 </button>
@@ -473,14 +473,14 @@ export default function ManageAlertsModal({
         </div>
 
         <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between flex-shrink-0">
-          <div className="text-[11px] text-slate-500">
+          <div className="text-sm text-slate-500">
             Cron checks every 5 minutes.
           </div>
           {!creating && (
             <button
               type="button"
               onClick={() => setCreating(true)}
-              className="h-7 px-3 text-[11px] bg-purple-600 text-white rounded hover:bg-purple-700 inline-flex items-center gap-1"
+              className="h-7 px-3 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 inline-flex items-center gap-1"
             >
               <Plus className="w-3 h-3" />
               New alert

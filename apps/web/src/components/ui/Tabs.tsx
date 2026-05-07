@@ -34,7 +34,7 @@ export function Tabs({ tabs, activeTab, onChange, trailing, className }: TabsPro
             onClick={() => !tab.disabled && onChange(tab.id)}
             disabled={tab.disabled}
             className={cn(
-              'flex items-center gap-1.5 h-10 px-4 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap',
+              'flex items-center gap-1.5 h-10 px-4 text-md font-medium border-b-2 transition-colors whitespace-nowrap',
               'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30',
               isActive
                 ? 'border-blue-600 text-blue-600'
@@ -46,7 +46,7 @@ export function Tabs({ tabs, activeTab, onChange, trailing, className }: TabsPro
             {tab.count != null && (
               <span
                 className={cn(
-                  'inline-flex items-center justify-center rounded text-[10px] tabular-nums px-1.5 py-0.5 min-w-[18px]',
+                  'inline-flex items-center justify-center rounded text-xs tabular-nums px-1.5 py-0.5 min-w-[18px]',
                   isActive ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'
                 )}
               >

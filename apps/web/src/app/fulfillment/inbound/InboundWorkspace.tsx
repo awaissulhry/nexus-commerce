@@ -280,16 +280,16 @@ export default function InboundWorkspace() {
         breadcrumbs={[{ label: 'Fulfillment', href: '/fulfillment' }, { label: 'Inbound' }]}
         actions={
           <div className="flex items-center gap-2 flex-wrap justify-end">
-            <button onClick={() => setBulkReceiveOpen(true)} className="h-8 px-3 text-[12px] bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5" title="Scan SKUs across any open shipment">
+            <button onClick={() => setBulkReceiveOpen(true)} className="h-8 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5" title="Scan SKUs across any open shipment">
               <ArrowDownToLine size={12} /> Bulk receive
             </button>
-            <button onClick={() => setFbaWizardOpen(true)} className="h-8 px-3 text-[12px] bg-orange-50 text-orange-700 border border-orange-200 rounded hover:bg-orange-100 inline-flex items-center gap-1.5">
+            <button onClick={() => setFbaWizardOpen(true)} className="h-8 px-3 text-base bg-orange-50 text-orange-700 border border-orange-200 rounded hover:bg-orange-100 inline-flex items-center gap-1.5">
               <Truck size={12} /> Send to Amazon FBA
             </button>
-            <button onClick={() => setCreateOpen(true)} className="h-8 px-3 text-[12px] bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
+            <button onClick={() => setCreateOpen(true)} className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
               <Plus size={12} /> New inbound
             </button>
-            <button onClick={() => { fetchAll(); fetchKpis() }} className="h-8 px-3 text-[12px] border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
+            <button onClick={() => { fetchAll(); fetchKpis() }} className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
               <RefreshCw size={12} /> Refresh
             </button>
           </div>
@@ -324,14 +324,14 @@ export default function InboundWorkspace() {
         <div className="space-y-3">
           {/* Type tabs */}
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mr-1">Type</span>
+            <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold mr-1">Type</span>
             {(['ALL', 'SUPPLIER', 'MANUFACTURING', 'TRANSFER', 'FBA'] as const).map((t) => {
               const active = tab === t
               return (
                 <button
                   key={t}
                   onClick={() => updateUrl({ type: t === 'ALL' ? undefined : t, page: undefined })}
-                  className={`h-7 px-3 text-[11px] rounded-full font-medium border ${
+                  className={`h-7 px-3 text-sm rounded-full font-medium border ${
                     active ? 'bg-slate-900 text-white border-slate-900'
                            : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
                   }`}
@@ -341,7 +341,7 @@ export default function InboundWorkspace() {
                    t === 'FBA' ? 'To FBA' :
                    t === 'TRANSFER' ? 'Transfers' : 'All'}
                   {kpis?.typeCounts?.[t] != null && t !== 'ALL' && (
-                    <span className={`ml-1.5 text-[10px] tabular-nums ${active ? 'text-slate-300' : 'text-slate-400'}`}>
+                    <span className={`ml-1.5 text-xs tabular-nums ${active ? 'text-slate-300' : 'text-slate-400'}`}>
                       {kpis.typeCounts[t]}
                     </span>
                   )}
@@ -361,11 +361,11 @@ export default function InboundWorkspace() {
                 className="pl-7"
               />
             </div>
-            <span className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold ml-1">Status</span>
+            <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold ml-1">Status</span>
             <select
               value={status}
               onChange={(e) => updateUrl({ status: e.target.value || undefined, page: undefined })}
-              className="h-7 px-2 text-[12px] border border-slate-200 rounded font-medium"
+              className="h-7 px-2 text-base border border-slate-200 rounded font-medium"
             >
               <option value="">All</option>
               {STATUS_OPTIONS.map((s) => (
@@ -374,7 +374,7 @@ export default function InboundWorkspace() {
             </select>
             <button
               onClick={() => updateUrl({ delayed: delayed ? undefined : 'true', page: undefined })}
-              className={`h-7 px-3 text-[11px] rounded-full font-medium border inline-flex items-center gap-1 ${
+              className={`h-7 px-3 text-sm rounded-full font-medium border inline-flex items-center gap-1 ${
                 delayed ? 'bg-rose-50 text-rose-700 border-rose-300'
                         : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
               }`}
@@ -383,7 +383,7 @@ export default function InboundWorkspace() {
               <CalendarClock size={11} />
               Delayed
               {kpis?.delayed != null && kpis.delayed > 0 && (
-                <span className={`ml-0.5 text-[10px] tabular-nums ${delayed ? 'text-rose-500' : 'text-slate-400'}`}>
+                <span className={`ml-0.5 text-xs tabular-nums ${delayed ? 'text-rose-500' : 'text-slate-400'}`}>
                   {kpis.delayed}
                 </span>
               )}
@@ -391,12 +391,12 @@ export default function InboundWorkspace() {
             {filterCount > 0 && (
               <button
                 onClick={() => updateUrl({ type: undefined, status: undefined, delayed: undefined, search: undefined, page: undefined })}
-                className="h-7 px-2 text-[12px] text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
+                className="h-7 px-2 text-base text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
               >
                 <X size={12} /> Clear
               </button>
             )}
-            <div className="ml-auto text-[12px] text-slate-500">
+            <div className="ml-auto text-base text-slate-500">
               <span className="font-semibold text-slate-700 tabular-nums">{total}</span> shipments
             </div>
           </div>
@@ -405,9 +405,9 @@ export default function InboundWorkspace() {
 
       {/* Table */}
       {error ? (
-        <Card><div className="text-[13px] text-rose-700 py-8 text-center">Failed to load: {error}</div></Card>
+        <Card><div className="text-md text-rose-700 py-8 text-center">Failed to load: {error}</div></Card>
       ) : loading && items.length === 0 ? (
-        <Card><div className="text-[13px] text-slate-500 py-8 text-center">Loading inbound…</div></Card>
+        <Card><div className="text-md text-slate-500 py-8 text-center">Loading inbound…</div></Card>
       ) : items.length === 0 ? (
         <EmptyState
           icon={PackageCheck}
@@ -422,19 +422,19 @@ export default function InboundWorkspace() {
       ) : (
         <Card noPadding>
           <div className="overflow-x-auto">
-            <table className="w-full text-[13px]">
+            <table className="w-full text-md">
               <thead className="border-b border-slate-200 bg-slate-50">
                 <tr>
                   <SortableTh label="Type" sortKey="type" current={sortBy} dir={sortDir} onSort={toggleSort} />
                   <SortableTh label="Status" sortKey="status" current={sortBy} dir={sortDir} onSort={toggleSort} />
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">Source</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-700">Carrier · tracking</th>
-                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">Items</th>
-                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">Progress</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">Source</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">Carrier · tracking</th>
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">Items</th>
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">Progress</th>
                   <SortableTh label="ETA" sortKey="expectedAt" current={sortBy} dir={sortDir} onSort={toggleSort} align="right" />
-                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">Flags</th>
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">Flags</th>
                   <SortableTh label="Created" sortKey="createdAt" current={sortBy} dir={sortDir} onSort={toggleSort} align="right" />
-                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700"></th>
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700"></th>
                 </tr>
               </thead>
               <tbody>
@@ -451,7 +451,7 @@ export default function InboundWorkspace() {
                       className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors"
                     >
                       <td className="px-3 py-2">
-                        <span className={`inline-block text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${TYPE_TONE[it.type]}`}>
+                        <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${TYPE_TONE[it.type]}`}>
                           {it.type}
                         </span>
                       </td>
@@ -461,14 +461,14 @@ export default function InboundWorkspace() {
                         </Badge>
                       </td>
                       <td className="px-3 py-2">
-                        <div className="text-[13px] text-slate-900 truncate max-w-[200px]">
+                        <div className="text-md text-slate-900 truncate max-w-[200px]">
                           {it.fbaShipmentId ? `FBA · ${it.fbaShipmentId}` :
                            it.purchaseOrder?.poNumber ? `PO ${it.purchaseOrder.poNumber}` :
                            it.workOrder ? `Work order × ${it.workOrder.quantity}` :
                            it.reference ?? '—'}
                         </div>
                         {it.warehouse && (
-                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">→ {it.warehouse.code}</div>
+                          <div className="text-xs text-slate-400 font-mono mt-0.5">→ {it.warehouse.code}</div>
                         )}
                       </td>
                       <td className="px-3 py-2">
@@ -479,7 +479,7 @@ export default function InboundWorkspace() {
                       </td>
                       <td className="px-3 py-2 text-right">
                         <div className="inline-flex items-center gap-2 justify-end">
-                          <span className="text-[11px] tabular-nums text-slate-600">{totalReceived}/{totalExpected}</span>
+                          <span className="text-sm tabular-nums text-slate-600">{totalReceived}/{totalExpected}</span>
                           <div className="w-16 h-1.5 bg-slate-100 rounded overflow-hidden">
                             <div
                               className={`h-full transition-all ${pct === 100 ? 'bg-emerald-500' : 'bg-blue-500'}`}
@@ -488,7 +488,7 @@ export default function InboundWorkspace() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-3 py-2 text-right text-[11px]">
+                      <td className="px-3 py-2 text-right text-sm">
                         {eta ? (
                           <div className="inline-flex items-center gap-1.5 justify-end">
                             <span className={isLate ? 'text-rose-700 font-semibold' : 'text-slate-600'}>
@@ -497,7 +497,7 @@ export default function InboundWorkspace() {
                             {isLate && (() => {
                               const daysLate = Math.floor((Date.now() - eta.getTime()) / 86400_000)
                               return (
-                                <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-rose-100 text-rose-800">
+                                <span className="text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-rose-100 text-rose-800">
                                   {daysLate}d late
                                 </span>
                               )
@@ -508,18 +508,18 @@ export default function InboundWorkspace() {
                       <td className="px-3 py-2 text-right">
                         <div className="inline-flex items-center gap-1.5 justify-end">
                           {it._count.discrepancies > 0 && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded" title={`${it._count.discrepancies} discrepancy`}>
+                            <span className="inline-flex items-center gap-0.5 text-xs text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded" title={`${it._count.discrepancies} discrepancy`}>
                               <AlertTriangle size={9} /> {it._count.discrepancies}
                             </span>
                           )}
                           {it._count.attachments > 0 && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded" title={`${it._count.attachments} attachment`}>
+                            <span className="inline-flex items-center gap-0.5 text-xs text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded" title={`${it._count.attachments} attachment`}>
                               <FileText size={9} /> {it._count.attachments}
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className="px-3 py-2 text-right text-[11px] text-slate-400 tabular-nums">
+                      <td className="px-3 py-2 text-right text-sm text-slate-400 tabular-nums">
                         {new Date(it.createdAt).toLocaleDateString('en-GB')}
                       </td>
                       <td className="px-3 py-2 text-right">
@@ -535,7 +535,7 @@ export default function InboundWorkspace() {
       )}
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between text-[12px] text-slate-500">
+        <div className="flex items-center justify-between text-base text-slate-500">
           <span>Page <span className="font-semibold text-slate-700 tabular-nums">{page}</span> of <span className="tabular-nums">{totalPages}</span></span>
           <div className="flex items-center gap-1">
             <button
@@ -585,7 +585,7 @@ function KpiStrip({ kpis, onQcClick }: { kpis: Kpis | null; onQcClick?: () => vo
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
         {[0, 1, 2, 3, 4].map((i) => (
-          <Card key={i}><div className="h-[68px] flex items-center justify-center text-[12px] text-slate-400">…</div></Card>
+          <Card key={i}><div className="h-[68px] flex items-center justify-center text-base text-slate-400">…</div></Card>
         ))}
       </div>
     )
@@ -642,9 +642,9 @@ function KpiStrip({ kpis, onQcClick }: { kpis: Kpis | null; onQcClick?: () => vo
               <c.icon size={16} />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{c.label}</div>
+              <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">{c.label}</div>
               <div className="text-[20px] font-semibold tabular-nums text-slate-900 mt-0.5">{c.value}</div>
-              <div className="text-[11px] text-slate-500 mt-0.5 truncate">{c.detail}</div>
+              <div className="text-sm text-slate-500 mt-0.5 truncate">{c.detail}</div>
             </div>
           </div>
         )
@@ -673,7 +673,7 @@ function SortableTh({
 }) {
   const active = current === sortKey
   return (
-    <th className={`px-3 py-2 text-${align ?? 'left'} text-[11px] font-semibold uppercase tracking-wider text-slate-700`}>
+    <th className={`px-3 py-2 text-${align ?? 'left'} text-sm font-semibold uppercase tracking-wider text-slate-700`}>
       <button onClick={() => onSort(sortKey)} className="inline-flex items-center gap-1 hover:text-slate-900">
         {label}
         {active && (dir === 'asc' ? <ChevronUp size={11} /> : <ChevronDown size={11} />)}
@@ -685,15 +685,15 @@ function SortableTh({
 function CarrierLink({
   carrierCode, trackingNumber, trackingUrl,
 }: { carrierCode: string | null; trackingNumber: string | null; trackingUrl: string | null }) {
-  if (!trackingNumber && !carrierCode) return <span className="text-slate-400 text-[11px]">—</span>
+  if (!trackingNumber && !carrierCode) return <span className="text-slate-400 text-sm">—</span>
   if (!trackingNumber) {
-    return <span className="text-[12px] text-slate-700 font-mono">{carrierCode}</span>
+    return <span className="text-base text-slate-700 font-mono">{carrierCode}</span>
   }
   const fn = carrierCode ? CARRIER_TRACKING_URL[carrierCode.toUpperCase()] : null
   const url = fn ? fn(trackingNumber) : trackingUrl
   if (!url) {
     return (
-      <span className="text-[12px]">
+      <span className="text-base">
         <span className="text-slate-700 font-mono">{carrierCode ?? '—'}</span>
         <span className="text-slate-500 mx-1">·</span>
         <span className="text-slate-700 font-mono">{trackingNumber}</span>
@@ -706,7 +706,7 @@ function CarrierLink({
       target="_blank"
       rel="noopener noreferrer"
       onClick={(e) => e.stopPropagation()}
-      className="text-[12px] hover:underline"
+      className="text-base hover:underline"
     >
       <span className="text-slate-700 font-mono">{carrierCode ?? '—'}</span>
       <span className="text-slate-500 mx-1">·</span>
@@ -937,7 +937,7 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
       <aside onClick={(e) => e.stopPropagation()} className="relative h-full w-full max-w-3xl bg-white shadow-2xl overflow-y-auto flex flex-col">
         {/* Sticky header */}
         <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
-          <div className="text-[13px] font-semibold text-slate-900 inline-flex items-center gap-2">
+          <div className="text-md font-semibold text-slate-900 inline-flex items-center gap-2">
             <PackageCheck size={14} /> Inbound shipment
             {loading && <RefreshCw size={11} className="animate-spin text-slate-400" />}
           </div>
@@ -952,20 +952,20 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
         </header>
 
         <div className="p-5 space-y-4 flex-1">
-          {loading || !shipment ? <div className="text-[12px] text-slate-500">Loading…</div> : (
+          {loading || !shipment ? <div className="text-base text-slate-500">Loading…</div> : (
             <>
               {/* Top — type + status + reference */}
               <div className="flex items-center gap-2 flex-wrap">
-                <span className={`inline-block text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${TYPE_TONE[shipment.type as InboundType]}`}>{shipment.type}</span>
+                <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${TYPE_TONE[shipment.type as InboundType]}`}>{shipment.type}</span>
                 <Badge variant={STATUS_VARIANT[shipment.status as InboundStatus] ?? 'default'} size="sm">{shipment.status.replace(/_/g, ' ')}</Badge>
-                {shipment.reference && <span className="text-[12px] text-slate-500 font-mono">{shipment.reference}</span>}
+                {shipment.reference && <span className="text-base text-slate-500 font-mono">{shipment.reference}</span>}
                 {shipment.purchaseOrder?.poNumber && (
-                  <span className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+                  <span className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
                     <Link2 size={10} /> PO {shipment.purchaseOrder.poNumber}
                   </span>
                 )}
                 {shipment.fbaShipmentId && (
-                  <span className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded inline-flex items-center gap-1.5">
+                  <span className="text-sm text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded inline-flex items-center gap-1.5">
                     <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
                     FBA · {shipment.fbaShipmentId}
                   </span>
@@ -985,10 +985,10 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
                       const isLate = eta.getTime() < Date.now() && !['RECEIVED', 'RECONCILED', 'CLOSED'].includes(shipment.status)
                       const daysLate = isLate ? Math.floor((Date.now() - eta.getTime()) / 86400_000) : 0
                       return (
-                        <span className={`text-[11px] inline-flex items-center gap-1 ${isLate ? 'text-rose-700 font-semibold' : 'text-slate-500'}`}>
+                        <span className={`text-sm inline-flex items-center gap-1 ${isLate ? 'text-rose-700 font-semibold' : 'text-slate-500'}`}>
                           <CalendarClock size={11} />
                           ETA {eta.toLocaleDateString('en-GB')}
-                          {isLate && <span className="text-[10px] bg-rose-100 px-1.5 py-0.5 rounded ml-1">{daysLate}d late</span>}
+                          {isLate && <span className="text-xs bg-rose-100 px-1.5 py-0.5 rounded ml-1">{daysLate}d late</span>}
                         </span>
                       )
                     })()}
@@ -1011,12 +1011,12 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
                   <div className="inline-flex items-center gap-3">
                     <Link
                       href={`/fulfillment/inbound/${id}/receive`}
-                      className="text-[10px] text-blue-700 hover:underline inline-flex items-center gap-1"
+                      className="text-xs text-blue-700 hover:underline inline-flex items-center gap-1"
                       title="Open mobile receive flow (touch-friendly, camera scan + photo)"
                     >
                       <Smartphone size={10} /> Mobile receive
                     </Link>
-                    <button onClick={fillExpected} className="text-[10px] text-blue-700 hover:underline inline-flex items-center gap-1">
+                    <button onClick={fillExpected} className="text-xs text-blue-700 hover:underline inline-flex items-center gap-1">
                       <Check size={10} /> Fill all expected
                     </button>
                   </div>
@@ -1049,14 +1049,14 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
                       href={`${getBackendUrl()}/api/fulfillment/inbound/${shipment.id}/discrepancies/report.pdf`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[10px] text-blue-700 hover:underline inline-flex items-center gap-1"
+                      className="text-xs text-blue-700 hover:underline inline-flex items-center gap-1"
                       title="Download a PDF report of all discrepancies on this shipment to forward to the supplier"
                     >
                       <FileText size={10} /> Report (PDF)
                     </a>
                     <button
                       onClick={() => setComposerOpen({ kind: 'discrepancy' })}
-                      className="text-[10px] text-blue-700 hover:underline inline-flex items-center gap-1"
+                      className="text-xs text-blue-700 hover:underline inline-flex items-center gap-1"
                     >
                       <Plus size={10} /> Add discrepancy
                     </button>
@@ -1064,7 +1064,7 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
                 }
               >
                 {shipment.discrepancies?.length === 0 ? (
-                  <div className="text-[11px] text-slate-400 py-2">No ship-level discrepancies.</div>
+                  <div className="text-sm text-slate-400 py-2">No ship-level discrepancies.</div>
                 ) : (
                   <ul className="space-y-1.5">
                     {shipment.discrepancies.map((d: any) => (
@@ -1097,25 +1097,25 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
                 right={
                   <button
                     onClick={() => setComposerOpen({ kind: 'attachment' })}
-                    className="text-[10px] text-blue-700 hover:underline inline-flex items-center gap-1"
+                    className="text-xs text-blue-700 hover:underline inline-flex items-center gap-1"
                   >
                     <Plus size={10} /> Add attachment
                   </button>
                 }
               >
                 {shipment.attachments?.length === 0 ? (
-                  <div className="text-[11px] text-slate-400 py-2">No attachments.</div>
+                  <div className="text-sm text-slate-400 py-2">No attachments.</div>
                 ) : (
                   <ul className="space-y-1">
                     {shipment.attachments.map((a: any) => (
-                      <li key={a.id} className="flex items-center justify-between text-[11px] py-1">
+                      <li key={a.id} className="flex items-center justify-between text-sm py-1">
                         <span className="inline-flex items-center gap-2 min-w-0">
                           <span className="text-[9px] uppercase font-semibold text-slate-500 bg-slate-100 px-1 py-0.5 rounded">{a.kind}</span>
                           <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:underline truncate">
                             {a.filename ?? a.url}
                           </a>
                         </span>
-                        <span className="text-[10px] text-slate-400 flex-shrink-0">{new Date(a.uploadedAt).toLocaleDateString('en-GB')}</span>
+                        <span className="text-xs text-slate-400 flex-shrink-0">{new Date(a.uploadedAt).toLocaleDateString('en-GB')}</span>
                       </li>
                     ))}
                   </ul>
@@ -1138,29 +1138,29 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
             <button
               onClick={submitReceive}
               disabled={busy || Object.keys(receiveBuf).length === 0}
-              className="h-8 px-3 text-[12px] bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1.5"
             >
               <ArrowDownToLine size={12} /> {busy ? 'Submitting…' : 'Submit receive'}
             </button>
             {shipment.status === 'DRAFT' && (
-              <button onClick={() => transition('SUBMITTED')} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Mark submitted</button>
+              <button onClick={() => transition('SUBMITTED')} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50">Mark submitted</button>
             )}
             {shipment.status === 'SUBMITTED' && (
-              <button onClick={() => transition('IN_TRANSIT')} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Mark in transit</button>
+              <button onClick={() => transition('IN_TRANSIT')} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50">Mark in transit</button>
             )}
             {shipment.status === 'IN_TRANSIT' && (
-              <button onClick={() => transition('ARRIVED')} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Mark arrived</button>
+              <button onClick={() => transition('ARRIVED')} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50">Mark arrived</button>
             )}
             {shipment.status === 'ARRIVED' && (
-              <button onClick={() => transition('RECEIVING')} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Start receiving</button>
+              <button onClick={() => transition('RECEIVING')} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50">Start receiving</button>
             )}
             {(shipment.status === 'RECEIVED' || shipment.status === 'RECONCILED') && (
-              <button onClick={() => transition('CLOSED')} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Close</button>
+              <button onClick={() => transition('CLOSED')} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50">Close</button>
             )}
             {shipment.status !== 'CLOSED' && shipment.status !== 'CANCELLED' && (
               <button
                 onClick={() => { if (confirm('Cancel shipment? This is terminal.')) transition('CANCELLED') }}
-                className="ml-auto h-8 px-3 text-[12px] text-rose-700 hover:bg-rose-50 rounded"
+                className="ml-auto h-8 px-3 text-base text-rose-700 hover:bg-rose-50 rounded"
               >Cancel</button>
             )}
           </footer>
@@ -1179,7 +1179,7 @@ function DrawerSection({
   return (
     <div className="border border-slate-200 rounded-md p-3">
       <div className="flex items-center justify-between mb-2">
-        <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold inline-flex items-center gap-1.5">
+        <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold inline-flex items-center gap-1.5">
           <Icon size={11} className="text-slate-400" />
           {title}
         </div>
@@ -1193,7 +1193,7 @@ function DrawerSection({
 function StatusTimeline({ current, cancelled }: { current: InboundStatus; cancelled: boolean }) {
   if (cancelled) {
     return (
-      <div className="text-[11px] inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 text-slate-700 rounded">
+      <div className="text-sm inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 text-slate-700 rounded">
         <X size={12} className="text-rose-500" />
         Shipment cancelled
       </div>
@@ -1215,7 +1215,7 @@ function StatusTimeline({ current, cancelled }: { current: InboundStatus; cancel
         return (
           <div key={s} className="flex items-center gap-1 flex-shrink-0">
             <span className={`w-2 h-2 rounded-full ${dotCls}`} />
-            <span className={`text-[10px] uppercase tracking-wider ${labelCls}`}>
+            <span className={`text-xs uppercase tracking-wider ${labelCls}`}>
               {s.replace(/_/g, ' ')}
             </span>
             {i < visibleSteps.length - 1 && <span className="w-3 h-px bg-slate-200" />}
@@ -1326,7 +1326,7 @@ function LandedCostEditor({ shipment, onSaved }: { shipment: any; onSaved: () =>
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-2 text-[12px]">
+      <div className="grid grid-cols-2 gap-2 text-base">
         <DrawerCostInput label="Shipping" value={shipping} onChange={setShipping} />
         <DrawerCostInput label="Customs" value={customs} onChange={setCustoms} />
         <DrawerCostInput label="Duties" value={duties} onChange={setDuties} />
@@ -1334,10 +1334,10 @@ function LandedCostEditor({ shipment, onSaved }: { shipment: any; onSaved: () =>
       </div>
 
       <div className="border-t border-slate-100 pt-2">
-        <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">Per-line unit cost ({shipment.currencyCode})</div>
+        <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1.5">Per-line unit cost ({shipment.currencyCode})</div>
         <ul className="space-y-1">
           {(shipment.items ?? []).map((it: any) => (
-            <li key={it.id} className="flex items-center gap-2 text-[12px]">
+            <li key={it.id} className="flex items-center gap-2 text-base">
               <span className="font-mono text-slate-700 truncate flex-1 min-w-0">{it.sku}</span>
               <span className="text-slate-500 tabular-nums">×{it.quantityExpected}</span>
               <input
@@ -1347,24 +1347,24 @@ function LandedCostEditor({ shipment, onSaved }: { shipment: any; onSaved: () =>
                 value={itemCosts[it.id] ?? ''}
                 onChange={(e) => setItemCosts((prev) => ({ ...prev, [it.id]: e.target.value }))}
                 placeholder="0.00"
-                className="h-6 w-20 px-1.5 text-right tabular-nums border border-slate-200 rounded text-[11px]"
+                className="h-6 w-20 px-1.5 text-right tabular-nums border border-slate-200 rounded text-sm"
               />
             </li>
           ))}
         </ul>
       </div>
 
-      <div className="border-t border-slate-100 pt-2 space-y-1 text-[12px]">
+      <div className="border-t border-slate-100 pt-2 space-y-1 text-base">
         <CostRow label="Goods" cents={liveGoodsCents} />
         <CostRow label="Overhead (shipping + customs + duties + insurance)" cents={liveOverhead} />
-        <div className="flex items-center justify-between border-t border-slate-200 pt-1.5 mt-1.5 text-[13px]">
+        <div className="flex items-center justify-between border-t border-slate-200 pt-1.5 mt-1.5 text-md">
           <span className="font-semibold text-slate-900">Landed cost</span>
           <span className="font-semibold tabular-nums text-slate-900">{(liveTotal / 100).toFixed(2)} {shipment.currencyCode}</span>
         </div>
       </div>
 
       <div className="border-t border-slate-100 pt-2 flex items-center gap-2 flex-wrap">
-        <label className="text-[11px] text-slate-600 inline-flex items-center gap-1">
+        <label className="text-sm text-slate-600 inline-flex items-center gap-1">
           FX rate
           <input
             type="number"
@@ -1372,16 +1372,16 @@ function LandedCostEditor({ shipment, onSaved }: { shipment: any; onSaved: () =>
             value={exchangeRate}
             onChange={(e) => setExchangeRate(e.target.value)}
             placeholder="—"
-            className="h-6 w-24 px-1.5 text-right tabular-nums border border-slate-200 rounded text-[11px]"
+            className="h-6 w-24 px-1.5 text-right tabular-nums border border-slate-200 rounded text-sm"
           />
         </label>
-        <span className="text-[10px] text-slate-400">to {shipment.currencyCode}</span>
+        <span className="text-xs text-slate-400">to {shipment.currencyCode}</span>
         <div className="flex-1" />
-        {error && <span className="text-[11px] text-rose-700">{error}</span>}
+        {error && <span className="text-sm text-rose-700">{error}</span>}
         <button
           onClick={save}
           disabled={busy || !dirty}
-          className="h-7 px-2.5 text-[11px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50"
+          className="h-7 px-2.5 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50"
         >
           {busy ? 'Saving…' : dirty ? 'Save costs' : 'No changes'}
         </button>
@@ -1432,8 +1432,8 @@ function ItemRow({
           {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         </button>
         <div className="flex-1 min-w-0">
-          <div className="text-[12px] font-mono font-semibold text-slate-900 truncate">{item.sku}</div>
-          <div className="text-[10px] text-slate-500 mt-0.5 inline-flex items-center gap-2">
+          <div className="text-base font-mono font-semibold text-slate-900 truncate">{item.sku}</div>
+          <div className="text-xs text-slate-500 mt-0.5 inline-flex items-center gap-2">
             <span className="tabular-nums">{item.quantityReceived}/{item.quantityExpected} received</span>
             {remaining > 0 && <span className="text-amber-700">{remaining} remaining</span>}
             {item.qcStatus && (
@@ -1460,13 +1460,13 @@ function ItemRow({
           value={target}
           onChange={(e) => onBufChange({ qty: e.target.value, qc, photoUrl })}
           placeholder={String(item.quantityReceived)}
-          className="h-7 w-20 px-2 text-right tabular-nums border border-slate-200 rounded text-[12px]"
+          className="h-7 w-20 px-2 text-right tabular-nums border border-slate-200 rounded text-base"
           title="Cumulative target. Server computes delta."
         />
         <select
           value={qc}
           onChange={(e) => onBufChange({ qty: target, qc: e.target.value, photoUrl })}
-          className="h-7 px-1.5 text-[11px] border border-slate-200 rounded"
+          className="h-7 px-1.5 text-sm border border-slate-200 rounded"
         >
           <option value="">QC —</option>
           <option value="PASS">PASS</option>
@@ -1479,7 +1479,7 @@ function ItemRow({
         <div className="px-3 pb-3 border-t border-slate-100 space-y-2">
           {/* Photo URL paste */}
           <div className="pt-2">
-            <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1 inline-flex items-center gap-1">
+            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 inline-flex items-center gap-1">
               <Camera size={10} /> Add photo URL (Cloudinary or any image)
             </div>
             <input
@@ -1487,9 +1487,9 @@ function ItemRow({
               value={photoUrl}
               onChange={(e) => onBufChange({ qty: target, qc, photoUrl: e.target.value })}
               placeholder="https://res.cloudinary.com/…"
-              className="w-full h-7 px-2 text-[11px] border border-slate-200 rounded"
+              className="w-full h-7 px-2 text-sm border border-slate-200 rounded"
             />
-            <div className="text-[10px] text-slate-500 mt-1">Submitted with the next receive call. Camera + direct upload land in Commit 7.</div>
+            <div className="text-xs text-slate-500 mt-1">Submitted with the next receive call. Camera + direct upload land in Commit 7.</div>
           </div>
 
           {/* Existing photos */}
@@ -1506,12 +1506,12 @@ function ItemRow({
           {/* Receipt history */}
           {(item.receipts?.length ?? 0) > 0 && (
             <div>
-              <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1 inline-flex items-center gap-1">
+              <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 inline-flex items-center gap-1">
                 <History size={10} /> Receipt history ({item.receipts.length})
               </div>
               <ul className="space-y-0.5 max-h-40 overflow-y-auto">
                 {item.receipts.slice(0, 10).map((r: any) => (
-                  <li key={r.id} className="text-[10px] flex items-center justify-between text-slate-600">
+                  <li key={r.id} className="text-xs flex items-center justify-between text-slate-600">
                     <span>
                       <span className={`font-semibold tabular-nums ${r.quantity > 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
                         {r.quantity > 0 ? '+' : ''}{r.quantity}
@@ -1529,10 +1529,10 @@ function ItemRow({
           {/* Item-level discrepancies */}
           {(item.discrepancies?.length ?? 0) > 0 && (
             <div>
-              <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Discrepancies</div>
+              <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Discrepancies</div>
               <ul className="space-y-0.5">
                 {item.discrepancies.map((d: any) => (
-                  <li key={d.id} className="text-[11px] inline-flex items-center gap-2">
+                  <li key={d.id} className="text-sm inline-flex items-center gap-2">
                     <span className="text-[9px] uppercase font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-1 py-0.5 rounded">{d.reasonCode}</span>
                     <span className="text-slate-600">{d.status}</span>
                     {d.description && <span className="text-slate-500 truncate">— {d.description}</span>}
@@ -1546,14 +1546,14 @@ function ItemRow({
           <div className="flex items-center gap-2 pt-1">
             <button
               onClick={onAddDiscrepancy}
-              className="h-7 px-2 text-[10px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1"
+              className="h-7 px-2 text-xs border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1"
             >
               <Plus size={10} /> Add discrepancy
             </button>
             {onHold && (
               <button
                 onClick={onReleaseHold}
-                className="h-7 px-2 text-[10px] bg-amber-50 text-amber-800 border border-amber-200 rounded hover:bg-amber-100 inline-flex items-center gap-1"
+                className="h-7 px-2 text-xs bg-amber-50 text-amber-800 border border-amber-200 rounded hover:bg-amber-100 inline-flex items-center gap-1"
               >
                 <Unlock size={10} /> Release {item.qcStatus} hold ({item.quantityReceived})
               </button>
@@ -1576,23 +1576,23 @@ function DiscrepancyRow({ d, onUpdateStatus }: { d: any; onUpdateStatus: (s: str
     <li className="flex items-start justify-between gap-2 py-1 border-b border-slate-100 last:border-0">
       <div className="min-w-0 flex-1">
         <div className="inline-flex items-center gap-2">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
+          <span className="text-xs font-semibold uppercase tracking-wider text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
             {d.reasonCode}
           </span>
-          <span className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${statusTone}`}>
+          <span className={`text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${statusTone}`}>
             {d.status}
           </span>
         </div>
-        {d.description && <div className="text-[11px] text-slate-600 mt-0.5">{d.description}</div>}
-        <div className="text-[10px] text-slate-400 mt-0.5">{new Date(d.reportedAt).toLocaleDateString('en-GB')}{d.reportedBy ? ` · ${d.reportedBy}` : ''}</div>
+        {d.description && <div className="text-sm text-slate-600 mt-0.5">{d.description}</div>}
+        <div className="text-xs text-slate-400 mt-0.5">{new Date(d.reportedAt).toLocaleDateString('en-GB')}{d.reportedBy ? ` · ${d.reportedBy}` : ''}</div>
       </div>
       {isOpen && (
         <div className="flex items-center gap-1 flex-shrink-0">
           {d.status === 'REPORTED' && (
-            <button onClick={() => onUpdateStatus('ACKNOWLEDGED')} className="h-6 px-1.5 text-[10px] text-amber-700 hover:bg-amber-50 rounded">Ack</button>
+            <button onClick={() => onUpdateStatus('ACKNOWLEDGED')} className="h-6 px-1.5 text-xs text-amber-700 hover:bg-amber-50 rounded">Ack</button>
           )}
-          <button onClick={() => onUpdateStatus('RESOLVED')} className="h-6 px-1.5 text-[10px] text-emerald-700 hover:bg-emerald-50 rounded">Resolve</button>
-          <button onClick={() => onUpdateStatus('WAIVED')} className="h-6 px-1.5 text-[10px] text-slate-500 hover:bg-slate-50 rounded">Waive</button>
+          <button onClick={() => onUpdateStatus('RESOLVED')} className="h-6 px-1.5 text-xs text-emerald-700 hover:bg-emerald-50 rounded">Resolve</button>
+          <button onClick={() => onUpdateStatus('WAIVED')} className="h-6 px-1.5 text-xs text-slate-500 hover:bg-slate-50 rounded">Waive</button>
         </div>
       )}
     </li>
@@ -1623,24 +1623,24 @@ function DiscrepancyComposer({
 
   return (
     <div className="border border-rose-200 bg-rose-50/30 rounded-md p-3 mt-2 space-y-2">
-      <div className="text-[10px] uppercase tracking-wider text-rose-700 font-semibold">
+      <div className="text-xs uppercase tracking-wider text-rose-700 font-semibold">
         New discrepancy {itemSku && <span className="text-rose-600">— {itemSku}</span>}
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <div className="text-[10px] text-slate-500 mb-1">Reason</div>
-          <select value={reasonCode} onChange={(e) => setReasonCode(e.target.value)} className="h-7 w-full px-1.5 text-[11px] border border-slate-200 rounded">
+          <div className="text-xs text-slate-500 mb-1">Reason</div>
+          <select value={reasonCode} onChange={(e) => setReasonCode(e.target.value)} className="h-7 w-full px-1.5 text-sm border border-slate-200 rounded">
             {DISCREPANCY_REASONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
         </div>
         <div>
-          <div className="text-[10px] text-slate-500 mb-1">Quantity impact (signed)</div>
+          <div className="text-xs text-slate-500 mb-1">Quantity impact (signed)</div>
           <input
             type="number"
             value={qtyImpact}
             onChange={(e) => setQtyImpact(e.target.value)}
             placeholder="+5 = over, -5 = short"
-            className="h-7 w-full px-2 text-[11px] tabular-nums border border-slate-200 rounded"
+            className="h-7 w-full px-2 text-sm tabular-nums border border-slate-200 rounded"
           />
         </div>
       </div>
@@ -1649,11 +1649,11 @@ function DiscrepancyComposer({
         onChange={(e) => setDescription(e.target.value)}
         placeholder="Description (visible to supplier on resolution PDF — Commit 17)"
         rows={2}
-        className="w-full px-2 py-1 text-[11px] border border-slate-200 rounded"
+        className="w-full px-2 py-1 text-sm border border-slate-200 rounded"
       />
       <div className="flex items-center justify-end gap-2">
-        <button onClick={onCancel} className="h-7 px-2 text-[11px] text-slate-500 hover:text-slate-900">Cancel</button>
-        <button onClick={submit} disabled={busy} className="h-7 px-3 text-[11px] bg-rose-600 text-white rounded hover:bg-rose-700 disabled:opacity-50">
+        <button onClick={onCancel} className="h-7 px-2 text-sm text-slate-500 hover:text-slate-900">Cancel</button>
+        <button onClick={submit} disabled={busy} className="h-7 px-3 text-sm bg-rose-600 text-white rounded hover:bg-rose-700 disabled:opacity-50">
           {busy ? 'Saving…' : 'Create'}
         </button>
       </div>
@@ -1675,32 +1675,32 @@ function AttachmentComposer({
 
   return (
     <div className="border border-slate-300 bg-slate-50/50 rounded-md p-3 mt-2 space-y-2">
-      <div className="text-[10px] uppercase tracking-wider text-slate-700 font-semibold">New attachment</div>
+      <div className="text-xs uppercase tracking-wider text-slate-700 font-semibold">New attachment</div>
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <div className="text-[10px] text-slate-500 mb-1">Kind</div>
-          <select value={kind} onChange={(e) => setKind(e.target.value)} className="h-7 w-full px-1.5 text-[11px] border border-slate-200 rounded">
+          <div className="text-xs text-slate-500 mb-1">Kind</div>
+          <select value={kind} onChange={(e) => setKind(e.target.value)} className="h-7 w-full px-1.5 text-sm border border-slate-200 rounded">
             {ATTACHMENT_KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
           </select>
         </div>
         <div>
-          <div className="text-[10px] text-slate-500 mb-1">Filename (optional)</div>
-          <input value={filename} onChange={(e) => setFilename(e.target.value)} placeholder="invoice.pdf" className="h-7 w-full px-2 text-[11px] border border-slate-200 rounded" />
+          <div className="text-xs text-slate-500 mb-1">Filename (optional)</div>
+          <input value={filename} onChange={(e) => setFilename(e.target.value)} placeholder="invoice.pdf" className="h-7 w-full px-2 text-sm border border-slate-200 rounded" />
         </div>
       </div>
       <div>
-        <div className="text-[10px] text-slate-500 mb-1">URL</div>
+        <div className="text-xs text-slate-500 mb-1">URL</div>
         <input
           type="url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://res.cloudinary.com/.../inbound/.../file.pdf"
-          className="w-full h-7 px-2 text-[11px] border border-slate-200 rounded"
+          className="w-full h-7 px-2 text-sm border border-slate-200 rounded"
         />
       </div>
       <div className="flex items-center justify-end gap-2">
-        <button onClick={onCancel} className="h-7 px-2 text-[11px] text-slate-500 hover:text-slate-900">Cancel</button>
-        <button onClick={submit} disabled={busy} className="h-7 px-3 text-[11px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">
+        <button onClick={onCancel} className="h-7 px-2 text-sm text-slate-500 hover:text-slate-900">Cancel</button>
+        <button onClick={submit} disabled={busy} className="h-7 px-3 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">
           {busy ? 'Saving…' : 'Add'}
         </button>
       </div>
@@ -1941,7 +1941,7 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
       <div className="absolute inset-0 bg-slate-900/40" />
       <div onClick={(e) => e.stopPropagation()} className="relative bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto">
         <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
-          <div className="text-[14px] font-semibold text-slate-900">New inbound shipment</div>
+          <div className="text-lg font-semibold text-slate-900">New inbound shipment</div>
           <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
         </header>
 
@@ -1974,43 +1974,43 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
           {/* Type + reference */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Type</div>
+              <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1">Type</div>
               <div className="flex items-center gap-2">
                 {(['SUPPLIER', 'MANUFACTURING', 'TRANSFER'] as const).map((t) => (
                   <button
                     key={t}
                     onClick={() => setType(t)}
-                    className={`h-7 px-3 text-[11px] border rounded ${type === t ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200'}`}
+                    className={`h-7 px-3 text-sm border rounded ${type === t ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200'}`}
                   >{t}</button>
                 ))}
               </div>
             </div>
             <div>
-              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Expected arrival</div>
+              <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1">Expected arrival</div>
               <input
                 type="date"
                 value={expectedAt}
                 onChange={(e) => setExpectedAt(e.target.value)}
-                className="h-8 w-full px-2 text-[12px] border border-slate-200 rounded"
+                className="h-8 w-full px-2 text-base border border-slate-200 rounded"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Reference</div>
+              <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1">Reference</div>
               <input
                 type="text" value={reference} onChange={(e) => setReference(e.target.value)}
                 placeholder="Invoice #, transport doc…"
-                className="h-8 w-full px-2 text-[12px] border border-slate-200 rounded"
+                className="h-8 w-full px-2 text-base border border-slate-200 rounded"
               />
             </div>
             <div>
-              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">ASN number</div>
+              <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1">ASN number</div>
               <input
                 type="text" value={asnNumber} onChange={(e) => setAsnNumber(e.target.value)}
                 placeholder="Supplier-provided ASN ref"
-                className="h-8 w-full px-2 text-[12px] border border-slate-200 rounded"
+                className="h-8 w-full px-2 text-base border border-slate-200 rounded"
               />
             </div>
           </div>
@@ -2027,19 +2027,19 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
           )}
           {source === 'CSV' && (
             <div className="border border-slate-200 rounded p-3 space-y-2">
-              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">CSV import</div>
+              <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">CSV import</div>
               <textarea
                 value={csvText}
                 onChange={(e) => setCsvText(e.target.value)}
                 placeholder={`sku,quantityExpected,unitCostCents\nSKU-001,10,1200\nSKU-002,5,800`}
                 rows={5}
-                className="w-full font-mono text-[11px] border border-slate-200 rounded p-2"
+                className="w-full font-mono text-sm border border-slate-200 rounded p-2"
               />
               <div className="flex items-center justify-between">
-                <div className="text-[10px] text-slate-500">Header optional. unitCostCents optional.</div>
+                <div className="text-xs text-slate-500">Header optional. unitCostCents optional.</div>
                 <button
                   onClick={applyCsv}
-                  className="h-7 px-3 text-[11px] bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100"
+                  className="h-7 px-3 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100"
                 >Parse {csvText.split(/\r?\n/).filter(Boolean).length} lines →</button>
               </div>
             </div>
@@ -2054,19 +2054,19 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
           >
             <div className="grid grid-cols-3 gap-2">
               <div>
-                <div className="text-[10px] text-slate-500 mb-1">Carrier</div>
-                <select value={carrierCode} onChange={(e) => setCarrierCode(e.target.value)} className="h-7 w-full px-1.5 text-[12px] border border-slate-200 rounded">
+                <div className="text-xs text-slate-500 mb-1">Carrier</div>
+                <select value={carrierCode} onChange={(e) => setCarrierCode(e.target.value)} className="h-7 w-full px-1.5 text-base border border-slate-200 rounded">
                   {carrierOptions.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
               </div>
               <div className="col-span-2">
-                <div className="text-[10px] text-slate-500 mb-1">Tracking number</div>
-                <input type="text" value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} placeholder="Carrier tracking #" className="h-7 w-full px-2 text-[12px] font-mono border border-slate-200 rounded" />
+                <div className="text-xs text-slate-500 mb-1">Tracking number</div>
+                <input type="text" value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} placeholder="Carrier tracking #" className="h-7 w-full px-2 text-base font-mono border border-slate-200 rounded" />
               </div>
             </div>
             <div className="mt-2">
-              <div className="text-[10px] text-slate-500 mb-1">Override tracking URL (optional — frontend computes from carrier + number when blank)</div>
-              <input type="url" value={trackingUrl} onChange={(e) => setTrackingUrl(e.target.value)} placeholder="https://…" className="h-7 w-full px-2 text-[11px] border border-slate-200 rounded" />
+              <div className="text-xs text-slate-500 mb-1">Override tracking URL (optional — frontend computes from carrier + number when blank)</div>
+              <input type="url" value={trackingUrl} onChange={(e) => setTrackingUrl(e.target.value)} placeholder="https://…" className="h-7 w-full px-2 text-sm border border-slate-200 rounded" />
             </div>
           </CollapseSection>
 
@@ -2079,14 +2079,14 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
           >
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <div className="text-[10px] text-slate-500 mb-1">Currency</div>
-                <select value={currencyCode} onChange={(e) => setCurrencyCode(e.target.value)} className="h-7 w-full px-1.5 text-[12px] border border-slate-200 rounded">
+                <div className="text-xs text-slate-500 mb-1">Currency</div>
+                <select value={currencyCode} onChange={(e) => setCurrencyCode(e.target.value)} className="h-7 w-full px-1.5 text-base border border-slate-200 rounded">
                   {CURRENCY_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
-                <div className="text-[10px] text-slate-500 mb-1">FX rate to EUR (optional)</div>
-                <input type="number" step="0.0001" value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} placeholder="e.g. 0.92" className="h-7 w-full px-2 text-[12px] tabular-nums border border-slate-200 rounded" />
+                <div className="text-xs text-slate-500 mb-1">FX rate to EUR (optional)</div>
+                <input type="number" step="0.0001" value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} placeholder="e.g. 0.92" className="h-7 w-full px-2 text-base tabular-nums border border-slate-200 rounded" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2 mt-2">
@@ -2100,21 +2100,21 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
           {/* Items table */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+              <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
                 Items ({items.filter((i) => i.sku.trim()).length})
               </div>
               {linkedPoId && (
-                <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                <span className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
                   Linked to PO — items locked to remaining qty
                 </span>
               )}
             </div>
-            <table className="w-full text-[12px]">
+            <table className="w-full text-base">
               <thead>
                 <tr className="border-b border-slate-200">
-                  <th className="px-1.5 py-1 text-left text-[10px] uppercase text-slate-500">SKU</th>
-                  <th className="px-1.5 py-1 text-right text-[10px] uppercase text-slate-500 w-20">Qty</th>
-                  <th className="px-1.5 py-1 text-right text-[10px] uppercase text-slate-500 w-24">Unit cost ({currencyCode})</th>
+                  <th className="px-1.5 py-1 text-left text-xs uppercase text-slate-500">SKU</th>
+                  <th className="px-1.5 py-1 text-right text-xs uppercase text-slate-500 w-20">Qty</th>
+                  <th className="px-1.5 py-1 text-right text-xs uppercase text-slate-500 w-24">Unit cost ({currencyCode})</th>
                   <th className="w-7"></th>
                 </tr>
               </thead>
@@ -2126,7 +2126,7 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
                         type="text" value={row.sku}
                         onChange={(e) => setItems(items.map((s, j) => j === i ? { ...s, sku: e.target.value } : s))}
                         placeholder="SKU"
-                        className="w-full h-7 px-1.5 text-[12px] font-mono border border-slate-200 rounded"
+                        className="w-full h-7 px-1.5 text-base font-mono border border-slate-200 rounded"
                       />
                     </td>
                     <td className="px-1.5 py-1 text-right">
@@ -2157,28 +2157,28 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
             </table>
             <button
               onClick={() => setItems([...items, { sku: '', quantityExpected: 1 }])}
-              className="mt-2 text-[11px] text-blue-600 hover:underline"
+              className="mt-2 text-sm text-blue-600 hover:underline"
             >+ Add item</button>
           </div>
 
           <div>
-            <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Notes</div>
+            <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1">Notes</div>
             <textarea
               value={notes} onChange={(e) => setNotes(e.target.value)}
               rows={2}
               placeholder="Internal notes (visible in drawer)"
-              className="w-full px-2 py-1 text-[12px] border border-slate-200 rounded"
+              className="w-full px-2 py-1 text-base border border-slate-200 rounded"
             />
           </div>
         </div>
 
         <footer className="px-5 py-3 border-t border-slate-200 flex items-center justify-between sticky bottom-0 bg-white">
-          <div className="text-[11px] text-slate-500">
+          <div className="text-sm text-slate-500">
             Saves as DRAFT. Transition to SUBMITTED from the drawer.
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={onClose} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Cancel</button>
-            <button onClick={submit} disabled={busy} className="h-8 px-3 text-[12px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">
+            <button onClick={onClose} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50">Cancel</button>
+            <button onClick={submit} disabled={busy} className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">
               {busy ? 'Creating…' : 'Create draft'}
             </button>
           </div>
@@ -2201,9 +2201,9 @@ function SourceCard({
     >
       <div className="flex items-center gap-2 mb-0.5">
         <Icon size={14} />
-        <span className="text-[12px] font-semibold">{label}</span>
+        <span className="text-base font-semibold">{label}</span>
       </div>
-      <div className={`text-[10px] leading-tight ${active ? 'text-slate-300' : 'text-slate-500'}`}>{hint}</div>
+      <div className={`text-xs leading-tight ${active ? 'text-slate-300' : 'text-slate-500'}`}>{hint}</div>
     </button>
   )
 }
@@ -2217,9 +2217,9 @@ function CollapseSection({
         onClick={onToggle}
         className="w-full px-3 py-2 flex items-center justify-between text-left hover:bg-slate-50"
       >
-        <span className="text-[11px] uppercase tracking-wider text-slate-700 font-semibold inline-flex items-center gap-2">
+        <span className="text-sm uppercase tracking-wider text-slate-700 font-semibold inline-flex items-center gap-2">
           {label}
-          {count > 0 && <span className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono">{count}</span>}
+          {count > 0 && <span className="text-xs bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono">{count}</span>}
         </span>
         {open ? <ChevronUp size={12} className="text-slate-400" /> : <ChevronDown size={12} className="text-slate-400" />}
       </button>
@@ -2233,12 +2233,12 @@ function CostInput({
 }: { label: string; value: string; onChange: (v: string) => void; currency: string }) {
   return (
     <div>
-      <div className="text-[10px] text-slate-500 mb-1">{label} ({currency})</div>
+      <div className="text-xs text-slate-500 mb-1">{label} ({currency})</div>
       <input
         type="number" step="0.01" value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="0.00"
-        className="h-7 w-full px-2 text-[12px] tabular-nums border border-slate-200 rounded"
+        className="h-7 w-full px-2 text-base tabular-nums border border-slate-200 rounded"
       />
     </div>
   )
@@ -2256,15 +2256,15 @@ function PoPicker({
   return (
     <div className="border border-slate-200 rounded p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Open POs</div>
-        <button onClick={onRefresh} className="h-6 px-2 text-[10px] text-slate-500 hover:text-slate-900 inline-flex items-center gap-1">
+        <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">Open POs</div>
+        <button onClick={onRefresh} className="h-6 px-2 text-xs text-slate-500 hover:text-slate-900 inline-flex items-center gap-1">
           <RefreshCw size={10} /> Refresh
         </button>
       </div>
       {loading ? (
-        <div className="text-[11px] text-slate-500 py-2">Loading POs…</div>
+        <div className="text-sm text-slate-500 py-2">Loading POs…</div>
       ) : !poList || poList.length === 0 ? (
-        <div className="text-[11px] text-slate-500 py-2">No open purchase orders. Create one in /fulfillment/purchase-orders first.</div>
+        <div className="text-sm text-slate-500 py-2">No open purchase orders. Create one in /fulfillment/purchase-orders first.</div>
       ) : (
         <ul className="max-h-48 overflow-y-auto space-y-1">
           {poList.map((po) => {
@@ -2275,7 +2275,7 @@ function PoPicker({
                 <button
                   onClick={() => onPick(po)}
                   disabled={totalRemaining === 0}
-                  className={`w-full text-left px-2 py-1.5 rounded border text-[12px] ${
+                  className={`w-full text-left px-2 py-1.5 rounded border text-base ${
                     selected ? 'bg-emerald-50 border-emerald-300 text-emerald-900' :
                     totalRemaining === 0 ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed' :
                     'bg-white border-slate-200 hover:border-slate-300'
@@ -2284,13 +2284,13 @@ function PoPicker({
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="font-mono font-semibold">{po.poNumber}</span>
-                      <span className="text-[10px] text-slate-500 ml-2">{po.status}</span>
+                      <span className="text-xs text-slate-500 ml-2">{po.status}</span>
                     </div>
-                    <span className="text-[11px] tabular-nums">
+                    <span className="text-sm tabular-nums">
                       {totalRemaining > 0 ? <>{totalRemaining} units</> : <>fully received</>}
                     </span>
                   </div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">
+                  <div className="text-xs text-slate-500 mt-0.5">
                     {po.supplier?.name ?? 'No supplier'} · {po.warehouse?.code ?? '—'} · {po.currencyCode}
                   </div>
                 </button>
@@ -2381,13 +2381,13 @@ function QcQueueModal({ onClose, onChanged }: { onClose: () => void; onChanged: 
       <div className="absolute inset-0 bg-slate-900/40" />
       <div onClick={(e) => e.stopPropagation()} className="relative bg-white rounded-lg shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-y-auto">
         <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
-          <div className="text-[14px] font-semibold text-slate-900 inline-flex items-center gap-2">
+          <div className="text-lg font-semibold text-slate-900 inline-flex items-center gap-2">
             <Unlock size={16} className="text-violet-600" /> QC queue ({items.length})
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => fetchQueue()}
-              className="h-7 px-2.5 text-[11px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1"
+              className="h-7 px-2.5 text-sm border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1"
               title="Refresh"
             >
               <RefreshCw size={11} /> Refresh
@@ -2397,16 +2397,16 @@ function QcQueueModal({ onClose, onChanged }: { onClose: () => void; onChanged: 
         </header>
 
         <div className="p-5 space-y-3">
-          <div className="text-[12px] text-slate-500">
+          <div className="text-base text-slate-500">
             Items currently in FAIL or HOLD across non-closed shipments. Releasing applies stock as if the QC passed (the existing release-hold path) — the receipt event log preserves the original disposition for audit.
           </div>
 
-          {loading && <div className="text-[12px] text-slate-500 py-4 text-center">Loading…</div>}
+          {loading && <div className="text-base text-slate-500 py-4 text-center">Loading…</div>}
           {error && (
-            <div className="text-[12px] text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2">{error}</div>
+            <div className="text-base text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2">{error}</div>
           )}
           {!loading && !error && items.length === 0 && (
-            <div className="text-[12px] text-slate-500 italic py-6 text-center bg-emerald-50 border border-emerald-200 rounded">
+            <div className="text-base text-slate-500 italic py-6 text-center bg-emerald-50 border border-emerald-200 rounded">
               <Check size={16} className="inline-block text-emerald-600 mr-1" />
               QC queue is empty — nothing held or failed.
             </div>
@@ -2418,25 +2418,25 @@ function QcQueueModal({ onClose, onChanged }: { onClose: () => void; onChanged: 
                   <div className="flex items-start justify-between gap-3 flex-wrap">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[12px] font-mono text-slate-900">{it.sku}</span>
-                        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                        <span className="text-base font-mono text-slate-900">{it.sku}</span>
+                        <span className={`text-xs font-mono px-1.5 py-0.5 rounded ${
                           it.qcStatus === 'FAIL'
                             ? 'bg-rose-50 text-rose-700 border border-rose-200'
                             : 'bg-amber-50 text-amber-700 border border-amber-200'
                         }`}>{it.qcStatus}</span>
-                        <span className="text-[10px] tabular-nums text-slate-600">{it.quantityReceived} / {it.quantityExpected}</span>
+                        <span className="text-xs tabular-nums text-slate-600">{it.quantityReceived} / {it.quantityExpected}</span>
                       </div>
-                      {it.productName && <div className="text-[12px] text-slate-700 mt-0.5">{it.productName}</div>}
-                      <div className="text-[11px] text-slate-500 mt-1 inline-flex items-center gap-2 flex-wrap">
+                      {it.productName && <div className="text-base text-slate-700 mt-0.5">{it.productName}</div>}
+                      <div className="text-sm text-slate-500 mt-1 inline-flex items-center gap-2 flex-wrap">
                         <span className="font-mono">{it.shipment.reference ?? it.shipment.id}</span>
-                        <span className="text-[10px] font-mono bg-slate-100 px-1.5 py-0.5 rounded">{it.shipment.type}</span>
-                        <span className="text-[10px] font-mono bg-slate-100 px-1.5 py-0.5 rounded">{it.shipment.status}</span>
+                        <span className="text-xs font-mono bg-slate-100 px-1.5 py-0.5 rounded">{it.shipment.type}</span>
+                        <span className="text-xs font-mono bg-slate-100 px-1.5 py-0.5 rounded">{it.shipment.status}</span>
                         {it.shipment.expectedAt && (
-                          <span className="text-[10px] text-slate-500">ETA {new Date(it.shipment.expectedAt).toLocaleDateString('en-GB')}</span>
+                          <span className="text-xs text-slate-500">ETA {new Date(it.shipment.expectedAt).toLocaleDateString('en-GB')}</span>
                         )}
                       </div>
                       {it.qcNotes && (
-                        <div className="text-[11px] text-slate-600 mt-1.5 px-2 py-1 bg-slate-50 border border-slate-200 rounded">
+                        <div className="text-sm text-slate-600 mt-1.5 px-2 py-1 bg-slate-50 border border-slate-200 rounded">
                           <span className="text-slate-500 mr-1">QC note:</span>{it.qcNotes}
                         </div>
                       )}
@@ -2444,7 +2444,7 @@ function QcQueueModal({ onClose, onChanged }: { onClose: () => void; onChanged: 
                     <button
                       onClick={() => release(it)}
                       disabled={busyItemId === it.itemId}
-                      className="h-7 px-2.5 text-[11px] bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1 flex-shrink-0"
+                      className="h-7 px-2.5 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1 flex-shrink-0"
                       title="Release the hold and apply stock as if QC had passed"
                     >
                       <Unlock size={11} /> {busyItemId === it.itemId ? 'Releasing…' : 'Release'}
@@ -2611,15 +2611,15 @@ function SavedViewsBar({
   return (
     <Card>
       <div className="flex items-start gap-2 flex-wrap">
-        <span className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mt-1">Views</span>
+        <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold mt-1">Views</span>
         <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
           {views.length === 0 && !savingOpen && (
-            <span className="text-[11px] text-slate-400 italic">No saved views yet — set up your filters and click "Save view" to capture them.</span>
+            <span className="text-sm text-slate-400 italic">No saved views yet — set up your filters and click "Save view" to capture them.</span>
           )}
           {views.map((v) => (
             <span
               key={v.id}
-              className={`group inline-flex items-center gap-1 h-7 pl-2.5 pr-1 rounded-full border text-[11px] ${
+              className={`group inline-flex items-center gap-1 h-7 pl-2.5 pr-1 rounded-full border text-sm ${
                 v.isDefault
                   ? 'bg-blue-50 border-blue-200 text-blue-800'
                   : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
@@ -2655,7 +2655,7 @@ function SavedViewsBar({
         {!savingOpen && (
           <button
             onClick={() => { setSavingOpen(true); setError(null) }}
-            className="h-7 px-2.5 text-[11px] border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1"
+            className="h-7 px-2.5 text-sm border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1"
           >
             <Plus size={11} /> Save view
           </button>
@@ -2668,10 +2668,10 @@ function SavedViewsBar({
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="View name (e.g. Late from Vendor X)"
-            className="h-7 px-2 text-[12px] border border-slate-200 rounded flex-1 min-w-[180px]"
+            className="h-7 px-2 text-base border border-slate-200 rounded flex-1 min-w-[180px]"
             autoFocus
           />
-          <label className="text-[11px] text-slate-600 inline-flex items-center gap-1 cursor-pointer">
+          <label className="text-sm text-slate-600 inline-flex items-center gap-1 cursor-pointer">
             <input
               type="checkbox"
               checked={newDefault}
@@ -2683,17 +2683,17 @@ function SavedViewsBar({
           <button
             onClick={saveCurrent}
             disabled={busy || !newName.trim()}
-            className="h-7 px-2.5 text-[11px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50"
+            className="h-7 px-2.5 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50"
           >
             {busy ? 'Saving…' : 'Save'}
           </button>
           <button
             onClick={() => { setSavingOpen(false); setNewName(''); setNewDefault(false); setError(null) }}
-            className="h-7 px-2.5 text-[11px] border border-slate-200 rounded hover:bg-slate-50"
+            className="h-7 px-2.5 text-sm border border-slate-200 rounded hover:bg-slate-50"
           >
             Cancel
           </button>
-          {error && <span className="text-[11px] text-rose-700">{error}</span>}
+          {error && <span className="text-sm text-rose-700">{error}</span>}
         </div>
       )}
     </Card>
@@ -2819,14 +2819,14 @@ function BulkReceiveModal({ onClose, onReceived }: { onClose: () => void; onRece
       <div className="absolute inset-0 bg-slate-900/40" />
       <div onClick={(e) => e.stopPropagation()} className="relative bg-white rounded-lg shadow-2xl w-full max-w-xl max-h-[85vh] overflow-y-auto">
         <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
-          <div className="text-[14px] font-semibold text-slate-900 inline-flex items-center gap-2">
+          <div className="text-lg font-semibold text-slate-900 inline-flex items-center gap-2">
             <ArrowDownToLine size={16} className="text-emerald-600" /> Bulk receive
           </div>
           <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
         </header>
 
         <div className="p-5 space-y-3">
-          <div className="text-[12px] text-slate-500">Scan or type a SKU. The system finds the right open shipment and applies +qty automatically. Bluetooth scanners work — just keep this input focused.</div>
+          <div className="text-base text-slate-500">Scan or type a SKU. The system finds the right open shipment and applies +qty automatically. Bluetooth scanners work — just keep this input focused.</div>
 
           <form onSubmit={onSubmit} className="space-y-2">
             <div className="flex items-center gap-2">
@@ -2837,7 +2837,7 @@ function BulkReceiveModal({ onClose, onReceived }: { onClose: () => void; onRece
                 onChange={(e) => setSku(e.target.value)}
                 placeholder="Scan SKU…"
                 disabled={busy}
-                className="flex-1 h-10 px-3 text-[14px] font-mono border-2 border-emerald-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-500"
+                className="flex-1 h-10 px-3 text-lg font-mono border-2 border-emerald-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-500"
               />
               <input
                 type="number"
@@ -2845,12 +2845,12 @@ function BulkReceiveModal({ onClose, onReceived }: { onClose: () => void; onRece
                 value={qty}
                 onChange={(e) => setQty(Number(e.target.value) || 1)}
                 disabled={busy}
-                className="h-10 w-20 px-2 text-right tabular-nums text-[14px] border border-slate-200 rounded"
+                className="h-10 w-20 px-2 text-right tabular-nums text-lg border border-slate-200 rounded"
               />
               <button
                 type="submit"
                 disabled={busy || !sku.trim()}
-                className="h-10 px-4 text-[12px] bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+                className="h-10 px-4 text-base bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1.5"
               >
                 <Check size={14} /> Receive
               </button>
@@ -2858,7 +2858,7 @@ function BulkReceiveModal({ onClose, onReceived }: { onClose: () => void; onRece
           </form>
 
           {error && (
-            <div className="text-[12px] text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2">
+            <div className="text-base text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2">
               {error}
             </div>
           )}
@@ -2866,7 +2866,7 @@ function BulkReceiveModal({ onClose, onReceived }: { onClose: () => void; onRece
           {/* Multi-candidate picker */}
           {candidates && candidates.length > 1 && (
             <div className="border border-amber-200 bg-amber-50 rounded p-3 space-y-2">
-              <div className="text-[12px] font-semibold text-amber-900 inline-flex items-center gap-1.5">
+              <div className="text-base font-semibold text-amber-900 inline-flex items-center gap-1.5">
                 <AlertTriangle size={12} /> {candidates.length} shipments expect this SKU — pick one
               </div>
               <ul className="space-y-1.5">
@@ -2879,14 +2879,14 @@ function BulkReceiveModal({ onClose, onReceived }: { onClose: () => void; onRece
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
-                          <div className="text-[12px] font-mono text-slate-900 truncate">
+                          <div className="text-base font-mono text-slate-900 truncate">
                             {c.shipment.reference ?? c.shipment.id}
-                            <span className="ml-2 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{c.shipment.type}</span>
-                            <span className="ml-1 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{c.shipment.status}</span>
+                            <span className="ml-2 text-xs font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{c.shipment.type}</span>
+                            <span className="ml-1 text-xs font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{c.shipment.status}</span>
                           </div>
-                          {c.productName && <div className="text-[11px] text-slate-500 truncate">{c.productName}</div>}
+                          {c.productName && <div className="text-sm text-slate-500 truncate">{c.productName}</div>}
                         </div>
-                        <div className="text-[11px] tabular-nums text-slate-600 flex-shrink-0">
+                        <div className="text-sm tabular-nums text-slate-600 flex-shrink-0">
                           {c.quantityReceived}/{c.quantityExpected} · {c.remaining} left
                         </div>
                       </div>
@@ -2900,10 +2900,10 @@ function BulkReceiveModal({ onClose, onReceived }: { onClose: () => void; onRece
           {/* Receive log */}
           {log.length > 0 && (
             <div className="border-t border-slate-200 pt-3">
-              <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">This session ({log.filter((l) => l.ok).reduce((n, l) => n + l.applied, 0)} units received)</div>
+              <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1.5">This session ({log.filter((l) => l.ok).reduce((n, l) => n + l.applied, 0)} units received)</div>
               <ul className="space-y-1">
                 {log.map((entry, i) => (
-                  <li key={i} className="flex items-center justify-between gap-2 text-[11px]">
+                  <li key={i} className="flex items-center justify-between gap-2 text-sm">
                     <span className={`inline-flex items-center gap-1 ${entry.ok ? 'text-emerald-700' : 'text-rose-700'}`}>
                       {entry.ok ? <Check size={11} /> : <X size={11} />}
                       <span className="font-mono">{entry.sku}</span>
@@ -2961,14 +2961,14 @@ function FbaLabelDownload({ shipmentId }: { shipmentId: string }) {
 
   return (
     <div className="space-y-1.5">
-      <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Labels</div>
+      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Labels</div>
       <div className="flex items-center gap-2 flex-wrap">
-        <select value={labelType} onChange={(e) => setLabelType(e.target.value as any)} className="h-7 text-[11px] px-2 border border-slate-200 rounded">
+        <select value={labelType} onChange={(e) => setLabelType(e.target.value as any)} className="h-7 text-sm px-2 border border-slate-200 rounded">
           <option value="BARCODE_2D">FNSKU (unit)</option>
           <option value="UNIQUE">Carton</option>
           <option value="PALLET">Pallet</option>
         </select>
-        <select value={pageType} onChange={(e) => setPageType(e.target.value as any)} className="h-7 text-[11px] px-2 border border-slate-200 rounded">
+        <select value={pageType} onChange={(e) => setPageType(e.target.value as any)} className="h-7 text-sm px-2 border border-slate-200 rounded">
           <option value="PackageLabel_A4_4">A4 — 4 per sheet</option>
           <option value="PackageLabel_Letter_4">Letter — 4 per sheet</option>
           <option value="PackageLabel_Thermal">Thermal</option>
@@ -2976,7 +2976,7 @@ function FbaLabelDownload({ shipmentId }: { shipmentId: string }) {
         <button
           onClick={fetchLabels}
           disabled={busy}
-          className="h-7 px-2.5 text-[11px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1"
+          className="h-7 px-2.5 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1"
         >
           {busy ? 'Fetching…' : downloadUrl ? 'Refresh' : 'Get labels →'}
         </button>
@@ -2985,15 +2985,15 @@ function FbaLabelDownload({ shipmentId }: { shipmentId: string }) {
             href={downloadUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="h-7 px-2.5 text-[11px] bg-emerald-600 text-white rounded hover:bg-emerald-700 inline-flex items-center gap-1"
+            className="h-7 px-2.5 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700 inline-flex items-center gap-1"
           >
             <FileText size={11} /> Download PDF
           </a>
         )}
       </div>
-      {error && <div className="text-[10px] text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-1">{error}</div>}
+      {error && <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-1">{error}</div>}
       {downloadUrl && (
-        <div className="text-[10px] text-slate-500">Amazon link expires in a few minutes — click "Refresh" to mint a new one.</div>
+        <div className="text-xs text-slate-500">Amazon link expires in a few minutes — click "Refresh" to mint a new one.</div>
       )}
     </div>
   )
@@ -3045,12 +3045,12 @@ function FbaTransportBooking({ shipmentId }: { shipmentId: string }) {
 
   return (
     <div className="space-y-1.5">
-      <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Transport</div>
+      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Transport</div>
       <div className="flex items-center gap-2 flex-wrap">
         <select
           value={shipmentType}
           onChange={(e) => setShipmentType(e.target.value as 'SP' | 'LTL')}
-          className="h-7 text-[11px] px-2 border border-slate-200 rounded"
+          className="h-7 text-sm px-2 border border-slate-200 rounded"
         >
           <option value="SP">Small parcel</option>
           <option value="LTL">LTL (truck)</option>
@@ -3060,7 +3060,7 @@ function FbaTransportBooking({ shipmentId }: { shipmentId: string }) {
           value={carrierName}
           onChange={(e) => setCarrierName(e.target.value)}
           placeholder="Carrier (e.g. DHL, UPS, OTHER)"
-          className="h-7 text-[11px] px-2 border border-slate-200 rounded w-40"
+          className="h-7 text-sm px-2 border border-slate-200 rounded w-40"
         />
         {shipmentType === 'SP' ? (
           <input
@@ -3068,7 +3068,7 @@ function FbaTransportBooking({ shipmentId }: { shipmentId: string }) {
             value={trackingInput}
             onChange={(e) => setTrackingInput(e.target.value)}
             placeholder="Tracking IDs (comma-separated, one per box)"
-            className="h-7 text-[11px] px-2 border border-slate-200 rounded flex-1 min-w-[180px] font-mono"
+            className="h-7 text-sm px-2 border border-slate-200 rounded flex-1 min-w-[180px] font-mono"
           />
         ) : (
           <input
@@ -3076,23 +3076,23 @@ function FbaTransportBooking({ shipmentId }: { shipmentId: string }) {
             value={proNumber}
             onChange={(e) => setProNumber(e.target.value)}
             placeholder="PRO#"
-            className="h-7 text-[11px] px-2 border border-slate-200 rounded w-32 font-mono"
+            className="h-7 text-sm px-2 border border-slate-200 rounded w-32 font-mono"
           />
         )}
         <button
           onClick={submit}
           disabled={busy}
-          className="h-7 px-2.5 text-[11px] bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50"
+          className="h-7 px-2.5 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50"
         >
           {busy ? 'Booking…' : transportStatus ? 'Re-book' : 'Book transport →'}
         </button>
         {transportStatus && (
-          <span className="text-[10px] font-mono bg-emerald-50 text-emerald-700 border border-emerald-200 rounded px-1.5 py-0.5">
+          <span className="text-xs font-mono bg-emerald-50 text-emerald-700 border border-emerald-200 rounded px-1.5 py-0.5">
             {transportStatus}
           </span>
         )}
       </div>
-      {error && <div className="text-[10px] text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-1">{error}</div>}
+      {error && <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-1">{error}</div>}
     </div>
   )
 }
@@ -3203,14 +3203,14 @@ function FbaSkuPicker({
             onFocus={() => setOpen(true)}
             onBlur={() => window.setTimeout(() => setOpen(false), 150)}
             placeholder="Search SKU or product name…"
-            className="w-full h-9 pl-8 pr-3 text-[12px] border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400"
+            className="w-full h-9 pl-8 pr-3 text-base border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400"
           />
         </div>
         {open && query.trim().length >= 2 && (
           <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded shadow-lg max-h-72 overflow-y-auto">
-            {loading && <div className="px-3 py-2 text-[11px] text-slate-500">Searching…</div>}
+            {loading && <div className="px-3 py-2 text-sm text-slate-500">Searching…</div>}
             {!loading && results.length === 0 && (
-              <div className="px-3 py-2 text-[11px] text-slate-500">No products match "{query.trim()}"</div>
+              <div className="px-3 py-2 text-sm text-slate-500">No products match "{query.trim()}"</div>
             )}
             {!loading && results.map((p) => (
               <button
@@ -3226,11 +3226,11 @@ function FbaSkuPicker({
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <div className="text-[11px] font-mono text-slate-700 truncate">{p.sku}</div>
-                  <div className="text-[12px] text-slate-900 truncate">{p.name}</div>
+                  <div className="text-sm font-mono text-slate-700 truncate">{p.sku}</div>
+                  <div className="text-base text-slate-900 truncate">{p.name}</div>
                 </div>
                 {p.totalStock != null && (
-                  <span className={`text-[10px] tabular-nums px-1.5 py-0.5 rounded ${
+                  <span className={`text-xs tabular-nums px-1.5 py-0.5 rounded ${
                     p.totalStock <= 0
                       ? 'bg-rose-50 text-rose-700 border border-rose-200'
                       : p.totalStock < 10
@@ -3248,7 +3248,7 @@ function FbaSkuPicker({
 
       {/* Selected rows */}
       {realRows.length === 0 ? (
-        <div className="text-[11px] text-slate-500 italic px-2 py-3 border border-dashed border-slate-200 rounded bg-slate-50 text-center">
+        <div className="text-sm text-slate-500 italic px-2 py-3 border border-dashed border-slate-200 rounded bg-slate-50 text-center">
           No SKUs added yet. Search above and click a result to add it.
         </div>
       ) : (
@@ -3263,11 +3263,11 @@ function FbaSkuPicker({
                 </div>
               )}
               <div className="flex-1 min-w-0">
-                <div className="text-[11px] font-mono text-slate-700 truncate">{row.sku}</div>
-                {row.name && <div className="text-[12px] text-slate-900 truncate">{row.name}</div>}
+                <div className="text-sm font-mono text-slate-700 truncate">{row.sku}</div>
+                {row.name && <div className="text-base text-slate-900 truncate">{row.name}</div>}
               </div>
               {row.totalStock != null && (
-                <span className={`text-[10px] tabular-nums px-1.5 py-0.5 rounded flex-shrink-0 ${
+                <span className={`text-xs tabular-nums px-1.5 py-0.5 rounded flex-shrink-0 ${
                   row.totalStock <= 0
                     ? 'bg-rose-50 text-rose-700 border border-rose-200'
                     : row.totalStock < 10
@@ -3282,7 +3282,7 @@ function FbaSkuPicker({
                 min="1"
                 value={row.quantity}
                 onChange={(e) => updateQty(i, Number(e.target.value))}
-                className="h-7 w-16 px-2 text-right tabular-nums text-[12px] border border-slate-200 rounded flex-shrink-0"
+                className="h-7 w-16 px-2 text-right tabular-nums text-base border border-slate-200 rounded flex-shrink-0"
               />
               <button
                 onClick={() => removeRow(i)}
@@ -3344,7 +3344,7 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
       <div className="absolute inset-0 bg-slate-900/40" />
       <div onClick={(e) => e.stopPropagation()} className="relative bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-y-auto">
         <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
-          <div className="text-[14px] font-semibold text-slate-900 inline-flex items-center gap-2">
+          <div className="text-lg font-semibold text-slate-900 inline-flex items-center gap-2">
             <Truck size={16} className="text-orange-600" /> Send to Amazon FBA
           </div>
           <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
@@ -3354,7 +3354,7 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
             real against SP-API v0; putTransportDetails is deprecated
             on v0 (Amazon returns 400 with a v2024-03-20 migration
             note). Honest banner reflects that. */}
-        <div className="mx-5 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-md text-[12px] text-amber-900">
+        <div className="mx-5 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-md text-base text-amber-900">
           <div className="font-semibold mb-1 inline-flex items-center gap-1.5">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
             Plan + Labels + Status polling live · Transport v0 deprecated by Amazon
@@ -3370,14 +3370,14 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
 
         {step === 'plan' && (
           <div className="p-5 space-y-3">
-            <div className="text-[12px] text-slate-500">Step 1 of 2 — pick the SKUs and quantities to ship to Amazon. Search by SKU or product name.</div>
+            <div className="text-base text-slate-500">Step 1 of 2 — pick the SKUs and quantities to ship to Amazon. Search by SKU or product name.</div>
             <FbaSkuPicker items={items} onChange={setItems} />
             <footer className="pt-3 border-t border-slate-200 flex items-center gap-2 justify-end">
-              <button onClick={onClose} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Cancel</button>
+              <button onClick={onClose} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50">Cancel</button>
               <button
                 onClick={buildPlan}
                 disabled={busy || items.filter((i) => i.sku.trim()).length === 0}
-                className="h-8 px-3 text-[12px] bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50"
+                className="h-8 px-3 text-base bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50"
               >
                 Plan shipment →
               </button>
@@ -3387,16 +3387,16 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
 
         {step === 'commit' && plan && (
           <div className="p-5 space-y-3">
-            <div className="text-[12px] text-slate-500">Step 2 of 2 — Amazon-issued shipment IDs below. Confirm to write local records, then download FNSKU labels for each shipment.</div>
+            <div className="text-base text-slate-500">Step 2 of 2 — Amazon-issued shipment IDs below. Confirm to write local records, then download FNSKU labels for each shipment.</div>
             {plan.shipmentPlans.map((sp: any, i: number) => (
               <div key={i} className="border border-slate-200 rounded-md p-3">
                 <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
-                  <div className="text-[12px] font-semibold text-slate-900 font-mono">{sp.shipmentId}</div>
-                  <span className="text-[11px] font-mono bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded">→ {sp.destinationFC}</span>
+                  <div className="text-base font-semibold text-slate-900 font-mono">{sp.shipmentId}</div>
+                  <span className="text-sm font-mono bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded">→ {sp.destinationFC}</span>
                 </div>
                 <ul className="space-y-1">
                   {sp.items.map((it: any, j: number) => (
-                    <li key={j} className="flex items-center justify-between text-[12px]">
+                    <li key={j} className="flex items-center justify-between text-base">
                       <span className="font-mono text-slate-700">{it.sku}</span>
                       <span className="tabular-nums text-slate-600">×{it.quantity}</span>
                     </li>
@@ -3409,8 +3409,8 @@ function FBAWizardModal({ onClose, onCreated }: { onClose: () => void; onCreated
               </div>
             ))}
             <footer className="pt-3 border-t border-slate-200 flex items-center gap-2 justify-end">
-              <button onClick={() => setStep('plan')} className="h-8 px-3 text-[12px] border border-slate-200 rounded hover:bg-slate-50">Back</button>
-              <button onClick={commit} disabled={busy} className="h-8 px-3 text-[12px] bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50">Create shipment</button>
+              <button onClick={() => setStep('plan')} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50">Back</button>
+              <button onClick={commit} disabled={busy} className="h-8 px-3 text-base bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50">Create shipment</button>
             </footer>
           </div>
         )}

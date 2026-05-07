@@ -55,7 +55,7 @@ export default function SidebarSection({
       {/* Section header — clickable to collapse */}
       <button
         onClick={toggle}
-        className="w-full flex items-center gap-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500 hover:text-gray-300 transition-colors"
+        className="w-full flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider text-gray-500 hover:text-gray-300 transition-colors"
       >
         <span className="text-sm">{section.icon}</span>
         <span className="flex-1 text-left">{section.label}</span>

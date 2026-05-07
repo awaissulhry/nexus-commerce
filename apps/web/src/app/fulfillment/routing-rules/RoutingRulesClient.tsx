@@ -240,7 +240,7 @@ export default function RoutingRulesClient() {
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="text-[12px] text-slate-500">
+        <div className="text-base text-slate-500">
           {data?.rules.length ?? 0} rule{data?.rules.length === 1 ? '' : 's'}
           {data?.warehouses.length
             ? ` · ${data.warehouses.length} warehouse${data.warehouses.length === 1 ? '' : 's'}`
@@ -259,7 +259,7 @@ export default function RoutingRulesClient() {
       </div>
 
       {error && (
-        <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-center gap-2">
+        <div className="text-base text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-center gap-2">
           <AlertCircle className="w-3.5 h-3.5" />
           {error}
         </div>
@@ -285,8 +285,8 @@ export default function RoutingRulesClient() {
 
       {data && data.rules.length > 0 && (
         <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-          <table className="w-full text-[12px]">
-            <thead className="bg-slate-50 text-[11px] text-slate-600 border-b border-slate-200">
+          <table className="w-full text-base">
+            <thead className="bg-slate-50 text-sm text-slate-600 border-b border-slate-200">
               <tr>
                 <th className="text-left font-medium px-3 py-2 w-16">Priority</th>
                 <th className="text-left font-medium px-3 py-2">Name / criteria</th>
@@ -314,20 +314,20 @@ export default function RoutingRulesClient() {
                         <Badge variant="default" size="sm">→ {rule.shippingCountry}</Badge>
                       ) : null}
                       {!rule.channel && !rule.marketplace && !rule.shippingCountry && (
-                        <span className="text-[10px] text-slate-400 italic">
+                        <span className="text-xs text-slate-400 italic">
                           matches all (use priority to control)
                         </span>
                       )}
                     </div>
                     {rule.notes && (
-                      <div className="text-[11px] text-slate-500 mt-1 italic">
+                      <div className="text-sm text-slate-500 mt-1 italic">
                         {rule.notes}
                       </div>
                     )}
                   </td>
                   <td className="px-3 py-2">
                     <div className="text-slate-900">{rule.warehouse.name}</div>
-                    <div className="text-[11px] text-slate-500 font-mono">
+                    <div className="text-sm text-slate-500 font-mono">
                       {rule.warehouse.code}
                     </div>
                   </td>
@@ -377,10 +377,10 @@ export default function RoutingRulesClient() {
           <div className="flex items-start gap-2">
             <ChevronUp className="w-4 h-4 text-blue-700 mt-0.5 flex-shrink-0" />
             <div>
-              <h3 className="text-[13px] font-semibold text-slate-900">
+              <h3 className="text-md font-semibold text-slate-900">
                 Test routing
               </h3>
-              <p className="text-[11px] text-slate-600 mt-0.5">
+              <p className="text-sm text-slate-600 mt-0.5">
                 Type the order's channel / marketplace / shipping country to
                 see which rule will match (or which fallback fires).
               </p>
@@ -427,7 +427,7 @@ export default function RoutingRulesClient() {
               Test
             </Button>
             {previewResult && (
-              <div className="text-[12px] text-slate-700 inline-flex items-center gap-2 flex-wrap">
+              <div className="text-base text-slate-700 inline-flex items-center gap-2 flex-wrap">
                 <span>Result:</span>
                 {previewResult.warehouseId ? (
                   <span className="font-medium">
@@ -453,7 +453,7 @@ export default function RoutingRulesClient() {
                   {previewResult.source}
                 </Badge>
                 {previewResult.ruleName && (
-                  <span className="text-[11px] text-slate-500">
+                  <span className="text-sm text-slate-500">
                     via "{previewResult.ruleName}"
                   </span>
                 )}
@@ -476,7 +476,7 @@ export default function RoutingRulesClient() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
-              <h2 className="text-[14px] font-semibold text-slate-900">
+              <h2 className="text-lg font-semibold text-slate-900">
                 {form.id ? 'Edit rule' : 'New routing rule'}
               </h2>
               <button
@@ -491,7 +491,7 @@ export default function RoutingRulesClient() {
             </div>
             <form onSubmit={handleSubmit} className="p-5 space-y-3">
               <div>
-                <label className="text-[11px] font-medium text-slate-700 uppercase tracking-wide">
+                <label className="text-sm font-medium text-slate-700 uppercase tracking-wide">
                   Name
                 </label>
                 <Input
@@ -506,10 +506,10 @@ export default function RoutingRulesClient() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[11px] font-medium text-slate-700 uppercase tracking-wide">
+                  <label className="text-sm font-medium text-slate-700 uppercase tracking-wide">
                     Priority
                   </label>
-                  <p className="text-[10px] text-slate-500 mt-0.5">
+                  <p className="text-xs text-slate-500 mt-0.5">
                     Lower number wins
                   </p>
                   <Input
@@ -522,7 +522,7 @@ export default function RoutingRulesClient() {
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-medium text-slate-700 uppercase tracking-wide">
+                  <label className="text-sm font-medium text-slate-700 uppercase tracking-wide">
                     Warehouse
                   </label>
                   <select
@@ -530,7 +530,7 @@ export default function RoutingRulesClient() {
                     onChange={(e) =>
                       setForm({ ...form, warehouseId: e.target.value })
                     }
-                    className="mt-1 w-full px-3 py-1.5 text-[13px] border border-slate-200 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    className="mt-1 w-full px-3 py-1.5 text-md border border-slate-200 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
                     required
                   >
                     <option value="">Select…</option>
@@ -545,10 +545,10 @@ export default function RoutingRulesClient() {
               </div>
 
               <div className="bg-slate-50 border border-slate-200 rounded p-3 space-y-2">
-                <div className="text-[11px] font-medium text-slate-700 uppercase tracking-wide">
+                <div className="text-sm font-medium text-slate-700 uppercase tracking-wide">
                   Match criteria
                 </div>
-                <p className="text-[10px] text-slate-500">
+                <p className="text-xs text-slate-500">
                   All filled criteria must match. Leave blank to wildcard.
                 </p>
                 <Input
@@ -576,7 +576,7 @@ export default function RoutingRulesClient() {
               </div>
 
               <div>
-                <label className="text-[11px] font-medium text-slate-700 uppercase tracking-wide">
+                <label className="text-sm font-medium text-slate-700 uppercase tracking-wide">
                   Notes (optional)
                 </label>
                 <Input
@@ -588,7 +588,7 @@ export default function RoutingRulesClient() {
                 />
               </div>
 
-              <label className="flex items-center gap-2 text-[12px] text-slate-700">
+              <label className="flex items-center gap-2 text-base text-slate-700">
                 <input
                   type="checkbox"
                   checked={form.isActive}

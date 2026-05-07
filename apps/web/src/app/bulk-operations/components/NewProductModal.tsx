@@ -150,7 +150,7 @@ export default function NewProductModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
-          <h2 className="text-[15px] font-semibold text-slate-900">
+          <h2 className="text-lg font-semibold text-slate-900">
             New product
           </h2>
           <button
@@ -171,7 +171,7 @@ export default function NewProductModal({
               type="button"
               onClick={() => setMode('parent')}
               className={cn(
-                'flex-1 h-7 px-2 text-[12px] rounded transition-colors',
+                'flex-1 h-7 px-2 text-base rounded transition-colors',
                 mode === 'parent'
                   ? 'bg-white text-slate-900 font-semibold shadow-sm'
                   : 'text-slate-600 hover:text-slate-900',
@@ -189,7 +189,7 @@ export default function NewProductModal({
                   : 'Variant of an existing parent'
               }
               className={cn(
-                'flex-1 h-7 px-2 text-[12px] rounded transition-colors',
+                'flex-1 h-7 px-2 text-base rounded transition-colors',
                 mode === 'variant'
                   ? 'bg-white text-slate-900 font-semibold shadow-sm'
                   : 'text-slate-600 hover:text-slate-900',
@@ -295,7 +295,7 @@ export default function NewProductModal({
                   onChange={setProductType}
                   placeholder={`Pick a ${pickerChannel} product type`}
                 />
-                <p className="mt-1 text-[10px] text-slate-500">
+                <p className="mt-1 text-xs text-slate-500">
                   Drives the schema-driven attribute set. Pick from the
                   channel's live taxonomy — refresh in the picker if
                   Amazon's list seems stale.
@@ -314,7 +314,7 @@ export default function NewProductModal({
           )}
 
           {error && (
-            <div className="text-[12px] text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2 inline-flex items-start gap-2">
+            <div className="text-base text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2 inline-flex items-start gap-2">
               <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
               <div>{error}</div>
             </div>
@@ -363,11 +363,11 @@ function Field({
 }) {
   return (
     <label className="block">
-      <div className="text-[11px] text-slate-600 mb-1">{label}</div>
+      <div className="text-sm text-slate-600 mb-1">{label}</div>
       {children}
     </label>
   )
 }
 
 const inputCls =
-  'w-full h-8 px-2 text-[12px] border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+  'w-full h-8 px-2 text-base border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500'

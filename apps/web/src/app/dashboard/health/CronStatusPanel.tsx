@@ -128,8 +128,8 @@ export default function CronStatusPanel() {
     <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
       <div className="px-4 py-3 flex items-center justify-between border-b border-slate-200">
         <div>
-          <h3 className="text-[14px] font-semibold text-slate-900">Cron Jobs</h3>
-          <p className="text-[12px] text-slate-500 mt-0.5">
+          <h3 className="text-lg font-semibold text-slate-900">Cron Jobs</h3>
+          <p className="text-base text-slate-500 mt-0.5">
             Latest run per scheduled job · stale RUNNING flags + recent failures
           </p>
         </div>
@@ -137,7 +137,7 @@ export default function CronStatusPanel() {
           type="button"
           onClick={fetchData}
           disabled={loading}
-          className="text-[11px] text-slate-500 hover:text-slate-900 inline-flex items-center gap-1 disabled:opacity-50"
+          className="text-sm text-slate-500 hover:text-slate-900 inline-flex items-center gap-1 disabled:opacity-50"
         >
           <RefreshCw className={cn('w-3 h-3', loading && 'animate-spin')} />
           Refresh
@@ -145,7 +145,7 @@ export default function CronStatusPanel() {
       </div>
 
       {error && (
-        <div className="px-4 py-2 text-[12px] text-red-700 bg-red-50 border-b border-red-200 inline-flex items-center gap-2">
+        <div className="px-4 py-2 text-base text-red-700 bg-red-50 border-b border-red-200 inline-flex items-center gap-2">
           <AlertCircle className="w-3.5 h-3.5" />
           {error}
         </div>
@@ -160,21 +160,21 @@ export default function CronStatusPanel() {
       )}
 
       {data && data.latest.length === 0 && (
-        <div className="p-6 text-[13px] text-slate-500 text-center">
+        <div className="p-6 text-md text-slate-500 text-center">
           No cron runs recorded in the last 30 days. Crons that have been
-          updated to use <code className="text-[11px] bg-slate-100 px-1 py-0.5 rounded">recordCronRun()</code> will appear here on their next firing.
+          updated to use <code className="text-sm bg-slate-100 px-1 py-0.5 rounded">recordCronRun()</code> will appear here on their next firing.
         </div>
       )}
 
       {data && data.staleRunning.length > 0 && (
         <div className="px-4 py-3 bg-amber-50 border-b border-amber-200">
-          <div className="text-[12px] font-semibold text-amber-900 mb-1.5 inline-flex items-center gap-1.5">
+          <div className="text-base font-semibold text-amber-900 mb-1.5 inline-flex items-center gap-1.5">
             <AlertCircle className="w-3.5 h-3.5" />
             {data.staleRunning.length} stale RUNNING (likely crashed mid-run)
           </div>
           <div className="space-y-0.5">
             {data.staleRunning.map((s) => (
-              <div key={s.id} className="text-[11px] text-amber-800">
+              <div key={s.id} className="text-sm text-amber-800">
                 <span className="font-mono">{s.jobName}</span>
                 <span className="text-amber-600"> · started {relativeTime(s.startedAt)}</span>
               </div>
@@ -185,8 +185,8 @@ export default function CronStatusPanel() {
 
       {data && data.latest.length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full text-[12px]">
-            <thead className="bg-slate-50 text-[11px] text-slate-600 border-b border-slate-200">
+          <table className="w-full text-base">
+            <thead className="bg-slate-50 text-sm text-slate-600 border-b border-slate-200">
               <tr>
                 <th className="text-left font-medium px-3 py-2">Job</th>
                 <th className="text-left font-medium px-3 py-2 w-32">Status</th>
@@ -199,9 +199,9 @@ export default function CronStatusPanel() {
               {data.latest.map((r) => (
                 <tr key={r.jobName} className="border-b border-slate-100 last:border-0 align-top">
                   <td className="px-3 py-2">
-                    <div className="font-mono text-[11px] text-slate-900">{r.jobName}</div>
+                    <div className="font-mono text-sm text-slate-900">{r.jobName}</div>
                     {r.triggeredBy === 'manual' && (
-                      <div className="text-[10px] text-slate-500 mt-0.5">manual trigger</div>
+                      <div className="text-xs text-slate-500 mt-0.5">manual trigger</div>
                     )}
                   </td>
                   <td className="px-3 py-2">
@@ -210,23 +210,23 @@ export default function CronStatusPanel() {
                       {r.status}
                     </Badge>
                   </td>
-                  <td className="px-3 py-2 text-[11px] text-slate-500" title={new Date(r.startedAt).toLocaleString()}>
+                  <td className="px-3 py-2 text-sm text-slate-500" title={new Date(r.startedAt).toLocaleString()}>
                     {relativeTime(r.startedAt)}
                   </td>
-                  <td className="px-3 py-2 text-[11px] text-slate-700 tabular-nums">
+                  <td className="px-3 py-2 text-sm text-slate-700 tabular-nums">
                     {formatDuration(r.durationMs)}
                   </td>
                   <td className="px-3 py-2">
                     {r.status === 'FAILED' && r.errorMessage ? (
-                      <div className="text-[11px] text-red-700 truncate" title={r.errorMessage}>
+                      <div className="text-sm text-red-700 truncate" title={r.errorMessage}>
                         {r.errorMessage}
                       </div>
                     ) : r.outputSummary ? (
-                      <div className="text-[11px] text-slate-600 truncate" title={r.outputSummary}>
+                      <div className="text-sm text-slate-600 truncate" title={r.outputSummary}>
                         {r.outputSummary}
                       </div>
                     ) : (
-                      <span className="text-[11px] text-slate-400">—</span>
+                      <span className="text-sm text-slate-400">—</span>
                     )}
                   </td>
                 </tr>
@@ -238,12 +238,12 @@ export default function CronStatusPanel() {
 
       {data && data.recentFailures.length > 0 && (
         <div className="px-4 py-3 bg-red-50 border-t border-red-200">
-          <div className="text-[12px] font-semibold text-red-900 mb-1.5">
+          <div className="text-base font-semibold text-red-900 mb-1.5">
             Recent failures ({data.recentFailures.length})
           </div>
           <div className="space-y-1">
             {data.recentFailures.slice(0, 5).map((f) => (
-              <div key={f.id} className="text-[11px] text-red-800">
+              <div key={f.id} className="text-sm text-red-800">
                 <span className="font-mono">{f.jobName}</span>
                 <span className="text-red-600"> · {relativeTime(f.startedAt)}</span>
                 {f.errorMessage && (
@@ -252,7 +252,7 @@ export default function CronStatusPanel() {
               </div>
             ))}
             {data.recentFailures.length > 5 && (
-              <div className="text-[10px] text-red-600 italic">
+              <div className="text-xs text-red-600 italic">
                 +{data.recentFailures.length - 5} more
               </div>
             )}

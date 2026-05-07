@@ -110,7 +110,7 @@ export default function MobileReceiveClient({ id }: { id: string }) {
   if (loading && !shipment) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-[14px] text-slate-500 inline-flex items-center gap-2">
+        <div className="text-lg text-slate-500 inline-flex items-center gap-2">
           <RefreshCw size={14} className="animate-spin" /> Loading shipment…
         </div>
       </div>
@@ -119,8 +119,8 @@ export default function MobileReceiveClient({ id }: { id: string }) {
   if (error || !shipment) {
     return (
       <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center justify-center">
-        <div className="text-[14px] text-rose-700 mb-3">Failed to load shipment</div>
-        <div className="text-[12px] text-slate-500 mb-4">{error}</div>
+        <div className="text-lg text-rose-700 mb-3">Failed to load shipment</div>
+        <div className="text-base text-slate-500 mb-4">{error}</div>
         <button onClick={() => router.push('/fulfillment/inbound')} className="h-11 px-4 bg-slate-900 text-white rounded">
           Back to inbound
         </button>
@@ -141,10 +141,10 @@ export default function MobileReceiveClient({ id }: { id: string }) {
             <ArrowLeft size={20} />
           </button>
           <div className="flex-1 min-w-0">
-            <div className="text-[15px] font-semibold text-slate-900 truncate">
+            <div className="text-lg font-semibold text-slate-900 truncate">
               {shipment.reference ?? `${shipment.type} shipment`}
             </div>
-            <div className="text-[11px] text-slate-500 mt-0.5 truncate">
+            <div className="text-sm text-slate-500 mt-0.5 truncate">
               <span className="font-mono uppercase">{shipment.status}</span>
               {shipment.expectedAt && <> · ETA {new Date(shipment.expectedAt).toLocaleDateString('en-GB')}</>}
             </div>
@@ -185,7 +185,7 @@ export default function MobileReceiveClient({ id }: { id: string }) {
 
       {/* Toast */}
       {toast && (
-        <div className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-20 px-4 py-2.5 rounded-lg shadow-lg text-[13px] font-medium inline-flex items-center gap-2 ${
+        <div className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-20 px-4 py-2.5 rounded-lg shadow-lg text-md font-medium inline-flex items-center gap-2 ${
           toast.kind === 'success'
             ? 'bg-emerald-600 text-white'
             : 'bg-rose-600 text-white'
@@ -267,7 +267,7 @@ function ItemList({
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Scan or type SKU…"
-            className="w-full h-12 pl-9 pr-3 text-[15px] font-mono border-2 border-slate-300 rounded focus:border-blue-500 outline-none"
+            className="w-full h-12 pl-9 pr-3 text-lg font-mono border-2 border-slate-300 rounded focus:border-blue-500 outline-none"
           />
           {search && (
             <button
@@ -281,12 +281,12 @@ function ItemList({
         </div>
         <button
           onClick={startCameraScan}
-          className="w-full h-11 inline-flex items-center justify-center gap-2 bg-blue-600 text-white rounded font-medium text-[14px] hover:bg-blue-700"
+          className="w-full h-11 inline-flex items-center justify-center gap-2 bg-blue-600 text-white rounded font-medium text-lg hover:bg-blue-700"
         >
           <Scan size={16} /> Scan with camera
         </button>
         {scanError && (
-          <div className="text-[11px] text-rose-700 bg-rose-50 border border-rose-200 rounded p-2">
+          <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded p-2">
             {scanError}
           </div>
         )}
@@ -295,7 +295,7 @@ function ItemList({
       {/* Items */}
       <div className="space-y-2">
         {items.length === 0 ? (
-          <div className="text-center text-[13px] text-slate-500 py-8">
+          <div className="text-center text-md text-slate-500 py-8">
             {search ? `No items matching "${search}"` : 'No items on this shipment'}
           </div>
         ) : (
@@ -306,7 +306,7 @@ function ItemList({
       </div>
 
       {shipment.items.length > 0 && (
-        <div className="text-[11px] text-slate-500 text-center py-3">
+        <div className="text-sm text-slate-500 text-center py-3">
           {shipment.items.filter((it) => it.quantityReceived >= it.quantityExpected).length} of {shipment.items.length} fully received
         </div>
       )}
@@ -331,15 +331,15 @@ function ItemCard({ item, onClick }: { item: Item; onClick: () => void }) {
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <div className="text-[14px] font-mono font-semibold text-slate-900 truncate">{item.sku}</div>
-          <div className="text-[11px] text-slate-500 mt-0.5 inline-flex items-center gap-2 flex-wrap">
+          <div className="text-lg font-mono font-semibold text-slate-900 truncate">{item.sku}</div>
+          <div className="text-sm text-slate-500 mt-0.5 inline-flex items-center gap-2 flex-wrap">
             <span className="tabular-nums">
               <span className="font-semibold">{item.quantityReceived}</span>
               /{item.quantityExpected}
             </span>
             {remaining > 0 && <span className="text-amber-700">{remaining} left</span>}
             {item.qcStatus && (
-              <span className={`uppercase font-semibold tracking-wider px-1 rounded text-[10px] ${
+              <span className={`uppercase font-semibold tracking-wider px-1 rounded text-xs ${
                 item.qcStatus === 'PASS' ? 'bg-emerald-100 text-emerald-700' :
                 item.qcStatus === 'HOLD' ? 'bg-amber-100 text-amber-700' :
                 item.qcStatus === 'FAIL' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'
@@ -458,13 +458,13 @@ function ItemReceiveDetail({
 
   return (
     <div className="space-y-3">
-      <button onClick={onBack} className="text-[13px] text-blue-700 hover:underline inline-flex items-center gap-1">
+      <button onClick={onBack} className="text-md text-blue-700 hover:underline inline-flex items-center gap-1">
         <ArrowLeft size={14} /> Back to list
       </button>
 
       <div className="bg-white rounded-lg border-2 border-slate-300 p-4">
-        <div className="text-[18px] font-mono font-bold text-slate-900 break-all">{item.sku}</div>
-        <div className="text-[12px] text-slate-500 mt-1">
+        <div className="text-2xl font-mono font-bold text-slate-900 break-all">{item.sku}</div>
+        <div className="text-base text-slate-500 mt-1">
           <span className="font-semibold tabular-nums">{item.quantityReceived}</span>
           <span className="text-slate-400">/{item.quantityExpected}</span>
           <span> received</span>
@@ -475,7 +475,7 @@ function ItemReceiveDetail({
         <div className="mt-4 grid grid-cols-5 gap-2">
           <button
             onClick={() => setTarget(Math.max(0, target - 10))}
-            className="h-12 rounded bg-slate-100 hover:bg-slate-200 text-[14px] font-semibold text-slate-700"
+            className="h-12 rounded bg-slate-100 hover:bg-slate-200 text-lg font-semibold text-slate-700"
             aria-label="-10"
           >−10</button>
           <button
@@ -489,7 +489,7 @@ function ItemReceiveDetail({
             min="0"
             value={target}
             onChange={(e) => setTarget(Math.max(0, Number(e.target.value) || 0))}
-            className="h-12 text-center text-[18px] font-mono font-bold tabular-nums border-2 border-slate-300 rounded focus:border-blue-500 outline-none"
+            className="h-12 text-center text-2xl font-mono font-bold tabular-nums border-2 border-slate-300 rounded focus:border-blue-500 outline-none"
           />
           <button
             onClick={() => setTarget(target + 1)}
@@ -498,11 +498,11 @@ function ItemReceiveDetail({
           ><Plus size={18} /></button>
           <button
             onClick={() => setTarget(target + 10)}
-            className="h-12 rounded bg-slate-100 hover:bg-slate-200 text-[14px] font-semibold text-slate-700"
+            className="h-12 rounded bg-slate-100 hover:bg-slate-200 text-lg font-semibold text-slate-700"
             aria-label="+10"
           >+10</button>
         </div>
-        <div className="mt-2 flex items-center justify-between text-[11px]">
+        <div className="mt-2 flex items-center justify-between text-sm">
           <button
             onClick={() => setTarget(item.quantityExpected)}
             className="text-blue-700 hover:underline"
@@ -517,7 +517,7 @@ function ItemReceiveDetail({
 
       {/* QC dropdown */}
       <div className="bg-white rounded-lg border-2 border-slate-300 p-4">
-        <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-2">Quality check</div>
+        <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-2">Quality check</div>
         <div className="grid grid-cols-3 gap-2">
           {[
             { v: 'PASS', label: 'PASS', cls: 'bg-emerald-50 text-emerald-700 border-emerald-300' },
@@ -527,7 +527,7 @@ function ItemReceiveDetail({
             <button
               key={opt.v}
               onClick={() => setQc(qc === opt.v ? '' : opt.v)}
-              className={`h-12 rounded-lg border-2 font-semibold text-[13px] transition-colors ${
+              className={`h-12 rounded-lg border-2 font-semibold text-md transition-colors ${
                 qc === opt.v ? opt.cls : 'bg-white border-slate-200 text-slate-500'
               }`}
             >
@@ -539,7 +539,7 @@ function ItemReceiveDetail({
 
       {/* Photos */}
       <div className="bg-white rounded-lg border-2 border-slate-300 p-4">
-        <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-2 inline-flex items-center gap-1.5">
+        <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-2 inline-flex items-center gap-1.5">
           <Camera size={11} /> Photos ({item.photoUrls.length})
         </div>
         {item.photoUrls.length > 0 && (
@@ -564,7 +564,7 @@ function ItemReceiveDetail({
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={uploadingPhoto}
-          className="w-full h-12 inline-flex items-center justify-center gap-2 bg-blue-600 text-white rounded font-semibold text-[14px] hover:bg-blue-700 disabled:opacity-60"
+          className="w-full h-12 inline-flex items-center justify-center gap-2 bg-blue-600 text-white rounded font-semibold text-lg hover:bg-blue-700 disabled:opacity-60"
         >
           <Camera size={18} />
           {uploadingPhoto ? 'Uploading…' : 'Take photo'}
@@ -573,7 +573,7 @@ function ItemReceiveDetail({
 
       {/* Discrepancies summary */}
       {(item.discrepancies?.length ?? 0) > 0 && (
-        <div className="bg-rose-50 rounded-lg border-2 border-rose-200 p-3 text-[12px]">
+        <div className="bg-rose-50 rounded-lg border-2 border-rose-200 p-3 text-base">
           <div className="font-semibold text-rose-800 inline-flex items-center gap-1.5 mb-1">
             <AlertTriangle size={12} /> {item.discrepancies?.length} discrepancy
           </div>
@@ -590,7 +590,7 @@ function ItemReceiveDetail({
         <button
           onClick={submit}
           disabled={busy}
-          className="w-full h-14 inline-flex items-center justify-center gap-2 bg-emerald-600 text-white rounded-lg font-semibold text-[16px] hover:bg-emerald-700 disabled:opacity-60"
+          className="w-full h-14 inline-flex items-center justify-center gap-2 bg-emerald-600 text-white rounded-lg font-semibold text-xl hover:bg-emerald-700 disabled:opacity-60"
         >
           {busy ? 'Saving…' : <><Check size={18} /> Save receive</>}
         </button>
@@ -598,7 +598,7 @@ function ItemReceiveDetail({
           <button
             onClick={releaseHold}
             disabled={busy}
-            className="w-full h-12 inline-flex items-center justify-center gap-2 bg-amber-50 text-amber-800 border-2 border-amber-300 rounded font-semibold text-[14px] hover:bg-amber-100"
+            className="w-full h-12 inline-flex items-center justify-center gap-2 bg-amber-50 text-amber-800 border-2 border-amber-300 rounded font-semibold text-lg hover:bg-amber-100"
           >
             <Unlock size={16} /> Release {item.qcStatus} hold ({item.quantityReceived})
           </button>
