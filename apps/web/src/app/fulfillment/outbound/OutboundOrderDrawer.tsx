@@ -238,6 +238,14 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
       code: string
       message: string
     }>
+    // O.71: weight check (always present, regardless of international).
+    weightCheck: {
+      expectedGrams: number | null
+      declaredGrams: number | null
+      missingWeightMaster: boolean
+      variancePct: number | null
+      severity: 'ok' | 'warning' | 'error' | 'pending'
+    }
     ready: boolean
   }
   const [customsByShipment, setCustomsByShipment] = useState<
@@ -878,20 +886,29 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                 </Card>
               )}
 
-              {/* O.64: customs preflight — only renders when at least
-                  one active shipment is heading abroad. International
-                  shipments without an HS code get rejected by
-                  Sendcloud's print-label call, so this panel is the
-                  operator's pre-flight checklist. Issues sorted error
-                  → warning so the blocker shows first. */}
-              {Object.values(customsByShipment).some((c) => c.isInternational) && (
+              {/* O.64 + O.71: shipment preflight panel — surfaces when
+                  any active shipment is heading abroad (customs check)
+                  OR when a weight-check flag fires (warning/error).
+                  Skips rendering for boring intra-EU shipments where
+                  every check passes. */}
+              {Object.values(customsByShipment).some(
+                (c) =>
+                  c.isInternational ||
+                  c.weightCheck.severity === 'warning' ||
+                  c.weightCheck.severity === 'error',
+              ) && (
                 <Card>
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
                       <Globe size={12} /> {t('outbound.drawer.customs.title')}
                     </div>
                     {Object.values(customsByShipment)
-                      .filter((c) => c.isInternational)
+                      .filter(
+                        (c) =>
+                          c.isInternational ||
+                          c.weightCheck.severity === 'warning' ||
+                          c.weightCheck.severity === 'error',
+                      )
                       .map((c) => {
                         const errors = c.issues.filter((i) => i.severity === 'error')
                         const warnings = c.issues.filter((i) => i.severity === 'warning')
@@ -923,6 +940,54 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                                 ))}
                               </ul>
                             )}
+                            {/* O.71: weight check inline. Renders as a
+                                small row when a comparison is possible
+                                (declared + master both present); other
+                                states (pending pack, missing master)
+                                show muted hints so the operator knows
+                                why no green badge is showing yet. */}
+                            {(() => {
+                              const w = c.weightCheck
+                              if (w.severity === 'pending') {
+                                if (w.declaredGrams == null) {
+                                  return (
+                                    <div className="text-xs text-slate-500">
+                                      {t('outbound.drawer.weight.pendingPack')}
+                                    </div>
+                                  )
+                                }
+                                if (w.missingWeightMaster) {
+                                  return (
+                                    <div className="text-xs text-amber-700">
+                                      {t('outbound.drawer.weight.masterMissing')}
+                                    </div>
+                                  )
+                                }
+                              }
+                              const tone =
+                                w.severity === 'error'
+                                  ? 'text-rose-700'
+                                  : w.severity === 'warning'
+                                  ? 'text-amber-700'
+                                  : 'text-emerald-700'
+                              const tKey =
+                                w.severity === 'error'
+                                  ? 'outbound.drawer.weight.error'
+                                  : w.severity === 'warning'
+                                  ? 'outbound.drawer.weight.warning'
+                                  : 'outbound.drawer.weight.ok'
+                              return (
+                                <div className={`text-xs flex items-center gap-2 ${tone}`}>
+                                  <span>
+                                    {t(tKey, {
+                                      declared: ((w.declaredGrams ?? 0) / 1000).toFixed(2),
+                                      expected: ((w.expectedGrams ?? 0) / 1000).toFixed(2),
+                                      pct: w.variancePct ?? 0,
+                                    })}
+                                  </span>
+                                </div>
+                              )
+                            })()}
                             {warnings.length > 0 && (
                               <ul className="space-y-1 text-xs">
                                 {warnings.map((iss, idx) => (
@@ -933,7 +998,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                                 ))}
                               </ul>
                             )}
-                            {c.lines.length > 0 && (
+                            {c.isInternational && c.lines.length > 0 && (
                               <table className="w-full text-xs">
                                 <thead>
                                   <tr className="text-slate-500 border-b border-slate-100">

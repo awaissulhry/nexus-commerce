@@ -1898,7 +1898,15 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
               items: {
                 include: {
                   product: {
-                    select: { sku: true, hsCode: true, countryOfOrigin: true },
+                    select: {
+                      sku: true,
+                      hsCode: true,
+                      countryOfOrigin: true,
+                      // O.71: weight master so we can compute expected
+                      // grams and flag scale errors / mispacked items.
+                      weightValue: true,
+                      weightUnit: true,
+                    },
                   },
                 },
               },
@@ -1958,6 +1966,57 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
       const totalValue = lines.reduce((sum, l) => sum + l.totalValue, 0)
 
+      // O.71: weight check. Sum the master weight × quantity per item
+      // (normalising the per-product weightUnit to grams) and compare
+      // against the operator-declared shipment.weightGrams. Flags
+      // mismatches that often mean the operator put the wrong items
+      // in the box, used a stale tare on the scale, or the master
+      // weight is wrong. Skips when:
+      //   • the shipment hasn't been weighed yet (weightGrams null) —
+      //     pack station hasn't run; nothing to compare
+      //   • any item lacks weightValue — would understate expected
+      //     and create false alerts; flagged separately as a warning
+      const UNIT_TO_GRAMS: Record<string, number> = {
+        g: 1,
+        kg: 1000,
+        oz: 28.3495,
+        lb: 453.592,
+      }
+      let expectedGrams = 0
+      let anyMissingWeight = false
+      for (const it of shipment.order.items) {
+        const v = it.product?.weightValue
+        const u = (it.product?.weightUnit ?? '').toLowerCase()
+        if (v == null || !UNIT_TO_GRAMS[u]) {
+          anyMissingWeight = true
+          continue
+        }
+        expectedGrams += Number(v) * UNIT_TO_GRAMS[u] * it.quantity
+      }
+      const declaredGrams = shipment.weightGrams ?? null
+      let weightCheck: {
+        expectedGrams: number | null
+        declaredGrams: number | null
+        missingWeightMaster: boolean
+        variancePct: number | null
+        severity: 'ok' | 'warning' | 'error' | 'pending'
+      } = {
+        expectedGrams: anyMissingWeight ? null : Math.round(expectedGrams),
+        declaredGrams,
+        missingWeightMaster: anyMissingWeight,
+        variancePct: null,
+        severity: 'pending',
+      }
+      if (declaredGrams != null && !anyMissingWeight && expectedGrams > 0) {
+        const variance = Math.abs(declaredGrams - expectedGrams) / expectedGrams
+        weightCheck.variancePct = Math.round(variance * 1000) / 10
+        // ≤10% = expected drift (packaging, tape). >20% = error
+        // (likely wrong items packed). 10–20% = warning.
+        if (variance <= 0.1) weightCheck.severity = 'ok'
+        else if (variance <= 0.2) weightCheck.severity = 'warning'
+        else weightCheck.severity = 'error'
+      }
+
       return {
         shipmentId: id,
         destinationCountry: destCountry || null,
@@ -1967,6 +2026,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         totalValue,
         lines,
         issues,
+        weightCheck,
         ready: isInternational ? !issues.some((i) => i.severity === 'error') : true,
       }
     } catch (error: any) {
