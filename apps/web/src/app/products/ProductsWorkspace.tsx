@@ -10,7 +10,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   Boxes, AlertTriangle, LayoutGrid, Sparkles, Search, RefreshCw,
-  Settings2, X, ChevronDown, ChevronRight, Eye, EyeOff, Tag as TagIcon,
+  Filter, Settings2, X, ChevronDown, ChevronRight, Eye, EyeOff, Tag as TagIcon,
   Package, Plus, FolderTree, Network, Bookmark, BookmarkPlus,
   ExternalLink, Star, Copy, Trash2, Layers, Image as ImageIcon,
   CheckCircle2, XCircle, AlertCircle, Loader2, Upload, Bell,
@@ -1120,33 +1120,6 @@ function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) =>
 // ────────────────────────────────────────────────────────────────────
 // FilterBar
 // ────────────────────────────────────────────────────────────────────
-// E.8 — filter dimension keys. The single source of truth for the
-// pill + add-filter + editor flow. The accordion is gone; this enum
-// drives every interaction.
-type FilterDimKey =
-  | 'status'
-  | 'channels'
-  | 'missing'
-  | 'marketplaces'
-  | 'fulfillment'
-  | 'productTypes'
-  | 'brands'
-  | 'tags'
-  | 'stockLevel'
-  | 'hasPhotos'
-
-const FILTER_DIM_LABELS: Record<FilterDimKey, string> = {
-  status: 'Status',
-  channels: 'Channel',
-  missing: 'Missing on',
-  marketplaces: 'Marketplace',
-  fulfillment: 'Fulfillment',
-  productTypes: 'Type',
-  brands: 'Brand',
-  tags: 'Tag',
-  stockLevel: 'Stock',
-  hasPhotos: 'Photos',
-}
 
 // E.6 — More actions dropdown. Consolidates secondary header actions
 // (Upload photos, Export CSV, Bundles) into a single button so the
@@ -1261,14 +1234,10 @@ function FilterBar(props: any) {
     return () => window.removeEventListener('nexus:focus-search', onFocusSearch)
   }, [])
 
-  // E.8 — bare-F shortcut from the workspace dispatches this; we open
-  // the dimension picker. Closes the value editor first if it's open
-  // so the two popovers never overlap.
+  // E.20 — bare-F shortcut toggles the accordion. Custom-event pattern
+  // matches how nexus:focus-search wires the / shortcut.
   useEffect(() => {
-    const onOpenFilterMenu = () => {
-      setEditingDim(null)
-      setAddMenuOpen(true)
-    }
+    const onOpenFilterMenu = () => setFiltersOpen((o) => !o)
     window.addEventListener('nexus:open-filter-menu', onOpenFilterMenu)
     return () =>
       window.removeEventListener('nexus:open-filter-menu', onOpenFilterMenu)
@@ -1277,47 +1246,13 @@ function FilterBar(props: any) {
   const toggleArr = (current: string[], val: string) =>
     current.includes(val) ? current.filter((v: string) => v !== val) : [...current, val]
 
-  // E.8 — single popover state replaces the old accordion. `editingDim`
-  // is null when nothing is open, or one of the FILTER_DIM_KEYS when
-  // the user is editing that dimension's values. Clicking a pill or
-  // picking from the "+ Filter" menu sets this; outside-click + Esc
-  // close it.
-  const [editingDim, setEditingDim] = useState<FilterDimKey | null>(null)
-  const [addMenuOpen, setAddMenuOpen] = useState(false)
-  const dimMenuRef = useRef<HTMLDivElement>(null)
-  const valueEditorRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!addMenuOpen && !editingDim) return
-    const onClick = (e: MouseEvent) => {
-      const t = e.target as Node
-      if (
-        addMenuOpen &&
-        dimMenuRef.current &&
-        !dimMenuRef.current.contains(t)
-      ) {
-        setAddMenuOpen(false)
-      }
-      if (
-        editingDim &&
-        valueEditorRef.current &&
-        !valueEditorRef.current.contains(t)
-      ) {
-        setEditingDim(null)
-      }
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setAddMenuOpen(false)
-        setEditingDim(null)
-      }
-    }
-    document.addEventListener('mousedown', onClick)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onClick)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [addMenuOpen, editingDim])
+  // E.20 — reverted E.8's single-dimension popover back to the
+  // original "Filters button + multi-dimension accordion" UX per
+  // operator preference. The active-filter pills (E.5) are kept
+  // since they're useful for at-a-glance visibility; clicking a
+  // pill body opens the accordion (jumps to filter state for that
+  // dimension already populated).
+  const [filtersOpen, setFiltersOpen] = useState(false)
 
   // E.5 — active-filter pills. Surfaces every active filter dimension
   // as a removable chip above the search, so the operator sees what's
@@ -1453,119 +1388,86 @@ function FilterBar(props: any) {
             clickable: opens that dimension's value editor. The
             "+ Filter" button at the end opens the dimension picker.
             The accordion is gone — this row IS the editor. */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {activePills.map((p) => (
-            <span
-              key={p.key}
-              className="inline-flex items-center gap-0.5 h-7 text-sm rounded-full bg-blue-50 text-blue-900 border border-blue-200"
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  setAddMenuOpen(false)
-                  setEditingDim(p.key as FilterDimKey)
-                }}
-                className="inline-flex items-center gap-1 pl-2 pr-1 h-full hover:bg-blue-100 rounded-l-full"
+        {/* E.20 — pills row stays, BUT pill clicks now toggle the
+            full accordion (instead of opening a single-dimension
+            popover) per operator preference for the original
+            "many-filters-at-once" UX. */}
+        {activePills.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {activePills.map((p) => (
+              <span
+                key={p.key}
+                className="inline-flex items-center gap-0.5 h-7 text-sm rounded-full bg-blue-50 text-blue-900 border border-blue-200"
               >
-                <span className="font-medium text-blue-700">{p.label}:</span>
-                <span className="truncate max-w-[180px]">{p.value}</span>
-              </button>
-              <button
-                type="button"
-                onClick={p.clear}
-                aria-label={`Remove ${p.label} filter`}
-                className="inline-flex items-center justify-center w-5 h-5 rounded-full hover:bg-blue-100 text-blue-700"
-              >
-                <X size={11} />
-              </button>
-            </span>
-          ))}
-          {/* "+ Filter" button — opens the dimension picker. */}
-          <div ref={dimMenuRef} className="relative inline-block">
-            <button
-              type="button"
-              onClick={() => {
-                setEditingDim(null)
-                setAddMenuOpen((v) => !v)
-              }}
-              aria-haspopup="menu"
-              aria-expanded={addMenuOpen}
-              className="inline-flex items-center gap-1 h-7 px-2 text-sm rounded-full border border-dashed border-slate-300 text-slate-600 hover:border-slate-400 hover:bg-slate-50"
-            >
-              <Plus size={12} /> Filter
-            </button>
-            {addMenuOpen && (
-              <div
-                role="menu"
-                className="absolute left-0 top-full mt-1 w-52 bg-white border border-slate-200 rounded-md shadow-lg z-30 p-1 dark:bg-slate-900 dark:border-slate-800"
-              >
-                {(Object.keys(FILTER_DIM_LABELS) as FilterDimKey[]).map(
-                  (k) => (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => {
-                        setAddMenuOpen(false)
-                        setEditingDim(k)
-                      }}
-                      className="w-full text-left px-2.5 h-9 rounded text-base text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-                    >
-                      {FILTER_DIM_LABELS[k]}
-                    </button>
-                  ),
-                )}
-              </div>
-            )}
+                <button
+                  type="button"
+                  onClick={() => setFiltersOpen(true)}
+                  className="inline-flex items-center gap-1 pl-2 pr-1 h-full hover:bg-blue-100 rounded-l-full"
+                >
+                  <span className="font-medium text-blue-700">{p.label}:</span>
+                  <span className="truncate max-w-[180px]">{p.value}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={p.clear}
+                  aria-label={`Remove ${p.label} filter`}
+                  className="inline-flex items-center justify-center w-5 h-5 rounded-full hover:bg-blue-100 text-blue-700"
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            ))}
           </div>
+        )}
+
+        {/* E.20 — restored "Filters" button + multi-dimension accordion
+            (was removed in E.8, brought back per operator preference).
+            Shows every filter dimension at once when expanded so common
+            workflows (set status + tag + channel together) don't need
+            multiple popover open/close cycles. */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            className={`h-8 px-3 text-base border rounded inline-flex items-center gap-1.5 ${filtersOpen || filterCount > 0 ? 'border-slate-300 bg-slate-50' : 'border-slate-200 hover:bg-slate-50'}`}
+          >
+            <Filter size={12} />
+            Filters
+            {filterCount > 0 && (
+              <span className="bg-slate-700 text-white text-xs px-1.5 py-0.5 rounded-full font-semibold">
+                {filterCount}
+              </span>
+            )}
+            <ChevronDown
+              size={12}
+              className={
+                filtersOpen ? 'rotate-180 transition-transform' : 'transition-transform'
+              }
+            />
+          </button>
         </div>
 
-        {/* E.8 — value editor popover. Renders the picker for whichever
-            dimension is being edited. Anchored to the pills row so it
-            sits visually next to the pill that opened it. */}
-        {editingDim && (
-          <div
-            ref={valueEditorRef}
-            className="border border-slate-200 rounded-md bg-white shadow-md p-3 dark:bg-slate-900 dark:border-slate-800"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                {FILTER_DIM_LABELS[editingDim]}
-              </div>
-              <button
-                type="button"
-                onClick={() => setEditingDim(null)}
-                aria-label="Close filter editor"
-                className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 rounded"
-              >
-                <X size={12} />
-              </button>
-            </div>
-            {editingDim === 'status' && (
-              <FilterGroup
-                label=""
-                options={['ACTIVE', 'DRAFT', 'INACTIVE']}
-                selected={statusFilters}
-                counts={facets?.statuses.reduce((m: any, s: any) => { m[s.value] = s.count; return m }, {})}
-                onToggle={(v: string) => updateUrl({ status: toggleArr(statusFilters, v).join(',') || undefined, page: undefined })}
-              />
-            )}
-            {editingDim === 'channels' && (
-              <FilterGroup
-                label=""
-                options={['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY']}
-                selected={channelFilters}
-                onToggle={(v: string) => updateUrl({ channels: toggleArr(channelFilters, v).join(',') || undefined, page: undefined })}
-              />
-            )}
-            {editingDim === 'missing' && (
-              <FilterGroup
-                label=""
-                options={['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY']}
-                selected={missingChannelFilters}
-                onToggle={(v: string) => updateUrl({ missingChannels: toggleArr(missingChannelFilters, v).join(',') || undefined, page: undefined })}
-              />
-            )}
-            {editingDim === 'marketplaces' && facets?.marketplaces && (() => {
+        {filtersOpen && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-2 border-t border-slate-100">
+            <FilterGroup
+              label="Status"
+              options={['ACTIVE', 'DRAFT', 'INACTIVE']}
+              selected={statusFilters}
+              counts={facets?.statuses.reduce((m: any, s: any) => { m[s.value] = s.count; return m }, {})}
+              onToggle={(v: string) => updateUrl({ status: toggleArr(statusFilters, v).join(',') || undefined, page: undefined })}
+            />
+            <FilterGroup
+              label="Channels"
+              options={['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY']}
+              selected={channelFilters}
+              onToggle={(v: string) => updateUrl({ channels: toggleArr(channelFilters, v).join(',') || undefined, page: undefined })}
+            />
+            <FilterGroup
+              label="Missing on…"
+              options={['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY']}
+              selected={missingChannelFilters}
+              onToggle={(v: string) => updateUrl({ missingChannels: toggleArr(missingChannelFilters, v).join(',') || undefined, page: undefined })}
+            />
+            {facets?.marketplaces && facets.marketplaces.length > 0 && (() => {
               const merged = new Map<string, number>()
               for (const m of facets.marketplaces!) {
                 merged.set(m.value, (merged.get(m.value) ?? 0) + m.count)
@@ -1573,12 +1475,13 @@ function FilterBar(props: any) {
               const codes = Array.from(merged.keys()).sort(
                 (a, b) => (merged.get(b) ?? 0) - (merged.get(a) ?? 0),
               )
+              const counts = Object.fromEntries(merged)
               return (
                 <FilterGroup
-                  label=""
+                  label="Marketplace"
                   options={codes}
                   selected={marketplaceFilters}
-                  counts={Object.fromEntries(merged)}
+                  counts={counts}
                   renderLabel={(v: string) =>
                     MARKETPLACE_DISPLAY_NAMES[v]
                       ? `${MARKETPLACE_DISPLAY_NAMES[v]} (${v})`
@@ -1594,18 +1497,16 @@ function FilterBar(props: any) {
                 />
               )
             })()}
-            {editingDim === 'fulfillment' && (
+            <FilterGroup
+              label="Fulfillment"
+              options={['FBA', 'FBM']}
+              selected={fulfillmentFilters}
+              counts={facets?.fulfillment.reduce((m: any, s: any) => { m[s.value] = s.count; return m }, {})}
+              onToggle={(v: string) => updateUrl({ fulfillment: toggleArr(fulfillmentFilters, v).join(',') || undefined, page: undefined })}
+            />
+            {facets && facets.productTypes.length > 0 && (
               <FilterGroup
-                label=""
-                options={['FBA', 'FBM']}
-                selected={fulfillmentFilters}
-                counts={facets?.fulfillment.reduce((m: any, s: any) => { m[s.value] = s.count; return m }, {})}
-                onToggle={(v: string) => updateUrl({ fulfillment: toggleArr(fulfillmentFilters, v).join(',') || undefined, page: undefined })}
-              />
-            )}
-            {editingDim === 'productTypes' && facets && facets.productTypes.length > 0 && (
-              <FilterGroup
-                label=""
+                label="Product type"
                 options={facets.productTypes.slice(0, 12).map((p: any) => p.value)}
                 selected={productTypeFilters}
                 counts={facets.productTypes.reduce((m: any, s: any) => { m[s.value] = s.count; return m }, {})}
@@ -1613,47 +1514,43 @@ function FilterBar(props: any) {
                 onToggle={(v: string) => updateUrl({ productTypes: toggleArr(productTypeFilters, v).join(',') || undefined, page: undefined })}
               />
             )}
-            {editingDim === 'brands' && facets && facets.brands.length > 0 && (
+            {facets && facets.brands.length > 0 && (
               <FilterGroup
-                label=""
+                label="Brand"
                 options={facets.brands.slice(0, 12).map((p: any) => p.value)}
                 selected={brandFilters}
                 counts={facets.brands.reduce((m: any, s: any) => { m[s.value] = s.count; return m }, {})}
                 onToggle={(v: string) => updateUrl({ brands: toggleArr(brandFilters, v).join(',') || undefined, page: undefined })}
               />
             )}
-            {editingDim === 'tags' && tags.length > 0 && (
+            {tags.length > 0 && (
               <FilterGroup
-                label=""
+                label="Tags"
                 options={tags.map((t: Tag) => t.id)}
                 selected={tagFilters}
                 renderLabel={(id: string) => tags.find((t: Tag) => t.id === id)?.name ?? id}
                 onToggle={(v: string) => updateUrl({ tags: toggleArr(tagFilters, v).join(',') || undefined, page: undefined })}
               />
             )}
-            {editingDim === 'stockLevel' && (
-              <div className="flex items-center gap-2 flex-wrap">
-                {(['all', 'in', 'low', 'out'] as const).map((v) => (
-                  <button
-                    key={v}
-                    onClick={() => updateUrl({ stockLevel: v === 'all' ? undefined : v, page: undefined })}
-                    className={`h-7 px-3 text-sm border rounded-full font-medium ${stockLevel === v ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
-                  >{v}</button>
-                ))}
-              </div>
-            )}
-            {editingDim === 'hasPhotos' && (
-              <div className="flex items-center gap-2 flex-wrap">
+            <div className="md:col-span-2 lg:col-span-3 flex items-center gap-2 flex-wrap pt-2 border-t border-slate-100">
+              <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold mr-1">Stock</span>
+              {(['all', 'in', 'low', 'out'] as const).map((v) => (
                 <button
-                  onClick={() => updateUrl({ hasPhotos: hasPhotos === 'true' ? undefined : 'true', page: undefined })}
-                  className={`h-7 px-3 text-sm border rounded-full font-medium ${hasPhotos === 'true' ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
-                >Has photos</button>
-                <button
-                  onClick={() => updateUrl({ hasPhotos: hasPhotos === 'false' ? undefined : 'false', page: undefined })}
-                  className={`h-7 px-3 text-sm border rounded-full font-medium ${hasPhotos === 'false' ? 'bg-rose-50 text-rose-700 border-rose-300' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
-                >No photos</button>
-              </div>
-            )}
+                  key={v}
+                  onClick={() => updateUrl({ stockLevel: v === 'all' ? undefined : v, page: undefined })}
+                  className={`h-7 px-3 text-sm border rounded-full font-medium ${stockLevel === v ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
+                >{v}</button>
+              ))}
+              <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold ml-3 mr-1">Photos</span>
+              <button
+                onClick={() => updateUrl({ hasPhotos: hasPhotos === 'true' ? undefined : 'true', page: undefined })}
+                className={`h-7 px-3 text-sm border rounded-full font-medium ${hasPhotos === 'true' ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
+              >Has photos</button>
+              <button
+                onClick={() => updateUrl({ hasPhotos: hasPhotos === 'false' ? undefined : 'false', page: undefined })}
+                className={`h-7 px-3 text-sm border rounded-full font-medium ${hasPhotos === 'false' ? 'bg-rose-50 text-rose-700 border-rose-300' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
+              >No photos</button>
+            </div>
           </div>
         )}
       </div>
