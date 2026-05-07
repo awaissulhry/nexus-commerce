@@ -2812,6 +2812,11 @@ model Shipment {
   warehouse Warehouse?     @relation(fields: [warehouseId], references: [id])
   items     ShipmentItem[]
 
+  // O.2: carrier scan log + channel-pushback retry queue. Cascades on
+  // shipment delete since both are meaningless without their parent.
+  trackingEvents      TrackingEvent[]
+  trackingMessageLogs TrackingMessageLog[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2820,6 +2825,93 @@ model Shipment {
   @@index([carrierCode])
   @@index([trackingNumber])
   @@index([createdAt])
+}
+
+// O.2: Carrier scan log per shipment (append-only). Sendcloud webhook
+// (O.7) and Amazon shipping-event handlers write here; the timeline
+// drawer (O.20), branded tracking page (O.21), and late-shipment
+// outbound risk job (O.19) read from here.
+//
+// Normalized event codes (so the UI doesn't care which carrier the
+// scan came from):
+//   ANNOUNCED | PICKED_UP | IN_TRANSIT | OUT_FOR_DELIVERY |
+//   DELIVERED | DELIVERY_ATTEMPTED | EXCEPTION |
+//   RETURNED_TO_SENDER | CANCELLED | INFO
+model TrackingEvent {
+  id          String   @id @default(cuid())
+
+  shipment    Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId  String
+
+  // Distinct from createdAt (= ingestion). The timeline sorts by this.
+  occurredAt  DateTime
+  code        String
+  description String
+  location    String?
+  // Provenance: SENDCLOUD | AMAZON | EBAY_MFP | MANUAL.
+  source      String
+
+  // Carrier's original code/payload — kept for audit + future taxonomy
+  // refinements. Read-only after insert.
+  carrierRawCode    String?
+  carrierRawPayload Json?
+
+  createdAt   DateTime @default(now())
+
+  @@index([shipmentId, occurredAt])
+  @@index([code, occurredAt])
+  @@index([occurredAt])
+}
+
+enum TrackingMessageStatus {
+  PENDING     // queued, waiting for retry job to pick up
+  IN_FLIGHT   // worker has claimed it, API call in progress
+  SUCCESS     // channel acked
+  FAILED      // last attempt failed; will retry per nextAttemptAt
+  DEAD_LETTER // exceeded maxAttempts; needs operator intervention
+}
+
+// O.2: Channel-pushback retry queue (us → channel). Mark-shipped path +
+// retry job (O.12) write here; retry job reads against
+// (status='PENDING' AND nextAttemptAt <= NOW()).
+//
+// The Shipment.trackingPushedAt / trackingPushError fields are kept as
+// a denormalized cache of the latest log entry (writer-owned by the
+// pushback worker) so the typical "did this ship's tracking get
+// pushed?" check stays a single-row read.
+model TrackingMessageLog {
+  id          String       @id @default(cuid())
+
+  shipment    Shipment     @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId  String
+
+  channel     OrderChannel
+  // Nullable for channels with no per-marketplace split (Shopify, Woo).
+  marketplace String?
+
+  status      TrackingMessageStatus @default(PENDING)
+
+  // Retry state. Default maxAttempts = 8 → ≈26h of exponential backoff
+  // (5min × 2^n, capped at 12h per attempt) before DEAD_LETTER.
+  attemptCount    Int       @default(0)
+  maxAttempts     Int       @default(8)
+  nextAttemptAt   DateTime?
+  lastAttemptedAt DateTime?
+
+  // Most-recent failure only. lastErrorCode = channel response code
+  // (Amazon "InvalidParameterValue", HTTP 429, etc.).
+  lastError     String?
+  lastErrorCode String?
+
+  requestPayload  Json
+  responsePayload Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([shipmentId, channel])
+  @@index([status, createdAt])
 }
 
 model ShipmentItem {
