@@ -13,6 +13,7 @@ import {
   Eye, EyeOff, CheckCircle2, Tag, Link2,
   ArrowUpRight, Layers, Package, MoreHorizontal, Plus, Pause, Play,
   Edit3, Bookmark, BookmarkPlus, Star, Trash2,
+  Download, FilterX, AlertCircle,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -232,6 +233,14 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [drawerListingId, setDrawerListingId] = useState<string | null>(null)
 
+  // U.1 — keyboard navigation on the grid lens. activeRowIndex tracks
+  // which row j/k has highlighted; -1 = no active row (default).
+  // Enter on the active row opens the drawer; / focuses search; Esc
+  // closes drawer or clears search; ? opens the shortcuts help modal.
+  // Search input is targeted by id (no ref drilling through FilterBar).
+  const [activeRowIndex, setActiveRowIndex] = useState(-1)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+
   // C.11 — saved views. Re-uses the existing /api/saved-views CRUD
   // shipped for /products (P.3); the SavedView model has a `surface`
   // discriminator so /listings rows are scoped separately. The
@@ -443,6 +452,109 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
 
   const visible = useMemo(() => ALL_COLUMNS.filter((c) => visibleColumns.includes(c.key)), [visibleColumns])
 
+  // U.1 — global keyboard shortcuts on the grid lens. Skipped when
+  // the operator is typing into an input/textarea/select (otherwise
+  // the search field would intercept its own keystrokes). The drawer
+  // and modals own their own keyboard semantics — `Escape` closes
+  // them, `Enter` submits — so we only act on j/k/?/space when no
+  // modal is up.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // Don't fight inputs.
+      const tag = (e.target as HTMLElement)?.tagName
+      const inEditable =
+        tag === 'INPUT' ||
+        tag === 'TEXTAREA' ||
+        tag === 'SELECT' ||
+        (e.target as HTMLElement)?.isContentEditable
+      if (inEditable) {
+        // Allow Esc to clear the search input even from the input itself.
+        if (e.key === 'Escape' && tag === 'INPUT' && searchInput) {
+          // The input owns its own clear; let it ride.
+        }
+        return
+      }
+      // Cmd/Ctrl combos go to the global palette etc., not us.
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+
+      if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+        e.preventDefault()
+        setShortcutsOpen((v) => !v)
+        return
+      }
+      if (e.key === '/') {
+        e.preventDefault()
+        const input = document.getElementById('listings-search') as HTMLInputElement | null
+        input?.focus()
+        input?.select()
+        return
+      }
+      if (e.key === 'Escape') {
+        if (drawerListingId) {
+          setDrawerListingId(null)
+        } else if (shortcutsOpen) {
+          setShortcutsOpen(false)
+        } else if (searchInput) {
+          setSearchInput('')
+        } else {
+          setActiveRowIndex(-1)
+        }
+        return
+      }
+
+      // The remaining shortcuts only apply on the grid lens — j/k/Enter
+      // navigate rows, which only the table renders.
+      if (lens !== 'grid') return
+
+      const rows = grid.listings.length
+      if (e.key === 'j' || e.key === 'ArrowDown') {
+        e.preventDefault()
+        setActiveRowIndex((i) => Math.min(i + 1, rows - 1))
+      } else if (e.key === 'k' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        setActiveRowIndex((i) => Math.max(i - 1, 0))
+      } else if (e.key === 'Enter') {
+        if (activeRowIndex >= 0 && activeRowIndex < rows) {
+          e.preventDefault()
+          setDrawerListingId(grid.listings[activeRowIndex].id)
+        }
+      } else if (e.key === ' ') {
+        if (activeRowIndex >= 0 && activeRowIndex < rows) {
+          e.preventDefault()
+          const id = grid.listings[activeRowIndex].id
+          setSelected((prev) => {
+            const next = new Set(prev)
+            if (next.has(id)) next.delete(id)
+            else next.add(id)
+            return next
+          })
+        }
+      } else if (e.key === 'g') {
+        // 'g' alone — first half of "go to top". Capture next g via
+        // a one-tick window; fallthrough means single-press is a no-op
+        // (consistent with Linear / Gmail vim-like double-key chords).
+        const handleSecond = (ev: KeyboardEvent) => {
+          if (ev.key === 'g') {
+            ev.preventDefault()
+            setActiveRowIndex(0)
+          }
+          window.removeEventListener('keydown', handleSecond, true)
+        }
+        window.addEventListener('keydown', handleSecond, true)
+        setTimeout(() => {
+          window.removeEventListener('keydown', handleSecond, true)
+        }, 800)
+      } else if (e.key === 'G' && e.shiftKey === false) {
+        // Note: shift-g comes through as 'G' on most browsers — we
+        // accept either way to mean "jump to last row" (vim semantic).
+        e.preventDefault()
+        setActiveRowIndex(Math.max(0, rows - 1))
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [lens, grid.listings, activeRowIndex, drawerListingId, shortcutsOpen, searchInput, setSearchInput, setSelected])
+
   // S.4 — open the SSE stream for the lifetime of this workspace. The
   // hook self-dispatches every event into the invalidation channel, so
   // the grid / matrix / drawer just refresh as if a 200ms polling
@@ -453,6 +565,7 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
   // components grab their own useTranslations() so they don't need
   // prop drilling.
   const { t } = useTranslations()
+
 
   return (
     <div className="space-y-5">
@@ -590,6 +703,24 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
         </div>
       </div>
 
+      {/* U.1 — Quick filter presets. One-click pills for the
+          high-frequency filter combos operators reach for daily.
+          Sit above the chip-based FilterBar; clicking a preset
+          rewrites URL state via updateUrl, so refreshing the page
+          or sharing the link preserves the preset. Active state is
+          derived from URL — a preset highlights when its filter
+          combo matches the current URL. */}
+      {lens === 'grid' && (
+        <QuickPresets
+          activeStatuses={statusFilters}
+          activeSyncStatuses={syncStatusFilters}
+          hasError={hasError}
+          lowStock={lowStock}
+          publishedOnly={publishedOnly}
+          updateUrl={updateUrl}
+        />
+      )}
+
       {/* Filters bar (visible on Grid + Drafts lens; Health and Matrix have their own). */}
       {(lens === 'grid' || lens === 'drafts') && (
         <FilterBar
@@ -647,6 +778,32 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
               fetchGrid()
             } catch {}
           }}
+          activeFilterCount={
+            channelFilters.length +
+            marketplaceFilters.length +
+            statusFilters.length +
+            syncStatusFilters.length +
+            (hasError ? 1 : 0) +
+            (lowStock ? 1 : 0) +
+            (publishedOnly ? 1 : 0)
+          }
+          search={search}
+          onClearFilters={() => {
+            setSearchInput('')
+            updateUrl({
+              search: undefined,
+              channel: lockChannel ? undefined : undefined,
+              marketplace: lockMarketplace ? undefined : undefined,
+              listingStatus: undefined,
+              syncStatus: undefined,
+              hasError: undefined,
+              lowStock: undefined,
+              published: undefined,
+              page: undefined,
+            })
+          }}
+          onListingChanged={() => { fetchGrid(); fetchFacets() }}
+          activeRowIndex={activeRowIndex}
         />
       )}
 
@@ -670,6 +827,11 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
       {/* Detail drawer */}
       {drawerListingId && (
         <ListingDrawer id={drawerListingId} onClose={() => setDrawerListingId(null)} onChanged={() => { fetchGrid(); fetchFacets() }} />
+      )}
+
+      {/* U.1 — keyboard shortcuts help modal (`?` toggles). */}
+      {shortcutsOpen && (
+        <KeyboardShortcutsHelp onClose={() => setShortcutsOpen(false)} />
       )}
     </div>
   )
@@ -700,6 +862,339 @@ function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) =>
           {t(tab.labelKey)}
         </button>
       ))}
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────
+// InlineNumberCell — U.1.
+// Click-to-edit numeric cell rendered inside the grid for price /
+// quantity columns. At rest it shows the formatted value (or "—" if
+// null); on click it swaps to a small input. Enter or blur saves via
+// PATCH /api/listings/:id with optimistic concurrency (sends the
+// listing's `version` so a stale tab doesn't overwrite a fresh edit
+// from another tab). 409 surfaces as a "Reload required" toast; the
+// caller's onSaved refreshes the grid on success so the new value
+// reads through cleanly.
+// ────────────────────────────────────────────────────────────────────
+function InlineNumberCell({
+  value,
+  listingId,
+  version,
+  field,
+  align = 'right',
+  integer = false,
+  format,
+  tone,
+  subline,
+  subTone,
+  onSaved,
+}: {
+  value: number | null
+  listingId: string
+  version: number
+  field: 'price' | 'quantity'
+  align?: 'left' | 'right'
+  integer?: boolean
+  format: (n: number) => string
+  tone?: string
+  subline?: string | null
+  subTone?: 'rose' | 'amber'
+  onSaved: () => void
+}) {
+  const { toast } = useToast()
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState<string>(value != null ? String(value) : '')
+  const [busy, setBusy] = useState(false)
+
+  // Keep draft in sync with upstream value when not editing — the
+  // 30s polling can land a fresh value while the cell sits idle.
+  useEffect(() => {
+    if (!editing) setDraft(value != null ? String(value) : '')
+  }, [value, editing])
+
+  const commit = useCallback(async () => {
+    const trimmed = draft.trim()
+    if (trimmed === '' || trimmed === (value != null ? String(value) : '')) {
+      setEditing(false)
+      return
+    }
+    const n = Number(trimmed)
+    if (!Number.isFinite(n) || n < 0) {
+      toast.error(
+        field === 'price' ? 'Price must be a non-negative number' : 'Quantity must be a non-negative integer',
+      )
+      setEditing(false)
+      setDraft(value != null ? String(value) : '')
+      return
+    }
+    const finalValue = integer ? Math.round(n) : n
+    setBusy(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/listings/${listingId}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ [field]: finalValue, expectedVersion: version }),
+        },
+      )
+      if (res.status === 409) {
+        toast.error('Listing changed in another tab — reload to see the latest')
+        setEditing(false)
+        setDraft(value != null ? String(value) : '')
+        return
+      }
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error ?? `HTTP ${res.status}`)
+      }
+      toast.success(`${field === 'price' ? 'Price' : 'Stock'} updated`)
+      emitInvalidation({
+        type: 'listing.updated',
+        id: listingId,
+        meta: { source: 'inline-edit', field },
+      })
+      onSaved()
+      setEditing(false)
+    } catch (e: any) {
+      toast.error(`Save failed: ${e?.message ?? String(e)}`)
+      setEditing(false)
+      setDraft(value != null ? String(value) : '')
+    } finally {
+      setBusy(false)
+    }
+  }, [draft, value, field, listingId, version, integer, toast, onSaved])
+
+  if (editing) {
+    return (
+      <div className={`tabular-nums ${align === 'right' ? 'text-right' : 'text-left'}`}>
+        <input
+          type="number"
+          step={integer ? '1' : '0.01'}
+          min="0"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              commit()
+            } else if (e.key === 'Escape') {
+              e.preventDefault()
+              setEditing(false)
+              setDraft(value != null ? String(value) : '')
+            }
+          }}
+          autoFocus
+          disabled={busy}
+          aria-label={`Edit ${field}`}
+          className="w-20 h-7 px-1 text-md border border-blue-400 rounded text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-300"
+        />
+      </div>
+    )
+  }
+
+  if (value == null) {
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        aria-label={`Set ${field}`}
+        className="text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded px-1 -mx-1 cursor-pointer w-full text-right"
+      >
+        —
+      </button>
+    )
+  }
+
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      aria-label={`Edit ${field} (currently ${format(value)})`}
+      className={`tabular-nums hover:bg-slate-50 rounded px-1 -mx-1 cursor-pointer transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${align === 'right' ? 'text-right block w-full' : ''}`}
+    >
+      <div className={`text-md ${tone ?? 'text-slate-900'}`}>{format(value)}</div>
+      {subline && (
+        <div className={`text-sm ${subTone === 'rose' ? 'text-rose-600' : subTone === 'amber' ? 'text-amber-600' : 'text-slate-500'}`}>
+          {subline}
+        </div>
+      )}
+    </button>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────
+// QuickPresets — U.1.
+// One-click pill row above the FilterBar covering the high-frequency
+// filter combos operators reach for daily. Each preset writes to URL
+// state via updateUrl (channel filters stay; only the listingStatus
+// / syncStatus / hasError / lowStock / publishedOnly toggles flip).
+// "All" clears those toggles back to defaults without touching
+// channel/marketplace which the operator usually keeps locked when
+// they navigate via /listings/{channel}/{marketplace}.
+// ────────────────────────────────────────────────────────────────────
+function QuickPresets({
+  activeStatuses,
+  activeSyncStatuses,
+  hasError,
+  lowStock,
+  publishedOnly,
+  updateUrl,
+}: {
+  activeStatuses: string[]
+  activeSyncStatuses: string[]
+  hasError: boolean
+  lowStock: boolean
+  publishedOnly: boolean
+  updateUrl: (p: Record<string, string | undefined>) => void
+}) {
+  // Each preset is identified by a function that compares the current
+  // URL state to the preset's expected state. Active highlight comes
+  // from that comparison — no extra state needed.
+  const presets = [
+    {
+      id: 'all',
+      label: 'All',
+      icon: Boxes,
+      isActive:
+        activeStatuses.length === 0 &&
+        activeSyncStatuses.length === 0 &&
+        !hasError &&
+        !lowStock &&
+        !publishedOnly,
+      apply: () =>
+        updateUrl({
+          listingStatus: undefined,
+          syncStatus: undefined,
+          hasError: undefined,
+          lowStock: undefined,
+          published: undefined,
+          page: undefined,
+        }),
+    },
+    {
+      id: 'errors',
+      label: 'Errors only',
+      icon: AlertTriangle,
+      tone: 'danger' as const,
+      isActive: hasError && activeStatuses.length === 0,
+      apply: () =>
+        updateUrl({
+          listingStatus: undefined,
+          syncStatus: undefined,
+          hasError: 'true',
+          lowStock: undefined,
+          published: undefined,
+          page: undefined,
+        }),
+    },
+    {
+      id: 'low-stock',
+      label: 'Low stock',
+      icon: Package,
+      tone: 'warning' as const,
+      isActive: lowStock,
+      apply: () =>
+        updateUrl({
+          listingStatus: undefined,
+          syncStatus: undefined,
+          hasError: undefined,
+          lowStock: 'true',
+          published: undefined,
+          page: undefined,
+        }),
+    },
+    {
+      id: 'drafts',
+      label: 'Drafts',
+      icon: Edit3,
+      isActive:
+        activeStatuses.length === 1 && activeStatuses[0] === 'DRAFT',
+      apply: () =>
+        updateUrl({
+          listingStatus: 'DRAFT',
+          syncStatus: undefined,
+          hasError: undefined,
+          lowStock: undefined,
+          published: undefined,
+          page: undefined,
+        }),
+    },
+    {
+      id: 'out-of-sync',
+      label: 'Out of sync',
+      icon: RefreshCw,
+      tone: 'warning' as const,
+      isActive:
+        activeSyncStatuses.length === 1 && activeSyncStatuses[0] === 'FAILED',
+      apply: () =>
+        updateUrl({
+          listingStatus: undefined,
+          syncStatus: 'FAILED',
+          hasError: undefined,
+          lowStock: undefined,
+          published: undefined,
+          page: undefined,
+        }),
+    },
+    {
+      id: 'suppressed',
+      label: 'Suppressed',
+      icon: AlertCircle,
+      tone: 'danger' as const,
+      isActive:
+        activeStatuses.length === 1 && activeStatuses[0] === 'SUPPRESSED',
+      apply: () =>
+        updateUrl({
+          listingStatus: 'SUPPRESSED',
+          syncStatus: undefined,
+          hasError: undefined,
+          lowStock: undefined,
+          published: undefined,
+          page: undefined,
+        }),
+    },
+    {
+      id: 'published',
+      label: 'Published only',
+      icon: Eye,
+      isActive: publishedOnly,
+      apply: () =>
+        updateUrl({
+          listingStatus: undefined,
+          syncStatus: undefined,
+          hasError: undefined,
+          lowStock: undefined,
+          published: 'true',
+          page: undefined,
+        }),
+    },
+  ]
+
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      {presets.map((p) => {
+        const Icon = p.icon
+        const tone = (p as any).tone as 'danger' | 'warning' | undefined
+        const activeClass = p.isActive
+          ? tone === 'danger'
+            ? 'bg-rose-100 border-rose-300 text-rose-700'
+            : tone === 'warning'
+              ? 'bg-amber-100 border-amber-300 text-amber-700'
+              : 'bg-blue-100 border-blue-300 text-blue-700'
+          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+        return (
+          <button
+            key={p.id}
+            onClick={p.apply}
+            aria-pressed={p.isActive}
+            className={`h-7 px-2.5 text-sm rounded-full border inline-flex items-center gap-1.5 transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${activeClass}`}
+          >
+            <Icon size={11} />
+            {p.label}
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -762,7 +1257,8 @@ function FilterBar(props: {
           <div className="flex-1 min-w-[240px] max-w-md relative">
             <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <Input
-              placeholder="Search SKU, product name, external ID, or title"
+              id="listings-search"
+              placeholder="Search SKU, product name, external ID, or title — press / to focus"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               className="pl-7"
@@ -939,8 +1435,19 @@ function GridLens(props: {
   setSelected: (s: Set<string>) => void
   onOpenDrawer: (id: string) => void
   onResync: (id: string) => void
+  // U.1 — empty-state CTA needs context. activeFilterCount + search
+  // drive the "X filters + search 'foo' active" message; onClearFilters
+  // wipes URL state back to lens defaults.
+  activeFilterCount: number
+  search: string
+  onClearFilters: () => void
+  // U.1 — onListingChanged refreshes after inline cell edits land.
+  onListingChanged: () => void
+  // U.1 — activeRowIndex is the keyboard-cursor row (j/k navigation).
+  // -1 = no active row; rendered as a blue ring on the matching <tr>.
+  activeRowIndex: number
 }) {
-  const { grid, visible, visibleColumns, setVisibleColumns, columnPickerOpen, setColumnPickerOpen, sortBy, sortDir, onSort, page, onPage, selected, setSelected, onOpenDrawer, onResync } = props
+  const { grid, visible, visibleColumns, setVisibleColumns, columnPickerOpen, setColumnPickerOpen, sortBy, sortDir, onSort, page, onPage, selected, setSelected, onOpenDrawer, onResync, onListingChanged, activeRowIndex } = props
 
   const allSelected = grid.listings.length > 0 && grid.listings.every((l) => selected.has(l.id))
 
@@ -968,19 +1475,132 @@ function GridLens(props: {
     return <Card><div className="text-md text-rose-600 py-8 text-center">Failed to load: {grid.error}</div></Card>
   }
   if (grid.listings.length === 0) {
+    // U.1 — when filters are active, the CTA is "Clear filters", not
+    // "Go to catalog" (the latter only makes sense when the catalog
+    // is genuinely empty, not when a filter combo dead-ended).
+    const hasActiveFilters =
+      props.activeFilterCount > 0 || (props.search && props.search.length > 0)
+    if (hasActiveFilters) {
+      return (
+        <Card>
+          <div className="text-center py-12 space-y-3">
+            <FilterX size={32} className="text-slate-300 mx-auto" />
+            <div className="text-md font-semibold text-slate-700">
+              No listings match these filters
+            </div>
+            <div className="text-sm text-slate-500">
+              {props.activeFilterCount > 0 && props.search
+                ? `${props.activeFilterCount} filter${props.activeFilterCount === 1 ? '' : 's'} + search "${props.search}" active`
+                : props.activeFilterCount > 0
+                  ? `${props.activeFilterCount} filter${props.activeFilterCount === 1 ? '' : 's'} active`
+                  : `Search "${props.search}" returned nothing`}
+            </div>
+            <button
+              onClick={props.onClearFilters}
+              className="h-9 px-4 text-base bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-2"
+            >
+              <FilterX size={12} /> Clear filters
+            </button>
+          </div>
+        </Card>
+      )
+    }
     return (
       <EmptyState
         icon={Boxes}
-        title="No listings match these filters"
-        description="Try adjusting filters or clearing the search."
+        title="No listings yet"
+        description="Use the listing wizard from /products to publish your first SKU to a channel."
         action={{ label: 'View Catalog', href: '/products' }}
       />
     )
   }
 
+  // U.1 — CSV export of the visible columns × all loaded rows. Pure
+  // client-side: dumps grid.listings (current page, current sort,
+  // current filters) to a CSV download. Operators paste these into
+  // spreadsheets / send to suppliers / archive end-of-month
+  // snapshots — common-enough requests that batch through Slack
+  // today. Captures only what the operator sees, so visibleColumns
+  // drives both the row of headers and the per-cell extraction.
+  const exportCsv = () => {
+    if (grid.listings.length === 0) return
+    const escape = (v: unknown): string => {
+      const s = v == null ? '' : String(v)
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+        return `"${s.replace(/"/g, '""')}"`
+      }
+      return s
+    }
+    const cols = visible.filter((c) => c.key !== 'thumb' && c.key !== 'actions')
+    const headers = cols.map((c) => escape(c.label || c.key)).join(',')
+    const rows = grid.listings.map((l) =>
+      cols
+        .map((c) => {
+          const k = c.key
+          if (k === 'product') return escape(`${l.product.sku} — ${l.product.name}`)
+          if (k === 'channel') return escape(l.channel)
+          if (k === 'marketplace') return escape(l.marketplace)
+          if (k === 'status') return escape(l.listingStatus)
+          if (k === 'syncStatus') return escape(l.syncStatus ?? 'IDLE')
+          if (k === 'price') return escape(l.price ?? '')
+          if (k === 'pricingRule') return escape(l.pricingRule ?? '')
+          if (k === 'masterDelta')
+            return escape(
+              l.price != null && l.masterPrice != null
+                ? (l.price - l.masterPrice).toFixed(2)
+                : '',
+            )
+          if (k === 'quantity') return escape(l.quantity ?? '')
+          if (k === 'follow')
+            return escape(
+              [
+                l.followMasterTitle && 'T',
+                l.followMasterPrice && 'P',
+                l.followMasterQuantity && 'Q',
+              ]
+                .filter(Boolean)
+                .join(''),
+            )
+          if (k === 'externalId') return escape(l.externalListingId ?? '')
+          if (k === 'lastSync')
+            return escape(
+              l.lastSyncedAt
+                ? new Date(l.lastSyncedAt).toISOString()
+                : '',
+            )
+          return ''
+        })
+        .join(','),
+    )
+    const csv = [headers, ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const stamp = new Date().toISOString().slice(0, 10)
+    a.href = url
+    a.download = `listings-${stamp}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 justify-end">
+        <button
+          onClick={exportCsv}
+          disabled={grid.listings.length === 0}
+          aria-label="Export current grid view to CSV"
+          title={
+            grid.listings.length === 0
+              ? 'Nothing to export'
+              : `Download ${grid.listings.length} row${grid.listings.length === 1 ? '' : 's'} as CSV (current filter + sort)`
+          }
+          className="h-7 px-2 text-base border border-slate-200 rounded inline-flex items-center gap-1.5 hover:bg-slate-50 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-300"
+        >
+          <Download size={12} /> Export CSV
+        </button>
         <div className="relative">
           <button
             onClick={() => setColumnPickerOpen(!columnPickerOpen)}
@@ -1035,10 +1655,15 @@ function GridLens(props: {
               </tr>
             </thead>
             <tbody>
-              {grid.listings.map((l) => {
+              {grid.listings.map((l, idx) => {
                 const isSelected = selected.has(l.id)
+                const isActive = idx === activeRowIndex
                 return (
-                  <tr key={l.id} className={`border-b border-slate-100 hover:bg-slate-50 transition-colors ${isSelected ? 'bg-blue-50/30' : ''}`}>
+                  <tr
+                    key={l.id}
+                    data-row-index={idx}
+                    className={`border-b border-slate-100 hover:bg-slate-50 transition-colors ${isSelected ? 'bg-blue-50/30' : ''} ${isActive ? 'ring-2 ring-blue-400 ring-inset' : ''}`}
+                  >
                     <td className="px-3 py-2">
                       <input
                         type="checkbox"
@@ -1049,7 +1674,7 @@ function GridLens(props: {
                     </td>
                     {visible.map((col) => (
                       <td key={col.key} className="px-3 py-2 align-middle" style={{ width: col.width, minWidth: col.width }}>
-                        <CellRenderer col={col.key} listing={l} onOpenDrawer={onOpenDrawer} onResync={onResync} />
+                        <CellRenderer col={col.key} listing={l} onOpenDrawer={onOpenDrawer} onResync={onResync} onListingChanged={onListingChanged} />
                       </td>
                     ))}
                   </tr>
@@ -1065,7 +1690,7 @@ function GridLens(props: {
   )
 }
 
-function CellRenderer({ col, listing, onOpenDrawer, onResync }: { col: string; listing: Listing; onOpenDrawer: (id: string) => void; onResync: (id: string) => void }) {
+function CellRenderer({ col, listing, onOpenDrawer, onResync, onListingChanged }: { col: string; listing: Listing; onOpenDrawer: (id: string) => void; onResync: (id: string) => void; onListingChanged: () => void }) {
   const l = listing
   switch (col) {
     case 'thumb':
@@ -1114,15 +1739,24 @@ function CellRenderer({ col, listing, onOpenDrawer, onResync }: { col: string; l
       )
     }
     case 'price':
+      // U.1 — inline edit: click cell, type new price, Enter or blur
+      // saves via PATCH; Esc cancels. Optimistic concurrency via the
+      // listing's `version` field (the endpoint returns 409 when the
+      // version doesn't match — we surface that to the operator with
+      // a "Reload" hint). Sale price stays read-only here; complex
+      // editing flows live in the drawer.
       return (
-        <div className="text-right tabular-nums">
-          {l.price != null ? (
-            <>
-              <div className="text-md text-slate-900">{l.currency ?? ''} {l.price.toFixed(2)}</div>
-              {l.salePrice != null && <div className="text-sm text-rose-600">Sale {l.salePrice.toFixed(2)}</div>}
-            </>
-          ) : <span className="text-slate-400">—</span>}
-        </div>
+        <InlineNumberCell
+          value={l.price ?? null}
+          listingId={l.id}
+          version={l.version}
+          field="price"
+          align="right"
+          format={(n) => `${l.currency ?? ''} ${n.toFixed(2)}`.trim()}
+          subline={l.salePrice != null ? `Sale ${l.salePrice.toFixed(2)}` : null}
+          subTone="rose"
+          onSaved={onListingChanged}
+        />
       )
     case 'pricingRule':
       return (
@@ -1146,10 +1780,26 @@ function CellRenderer({ col, listing, onOpenDrawer, onResync }: { col: string; l
       )
     }
     case 'quantity': {
+      // U.1 — inline edit, integer-only. Same PATCH path as price.
+      // The empty-state '—' rendering stays via passing null
+      // through; the cell renders the dash but stays clickable
+      // so operators can set an initial qty without opening the
+      // drawer.
       const q = l.quantity
-      if (q == null) return <span className="text-slate-400 text-right block">—</span>
-      const tone = q === 0 ? 'text-rose-600' : q <= 5 ? 'text-amber-600' : 'text-slate-700'
-      return <div className={`text-right tabular-nums ${tone}`}>{q}</div>
+      const tone = q === 0 ? 'text-rose-600' : q != null && q <= 5 ? 'text-amber-600' : 'text-slate-700'
+      return (
+        <InlineNumberCell
+          value={q ?? null}
+          listingId={l.id}
+          version={l.version}
+          field="quantity"
+          align="right"
+          integer
+          format={(n) => String(Math.round(n))}
+          tone={tone}
+          onSaved={onListingChanged}
+        />
+      )
     }
     case 'follow':
       return (
@@ -4298,5 +4948,71 @@ function Detail({ label, value }: { label: string; value: any }) {
       <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">{label}</div>
       <div className="text-base text-slate-900 mt-0.5">{String(value)}</div>
     </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────
+// KeyboardShortcutsHelp — U.1 modal (opens via `?`).
+// Lists every shortcut wired into the workspace's keydown handler so
+// operators discover the productivity layer without trial and error.
+// ────────────────────────────────────────────────────────────────────
+function KeyboardShortcutsHelp({ onClose }: { onClose: () => void }) {
+  const shortcuts: Array<{ keys: string[]; description: string; section: string }> = [
+    { section: 'Navigation', keys: ['/'], description: 'Focus search' },
+    { section: 'Navigation', keys: ['j', '↓'], description: 'Move to next row' },
+    { section: 'Navigation', keys: ['k', '↑'], description: 'Move to previous row' },
+    { section: 'Navigation', keys: ['g', 'g'], description: 'Jump to first row' },
+    { section: 'Navigation', keys: ['G'], description: 'Jump to last row' },
+    { section: 'Actions', keys: ['Enter'], description: 'Open detail drawer for active row' },
+    { section: 'Actions', keys: ['Space'], description: 'Toggle selection on active row' },
+    { section: 'Actions', keys: ['Esc'], description: 'Close drawer / clear search / drop active row' },
+    { section: 'Actions', keys: ['?'], description: 'Show this shortcut list' },
+    { section: 'Tip', keys: [], description: 'Click a price or stock cell to edit it inline; Enter saves, Esc cancels.' },
+  ]
+  const sections = Array.from(new Set(shortcuts.map((s) => s.section)))
+  return (
+    <Modal open onClose={onClose} title="Keyboard shortcuts" size="md">
+      <ModalBody>
+        <div className="space-y-4">
+          {sections.map((section) => (
+            <div key={section}>
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                {section}
+              </div>
+              <ul className="space-y-1.5">
+                {shortcuts
+                  .filter((s) => s.section === section)
+                  .map((s, i) => (
+                    <li
+                      key={`${section}-${i}`}
+                      className="flex items-center justify-between gap-3 text-sm"
+                    >
+                      <span className="text-slate-700 flex-1">{s.description}</span>
+                      <span className="inline-flex items-center gap-1">
+                        {s.keys.map((k, j) => (
+                          <kbd
+                            key={j}
+                            className="inline-flex items-center justify-center min-w-[24px] h-6 px-1.5 text-xs font-mono bg-white border border-slate-300 rounded shadow-sm"
+                          >
+                            {k}
+                          </kbd>
+                        ))}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </ModalBody>
+      <ModalFooter>
+        <button
+          onClick={onClose}
+          className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800"
+        >
+          Got it
+        </button>
+      </ModalFooter>
+    </Modal>
   )
 }
