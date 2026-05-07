@@ -13,7 +13,7 @@ import {
   Eye, EyeOff, CheckCircle2, Tag, Link2,
   ArrowUpRight, Layers, Package, MoreHorizontal, Plus, Pause, Play,
   Edit3, Bookmark, BookmarkPlus, Star, Trash2,
-  Download, FilterX, AlertCircle,
+  Download, FilterX, AlertCircle, Activity, TrendingUp,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -41,7 +41,7 @@ import { useListingEvents } from '@/lib/sync/use-listing-events'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 
 // ── Types ───────────────────────────────────────────────────────────
-type Lens = 'grid' | 'health' | 'matrix' | 'drafts'
+type Lens = 'grid' | 'health' | 'matrix' | 'drafts' | 'performance'
 
 // C.11 — saved view shape returned by /api/saved-views?surface=listings.
 // Mirrors the /products SavedView used by ProductsWorkspace; alerts
@@ -824,6 +824,14 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
         />
       )}
 
+      {lens === 'performance' && (
+        <PerformanceLens
+          lockChannel={lockChannel}
+          lockMarketplace={lockMarketplace}
+          onOpenDrawer={(id) => setDrawerListingId(id)}
+        />
+      )}
+
       {/* Detail drawer */}
       {drawerListingId && (
         <ListingDrawer id={drawerListingId} onClose={() => setDrawerListingId(null)} onChanged={() => { fetchGrid(); fetchFacets() }} />
@@ -847,6 +855,7 @@ function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) =>
     { key: 'health', labelKey: 'listings.lens.health', icon: AlertTriangle },
     { key: 'matrix', labelKey: 'listings.lens.matrix', icon: LayoutGrid },
     { key: 'drafts', labelKey: 'listings.lens.drafts', icon: Sparkles },
+    { key: 'performance', labelKey: 'listings.lens.performance', icon: Activity },
   ]
   return (
     <div className="inline-flex items-center bg-slate-100 rounded-md p-0.5">
@@ -3413,6 +3422,307 @@ function EmptyMatrixCell({
         <span className="text-xs uppercase tracking-wider">List</span>
       </Link>
     </Tooltip>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────
+// PerformanceLens — U.3
+// ────────────────────────────────────────────────────────────────────
+// Per-listing aggregates over the last N days. Sortable table with
+// units sold, revenue, velocity (units/day), avg selling price,
+// orders count, last sold timestamp, and the channel-listing's
+// current status. Click row → open drawer for the matching listing.
+//
+// Data flow: GET /api/listings/performance does a GROUP BY on
+// OrderItem joined to ChannelListing. The response carries a
+// totals rollup so the operator gets a "27 units · €2,914.00"
+// strip at the top without re-summing on the client.
+//
+// Empty state is informative rather than blank: until orders flow
+// through Xavia's channels, the lens shows "No orders yet in the
+// last N days" and the operator knows the surface itself works.
+// ────────────────────────────────────────────────────────────────────
+type PerformanceRow = {
+  sku: string
+  channel: string
+  marketplace: string | null
+  productId: string | null
+  productName: string | null
+  listing: {
+    id: string
+    listingStatus: string
+    syncStatus: string | null
+    price: number | null
+    quantity: number | null
+    externalListingId: string | null
+  } | null
+  unitsSold: number
+  grossRevenue: number
+  orderCount: number
+  avgSellingPrice: number
+  firstSoldAt: string | null
+  lastSoldAt: string | null
+  velocity: number
+}
+
+function PerformanceLens({
+  lockChannel,
+  lockMarketplace,
+  onOpenDrawer,
+}: {
+  lockChannel?: string
+  lockMarketplace?: string
+  onOpenDrawer: (id: string) => void
+}) {
+  const [range, setRange] = useState<'7d' | '30d' | '90d'>('30d')
+  const [sortBy, setSortBy] = useState<
+    'grossRevenue' | 'unitsSold' | 'velocity' | 'lastSoldAt' | 'avgSellingPrice'
+  >('grossRevenue')
+
+  const url = useMemo(() => {
+    const qs = new URLSearchParams()
+    qs.set('range', range)
+    if (lockChannel) qs.set('channel', lockChannel)
+    if (lockMarketplace) qs.set('marketplace', lockMarketplace)
+    qs.set('limit', '200')
+    return `/api/listings/performance?${qs.toString()}`
+  }, [range, lockChannel, lockMarketplace])
+
+  const { data, loading, error, refetch } = usePolledList<{
+    rangeDays: number
+    rangeStart: string
+    rangeEnd: string
+    rows: PerformanceRow[]
+    totals: { unitsSold: number; grossRevenue: number; orderCount: number }
+  }>({
+    url,
+    intervalMs: 60_000,
+    invalidationTypes: ['listing.updated', 'listing.created', 'bulk-job.completed'],
+  })
+
+  const sorted = useMemo(() => {
+    if (!data?.rows) return [] as PerformanceRow[]
+    const arr = [...data.rows]
+    arr.sort((a, b) => {
+      if (sortBy === 'lastSoldAt') {
+        const av = a.lastSoldAt ? new Date(a.lastSoldAt).getTime() : 0
+        const bv = b.lastSoldAt ? new Date(b.lastSoldAt).getTime() : 0
+        return bv - av
+      }
+      const av = (a as any)[sortBy] ?? 0
+      const bv = (b as any)[sortBy] ?? 0
+      return bv - av
+    })
+    return arr
+  }, [data?.rows, sortBy])
+
+  const headerCell = (key: typeof sortBy, label: string, align: 'left' | 'right' = 'right') => (
+    <th
+      onClick={() => setSortBy(key)}
+      className={`px-3 py-2 text-sm font-semibold uppercase tracking-wider cursor-pointer hover:bg-slate-100 select-none ${align === 'right' ? 'text-right' : 'text-left'} ${sortBy === key ? 'text-blue-700' : 'text-slate-700'}`}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {sortBy === key && <ChevronDown size={11} />}
+      </span>
+    </th>
+  )
+
+  if (loading && !data) {
+    return (
+      <Card>
+        <Skeleton variant="text" lines={6} />
+      </Card>
+    )
+  }
+  if (error && !data) {
+    return (
+      <Card>
+        <div className="text-rose-600 text-md py-8 text-center space-y-2">
+          <div>Failed to load performance: {error}</div>
+          <button
+            onClick={() => refetch()}
+            className="h-8 px-3 text-base bg-white text-rose-700 border border-rose-300 rounded hover:bg-rose-50 inline-flex items-center gap-1.5 mx-auto"
+          >
+            <RefreshCw size={12} /> Retry
+          </button>
+        </div>
+      </Card>
+    )
+  }
+  if (!data) return null
+
+  return (
+    <div className="space-y-3">
+      {/* Header — range selector + totals strip */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="inline-flex items-center bg-slate-100 rounded-md p-0.5">
+          {(['7d', '30d', '90d'] as const).map((r) => (
+            <button
+              key={r}
+              onClick={() => setRange(r)}
+              aria-pressed={range === r}
+              className={`h-7 px-3 text-base font-medium rounded transition-colors ${range === r ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+            >
+              Last {r === '7d' ? '7 days' : r === '30d' ? '30 days' : '90 days'}
+            </button>
+          ))}
+        </div>
+        {data.rows.length > 0 && (
+          <div className="flex items-center gap-3 text-base text-slate-500 ml-auto">
+            <span>
+              <span className="font-semibold text-slate-700 tabular-nums">
+                {data.totals.unitsSold.toLocaleString()}
+              </span>{' '}
+              units
+            </span>
+            <span className="text-slate-300">·</span>
+            <span>
+              <span className="font-semibold text-slate-700 tabular-nums">
+                €{data.totals.grossRevenue.toFixed(2)}
+              </span>{' '}
+              revenue
+            </span>
+            <span className="text-slate-300">·</span>
+            <span>
+              <span className="font-semibold text-slate-700 tabular-nums">
+                {data.totals.orderCount.toLocaleString()}
+              </span>{' '}
+              orders
+            </span>
+          </div>
+        )}
+      </div>
+
+      {sorted.length === 0 ? (
+        <Card>
+          <div className="text-center py-12 space-y-2">
+            <Activity size={32} className="text-slate-300 mx-auto" />
+            <div className="text-md font-semibold text-slate-700">
+              No orders yet in the last {data.rangeDays} days
+            </div>
+            <div className="text-sm text-slate-500">
+              Once orders flow through{' '}
+              {lockChannel ? lockChannel.toLowerCase() : 'your channels'}, this
+              lens will show units sold, revenue, and sales velocity per
+              listing.
+            </div>
+          </div>
+        </Card>
+      ) : (
+        <Card noPadding>
+          <div className="overflow-x-auto">
+            <table className="w-full text-md">
+              <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
+                <tr>
+                  <th className="px-3 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                    Listing
+                  </th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                    Channel
+                  </th>
+                  {headerCell('unitsSold', 'Units')}
+                  {headerCell('grossRevenue', 'Revenue')}
+                  {headerCell('avgSellingPrice', 'Avg price')}
+                  {headerCell('velocity', 'Velocity')}
+                  <th className="px-3 py-2 text-right text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                    Orders
+                  </th>
+                  {headerCell('lastSoldAt', 'Last sold')}
+                  <th className="px-3 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                    Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((r, i) => {
+                  const handleClick = () => {
+                    if (r.listing) onOpenDrawer(r.listing.id)
+                  }
+                  // Velocity tone: hot (≥1/day) emerald, warm (≥0.3) slate,
+                  // cold (<0.3) muted. Heuristic — operators can re-anchor
+                  // by sorting on the Velocity column directly.
+                  const velocityTone =
+                    r.velocity >= 1
+                      ? 'text-emerald-700'
+                      : r.velocity >= 0.3
+                        ? 'text-slate-700'
+                        : 'text-slate-400'
+                  return (
+                    <tr
+                      key={`${r.sku}::${r.channel}::${r.marketplace}::${i}`}
+                      onClick={handleClick}
+                      className={`border-b border-slate-100 hover:bg-slate-50 ${r.listing ? 'cursor-pointer' : ''}`}
+                    >
+                      <td className="px-3 py-2">
+                        <div className="font-medium text-slate-900 truncate max-w-xs">
+                          {r.productName ?? '(unknown product)'}
+                        </div>
+                        <div className="text-xs text-slate-500 font-mono">
+                          {r.sku}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-sm">
+                        <div className="inline-flex items-center gap-1.5">
+                          <span className="font-mono text-xs">{r.channel}</span>
+                          {r.marketplace && (
+                            <span className="font-mono text-xs bg-slate-100 px-1 py-0.5 rounded text-slate-600">
+                              {r.marketplace}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        {r.unitsSold}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums font-semibold">
+                        €{r.grossRevenue.toFixed(2)}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-500">
+                        €{r.avgSellingPrice.toFixed(2)}
+                      </td>
+                      <td className={`px-3 py-2 text-right tabular-nums ${velocityTone}`}>
+                        {r.velocity.toFixed(2)}/d
+                        {r.velocity >= 1 && (
+                          <TrendingUp size={11} className="inline ml-1" />
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-500">
+                        {r.orderCount}
+                      </td>
+                      <td className="px-3 py-2 text-sm text-slate-500 whitespace-nowrap">
+                        {r.lastSoldAt
+                          ? new Date(r.lastSoldAt).toLocaleDateString('en-GB', {
+                              day: 'numeric',
+                              month: 'short',
+                            })
+                          : '—'}
+                      </td>
+                      <td className="px-3 py-2">
+                        {r.listing ? (
+                          <Badge
+                            variant={
+                              STATUS_VARIANT[r.listing.listingStatus] ?? 'default'
+                            }
+                            size="sm"
+                          >
+                            {r.listing.listingStatus}
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-slate-400">
+                            no listing
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>
   )
 }
 

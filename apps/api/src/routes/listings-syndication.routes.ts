@@ -1849,6 +1849,164 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
   // alongside (toggle visibility, set vendor, etc.) — for now this
   // surface is the entry point they need.
   // ─────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────
+  // U.3 — Performance lens aggregation.
+  //
+  // GET /api/listings/performance?range=7d|30d|90d&channel=&marketplace=&limit=200
+  //
+  // GROUPs OrderItem by (sku, channel, marketplace, productId) over
+  // the last N days, joins each row to its matching ChannelListing
+  // so the lens cell can open the drawer / surface listingStatus +
+  // current price. Single $queryRawUnsafe for the aggregate,
+  // then a per-row Prisma fetch for the listing context (cap at 200
+  // rows so the second query stays bounded).
+  //
+  // Date predicate: prefer order.purchaseDate (the customer-side
+  // event), fall back to order.createdAt (ingestion time) for legacy
+  // rows where purchaseDate is null. The audit showed Xavia has near-
+  // zero orders today; the lens is correct shape for when real
+  // orders flow through.
+  // ─────────────────────────────────────────────────────────────────
+  fastify.get('/listings/performance', async (request, reply) => {
+    try {
+      const q = request.query as Record<string, string | undefined>
+      const rangeRaw = (q.range ?? '30d').toLowerCase()
+      const rangeDays =
+        rangeRaw === '7d' ? 7 : rangeRaw === '90d' ? 90 : 30
+      const channelFilter = q.channel
+      const marketplaceFilter = q.marketplace
+      const limit = Math.min(500, Math.max(1, Math.floor(safeNum(q.limit) ?? 200)))
+      const since = new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000)
+
+      // Raw aggregation. COALESCE on the date so legacy rows missing
+      // purchaseDate still count if they were ingested in the window.
+      const channelClause = channelFilter
+        ? `AND o."channel"::text = '${channelFilter.replace(/'/g, "''")}'`
+        : ''
+      const marketplaceClause = marketplaceFilter
+        ? `AND o."marketplace" = '${marketplaceFilter.replace(/'/g, "''")}'`
+        : ''
+      const rows = (await prisma.$queryRawUnsafe(
+        `SELECT
+            oi.sku                                        AS sku,
+            o."channel"::text                             AS channel,
+            o."marketplace"                               AS marketplace,
+            oi."productId"                                AS product_id,
+            COUNT(DISTINCT o.id)::int                     AS order_count,
+            COALESCE(SUM(oi.quantity), 0)::int            AS units_sold,
+            COALESCE(SUM(oi.quantity * oi.price), 0)::float AS gross_revenue,
+            COALESCE(AVG(oi.price), 0)::float             AS avg_selling_price,
+            MIN(COALESCE(o."purchaseDate", o."createdAt")) AS first_sold_at,
+            MAX(COALESCE(o."purchaseDate", o."createdAt")) AS last_sold_at
+         FROM "OrderItem" oi
+         JOIN "Order" o ON oi."orderId" = o.id
+         WHERE COALESCE(o."purchaseDate", o."createdAt") >= $1
+           ${channelClause}
+           ${marketplaceClause}
+         GROUP BY oi.sku, o."channel", o."marketplace", oi."productId"
+         ORDER BY gross_revenue DESC
+         LIMIT $2`,
+        since,
+        limit,
+      )) as Array<{
+        sku: string
+        channel: string
+        marketplace: string | null
+        product_id: string | null
+        order_count: number
+        units_sold: number
+        gross_revenue: number
+        avg_selling_price: number
+        first_sold_at: Date | null
+        last_sold_at: Date | null
+      }>
+
+      // Resolve matching ChannelListing rows (one per sku × channel ×
+      // marketplace tuple). Use a single findMany with an OR of
+      // tuple-matches; cheaper than N round-trips. For sale-of-record
+      // SKUs that don't have a ChannelListing (manual orders, archived
+      // listings) we render the row without a listing reference.
+      const listingMatches = rows.length === 0
+        ? []
+        : await prisma.channelListing.findMany({
+            where: {
+              OR: rows.map((r) => ({
+                product: { sku: r.sku },
+                channel: r.channel,
+                ...(r.marketplace ? { marketplace: r.marketplace } : {}),
+              })),
+            },
+            select: {
+              id: true,
+              channel: true,
+              marketplace: true,
+              listingStatus: true,
+              syncStatus: true,
+              price: true,
+              quantity: true,
+              externalListingId: true,
+              product: { select: { id: true, sku: true, name: true } },
+            },
+          })
+      const byTuple = new Map<string, (typeof listingMatches)[number]>()
+      for (const l of listingMatches) {
+        byTuple.set(`${l.product?.sku}::${l.channel}::${l.marketplace}`, l)
+      }
+
+      const enriched = rows.map((r) => {
+        const tuple = `${r.sku}::${r.channel}::${r.marketplace}`
+        const listing = byTuple.get(tuple) ?? null
+        const velocity =
+          rangeDays > 0 ? r.units_sold / rangeDays : r.units_sold
+        return {
+          sku: r.sku,
+          channel: r.channel,
+          marketplace: r.marketplace,
+          productId: r.product_id,
+          productName: listing?.product?.name ?? null,
+          listing: listing
+            ? {
+                id: listing.id,
+                listingStatus: listing.listingStatus,
+                syncStatus: listing.syncStatus,
+                price: listing.price == null ? null : Number(listing.price),
+                quantity: listing.quantity,
+                externalListingId: listing.externalListingId,
+              }
+            : null,
+          unitsSold: r.units_sold,
+          grossRevenue: r.gross_revenue,
+          orderCount: r.order_count,
+          avgSellingPrice: r.avg_selling_price,
+          firstSoldAt: r.first_sold_at,
+          lastSoldAt: r.last_sold_at,
+          velocity,
+        }
+      })
+
+      const totals = enriched.reduce(
+        (acc, r) => {
+          acc.unitsSold += r.unitsSold
+          acc.grossRevenue += r.grossRevenue
+          acc.orderCount += r.orderCount
+          return acc
+        },
+        { unitsSold: 0, grossRevenue: 0, orderCount: 0 },
+      )
+
+      return {
+        rangeDays,
+        rangeStart: since,
+        rangeEnd: new Date(),
+        rows: enriched,
+        totals,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[listings/performance] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   fastify.get('/listings/path-a/overview', async (request, reply) => {
     try {
       const q = request.query as Record<string, string | undefined>
