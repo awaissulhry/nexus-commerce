@@ -24,7 +24,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import {
   Plus, Pencil, Trash2, ScrollText, Check, X, RefreshCw, FlaskConical, ArrowRight,
-  GripVertical,
+  GripVertical, Copy,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -165,6 +165,37 @@ export default function RulesClient() {
     }
   }
 
+  // O.73: duplicate a rule. Most rule edits start as "I want
+  // something like rule X but with a different threshold" — cloning
+  // saves the operator from re-typing every condition. Posts a new
+  // rule with name prefixed by "Copy of " and isActive=false so a
+  // half-edited duplicate doesn't fire on real shipments. The new
+  // priority is +5 of the source so the row lands directly under it.
+  const onDuplicate = async (rule: ShippingRule) => {
+    const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipping-rules`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: t('rules.duplicate.namePrefix', { name: rule.name }),
+        description: rule.description,
+        priority: rule.priority + 5,
+        isActive: false,
+        conditions: rule.conditions,
+        actions: rule.actions,
+      }),
+    })
+    if (res.ok) {
+      const created = await res.json()
+      toast.success(t('rules.toast.duplicated'))
+      await fetchRules()
+      // Pop the editor on the new rule so the operator can tweak
+      // and enable in one flow.
+      setEditing(created)
+    } else {
+      toast.error(t('common.error'))
+    }
+  }
+
   const onToggleActive = async (rule: ShippingRule) => {
     const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipping-rules/${rule.id}`, {
       method: 'PATCH',
@@ -247,6 +278,7 @@ export default function RulesClient() {
                   onToggleActive={onToggleActive}
                   onEdit={setEditing}
                   onDelete={onDelete}
+                  onDuplicate={onDuplicate}
                   t={t}
                 />
               ))}
@@ -508,12 +540,14 @@ function SortableRuleRow({
   onToggleActive,
   onEdit,
   onDelete,
+  onDuplicate,
   t,
 }: {
   rule: ShippingRule
   onToggleActive: (rule: ShippingRule) => void
   onEdit: (rule: ShippingRule) => void
   onDelete: (rule: ShippingRule) => void
+  onDuplicate: (rule: ShippingRule) => void
   t: (key: string, vars?: Record<string, string | number>) => string
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: r.id })
@@ -554,6 +588,9 @@ function SortableRuleRow({
           </button>
           <button onClick={() => onEdit(r)} className="h-6 w-6 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded" title={t('common.edit') ?? 'Edit'}>
             <Pencil size={11} />
+          </button>
+          <button onClick={() => onDuplicate(r)} className="h-6 w-6 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded" title={t('rules.action.duplicate')}>
+            <Copy size={11} />
           </button>
           <button onClick={() => onDelete(r)} className="h-6 w-6 inline-flex items-center justify-center text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded" title={t('common.delete')}>
             <Trash2 size={11} />
