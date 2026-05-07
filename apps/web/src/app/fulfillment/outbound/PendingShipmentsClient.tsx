@@ -6,7 +6,7 @@
 // grouped by ship-by urgency, filterable by channel + marketplace,
 // bulk-create-able. Drawer (per-order detail) lands in O.5.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Truck, Search, RefreshCw, Crown, AlertTriangle, Clock, Package, X, Plus,
@@ -156,6 +156,40 @@ export default function PendingShipmentsClient() {
   }, [])
   useEffect(() => { fetchViews() }, [fetchViews])
 
+  // O.42: cross-tab refresh of the views dropdown when a sibling tab
+  // edits the list (saved a new view, deleted one, toggled default).
+  useInvalidationChannel('saved-view.changed', () => {
+    fetchViews()
+  })
+
+  // O.41: default-view auto-apply on first visit. Triggers exactly
+  // once per tab session: when the operator lands on /fulfillment/
+  // outbound with NO existing URL filters AND a default view exists,
+  // apply it. Subsequent navigation that clears filters won't
+  // re-apply (URL state is the operator's source of truth).
+  const autoAppliedDefaultRef = useRef(false)
+  useEffect(() => {
+    if (autoAppliedDefaultRef.current) return
+    if (views.length === 0) return
+    // Only auto-apply when the URL has no operator-set filters yet.
+    const hasAnyFilter =
+      params.get('channel') ||
+      params.get('urgency') ||
+      params.get('q') ||
+      params.get('sort')
+    if (hasAnyFilter) {
+      autoAppliedDefaultRef.current = true // operator's URL wins; don't auto-apply later either
+      return
+    }
+    const def = views.find((v) => v.isDefault)
+    if (def) {
+      autoAppliedDefaultRef.current = true
+      applyView(def)
+    }
+    // applyView reads from views array; including views as a dep is
+    // fine — once we mark auto-applied, the early return short-circuits.
+  }, [views, params])
+
   // Apply a view by replacing the URL params with the view's filters.
   const applyView = (view: SavedView) => {
     const next = new URLSearchParams()
@@ -186,6 +220,7 @@ export default function PendingShipmentsClient() {
       })
       if (res.ok) {
         toast.success('View saved')
+        emitInvalidation({ type: 'saved-view.changed', meta: { surface: 'outbound.pending' } })
         fetchViews()
       } else {
         toast.error('Failed to save view')
@@ -200,6 +235,7 @@ export default function PendingShipmentsClient() {
     const res = await fetch(`${getBackendUrl()}/api/saved-views/${id}`, { method: 'DELETE' })
     if (res.ok) {
       toast.success('View deleted')
+      emitInvalidation({ type: 'saved-view.changed', id, meta: { surface: 'outbound.pending' } })
       fetchViews()
     } else {
       toast.error('Failed to delete view')
@@ -212,7 +248,10 @@ export default function PendingShipmentsClient() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ isDefault: !view.isDefault }),
     })
-    if (res.ok) fetchViews()
+    if (res.ok) {
+      emitInvalidation({ type: 'saved-view.changed', id: view.id, meta: { surface: 'outbound.pending' } })
+      fetchViews()
+    }
   }
 
   const setParam = useCallback(
