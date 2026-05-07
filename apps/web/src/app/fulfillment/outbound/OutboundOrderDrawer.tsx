@@ -1125,6 +1125,26 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                           )
                         })}
                     </div>
+                    {/* O.74: link to the full audit log for this
+                        order. The activity feed shows the most-recent
+                        20; the full audit log includes everything
+                        plus before/after JSON for forensic review. */}
+                    {(() => {
+                      const shipmentIds = data.shipments.map((s) => s.id)
+                      if (shipmentIds.length === 0) return null
+                      // /audit-log accepts entityType + a comma-separated
+                      // entityIds for multi-shipment orders.
+                      const href = `/audit-log?entityType=Shipment&entityIds=${shipmentIds.join(',')}`
+                      return (
+                        <Link
+                          href={href}
+                          className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1"
+                        >
+                          {t('outbound.drawer.activityViewAll')}
+                          <ExternalLink size={9} />
+                        </Link>
+                      )
+                    })()}
                   </div>
                 </Card>
               )}

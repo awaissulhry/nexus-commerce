@@ -210,6 +210,11 @@ export default function AuditLogClient() {
 
   // URL-shareable filter state.
   const urlEntityType = searchParams.get('entityType') ?? ''
+  const urlEntityId = searchParams.get('entityId') ?? ''
+  // O.74: drawer "View full audit log" links pass a comma-separated
+  // entityIds for multi-package orders. Backend resolves it to an
+  // IN clause; the client just forwards.
+  const urlEntityIds = searchParams.get('entityIds') ?? ''
   const urlAction = searchParams.get('action') ?? ''
   const urlSearch = searchParams.get('search') ?? ''
   const urlSince = searchParams.get('since') ?? ''
@@ -257,6 +262,8 @@ export default function AuditLogClient() {
     try {
       const url = new URL(`${getBackendUrl()}/api/audit-log/search`)
       if (urlEntityType) url.searchParams.set('entityType', urlEntityType)
+      if (urlEntityId) url.searchParams.set('entityId', urlEntityId)
+      else if (urlEntityIds) url.searchParams.set('entityIds', urlEntityIds)
       if (urlAction) url.searchParams.set('action', urlAction)
       if (urlSearch) url.searchParams.set('search', urlSearch)
       if (urlSince) url.searchParams.set('since', urlSince)
@@ -275,7 +282,7 @@ export default function AuditLogClient() {
     } finally {
       setLoading(false)
     }
-  }, [urlEntityType, urlAction, urlSearch, urlSince])
+  }, [urlEntityType, urlEntityId, urlEntityIds, urlAction, urlSearch, urlSince])
 
   useEffect(() => {
     fetchData()

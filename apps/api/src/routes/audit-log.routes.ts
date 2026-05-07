@@ -19,6 +19,10 @@ const auditLogRoutes: FastifyPluginAsync = async (fastify) => {
     Querystring: {
       entityType?: string
       entityId?: string
+      // O.74: comma-separated set support so callers (drawer's
+      // "View full audit log") can pass multiple shipment IDs for
+      // a multi-package order in a single query string.
+      entityIds?: string
       userId?: string
       action?: string
       search?: string
@@ -35,6 +39,10 @@ const auditLogRoutes: FastifyPluginAsync = async (fastify) => {
       const where: Prisma.AuditLogWhereInput = {}
       if (q.entityType) where.entityType = q.entityType
       if (q.entityId) where.entityId = q.entityId
+      else if (q.entityIds) {
+        const ids = q.entityIds.split(',').map((s) => s.trim()).filter(Boolean)
+        if (ids.length > 0) where.entityId = { in: ids }
+      }
       if (q.userId) where.userId = q.userId
       if (q.action) where.action = q.action
       if (q.since || q.until) {
