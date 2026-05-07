@@ -19,6 +19,7 @@ import {
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { useToast } from '@/components/ui/Toast'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 
 type DrawerOrder = {
@@ -129,14 +130,14 @@ function formatMoney(v: number, currency: string | null): string {
   }
 }
 
-function urgencyOf(d: string | null): { tint: string; label: string } | null {
+function urgencyOf(d: string | null): { tint: string; tKey: string } | null {
   if (!d) return null
   const t = new Date(d).getTime()
   const now = Date.now()
   const diffH = (t - now) / 3_600_000
-  if (diffH < 0) return { tint: 'bg-rose-50 text-rose-700 border-rose-200', label: 'Overdue' }
-  if (diffH < 24) return { tint: 'bg-amber-50 text-amber-700 border-amber-200', label: 'Today' }
-  if (diffH < 48) return { tint: 'bg-yellow-50 text-yellow-700 border-yellow-200', label: 'Tomorrow' }
+  if (diffH < 0) return { tint: 'bg-rose-50 text-rose-700 border-rose-200', tKey: 'outbound.drawer.urgency.overdue' }
+  if (diffH < 24) return { tint: 'bg-amber-50 text-amber-700 border-amber-200', tKey: 'outbound.drawer.urgency.today' }
+  if (diffH < 48) return { tint: 'bg-yellow-50 text-yellow-700 border-yellow-200', tKey: 'outbound.drawer.urgency.tomorrow' }
   return null
 }
 
@@ -147,6 +148,7 @@ interface Props {
 
 export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
   const { toast } = useToast()
+  const { t } = useTranslations()
   const [data, setData] = useState<DrawerOrder | null>(null)
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -161,9 +163,9 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
         { cache: 'no-store' },
       )
       if (res.ok) setData(await res.json())
-      else toast.error('Failed to load order')
+      else toast.error(t('common.error'))
     } catch {
-      toast.error('Failed to load order')
+      toast.error(t('common.error'))
     } finally {
       setLoading(false)
     }
@@ -192,13 +194,13 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
       })
       const out = await res.json()
       if (!res.ok || (out.created ?? 0) === 0) {
-        toast.error(out?.errors?.[0]?.reason ?? out.error ?? 'Could not create shipment')
+        toast.error(out?.errors?.[0]?.reason ?? out.error ?? t('common.error'))
         return
       }
-      toast.success('Shipment created')
+      toast.success(t('outbound.pending.toast.createdAll', { n: 1 }))
       fetchDetail()
     } catch {
-      toast.error('Could not create shipment')
+      toast.error(t('common.error'))
     } finally {
       setCreating(false)
     }
@@ -224,7 +226,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label="Order detail"
+      aria-label={t('outbound.drawer.lifecycle')}
     >
       <div
         className="w-full max-w-[640px] bg-white shadow-2xl border-l border-slate-200 flex flex-col h-full animate-slide-from-right"
@@ -235,7 +237,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-lg font-semibold text-slate-900 truncate">
-                {data?.customerName || (loading ? 'Loading…' : 'Order')}
+                {data?.customerName || (loading ? t('common.loading') : t('outbound.pending.col.order'))}
               </h2>
               {data && (
                 <Badge variant="info" size="sm">
@@ -262,7 +264,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
           <button
             onClick={onClose}
             className="h-8 w-8 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded"
-            aria-label="Close"
+            aria-label={t('common.close')}
           >
             <X size={16} />
           </button>
@@ -271,7 +273,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
         {/* ── Body ─────────────────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           {loading && !data ? (
-            <div className="text-md text-slate-500 py-8 text-center">Loading…</div>
+            <div className="text-md text-slate-500 py-8 text-center">{t('common.loading')}</div>
           ) : data ? (
             <>
               {/* Urgency banner */}
@@ -279,7 +281,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                 <div className={`flex items-center gap-2 px-3 py-2 rounded border ${urgency.tint}`}>
                   <AlertTriangle size={14} />
                   <span className="text-md font-semibold">
-                    Ship by {urgency.label.toLowerCase()}
+                    {t('outbound.drawer.shipBy')} {t(urgency.tKey).toLowerCase()}
                   </span>
                   <span className="text-md ml-auto">
                     {data.shipByDate ? new Date(data.shipByDate).toLocaleString('it-IT') : ''}
@@ -291,14 +293,14 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
               <Card>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
-                    <User size={12} /> Customer
+                    <User size={12} /> {t('outbound.drawer.customer')}
                   </div>
                   <div className="text-md text-slate-900">{data.customerName || '—'}</div>
                   <div className="text-base text-slate-600">{data.customerEmail || '—'}</div>
                   {ship && (
                     <div className="pt-2 border-t border-slate-100">
                       <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                        <MapPin size={12} /> Ship to
+                        <MapPin size={12} /> {t('outbound.drawer.shipTo')}
                       </div>
                       <div className="text-base text-slate-700 whitespace-pre-line">
                         {[
@@ -317,21 +319,21 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
               <Card>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
-                    <Clock size={12} /> Lifecycle
+                    <Clock size={12} /> {t('outbound.drawer.lifecycle')}
                   </div>
                   <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-base">
-                    <Row label="Purchased" value={data.purchaseDate} />
-                    {data.paidAt && <Row label="Paid" value={data.paidAt} />}
-                    <Row label="Ship by" value={data.shipByDate} highlight={!!urgency} />
+                    <Row label={t('outbound.drawer.lifecycle.purchased')} value={data.purchaseDate} />
+                    {data.paidAt && <Row label={t('outbound.drawer.lifecycle.paid')} value={data.paidAt} />}
+                    <Row label={t('outbound.drawer.lifecycle.shipBy')} value={data.shipByDate} highlight={!!urgency} />
                     {data.earliestShipDate && (
-                      <Row label="Earliest ship" value={data.earliestShipDate} />
+                      <Row label={t('outbound.drawer.lifecycle.earliestShip')} value={data.earliestShipDate} />
                     )}
                     {data.latestDeliveryDate && (
-                      <Row label="Promised by" value={data.latestDeliveryDate} />
+                      <Row label={t('outbound.drawer.lifecycle.promisedBy')} value={data.latestDeliveryDate} />
                     )}
-                    {data.shippedAt && <Row label="Shipped" value={data.shippedAt} />}
-                    {data.deliveredAt && <Row label="Delivered" value={data.deliveredAt} />}
-                    {data.cancelledAt && <Row label="Cancelled" value={data.cancelledAt} />}
+                    {data.shippedAt && <Row label={t('outbound.drawer.lifecycle.shipped')} value={data.shippedAt} />}
+                    {data.deliveredAt && <Row label={t('outbound.drawer.lifecycle.delivered')} value={data.deliveredAt} />}
+                    {data.cancelledAt && <Row label={t('outbound.drawer.lifecycle.cancelled')} value={data.cancelledAt} />}
                   </dl>
                 </div>
               </Card>
@@ -341,7 +343,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
-                      <Package size={12} /> Items ({data.items.length})
+                      <Package size={12} /> {t('outbound.drawer.items', { n: data.items.length })}
                     </div>
                     <div className="text-md font-semibold text-slate-900 tabular-nums">
                       {formatMoney(data.totalPrice, data.currencyCode)}
@@ -389,11 +391,11 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
               <Card>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
-                    <Truck size={12} /> Shipments ({data.shipments.length})
+                    <Truck size={12} /> {t('outbound.drawer.shipments', { n: data.shipments.length })}
                   </div>
                   {data.shipments.length === 0 ? (
                     <div className="text-base text-slate-500 py-2">
-                      No shipment yet. Click <strong>Create shipment</strong> below to start.
+                      {t('outbound.drawer.noShipmentYet')}
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -457,7 +459,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                 <Card>
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
-                      <Clock size={12} /> Tracking timeline
+                      <Clock size={12} /> {t('outbound.drawer.timeline')}
                     </div>
                     <div className="space-y-1.5">
                       {data.shipments
@@ -499,7 +501,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                 <details className="group">
                   <summary className="cursor-pointer text-sm font-semibold text-slate-500 uppercase tracking-wider hover:text-slate-700">
                     <CreditCard size={12} className="inline mr-1" />
-                    Channel metadata
+                    {t('outbound.drawer.channelMeta')}
                   </summary>
                   <pre className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded text-xs text-slate-700 overflow-x-auto max-h-64 overflow-y-auto">
                     {JSON.stringify(channelMetadata, null, 2)}
@@ -519,7 +521,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                 disabled={creating}
                 className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
               >
-                <Plus size={12} /> Create shipment
+                <Plus size={12} /> {t('outbound.drawer.createShipment')}
               </button>
             ) : (() => {
               // O.13: surface the next-step CTA based on shipment state.
@@ -534,14 +536,14 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                     href={`/fulfillment/outbound/pack/${ship.id}`}
                     className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5"
                   >
-                    <Plus size={12} /> Pack &amp; ready
+                    <Plus size={12} /> {t('outbound.drawer.packAndReady')}
                   </Link>
                 )
               }
               return (
                 <span className="inline-flex items-center gap-1.5 h-8 px-3 text-base text-emerald-700 bg-emerald-50 border border-emerald-200 rounded">
                   <CheckCircle2 size={12} />
-                  {ship.status === 'PACKED' ? 'Packed — print label next' : 'Shipment in flight'}
+                  {ship.status === 'PACKED' ? t('outbound.drawer.packedNext') : t('outbound.drawer.shipmentInFlight')}
                 </span>
               )
             })()}
@@ -553,14 +555,14 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                 href={`/fulfillment/returns/new?orderId=${data.id}`}
                 className="h-8 px-3 text-base text-slate-700 border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1.5"
               >
-                <Undo2 size={11} /> Generate return
+                <Undo2 size={11} /> {t('outbound.drawer.generateReturn')}
               </Link>
             )}
             <Link
               href={`/orders/${data.id}`}
               className="ml-auto h-8 px-3 text-base text-slate-700 border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1.5"
             >
-              Open full order
+              {t('outbound.drawer.openFullOrder')}
               <ExternalLink size={11} />
             </Link>
           </div>

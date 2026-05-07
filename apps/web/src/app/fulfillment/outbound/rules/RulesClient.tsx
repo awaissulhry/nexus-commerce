@@ -12,6 +12,7 @@ import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface RuleConditions {
@@ -62,6 +63,7 @@ const CHANNEL_OPTIONS = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY', 'MA
 export default function RulesClient() {
   const { toast } = useToast()
   const askConfirm = useConfirm()
+  const { t } = useTranslations()
   const [rules, setRules] = useState<ShippingRule[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<ShippingRule | null>(null)
@@ -84,19 +86,19 @@ export default function RulesClient() {
 
   const onDelete = async (rule: ShippingRule) => {
     if (!(await askConfirm({
-      title: 'Delete rule?',
-      description: `"${rule.name}" will stop firing. This cannot be undone.`,
-      confirmLabel: 'Delete',
+      title: t('rules.delete.title'),
+      description: t('rules.delete.description', { name: rule.name }),
+      confirmLabel: t('common.delete'),
       tone: 'danger',
     }))) return
     const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipping-rules/${rule.id}`, {
       method: 'DELETE',
     })
     if (res.ok) {
-      toast.success('Rule deleted')
+      toast.success(t('rules.toast.deleted'))
       fetchRules()
     } else {
-      toast.error('Failed to delete')
+      toast.error(t('common.error'))
     }
   }
 
@@ -107,48 +109,47 @@ export default function RulesClient() {
       body: JSON.stringify({ isActive: !rule.isActive }),
     })
     if (res.ok) {
-      toast.success(rule.isActive ? 'Rule disabled' : 'Rule enabled')
+      toast.success(rule.isActive ? t('rules.toast.disabled') : t('rules.toast.enabled'))
       fetchRules()
     } else {
-      toast.error('Failed to update')
+      toast.error(t('common.error'))
     }
   }
 
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Shipping rules"
-        description="WHEN ⟨conditions⟩ THEN ⟨actions⟩. Walked in priority ASC; first match wins. Applies at shipment creation."
+        title={t('rules.title')}
+        description={t('rules.description')}
         breadcrumbs={[
-          { label: 'Fulfillment', href: '/fulfillment' },
-          { label: 'Outbound', href: '/fulfillment/outbound' },
+          { label: t('nav.fulfillment'), href: '/fulfillment' },
+          { label: t('nav.outbound'), href: '/fulfillment/outbound' },
           { label: 'Rules' },
         ]}
         actions={
           <div className="flex items-center gap-2">
             <button onClick={fetchRules} className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
-              <RefreshCw size={12} /> Refresh
+              <RefreshCw size={12} /> {t('common.refresh')}
             </button>
             <button onClick={() => setShowNew(true)} className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5">
-              <Plus size={12} /> New rule
+              <Plus size={12} /> {t('rules.newRule')}
             </button>
           </div>
         }
       />
 
       {loading && rules.length === 0 ? (
-        <Card><div className="text-md text-slate-500 py-8 text-center">Loading rules…</div></Card>
+        <Card><div className="text-md text-slate-500 py-8 text-center">{t('common.loading')}</div></Card>
       ) : rules.length === 0 ? (
         <Card>
           <div className="py-8 text-center space-y-2">
             <ScrollText size={28} className="mx-auto text-slate-300" />
-            <div className="text-md text-slate-700 font-medium">No shipping rules yet</div>
+            <div className="text-md text-slate-700 font-medium">{t('rules.empty.title')}</div>
             <div className="text-base text-slate-500">
-              Without rules, every shipment defaults to SENDCLOUD.<br />
-              Define a rule to override carrier / service per order context.
+              {t('rules.empty.description')}
             </div>
             <button onClick={() => setShowNew(true)} className="h-8 px-3 mt-2 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5">
-              <Plus size={12} /> Create the first rule
+              <Plus size={12} /> {t('rules.empty.cta')}
             </button>
           </div>
         </Card>
@@ -157,11 +158,11 @@ export default function RulesClient() {
           <table className="w-full text-md">
             <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
-                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 w-16">Pri</th>
-                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">Rule</th>
-                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">When</th>
-                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">Then</th>
-                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">Activity</th>
+                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 w-16">{t('rules.col.priority')}</th>
+                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('rules.col.rule')}</th>
+                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('rules.col.when')}</th>
+                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('rules.col.then')}</th>
+                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('rules.col.activity')}</th>
                 <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700"></th>
               </tr>
             </thead>
@@ -176,14 +177,14 @@ export default function RulesClient() {
                   <td className="px-3 py-2 text-sm text-slate-600">{summarizeConditions(r.conditions)}</td>
                   <td className="px-3 py-2 text-sm text-slate-600">{summarizeActions(r.actions)}</td>
                   <td className="px-3 py-2 text-sm text-slate-600">
-                    <span className="tabular-nums">{r.triggerCount}</span> fires
-                    {r.lastFiredAt && <div className="text-xs text-slate-400">last: {new Date(r.lastFiredAt).toLocaleDateString('it-IT')}</div>}
+                    {t('rules.fires', { n: r.triggerCount })}
+                    {r.lastFiredAt && <div className="text-xs text-slate-400">{t('rules.lastFired', { date: new Date(r.lastFiredAt).toLocaleDateString('it-IT') })}</div>}
                   </td>
                   <td className="px-3 py-2 text-right">
                     <div className="flex items-center gap-1 justify-end">
-                      <button onClick={() => onToggleActive(r)} className="h-6 px-2 text-sm text-slate-600 border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1" title={r.isActive ? 'Disable' : 'Enable'}>
+                      <button onClick={() => onToggleActive(r)} className="h-6 px-2 text-sm text-slate-600 border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1" title={r.isActive ? t('rules.action.disable') : t('rules.action.enable')}>
                         {r.isActive ? <X size={11} /> : <Check size={11} />}
-                        {r.isActive ? 'Disable' : 'Enable'}
+                        {r.isActive ? t('rules.action.disable') : t('rules.action.enable')}
                       </button>
                       <button onClick={() => setEditing(r)} className="h-6 w-6 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded" title="Edit">
                         <Pencil size={11} />

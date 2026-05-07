@@ -19,6 +19,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { useToast } from '@/components/ui/Toast'
 import { BarcodeScanInput } from '@/components/ui/BarcodeScanInput'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface ShipmentDetail {
@@ -61,6 +62,7 @@ interface Props {
 export default function PackStationClient({ shipmentId }: Props) {
   const router = useRouter()
   const { toast } = useToast()
+  const { t } = useTranslations()
   const [shipment, setShipment] = useState<ShipmentDetail | null>(null)
   const [customs, setCustoms] = useState<CustomsPreflight | null>(null)
   const [loading, setLoading] = useState(true)
@@ -90,7 +92,7 @@ export default function PackStationClient({ shipmentId }: Props) {
         fetch(`${getBackendUrl()}/api/fulfillment/shipments/${shipmentId}/customs-preflight`, { cache: 'no-store' }),
       ])
       if (!shipRes.ok) {
-        toast.error('Shipment not found')
+        toast.error(t('pack.notFound'))
         return
       }
       const s: ShipmentDetail = await shipRes.json()
@@ -117,12 +119,12 @@ export default function PackStationClient({ shipmentId }: Props) {
       // barcode/GTIN once that's stored on the order item.
       const match = shipment.items.find((it) => it.sku.toUpperCase() === trimmed)
       if (!match) {
-        toast.error(`SKU "${raw}" not in this shipment`)
+        toast.error(t('pack.toast.notInShipment', { sku: raw }))
         return
       }
       const current = scanCounts[match.sku] ?? 0
       if (current >= match.quantity) {
-        toast.warning(`Already scanned ${match.quantity}× ${match.sku}`)
+        toast.warning(t('pack.toast.alreadyScanned', { n: match.quantity, sku: match.sku }))
         return
       }
       setScanCounts((prev) => ({ ...prev, [match.sku]: current + 1 }))
@@ -161,17 +163,17 @@ export default function PackStationClient({ shipmentId }: Props) {
       )
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        toast.error(err.error ?? 'Failed to mark packed')
+        toast.error(err.error ?? t('pack.toast.packFailed'))
         return
       }
-      toast.success('Shipment packed — ready for label')
+      toast.success(t('pack.toast.packed'))
       // Return to outbound, opening the drawer for this order so the
       // operator can immediately print the label.
       const data = await res.json()
       const orderId = data?.orderId ?? shipment.orderId
       router.push(orderId ? `/fulfillment/outbound?drawer=${orderId}` : '/fulfillment/outbound')
     } catch {
-      toast.error('Failed to mark packed')
+      toast.error(t('pack.toast.packFailed'))
     } finally {
       setSaving(false)
     }
@@ -181,17 +183,17 @@ export default function PackStationClient({ shipmentId }: Props) {
     return (
       <div className="space-y-5">
         <PageHeader
-          title="Pack station"
+          title={t('pack.title')}
           breadcrumbs={[
-            { label: 'Fulfillment', href: '/fulfillment' },
-            { label: 'Outbound', href: '/fulfillment/outbound' },
-            { label: 'Pack' },
+            { label: t('nav.fulfillment'), href: '/fulfillment' },
+            { label: t('nav.outbound'), href: '/fulfillment/outbound' },
+            { label: t('pack.title') },
           ]}
         />
         <Card>
           <div className="text-md text-slate-500 py-8 text-center">
             <Loader2 size={20} className="inline animate-spin mr-2" />
-            Loading shipment…
+            {t('pack.loading')}
           </div>
         </Card>
       </div>
@@ -201,12 +203,12 @@ export default function PackStationClient({ shipmentId }: Props) {
   if (!shipment) {
     return (
       <div className="space-y-5">
-        <PageHeader title="Pack station" />
+        <PageHeader title={t('pack.title')} />
         <Card>
           <div className="text-md text-rose-700 py-8 text-center">
-            Shipment not found.{' '}
+            {t('pack.notFound')}{' '}
             <Link href="/fulfillment/outbound" className="text-blue-600 hover:underline">
-              Back to outbound
+              {t('pack.backToOutbound')}
             </Link>
           </div>
         </Card>
@@ -217,12 +219,12 @@ export default function PackStationClient({ shipmentId }: Props) {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Pack station"
+        title={t('pack.title')}
         description={`Shipment ${shipment.id.slice(0, 8)}… · ${shipment.carrierCode}${shipment.warehouse ? ` · ${shipment.warehouse.code}` : ''}`}
         breadcrumbs={[
-          { label: 'Fulfillment', href: '/fulfillment' },
-          { label: 'Outbound', href: '/fulfillment/outbound' },
-          { label: 'Pack' },
+          { label: t('nav.fulfillment'), href: '/fulfillment' },
+          { label: t('nav.outbound'), href: '/fulfillment/outbound' },
+          { label: t('pack.title') },
         ]}
         actions={
           <Link
@@ -233,7 +235,7 @@ export default function PackStationClient({ shipmentId }: Props) {
             }
             className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
           >
-            <ArrowLeft size={12} /> Back
+            <ArrowLeft size={12} /> {t('common.back')}
           </Link>
         }
       />
@@ -242,11 +244,11 @@ export default function PackStationClient({ shipmentId }: Props) {
       <Card>
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
-            <Package size={12} /> Scan each item
+            <Package size={12} /> {t('pack.scanItems')}
           </div>
           <BarcodeScanInput
             onScan={onScan}
-            placeholder="Scan SKU or barcode…"
+            placeholder={t('pack.scanPlaceholder')}
             disabled={saving}
             className="w-full"
           />
@@ -295,24 +297,24 @@ export default function PackStationClient({ shipmentId }: Props) {
       <Card>
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
-            <Scale size={12} /> Measurements
+            <Scale size={12} /> {t('pack.measurements')}
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <NumberField
-              label="Weight (g)"
+              label={t('pack.weightGrams')}
               value={weightGrams}
               onChange={setWeightGrams}
               required
               min={1}
             />
-            <NumberField label="Length (cm)" value={lengthCm} onChange={setLengthCm} min={0} />
-            <NumberField label="Width (cm)" value={widthCm} onChange={setWidthCm} min={0} />
-            <NumberField label="Height (cm)" value={heightCm} onChange={setHeightCm} min={0} />
+            <NumberField label={t('pack.lengthCm')} value={lengthCm} onChange={setLengthCm} min={0} />
+            <NumberField label={t('pack.widthCm')} value={widthCm} onChange={setWidthCm} min={0} />
+            <NumberField label={t('pack.heightCm')} value={heightCm} onChange={setHeightCm} min={0} />
           </div>
           {!measurementsComplete && (
             <div className="flex items-start gap-2 text-sm text-amber-700">
               <AlertTriangle size={12} className="mt-0.5" />
-              Weight is required. Dimensions improve carrier rate accuracy.
+              {t('pack.weightRequired')}
             </div>
           )}
         </div>
@@ -323,12 +325,12 @@ export default function PackStationClient({ shipmentId }: Props) {
         <Card>
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
-              <Globe size={12} /> Customs review
+              <Globe size={12} /> {t('pack.customs.title')}
               <Badge variant={customs.ready ? 'success' : 'warning'} size="sm">
-                {customs.ready ? 'Ready' : 'Action required'}
+                {customs.ready ? t('pack.customs.ready') : t('pack.customs.actionRequired')}
               </Badge>
               <span className="ml-auto text-xs text-slate-500 font-normal normal-case tabular-nums">
-                Destination · {customs.destinationCountry ?? '—'} · Total{' '}
+                {t('pack.customs.destination')} · {customs.destinationCountry ?? '—'} · {t('pack.customs.total')}{' '}
                 {new Intl.NumberFormat('it-IT', {
                   style: 'currency',
                   currency: customs.currency || 'EUR',
@@ -347,7 +349,7 @@ export default function PackStationClient({ shipmentId }: Props) {
                   >
                     <span className="font-mono text-slate-900 min-w-[120px]">{l.sku}</span>
                     <span className={`tabular-nums ${l.hsCode ? 'text-slate-700' : 'text-rose-700 font-semibold'}`}>
-                      HS: {l.hsCode ?? 'MISSING'}
+                      HS: {l.hsCode ?? t('pack.customs.hsMissing')}
                     </span>
                     <span className={`text-slate-600 ${l.originCountry ? '' : 'text-amber-700'}`}>
                       Origin: {l.originCountry ?? '—'}
@@ -376,8 +378,7 @@ export default function PackStationClient({ shipmentId }: Props) {
             )}
             {!customs.ready && (
               <div className="text-sm text-slate-600 bg-slate-50 px-3 py-2 rounded border border-slate-200">
-                Set HS codes on the affected products before printing the label —
-                Sendcloud will reject otherwise.
+                {t('pack.customs.hint')}
               </div>
             )}
           </div>
@@ -387,12 +388,12 @@ export default function PackStationClient({ shipmentId }: Props) {
       {/* ── Notes ────────────────────────────────────────────────── */}
       <Card>
         <div className="space-y-2">
-          <label className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Notes (optional)</label>
+          <label className="text-sm font-semibold text-slate-700 uppercase tracking-wider">{t('pack.notes')}</label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
-            placeholder="Fragile · Customer note · Pack instruction…"
+            placeholder={t('pack.notesPlaceholder')}
             className="w-full px-3 py-2 text-md border border-slate-300 rounded outline-none focus:border-blue-500"
           />
         </div>
@@ -403,10 +404,12 @@ export default function PackStationClient({ shipmentId }: Props) {
         <Card>
           <div className="flex items-center gap-3">
             {allVerified ? (
-              <Badge variant="success" size="sm">All items verified</Badge>
+              <Badge variant="success" size="sm">{t('pack.allVerified')}</Badge>
             ) : (
               <Badge variant="warning" size="sm">
-                {shipment.items.length - shipment.items.filter((it) => (scanCounts[it.sku] ?? 0) >= it.quantity).length} item(s) to scan
+                {t('pack.itemsToScan', {
+                  n: shipment.items.length - shipment.items.filter((it) => (scanCounts[it.sku] ?? 0) >= it.quantity).length,
+                })}
               </Badge>
             )}
             <button
@@ -415,7 +418,7 @@ export default function PackStationClient({ shipmentId }: Props) {
               className="ml-auto h-9 px-4 text-md bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-              Mark packed
+              {t('pack.markPacked')}
             </button>
           </div>
         </Card>
