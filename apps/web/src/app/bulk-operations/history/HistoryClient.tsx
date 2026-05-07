@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -336,12 +337,18 @@ function ItemsPanel({ jobId }: { jobId: string }) {
       )}
 
       {loading && !items && (
-        <div className="space-y-1">
+        <div
+          className="space-y-1"
+          aria-busy="true"
+          aria-label="Loading history items"
+        >
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="h-9 bg-white border border-slate-200 rounded animate-pulse"
-            />
+              className="h-9 bg-white border border-slate-200 rounded flex items-center px-3"
+            >
+              <Skeleton variant="text" width="60%" />
+            </div>
           ))}
         </div>
       )}
@@ -671,12 +678,18 @@ export default function HistoryClient() {
 
       {/* Loading skeleton */}
       {loading && !jobs && (
-        <div className="space-y-2">
+        <div
+          className="space-y-2"
+          aria-busy="true"
+          aria-label="Loading bulk-action jobs"
+        >
           {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="h-16 bg-white border border-slate-200 rounded-lg animate-pulse"
-            />
+              className="border border-slate-200 rounded-lg bg-white p-3"
+            >
+              <Skeleton variant="text" lines={2} />
+            </div>
           ))}
         </div>
       )}

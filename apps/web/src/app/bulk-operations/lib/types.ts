@@ -152,5 +152,11 @@ export interface Rect {
   height: number
 }
 
-export const ROW_HEIGHT = 36
+// C.5 — bumped from 36 to 44px so cells meet WCAG / iOS HIG touch
+// target minimums on tablets + iPads (the operator's secondary
+// device). 44px is the canonical Apple HIG minimum and the default
+// Material guideline. The virtualizer + range-overlay calculations
+// derive every position from this constant, so a single change
+// rescales every row + selection rectangle in lockstep.
+export const ROW_HEIGHT = 44
 export const HEADER_HEIGHT = 36
