@@ -227,6 +227,19 @@ export class AmazonOrdersService {
     const totalPrice = raw.OrderTotal?.Amount ? Number(raw.OrderTotal.Amount) : 0
     const currencyCode = raw.OrderTotal?.CurrencyCode ?? 'EUR'
     const status = mapStatus(raw.OrderStatus)
+
+    // O.45: track the previous status so we can detect the
+    // transition to CANCELLED (vs re-ingesting an already-cancelled
+    // order, which shouldn't re-trigger the cleanup cascade).
+    const existing = await prisma.order.findUnique({
+      where: {
+        channel_channelOrderId: {
+          channel: 'AMAZON',
+          channelOrderId: raw.AmazonOrderId,
+        },
+      },
+      select: { id: true, status: true },
+    })
     const fulfillmentMethod = mapFulfillmentMethod(raw.FulfillmentChannel)
     const marketplace = mapMarketplaceCode(raw.MarketplaceId)
     const shippingAddress = (raw.ShippingAddress ?? {}) as object
@@ -259,6 +272,12 @@ export class AmazonOrdersService {
       amazonMetadata: raw as object,
     }
 
+    // O.45: did we just transition to CANCELLED?
+    const newlyCancelled =
+      status === 'CANCELLED'
+      && existing != null
+      && existing.status !== 'CANCELLED'
+
     const order = await prisma.order.upsert({
       where: {
         channel_channelOrderId: {
@@ -273,6 +292,28 @@ export class AmazonOrdersService {
         channelOrderId: raw.AmazonOrderId,
       },
     })
+
+    // O.45: cascade cancellation cleanup. Best-effort + non-blocking
+    // — a void failure shouldn't fail the order ingest.
+    if (newlyCancelled) {
+      void (async () => {
+        try {
+          const { handleOrderCancelled } = await import(
+            './order-cancellation/index.js'
+          )
+          const cleanup = await handleOrderCancelled(order.id)
+          logger.info('amazon-orders: cancellation cascade', {
+            orderId: order.id,
+            ...cleanup,
+          })
+        } catch (err) {
+          logger.warn('amazon-orders: cancellation cascade failed', {
+            orderId: order.id,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      })()
+    }
 
     // Items — the schema doesn't carry a per-line external id, and
     // there's no composite-unique on (orderId, sku) to upsert against

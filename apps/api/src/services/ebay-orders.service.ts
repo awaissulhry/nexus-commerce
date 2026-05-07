@@ -280,6 +280,12 @@ export class EbayOrdersService {
     })
 
     let dbOrder
+    // O.45: did we just transition to CANCELLED?
+    const newlyCancelled =
+      orderData.status === 'CANCELLED'
+      && existing != null
+      && existing.status !== 'CANCELLED'
+
     if (existing) {
       dbOrder = await prisma.order.update({
         where: { id: existing.id },
@@ -289,6 +295,27 @@ export class EbayOrdersService {
     } else {
       dbOrder = await prisma.order.create({ data: orderData })
       this.stats.ordersCreated++
+    }
+
+    // O.45: cascade cancellation cleanup. Best-effort + non-blocking.
+    if (newlyCancelled) {
+      void (async () => {
+        try {
+          const { handleOrderCancelled } = await import(
+            './order-cancellation/index.js'
+          )
+          const cleanup = await handleOrderCancelled(dbOrder.id)
+          logger.info('ebay-orders: cancellation cascade', {
+            orderId: dbOrder.id,
+            ...cleanup,
+          })
+        } catch (err) {
+          logger.warn('ebay-orders: cancellation cascade failed', {
+            orderId: dbOrder.id,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      })()
     }
 
     // Inventory deduction is one-shot per (orderId, lineItemId) — track
