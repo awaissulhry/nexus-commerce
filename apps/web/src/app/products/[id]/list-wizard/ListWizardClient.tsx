@@ -6,6 +6,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import WizardStepper from './components/WizardStepper'
 import WizardHeader from './components/WizardHeader'
 import WizardNav from './components/WizardNav'
+import BlockerBanner from './components/BlockerBanner'
 import PlaceholderStep from './components/PlaceholderStep'
 import Step1Identifiers from './steps/Step1Identifiers'
 import Step3ProductType from './steps/Step3ProductType'
@@ -17,6 +18,10 @@ import Step9Review from './steps/Step9Review'
 import Step10Submit from './steps/Step10Submit'
 import Step1Channels from './steps/Step1Channels'
 import { STEPS, findStep } from './lib/steps'
+import { postWizardEvent } from './lib/telemetry'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { useToast } from '@/components/ui/Toast'
+import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 
 export interface ChannelTuple {
   platform: string
@@ -48,6 +53,14 @@ export interface WizardProduct {
   gtin?: string | null
 }
 
+export interface StepValidity {
+  valid: boolean
+  /** 0 means valid; >0 means N reasons preventing forward progress. */
+  blockers: number
+  /** Human-readable; first 3 surfaced in the WizardNav tooltip. */
+  reasons?: string[]
+}
+
 export interface StepProps {
   wizardId: string
   wizardState: Record<string, unknown>
@@ -72,6 +85,17 @@ export interface StepProps {
   /** U.4 — exposed so Step 9 (Review) can deep-link incomplete
    *  checklist rows back to the originating step. */
   onJumpToStep: (stepId: number) => void
+  /** C.0 — step reports its validity up to the wizard so the global
+   *  Continue button can gate. Stable identity across renders, so
+   *  it's safe to use directly in useEffect deps. Steps that don't
+   *  need gating can ignore it. */
+  reportValidity: (validity: StepValidity) => void
+  /** C.0 / A1 — step registers a callback to scroll + focus its
+   *  first blocker. Fired when the user clicks the disabled Continue
+   *  button or hits Cmd+Enter / Cmd+G while gated. Pass null on
+   *  unmount to clear the registration. Steps without gating can
+   *  ignore. */
+  setJumpToBlocker: (fn: (() => void) | null) => void
 }
 
 interface Props {
@@ -109,6 +133,35 @@ export default function ListWizardClient({
   const [skippedSteps] = useState<Set<number>>(new Set())
   const [saveState, setSaveState] = useState<SaveState>('idle')
 
+  // C.0 — per-step validity, keyed by routing step id. Steps that
+  // don't report validity (Step 1 Channels, Step 2 Product Type,
+  // Step 9 Submit) leave their key undefined; the chrome treats
+  // undefined as "no opinion" and lets Continue through.
+  const [stepValidity, setStepValidity] = useState<
+    Record<number, StepValidity>
+  >({})
+  const stepValidityRef = useRef(stepValidity)
+  stepValidityRef.current = stepValidity
+
+  // C.0 / A1 — current step's "jump to first blocker" callback.
+  // Set by the active step on mount, cleared on unmount. The chrome
+  // calls it via onContinueAttemptWhileBlocked from WizardNav.
+  const jumpToBlockerRef = useRef<(() => void) | null>(null)
+
+  // C.0 / A6 — optimistic-concurrency conflict detection. PATCH /:id
+  // bumps the row version; a 409 means the local wizard state diverged
+  // from the server (e.g., another tab edited it). We surface a
+  // sticky banner with a refresh CTA — silently overwriting would
+  // discard the other tab's edits.
+  const [conflictDetected, setConflictDetected] = useState(false)
+
+  // C.0 / A7 — time-on-step. Resets when currentStep changes; ticks
+  // every second. WizardNav renders mm:ss after 30s of dwell so
+  // power users notice when they've stalled, but it stays out of
+  // the chrome for fast steppers.
+  const stepEnteredAtRef = useRef<number>(Date.now())
+  const [timeOnStepSeconds, setTimeOnStepSeconds] = useState(0)
+
   // Keep the latest values on a ref so the save fn closure doesn't
   // capture stale state when called from event handlers.
   const stateRef = useRef({ wizardState, currentStep, channels })
@@ -142,6 +195,19 @@ export default function ListWizardClient({
         )
         if (!res.ok) {
           setSaveState('error')
+          // C.0 / A6 — 409 means optimistic-concurrency conflict.
+          // Surface the sticky banner so the user notices and
+          // refreshes rather than continuing on top of a stale
+          // wizard. Telemetry captures the conflict for analytics.
+          if (res.status === 409) {
+            setConflictDetected(true)
+            postWizardEvent(wizardId, {
+              type: 'validation_failed',
+              step: stateRef.current.currentStep,
+              errorCode: 'conflict_409',
+              errorContext: { reason: 'conflict_409' },
+            })
+          }
           return false
         }
         setSaveState('saved')
@@ -200,6 +266,119 @@ export default function ListWizardClient({
     router.push(`/products/${product.id}/edit`)
   }, [persist, router, product.id])
 
+  // C.0 / A5 — Discard wizard.
+  // Soft-deletes the DRAFT wizard server-side (status='DISCARDED' so
+  // the WizardStepEvent trail survives), broadcasts wizard.deleted
+  // so /products/drafts and /products refresh without polling, then
+  // navigates back to the product edit page.
+  const confirm = useConfirm()
+  const { toast } = useToast()
+  const handleDiscard = useCallback(async () => {
+    const ok = await confirm({
+      title: 'Discard this draft?',
+      description:
+        'The wizard’s progress on this product will be removed. This can’t be undone.',
+      confirmLabel: 'Discard draft',
+      tone: 'danger',
+    })
+    if (!ok) return
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/listing-wizard/${wizardId}`,
+        { method: 'DELETE' },
+      )
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as {
+          error?: string
+        }
+        toast({
+          tone: 'error',
+          title: 'Could not discard',
+          description: json.error ?? `HTTP ${res.status}`,
+        })
+        return
+      }
+      emitInvalidation({
+        type: 'wizard.deleted',
+        id: wizardId,
+        meta: { productId: product.id },
+      })
+      router.push(`/products/${product.id}/edit`)
+    } catch (err) {
+      toast({
+        tone: 'error',
+        title: 'Could not discard',
+        description: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }, [confirm, toast, wizardId, product.id, router])
+
+  // C.0 — steps call this to report their validity. We compare to
+  // the previous record before bumping state to avoid render loops
+  // when a step re-reports the same {valid, blockers} on every
+  // render (which is the common case — useEffect deps fire even
+  // when content is identical).
+  //
+  // Edge transitions (valid→invalid or invalid→valid) emit a
+  // validation_failed/validation_passed telemetry event so we can
+  // measure time-to-validity per step. Bug #10 fix — first-time
+  // reports (prev undefined) emit too when the step landed invalid,
+  // so analytics see "user hit step N already broken" without having
+  // to infer it from the absence of a passed event.
+  const reportValidity = useCallback((next: StepValidity) => {
+    const stepNow = stateRef.current.currentStep
+    const prev = stepValidityRef.current[stepNow]
+    if (
+      prev &&
+      prev.valid === next.valid &&
+      prev.blockers === next.blockers
+    ) {
+      return
+    }
+    setStepValidity((cur) => ({ ...cur, [stepNow]: next }))
+
+    const isFirstReport = !prev
+    const flipped = !!prev && prev.valid !== next.valid
+    if (flipped || (isFirstReport && !next.valid)) {
+      postWizardEvent(wizardId, {
+        type: next.valid ? 'validation_passed' : 'validation_failed',
+        step: stepNow,
+        errorCode: next.valid ? undefined : 'missing_required',
+        errorContext: { blockerCount: next.blockers },
+      })
+    }
+  }, [wizardId])
+
+  // C.0 / A1 — steps register their first-blocker focus callback
+  // here. Stable identity (deps: []), so a step can pass it directly
+  // into a useEffect that runs once on mount.
+  const setJumpToBlocker = useCallback(
+    (fn: (() => void) | null) => {
+      jumpToBlockerRef.current = fn
+    },
+    [],
+  )
+
+  // C.0 / A1 — fired when the user clicks the disabled Continue or
+  // hits Cmd+Enter / Cmd+G while gated. Calls the active step's
+  // registered focus callback (if any) and emits a jumped_to_step
+  // event so analytics can measure how often users hit the gate.
+  const handleContinueAttemptWhileBlocked = useCallback(() => {
+    const stepNow = stateRef.current.currentStep
+    postWizardEvent(wizardId, {
+      type: 'jumped_to_step',
+      step: stepNow,
+      errorContext: {
+        reason: 'continue_attempt_while_blocked',
+        fromStep: stepNow,
+        toStep: stepNow,
+        blockerCount:
+          stepValidityRef.current[stepNow]?.blockers ?? 0,
+      },
+    })
+    jumpToBlockerRef.current?.()
+  }, [wizardId])
+
   // NN.3 — beforeunload guard while a save is in flight. If the user
   // closes the tab between persist() armed and PATCH settled, the
   // wizard's last state delta vanishes. saveState === 'saving' is a
@@ -215,32 +394,71 @@ export default function ListWizardClient({
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [saveState])
 
-  // Cmd/Ctrl + arrow shortcuts make stepping through the wizard feel
-  // closer to a guided form than a series of clicks. Skip when an
-  // input is focused so it doesn't fight text-cursor nav.
+  // Cmd/Ctrl + arrow shortcuts + Cmd+Enter (smart Continue, A8) +
+  // Cmd+G (jump to first blocker, A1). Skip when an input/textarea
+  // is focused so it doesn't fight text-cursor nav. Cmd+Enter is
+  // smart: when validity is gated it jumps to the blocker instead
+  // of trying to advance.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return
       const ae = document.activeElement as HTMLElement | null
-      if (
+      const inText =
         ae &&
         (ae.tagName === 'INPUT' ||
           ae.tagName === 'TEXTAREA' ||
           ae.isContentEditable)
-      ) {
+
+      // Cmd+G works even from inside an input — the user is
+      // explicitly asking "where am I stuck?" and the focus stays
+      // captured as part of the jump action.
+      if (e.key === 'g' || e.key === 'G') {
+        const cur =
+          stepValidityRef.current[stateRef.current.currentStep]
+        if (cur && !cur.valid) {
+          e.preventDefault()
+          handleContinueAttemptWhileBlocked()
+        }
         return
       }
+
+      if (inText) return
+
       if (e.key === 'ArrowRight') {
         e.preventDefault()
         handleContinue()
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault()
         handleBack()
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        const cur =
+          stepValidityRef.current[stateRef.current.currentStep]
+        if (cur && !cur.valid) {
+          handleContinueAttemptWhileBlocked()
+        } else {
+          handleContinue()
+        }
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [handleContinue, handleBack])
+  }, [handleContinue, handleBack, handleContinueAttemptWhileBlocked])
+
+  // C.0 / A7 — reset stepEnteredAt + tick timeOnStepSeconds while
+  // the user is on a step. Resets to 0 on transition; ticks every
+  // second. Cheap (one re-render per second on the chrome only —
+  // the step content doesn't depend on this state).
+  useEffect(() => {
+    stepEnteredAtRef.current = Date.now()
+    setTimeOnStepSeconds(0)
+    const id = window.setInterval(() => {
+      setTimeOnStepSeconds(
+        Math.floor((Date.now() - stepEnteredAtRef.current) / 1000),
+      )
+    }, 1000)
+    return () => window.clearInterval(id)
+  }, [currentStep])
 
   // Step components mutate their slice of wizardState via this
   // callback. The patch is shallow-merged at the top level (so Step
@@ -319,9 +537,46 @@ export default function ListWizardClient({
         currentStep={currentStep}
         completedSteps={completedSteps}
         skippedSteps={skippedSteps}
+        blockerCounts={Object.fromEntries(
+          Object.entries(stepValidity)
+            .filter(([, v]) => !v.valid)
+            .map(([k, v]) => [Number(k), v.blockers]),
+        )}
         onStepClick={handleStepClick}
       />
       <div className="flex-1 overflow-y-auto">
+        {/* C.0 / A2 — global sticky blocker banner. Hidden on Step 5
+            (Attributes) which has its richer in-step ValidationSummary.
+            Visible on Steps 4, 6, 7, 8 — the steps where validity is
+            otherwise only signalled by the chrome pill. */}
+        {currentStep !== 5 &&
+          stepValidity[currentStep] &&
+          !stepValidity[currentStep].valid && (
+            <BlockerBanner
+              blockerCount={stepValidity[currentStep].blockers}
+              reasons={stepValidity[currentStep].reasons ?? []}
+              onJump={handleContinueAttemptWhileBlocked}
+            />
+          )}
+        {conflictDetected && (
+          <div
+            role="alert"
+            className="sticky top-0 z-20 px-6 py-3 bg-rose-50 border-b border-rose-200 flex items-center justify-between gap-3 dark:bg-rose-950 dark:border-rose-800"
+          >
+            <div className="text-base text-rose-800 dark:text-rose-200">
+              <span className="font-semibold">Someone else edited this wizard.</span>{' '}
+              Your most recent change wasn't saved. Refresh to load
+              the latest state — your in-progress edits will be lost.
+            </div>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="flex-shrink-0 h-8 px-3 rounded-md bg-rose-600 text-white text-base font-medium hover:bg-rose-700 dark:bg-rose-500 dark:hover:bg-rose-400"
+            >
+              Refresh now
+            </button>
+          </div>
+        )}
         {(() => {
           const stepProps = {
             wizardId,
@@ -333,6 +588,8 @@ export default function ListWizardClient({
             channel: firstChannel.platform,
             marketplace: firstChannel.marketplace,
             onJumpToStep: navigateTo,
+            reportValidity,
+            setJumpToBlocker,
           }
 
           // ── Phase B step routing ────────────────────────────────
@@ -380,6 +637,18 @@ export default function ListWizardClient({
         onBack={handleBack}
         onContinue={handleContinue}
         onSaveAndExit={handleClose}
+        continueDisabled={
+          stepValidity[currentStep]
+            ? !stepValidity[currentStep].valid
+            : false
+        }
+        blockerCount={stepValidity[currentStep]?.blockers ?? 0}
+        blockerReasons={stepValidity[currentStep]?.reasons}
+        onContinueAttemptWhileBlocked={handleContinueAttemptWhileBlocked}
+        onDiscard={
+          initialWizard.status === 'DRAFT' ? handleDiscard : undefined
+        }
+        timeOnStepSeconds={timeOnStepSeconds}
       />
     </div>
   )

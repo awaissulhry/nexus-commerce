@@ -57,6 +57,8 @@ export default function Step8Pricing({
   updateWizardState,
   wizardId,
   channels,
+  reportValidity,
+  setJumpToBlocker,
 }: StepProps) {
   const baseSlice = (wizardState.pricing ?? {}) as BasePricingSlice
   const channelGroups = (wizardState.channelGroups ?? []) as ChannelGroup[]
@@ -319,10 +321,71 @@ export default function Step8Pricing({
     )
   }, [issuesByChannel])
 
+  // C.0 / A1 — first blocked channel key for the data-attr hook.
+  const firstBlockedChannelKey = useMemo(() => {
+    for (const [k, v] of Object.entries(issuesByChannel)) {
+      if (v.blocking.length > 0) return k
+    }
+    return null
+  }, [issuesByChannel])
+
+  // C.0 / A1 — register jump-to-blocker. Scrolls to the first
+  // pricing row with blocking issues.
+  useEffect(() => {
+    setJumpToBlocker(() => {
+      const row = document.querySelector<HTMLElement>(
+        '[data-blocker-row="true"]',
+      )
+      if (row) {
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        // Focus the first input inside the row so the user can edit
+        // immediately.
+        row.querySelector<HTMLInputElement>('input')?.focus({
+          preventScroll: true,
+        })
+        return
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    })
+    return () => setJumpToBlocker(null)
+  }, [setJumpToBlocker])
+
   const onContinue = useCallback(async () => {
     if (totalBlocking > 0) return
     await updateWizardState({}, { advance: true })
   }, [totalBlocking, updateWizardState])
+
+  // C.0 — report validity from totalBlocking. Warnings (negative
+  // margin, price outside repricing band) don't gate. Reasons quote
+  // up to 3 channel keys with blocking issues so the disabled-button
+  // tooltip stays short.
+  useEffect(() => {
+    if (loading) {
+      reportValidity({
+        valid: false,
+        blockers: 1,
+        reasons: ['Loading pricing context…'],
+      })
+      return
+    }
+    if (error) {
+      reportValidity({ valid: false, blockers: 1, reasons: [error] })
+      return
+    }
+    if (totalBlocking === 0) {
+      reportValidity({ valid: true, blockers: 0 })
+      return
+    }
+    const reasons = Object.entries(issuesByChannel)
+      .filter(([, v]) => v.blocking.length > 0)
+      .slice(0, 3)
+      .map(([ch, v]) => `${ch}: ${v.blocking[0]}`)
+    reportValidity({
+      valid: false,
+      blockers: totalBlocking,
+      reasons,
+    })
+  }, [loading, error, totalBlocking, issuesByChannel, reportValidity])
 
   if (channels.length === 0) {
     return (
@@ -488,11 +551,16 @@ export default function Step8Pricing({
                         : r.netMargin > 0
                         ? TrendingUp
                         : null
+                    const isFirstBlocked =
+                      c.channelKey === firstBlockedChannelKey
                     return (
                       <tr
                         key={c.channelKey}
+                        data-blocker-row={
+                          isFirstBlocked ? 'true' : undefined
+                        }
                         className={cn(
-                          'border-t border-slate-100',
+                          'border-t border-slate-100 scroll-mt-24',
                           tone,
                         )}
                       >

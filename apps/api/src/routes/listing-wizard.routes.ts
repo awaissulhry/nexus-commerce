@@ -26,6 +26,12 @@ import {
 } from '../services/listing-wizard/product-types.service.js'
 import { SchemaParserService } from '../services/listing-wizard/schema-parser.service.js'
 import {
+  WIZARD_EVENT_TYPES,
+  writeStepTransition,
+  writeWizardEvent,
+  type WizardEventType,
+} from '../services/listing-wizard/telemetry.service.js'
+import {
   EbayCategoryService,
   type EbayAspectRich,
 } from '../services/ebay-category.service.js'
@@ -48,6 +54,7 @@ import {
   normalizeChannels,
 } from '../services/listing-wizard/channels.js'
 import { idempotencyService } from '../services/idempotency.service.js'
+import { publishListingEvent } from '../services/listing-events.service.js'
 
 const amazonService = new AmazonService()
 const categorySchemaService = new CategorySchemaService(
@@ -499,6 +506,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         },
         orderBy: { createdAt: 'desc' },
       })
+      const isNew = !wizard
       if (!wizard) {
         wizard = await prisma.listingWizard.create({
           data: {
@@ -518,6 +526,24 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           },
         })
       }
+
+      // C.0 — funnel-completeness telemetry. wizard_started fires on
+      // every fresh create (regardless of step 1 advancement);
+      // wizard_resumed fires when /start hits an existing DRAFT so
+      // analytics can answer "do resumed wizards complete more often
+      // than cold starts?". Both fire-and-forget so /start latency is
+      // unaffected.
+      void writeWizardEvent({
+        wizardId: wizard.id,
+        productId: wizard.productId,
+        type: isNew ? 'wizard_started' : 'wizard_resumed',
+        step: wizard.currentStep,
+        errorContext: {
+          channelsSucceeded: channels.length,
+          fromStep: wizard.currentStep,
+        },
+      })
+
       return { wizard, product }
     },
   )
@@ -616,19 +642,144 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      const nextStep =
+        typeof body.currentStep === 'number'
+          ? Math.min(Math.max(body.currentStep, 1), 9)
+          : wizard.currentStep
+
       const next = await prisma.listingWizard.update({
         where: { id: wizard.id },
         data: {
-          currentStep:
-            typeof body.currentStep === 'number'
-              ? Math.min(Math.max(body.currentStep, 1), 9)
-              : wizard.currentStep,
+          currentStep: nextStep,
           state: merged as any,
           channelStates: mergedChannelStates as any,
           ...(channelsUpdate ?? {}),
         },
       })
+
+      // C.0 — fire-and-forget step-transition telemetry. Telemetry
+      // failures must never break the PATCH (writeStepTransition
+      // swallows errors internally), so we don't await.
+      if (nextStep !== wizard.currentStep) {
+        void writeStepTransition({
+          wizardId: wizard.id,
+          productId: wizard.productId,
+          fromStep: wizard.currentStep,
+          toStep: nextStep,
+          prevUpdatedAt: wizard.updatedAt,
+        })
+      }
+
       return { wizard: next }
+    },
+  )
+
+  // ── C.0 — POST /api/listing-wizard/:id/events ─────────────────
+  // Client-emitted telemetry: validation_failed, validation_passed,
+  // error_shown, jumped_to_step. Fire-and-forget from the client; the
+  // handler returns 204 even if the sanitizer drops the body, so the
+  // wizard UX never depends on telemetry round-trip success.
+  fastify.post<{
+    Params: { id: string }
+    Body: {
+      type?: string
+      step?: number
+      durationMs?: number
+      errorCode?: string
+      errorContext?: unknown
+    }
+  }>('/listing-wizard/:id/events', async (request, reply) => {
+    const wizard = await prisma.listingWizard.findUnique({
+      where: { id: request.params.id },
+      select: { id: true, productId: true },
+    })
+    if (!wizard) {
+      return reply.code(404).send({ error: 'Wizard not found' })
+    }
+    const body = request.body ?? {}
+    const type = body.type as WizardEventType | undefined
+    if (!type || !WIZARD_EVENT_TYPES.includes(type)) {
+      return reply.code(400).send({ error: 'Invalid event type' })
+    }
+    if (
+      typeof body.step !== 'number' ||
+      !Number.isInteger(body.step) ||
+      body.step < 1 ||
+      body.step > 9
+    ) {
+      return reply.code(400).send({ error: 'Invalid step' })
+    }
+    void writeWizardEvent({
+      wizardId: wizard.id,
+      productId: wizard.productId,
+      type,
+      step: body.step,
+      durationMs:
+        typeof body.durationMs === 'number' ? body.durationMs : null,
+      errorCode:
+        typeof body.errorCode === 'string' ? body.errorCode : null,
+      errorContext: body.errorContext,
+    })
+    return reply.code(204).send()
+  })
+
+  // ── C.0 — DELETE /api/listing-wizard/:id ──────────────────────
+  // Soft-deletes a DRAFT wizard by flipping status to DISCARDED so
+  // the row + its WizardStepEvent trail survive (cascade-on-delete
+  // would erase analytics). The drafts endpoint filters status='DRAFT'
+  // so DISCARDED rows are naturally hidden in the UI without further
+  // changes.
+  //
+  // SUBMITTED / LIVE / FAILED wizards are terminal and not eligible
+  // for discard — submitted listings live on the channel side and the
+  // wizard row is the audit trail for them.
+  fastify.delete<{ Params: { id: string } }>(
+    '/listing-wizard/:id',
+    async (request, reply) => {
+      const wizard = await prisma.listingWizard.findUnique({
+        where: { id: request.params.id },
+        select: {
+          id: true,
+          productId: true,
+          status: true,
+          currentStep: true,
+          createdAt: true,
+        },
+      })
+      if (!wizard) {
+        return reply.code(404).send({ error: 'Wizard not found' })
+      }
+      if (wizard.status !== 'DRAFT') {
+        return reply
+          .code(409)
+          .send({ error: `Cannot discard a ${wizard.status} wizard.` })
+      }
+
+      // Telemetry first; if the soft-delete fails the analytics
+      // event is still informative (user attempted discard, may retry).
+      void writeWizardEvent({
+        wizardId: wizard.id,
+        productId: wizard.productId,
+        type: 'wizard_discarded',
+        step: wizard.currentStep,
+        durationMs: Math.max(
+          0,
+          Date.now() - wizard.createdAt.getTime(),
+        ),
+        errorContext: { fromStep: wizard.currentStep },
+      })
+
+      await prisma.listingWizard.update({
+        where: { id: wizard.id },
+        data: {
+          status: 'DISCARDED',
+          // Clear expiresAt so the cleanup cron's DRAFT-only sweep
+          // doesn't double-process this row.
+          expiresAt: null,
+        },
+      })
+
+      return reply.code(204).send()
     },
   )
 
@@ -1629,6 +1780,11 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: string } }>(
     '/listing-wizard/:id/submit',
     async (request, reply) => {
+      // C.0 — capture submit start for submit_completed/submit_failed
+      // duration telemetry. Read at handler entry so retries from
+      // idempotency-cache hits return without polluting the analytics.
+      const submitStartedAt = Date.now()
+
       // NN.2 — idempotency: a double-clicked Submit must not run the
       // publish orchestration twice. We dedup by Idempotency-Key
       // header (RFC 7240–style); when missing, we fall back to the
@@ -1740,6 +1896,52 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           completedAt:
             overallStatus === 'LIVE' ? new Date() : wizard.completedAt,
           submissions: submissions as any,
+        },
+      })
+
+      // C.1 — emit `listing.created` per submission that produced a
+      // real channel listing. Today every adapter returns
+      // NOT_IMPLEMENTED so this loop fires zero events; once C.6
+      // (Amazon SP-API putListingsItem) and C.7 (eBay AddItem) land,
+      // LIVE / SUBMITTED entries with a submissionId will broadcast
+      // automatically — no follow-up edit needed in the wizard route.
+      // We pick LIVE and SUBMITTED-with-id: a SUBMITTED entry has been
+      // accepted by the channel and is just awaiting indexing, so the
+      // listing has effectively been "created" from the user's POV.
+      for (const sub of submissions) {
+        const acknowledged =
+          sub.status === 'LIVE' ||
+          (sub.status === 'SUBMITTED' && !!sub.submissionId)
+        if (!acknowledged) continue
+        publishListingEvent({
+          type: 'listing.created',
+          listingId: sub.submissionId ?? `${wizard.id}:${sub.channelKey}`,
+          ts: Date.now(),
+        })
+      }
+
+      // C.0 — submit funnel telemetry. submit_completed when every
+      // entry landed (SUBMITTED or LIVE); submit_failed when one or
+      // more terminal-failed. Mid-flight statuses (NOT_IMPLEMENTED
+      // adapters in v1) count as completed for the wizard, since the
+      // user finished their part — adapter readiness is tracked
+      // separately on the submissions array.
+      const channelsSucceeded = submissions.filter(
+        (s) => s.status !== 'FAILED',
+      ).length
+      const channelsFailed = submissions.filter(
+        (s) => s.status === 'FAILED',
+      ).length
+      void writeWizardEvent({
+        wizardId: wizard.id,
+        productId: wizard.productId,
+        type: channelsFailed === 0 ? 'submit_completed' : 'submit_failed',
+        step: 9,
+        durationMs: Date.now() - submitStartedAt,
+        errorContext: {
+          channelsSucceeded,
+          channelsFailed,
+          totalDurationMs: Date.now() - submitStartedAt,
         },
       })
 
@@ -1872,6 +2074,33 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
               : wizard.completedAt,
         },
       })
+
+      // C.1 — emit `listing.created` for entries that newly transitioned
+      // into an acknowledged state during this poll cycle. Today the
+      // pollStatus implementations are no-ops (NOT_IMPLEMENTED), so the
+      // diff is empty and no events fire. When real pollers land, every
+      // SUBMITTED → LIVE / SUBMITTED-with-id transition will broadcast
+      // automatically.
+      const previousByKey = new Map(
+        current.map((e) => [e.channelKey, e] as const),
+      )
+      for (const sub of polled) {
+        const prev = previousByKey.get(sub.channelKey)
+        const wasAcknowledged =
+          prev?.status === 'LIVE' ||
+          (prev?.status === 'SUBMITTED' && !!prev.submissionId)
+        const isAcknowledged =
+          sub.status === 'LIVE' ||
+          (sub.status === 'SUBMITTED' && !!sub.submissionId)
+        if (!wasAcknowledged && isAcknowledged) {
+          publishListingEvent({
+            type: 'listing.created',
+            listingId: sub.submissionId ?? `${wizard.id}:${sub.channelKey}`,
+            ts: Date.now(),
+          })
+        }
+      }
+
       return {
         wizard: {
           id: updated.id,
@@ -2003,6 +2232,30 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
               : wizard.completedAt,
         },
       })
+
+      // C.1 — same diff-based emit as /poll: a retry that finally lands
+      // a previously-failed channel is also a "listing.created" moment.
+      const previousByKey = new Map(
+        current.map((e) => [e.channelKey, e] as const),
+      )
+      for (const sub of updatedSubmissions) {
+        if (!wantedKeys.has(sub.channelKey)) continue
+        const prev = previousByKey.get(sub.channelKey)
+        const wasAcknowledged =
+          prev?.status === 'LIVE' ||
+          (prev?.status === 'SUBMITTED' && !!prev.submissionId)
+        const isAcknowledged =
+          sub.status === 'LIVE' ||
+          (sub.status === 'SUBMITTED' && !!sub.submissionId)
+        if (!wasAcknowledged && isAcknowledged) {
+          publishListingEvent({
+            type: 'listing.created',
+            listingId: sub.submissionId ?? `${wizard.id}:${sub.channelKey}`,
+            ts: Date.now(),
+          })
+        }
+      }
+
       return {
         wizard: {
           id: updated.id,

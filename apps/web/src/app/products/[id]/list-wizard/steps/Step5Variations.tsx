@@ -71,6 +71,8 @@ export default function Step5Variations({
   updateWizardState,
   wizardId,
   channels,
+  reportValidity,
+  setJumpToBlocker,
 }: StepProps) {
   const slice = (wizardState.variations ?? {}) as VariationsSlice
 
@@ -249,6 +251,83 @@ export default function Step5Variations({
   const channelKeys = useMemo(() => {
     return payload ? Object.keys(payload.themesByChannel) : []
   }, [payload])
+
+  // C.0 / A1 — register a jump-to-blocker callback. Scrolls to the
+  // first row tagged with data-blocker-row="true" within this step.
+  // If no row is tagged (e.g., the blocker is "no theme picked")
+  // we scroll the step container itself to the top so the theme
+  // picker is in view.
+  useEffect(() => {
+    setJumpToBlocker(() => {
+      const row = document.querySelector<HTMLElement>(
+        '[data-blocker-row="true"]',
+      )
+      if (row) {
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        const cb = row.querySelector<HTMLInputElement>(
+          'input[type="checkbox"]',
+        )
+        cb?.focus({ preventScroll: true })
+        return
+      }
+      // Fall back: scroll the page to top — the theme picker lives
+      // there.
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    })
+    return () => setJumpToBlocker(null)
+  }, [setJumpToBlocker])
+
+  // C.0 — derive validity for the global Continue gate. Standalone
+  // (non-parent) products are always valid here; parents must have
+  // an effective theme on at least one channel, ≥1 included child,
+  // and no children with unfilled required attributes.
+  useEffect(() => {
+    if (loading) {
+      reportValidity({
+        valid: false,
+        blockers: 1,
+        reasons: ['Loading variations…'],
+      })
+      return
+    }
+    if (error) {
+      reportValidity({ valid: false, blockers: 1, reasons: [error] })
+      return
+    }
+    if (!payload || !payload.isParent) {
+      reportValidity({ valid: true, blockers: 0 })
+      return
+    }
+    const reasons: string[] = []
+    let blockers = 0
+    const anyThemeSet = Object.keys(payload.themesByChannel).some(
+      (ch) => effectiveTheme(ch) !== null,
+    )
+    if (!anyThemeSet) {
+      reasons.push('Pick a variation theme')
+      blockers += 1
+    }
+    if (includedChildren.length === 0) {
+      reasons.push('Include at least one variation')
+      blockers += 1
+    }
+    if (blockingChildren.length > 0) {
+      const top = blockingChildren
+        .slice(0, 3)
+        .map((c) => `${c.sku} missing required`)
+      reasons.push(...top)
+      blockers += blockingChildren.length
+    }
+    reportValidity({ valid: blockers === 0, blockers, reasons })
+  }, [
+    loading,
+    error,
+    payload,
+    includedChildren.length,
+    blockingChildren,
+    effectiveTheme,
+    reportValidity,
+  ])
 
   const onContinue = useCallback(async () => {
     if (!payload) return
@@ -624,8 +703,13 @@ export default function Step5Variations({
                   return (
                     <label
                       key={c.id}
+                      // C.0 / A1 — first blocking row gets a data-attr
+                      // hook so the global setJumpToBlocker can find
+                      // and scroll to it. scroll-margin-top keeps the
+                      // sticky header from covering it after the jump.
+                      data-blocker-row={hasBlocking ? 'true' : undefined}
                       className={cn(
-                        'flex items-center gap-3 px-3 py-2 border-b border-slate-100 last:border-b-0 cursor-pointer hover:bg-slate-50',
+                        'flex items-center gap-3 px-3 py-2 border-b border-slate-100 last:border-b-0 cursor-pointer hover:bg-slate-50 scroll-mt-24',
                         hasBlocking && 'bg-amber-50/40 hover:bg-amber-50/70',
                       )}
                     >

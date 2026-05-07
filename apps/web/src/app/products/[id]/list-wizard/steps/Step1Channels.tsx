@@ -97,6 +97,7 @@ export default function Step1Channels({
   wizardState,
   updateWizardState,
   updateWizardChannels,
+  reportValidity,
 }: StepProps) {
   const [status, setStatus] = useState<ConnectionStatus | null>(null)
   const [loading, setLoading] = useState(true)
@@ -120,6 +121,22 @@ export default function Step1Channels({
     readSkuStrategy(wizardState),
   )
   const [strategyExpanded, setStrategyExpanded] = useState(false)
+
+  // C.0 — gate the chrome's Continue on at least one channel picked.
+  // Mirrors the in-step "Continue" affordance which already requires
+  // a non-empty selection; bridging it here makes Cmd+Enter and the
+  // chrome Continue behave consistently with the step's own button.
+  useEffect(() => {
+    reportValidity(
+      selected.size > 0
+        ? { valid: true, blockers: 0 }
+        : {
+            valid: false,
+            blockers: 1,
+            reasons: ['Pick at least one channel + marketplace'],
+          },
+    )
+  }, [selected, reportValidity])
 
   useEffect(() => {
     let cancelled = false

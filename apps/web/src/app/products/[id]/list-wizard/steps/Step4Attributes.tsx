@@ -31,6 +31,8 @@ export default function Step4Attributes({
   updateWizardState,
   wizardId,
   channels,
+  reportValidity,
+  setJumpToBlocker,
 }: StepProps) {
   const [manifest, setManifest] = useState<UnionManifest | null>(null)
   const [loading, setLoading] = useState(true)
@@ -444,6 +446,45 @@ export default function Step4Attributes({
     return out
   }, [manifest, values, overrides])
 
+  // C.0 — report validity from the existing unsatisfied[] so the
+  // global Continue gate matches the in-step ValidationSummary
+  // surface. While loading we report invalid so users can't skip
+  // ahead before required fields are known.
+  useEffect(() => {
+    if (loading) {
+      reportValidity({
+        valid: false,
+        blockers: 1,
+        reasons: ['Loading attribute schema…'],
+      })
+      return
+    }
+    if (error) {
+      reportValidity({ valid: false, blockers: 1, reasons: [error] })
+      return
+    }
+    if (unsatisfied.length === 0) {
+      reportValidity({ valid: true, blockers: 0 })
+      return
+    }
+    // Top-3 reasons by channel: "AMAZON:IT (5 fields)" — concise
+    // enough for the disabled-button tooltip without leaking field
+    // names (which can carry brand/PII).
+    const byChannel = new Map<string, number>()
+    for (const u of unsatisfied) {
+      byChannel.set(u.channelKey, (byChannel.get(u.channelKey) ?? 0) + 1)
+    }
+    const reasons = Array.from(byChannel.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([ch, n]) => `${ch} (${n} field${n === 1 ? '' : 's'})`)
+    reportValidity({
+      valid: false,
+      blockers: unsatisfied.length,
+      reasons,
+    })
+  }, [loading, error, unsatisfied, reportValidity])
+
   // U.4 — totals for the validation summary header.
   // totalRequired counts every (field, channel) pair where the field is
   // required for that channel; totalFilled subtracts the unsatisfied
@@ -528,6 +569,15 @@ export default function Step4Attributes({
     const target = inActive ?? unsatisfied[0]
     if (target) jumpToFieldEntry(target)
   }, [unsatisfied, activeTab, jumpToFieldEntry])
+
+  // C.0 / A1 — register the jump-to-blocker callback with the
+  // wizard chrome so the disabled Continue button (or Cmd+G) can
+  // fire it. Reuses the existing jumpToNextUnfilled so behavior is
+  // identical to the in-step ⌘J shortcut.
+  useEffect(() => {
+    setJumpToBlocker(jumpToNextUnfilled)
+    return () => setJumpToBlocker(null)
+  }, [setJumpToBlocker, jumpToNextUnfilled])
 
   // U.4 — Cmd/Ctrl + J jumps to the next unsatisfied required field.
   // Skipped while focus is in a text input so it doesn't fight the

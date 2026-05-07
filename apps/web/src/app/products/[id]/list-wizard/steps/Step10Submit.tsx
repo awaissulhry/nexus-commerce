@@ -16,6 +16,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
+import { postWizardEvent } from '../lib/telemetry'
 
 type SubmissionStatus =
   | 'PENDING'
@@ -115,6 +116,15 @@ export default function Step10Submit({
       if (elapsed >= POLL_TIMEOUT_MS) {
         setTimedOut(true)
         stopPolling()
+        // C.0 — telemetry: poll loop hit the 15-minute hard cap.
+        // Distinct from a per-channel adapter failure — the wizard
+        // simply never converged.
+        postWizardEvent(wizardId, {
+          type: 'error_shown',
+          step: 9,
+          errorCode: 'poll_timeout',
+          errorContext: { reason: 'timeout', totalDurationMs: elapsed },
+        })
         return
       }
       const tick = pollTickRef.current
@@ -235,6 +245,15 @@ export default function Step10Submit({
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
+      // C.0 — telemetry: network error from the user's side. errorCode
+      // is categorical only; err.message can leak request URLs so we
+      // don't include it.
+      postWizardEvent(wizardId, {
+        type: 'error_shown',
+        step: 9,
+        errorCode: 'submit_network_error',
+        errorContext: { reason: 'network_error' },
+      })
     } finally {
       setSubmitting(false)
     }
@@ -259,12 +278,27 @@ export default function Step10Submit({
         const json = (await res.json()) as SubmitResponse & { error?: string }
         if (!res.ok) {
           setError(json?.error ?? `HTTP ${res.status}`)
+          // C.0 — telemetry: per-channel retry rejected. channelKey
+          // identifies the platform:marketplace pair the user was
+          // re-attempting, kept within the 80-char allowlist cap.
+          postWizardEvent(wizardId, {
+            type: 'error_shown',
+            step: 9,
+            errorCode: `retry_http_${res.status}`,
+            errorContext: { reason: 'retry_dispatcher_error', channelKey },
+          })
           return
         }
         setSubmissions(json.submissions)
         setOverallStatus(json.wizard?.status ?? null)
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err))
+        postWizardEvent(wizardId, {
+          type: 'error_shown',
+          step: 9,
+          errorCode: 'retry_network_error',
+          errorContext: { reason: 'network_error', channelKey },
+        })
       } finally {
         setRetrying((prev) => {
           const next = new Set(prev)

@@ -66,6 +66,8 @@ export default function Step9Review({
   wizardId,
   updateWizardState,
   onJumpToStep,
+  reportValidity,
+  setJumpToBlocker,
 }: StepProps) {
   const [data, setData] = useState<ReviewResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -125,6 +127,70 @@ export default function Step9Review({
     if (!data?.validation.allReady) return
     await updateWizardState({}, { advance: true })
   }, [data?.validation.allReady, updateWizardState])
+
+  // C.0 / A1 — register jump-to-blocker. Scrolls to the first
+  // not-ready channel card and expands its checklist so the user
+  // sees what's missing.
+  useEffect(() => {
+    setJumpToBlocker(() => {
+      const card = document.querySelector<HTMLElement>(
+        '[data-blocker-row="true"]',
+      )
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        // Auto-expand the checklist on the blocked channel.
+        if (data?.validation.blockingChannels[0]) {
+          setExpandedChecklists((prev) => {
+            const next = new Set(prev)
+            next.add(data.validation.blockingChannels[0]!)
+            return next
+          })
+        }
+        return
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    })
+    return () => setJumpToBlocker(null)
+  }, [setJumpToBlocker, data])
+
+  // C.0 — report validity from the existing allReady + blockingChannels.
+  // Each blocked channel may carry multiple checklist items; the
+  // visible blocker count is the sum across blocked channels so the
+  // pill matches the per-card breakdown.
+  useEffect(() => {
+    if (loading) {
+      reportValidity({
+        valid: false,
+        blockers: 1,
+        reasons: ['Loading review…'],
+      })
+      return
+    }
+    if (error) {
+      reportValidity({ valid: false, blockers: 1, reasons: [error] })
+      return
+    }
+    if (!data) {
+      reportValidity({ valid: false, blockers: 1, reasons: ['No review data'] })
+      return
+    }
+    if (data.validation.allReady) {
+      reportValidity({ valid: true, blockers: 0 })
+      return
+    }
+    let totalBlockers = 0
+    for (const ch of data.validation.channels) {
+      if (!ch.ready) totalBlockers += ch.blockingCount
+    }
+    const reasons = data.validation.blockingChannels
+      .slice(0, 3)
+      .map((ch) => `${ch} not ready`)
+    reportValidity({
+      valid: false,
+      blockers: Math.max(totalBlockers, data.validation.blockingChannels.length),
+      reasons,
+    })
+  }, [loading, error, data, reportValidity])
 
   return (
     <div className="max-w-3xl mx-auto py-10 px-6">
@@ -193,17 +259,27 @@ export default function Step9Review({
               const payload = data.payloads.find(
                 (p) => p.channelKey === report.channelKey,
               )
+              // C.0 / A1 — first blocking channel gets a jump hook.
+              const isFirstBlocked =
+                data.validation.blockingChannels.length > 0 &&
+                report.channelKey ===
+                  data.validation.blockingChannels[0]
               return (
-                <ChannelCard
+                <div
                   key={report.channelKey}
-                  report={report}
-                  payload={payload}
-                  checklistExpanded={expandedChecklists.has(report.channelKey)}
-                  payloadExpanded={expandedPayloads.has(report.channelKey)}
-                  onToggleChecklist={() => toggleChecklist(report.channelKey)}
-                  onTogglePayload={() => togglePayload(report.channelKey)}
-                  onJumpToStep={onJumpToStep}
-                />
+                  data-blocker-row={isFirstBlocked ? 'true' : undefined}
+                  className="scroll-mt-24"
+                >
+                  <ChannelCard
+                    report={report}
+                    payload={payload}
+                    checklistExpanded={expandedChecklists.has(report.channelKey)}
+                    payloadExpanded={expandedPayloads.has(report.channelKey)}
+                    onToggleChecklist={() => toggleChecklist(report.channelKey)}
+                    onTogglePayload={() => togglePayload(report.channelKey)}
+                    onJumpToStep={onJumpToStep}
+                  />
+                </div>
               )
             })}
           </div>

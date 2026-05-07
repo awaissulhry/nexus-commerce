@@ -202,30 +202,31 @@ model Product {
   lastChannelOverrideAt DateTime?
 
   // Relations
-  variations           ProductVariation[]
-  images               ProductImage[]
-  listingImages        ListingImage[] // Phase A: per-listing image set (multi-scope)
-  listingWizards       ListingWizard[] // Phase A: multi-channel wizards for this product
-  channelListings      ChannelListing[]
-  channelListingImages ChannelListingImage[]
-  listings             Listing[]
-  draftListings        DraftListing[] // Phase 5: AI Listing Generator
-  stockLogs            StockLog[]
-  marketplaceSyncs     MarketplaceSync[]
-  fbaShipmentItems     FBAShipmentItem[]
-  pricingRuleProducts  PricingRuleProduct[]
-  syncHealthLogs       SyncHealthLog[]
-  syncLogs             SyncLog[]
-  orderItems           OrderItem[] // Phase 2: Orders & Financials
-  outboundSyncQueue    OutboundSyncQueue[] // Phase 8: Outbound Sync Engine
-  stockLevels          StockLevel[] // H.1: per-location stock ledger
-  translations         ProductTranslation[] // H.10: per-language master content
-  relationsFrom        ProductRelation[] @relation("ProductRelationFrom") // H.11
-  relationsTo          ProductRelation[] @relation("ProductRelationTo") // H.11
-  recommendations      ReplenishmentRecommendation[] // R.3
-  stockoutEvents       StockoutEvent[] // R.12
-  substitutionsAsPrimary    ProductSubstitution[] @relation("SubstitutionPrimary") // R.17
-  substitutionsAsSubstitute ProductSubstitution[] @relation("SubstitutionSubstitute") // R.17
+  variations                ProductVariation[]
+  images                    ProductImage[]
+  listingImages             ListingImage[] // Phase A: per-listing image set (multi-scope)
+  listingWizards            ListingWizard[] // Phase A: multi-channel wizards for this product
+  channelListings           ChannelListing[]
+  channelListingImages      ChannelListingImage[]
+  listings                  Listing[]
+  draftListings             DraftListing[] // Phase 5: AI Listing Generator
+  stockLogs                 StockLog[]
+  marketplaceSyncs          MarketplaceSync[]
+  fbaShipmentItems          FBAShipmentItem[]
+  pricingRuleProducts       PricingRuleProduct[]
+  syncHealthLogs            SyncHealthLog[]
+  syncLogs                  SyncLog[]
+  orderItems                OrderItem[] // Phase 2: Orders & Financials
+  outboundSyncQueue         OutboundSyncQueue[] // Phase 8: Outbound Sync Engine
+  stockLevels               StockLevel[] // H.1: per-location stock ledger
+  translations              ProductTranslation[] // H.10: per-language master content
+  relationsFrom             ProductRelation[]             @relation("ProductRelationFrom") // H.11
+  relationsTo               ProductRelation[]             @relation("ProductRelationTo") // H.11
+  recommendations           ReplenishmentRecommendation[] // R.3
+  stockoutEvents            StockoutEvent[] // R.12
+  substitutionsAsPrimary    ProductSubstitution[]         @relation("SubstitutionPrimary") // R.17
+  substitutionsAsSubstitute ProductSubstitution[]         @relation("SubstitutionSubstitute") // R.17
+  wizardStepEvents          WizardStepEvent[] // C.0: per-step wizard telemetry
 
   // H.16 — Compliance master data. HS code = customs classification,
   // mostly 6-digit (HS) or 8-10 digit (CN/HTS); stored as text since
@@ -573,14 +574,14 @@ model ChannelListing {
   bestOfferFloor        Decimal?  @db.Decimal(10, 2)
 
   // ── Relations ───────────────────────────────────────────────────
-  offers            Offer[]
-  images            ChannelListingImage[]
-  outboundSyncQueue OutboundSyncQueue[]
-  overrideHistory   ChannelListingOverride[]
+  offers             Offer[]
+  images             ChannelListingImage[]
+  outboundSyncQueue  OutboundSyncQueue[]
+  overrideHistory    ChannelListingOverride[]
   // S.4 — per-listing sync attempt audit trail. Each manual / cron /
   // bulk / webhook resync writes a row with status, duration, error.
   // The drawer's Sync tab renders these as a real timeline.
-  syncAttempts      SyncAttempt[]
+  syncAttempts       SyncAttempt[]
   // S.5 — Amazon suppression events. One row per suppression episode
   // (open + resolved span). The Amazon deep view's resolver lists
   // active rows; resolved rows form an audit trail for "this listing
@@ -692,8 +693,8 @@ model ChannelListingOverride {
 model SyncAttempt {
   id String @id @default(cuid())
 
-  channelListing   ChannelListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  listingId        String
+  channelListing ChannelListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listingId      String
 
   attemptedAt DateTime @default(now())
   status      String // PENDING | IN_PROGRESS | SUCCESS | FAILED | TIMEOUT | NOT_IMPLEMENTED
@@ -731,12 +732,12 @@ model AmazonSuppression {
   channelListing ChannelListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
   listingId      String
 
-  suppressedAt   DateTime  @default(now())
-  resolvedAt     DateTime?
-  reasonCode     String? // SP-API reason code, when available
-  reasonText     String // human-readable description
-  severity       String  @default("ERROR") // ERROR | WARNING | INFO
-  source         String  @default("manual") // manual | sp-api-poll | webhook
+  suppressedAt DateTime  @default(now())
+  resolvedAt   DateTime?
+  reasonCode   String? // SP-API reason code, when available
+  reasonText   String // human-readable description
+  severity     String    @default("ERROR") // ERROR | WARNING | INFO
+  source       String    @default("manual") // manual | sp-api-poll | webhook
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1584,12 +1585,12 @@ model ReplenishmentForecast {
 // cohorts are active. Accuracy infrastructure (R.1) already tracks
 // `model` per row, so MAPE rolls up per (sku, model) naturally.
 model ForecastModelAssignment {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   sku        String
-  modelId    String   // 'HOLT_WINTERS_V1' | 'PROPHET_V1' | etc.
-  cohort     String   // 'champion' | 'challenger' | 'control'
-  assignedAt DateTime @default(now())
-  assignedBy String   // 'cron' | 'manual' | 'rollout'
+  modelId    String // 'HOLT_WINTERS_V1' | 'PROPHET_V1' | etc.
+  cohort     String // 'champion' | 'challenger' | 'control'
+  assignedAt DateTime  @default(now())
+  assignedBy String // 'cron' | 'manual' | 'rollout'
   expiresAt  DateTime?
 
   @@unique([sku, modelId])
@@ -1633,11 +1634,11 @@ model ForecastAccuracy {
 
   // Pre-computed error metrics
   absoluteError Decimal  @db.Decimal(12, 2) // |forecast - actual|
-  percentError  Decimal? @db.Decimal(7, 2)  // NULL when actualUnits=0
+  percentError  Decimal? @db.Decimal(7, 2) // NULL when actualUnits=0
   withinBand    Boolean
 
   // Provenance (snapshot from ReplenishmentForecast)
-  modelRegime         String   // COLD_START | TRAILING_MEAN_FALLBACK | HOLT_LINEAR | HOLT_WINTERS
+  modelRegime         String // COLD_START | TRAILING_MEAN_FALLBACK | HOLT_LINEAR | HOLT_WINTERS
   model               String
   forecastGeneratedAt DateTime
   evaluatedAt         DateTime @default(now())
@@ -2254,12 +2255,62 @@ model ListingWizard {
   // simple WHERE clause.
   expiresAt DateTime?
 
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product    Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  stepEvents WizardStepEvent[] // C.0: per-step telemetry
 
   @@unique([productId, channelsHash, status])
   @@index([productId])
   @@index([status])
   @@index([expiresAt])
+}
+
+// C.0 — append-only step-level telemetry for the listing wizard.
+// Distinct from AuditLog (which captures mutations on the wizard
+// row); this captures UX events (entered, exited, validation_failed,
+// validation_passed, error_shown, jumped_to_step, submit_completed,
+// submit_failed) for drop-off analytics + per-step UX iteration.
+//
+// Privacy: errorContext is constrained to an allowlisted set of keys
+// and string values are length-capped + run through a PII regex
+// guard before being written. AuditLog is the place for full state
+// diffs; this table holds categorical reasons + small numeric
+// counts only.
+model WizardStepEvent {
+  id        String @id @default(cuid())
+  wizardId  String
+  productId String // denormalized for cross-wizard product analytics
+
+  // step_entered | step_exited | validation_failed | validation_passed
+  // | error_shown | jumped_to_step | submit_completed | submit_failed
+  // | wizard_started | wizard_resumed | wizard_discarded | wizard_abandoned
+  // (CHECK constraint enforces this list at the DB level — see migration)
+  type String
+
+  // 1..9 — for step_exited the step the user left, for step_entered
+  // the step they arrived at. For submit_*, equals the submit step (9).
+  step Int
+
+  // Only set on step_exited / validation_passed / submit_*: ms spent
+  // on the step (or total submit duration). Bucketed analytics-side.
+  durationMs Int?
+
+  // Categorical reason. Examples: missing_required, schema_violation,
+  // adapter_unavailable, network_error, conflict_409, timeout.
+  errorCode String?
+
+  // Sanitized JSON. Allowlisted keys only — see wizard-telemetry.ts.
+  errorContext Json?
+
+  createdAt DateTime @default(now())
+
+  wizard  ListingWizard @relation(fields: [wizardId], references: [id], onDelete: Cascade)
+  product Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([wizardId, createdAt])
+  @@index([productId, createdAt])
+  @@index([type, step, createdAt])
+  @@index([errorCode, createdAt]) // C.0 — analytics path: top errors per window
+  @@index([createdAt])
 }
 
 // NN.4 — append-only audit log. One row per PATCH/PUT/DELETE on
@@ -2442,11 +2493,11 @@ enum ReturnConditionGrade {
 
 enum PurchaseOrderStatus {
   DRAFT
-  REVIEW          // R.7 — submitted for approval; auto-skipped when requireApprovalForPo=false
-  APPROVED        // R.7 — green-lit by approver; ready to send
-  SUBMITTED       // sent to supplier
-  ACKNOWLEDGED    // R.7 — supplier confirmed receipt
-  CONFIRMED       // legacy alias; kept for back-compat
+  REVIEW // R.7 — submitted for approval; auto-skipped when requireApprovalForPo=false
+  APPROVED // R.7 — green-lit by approver; ready to send
+  SUBMITTED // sent to supplier
+  ACKNOWLEDGED // R.7 — supplier confirmed receipt
+  CONFIRMED // legacy alias; kept for back-compat
   PARTIAL
   RECEIVED
   CANCELLED
@@ -2508,12 +2559,12 @@ model Warehouse {
   // Sendcloud sender address mapping — Sendcloud uses sender_address_id
   sendcloudSenderId Int?
 
-  stockMovements   StockMovement[]
-  shipments        Shipment[]
-  inboundShipments InboundShipment[]
-  purchaseOrders   PurchaseOrder[]
+  stockMovements    StockMovement[]
+  shipments         Shipment[]
+  inboundShipments  InboundShipment[]
+  purchaseOrders    PurchaseOrder[]
   // H.1: optional 1-1 link to inventory-side StockLocation
-  stockLocation    StockLocation?
+  stockLocation     StockLocation?
   // Order routing rules that target this warehouse
   orderRoutingRules OrderRoutingRule[]
 
@@ -2765,31 +2816,31 @@ model ShipmentItem {
 }
 
 model Supplier {
-  id              String  @id @default(cuid())
-  name            String
-  contactName     String?
-  email           String?
-  phone           String?
-  addressLine1    String?
-  city            String?
-  postalCode      String?
-  country         String? @default("IT")
-  taxId           String? // partita IVA / VAT number
-  paymentTerms    String? // e.g. "Net 30" / "30gg DF"
-  defaultCurrency String? @default("EUR")
-  leadTimeDays    Int     @default(14)
+  id                     String    @id @default(cuid())
+  name                   String
+  contactName            String?
+  email                  String?
+  phone                  String?
+  addressLine1           String?
+  city                   String?
+  postalCode             String?
+  country                String?   @default("IT")
+  taxId                  String? // partita IVA / VAT number
+  paymentTerms           String? // e.g. "Net 30" / "30gg DF"
+  defaultCurrency        String?   @default("EUR")
+  leadTimeDays           Int       @default(14)
   // R.11 — observed lead-time variance, computed nightly by
   // lead-time-stats.job from PO createdAt → InboundShipment.arrivedAt.
   // Feeds the second term of the textbook safety-stock formula:
   //   SS = z × √(σ_d² × LT + d² × σ_LT²)
   // Null/0 collapses the formula back to R.4's d-only behavior so
   // suppliers without enough history degrade gracefully.
-  leadTimeStdDevDays      Decimal?  @db.Decimal(8, 2)
-  leadTimeSampleCount     Int       @default(0)
-  leadTimeStatsUpdatedAt  DateTime?
+  leadTimeStdDevDays     Decimal?  @db.Decimal(8, 2)
+  leadTimeSampleCount    Int       @default(0)
+  leadTimeStatsUpdatedAt DateTime?
 
-  isActive        Boolean @default(true)
-  notes           String?
+  isActive Boolean @default(true)
+  notes    String?
 
   // R.6 — auto-PO opt-in. Both autoTriggerEnabled at the Supplier
   // AND at the per-product ReplenishmentRule must be true for an
@@ -2806,8 +2857,8 @@ model Supplier {
   // be explicit. Operator flips on per-supplier when ready.
   autoTriggerEventPrep         Boolean @default(false)
 
-  products       SupplierProduct[]
-  purchaseOrders PurchaseOrder[]
+  products        SupplierProduct[]
+  purchaseOrders  PurchaseOrder[]
   // R.19 — optional shipping profile (mode + freight rates +
   // container capacity). When present, enables landed-cost EOQ and
   // container-fill suggestions.
@@ -2834,7 +2885,7 @@ model SupplierShippingProfile {
   id                   String   @id @default(cuid())
   supplierId           String   @unique
   supplier             Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-  mode                 String   // AIR | SEA_LCL | SEA_FCL_20 | SEA_FCL_40 | ROAD
+  mode                 String // AIR | SEA_LCL | SEA_FCL_20 | SEA_FCL_40 | ROAD
   costPerCbmCents      Int?
   costPerKgCents       Int?
   fixedCostCents       Int?
@@ -2856,7 +2907,7 @@ model SupplierProduct {
   costCents            Int? // cost per unit in supplier's default currency
   currencyCode         String? @default("EUR")
   moq                  Int     @default(1) // minimum order quantity
-  casePack             Int?    // R.4 — units per carton (orders rounded up to multiples)
+  casePack             Int? // R.4 — units per carton (orders rounded up to multiples)
   leadTimeDaysOverride Int?
   isPrimary            Boolean @default(false)
 
@@ -3208,14 +3259,14 @@ model Return {
   // send the label?" visibility. v0 stores the carrier-generated
   // URL + tracking + email timestamp so the workflow is auditable
   // even before native carrier integration lands.
-  returnLabelUrl        String?
-  returnLabelCarrier    String?  // 'SENDCLOUD' | 'DHL' | 'GLS' | 'POSTE' | 'MANUAL' | etc.
-  returnTrackingNumber  String?
+  returnLabelUrl         String?
+  returnLabelCarrier     String? // 'SENDCLOUD' | 'DHL' | 'GLS' | 'POSTE' | 'MANUAL' | etc.
+  returnTrackingNumber   String?
   returnLabelGeneratedAt DateTime?
-  returnLabelEmailedAt  DateTime?
+  returnLabelEmailedAt   DateTime?
 
-  notes              String?
-  version            Int                   @default(1)
+  notes   String?
+  version Int     @default(1)
 
   items ReturnItem[]
 
@@ -3308,50 +3359,50 @@ model ReplenishmentRecommendation {
   needsReorder    Boolean
 
   // R.4 — math snapshot for audit
-  safetyStockUnits   Int?     // σ-derived buffer
-  eoqUnits           Int?     // Wilson EOQ before MOQ/case clamp
-  constraintsApplied String[] @default([]) // ['MOQ_APPLIED','CASE_PACK_ROUNDED_UP','EOQ_BELOW_MOQ']
-  unitCostCents      Int?     // cost basis at generation
+  safetyStockUnits          Int? // σ-derived buffer
+  eoqUnits                  Int? // Wilson EOQ before MOQ/case clamp
+  constraintsApplied        String[]  @default([]) // ['MOQ_APPLIED','CASE_PACK_ROUNDED_UP','EOQ_BELOW_MOQ']
+  unitCostCents             Int? // cost basis at generation
   // R.14 — urgency provenance: did the global aggregate drive
   // urgency, or did a per-channel cover crisis promote it?
-  urgencySource           String? // 'GLOBAL' | 'CHANNEL'
-  worstChannelKey         String? // 'AMAZON:IT' format when CHANNEL drove
-  worstChannelDaysOfCover Int?
+  urgencySource             String? // 'GLOBAL' | 'CHANNEL'
+  worstChannelKey           String? // 'AMAZON:IT' format when CHANNEL drove
+  worstChannelDaysOfCover   Int?
   // R.11 — σ_LT applied at this generation (audit "what variance
   // did we use that day?"). Null when supplier had < 3 PO observations.
-  leadTimeStdDevDays      Decimal? @db.Decimal(8, 2)
+  leadTimeStdDevDays        Decimal?  @db.Decimal(8, 2)
   // R.13 — event-prep audit: which RetailEvent (if any) is driving
   // an "order extra now" recommendation, and how many extra units.
-  prepEventId             String?
-  prepExtraUnits          Int?
+  prepEventId               String?
+  prepExtraUnits            Int?
   // R.15 — FX context for the EOQ calc. unitCostCurrency = supplier's
   // quoted currency (null = EUR / legacy). fxRateUsed = the EUR-base
   // rate snapshot applied at generation, so audit can answer "did
   // FX shift cause the qty change?".
-  unitCostCurrency        String?
-  fxRateUsed              Decimal? @db.Decimal(14, 6)
+  unitCostCurrency          String?
+  fxRateUsed                Decimal?  @db.Decimal(14, 6)
   // R.17 — substitution-aware velocity audit. rawVelocity = trailing
   // 30-day mean before substitution adjustments; substitutionAdjusted-
   // Delta = velocity - rawVelocity (positive when this SKU was a
   // primary that "lost" demand to substitutes during its stockouts;
   // negative when this SKU was a substitute whose spike got removed).
-  rawVelocity                  Decimal? @db.Decimal(10, 2)
-  substitutionAdjustedDelta    Decimal? @db.Decimal(10, 2)
+  rawVelocity               Decimal?  @db.Decimal(10, 2)
+  substitutionAdjustedDelta Decimal?  @db.Decimal(10, 2)
   // R.19 — landed-cost audit. freightCostPerUnitCents is the freight
   // share allocated to this SKU at the recommended order qty;
   // landedCostPerUnitCents = unitCostCents + freightCostPerUnitCents
   // (both in EUR cents after R.15 FX conversion).
-  freightCostPerUnitCents      Int?
-  landedCostPerUnitCents       Int?
+  freightCostPerUnitCents   Int?
+  landedCostPerUnitCents    Int?
   // R.8 — Amazon FBA Restock cross-check. Captures Amazon's own
   // recommendation at the time we generated this rec, plus the
   // signed delta (positive = Amazon recommends more, negative = we
   // recommend more) and the report freshness. amazonReportAsOf is
   // the FbaRestockReport.processedAt — null when no Amazon signal
   // for the matching marketplace within the staleness window.
-  amazonRecommendedQty   Int?
-  amazonDeltaPct         Decimal? @db.Decimal(8, 2)
-  amazonReportAsOf       DateTime?
+  amazonRecommendedQty      Int?
+  amazonDeltaPct            Decimal?  @db.Decimal(8, 2)
+  amazonReportAsOf          DateTime?
 
   preferredSupplierId String?
   isManufactured      Boolean @default(false)
@@ -3403,22 +3454,28 @@ model ReplenishmentRecommendation {
 model CycleCount {
   id String @id @default(cuid())
 
-  /** Which physical location is being counted. */
+  /**
+   * Which physical location is being counted.
+   */
   locationId String
   location   StockLocation @relation(fields: [locationId], references: [id], onDelete: Restrict)
 
-  /** Lifecycle: DRAFT → IN_PROGRESS → COMPLETED, or CANCELLED. */
+  /**
+   * Lifecycle: DRAFT → IN_PROGRESS → COMPLETED, or CANCELLED.
+   */
   status String @default("DRAFT")
 
-  /** Operator-friendly description ("Q2 spot check", "post-move audit", etc.). */
+  /**
+   * Operator-friendly description ("Q2 spot check", "post-move audit", etc.).
+   */
   notes String?
 
-  startedAt          DateTime?
-  startedByUserId    String?
-  completedAt        DateTime?
-  completedByUserId  String?
-  cancelledAt        DateTime?
-  cancelledReason    String?
+  startedAt         DateTime?
+  startedByUserId   String?
+  completedAt       DateTime?
+  completedByUserId String?
+  cancelledAt       DateTime?
+  cancelledReason   String?
 
   items CycleCountItem[]
 
@@ -3436,27 +3493,37 @@ model CycleCountItem {
   cycleCountId String
   cycleCount   CycleCount @relation(fields: [cycleCountId], references: [id], onDelete: Cascade)
 
-  /** Snapshot: the entity being counted. SKU is denormalised so the
-   *  count audit survives a Product/Variation deletion. */
+  /**
+   * Snapshot: the entity being counted. SKU is denormalised so the
+   * count audit survives a Product/Variation deletion.
+   */
   productId   String
   variationId String?
   sku         String
 
-  /** Stock count at session-start (snapshotted from StockLevel). */
+  /**
+   * Stock count at session-start (snapshotted from StockLevel).
+   */
   expectedQuantity Int
 
-  /** Operator entry — NULL until they record. */
-  countedQuantity   Int?
-  countedAt         DateTime?
-  countedByUserId   String?
+  /**
+   * Operator entry — NULL until they record.
+   */
+  countedQuantity Int?
+  countedAt       DateTime?
+  countedByUserId String?
 
-  /** PENDING | COUNTED | RECONCILED | IGNORED. */
+  /**
+   * PENDING | COUNTED | RECONCILED | IGNORED.
+   */
   status String @default("PENDING")
 
-  /** When variance is applied, link to the resulting StockMovement. */
-  reconciledMovementId  String?
-  reconciledAt          DateTime?
-  reconciledByUserId    String?
+  /**
+   * When variance is applied, link to the resulting StockMovement.
+   */
+  reconciledMovementId String?
+  reconciledAt         DateTime?
+  reconciledByUserId   String?
 
   notes String?
 
@@ -3492,12 +3559,16 @@ model CycleCountItem {
 model OrderRoutingRule {
   id String @id @default(cuid())
 
-  /** Operator-friendly identifier shown in the rules list. */
+  /**
+   * Operator-friendly identifier shown in the rules list.
+   */
   name String
 
-  /** Lower number = higher priority. Default 100 lets early
-   *  hand-tuned rules (priority 1, 10, …) win without renumbering
-   *  the rest. */
+  /**
+   * Lower number = higher priority. Default 100 lets early
+   * hand-tuned rules (priority 1, 10, …) win without renumbering
+   * the rest.
+   */
   priority Int @default(100)
 
   // ── Match criteria (all nullable; null = wildcard) ────────────
@@ -3509,10 +3580,14 @@ model OrderRoutingRule {
   warehouseId String
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
 
-  /** Disable a rule without deleting (preserves history). */
+  /**
+   * Disable a rule without deleting (preserves history).
+   */
   isActive Boolean @default(true)
 
-  /** Free-form note explaining the rule's intent. */
+  /**
+   * Free-form note explaining the rule's intent.
+   */
   notes String?
 
   createdAt DateTime @default(now())
@@ -3537,27 +3612,33 @@ model OrderRoutingRule {
 model ReplenishmentSavedView {
   id String @id @default(cuid())
 
-  /** Operator-friendly name shown in the dropdown ("Critical AMAZON IT"). */
+  /**
+   * Operator-friendly name shown in the dropdown ("Critical AMAZON IT").
+   */
   name String
 
-  /** Optional longer description. */
+  /**
+   * Optional longer description.
+   */
   description String?
 
   /**
    * Captured page state. Shape:
-   *   filter: 'NEEDS_REORDER' | 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'ALL'
-   *   channelFilter: string  (empty = all)
-   *   marketplaceFilter: string
-   *   search?: string
-   *   sortBy: 'urgency' | 'daysOfCover' | 'velocity' | 'qty' | 'stock' | 'sku' | 'name'
-   *   sortDir: 'asc' | 'desc'
+   * filter: 'NEEDS_REORDER' | 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'ALL'
+   * channelFilter: string  (empty = all)
+   * marketplaceFilter: string
+   * search?: string
+   * sortBy: 'urgency' | 'daysOfCover' | 'velocity' | 'qty' | 'stock' | 'sku' | 'name'
+   * sortDir: 'asc' | 'desc'
    * Stored as JSON so additive future params (e.g. supplier filter)
    * don't require a migration.
    */
   filterState Json
 
-  /** Marks the view auto-loaded on first visit. At most one row should
-   *  be true; UI enforces this on save. */
+  /**
+   * Marks the view auto-loaded on first visit. At most one row should
+   * be true; UI enforces this on save.
+   */
   isDefault Boolean @default(false)
 
   createdAt DateTime @default(now())
@@ -3584,28 +3665,38 @@ model ReplenishmentSavedView {
 model CronRun {
   id String @id @default(cuid())
 
-  /** Cron job name — e.g. 'forecast', 'auto-po', 'sales-report-ingest'.
-   *  Stable identifier matched against the constants in jobs/*.ts. */
+  /**
+   * Cron job name — e.g. 'forecast', 'auto-po', 'sales-report-ingest'.
+   * Stable identifier matched against the constants in jobs/*.ts.
+   */
   jobName String
 
-  startedAt    DateTime  @default(now())
-  finishedAt   DateTime?
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
 
-  /** RUNNING (insert), SUCCESS (clean exit), FAILED (threw). Stale
-   *  RUNNING rows older than the job's expected runtime indicate a
-   *  crash before the wrapper could update the row. */
+  /**
+   * RUNNING (insert), SUCCESS (clean exit), FAILED (threw). Stale
+   * RUNNING rows older than the job's expected runtime indicate a
+   * crash before the wrapper could update the row.
+   */
   status String @default("RUNNING")
 
-  /** Error message when status=FAILED. */
+  /**
+   * Error message when status=FAILED.
+   */
   errorMessage String?
 
-  /** Slim summary the cron may return — e.g. "27 forecasts updated"
-   *  or "3 POs created from 12 candidates". Surfaces in the dashboard
-   *  so operators can scan throughput at a glance. */
+  /**
+   * Slim summary the cron may return — e.g. "27 forecasts updated"
+   * or "3 POs created from 12 candidates". Surfaces in the dashboard
+   * so operators can scan throughput at a glance.
+   */
   outputSummary String?
 
-  /** triggeredBy: 'cron' | 'manual'. Manual runs from the dashboard
-   *  show up here too so audit traceability is unified. */
+  /**
+   * triggeredBy: 'cron' | 'manual'. Manual runs from the dashboard
+   * show up here too so audit traceability is unified.
+   */
   triggeredBy String @default("cron")
 
   createdAt DateTime @default(now())
@@ -3630,7 +3721,7 @@ model ProductSubstitution {
   id                   String   @id @default(cuid())
   primaryProductId     String
   substituteProductId  String
-  substitutionFraction Decimal  @db.Decimal(3, 2) @default(0.50)
+  substitutionFraction Decimal  @default(0.50) @db.Decimal(3, 2)
   notes                String?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
@@ -3662,13 +3753,13 @@ model ProductSubstitution {
 // our predictions were right; this tells us how much money we lost
 // when they weren't.
 model StockoutEvent {
-  id          String  @id @default(cuid())
-  productId   String
-  sku         String
+  id        String @id @default(cuid())
+  productId String
+  sku       String
 
   // Optional location scope. Null = product-wide event (rare —
   // typically location-scoped post-H.1).
-  locationId  String?
+  locationId String?
 
   // Optional channel/marketplace scope (deferred for v1; reserved
   // for R.12.x channel-level detection).
@@ -3676,10 +3767,10 @@ model StockoutEvent {
   marketplace String?
 
   // Lifecycle
-  startedAt   DateTime  @default(now())
-  endedAt     DateTime?
-  detectedBy  String    // 'cron' | 'movement' | 'manual'
-  closedBy    String?
+  startedAt  DateTime  @default(now())
+  endedAt    DateTime?
+  detectedBy String // 'cron' | 'movement' | 'manual'
+  closedBy   String?
 
   // Snapshot at start
   velocityAtStart    Decimal @db.Decimal(10, 2)
@@ -3697,12 +3788,12 @@ model StockoutEvent {
 
   product  Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
   location StockLocation? @relation(fields: [locationId], references: [id])
+  // Partial unique index in raw SQL — at most one OPEN event per
+  // (productId, locationId) at any time. See migration.
 
   @@index([productId, startedAt])
   @@index([endedAt])
   @@index([sku, startedAt])
-  // Partial unique index in raw SQL — at most one OPEN event per
-  // (productId, locationId) at any time. See migration.
 }
 
 // ── R.6: Auto-PO cron run ledger ──────────────────────────────────
@@ -3715,21 +3806,21 @@ model StockoutEvent {
 // run log answers "what happened in aggregate at 05:00 UTC?"
 // without forcing operators to grep recommendation logs.
 model AutoPoRunLog {
-  id          String   @id @default(cuid())
-  startedAt   DateTime @default(now())
+  id          String    @id @default(cuid())
+  startedAt   DateTime  @default(now())
   finishedAt  DateTime?
-  triggeredBy String   // 'cron' | 'manual'
-  dryRun      Boolean  @default(false)
+  triggeredBy String // 'cron' | 'manual'
+  dryRun      Boolean   @default(false)
 
-  eligibleCount        Int @default(0)
-  posCreated           Int @default(0)
-  totalUnitsCreated    Int @default(0)
-  totalCostCentsCreated Int @default(0)
-  declinedNoOptIn      Int @default(0)
-  declinedQtyCeiling   Int @default(0)
-  declinedCostCeiling  Int @default(0)
+  eligibleCount            Int @default(0)
+  posCreated               Int @default(0)
+  totalUnitsCreated        Int @default(0)
+  totalCostCentsCreated    Int @default(0)
+  declinedNoOptIn          Int @default(0)
+  declinedQtyCeiling       Int @default(0)
+  declinedCostCeiling      Int @default(0)
   declinedPerProductOptOut Int @default(0)
-  errorCount           Int @default(0)
+  errorCount               Int @default(0)
 
   notes        String?
   createdPoIds String[] @default([])
@@ -3743,21 +3834,21 @@ model AutoPoRunLog {
 // when SP-API requests fail and we want to know which day the rec
 // engine had a stale (or no) Amazon signal for a given marketplace.
 model FbaRestockReport {
-  id              String    @id @default(cuid())
-  marketplace     String    // SP-API marketplace ID, e.g. APJ6JRA9NG5V4 (IT)
-  marketplaceCode String    // human-friendly code, e.g. "IT"
-  status          String    // REQUESTED | IN_PROGRESS | DONE | FATAL | CANCELLED
-  reportId        String?   // SP-API reportId
+  id               String    @id @default(cuid())
+  marketplace      String // SP-API marketplace ID, e.g. APJ6JRA9NG5V4 (IT)
+  marketplaceCode  String // human-friendly code, e.g. "IT"
+  status           String // REQUESTED | IN_PROGRESS | DONE | FATAL | CANCELLED
+  reportId         String? // SP-API reportId
   reportDocumentId String?
-  requestedAt     DateTime  @default(now())
-  processedAt     DateTime? // when we successfully ingested rows
-  rowCount        Int       @default(0)
-  errorMessage    String?
-  payloadDigest   String?   // sha256 of raw report payload for de-dup
-  triggeredBy     String    // 'cron' | 'manual'
-  durationMs      Int?
+  requestedAt      DateTime  @default(now())
+  processedAt      DateTime? // when we successfully ingested rows
+  rowCount         Int       @default(0)
+  errorMessage     String?
+  payloadDigest    String? // sha256 of raw report payload for de-dup
+  triggeredBy      String // 'cron' | 'manual'
+  durationMs       Int?
 
-  rows            FbaRestockRow[]
+  rows FbaRestockRow[]
 
   @@index([marketplace])
   @@index([status])
@@ -3769,27 +3860,43 @@ model FbaRestockReport {
 // Engine reads the latest row per (sku, marketplace) within the
 // staleness cutoff (7d default).
 model FbaRestockRow {
-  id          String   @id @default(cuid())
-  reportId    String
-  report      FbaRestockReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  sku         String
-  marketplace String   // SP-API marketplace ID
-  /** Amazon's recommended replenishment quantity for the next ship cycle. */
+  id                          String           @id @default(cuid())
+  reportId                    String
+  report                      FbaRestockReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  sku                         String
+  marketplace                 String // SP-API marketplace ID
+  /**
+   * Amazon's recommended replenishment quantity for the next ship cycle.
+   */
   recommendedReplenishmentQty Int?
-  /** Days of supply at current FBA stock + Amazon's demand forecast. */
-  daysOfSupply                Decimal? @db.Decimal(8, 2)
-  /** Amazon's recommended ship-by date. */
+  /**
+   * Days of supply at current FBA stock + Amazon's demand forecast.
+   */
+  daysOfSupply                Decimal?         @db.Decimal(8, 2)
+  /**
+   * Amazon's recommended ship-by date.
+   */
   recommendedShipDate         DateTime?
-  /** Amazon's predicted days for inventory to land in FBA. */
+  /**
+   * Amazon's predicted days for inventory to land in FBA.
+   */
   daysToInbound               Int?
-  /** 30-day Amazon-net sales pace (units). */
+  /**
+   * 30-day Amazon-net sales pace (units).
+   */
   salesPace30dUnits           Int?
-  /** Forecasted units short of demand if we don't ship. */
+  /**
+   * Forecasted units short of demand if we don't ship.
+   */
   salesShortageUnits          Int?
-  /** Amazon's verbatim alert level if any (e.g. 'Recommended Restock'). */
+  /**
+   * Amazon's verbatim alert level if any (e.g. 'Recommended Restock').
+   */
   alertType                   String?
-  /** Snapshot of the row's report.processedAt for fast freshness checks. */
-  asOf                        DateTime @default(now())
+  /**
+   * Snapshot of the row's report.processedAt for fast freshness checks.
+   */
+  asOf                        DateTime         @default(now())
 
   @@unique([sku, marketplace, reportId])
   @@index([sku, marketplace, asOf])
@@ -3986,31 +4093,31 @@ model OrderTag {
 // Soft-link to entity (entityType + entityId, no FK) so the cost of
 // "AI fill on product X" is queryable even if X is later deleted.
 model AiUsageLog {
-  id          String  @id @default(cuid())
-  provider    String  // "gemini" | "anthropic"
-  model       String  // "gemini-2.0-flash" | "claude-haiku-4-5-20251001" ...
-  feature     String? // caller surface tag — e.g. "products-ai-bulk"
+  id           String   @id @default(cuid())
+  provider     String // "gemini" | "anthropic"
+  model        String // "gemini-2.0-flash" | "claude-haiku-4-5-20251001" ...
+  feature      String? // caller surface tag — e.g. "products-ai-bulk"
   // What it ran against (optional). entityType="Product", entityId=<cuid>.
-  entityType  String?
-  entityId    String?
+  entityType   String?
+  entityId     String?
   // Token + cost telemetry. cost is USD at four decimals; rounding
   // up to 4dp keeps small Haiku calls (sub-cent) visible.
-  inputTokens Int     @default(0)
-  outputTokens Int    @default(0)
-  costUSD     Decimal @default(0) @db.Decimal(12, 6)
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  costUSD      Decimal  @default(0) @db.Decimal(12, 6)
   // Free-form metadata the caller wants to surface in analytics.
-  metadata    Json?
+  metadata     Json?
   // Latency for the API call itself (excluding parse / DB writes).
-  latencyMs   Int?
+  latencyMs    Int?
   // Whether the call succeeded; failures still get logged for cost
   // visibility (most failures only burn input tokens, but Anthropic
   // bills for a partial completion).
-  ok          Boolean @default(true)
-  errorCode   String?
+  ok           Boolean  @default(true)
+  errorCode    String?
   errorMessage String?
   // Who ran it. Default-user pre-auth, real userId post-auth retrofit.
-  userId      String?
-  createdAt   DateTime @default(now())
+  userId       String?
+  createdAt    DateTime @default(now())
 
   @@index([provider, createdAt])
   @@index([feature, createdAt])
@@ -4121,8 +4228,8 @@ model SavedViewAlert {
 // the operator hasn't reviewed yet (sourceModel pinned to whichever
 // LLM produced the row — see providers/types.ts for names).
 model ProductTranslation {
-  id           String  @id @default(cuid())
-  product      Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  id           String    @id @default(cuid())
+  product      Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
   productId    String
   // ISO 639-1 lower-case (it, de, fr, es, en, nl, sv, pl, ...). We
   // normalise to lowercase before write so case mismatches don't
@@ -4130,16 +4237,16 @@ model ProductTranslation {
   language     String
   name         String?
   description  String?
-  bulletPoints String[] @default([])
-  keywords     String[] @default([])
+  bulletPoints String[]  @default([])
+  keywords     String[]  @default([])
   // Provenance.
   source       String? // 'manual' | 'ai-gemini' | 'ai-anthropic' | 'translated'
   sourceModel  String? // model id when source is AI ('gemini-2.0-flash', ...)
   // Flag set when an operator has reviewed AI-generated copy. The
   // drawer surfaces an "AI · unreviewed" pill until reviewedAt is set.
   reviewedAt   DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@unique([productId, language])
   @@index([language])

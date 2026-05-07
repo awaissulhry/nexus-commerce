@@ -73,6 +73,8 @@ export default function Step7Images({
   wizardId,
   channels,
   product,
+  reportValidity,
+  setJumpToBlocker,
 }: StepProps) {
   const slice = (wizardState.images ?? {}) as ImagesSlice
 
@@ -187,6 +189,61 @@ export default function Step7Images({
     )
   }, [blockingChannels.length, orderedUrls, updateWizardState])
 
+  // C.0 / A1 — register jump-to-blocker. Scrolls to the first
+  // blocked-channel row and focuses it.
+  useEffect(() => {
+    setJumpToBlocker(() => {
+      const row = document.querySelector<HTMLElement>(
+        '[data-blocker-row="true"]',
+      )
+      if (row) {
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        return
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    })
+    return () => setJumpToBlocker(null)
+  }, [setJumpToBlocker])
+
+  // C.0 — report validity from validationByChannel. Warnings don't
+  // gate (matches the in-step Continue logic); only `blocked` channels
+  // count as blockers. Total count = sum of blocking issues across
+  // blocked channels so a channel with 3 problems weighs proportionally.
+  useEffect(() => {
+    if (loading) {
+      reportValidity({
+        valid: false,
+        blockers: 1,
+        reasons: ['Loading images…'],
+      })
+      return
+    }
+    if (error) {
+      reportValidity({ valid: false, blockers: 1, reasons: [error] })
+      return
+    }
+    if (!data) {
+      reportValidity({ valid: true, blockers: 0 })
+      return
+    }
+    if (blockingChannels.length === 0) {
+      reportValidity({ valid: true, blockers: 0 })
+      return
+    }
+    let blockers = 0
+    for (const ch of blockingChannels) {
+      blockers += data.validationByChannel[ch]?.blocking.length ?? 0
+    }
+    const reasons = blockingChannels
+      .slice(0, 3)
+      .map((ch) => `${ch} image set incomplete`)
+    reportValidity({
+      valid: false,
+      blockers: Math.max(blockers, blockingChannels.length),
+      reasons,
+    })
+  }, [loading, error, data, blockingChannels, reportValidity])
+
   const removedAvailable = data
     ? data.images.filter((i) => !orderedUrls.includes(i.url))
     : []
@@ -242,14 +299,25 @@ export default function Step7Images({
                   const v = data.validationByChannel[channelKey]
                   const resolved = data.resolvedByChannel[channelKey] ?? []
                   const source = resolved[0]?.source ?? 'no_images'
+                  // C.0 / A1 — first blocked channel gets a hook for
+                  // setJumpToBlocker. scroll-mt keeps the sticky page
+                  // chrome from covering it after the jump.
+                  const isFirstBlocked =
+                    blockingChannels.length > 0 &&
+                    channelKey === blockingChannels[0]
                   return (
-                    <ChannelValidationRow
+                    <div
                       key={channelKey}
-                      channelKey={channelKey}
-                      validation={v}
-                      imageCount={resolved.length}
-                      source={source}
-                    />
+                      data-blocker-row={isFirstBlocked ? 'true' : undefined}
+                      className="scroll-mt-24"
+                    >
+                      <ChannelValidationRow
+                        channelKey={channelKey}
+                        validation={v}
+                        imageCount={resolved.length}
+                        source={source}
+                      />
+                    </div>
                   )
                 })}
               </div>

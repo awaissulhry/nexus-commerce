@@ -45,8 +45,14 @@ function isValidGtin(raw: string): boolean {
 }
 
 export default function Step1Identifiers(props: StepProps) {
-  const { wizardState, updateWizardState, product, marketplace, channels } =
-    props
+  const {
+    wizardState,
+    updateWizardState,
+    product,
+    marketplace,
+    channels,
+    reportValidity,
+  } = props
   const existingGtin = detectGtin(product)
   const stateSlice = (wizardState.identifiers ?? {}) as Identifiers
 
@@ -140,6 +146,29 @@ export default function Step1Identifiers(props: StepProps) {
     (path === 'have-code' && !hasAmazon && gtinValue.length > 0 && !gtinValid) ||
     (path === 'have-exemption' && !cache?.approved && !trademarkNumber) ||
     saving
+
+  // C.0 — bridge the in-step continueDisabled to the wizard chrome
+  // so the global Continue button gates consistently. Reasons are
+  // categorical so the tooltip stays useful without leaking the GTIN
+  // value itself.
+  useEffect(() => {
+    if (!continueDisabled) {
+      reportValidity({ valid: true, blockers: 0 })
+      return
+    }
+    const reasons: string[] = []
+    if (path === 'have-code' && !gtinValid) {
+      reasons.push('GTIN check digit invalid')
+    }
+    if (path === 'have-exemption' && !cache?.approved && !trademarkNumber) {
+      reasons.push('Enter trademark number or pick approved exemption')
+    }
+    reportValidity({
+      valid: false,
+      blockers: Math.max(reasons.length, 1),
+      reasons,
+    })
+  }, [continueDisabled, path, gtinValid, cache, trademarkNumber, reportValidity])
 
   const onContinue = async () => {
     setSaving(true)
