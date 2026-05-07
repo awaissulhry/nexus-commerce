@@ -860,33 +860,159 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/fulfillment/shipments/:id/print-label', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const shipment = await prisma.shipment.findUnique({ where: { id } })
+      const shipment = await prisma.shipment.findUnique({
+        where: { id },
+        include: {
+          order: {
+            include: {
+              items: {
+                include: {
+                  product: {
+                    select: {
+                      sku: true,
+                      hsCode: true,
+                      countryOfOrigin: true,
+                      weightValue: true,
+                      weightUnit: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      })
       if (!shipment) return reply.code(404).send({ error: 'Shipment not found' })
-
-      // B.4: Sendcloud integration point. The carrier service connection
-      // would call POST /api/v2/parcels here. We scaffold the state
-      // transition and a fake label URL so the UI flow works end-to-end
-      // without live credentials.
-      const carrier = await prisma.carrier.findUnique({ where: { code: shipment.carrierCode } })
-      if (!carrier?.isActive) {
-        return reply.code(400).send({ error: `Carrier ${shipment.carrierCode} is not connected. Open /fulfillment/carriers.` })
+      if (!shipment.order) {
+        return reply.code(400).send({ error: 'Shipment has no order; cannot print label.' })
       }
 
-      const fakeParcelId = `SC-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-      const fakeTracking = `JJD${Math.floor(Math.random() * 1e10)}`
+      // O.8: real Sendcloud call (replaces the B.4 stub). The
+      // sendcloud module returns mock data when
+      // NEXUS_ENABLE_SENDCLOUD_REAL=false (the default), so this path
+      // works end-to-end in dryRun mode without ever touching
+      // Sendcloud. resolveCredentials() throws SendcloudError with a
+      // clean 400 message if the carrier isn't connected.
+      const sendcloud = await import('../services/sendcloud/index.js')
+      let creds
+      try {
+        creds = await sendcloud.resolveCredentials()
+      } catch (e: any) {
+        if (e instanceof sendcloud.SendcloudError) {
+          return reply.code(e.status).send({ error: e.message, code: e.code })
+        }
+        throw e
+      }
+
+      const order = shipment.order
+      const ship = order.shippingAddress as any
+      // The address blob arrives in two shapes — Amazon-PascalCase
+      // (AddressLine1, City, ...) and generic camelCase (addressLine1,
+      // city, ...). Normalize so Sendcloud always sees its expected
+      // field names.
+      const addr = {
+        name: order.customerName || 'Customer',
+        address: ship?.AddressLine1 ?? ship?.addressLine1 ?? ship?.street ?? '',
+        address_2: ship?.AddressLine2 ?? ship?.addressLine2 ?? undefined,
+        city: ship?.City ?? ship?.city ?? '',
+        postal_code: ship?.PostalCode ?? ship?.postalCode ?? '',
+        country: ship?.CountryCode ?? ship?.countryCode ?? ship?.country ?? 'IT',
+        country_state: ship?.StateOrRegion ?? ship?.stateOrProvince ?? ship?.state ?? undefined,
+        telephone: ship?.Phone ?? ship?.phone ?? undefined,
+        email: order.customerEmail || undefined,
+      }
+
+      // Weight: prefer operator-entered shipment.weightGrams (from the
+      // pack station — O.13), else aggregate from product weights, else
+      // default 1.5 kg as a reasonable motorcycle-gear baseline. The
+      // shipping rules engine (O.16) will replace this fallback.
+      let weightKg: number
+      if (shipment.weightGrams && shipment.weightGrams > 0) {
+        weightKg = shipment.weightGrams / 1000
+      } else {
+        const summed = order.items.reduce((acc, it) => {
+          const w = it.product?.weightValue ? Number(it.product.weightValue) : 0
+          const factor = it.product?.weightUnit === 'g' ? 0.001 : 1 // assume kg otherwise
+          return acc + w * factor * it.quantity
+        }, 0)
+        weightKg = summed > 0 ? summed : 1.5
+      }
+
+      // Parcel items for customs declaration. Sendcloud uses these for
+      // international shipments + ignores for domestic. HS code +
+      // country-of-origin live on Product (per schema comment 1746).
+      const parcelItems = order.items.map((it) => ({
+        description: it.product?.sku ?? it.sku,
+        quantity: it.quantity,
+        weight: '0.100', // per-line weight rarely matters for our use
+        value: Number(it.price).toFixed(2),
+        hs_code: it.product?.hsCode ?? undefined,
+        origin_country: it.product?.countryOfOrigin ?? undefined,
+        sku: it.sku,
+      }))
+
+      // Service map lookup: which Sendcloud shipping_method to use for
+      // this (channel, marketplace). Returns null when no rule maps —
+      // Sendcloud auto-picks based on dimensions + destination.
+      const serviceId = await sendcloud.resolveServiceMap(order.channel, order.marketplace)
+
+      const input = {
+        ...addr,
+        weight: weightKg.toFixed(3),
+        order_number: order.channelOrderId,
+        total_order_value: Number(order.totalPrice).toFixed(2),
+        total_order_value_currency: order.currencyCode ?? 'EUR',
+        shipment: serviceId ? { id: serviceId } : undefined,
+        parcel_items: parcelItems.length > 0 ? parcelItems : undefined,
+        external_reference: shipment.id,
+        request_label: true,
+      }
+
+      let parcel
+      try {
+        parcel = await sendcloud.createParcel(creds, input)
+      } catch (e: any) {
+        if (e instanceof sendcloud.SendcloudError) {
+          fastify.log.warn({ err: e, shipmentId: id }, '[print-label] Sendcloud rejected')
+          return reply.code(502).send({
+            error: `Sendcloud: ${e.message}`,
+            code: e.code,
+          })
+        }
+        throw e
+      }
+
+      const labelUrl = parcel.label?.normal_printer?.[0] ?? null
 
       const updated = await prisma.shipment.update({
         where: { id },
         data: {
           status: 'LABEL_PRINTED',
-          sendcloudParcelId: fakeParcelId,
-          trackingNumber: fakeTracking,
-          trackingUrl: `https://tracking.sendcloud.sc/forward?carrier=${shipment.carrierCode}&code=${fakeTracking}`,
-          labelUrl: `/api/fulfillment/shipments/${id}/label.pdf`,
+          sendcloudParcelId: String(parcel.id),
+          trackingNumber: parcel.tracking_number,
+          trackingUrl: parcel.tracking_url,
+          labelUrl,
+          serviceCode: parcel.shipment?.name ?? null,
+          serviceName: parcel.shipment?.name ?? null,
           labelPrintedAt: new Date(),
           version: { increment: 1 },
         },
       })
+
+      // Seed the timeline with the initial ANNOUNCED event so the
+      // drawer / branded tracking page have something to render before
+      // the first carrier scan webhook arrives.
+      await prisma.trackingEvent.create({
+        data: {
+          shipmentId: id,
+          occurredAt: new Date(),
+          code: 'ANNOUNCED',
+          description: 'Label generated, awaiting carrier pickup',
+          source: 'SENDCLOUD',
+          carrierRawCode: String(parcel.status?.id ?? ''),
+        },
+      })
+
       return updated
     } catch (error: any) {
       fastify.log.error({ err: error }, '[print-label] failed')
