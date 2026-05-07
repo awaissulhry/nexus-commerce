@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Button } from '@/components/ui/Button'
+import { IconButton } from '@/components/ui/IconButton'
 import { InlineEditTrigger } from '@/components/ui/InlineEditTrigger'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -1974,17 +1975,51 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLooku
           </span>
           <div className="h-4 w-px bg-slate-200" />
 
-          <button onClick={() => setStatusBulk('ACTIVE')} disabled={busy} className="h-7 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 disabled:opacity-50 inline-flex items-center gap-1.5"><CheckCircle2 size={12} /> Activate</button>
-          <button onClick={() => setStatusBulk('DRAFT')} disabled={busy} className="h-7 px-3 text-base bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-50 inline-flex items-center gap-1.5"><EyeOff size={12} /> Draft</button>
-          <button onClick={() => setStatusBulk('INACTIVE')} disabled={busy} className="h-7 px-3 text-base bg-rose-50 text-rose-700 border border-rose-200 rounded hover:bg-rose-100 disabled:opacity-50 inline-flex items-center gap-1.5"><XCircle size={12} /> Inactive</button>
+          {/* U.2b — bulk status buttons. Status-tinted backgrounds
+              don't map onto Button's variants (primary blue / danger
+              red / etc) so we override className. Size sm = h-7 px-2.5
+              which matches the prior visual exactly. */}
+          <Button
+            size="sm"
+            onClick={() => setStatusBulk('ACTIVE')}
+            disabled={busy}
+            className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+            icon={<CheckCircle2 size={12} />}
+          >
+            Activate
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => setStatusBulk('DRAFT')}
+            disabled={busy}
+            className="bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+            icon={<EyeOff size={12} />}
+          >
+            Draft
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => setStatusBulk('INACTIVE')}
+            disabled={busy}
+            className="bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
+            icon={<XCircle size={12} />}
+          >
+            Inactive
+          </Button>
 
           <div className="h-4 w-px bg-slate-200" />
 
           {/* Tag menu */}
           <div className="relative" ref={tagMenuRef}>
-            <button onClick={() => setTagMenuOpen(!tagMenuOpen)} disabled={busy} className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5">
-              <TagIcon size={12} /> Tag <ChevronDown size={10} />
-            </button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setTagMenuOpen(!tagMenuOpen)}
+              disabled={busy}
+              icon={<TagIcon size={12} />}
+            >
+              Tag <ChevronDown size={10} />
+            </Button>
             {tagMenuOpen && (
               <div className="absolute left-0 top-full mt-1 w-64 bg-white border border-slate-200 rounded-md shadow-lg z-30 p-2 max-h-72 overflow-y-auto">
                 {allTags.length === 0 ? (
@@ -2007,9 +2042,15 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLooku
 
           {/* Publish menu */}
           <div className="relative" ref={pubMenuRef}>
-            <button onClick={() => setPublishMenuOpen(!publishMenuOpen)} disabled={busy} className="h-7 px-3 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 disabled:opacity-50 inline-flex items-center gap-1.5">
-              <Eye size={12} /> Publish <ChevronDown size={10} />
-            </button>
+            <Button
+              size="sm"
+              onClick={() => setPublishMenuOpen(!publishMenuOpen)}
+              disabled={busy}
+              className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+              icon={<Eye size={12} />}
+            >
+              Publish <ChevronDown size={10} />
+            </Button>
             {publishMenuOpen && (
               <div className="absolute left-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-md shadow-lg z-30 p-2 max-h-96 overflow-y-auto">
                 <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1">Amazon EU</div>
@@ -2034,37 +2075,46 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLooku
             )}
           </div>
 
-          <button onClick={duplicate} disabled={busy} className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5">
-            <Copy size={12} /> Duplicate
-          </button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={duplicate}
+            disabled={busy}
+            icon={<Copy size={12} />}
+          >
+            Duplicate
+          </Button>
 
           {/* P.17 — Compare side-by-side. Only enabled with 2-4
               products selected; the modal renders one column per
               product so wider sets don't fit. Uses the grid's
               already-loaded rows so there's no fetch. */}
           {compareEligible && (
-            <button
-              type="button"
+            <Button
+              size="sm"
+              variant="secondary"
               onClick={() => setCompareModalOpen(true)}
               disabled={busy || compareSubjects.length < 2}
-              className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
               title="Side-by-side comparison of selected products"
+              icon={<GitCompare size={12} />}
             >
-              <GitCompare size={12} /> Compare
-            </button>
+              Compare
+            </Button>
           )}
 
           {/* F4 — AI bulk-generate. Opens a modal with marketplace +
               field selectors, then calls /api/products/ai/bulk-generate
               for the selected productIds. */}
-          <button
+          <Button
+            size="sm"
             onClick={() => setAiModalOpen(true)}
             disabled={busy}
-            className="h-7 px-3 text-base bg-purple-50 text-purple-700 border border-purple-200 rounded hover:bg-purple-100 disabled:opacity-50 inline-flex items-center gap-1.5"
+            className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100"
             title="Generate descriptions / bullets / keywords with AI"
+            icon={<Sparkles size={12} />}
           >
-            <Sparkles size={12} /> AI fill
-          </button>
+            AI fill
+          </Button>
 
           <Link
             href={`/bulk-operations?productIds=${selectedIds.join(',')}`}
@@ -2074,9 +2124,15 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLooku
           </Link>
 
           {status && <span className="text-sm text-slate-500 ml-2">{status}</span>}
-          <button onClick={onClear} disabled={busy} aria-label="Clear selection" className="ml-auto h-7 w-7 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded">
+          <IconButton
+            aria-label="Clear selection"
+            onClick={onClear}
+            disabled={busy}
+            size="md"
+            className="ml-auto min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
+          >
             <X size={14} />
-          </button>
+          </IconButton>
         </div>
       </div>
       {aiModalOpen && (
@@ -4047,12 +4103,14 @@ function GridLens(props: any) {
           })}
         </div>
         <div className="relative">
-          <button
+          <Button
+            size="sm"
+            variant="secondary"
             onClick={() => setColumnPickerOpen(!columnPickerOpen)}
-            className="h-7 px-2 text-base border border-slate-200 rounded inline-flex items-center gap-1.5 hover:bg-slate-50"
+            icon={<Settings2 size={12} />}
           >
-            <Settings2 size={12} /> Columns ({visibleColumns.length})
-          </button>
+            Columns ({visibleColumns.length})
+          </Button>
           {columnPickerOpen && (
             <ColumnPickerMenu visible={visibleColumns} setVisible={setVisibleColumns} onClose={() => setColumnPickerOpen(false)} />
           )}
@@ -4207,17 +4265,22 @@ function PageBtn({
   title: string
   children: React.ReactNode
 }) {
+  // U.2b — IconButton outline variant for the pagination chevrons.
+  // The responsive min-h-11/min-w-11 stays so the touch-target on
+  // mobile keeps the C.13 44×44 minimum even while the desktop
+  // visual is h-7 w-7 (size="md" = h-7 w-7).
   return (
-    <button
-      type="button"
+    <IconButton
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
       title={title}
-      className="h-7 w-7 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center border border-slate-200 rounded text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+      variant="outline"
+      size="md"
+      className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 disabled:opacity-40"
     >
       {children}
-    </button>
+    </IconButton>
   )
 }
 
