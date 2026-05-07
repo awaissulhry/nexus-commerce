@@ -93,6 +93,10 @@
   "analytics.insights.subtitle": "Raccomandazioni su costi e affidabilità dai dati attuali",
 
   "pack.printPackSlip": "Stampa documento di trasporto",
+  "pack.weightCheck.expected": "Atteso ~{expected} kg dall'anagrafica prodotto",
+  "pack.weightCheck.ok": "Peso conforme ({declared} kg vs {expected} kg, scarto {pct}%)",
+  "pack.weightCheck.warning": "Fuori del {pct}% — dichiarato {declared} kg vs atteso {expected} kg",
+  "pack.weightCheck.error": "Scarto {pct}% — dichiarato {declared} kg vs atteso {expected} kg, ricontrolla articoli o bilancia",
   "pack.split.cta": "Dividi in pacco nuovo",
   "pack.split.hint": "Indica quante unità di ogni riga spostare in una spedizione nuova. Usa quando gli articoli non entrano in una sola scatola.",
   "pack.split.move": "Sposta",

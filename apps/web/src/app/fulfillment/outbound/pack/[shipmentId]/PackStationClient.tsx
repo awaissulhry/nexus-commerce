@@ -54,6 +54,16 @@ interface CustomsPreflight {
     originCountry: string | null
   }>
   issues: Array<{ sku: string; severity: 'error' | 'warning'; code: string; message: string }>
+  // O.71 weight check (always present, regardless of international).
+  // O.79 surfaces it inline at the pack station so the operator gets
+  // a real-time sanity check while keying the scale reading.
+  weightCheck?: {
+    expectedGrams: number | null
+    declaredGrams: number | null
+    missingWeightMaster: boolean
+    variancePct: number | null
+    severity: 'ok' | 'warning' | 'error' | 'pending'
+  }
   ready: boolean
 }
 
@@ -423,6 +433,50 @@ export default function PackStationClient({ shipmentId }: Props) {
             <NumberField label={t('pack.widthCm')} value={widthCm} onChange={setWidthCm} min={0} />
             <NumberField label={t('pack.heightCm')} value={heightCm} onChange={setHeightCm} min={0} />
           </div>
+          {/* O.79: real-time weight sanity check. The customs-preflight
+              endpoint computes expectedGrams from product master; we
+              recompute variance live as the operator types so they
+              can spot a wrong-tare or wrong-items situation before
+              committing. Only surfaces when expected is known. */}
+          {(() => {
+            const expected = customs?.weightCheck?.expectedGrams
+            if (!expected || expected <= 0) return null
+            const declared = Number(weightGrams)
+            if (!Number.isFinite(declared) || declared <= 0) {
+              return (
+                <div className="text-sm text-slate-500 inline-flex items-center gap-1.5">
+                  <Scale size={11} />
+                  {t('pack.weightCheck.expected', {
+                    expected: (expected / 1000).toFixed(2),
+                  })}
+                </div>
+              )
+            }
+            const variance = Math.abs(declared - expected) / expected
+            const pct = Math.round(variance * 1000) / 10
+            const tone =
+              variance > 0.2
+                ? 'text-rose-700 bg-rose-50 border-rose-200'
+                : variance > 0.1
+                ? 'text-amber-700 bg-amber-50 border-amber-200'
+                : 'text-emerald-700 bg-emerald-50 border-emerald-200'
+            const tKey =
+              variance > 0.2
+                ? 'pack.weightCheck.error'
+                : variance > 0.1
+                ? 'pack.weightCheck.warning'
+                : 'pack.weightCheck.ok'
+            return (
+              <div className={`text-sm inline-flex items-center gap-1.5 px-2 py-1 border rounded ${tone}`}>
+                <Scale size={11} />
+                {t(tKey, {
+                  declared: (declared / 1000).toFixed(2),
+                  expected: (expected / 1000).toFixed(2),
+                  pct,
+                })}
+              </div>
+            )
+          })()}
           {!measurementsComplete && (
             <div className="flex items-start gap-2 text-sm text-amber-700">
               <AlertTriangle size={12} className="mt-0.5" />

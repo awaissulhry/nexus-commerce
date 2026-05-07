@@ -122,6 +122,10 @@
   "analytics.insights.subtitle": "Cost + reliability recommendations from current data",
 
   "pack.printPackSlip": "Print pack slip",
+  "pack.weightCheck.expected": "Expected ~{expected} kg from product master",
+  "pack.weightCheck.ok": "Weight matches expected ({declared} kg vs {expected} kg, {pct}% variance)",
+  "pack.weightCheck.warning": "Off by {pct}% — declared {declared} kg vs expected {expected} kg",
+  "pack.weightCheck.error": "Mismatch {pct}% — declared {declared} kg vs expected {expected} kg, recheck items or scale",
   "pack.split.cta": "Split into new package",
   "pack.split.hint": "Enter how many units of each line to move into a new sibling shipment. Use this when items don't fit one box.",
   "pack.split.move": "Move",
