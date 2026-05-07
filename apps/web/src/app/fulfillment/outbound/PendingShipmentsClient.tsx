@@ -500,10 +500,35 @@ export default function PendingShipmentsClient() {
     setParam('channel', next.size ? Array.from(next).join(',') : null)
   }
 
-  const toggleSelect = (id: string) => {
+  // O.78: Shift+Click range select. Tracks the last toggled row so a
+  // subsequent shift-click can select the contiguous slice between
+  // them — same Linear/Notion/Airtable pattern. Mode of the range
+  // (select vs deselect) follows the anchor's *new* state to match
+  // user expectation: shift-click to extend a selection always
+  // selects, shift-click to extend a deselect always deselects.
+  const lastToggledId = useRef<string | null>(null)
+  const toggleSelect = (id: string, shift = false) => {
+    if (!data) return
     const next = new Set(selected)
+    if (shift && lastToggledId.current && lastToggledId.current !== id) {
+      const ids = data.items.map((o) => o.id)
+      const a = ids.indexOf(lastToggledId.current)
+      const b = ids.indexOf(id)
+      if (a >= 0 && b >= 0) {
+        const [lo, hi] = a < b ? [a, b] : [b, a]
+        const mode = next.has(lastToggledId.current) ? 'add' : 'remove'
+        for (let i = lo; i <= hi; i++) {
+          if (mode === 'add') next.add(ids[i])
+          else next.delete(ids[i])
+        }
+        setSelected(next)
+        lastToggledId.current = id
+        return
+      }
+    }
     next.has(id) ? next.delete(id) : next.add(id)
     setSelected(next)
+    lastToggledId.current = id
   }
   const toggleSelectAll = () => {
     if (!data) return
@@ -1000,7 +1025,8 @@ export default function PendingShipmentsClient() {
                         <input
                           type="checkbox"
                           checked={selected.has(o.id)}
-                          onChange={() => toggleSelect(o.id)}
+                          onChange={() => { /* native onChange fires before the wrapper */ }}
+                          onClick={(e) => toggleSelect(o.id, e.shiftKey)}
                           aria-label={`Select order ${o.channelOrderId}`}
                         />
                       </td>
