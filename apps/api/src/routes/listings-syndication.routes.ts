@@ -1619,6 +1619,217 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
   )
 
   // ─────────────────────────────────────────────────────────────────
+  // C.17 — eBay markdown CRUD.
+  //
+  // Local persistence only for v1, same as campaigns: markdowns
+  // sit in EbayMarkdown with status='DRAFT' until either the
+  // promotion API push lands (NEXUS_ENABLE_EBAY_PUBLISH gated) or
+  // the operator manually flips status. Same shape as the campaign
+  // CRUD — list/create/patch/delete with rules around ENDED being
+  // terminal and DRAFT-only deletion.
+  // ─────────────────────────────────────────────────────────────────
+
+  fastify.get('/listings/ebay/markdowns', async (request, reply) => {
+    try {
+      const q = request.query as Record<string, string | undefined>
+      const where: any = {}
+      if (q.status) where.status = q.status
+      if (q.listingId) where.channelListingId = q.listingId
+
+      const markdowns = await prisma.ebayMarkdown.findMany({
+        where,
+        orderBy: [{ status: 'asc' }, { startDate: 'desc' }],
+        include: {
+          channelListing: {
+            select: {
+              id: true,
+              marketplace: true,
+              externalListingId: true,
+              listingStatus: true,
+              product: { select: { id: true, sku: true, name: true } },
+            },
+          },
+        },
+      })
+
+      return {
+        markdowns: markdowns.map((m) => ({
+          id: m.id,
+          channelListingId: m.channelListingId,
+          externalPromotionId: m.externalPromotionId,
+          discountType: m.discountType,
+          discountValue: Number(m.discountValue),
+          originalPrice: Number(m.originalPrice),
+          markdownPrice: Number(m.markdownPrice),
+          currency: m.currency,
+          status: m.status,
+          startDate: m.startDate,
+          endDate: m.endDate,
+          lastSyncedAt: m.lastSyncedAt,
+          lastSyncStatus: m.lastSyncStatus,
+          lastSyncError: m.lastSyncError,
+          listing: {
+            id: m.channelListing.id,
+            marketplace: m.channelListing.marketplace,
+            externalListingId: m.channelListing.externalListingId,
+            listingStatus: m.channelListing.listingStatus,
+            product: m.channelListing.product,
+          },
+          createdAt: m.createdAt,
+          updatedAt: m.updatedAt,
+        })),
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[listings/ebay/markdowns] list failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.post('/listings/ebay/markdowns', async (request, reply) => {
+    try {
+      const body = request.body as {
+        channelListingId?: string
+        discountType?: 'PERCENTAGE' | 'FIXED_PRICE'
+        discountValue?: number
+        startDate?: string
+        endDate?: string | null
+      }
+
+      if (!body.channelListingId) {
+        return reply.code(400).send({ error: 'channelListingId is required' })
+      }
+      if (body.discountType !== 'PERCENTAGE' && body.discountType !== 'FIXED_PRICE') {
+        return reply.code(400).send({
+          error: "discountType must be 'PERCENTAGE' or 'FIXED_PRICE'",
+        })
+      }
+      if (typeof body.discountValue !== 'number' || body.discountValue <= 0) {
+        return reply.code(400).send({ error: 'discountValue must be positive' })
+      }
+      if (body.discountType === 'PERCENTAGE' && body.discountValue > 100) {
+        return reply.code(400).send({
+          error: 'PERCENTAGE markdowns must be <= 100',
+        })
+      }
+      if (!body.startDate) {
+        return reply.code(400).send({ error: 'startDate is required' })
+      }
+
+      const listing = await prisma.channelListing.findUnique({
+        where: { id: body.channelListingId },
+        select: { id: true, channel: true, price: true, marketplace: true },
+      })
+      if (!listing) return reply.code(404).send({ error: 'Listing not found' })
+      if (listing.channel !== 'EBAY') {
+        return reply.code(400).send({
+          error: 'Listing is not on eBay — markdowns are eBay-specific.',
+        })
+      }
+      if (listing.price == null) {
+        return reply.code(400).send({
+          error: 'Listing has no price set — set a price before scheduling a markdown.',
+        })
+      }
+
+      const originalPrice = Number(listing.price)
+      const markdownPrice =
+        body.discountType === 'PERCENTAGE'
+          ? Math.max(0, originalPrice * (1 - body.discountValue / 100))
+          : Math.max(0, body.discountValue)
+      // Currency is marketplace-driven; keep simple for v1 (EU =
+      // EUR, GB = GBP, US = USD). Could read from Marketplace.currency
+      // when that becomes a real field.
+      const currency =
+        listing.marketplace === 'UK' || listing.marketplace === 'GB'
+          ? 'GBP'
+          : listing.marketplace === 'US'
+            ? 'USD'
+            : 'EUR'
+
+      const created = await prisma.ebayMarkdown.create({
+        data: {
+          channelListingId: body.channelListingId,
+          discountType: body.discountType,
+          discountValue: body.discountValue as any,
+          originalPrice: originalPrice as any,
+          markdownPrice: markdownPrice as any,
+          currency,
+          status: 'DRAFT',
+          startDate: new Date(body.startDate),
+          endDate: body.endDate ? new Date(body.endDate) : null,
+        },
+      })
+
+      return reply.code(201).send({ markdown: created })
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[listings/ebay/markdowns] create failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.patch<{ Params: { id: string } }>(
+    '/listings/ebay/markdowns/:id',
+    async (request, reply) => {
+      try {
+        const { id } = request.params
+        const body = request.body as {
+          status?: 'DRAFT' | 'SCHEDULED' | 'ACTIVE' | 'ENDED' | 'CANCELLED'
+          endDate?: string | null
+        }
+
+        const existing = await prisma.ebayMarkdown.findUnique({ where: { id } })
+        if (!existing) return reply.code(404).send({ error: 'Markdown not found' })
+
+        if (
+          (existing.status === 'ENDED' || existing.status === 'CANCELLED') &&
+          body.status &&
+          body.status !== existing.status
+        ) {
+          return reply.code(409).send({
+            error: 'Terminal markdowns cannot be revived — create a new one instead.',
+          })
+        }
+
+        const data: any = {}
+        if (body.status) data.status = body.status
+        if (body.endDate !== undefined) {
+          data.endDate = body.endDate ? new Date(body.endDate) : null
+        }
+
+        const updated = await prisma.ebayMarkdown.update({
+          where: { id },
+          data,
+        })
+        return { markdown: updated }
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[listings/ebay/markdowns] patch failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
+  fastify.delete<{ Params: { id: string } }>(
+    '/listings/ebay/markdowns/:id',
+    async (request, reply) => {
+      try {
+        const { id } = request.params
+        const existing = await prisma.ebayMarkdown.findUnique({ where: { id } })
+        if (!existing) return reply.code(404).send({ error: 'Markdown not found' })
+        if (existing.status !== 'DRAFT') {
+          return reply.code(409).send({
+            error: 'Only DRAFT markdowns can be deleted. PATCH status to CANCELLED or ENDED instead.',
+          })
+        }
+        await prisma.ebayMarkdown.delete({ where: { id } })
+        return { ok: true }
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[listings/ebay/markdowns] delete failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
+  // ─────────────────────────────────────────────────────────────────
   // POST /api/listings/amazon/suppressions — manually log a suppression
   //
   // S.5 — used by the resolver UI when an operator wants to record a

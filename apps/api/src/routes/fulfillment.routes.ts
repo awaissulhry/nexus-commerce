@@ -1034,6 +1034,24 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      // O.39: audit. Includes mode (real vs dryRun) so post-incident
+      // forensics can distinguish "we sent this to Sendcloud" from
+      // "we mocked this in dryRun".
+      const { auditLogService } = await import('../services/audit-log.service.js')
+      const mode = sendcloud.getSendcloudMode()
+      void auditLogService.write({
+        entityType: 'Shipment',
+        entityId: id,
+        action: 'print-label',
+        before: { status: shipment.status },
+        after: {
+          status: 'LABEL_PRINTED',
+          sendcloudParcelId: String(parcel.id),
+          trackingNumber: parcel.tracking_number,
+        },
+        metadata: { dryRun: mode.dryRun, env: mode.env, weightKg, country: addr.country },
+      })
+
       return updated
     } catch (error: any) {
       fastify.log.error({ err: error }, '[print-label] failed')
@@ -1270,6 +1288,15 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       })
       const { publishOutboundEvent } = await import('../services/outbound-events.service.js')
       publishOutboundEvent({ type: 'shipment.updated', shipmentId: id, status: 'DRAFT', ts: Date.now() })
+      // O.39: audit log — fail-open per the service contract.
+      const { auditLogService } = await import('../services/audit-log.service.js')
+      void auditLogService.write({
+        entityType: 'Shipment',
+        entityId: id,
+        action: 'release',
+        before: { status: 'ON_HOLD', heldReason: shipment.heldReason },
+        after: { status: 'DRAFT' },
+      })
       return updated
     } catch (error: any) {
       fastify.log.error({ err: error }, '[shipments/:id/release] failed')
@@ -1291,17 +1318,26 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           error: `Cannot hold a shipment in status ${shipment.status}. Void the label first if needed.`,
         })
       }
+      const heldReason = body.reason?.trim() || 'Manually held by operator'
       const updated = await prisma.shipment.update({
         where: { id },
         data: {
           status: 'ON_HOLD' as any,
           heldAt: new Date(),
-          heldReason: body.reason?.trim() || 'Manually held by operator',
+          heldReason,
           version: { increment: 1 },
         },
       })
       const { publishOutboundEvent } = await import('../services/outbound-events.service.js')
       publishOutboundEvent({ type: 'shipment.updated', shipmentId: id, status: 'ON_HOLD', ts: Date.now() })
+      const { auditLogService } = await import('../services/audit-log.service.js')
+      void auditLogService.write({
+        entityType: 'Shipment',
+        entityId: id,
+        action: 'hold',
+        before: { status: shipment.status },
+        after: { status: 'ON_HOLD', heldReason },
+      })
       return updated
     } catch (error: any) {
       fastify.log.error({ err: error }, '[shipments/:id/hold] failed')
@@ -1942,7 +1978,17 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
       const result = await sendcloud.voidParcel(creds, Number(shipment.sendcloudParcelId))
       if (result.ok === false) {
-        return reply.code(502).send({ error: `Sendcloud refused: ${(result as { ok: false; reason: string }).reason}` })
+        const reason = (result as { ok: false; reason: string }).reason
+        // Audit the failed attempt — operator may want to see the
+        // history of "we tried to void, Sendcloud said no".
+        const { auditLogService } = await import('../services/audit-log.service.js')
+        void auditLogService.write({
+          entityType: 'Shipment',
+          entityId: id,
+          action: 'void-label-failed',
+          metadata: { reason },
+        })
+        return reply.code(502).send({ error: `Sendcloud refused: ${reason}` })
       }
 
       // Reset shipment for a fresh print. Keep the order link, items,
@@ -1964,6 +2010,18 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
       const { publishOutboundEvent } = await import('../services/outbound-events.service.js')
       publishOutboundEvent({ type: 'shipment.updated', shipmentId: id, status: updated.status, ts: Date.now() })
+      const { auditLogService } = await import('../services/audit-log.service.js')
+      void auditLogService.write({
+        entityType: 'Shipment',
+        entityId: id,
+        action: 'void-label',
+        before: {
+          status: 'LABEL_PRINTED',
+          sendcloudParcelId: shipment.sendcloudParcelId,
+          trackingNumber: shipment.trackingNumber,
+        },
+        after: { status: updated.status },
+      })
 
       return updated
     } catch (error: any) {
@@ -2000,11 +2058,27 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/fulfillment/shipments/:id/mark-shipped', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
+      const before = await prisma.shipment.findUnique({
+        where: { id },
+        select: { status: true, trackingNumber: true },
+      })
+      if (!before) return reply.code(404).send({ error: 'Shipment not found' })
       const updated = await prisma.shipment.update({
         where: { id },
         data: { status: 'SHIPPED', shippedAt: new Date(), version: { increment: 1 } },
       })
-      // TODO: push tracking back to channel via channel-specific service
+      // O.39: audit.
+      const { auditLogService } = await import('../services/audit-log.service.js')
+      void auditLogService.write({
+        entityType: 'Shipment',
+        entityId: id,
+        action: 'mark-shipped',
+        before: { status: before.status },
+        after: { status: 'SHIPPED', shippedAt: updated.shippedAt },
+      })
+      // Channel pushback fires from the O.7 webhook handler when
+      // Sendcloud reports the actual carrier scan; this endpoint just
+      // records operator intent ("we shipped it manually").
       return updated
     } catch (error: any) {
       fastify.log.error({ err: error }, '[mark-shipped] failed')

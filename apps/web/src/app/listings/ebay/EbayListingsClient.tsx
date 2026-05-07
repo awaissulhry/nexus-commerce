@@ -188,16 +188,25 @@ function EbayKpiStrip({
         }
         tone={engagement.totalQuestions > 0 ? 'warning' : 'default'}
       />
-      <KpiTile
-        label="Active markdowns"
-        value={markdowns.activeListingCount}
-        sub={
-          markdowns.activeListingCount === 0
-            ? 'no sales running'
-            : 'listings on sale'
-        }
-        tone={markdowns.activeListingCount > 0 ? 'warning' : 'default'}
-      />
+      <Link
+        href="/listings/ebay/markdowns"
+        className="block hover:shadow-sm rounded transition"
+        aria-label="Manage markdowns"
+      >
+        <Card>
+          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">
+            Active markdowns
+          </div>
+          <div
+            className={`text-[24px] font-semibold tabular-nums leading-none ${
+              markdowns.activeListingCount > 0 ? 'text-amber-700' : 'text-slate-900'
+            }`}
+          >
+            {markdowns.activeListingCount}
+          </div>
+          <div className="text-sm text-blue-600 mt-1">manage markdowns →</div>
+        </Card>
+      </Link>
       <Link
         href="/listings/ebay/campaigns"
         className="block hover:shadow-sm rounded transition"
