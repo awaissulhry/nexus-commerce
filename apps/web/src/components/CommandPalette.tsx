@@ -507,11 +507,13 @@ export default function CommandPalette() {
           ? ` · ${s.order.channel}${s.order.marketplace ? `:${s.order.marketplace}` : ''}`
           : ''
         // Order-attached shipments → drawer-on-load. Order-less
-        // manual shipments fall back to the shipments tab; the
-        // operator can refine from there.
+        // manual shipments fall back to the shipments tab pre-
+        // filtered to the tracking number (O.63 wires the param).
         const href = s.orderId
           ? `/fulfillment/outbound?drawer=${s.orderId}`
-          : `/fulfillment/outbound?tab=shipments`
+          : `/fulfillment/outbound?tab=shipments&search=${encodeURIComponent(
+              s.trackingNumber ?? '',
+            )}`
         return {
           id: `shipment-${s.id}`,
           label: `${channelOrder}${customer}${tracking}`,

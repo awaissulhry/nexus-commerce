@@ -87,7 +87,10 @@ export default function ShipmentsClient() {
     router.replace(`?${next.toString()}`, { scroll: false })
   }
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
-  const [search, setSearch] = useState('')
+  // O.63: honor ?search= so Cmd+K (and any other deep-link) can land
+  // on the shipments tab pre-filtered. Initialized from the URL once;
+  // subsequent edits flow through the input → state path.
+  const [search, setSearch] = useState(() => params.get('search') ?? '')
   const [items, setItems] = useState<Shipment[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Set<string>>(new Set())
