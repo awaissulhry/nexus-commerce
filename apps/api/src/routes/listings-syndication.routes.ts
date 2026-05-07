@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
+import { computeHealth, aggregateIssuesByCategory } from '../services/listings/health.service.js'
 import { listEtag, matches } from '../utils/list-etag.js'
 
 // ─────────────────────────────────────────────────────────────────────
@@ -404,7 +405,11 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       const where: any = {}
       if (channels && channels.length > 0) where.channel = { in: channels }
 
-      const [errorRows, suppressedRows, draftRows, failedSyncRows, pendingSyncRows] = await Promise.all([
+      // S.3 — pull a sample of all-listing health for category aggregate.
+      // We can't aggregate health categories in SQL (computed per row),
+      // so sample the most-recent N for the rollup. errorRows give us
+      // the actionable cohort; sampleAll feeds the category breakdown.
+      const [errorRows, suppressedRows, draftRows, failedSyncRows, pendingSyncRows, sampleAll] = await Promise.all([
         prisma.channelListing.findMany({
           where: { ...where, OR: [{ listingStatus: 'ERROR' }, { syncStatus: 'FAILED' }, { lastSyncStatus: 'FAILED' }] },
           include: { product: { select: { id: true, sku: true, name: true } } },
@@ -415,6 +420,11 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         prisma.channelListing.count({ where: { ...where, listingStatus: 'DRAFT' } }),
         prisma.channelListing.count({ where: { ...where, lastSyncStatus: 'FAILED' } }),
         prisma.channelListing.count({ where: { ...where, OR: [{ syncStatus: 'PENDING' }, { lastSyncStatus: 'PENDING' }] } }),
+        prisma.channelListing.findMany({
+          where,
+          orderBy: { updatedAt: 'desc' },
+          take: 500,
+        }),
       ])
 
       // Group errors by reason for at-a-glance triage
@@ -428,12 +438,49 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         .slice(0, 8)
         .map(([reason, count]) => ({ reason, count }))
 
+      // Score-bucket distribution + issues-by-category over the sample.
+      // 500 rows is enough for any operator-scale system (Awa runs ~3,200
+      // products); revisit when Nexus serves a multi-tenant customer
+      // with 100k+ listings.
+      const sampleHealths = sampleAll.map((r) =>
+        computeHealth({
+          listingStatus: r.listingStatus,
+          syncStatus: r.syncStatus,
+          lastSyncStatus: r.lastSyncStatus,
+          lastSyncError: r.lastSyncError,
+          lastSyncedAt: r.lastSyncedAt,
+          syncRetryCount: r.syncRetryCount,
+          validationErrors: r.validationErrors,
+          title: r.title,
+          price: r.price == null ? null : Number(r.price),
+          quantity: r.quantity,
+          externalListingId: r.externalListingId,
+          channel: r.channel,
+          marketplace: r.marketplace,
+          followMasterPrice: r.followMasterPrice,
+          followMasterQuantity: r.followMasterQuantity,
+          followMasterTitle: r.followMasterTitle,
+          masterPrice: r.masterPrice == null ? null : Number(r.masterPrice),
+          masterQuantity: r.masterQuantity,
+          masterTitle: r.masterTitle,
+        }),
+      )
+      const scoreBuckets = {
+        HEALTHY: sampleHealths.filter((h) => h.category === 'HEALTHY').length,
+        WARNING: sampleHealths.filter((h) => h.category === 'WARNING').length,
+        CRITICAL: sampleHealths.filter((h) => h.category === 'CRITICAL').length,
+      }
+      const issuesByCategory = aggregateIssuesByCategory(sampleHealths)
+
       return {
         errorCount: errorRows.length,
         suppressedCount: suppressedRows,
         draftCount: draftRows,
         failedSyncCount: failedSyncRows,
         pendingSyncCount: pendingSyncRows,
+        scoreBuckets,
+        issuesByCategory,
+        sampleSize: sampleAll.length,
         topReasons,
         recentErrors: errorRows.slice(0, 50).map((r) => ({
           id: r.id,
@@ -808,6 +855,29 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           isPublished: c.isPublished,
           listingUrl: listingUrlFor(c.channel, c.marketplace, c.externalListingId),
         })),
+        // S.3 — computed health: score, category, structured issues.
+        // The frontend HealthPanel renders this without recomputing.
+        health: computeHealth({
+          listingStatus: l.listingStatus,
+          syncStatus: l.syncStatus,
+          lastSyncStatus: l.lastSyncStatus,
+          lastSyncError: l.lastSyncError,
+          lastSyncedAt: l.lastSyncedAt,
+          syncRetryCount: l.syncRetryCount,
+          validationErrors: l.validationErrors,
+          title: l.title,
+          price: l.price == null ? null : Number(l.price),
+          quantity: l.quantity,
+          externalListingId: l.externalListingId,
+          channel: l.channel,
+          marketplace: l.marketplace,
+          followMasterPrice: l.followMasterPrice,
+          followMasterQuantity: l.followMasterQuantity,
+          followMasterTitle: l.followMasterTitle,
+          masterPrice: l.masterPrice == null ? null : Number(l.masterPrice),
+          masterQuantity: l.masterQuantity,
+          masterTitle: l.masterTitle,
+        }),
         createdAt: l.createdAt,
         updatedAt: l.updatedAt,
       }

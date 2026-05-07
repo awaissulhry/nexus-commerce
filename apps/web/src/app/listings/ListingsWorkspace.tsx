@@ -10,7 +10,7 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   Boxes, AlertTriangle, LayoutGrid, Sparkles, Search, RefreshCw,
   ExternalLink, Filter, Settings2, X, ChevronDown,
-  Eye, EyeOff, CheckCircle2, XCircle, Clock, Tag, Link2,
+  Eye, EyeOff, CheckCircle2, Tag, Link2,
   ArrowUpRight, Layers, Package, MoreHorizontal, Plus, Pause, Play,
   TrendingUp, TrendingDown, Edit3,
 } from 'lucide-react'
@@ -1315,12 +1315,188 @@ function SetPriceModal({
 // ────────────────────────────────────────────────────────────────────
 // HealthLens
 // ────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────
+// HealthScoreBadge — small pill rendering a 0-100 score with category
+// color. Used inline (drawer header, recent errors list, matrix corner).
+// ────────────────────────────────────────────────────────────────────
+function HealthScoreBadge({
+  score,
+  category,
+  size = 'md',
+}: {
+  score: number
+  category: 'HEALTHY' | 'WARNING' | 'CRITICAL'
+  size?: 'sm' | 'md' | 'lg'
+}) {
+  const tone =
+    category === 'HEALTHY' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+    : category === 'WARNING' ? 'bg-amber-50 text-amber-700 border-amber-200'
+    : 'bg-rose-50 text-rose-700 border-rose-200'
+  const sizeClass =
+    size === 'sm' ? 'h-5 px-1.5 text-xs'
+    : size === 'lg' ? 'h-9 px-3 text-lg'
+    : 'h-6 px-2 text-sm'
+  return (
+    <span className={`inline-flex items-center gap-1 rounded border tabular-nums font-semibold ${tone} ${sizeClass}`}>
+      {score}
+      <span className="opacity-60 text-xs uppercase tracking-wider">/100</span>
+    </span>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────
+// HealthPanel — score + structured issues with quick-fix actions.
+// Used in drawer Detail tab. Replaces the prior flat lastSyncError +
+// validationErrors blocks with a single source of truth driven by the
+// server-computed `health` field on the listing.
+// ────────────────────────────────────────────────────────────────────
+const ISSUE_CATEGORY_LABEL: Record<string, string> = {
+  sync: 'Sync',
+  validation: 'Validation',
+  data: 'Data',
+  drift: 'Drift',
+  staleness: 'Staleness',
+  suppression: 'Suppression',
+  retry: 'Retry',
+}
+
+function HealthPanel({
+  health,
+  handlers,
+}: {
+  health: { score: number; category: 'HEALTHY' | 'WARNING' | 'CRITICAL'; issues: any[] }
+  handlers: {
+    onResync: () => Promise<void> | void
+    onSnapMaster: (field: 'price' | 'quantity' | 'title') => Promise<void> | void
+    onEdit: () => void
+    onViewMarketplace: () => void
+  }
+}) {
+  // Group issues by severity so errors render first, then warnings,
+  // then info. Within a severity, drift issues stay last (they're
+  // informational and often intentional).
+  const sorted = useMemo(() => {
+    const order: Record<string, number> = { error: 0, warning: 1, info: 2 }
+    return [...health.issues].sort((a, b) => {
+      const s = (order[a.severity] ?? 3) - (order[b.severity] ?? 3)
+      if (s !== 0) return s
+      // drift category sinks last within a severity
+      if (a.category === 'drift' && b.category !== 'drift') return 1
+      if (b.category === 'drift' && a.category !== 'drift') return -1
+      return 0
+    })
+  }, [health.issues])
+
+  const tone =
+    health.category === 'HEALTHY' ? 'border-emerald-200 bg-emerald-50/30'
+    : health.category === 'WARNING' ? 'border-amber-200 bg-amber-50/30'
+    : 'border-rose-200 bg-rose-50/30'
+
+  return (
+    <div className={`border rounded-md p-3 space-y-3 ${tone}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Health</div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <HealthScoreBadge score={health.score} category={health.category} size="lg" />
+            <span className="text-sm text-slate-600">
+              {health.category === 'HEALTHY'
+                ? 'All clear.'
+                : `${health.issues.length} issue${health.issues.length === 1 ? '' : 's'} to review.`}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {sorted.length > 0 && (
+        <ul className="space-y-1.5">
+          {sorted.map((issue) => (
+            <HealthIssueRow key={issue.id} issue={issue} handlers={handlers} />
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function HealthIssueRow({
+  issue,
+  handlers,
+}: {
+  issue: any
+  handlers: {
+    onResync: () => Promise<void> | void
+    onSnapMaster: (field: 'price' | 'quantity' | 'title') => Promise<void> | void
+    onEdit: () => void
+    onViewMarketplace: () => void
+  }
+}) {
+  const sevTone =
+    issue.severity === 'error' ? 'border-l-rose-500 bg-rose-50/40'
+    : issue.severity === 'warning' ? 'border-l-amber-500 bg-amber-50/40'
+    : 'border-l-blue-300 bg-white'
+
+  const fix = issue.fix as
+    | { type: 'resync'; label: string }
+    | { type: 'snap-master'; label: string; field: 'price' | 'quantity' | 'title' }
+    | { type: 'edit'; label: string }
+    | { type: 'view-marketplace'; label: string }
+    | undefined
+
+  const onFix = useCallback(async () => {
+    if (!fix) return
+    if (fix.type === 'resync') return handlers.onResync()
+    if (fix.type === 'snap-master') return handlers.onSnapMaster(fix.field)
+    if (fix.type === 'edit') return handlers.onEdit()
+    if (fix.type === 'view-marketplace') return handlers.onViewMarketplace()
+  }, [fix, handlers])
+
+  return (
+    <li className={`border border-slate-200 border-l-4 rounded p-2.5 ${sevTone}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span className="text-xs uppercase tracking-wider font-semibold text-slate-500">
+              {ISSUE_CATEGORY_LABEL[issue.category] ?? issue.category}
+            </span>
+            <span className="text-base font-semibold text-slate-900">{issue.title}</span>
+          </div>
+          <div className="text-sm text-slate-700">{issue.detail}</div>
+        </div>
+        {fix && (
+          <button
+            onClick={onFix}
+            className="h-7 px-2.5 text-sm bg-white text-slate-700 border border-slate-300 rounded hover:bg-slate-50 inline-flex items-center gap-1 flex-shrink-0"
+          >
+            {fix.label}
+          </button>
+        )}
+      </div>
+    </li>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────
+// HealthLens — S.3 rebuild
+//
+// The rollup view for /listings?lens=health. Adds:
+//   - Score-bucket distribution (HEALTHY / WARNING / CRITICAL counts)
+//   - Issues-by-category summary (sync / validation / data / drift /
+//     staleness / suppression / retry)
+//   - Existing top reasons + recent errors lists keep working
+// ────────────────────────────────────────────────────────────────────
+
+const CATEGORY_TONE: Record<string, string> = {
+  sync: 'text-rose-700 bg-rose-50 border-rose-200',
+  validation: 'text-amber-700 bg-amber-50 border-amber-200',
+  data: 'text-amber-700 bg-amber-50 border-amber-200',
+  drift: 'text-blue-700 bg-blue-50 border-blue-200',
+  staleness: 'text-slate-700 bg-slate-50 border-slate-200',
+  suppression: 'text-rose-700 bg-rose-50 border-rose-200',
+  retry: 'text-amber-700 bg-amber-50 border-amber-200',
+}
+
 function HealthLens({ lockChannel, onOpenDrawer }: { lockChannel?: string; onOpenDrawer: (id: string) => void }) {
-  // S.0.5 / H-4 — usePolledList replaces the prior `useEffect(() =>
-  // fetchHealth(), [fetchHealth])` 1-shot fetch. Brings 30s polling,
-  // visibility/focus refresh, and cross-tab invalidation listening for
-  // free. Earlier audit caught operators returning to the tab after
-  // working elsewhere and seeing stale health rollup; this fixes that.
   const url = useMemo(() => {
     const qs = lockChannel ? `?channel=${lockChannel}` : ''
     return `/api/listings/health${qs}`
@@ -1337,22 +1513,56 @@ function HealthLens({ lockChannel, onOpenDrawer }: { lockChannel?: string; onOpe
     ],
   })
 
-  if (loading && !data) return <Card><div className="text-md text-slate-500 py-8 text-center">Loading health…</div></Card>
+  if (loading && !data) return <Card><Skeleton variant="text" lines={3} /></Card>
   if (error && !data) return <Card><div className="text-md text-rose-600 py-8 text-center">Failed to load health rollup: {error}</div></Card>
   if (!data) return <Card><div className="text-md text-rose-600 py-8 text-center">Failed to load health rollup.</div></Card>
 
+  const buckets = data.scoreBuckets ?? { HEALTHY: 0, WARNING: 0, CRITICAL: 0 }
+  const totalScored = (buckets.HEALTHY ?? 0) + (buckets.WARNING ?? 0) + (buckets.CRITICAL ?? 0)
+  const issuesByCategory = data.issuesByCategory ?? {}
   const allClear = data.errorCount === 0 && data.failedSyncCount === 0 && data.suppressedCount === 0
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <HealthStat icon={XCircle} tone="danger" label="Errors" value={data.errorCount} />
-        <HealthStat icon={AlertTriangle} tone="warning" label="Suppressed" value={data.suppressedCount} />
-        <HealthStat icon={Clock} tone="info" label="Pending" value={data.pendingSyncCount} />
-        <HealthStat icon={CheckCircle2} tone={allClear ? 'success' : 'default'} label="Drafts" value={data.draftCount} />
-      </div>
+      {/* Score-bucket distribution */}
+      <Card title="Health distribution" description={data.sampleSize != null ? `Computed over ${data.sampleSize} most recent listing${data.sampleSize === 1 ? '' : 's'}.` : undefined}>
+        {totalScored === 0 ? (
+          <div className="text-md text-slate-500 py-4 text-center">No listings to score yet.</div>
+        ) : (
+          <div className="space-y-2">
+            <HealthBucketRow label="Healthy" tone="emerald" count={buckets.HEALTHY ?? 0} total={totalScored} />
+            <HealthBucketRow label="Warning" tone="amber" count={buckets.WARNING ?? 0} total={totalScored} />
+            <HealthBucketRow label="Critical" tone="rose" count={buckets.CRITICAL ?? 0} total={totalScored} />
+          </div>
+        )}
+      </Card>
 
-      {data.topReasons.length > 0 && (
+      {/* Issues by category */}
+      {Object.values(issuesByCategory).some((n: any) => n > 0) && (
+        <Card title="Issues by category" description="Across the scored sample. Click a category to filter the grid.">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            {Object.entries(issuesByCategory)
+              .filter(([, count]) => (count as number) > 0)
+              .sort((a, b) => (b[1] as number) - (a[1] as number))
+              .map(([category, count]) => (
+                <div
+                  key={category}
+                  className={`border rounded-md px-3 py-2 ${CATEGORY_TONE[category] ?? 'border-slate-200 bg-slate-50 text-slate-700'}`}
+                >
+                  <div className="text-xs uppercase tracking-wider font-semibold opacity-70">
+                    {ISSUE_CATEGORY_LABEL[category] ?? category}
+                  </div>
+                  <div className="text-[20px] font-semibold tabular-nums leading-tight">
+                    {count as number}
+                  </div>
+                </div>
+              ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Top reasons (kept from prior) */}
+      {data.topReasons?.length > 0 && (
         <Card title="Top error reasons" description="Grouped by message — fix the cause once, retry many.">
           <div className="space-y-1">
             {data.topReasons.map((r: any) => (
@@ -1365,12 +1575,14 @@ function HealthLens({ lockChannel, onOpenDrawer }: { lockChannel?: string; onOpe
         </Card>
       )}
 
+      {/* Recent failed listings (kept from prior) */}
       <Card title="Recent failed listings" description="Click to inspect and retry.">
-        {data.recentErrors.length === 0 ? (
+        {data.recentErrors?.length === 0 ? (
           <div className="py-8 text-center">
             <CheckCircle2 className="text-emerald-500 mx-auto mb-2" size={32} />
-            <div className="text-md text-slate-700 font-medium">No errors right now.</div>
-            <div className="text-sm text-slate-500">All listings are syncing cleanly.</div>
+            <div className="text-md text-slate-700 font-medium">
+              {allClear ? 'All clear — listings are syncing cleanly.' : 'No recent errors to show.'}
+            </div>
           </div>
         ) : (
           <ul className="space-y-1 -my-1">
@@ -1393,7 +1605,7 @@ function HealthLens({ lockChannel, onOpenDrawer }: { lockChannel?: string; onOpe
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {e.syncRetryCount > 0 && <span className="text-xs text-slate-400 tabular-nums">×{e.syncRetryCount}</span>}
-                    <Badge variant="danger" size="sm">{e.lastSyncStatus ?? e.listingStatus}</Badge>
+                    <StatusBadge status={e.lastSyncStatus ?? e.listingStatus} />
                   </div>
                 </button>
               </li>
@@ -1405,26 +1617,39 @@ function HealthLens({ lockChannel, onOpenDrawer }: { lockChannel?: string; onOpe
   )
 }
 
-function HealthStat({ icon: Icon, tone, label, value }: { icon: any; tone: 'danger' | 'warning' | 'info' | 'success' | 'default'; label: string; value: number }) {
-  const tones = {
-    danger: 'text-rose-600 bg-rose-50',
-    warning: 'text-amber-600 bg-amber-50',
-    info: 'text-blue-600 bg-blue-50',
-    success: 'text-emerald-600 bg-emerald-50',
-    default: 'text-slate-500 bg-slate-50',
-  }[tone]
+function HealthBucketRow({
+  label,
+  tone,
+  count,
+  total,
+}: {
+  label: string
+  tone: 'emerald' | 'amber' | 'rose'
+  count: number
+  total: number
+}) {
+  const pct = total === 0 ? 0 : Math.round((count / total) * 100)
+  const barTone =
+    tone === 'emerald' ? 'bg-emerald-500'
+    : tone === 'amber' ? 'bg-amber-500'
+    : 'bg-rose-500'
+  const labelTone =
+    tone === 'emerald' ? 'text-emerald-700'
+    : tone === 'amber' ? 'text-amber-700'
+    : 'text-rose-700'
   return (
-    <Card>
-      <div className="flex items-center gap-3">
-        <div className={`w-10 h-10 rounded-md inline-flex items-center justify-center ${tones}`}>
-          <Icon size={18} />
-        </div>
-        <div>
-          <div className="text-[24px] font-semibold text-slate-900 tabular-nums leading-none">{value}</div>
-          <div className="text-sm text-slate-500 uppercase tracking-wider mt-1">{label}</div>
-        </div>
+    <div className="flex items-center gap-3">
+      <div className={`w-24 text-sm font-semibold uppercase tracking-wider ${labelTone}`}>
+        {label}
       </div>
-    </Card>
+      <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
+        <div className={`h-full ${barTone} transition-all`} style={{ width: `${pct}%` }} />
+      </div>
+      <div className="w-20 text-right text-sm tabular-nums">
+        <span className="font-semibold text-slate-900">{count}</span>
+        <span className="text-slate-500 ml-1">({pct}%)</span>
+      </div>
+    </div>
   )
 }
 
@@ -2404,6 +2629,27 @@ function DetailTab({ listing, patch }: { listing: any; patch: (body: any) => Pro
   const [editingBuffer, setEditingBuffer] = useState(false)
   const [editingPercent, setEditingPercent] = useState(false)
 
+  // S.3 — HealthPanel quick-fix dispatchers wired to existing endpoints.
+  const healthHandlers = useMemo(
+    () => ({
+      onResync: async () => {
+        await fetch(`${getBackendUrl()}/api/listings/${listing.id}/resync`, { method: 'POST' })
+        emitInvalidation({ type: 'listing.updated', id: listing.id })
+      },
+      onSnapMaster: async (field: 'price' | 'quantity' | 'title') => {
+        const key = field === 'price' ? 'followMasterPrice' : field === 'quantity' ? 'followMasterQuantity' : 'followMasterTitle'
+        await patch({ [key]: true })
+      },
+      onEdit: () => {
+        window.location.href = `/products/${listing.productId}/edit?channel=${listing.channel}&marketplace=${listing.marketplace}`
+      },
+      onViewMarketplace: () => {
+        if (listing.listingUrl) window.open(listing.listingUrl, '_blank', 'noopener,noreferrer')
+      },
+    }),
+    [listing.id, listing.productId, listing.channel, listing.marketplace, listing.listingUrl, patch],
+  )
+
   const masterPrice = listing.product?.basePrice ?? listing.masterPrice
   const channelPrice = listing.price
   const priceDrift =
@@ -2423,27 +2669,11 @@ function DetailTab({ listing, patch }: { listing: any; patch: (body: any) => Pro
 
   return (
     <div className="space-y-4">
-      {/* Last sync error — surfaced at the top of Detail too because
-          operators triage errors first */}
-      {listing.lastSyncError && (
-        <div className="bg-rose-50 border border-rose-200 rounded-md p-3">
-          <div className="text-sm font-semibold uppercase tracking-wider text-rose-700 mb-1">Last sync error</div>
-          <div className="text-base text-rose-700">{listing.lastSyncError}</div>
-        </div>
-      )}
-
-      {/* Validation errors */}
-      {listing.validationErrors && listing.validationErrors.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
-          <div className="text-sm font-semibold uppercase tracking-wider text-amber-700 mb-1">
-            Validation issues
-          </div>
-          <ul className="text-base text-amber-800 list-disc list-inside space-y-0.5">
-            {listing.validationErrors.map((e: string, i: number) => (
-              <li key={i}>{e}</li>
-            ))}
-          </ul>
-        </div>
+      {/* S.3 — HealthPanel replaces the prior flat lastSyncError +
+          validationErrors blocks. Health is computed server-side and
+          carries categorized issues with quick-fix actions. */}
+      {listing.health && (
+        <HealthPanel health={listing.health} handlers={healthHandlers} />
       )}
 
       {/* Master vs channel — Price */}
