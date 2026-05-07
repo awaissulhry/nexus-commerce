@@ -1,4 +1,23 @@
 import prisma from "../db.js";
+import { amazonSpApiClient } from "../clients/amazon-sp-api.client.js";
+import {
+  acquireAmazonPublishToken,
+  checkAmazonCircuit,
+  getAmazonPublishMode,
+  recordAmazonOutcome,
+} from "./amazon-publish-gate.service.js";
+import {
+  acquireEbayPublishToken,
+  checkEbayCircuit,
+  getEbayApiBaseForMode,
+  getEbayPublishMode,
+  recordEbayOutcome,
+} from "./ebay-publish-gate.service.js";
+import {
+  digestPayload,
+  writeAttemptLog,
+} from "./channel-publish-audit.service.js";
+import { ebayAuthService } from "./ebay-auth.service.js";
 
 // ── Data Structures ──────────────────────────────────────────────────────
 
@@ -268,165 +287,431 @@ export class OutboundSyncService {
   }
 
   /**
-   * Sync product to Amazon using SP-API
+   * Sync product to Amazon using SP-API.
    * PATCH /listings/2021-08-01/items/{sellerId}/{sku}
+   *
+   * C.8 — replaced the Math.random demo simulator with a real PATCH
+   * call routed through amazonSpApiClient.submitListingPayload, gated
+   * by the same NEXUS_ENABLE_AMAZON_PUBLISH flag + AMAZON_PUBLISH_MODE
+   * resolver as the wizard publish path (C.6). Default state: gated
+   * outcome, queue row fails honestly. Set the flag + mode on Railway
+   * to enable real updates.
    */
   private async syncToAmazon(queueItem: any): Promise<SyncResult> {
-    try {
-      const { product, payload, id: queueId } = queueItem;
+    const { product, payload, id: queueId } = queueItem;
+    const sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
+    const marketplaceId =
+      payload?.marketplaceId ?? process.env.AMAZON_DEFAULT_MARKETPLACE ?? "IT";
+    const sellerId =
+      process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? "";
 
-      // Construct Amazon SP-API payload
-      const amazonPayload = this.constructAmazonPayload(payload);
+    const amazonPayload = this.constructAmazonPayload(payload);
+    const digest = digestPayload(amazonPayload);
 
-      // TODO: Call actual Amazon SP-API
-      // For now, simulate the API call
-      console.log(`[AMAZON] Syncing product ${product.sku}:`, amazonPayload);
-
-      // Simulate API call
-      const success = Math.random() > 0.1; // 90% success rate for demo
-
-      if (!success) {
-        throw new Error("Simulated Amazon API error");
-      }
-
-      return {
-        success: true,
-        queueId,
+    const fail = (
+      outcome: "gated" | "rate-limited" | "circuit-open" | "failed" | "timeout",
+      mode: "gated" | "dry-run" | "sandbox" | "live",
+      message: string,
+      durationMs?: number,
+    ): SyncResult => {
+      writeAttemptLog({
         channel: "AMAZON",
-        status: "SUCCESS",
-        message: `Product ${product.sku} synced to Amazon`,
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        marketplace: marketplaceId,
+        sellerId: sellerId || "(unset)",
+        sku,
+        productId: product?.id ?? null,
+        mode,
+        outcome,
+        payloadDigest: digest,
+        errorMessage: message,
+        durationMs: durationMs ?? null,
+      });
       return {
         success: false,
-        queueId: queueItem.id,
+        queueId,
         channel: "AMAZON",
         status: "FAILED",
         message: `Failed to sync to Amazon`,
-        error: errorMessage,
+        error: message,
       };
+    };
+
+    // 1. Feature flag (resolved as 'gated' mode)
+    const mode = getAmazonPublishMode();
+    if (mode === "gated") {
+      return fail(
+        "gated",
+        "gated",
+        "NEXUS_ENABLE_AMAZON_PUBLISH=false — set true to enable Amazon outbound sync.",
+      );
     }
-  }
+    if (!sellerId) {
+      return fail(
+        "failed",
+        mode,
+        "AMAZON_SELLER_ID is not configured. Set the env var before enabling outbound sync.",
+      );
+    }
 
-  /**
-   * Sync product to eBay using Inventory API
-   * PUT /sell/inventory/v1/inventory_item/{sku}
-   */
-  private async syncToEbay(queueItem: any): Promise<SyncResult> {
-    try {
-      const { product, payload, id: queueId } = queueItem;
+    // 2. Circuit breaker
+    const circuit = checkAmazonCircuit(sellerId, marketplaceId);
+    if (!circuit.ok) {
+      return fail("circuit-open", mode, circuit.error ?? "Circuit open");
+    }
 
-      // Construct eBay Inventory API payload
-      const ebayPayload = this.constructEbayPayload(payload);
+    // 3. Rate limiter
+    const t0 = Date.now();
+    const acquired = await acquireAmazonPublishToken(sellerId, marketplaceId);
+    if (!acquired.ok) {
+      return fail(
+        "rate-limited",
+        mode,
+        acquired.error ?? "Rate limited",
+        Date.now() - t0,
+      );
+    }
 
-      // TODO: Call actual eBay Inventory API
-      // For now, simulate the API call
-      console.log(`[EBAY] Syncing product ${product.sku}:`, ebayPayload);
-
-      // Simulate API call
-      const success = Math.random() > 0.1; // 90% success rate for demo
-
-      if (!success) {
-        throw new Error("Simulated eBay API error");
-      }
-
+    // 4. Dry-run short-circuit. We log + audit + return synthetic
+    // success so the queue row's `syncStatus` flips to SUCCESS for
+    // the operator's downstream view; no HTTP. The 'mode'='dry-run'
+    // audit row is the source of truth that no real call occurred.
+    if (mode === "dry-run") {
+      console.log(`[AMAZON] Dry-run sync for ${sku}:`, amazonPayload);
+      recordAmazonOutcome(sellerId, marketplaceId, true);
+      writeAttemptLog({
+        channel: "AMAZON",
+        marketplace: marketplaceId,
+        sellerId,
+        sku,
+        productId: product?.id ?? null,
+        mode: "dry-run",
+        outcome: "success",
+        payloadDigest: digest,
+        durationMs: Date.now() - t0,
+      });
       return {
         success: true,
         queueId,
-        channel: "EBAY",
+        channel: "AMAZON",
         status: "SUCCESS",
-        message: `Product ${product.sku} synced to eBay`,
+        message: `Product ${sku} dry-run synced to Amazon`,
       };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    }
+
+    // 5. Real call. The client picks live vs sandbox host based on
+    // AMAZON_PUBLISH_MODE inside its own logic. submitListingPayload
+    // expects the JSON-Patch-style body that constructAmazonPayload
+    // already produces.
+    let result: Awaited<ReturnType<typeof amazonSpApiClient.submitListingPayload>>;
+    try {
+      result = await amazonSpApiClient.submitListingPayload({
+        sellerId,
+        sku,
+        payload: amazonPayload,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      recordAmazonOutcome(sellerId, marketplaceId, false);
+      return fail("timeout", mode, message, Date.now() - t0);
+    }
+
+    const succeeded = result.success;
+    recordAmazonOutcome(sellerId, marketplaceId, succeeded);
+    writeAttemptLog({
+      channel: "AMAZON",
+      marketplace: marketplaceId,
+      sellerId,
+      sku,
+      productId: product?.id ?? null,
+      mode,
+      outcome: succeeded ? "success" : "failed",
+      payloadDigest: digest,
+      errorMessage: result.error ?? null,
+      durationMs: Date.now() - t0,
+    });
+
+    if (!succeeded) {
       return {
         success: false,
-        queueId: queueItem.id,
+        queueId,
+        channel: "AMAZON",
+        status: "FAILED",
+        message: `Failed to sync to Amazon`,
+        error: result.error ?? "Unknown SP-API error",
+      };
+    }
+    return {
+      success: true,
+      queueId,
+      channel: "AMAZON",
+      status: "SUCCESS",
+      message: `Product ${sku} synced to Amazon`,
+    };
+  }
+
+  /**
+   * Sync product to eBay using Inventory API.
+   * PUT /sell/inventory/v1/inventory_item/{sku}
+   *
+   * C.8 — replaced the Math.random demo simulator with a real PUT
+   * call gated by NEXUS_ENABLE_EBAY_PUBLISH + EBAY_PUBLISH_MODE
+   * (same flags as the wizard publish path, C.7).
+   */
+  private async syncToEbay(queueItem: any): Promise<SyncResult> {
+    const { product, payload, id: queueId } = queueItem;
+    const sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
+    const marketplaceId = payload?.marketplaceId ?? "EBAY_IT";
+
+    const ebayPayload = this.constructEbayPayload(payload);
+    const digest = digestPayload(ebayPayload);
+
+    const fail = (
+      outcome: "gated" | "rate-limited" | "circuit-open" | "failed" | "timeout",
+      mode: "gated" | "dry-run" | "sandbox" | "live",
+      sellerId: string,
+      message: string,
+      durationMs?: number,
+    ): SyncResult => {
+      writeAttemptLog({
+        channel: "EBAY",
+        marketplace: marketplaceId,
+        sellerId,
+        sku,
+        productId: product?.id ?? null,
+        mode,
+        outcome,
+        payloadDigest: digest,
+        errorMessage: message,
+        durationMs: durationMs ?? null,
+      });
+      return {
+        success: false,
+        queueId,
         channel: "EBAY",
         status: "FAILED",
         message: `Failed to sync to eBay`,
-        error: errorMessage,
+        error: message,
+      };
+    };
+
+    // 1. Feature flag
+    const mode = getEbayPublishMode();
+    if (mode === "gated") {
+      return fail(
+        "gated",
+        "gated",
+        marketplaceId, // pre-connection-lookup placeholder
+        "NEXUS_ENABLE_EBAY_PUBLISH=false — set true to enable eBay outbound sync.",
+      );
+    }
+
+    // 2. Connection lookup (post-gate so a gated attempt is side-effect-free)
+    const connection = await prisma.channelConnection.findFirst({
+      where: { channelType: "EBAY", isActive: true },
+      orderBy: { updatedAt: "desc" },
+    });
+    if (!connection) {
+      return fail(
+        "failed",
+        mode,
+        "(no-connection)",
+        "No active eBay connection — link an eBay account in Settings first.",
+      );
+    }
+
+    // 3. Circuit breaker
+    const circuit = checkEbayCircuit(connection.id, marketplaceId);
+    if (!circuit.ok) {
+      return fail(
+        "circuit-open",
+        mode,
+        connection.id,
+        circuit.error ?? "Circuit open",
+      );
+    }
+
+    // 4. Rate limiter
+    const t0 = Date.now();
+    const acquired = await acquireEbayPublishToken(connection.id, marketplaceId);
+    if (!acquired.ok) {
+      return fail(
+        "rate-limited",
+        mode,
+        connection.id,
+        acquired.error ?? "Rate limited",
+        Date.now() - t0,
+      );
+    }
+
+    // 5. Dry-run short-circuit
+    if (mode === "dry-run") {
+      console.log(`[EBAY] Dry-run sync for ${sku}:`, ebayPayload);
+      recordEbayOutcome(connection.id, marketplaceId, true);
+      writeAttemptLog({
+        channel: "EBAY",
+        marketplace: marketplaceId,
+        sellerId: connection.id,
+        sku,
+        productId: product?.id ?? null,
+        mode: "dry-run",
+        outcome: "success",
+        payloadDigest: digest,
+        durationMs: Date.now() - t0,
+      });
+      return {
+        success: true,
+        queueId,
+        channel: "EBAY",
+        status: "SUCCESS",
+        message: `Product ${sku} dry-run synced to eBay`,
       };
     }
+
+    // 6. Auth (token fetch has a side effect — lastUsedAt update — so
+    // it lives after the dry-run short-circuit)
+    let token: string;
+    try {
+      token = await ebayAuthService.getValidToken(connection.id);
+    } catch (err) {
+      const message = `Could not obtain eBay token: ${
+        err instanceof Error ? err.message : String(err)
+      }`;
+      recordEbayOutcome(connection.id, marketplaceId, false);
+      return fail("failed", mode, connection.id, message, Date.now() - t0);
+    }
+
+    // 7. Real PUT to inventory_item endpoint. createOrReplaceInventoryItem
+    // accepts the same body shape we use for first-time publish; it
+    // upserts so partial updates (price, quantity) merge with whatever
+    // eBay already has on file.
+    const apiBase = getEbayApiBaseForMode(mode);
+    const url = `${apiBase}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Content-Language": "en-US",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(ebayPayload),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      recordEbayOutcome(connection.id, marketplaceId, false);
+      return fail("timeout", mode, connection.id, message, Date.now() - t0);
+    }
+
+    const succeeded = response.ok || response.status === 204;
+    let errorBody: string | null = null;
+    if (!succeeded) {
+      errorBody = await response.text().catch(() => "");
+    }
+    recordEbayOutcome(connection.id, marketplaceId, succeeded);
+    writeAttemptLog({
+      channel: "EBAY",
+      marketplace: marketplaceId,
+      sellerId: connection.id,
+      sku,
+      productId: product?.id ?? null,
+      mode,
+      outcome: succeeded ? "success" : "failed",
+      payloadDigest: digest,
+      errorMessage: succeeded
+        ? null
+        : `createOrReplaceInventoryItem ${response.status}: ${(errorBody ?? "").slice(0, 500)}`,
+      durationMs: Date.now() - t0,
+    });
+
+    if (!succeeded) {
+      return {
+        success: false,
+        queueId,
+        channel: "EBAY",
+        status: "FAILED",
+        message: `Failed to sync to eBay`,
+        error: `createOrReplaceInventoryItem ${response.status}: ${(errorBody ?? "").slice(0, 500)}`,
+      };
+    }
+    return {
+      success: true,
+      queueId,
+      channel: "EBAY",
+      status: "SUCCESS",
+      message: `Product ${sku} synced to eBay`,
+    };
   }
 
   /**
-   * Sync product to Shopify
+   * Sync product to Shopify.
+   *
+   * C.8 — replaced the Math.random demo simulator with an honest
+   * NOT_IMPLEMENTED gate. Real wiring lands in Wave 6 / C.18 once
+   * the /listings/shopify Path-A overlay is shipped. Until then
+   * every queued Shopify sync returns a clear "not yet wired"
+   * failure instead of phantom 90% success — so master/channel
+   * drift never gets papered over by a fake green tick.
    */
   private async syncToShopify(queueItem: any): Promise<SyncResult> {
-    try {
-      const { product, payload, id: queueId } = queueItem;
-
-      // Construct Shopify payload
-      const shopifyPayload = this.constructShopifyPayload(payload);
-
-      console.log(`[SHOPIFY] Syncing product ${product.sku}:`, shopifyPayload);
-
-      // Simulate API call
-      const success = Math.random() > 0.1;
-
-      if (!success) {
-        throw new Error("Simulated Shopify API error");
-      }
-
-      return {
-        success: true,
-        queueId,
-        channel: "SHOPIFY",
-        status: "SUCCESS",
-        message: `Product ${product.sku} synced to Shopify`,
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      return {
-        success: false,
-        queueId: queueItem.id,
-        channel: "SHOPIFY",
-        status: "FAILED",
-        message: `Failed to sync to Shopify`,
-        error: errorMessage,
-      };
-    }
+    const { product, payload, id: queueId } = queueItem;
+    const sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
+    const shopifyPayload = this.constructShopifyPayload(payload);
+    writeAttemptLog({
+      channel: "SHOPIFY",
+      marketplace: "GLOBAL",
+      sellerId: process.env.SHOPIFY_SHOP_NAME ?? "(unset)",
+      sku,
+      productId: product?.id ?? null,
+      mode: "gated",
+      outcome: "gated",
+      payload: shopifyPayload,
+      errorMessage:
+        "Shopify outbound sync not yet wired — see roadmap C.18 (Wave 6 Path A).",
+    });
+    return {
+      success: false,
+      queueId,
+      channel: "SHOPIFY",
+      status: "FAILED",
+      message: `Failed to sync to Shopify`,
+      error:
+        "Shopify outbound sync not yet wired — see roadmap C.18 (Wave 6 Path A).",
+    };
   }
 
   /**
-   * Sync product to WooCommerce
+   * Sync product to WooCommerce.
+   *
+   * C.8 — same shape as syncToShopify: honest NOT_IMPLEMENTED gate
+   * until Wave 6 / C.19 wires the real REST adapter.
    */
   private async syncToWoocommerce(queueItem: any): Promise<SyncResult> {
-    try {
-      const { product, payload, id: queueId } = queueItem;
-
-      // Construct WooCommerce payload
-      const wooPayload = this.constructWoocommercePayload(payload);
-
-      console.log(`[WOOCOMMERCE] Syncing product ${product.sku}:`, wooPayload);
-
-      // Simulate API call
-      const success = Math.random() > 0.1;
-
-      if (!success) {
-        throw new Error("Simulated WooCommerce API error");
-      }
-
-      return {
-        success: true,
-        queueId,
-        channel: "WOOCOMMERCE",
-        status: "SUCCESS",
-        message: `Product ${product.sku} synced to WooCommerce`,
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      return {
-        success: false,
-        queueId: queueItem.id,
-        channel: "WOOCOMMERCE",
-        status: "FAILED",
-        message: `Failed to sync to WooCommerce`,
-        error: errorMessage,
-      };
-    }
+    const { product, payload, id: queueId } = queueItem;
+    const sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
+    const wooPayload = this.constructWoocommercePayload(payload);
+    writeAttemptLog({
+      channel: "WOOCOMMERCE",
+      marketplace: "GLOBAL",
+      sellerId: process.env.WOOCOMMERCE_STORE_URL ?? "(unset)",
+      sku,
+      productId: product?.id ?? null,
+      mode: "gated",
+      outcome: "gated",
+      payload: wooPayload,
+      errorMessage:
+        "WooCommerce outbound sync not yet wired — see roadmap C.19 (Wave 6 Path A).",
+    });
+    return {
+      success: false,
+      queueId,
+      channel: "WOOCOMMERCE",
+      status: "FAILED",
+      message: `Failed to sync to WooCommerce`,
+      error:
+        "WooCommerce outbound sync not yet wired — see roadmap C.19 (Wave 6 Path A).",
+    };
   }
 
   /**
