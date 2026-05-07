@@ -159,6 +159,15 @@ export default function PendingShipmentsClient() {
   // The schema has always supported N alerts per view; v0 only
   // exposed the first one in a single-bell prompt.
   const [alertsModalView, setAlertsModalView] = useState<SavedView | null>(null)
+  // O.67: bulk-create results modal. Surfaces the per-order errors
+  // returned by /shipments/bulk-create so operators see which orders
+  // failed and why (instead of just "3 of 10 created" in a toast).
+  // Cleared on close.
+  const [createResults, setCreateResults] = useState<{
+    created: number
+    total: number
+    errors: Array<{ orderId: string; reason: string }>
+  } | null>(null)
 
   const fetchViews = useCallback(async () => {
     try {
@@ -472,6 +481,12 @@ export default function PendingShipmentsClient() {
         toast.warning(t('outbound.pending.toast.createdPartial', { ok: created, total: selected.size, errors: errors.length }))
       } else {
         toast.error(t('outbound.pending.toast.createdNone', { errors: errors.length }))
+      }
+      // O.67: when any order failed, open the results modal so the
+      // operator can see which orderIds failed + why. Successful runs
+      // skip the modal — toast is enough confirmation.
+      if (errors.length > 0) {
+        setCreateResults({ created, total: selected.size, errors })
       }
       // O.26: tell other tabs (sidebar, drawer, shipments tab) to refresh.
       if (created > 0) emitInvalidation({ type: 'shipment.created', meta: { count: created } })
@@ -945,6 +960,105 @@ export default function PendingShipmentsClient() {
           t={t}
         />
       )}
+
+      {createResults && (
+        <BulkCreateResultsModal
+          results={createResults}
+          orders={data?.items ?? []}
+          onClose={() => setCreateResults(null)}
+          onOpenDrawer={(orderId) => {
+            setCreateResults(null)
+            const next = new URLSearchParams(params.toString())
+            next.set('drawer', orderId)
+            router.replace(`?${next.toString()}`, { scroll: false })
+          }}
+          t={t}
+        />
+      )}
+    </div>
+  )
+}
+
+// O.67: bulk-create results modal. Renders only when at least one
+// order failed; lists each failure with its operator-readable
+// reason and a "Open" button that pops the drawer for diagnosis.
+function BulkCreateResultsModal({
+  results,
+  orders,
+  onClose,
+  onOpenDrawer,
+  t,
+}: {
+  results: {
+    created: number
+    total: number
+    errors: Array<{ orderId: string; reason: string }>
+  }
+  orders: PendingOrder[]
+  onClose: () => void
+  onOpenDrawer: (orderId: string) => void
+  t: (key: string, vars?: Record<string, string | number>) => string
+}) {
+  const orderById = useMemo(() => {
+    const map = new Map<string, PendingOrder>()
+    for (const o of orders) map.set(o.id, o)
+    return map
+  }, [orders])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div
+        className="bg-white rounded-md shadow-xl w-full max-w-xl mx-4 max-h-[80vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+          <div>
+            <div className="text-sm font-medium text-slate-900">
+              {t('outbound.pending.bulkResults.title')}
+            </div>
+            <div className="text-sm text-slate-500">
+              {t('outbound.pending.bulkResults.summary', {
+                ok: results.created,
+                total: results.total,
+                failed: results.errors.length,
+              })}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 rounded"
+          >
+            <X size={12} />
+          </button>
+        </div>
+        <div className="px-4 py-3">
+          <ul className="space-y-1.5">
+            {results.errors.map((err) => {
+              const o = orderById.get(err.orderId)
+              return (
+                <li
+                  key={err.orderId}
+                  className="flex items-start gap-2 px-2 py-1.5 border border-rose-200 bg-rose-50 rounded"
+                >
+                  <AlertTriangle size={11} className="text-rose-500 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0 text-sm">
+                    <div className="font-mono text-slate-900">
+                      {o?.channelOrderId ?? err.orderId.slice(0, 12)}
+                    </div>
+                    <div className="text-rose-700 text-xs">{err.reason}</div>
+                  </div>
+                  <button
+                    onClick={() => onOpenDrawer(err.orderId)}
+                    className="text-xs px-2 py-0.5 text-slate-700 border border-slate-200 rounded hover:bg-white"
+                  >
+                    {t('common.open')}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      </div>
     </div>
   )
 }
