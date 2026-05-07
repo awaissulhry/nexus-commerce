@@ -42,6 +42,7 @@ export interface CarrierDef {
 }
 
 export interface CarrierRow {
+  id?: string
   isActive: boolean
   hasCredentials: boolean
   lastVerifiedAt?: string | null
@@ -64,7 +65,7 @@ interface Props {
   onChanged: () => void
 }
 
-type TabId = 'credentials' | 'services' | 'warehouses' | 'defaults' | 'rules' | 'pickups' | 'performance' | 'webhooks'
+type TabId = 'credentials' | 'services' | 'warehouses' | 'defaults' | 'rules' | 'pickups' | 'performance' | 'activity' | 'webhooks'
 
 export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: Props) {
   const { t } = useTranslations()
@@ -248,6 +249,7 @@ export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: 
       list.push({ id: 'pickups', label: 'Pickups' })
     }
     list.push({ id: 'performance', label: 'Performance' })
+    list.push({ id: 'activity', label: 'Activity' })
     if (def.code === 'SENDCLOUD') {
       list.push({ id: 'webhooks', label: 'Webhooks' })
     }
@@ -337,6 +339,14 @@ export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: 
           )}
           {activeTab === 'performance' && (
             <PerformanceTab carrierCode={def.code} />
+          )}
+          {activeTab === 'activity' && carrier?.id && (
+            <ActivityTab carrierId={carrier.id} />
+          )}
+          {activeTab === 'activity' && !carrier?.id && (
+            <div className="text-base text-slate-500 dark:text-slate-400 italic py-2">
+              Activity log appears after the carrier is connected.
+            </div>
           )}
           {activeTab === 'webhooks' && def.code === 'SENDCLOUD' && (
             <WebhooksTab />
@@ -1260,6 +1270,108 @@ function Kpi({ label, value, hint }: { label: string; value: string; hint?: stri
       {hint && <div className="text-xs text-slate-500 dark:text-slate-400">{hint}</div>}
     </div>
   )
+}
+
+// ── Activity tab ───────────────────────────────────────────────────
+// CR.19: surfaces AuditLog entries scoped to this carrier. Connect /
+// disconnect / test-connection events get audit-logged from the
+// route handlers; this tab queries /api/audit-log/search filtered to
+// entityType=Carrier + entityId={carrier.id}. Read-only.
+type AuditEntry = {
+  id: string
+  userId: string | null
+  entityType: string
+  entityId: string
+  action: string
+  before: any
+  after: any
+  metadata: any
+  createdAt: string
+}
+
+function ActivityTab({ carrierId }: { carrierId: string }) {
+  const [entries, setEntries] = useState<AuditEntry[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let abort = false
+    setLoading(true)
+    fetch(
+      `${getBackendUrl()}/api/audit-log/search?entityType=Carrier&entityId=${encodeURIComponent(carrierId)}&limit=50`,
+      { cache: 'no-store' },
+    )
+      .then((r) => r.ok ? r.json() : { items: [] })
+      .then((d) => { if (!abort) setEntries(d.items ?? []) })
+      .catch(() => { /* */ })
+      .finally(() => { if (!abort) setLoading(false) })
+    return () => { abort = true }
+  }, [carrierId])
+
+  if (loading) {
+    return <div className="text-base text-slate-500 dark:text-slate-400 py-2">Loading activity…</div>
+  }
+  if (entries.length === 0) {
+    return (
+      <div className="text-base text-slate-500 dark:text-slate-400 italic py-2">
+        No activity yet. Connect / test / configure events appear here as they happen.
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-base text-slate-700 dark:text-slate-300">
+        Last 50 audit-log events for this carrier. Full log at{' '}
+        <a href="/audit-log" className="text-blue-600 dark:text-blue-400 hover:underline">
+          /audit-log
+        </a>.
+      </p>
+      <ol className="space-y-1">
+        {entries.map((e) => (
+          <li
+            key={e.id}
+            className="flex items-start gap-2 px-2 py-1.5 border border-slate-200 dark:border-slate-700 rounded text-sm"
+          >
+            <span className="font-mono text-xs text-slate-500 dark:text-slate-400 flex-shrink-0 w-32">
+              {new Date(e.createdAt).toLocaleString()}
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="font-semibold text-slate-900 dark:text-slate-100">{e.action}</span>
+              {e.metadata?.dryRun && (
+                <Badge variant="default" size="sm" >dryRun</Badge>
+              )}
+              {e.metadata?.purged && (
+                <Badge variant="warning" size="sm" >purged</Badge>
+              )}
+              <span className="ml-2 text-slate-500 dark:text-slate-400 break-words">
+                {summarizeAuditEntry(e)}
+              </span>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
+function summarizeAuditEntry(e: AuditEntry): string {
+  // Tight one-liner per common action so the timeline reads cleanly.
+  switch (e.action) {
+    case 'create':
+      return `Connected · ${e.metadata?.fieldsSupplied?.length ?? 0} fields`
+    case 'update':
+      return `Credentials updated · ${e.metadata?.fieldsSupplied?.length ?? 0} fields`
+    case 'disconnect':
+      return e.metadata?.purged
+        ? `Disconnected + purged ${e.metadata?.mappings ?? 0} mappings, ${e.metadata?.pickupsCancelled ?? 0} pickups`
+        : 'Disconnected (soft)'
+    case 'test-connection':
+      return e.after?.ok
+        ? `Verified · ${e.after.username ?? '?'}`
+        : `Test failed · ${e.after?.reason ?? 'unknown'}`
+    default:
+      return e.action
+  }
 }
 
 // ── Pickups tab ────────────────────────────────────────────────────

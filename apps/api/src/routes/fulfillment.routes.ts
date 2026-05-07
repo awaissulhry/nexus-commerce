@@ -8403,6 +8403,24 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const upserted = existing
         ? await prisma.carrier.update({ where: { code: code as any }, data })
         : await prisma.carrier.create({ data })
+
+      // CR.19: audit-log connect events so the drawer's Activity tab
+      // surfaces them. Don't dump the encrypted creds blob — just the
+      // shape (which fields were supplied).
+      const { auditLogService } = await import('../services/audit-log.service.js')
+      void auditLogService.write({
+        entityType: 'Carrier',
+        entityId: upserted.id,
+        action: existing ? 'update' : 'create',
+        before: existing ? { isActive: existing.isActive, hasCreds: !!existing.credentialsEncrypted } : null,
+        after: { isActive: upserted.isActive, hasCreds: !!upserted.credentialsEncrypted },
+        metadata: {
+          code: upserted.code,
+          fieldsSupplied: Object.keys({ publicKey: body.publicKey, privateKey: body.privateKey, integrationId: body.integrationId }).filter((k) => (body as any)[k] != null),
+          serviceMapKeys: body.defaultServiceMap ? Object.keys(body.defaultServiceMap as any).length : 0,
+        },
+      })
+
       return { ok: true, carrier: { id: upserted.id, code: upserted.code, name: upserted.name, isActive: upserted.isActive } }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[carriers/:code/connect] failed')
@@ -8465,6 +8483,25 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           .catch(() => { /* */ })
       }
 
+      // CR.19: audit-log test outcomes for the Activity tab. Includes
+      // dryRun flag so post-incident forensics can tell mocked passes
+      // from real verifications.
+      const carrierRow = await prisma.carrier.findUnique({
+        where: { code: 'SENDCLOUD' },
+        select: { id: true },
+      })
+      if (carrierRow) {
+        const { auditLogService } = await import('../services/audit-log.service.js')
+        void auditLogService.write({
+          entityType: 'Carrier',
+          entityId: carrierRow.id,
+          action: 'test-connection',
+          before: null,
+          after: result.ok === true ? { ok: true, username: result.username } : { ok: false, reason: result.reason },
+          metadata: { code, dryRun: mode.dryRun, env: mode.env },
+        })
+      }
+
       return { ...result, dryRun: mode.dryRun, env: mode.env }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[carriers/:code/test] failed')
@@ -8512,6 +8549,17 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             where: { code: code as any },
             data: { isActive: false, credentialsEncrypted: null, lastError: null, lastErrorAt: null },
           }), { mappings: 0, pickupsCancelled: 0 })
+
+      // CR.19: audit-log disconnect for the Activity tab.
+      const { auditLogService } = await import('../services/audit-log.service.js')
+      void auditLogService.write({
+        entityType: 'Carrier',
+        entityId: existing.id,
+        action: 'disconnect',
+        before: { isActive: existing.isActive, hasCreds: !!existing.credentialsEncrypted },
+        after: { isActive: false, hasCreds: false },
+        metadata: { code: existing.code, purged: !!body.purge, ...swept },
+      })
 
       return { ok: true, purged: !!body.purge, ...swept }
     } catch (error: any) {
