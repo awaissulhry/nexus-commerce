@@ -1438,8 +1438,16 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLooku
   )
 
   return (
-    <div className="sticky top-2 z-20">
-      <Card>
+    // E.4 — bottom-rising Gmail-style bulk action bar. Was `sticky top-2`
+    // which replaced the toolbar slot when items were selected — that
+    // hid search/filters until you cleared the selection. Now it floats
+    // at the bottom of the viewport (out of the page flow), slides up
+    // on first appearance, and the toolbar stays accessible above it.
+    // pointer-events-none on the outer wrapper lets clicks behind the
+    // visible pill (e.g. on the table) go through; the Card itself
+    // re-enables them.
+    <div className="fixed bottom-4 left-0 right-0 z-40 flex justify-center px-4 pointer-events-none animate-slide-up motion-reduce:animate-none">
+      <div className="pointer-events-auto bg-white border border-slate-200 shadow-xl rounded-lg px-3 py-2 max-w-[min(900px,calc(100vw-2rem))] dark:bg-slate-900 dark:border-slate-800">
         <div className="flex items-center gap-2 flex-wrap">
           {/* U.6 — selection count promoted to a pill so the user can
               see at a glance how many products the action will affect.
@@ -1556,7 +1564,7 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLooku
             <X size={14} />
           </button>
         </div>
-      </Card>
+      </div>
       {aiModalOpen && (
         <AiBulkGenerateModal
           productIds={selectedIds}
