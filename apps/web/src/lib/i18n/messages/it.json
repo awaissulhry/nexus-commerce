@@ -79,6 +79,7 @@
   "analytics.col.lateRate": "% ritardi",
   "analytics.byChannel": "Per canale",
 
+  "pack.printPackSlip": "Stampa documento di trasporto",
   "pack.split.cta": "Dividi in pacco nuovo",
   "pack.split.hint": "Indica quante unità di ogni riga spostare in una spedizione nuova. Usa quando gli articoli non entrano in una sola scatola.",
   "pack.split.move": "Sposta",

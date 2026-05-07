@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Package, CheckCircle2, AlertTriangle, Loader2, Scale, Globe, Boxes, Split } from 'lucide-react'
+import { ArrowLeft, Package, CheckCircle2, AlertTriangle, Loader2, Scale, Globe, Boxes, Split, FileText } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -273,16 +273,24 @@ export default function PackStationClient({ shipmentId }: Props) {
           { label: t('pack.title') },
         ]}
         actions={
-          <Link
-            href={
-              shipment.orderId
-                ? `/fulfillment/outbound?drawer=${shipment.orderId}`
-                : '/fulfillment/outbound'
-            }
-            className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
-          >
-            <ArrowLeft size={12} /> {t('common.back')}
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => window.open(`${getBackendUrl()}/api/fulfillment/shipments/${shipment.id}/pack-slip.html`, '_blank')}
+              className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+            >
+              <FileText size={12} /> {t('pack.printPackSlip')}
+            </button>
+            <Link
+              href={
+                shipment.orderId
+                  ? `/fulfillment/outbound?drawer=${shipment.orderId}`
+                  : '/fulfillment/outbound'
+              }
+              className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+            >
+              <ArrowLeft size={12} /> {t('common.back')}
+            </Link>
+          </div>
         }
       />
 

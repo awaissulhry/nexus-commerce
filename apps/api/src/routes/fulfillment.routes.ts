@@ -1114,6 +1114,140 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── O.37: pack slip print ──────────────────────────────────────────
+  // GET /api/fulfillment/shipments/:id/pack-slip.html — server-rendered
+  // printable HTML pack slip. Operator opens in a new tab + Cmd+P.
+  // Contains: Xavia branding, order #, ship-to, line items with
+  // quantities + SKUs, weight + dimensions, carrier/service, barcode-
+  // friendly tracking. Designed to print on standard A4 with the line
+  // items as a table the picker uses to verify before sealing the box.
+  fastify.get('/fulfillment/shipments/:id/pack-slip.html', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const shipment = await prisma.shipment.findUnique({
+        where: { id },
+        include: {
+          items: true,
+          warehouse: { select: { code: true, name: true } },
+          order: {
+            select: {
+              channelOrderId: true,
+              channel: true,
+              customerName: true,
+              shippingAddress: true,
+              currencyCode: true,
+            },
+          },
+        },
+      })
+      if (!shipment) return reply.code(404).send({ error: 'Shipment not found' })
+
+      const ship = (shipment.order?.shippingAddress ?? {}) as any
+      const escape = (s: string) => String(s ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      })[c]!)
+
+      const html = `<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<title>Pack slip · ${escape(shipment.order?.channelOrderId ?? shipment.id)}</title>
+<style>
+  @page { size: A4; margin: 12mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Inter, -apple-system, sans-serif; color: #0f172a; padding: 0; margin: 0; }
+  .header { display: flex; justify-content: space-between; align-items: start; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 18px; }
+  .brand { font-size: 28px; font-weight: 700; }
+  .meta { text-align: right; font-size: 12px; color: #475569; }
+  .meta .order-id { font-size: 14px; color: #0f172a; font-weight: 600; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 18px; }
+  .block h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #64748b; margin: 0 0 4px 0; }
+  .block p { margin: 0; line-height: 1.4; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
+  th { text-align: left; background: #f1f5f9; padding: 8px; border-bottom: 1px solid #cbd5e1; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #475569; }
+  td { padding: 10px 8px; border-bottom: 1px solid #e2e8f0; }
+  td.qty, th.qty { text-align: center; width: 80px; }
+  td.sku { font-family: ui-monospace, monospace; font-size: 12px; }
+  td.check { width: 40px; }
+  .check-box { width: 14px; height: 14px; border: 1.5px solid #94a3b8; display: inline-block; vertical-align: middle; }
+  .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; font-size: 11px; color: #64748b; }
+  .tracking { font-family: ui-monospace, monospace; font-weight: 600; color: #0f172a; }
+  @media print {
+    body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="brand">Xavia</div>
+      <div style="font-size:11px;color:#64748b;margin-top:4px;">Pack slip · ${escape(shipment.order?.channel ?? '')}</div>
+    </div>
+    <div class="meta">
+      <div class="order-id">#${escape(shipment.order?.channelOrderId ?? shipment.id.slice(0, 8))}</div>
+      <div>Shipment ${escape(shipment.id.slice(0, 12))}</div>
+      ${shipment.warehouse ? `<div>${escape(shipment.warehouse.code)}</div>` : ''}
+      <div>${new Date().toLocaleDateString('it-IT')}</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="block">
+      <h3>Ship to</h3>
+      <p><strong>${escape(shipment.order?.customerName ?? 'Customer')}</strong></p>
+      <p>${escape(ship.AddressLine1 ?? ship.addressLine1 ?? ship.street ?? '')}</p>
+      ${ship.AddressLine2 || ship.addressLine2 ? `<p>${escape(ship.AddressLine2 ?? ship.addressLine2)}</p>` : ''}
+      <p>${escape(ship.PostalCode ?? ship.postalCode ?? '')} ${escape(ship.City ?? ship.city ?? '')}</p>
+      <p>${escape(ship.StateOrRegion ?? ship.stateOrProvince ?? ship.state ?? '')} ${escape(ship.CountryCode ?? ship.countryCode ?? ship.country ?? '')}</p>
+    </div>
+    <div class="block">
+      <h3>Shipment</h3>
+      <p>Carrier: <strong>${escape(shipment.carrierCode)}</strong></p>
+      ${shipment.serviceName ? `<p>Service: ${escape(shipment.serviceName)}</p>` : ''}
+      ${shipment.weightGrams ? `<p>Weight: ${(shipment.weightGrams / 1000).toFixed(2)} kg</p>` : ''}
+      ${shipment.lengthCm && shipment.widthCm && shipment.heightCm ? `<p>Box: ${shipment.lengthCm} × ${shipment.widthCm} × ${shipment.heightCm} cm</p>` : ''}
+      ${shipment.trackingNumber ? `<p>Tracking: <span class="tracking">${escape(shipment.trackingNumber)}</span></p>` : ''}
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th class="check">✓</th>
+        <th>Item</th>
+        <th class="sku">SKU</th>
+        <th class="qty">Qty</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${shipment.items.map((it) => `
+        <tr>
+          <td class="check"><span class="check-box"></span></td>
+          <td>${escape(it.sku)}</td>
+          <td class="sku">${escape(it.sku)}</td>
+          <td class="qty">${it.quantity}</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <div>Total ${shipment.items.reduce((n, i) => n + i.quantity, 0)} unit(s) · ${shipment.items.length} SKU(s)</div>
+    <div>Picker initials: ____________</div>
+  </div>
+</body>
+</html>`
+
+      reply
+        .header('Content-Type', 'text/html; charset=utf-8')
+        .header('Cache-Control', 'no-store')
+        .send(html)
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[shipments/:id/pack-slip] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // ── O.36: holds queue — release shipment from ON_HOLD ──────────────
   // POST /api/fulfillment/shipments/:id/release — operator clears the
   // hold (after review) and the shipment transitions back to DRAFT.

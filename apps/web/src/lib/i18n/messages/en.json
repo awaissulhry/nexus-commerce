@@ -108,6 +108,7 @@
   "analytics.col.lateRate": "Late rate",
   "analytics.byChannel": "By channel",
 
+  "pack.printPackSlip": "Print pack slip",
   "pack.split.cta": "Split into new package",
   "pack.split.hint": "Enter how many units of each line to move into a new sibling shipment. Use this when items don't fit one box.",
   "pack.split.move": "Move",
