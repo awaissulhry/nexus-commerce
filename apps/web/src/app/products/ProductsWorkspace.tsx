@@ -5,7 +5,7 @@
 // URL-driven state, virtualized table, inline quick-edit, faceted filters,
 // saved views, tag + bundle editors, bulk actions across channels.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
@@ -494,6 +494,35 @@ export default function ProductsWorkspace() {
     setChildrenByParent({})
   }, [])
 
+  // E.1 — stable refs for the row-level callbacks. Without these,
+  // ProductRow's React.memo can't skip re-renders because every
+  // workspace render creates new arrow refs. updateUrl + setX are
+  // already stable; we only need to wrap the composing callbacks.
+  const onSort = useCallback(
+    (key: string) => updateUrl({ sortBy: key, page: undefined }),
+    [updateUrl],
+  )
+  const onPage = useCallback(
+    (p: number) => updateUrl({ page: p === 1 ? undefined : String(p) }),
+    [updateUrl],
+  )
+  const onPageSize = useCallback(
+    (s: number) =>
+      updateUrl({
+        pageSize: s === 100 ? undefined : String(s),
+        page: undefined,
+      }),
+    [updateUrl],
+  )
+  const onTagEdit = useCallback(
+    (id: string) => setTagEditorProductId(id),
+    [],
+  )
+  const onRowChanged = useCallback(() => {
+    onTopLevelRefresh()
+    fetchProducts()
+  }, [onTopLevelRefresh, fetchProducts])
+
   // Phase 10 — usePolledList above owns the 30s poll + visibility
   // refresh + invalidation-driven refetch for the Grid lens. The
   // hook only fires when productsUrl !== null, which depends on
@@ -833,13 +862,13 @@ export default function ProductsWorkspace() {
           columnPickerOpen={columnPickerOpen}
           setColumnPickerOpen={setColumnPickerOpen}
           sortBy={sortBy}
-          onSort={(key: string) => updateUrl({ sortBy: key, page: undefined })}
+          onSort={onSort}
           selected={selected}
           setSelected={setSelected}
-          onPage={(p: number) => updateUrl({ page: p === 1 ? undefined : String(p) })}
-          onPageSize={(s: number) => updateUrl({ pageSize: s === 100 ? undefined : String(s), page: undefined })}
-          onTagEdit={(id: string) => setTagEditorProductId(id)}
-          onChanged={() => { onTopLevelRefresh(); fetchProducts() }}
+          onPage={onPage}
+          onPageSize={onPageSize}
+          onTagEdit={onTagEdit}
+          onChanged={onRowChanged}
           expandedParents={expandedParents}
           childrenByParent={childrenByParent}
           loadingChildren={loadingChildren}
@@ -2660,6 +2689,16 @@ function VirtualizedGrid({
             {rowVirtualizer.getVirtualItems().map((vRow) => {
               const row = flatRows[vRow.index]
               if (!row) return null
+              // E.1 — pre-compute per-row booleans so React.memo can skip
+              // re-renders for rows whose selection / expansion didn't change.
+              const productId =
+                row.kind === 'parent' || row.kind === 'child'
+                  ? row.product.id
+                  : null
+              const isSelected = productId ? selected.has(productId) : false
+              const isExpanded = productId
+                ? expandedParents.has(productId)
+                : false
               return (
                 <div
                   key={vRow.key}
@@ -2675,32 +2714,34 @@ function VirtualizedGrid({
                     transform: `translateY(${vRow.start}px)`,
                   }}
                 >
-                  {row.kind === 'parent' &&
-                    renderProductRow({
-                      product: row.product,
-                      isChild: false,
-                      visible,
-                      cellPad,
-                      selected,
-                      toggleSelect,
-                      expandedParents,
-                      onToggleExpand,
-                      onTagEdit,
-                      onChanged,
-                    })}
-                  {row.kind === 'child' &&
-                    renderProductRow({
-                      product: row.product,
-                      isChild: true,
-                      visible,
-                      cellPad,
-                      selected,
-                      toggleSelect,
-                      expandedParents,
-                      onToggleExpand,
-                      onTagEdit,
-                      onChanged,
-                    })}
+                  {row.kind === 'parent' && (
+                    <ProductRow
+                      product={row.product}
+                      isChild={false}
+                      isSelected={isSelected}
+                      isExpanded={isExpanded}
+                      visible={visible}
+                      cellPad={cellPad}
+                      onToggleSelect={toggleSelect}
+                      onToggleExpand={onToggleExpand}
+                      onTagEdit={onTagEdit}
+                      onChanged={onChanged}
+                    />
+                  )}
+                  {row.kind === 'child' && (
+                    <ProductRow
+                      product={row.product}
+                      isChild={true}
+                      isSelected={isSelected}
+                      isExpanded={isExpanded}
+                      visible={visible}
+                      cellPad={cellPad}
+                      onToggleSelect={toggleSelect}
+                      onToggleExpand={onToggleExpand}
+                      onTagEdit={onTagEdit}
+                      onChanged={onChanged}
+                    />
+                  )}
                   {row.kind === 'loading' && (
                     <div
                       className="bg-slate-50/60 px-3 py-2 text-base text-slate-500 italic flex-1"
@@ -2738,33 +2779,45 @@ function VirtualizedGrid({
  * columns). Used by both parent and child rows; child rows get a
  * tinted background + tree-line glyph in the chevron column.
  */
-function renderProductRow({
+// E.1 — ProductRow as a memoized component.
+//
+// Was previously `renderProductRow({...})` returning a Fragment, which
+// meant every parent re-render (including every keystroke in the search
+// box) re-ran the full row render for every visible virtualized row.
+// At ~30 visible rows + ProductCell switch branches, that's the bulk
+// of /products' perceived slowness.
+//
+// Memoization needs *boolean* per-row props (isSelected, isExpanded)
+// rather than the parent's Sets — otherwise React.memo's shallow
+// compare sees a new Set ref on every selection change and re-renders
+// every row anyway. The caller (VirtualizedGrid) computes these
+// booleans once per visible row, so a single selection change
+// re-renders exactly two rows (old + new).
+const ProductRow = memo(function ProductRow({
   product,
   isChild,
+  isSelected,
+  isExpanded,
   visible,
   cellPad,
-  selected,
-  toggleSelect,
-  expandedParents,
+  onToggleSelect,
   onToggleExpand,
   onTagEdit,
   onChanged,
 }: {
   product: ProductRow
   isChild: boolean
+  isSelected: boolean
+  isExpanded: boolean
   visible: typeof ALL_COLUMNS
   cellPad: string
-  selected: Set<string>
-  toggleSelect: (id: string) => void
-  expandedParents: Set<string>
+  onToggleSelect: (id: string) => void
   onToggleExpand: (parentId: string) => void
   onTagEdit: (id: string) => void
   onChanged: () => void
 }) {
-  const isSelected = selected.has(product.id)
   const childCount = product.childCount ?? 0
   const canExpand = !isChild && product.isParent && childCount > 0
-  const isExpanded = expandedParents.has(product.id)
   const rowBg = isChild
     ? isSelected
       ? 'bg-blue-50/40'
@@ -2782,7 +2835,7 @@ function renderProductRow({
         <input
           type="checkbox"
           checked={isSelected}
-          onChange={() => toggleSelect(product.id)}
+          onChange={() => onToggleSelect(product.id)}
         />
       </div>
       <div
@@ -2830,7 +2883,7 @@ function renderProductRow({
       ))}
     </>
   )
-}
+})
 
 // ────────────────────────────────────────────────────────────────────
 // GridLens — virtualized table with column picker + inline quick-edit
@@ -2863,7 +2916,7 @@ function GridLens(props: any) {
     sortBy: string
     onSort: (key: string) => void
     selected: Set<string>
-    setSelected: (sel: Set<string>) => void
+    setSelected: Dispatch<SetStateAction<Set<string>>>
     onPage: (n: number) => void
     onPageSize: (n: number) => void
     onTagEdit: (id: string) => void
@@ -2909,17 +2962,32 @@ function GridLens(props: any) {
   }, [visibleColumns])
 
   const allSelected = products.length > 0 && products.every((p: ProductRow) => selected.has(p.id))
-  const toggleSelectAll = () => {
-    const next = new Set(selected)
-    if (allSelected) products.forEach((p: ProductRow) => next.delete(p.id))
-    else products.forEach((p: ProductRow) => next.add(p.id))
-    setSelected(next)
-  }
-  const toggleSelect = (id: string) => {
-    const next = new Set(selected)
-    next.has(id) ? next.delete(id) : next.add(id)
-    setSelected(next)
-  }
+  // E.1 — stable refs so ProductRow's React.memo can skip re-renders
+  // when an unrelated row's selection changes. Functional setState
+  // means we don't need `selected` in deps; the ref is reused across
+  // renders.
+  const toggleSelectAll = useCallback(() => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (products.every((p: ProductRow) => prev.has(p.id))) {
+        products.forEach((p: ProductRow) => next.delete(p.id))
+      } else {
+        products.forEach((p: ProductRow) => next.add(p.id))
+      }
+      return next
+    })
+  }, [products, setSelected])
+  const toggleSelect = useCallback(
+    (id: string) => {
+      setSelected((prev) => {
+        const next = new Set(prev)
+        if (next.has(id)) next.delete(id)
+        else next.add(id)
+        return next
+      })
+    },
+    [setSelected],
+  )
 
   if (loading && products.length === 0) {
     return <Card><div role="status" aria-live="polite" className="text-md text-slate-500 py-8 text-center">Loading products…</div></Card>
@@ -3185,7 +3253,10 @@ function buildPageRange(current: number, total: number): Array<number | 'gap'> {
   return out
 }
 
-function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; product: ProductRow; onTagEdit: (id: string) => void; onChanged: () => void }) {
+// E.1 — memo'd so a row that didn't change skips its 9-column re-render.
+// onTagEdit + onChanged come from useCallback'd refs in the workspace,
+// so they're stable across renders.
+const ProductCell = memo(function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; product: ProductRow; onTagEdit: (id: string) => void; onChanged: () => void }) {
   const p = product
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<string>('')
@@ -3632,7 +3703,7 @@ function ProductCell({ col, product, onTagEdit, onChanged }: { col: string; prod
     default:
       return null
   }
-}
+})
 
 function ColumnPickerMenu({ visible, setVisible, onClose }: { visible: string[]; setVisible: (v: string[]) => void; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null)
