@@ -5,6 +5,9 @@
 // preserves the prior pipeline view (DRAFT → DELIVERED). URL ?tab=
 // preserves operator state across refresh / bookmark / link share.
 //
+// O.5 — Per-order drawer mounted at this level so ?drawer=<orderId>
+// works regardless of which tab the operator is on.
+//
 // Future tabs (post-Wave 2):
 //   • Returns coordination summary (link-out only — full UI in /fulfillment/returns)
 //   • Late-shipment risk dashboard (O.19)
@@ -15,6 +18,7 @@ import PageHeader from '@/components/layout/PageHeader'
 import { Tabs, type Tab } from '@/components/ui/Tabs'
 import PendingShipmentsClient from './PendingShipmentsClient'
 import ShipmentsClient from './ShipmentsClient'
+import OutboundOrderDrawer from './OutboundOrderDrawer'
 
 type TabId = 'pending' | 'shipments'
 
@@ -22,6 +26,7 @@ export default function OutboundWorkspace() {
   const router = useRouter()
   const params = useSearchParams()
   const activeTab: TabId = (params.get('tab') as TabId) === 'shipments' ? 'shipments' : 'pending'
+  const drawerOrderId = params.get('drawer')
 
   const setTab = useCallback(
     (id: string) => {
@@ -39,6 +44,12 @@ export default function OutboundWorkspace() {
     [params, router],
   )
 
+  const closeDrawer = useCallback(() => {
+    const next = new URLSearchParams(params.toString())
+    next.delete('drawer')
+    router.replace(`?${next.toString()}`, { scroll: false })
+  }, [params, router])
+
   const tabs: Tab[] = [
     { id: 'pending', label: 'Pending' },
     { id: 'shipments', label: 'Shipments' },
@@ -53,6 +64,7 @@ export default function OutboundWorkspace() {
       />
       <Tabs tabs={tabs} activeTab={activeTab} onChange={setTab} />
       {activeTab === 'pending' ? <PendingShipmentsClient /> : <ShipmentsClient />}
+      <OutboundOrderDrawer orderId={drawerOrderId} onClose={closeDrawer} />
     </div>
   )
 }

@@ -1165,6 +1165,72 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── O.5: Outbound order detail (drawer) ──────────────────────────────
+  // Single-order full detail for the outbound surface drawer. Returns
+  // line items + product joins (for image/name) + every shipment that
+  // has touched this order. Distinct from the global /orders/:id read
+  // because we shape this payload around outbound's needs (urgency,
+  // Prime, all metadata blobs) and we keep the surface area scoped.
+  fastify.get('/fulfillment/outbound/orders/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const order = await prisma.order.findUnique({
+        where: { id },
+        include: {
+          items: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  sku: true,
+                  name: true,
+                  // ProductImage has no sortOrder — sort by createdAt
+                  // (matches insert order) and take the first.
+                  images: { select: { url: true }, orderBy: { createdAt: 'asc' }, take: 1 },
+                },
+              },
+            },
+          },
+          shipments: {
+            include: {
+              items: { select: { id: true, sku: true, quantity: true } },
+              warehouse: { select: { code: true, name: true } },
+            },
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+      })
+      if (!order) return reply.code(404).send({ error: 'Order not found' })
+
+      // Decimal → number on the wire (D.2 lesson). Only fields the
+      // drawer reads; preserves channel metadata blobs verbatim.
+      return {
+        ...order,
+        totalPrice: Number(order.totalPrice),
+        items: order.items.map((it) => ({
+          ...it,
+          price: Number(it.price),
+          product: it.product
+            ? {
+                id: it.product.id,
+                sku: it.product.sku,
+                name: it.product.name,
+                imageUrl: it.product.images[0]?.url ?? null,
+              }
+            : null,
+        })),
+        shipments: order.shipments.map((s) => ({
+          ...s,
+          // Shipment has no Decimal columns today, but keep the
+          // pattern consistent for future cost fields.
+        })),
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[outbound/orders/:id] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // Order routing rules — CRUD for OrderRoutingRule. Powers the
   // /fulfillment/routing-rules admin page and is consumed by
   // resolveWarehouseForOrder() when bulk-create-shipments runs.

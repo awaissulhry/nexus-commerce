@@ -7,7 +7,6 @@
 // bulk-create-able. Drawer (per-order detail) lands in O.5.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Truck, Search, RefreshCw, Crown, AlertTriangle, Clock, Package, X, Plus,
@@ -422,9 +421,16 @@ export default function PendingShipmentsClient() {
                   const Icon = tone.icon
                   const ship = o.shippingAddress as any
                   const country = ship?.countryCode ?? ship?.country ?? null
+                  // O.5: clicking the row anywhere except the checkbox
+                  // and the action button opens the order drawer.
+                  const openDrawer = () => setParam('drawer', o.id)
                   return (
-                    <tr key={o.id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="px-3 py-2">
+                    <tr
+                      key={o.id}
+                      className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
+                      onClick={openDrawer}
+                    >
+                      <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={selected.has(o.id)}
@@ -433,14 +439,15 @@ export default function PendingShipmentsClient() {
                         />
                       </td>
                       <td className="px-3 py-2">
-                        <Link
-                          href={`/orders/${o.id}`}
+                        <button
+                          type="button"
                           className="text-base font-mono text-blue-600 hover:underline"
+                          onClick={(e) => { e.stopPropagation(); openDrawer() }}
                         >
                           {o.channelOrderId.length > 18
                             ? `${o.channelOrderId.slice(0, 18)}…`
                             : o.channelOrderId}
-                        </Link>
+                        </button>
                         {o.isPrime && (
                           <span
                             title="Amazon Prime SFP"
@@ -479,7 +486,7 @@ export default function PendingShipmentsClient() {
                           {formatRelative(o.shipByDate)}
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-right">
+                      <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => {
                             setSelected(new Set([o.id]))

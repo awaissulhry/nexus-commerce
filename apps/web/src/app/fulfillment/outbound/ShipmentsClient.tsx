@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Truck, Search, RefreshCw, Printer, ExternalLink, X, CheckCircle2,
   AlertTriangle,
@@ -71,6 +72,13 @@ const PIPELINE: Array<{ key: string; label: string }> = [
 export default function ShipmentsClient() {
   const { toast } = useToast()
   const askConfirm = useConfirm()
+  const router = useRouter()
+  const params = useSearchParams()
+  const openDrawer = (orderId: string) => {
+    const next = new URLSearchParams(params.toString())
+    next.set('drawer', orderId)
+    router.replace(`?${next.toString()}`, { scroll: false })
+  }
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [search, setSearch] = useState('')
   const [items, setItems] = useState<Shipment[]>([])
@@ -252,8 +260,12 @@ export default function ShipmentsClient() {
               </thead>
               <tbody>
                 {items.map((s) => (
-                  <tr key={s.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="px-3 py-2">
+                  <tr
+                    key={s.id}
+                    className={`border-b border-slate-100 hover:bg-slate-50 ${s.orderId ? 'cursor-pointer' : ''}`}
+                    onClick={() => s.orderId && openDrawer(s.orderId)}
+                  >
+                    <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={selected.has(s.id)}
@@ -262,7 +274,13 @@ export default function ShipmentsClient() {
                     </td>
                     <td className="px-3 py-2">
                       {s.orderId ? (
-                        <Link href={`/orders/${s.orderId}`} className="text-base font-mono text-blue-600 hover:underline">{s.orderId.slice(0, 12)}…</Link>
+                        <button
+                          type="button"
+                          className="text-base font-mono text-blue-600 hover:underline"
+                          onClick={(e) => { e.stopPropagation(); openDrawer(s.orderId!) }}
+                        >
+                          {s.orderId.slice(0, 12)}…
+                        </button>
                       ) : <span className="text-slate-400 text-base">—</span>}
                     </td>
                     <td className="px-3 py-2">
@@ -287,7 +305,7 @@ export default function ShipmentsClient() {
                     <td className="px-3 py-2 text-right tabular-nums text-base text-slate-600">
                       {s.costCents != null ? `€${(s.costCents / 100).toFixed(2)}` : '—'}
                     </td>
-                    <td className="px-3 py-2 text-right">
+                    <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1 justify-end">
                         {(s.status === 'DRAFT' || s.status === 'READY_TO_PICK' || s.status === 'PACKED') && (
                           <button onClick={() => printLabel(s.id)} title="Print label" className="h-6 px-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center gap-1">
