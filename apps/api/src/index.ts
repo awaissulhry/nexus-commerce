@@ -69,6 +69,7 @@ import { startAmazonInventoryCron } from "./jobs/amazon-inventory-sync.job.js";
 import { startReservationSweepCron } from "./jobs/reservation-sweep.job.js";
 import { startLateShipmentFlagCron } from "./jobs/late-shipment-flag.job.js";
 import { startTrackingPushbackCron } from "./jobs/tracking-pushback.job.js";
+import { startOutboundLateRiskCron } from "./jobs/outbound-late-risk.job.js";
 import { startSavedViewAlertsCron } from "./jobs/saved-view-alerts.job.js";
 import { startSyncDriftDetectionCron } from "./jobs/sync-drift-detection.job.js";
 import { startFbaStatusPollCron } from "./jobs/fba-status-poll.job.js";
@@ -460,6 +461,14 @@ async function start() {
     // ENABLE_*_SHIP_CONFIRM flags still gate whether the underlying
     // call hits the real API or returns dryRun mocks.
     startTrackingPushbackCron();
+
+    // O.19 — outbound late-shipment risk monitor. Hourly sweep that
+    // logs counts of overdue / due-today / became-overdue-in-last-24h
+    // pending orders. Real-time alerting is on the surface (O.4
+    // OVERDUE urgency chip); this cron is for SLA reporting + future
+    // pager hooks. Default-ON; opt out via
+    // NEXUS_ENABLE_OUTBOUND_LATE_RISK_CRON=0.
+    startOutboundLateRiskCron();
 
     // H.8 — saved-view alerts cron. Every 5 minutes, evaluate every
     // active SavedViewAlert against its filter and fire an in-app
