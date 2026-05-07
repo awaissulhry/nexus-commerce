@@ -68,6 +68,7 @@ import { startAmazonOrdersCron } from "./jobs/amazon-orders-sync.job.js";
 import { startAmazonInventoryCron } from "./jobs/amazon-inventory-sync.job.js";
 import { startReservationSweepCron } from "./jobs/reservation-sweep.job.js";
 import { startLateShipmentFlagCron } from "./jobs/late-shipment-flag.job.js";
+import { startTrackingPushbackCron } from "./jobs/tracking-pushback.job.js";
 import { startSavedViewAlertsCron } from "./jobs/saved-view-alerts.job.js";
 import { startSyncDriftDetectionCron } from "./jobs/sync-drift-detection.job.js";
 import { startFbaStatusPollCron } from "./jobs/fba-status-poll.job.js";
@@ -448,6 +449,17 @@ async function start() {
     if (process.env.NEXUS_ENABLE_LATE_SHIPMENT_FLAG_CRON !== '0') {
       startLateShipmentFlagCron();
     }
+
+    // O.12 — tracking pushback retry cron. Every 2 minutes, walks
+    // TrackingMessageLog rows where status='PENDING' AND nextAttemptAt
+    // <= NOW(), routes each to the channel pushback module (Amazon
+    // FBM / eBay / Shopify / Woo), and finalizes to SUCCESS / FAILED
+    // (with backoff) / DEAD_LETTER. Default-ON because silent
+    // pushback failures cost marketplace SLA penalties; opt out via
+    // NEXUS_ENABLE_TRACKING_PUSHBACK_CRON=0. Per-channel
+    // ENABLE_*_SHIP_CONFIRM flags still gate whether the underlying
+    // call hits the real API or returns dryRun mocks.
+    startTrackingPushbackCron();
 
     // H.8 — saved-view alerts cron. Every 5 minutes, evaluate every
     // active SavedViewAlert against its filter and fire an in-app
