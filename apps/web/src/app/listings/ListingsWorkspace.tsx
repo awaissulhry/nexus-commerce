@@ -2651,6 +2651,11 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
   const [sortBy, setSortBy] = useState<MatrixSort>('updated')
   const [drawerOpen, setDrawerOpen] = useState<string | null>(null)
   const [optimisticSyncing, setOptimisticSyncing] = useState<Set<string>>(new Set())
+  // M.4 — click a KPI pip in a column header to drill down to the
+  // product rows whose cell in that column matches the pip's tone.
+  // Stored as `${columnKey}:${kind}` so a single click toggles, and a
+  // second click on the same pip clears.
+  const [pipFilter, setPipFilter] = useState<string | null>(null)
 
   const url = useMemo(() => {
     const qs = new URLSearchParams({ limit: '50' })
@@ -2738,6 +2743,36 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
   data.products.forEach((p: any) => p.cells.forEach((c: any) => cellKeys.add(`${c.channel}:${c.marketplace}`)))
   const columns = Array.from(cellKeys).sort()
 
+  // M.4 — predicate matching a single cell against a pip kind. Shared
+  // between the per-column rollup (header KPI counts) and the row
+  // filter (drill-down when a pip is clicked) so what the user sees
+  // on click matches the count they clicked.
+  const matchesPip = (
+    cell: any,
+    kind: 'live' | 'errors' | 'suppressed' | 'drift',
+    masterPrice: any,
+    masterQty: any,
+    masterTitle: any,
+  ) => {
+    if (kind === 'live') {
+      return cell.listingStatus === 'ACTIVE' || cell.listingStatus === 'LIVE'
+    }
+    if (kind === 'errors') {
+      return Boolean(cell.lastSyncError) || cell.syncStatus === 'FAILED'
+    }
+    if (kind === 'suppressed') return cell.listingStatus === 'SUPPRESSED'
+    if (kind === 'drift') {
+      const priceDrift =
+        masterPrice != null && cell.price != null && Number(masterPrice) !== Number(cell.price)
+      const qtyDrift =
+        masterQty != null && cell.quantity != null && Number(masterQty) !== Number(cell.quantity)
+      const titleDrift =
+        masterTitle != null && cell.title != null && masterTitle !== cell.title
+      return priceDrift || qtyDrift || titleDrift
+    }
+    return false
+  }
+
   // M.3 — per-column KPI rollup: how many cells in this column are
   // live / sync-erroring / suppressed / showing drift. Computed
   // client-side from the same payload the table renders, so no extra
@@ -2757,18 +2792,30 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
       const s = columnStats.get(key)
       if (!s) continue
       s.cells++
-      if (c.listingStatus === 'ACTIVE' || c.listingStatus === 'LIVE') s.live++
-      if (c.lastSyncError || c.syncStatus === 'FAILED') s.errors++
-      if (c.listingStatus === 'SUPPRESSED') s.suppressed++
-      const priceDrift =
-        masterPrice != null && c.price != null && Number(masterPrice) !== Number(c.price)
-      const qtyDrift =
-        masterQty != null && c.quantity != null && Number(masterQty) !== Number(c.quantity)
-      const titleDrift =
-        masterTitle != null && c.title != null && masterTitle !== c.title
-      if (priceDrift || qtyDrift || titleDrift) s.drift++
+      if (matchesPip(c, 'live', masterPrice, masterQty, masterTitle)) s.live++
+      if (matchesPip(c, 'errors', masterPrice, masterQty, masterTitle)) s.errors++
+      if (matchesPip(c, 'suppressed', masterPrice, masterQty, masterTitle)) s.suppressed++
+      if (matchesPip(c, 'drift', masterPrice, masterQty, masterTitle)) s.drift++
     }
   }
+
+  // M.4 — when pipFilter is set, narrow the rendered product rows to
+  // those whose cell in the matching column meets the pip predicate.
+  const visibleProducts = (() => {
+    if (!pipFilter) return data.products as any[]
+    const sep = pipFilter.lastIndexOf(':')
+    const col = pipFilter.slice(0, sep)
+    const kind = pipFilter.slice(sep + 1) as 'live' | 'errors' | 'suppressed' | 'drift'
+    return (data.products as any[]).filter((p) => {
+      const masterPrice = p.masterPriceForCompare
+      const masterQty = p.masterQuantityForCompare
+      const masterTitle = p.masterTitleForCompare ?? p.name
+      const cell = p.cells.find(
+        (c: any) => `${c.channel}:${c.marketplace}` === col,
+      )
+      return cell && matchesPip(cell, kind, masterPrice, masterQty, masterTitle)
+    })
+  })()
 
   return (
     <div className="space-y-3">
@@ -2807,6 +2854,36 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
             : t(data.count === 1 ? 'listings.matrix.productsCount' : 'listings.matrix.productsCountPlural', { count: data.count })}
         </span>
       </div>
+
+      {pipFilter && (() => {
+        const sep = pipFilter.lastIndexOf(':')
+        const col = pipFilter.slice(0, sep)
+        const kind = pipFilter.slice(sep + 1)
+        const kindLabel =
+          kind === 'errors' ? 'sync errors' :
+          kind === 'suppressed' ? 'suppressed listings' :
+          kind === 'drift' ? 'drift from master' :
+          'live listings'
+        return (
+          <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded border border-blue-200 bg-blue-50 text-sm">
+            <span className="text-blue-900">
+              Showing{' '}
+              <span className="tabular-nums font-semibold">{visibleProducts.length}</span>{' '}
+              of{' '}
+              <span className="tabular-nums">{data.products.length}</span>{' '}
+              products with <span className="font-semibold">{kindLabel}</span> on{' '}
+              <span className="font-mono">{col}</span>
+            </span>
+            <button
+              onClick={() => setPipFilter(null)}
+              className="h-6 px-2 text-xs bg-white border border-blue-300 rounded text-blue-700 hover:bg-blue-100 inline-flex items-center gap-1"
+              aria-label="Clear column filter"
+            >
+              <FilterX size={11} /> Clear
+            </button>
+          </div>
+        )
+      })()}
 
       {data.products.length === 0 ? (
         <EmptyState
@@ -2865,39 +2942,47 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
                         <div className="text-xs text-slate-500 font-mono mt-1">{mp}</div>
                         {stats && stats.cells > 0 && (
                           <div className="mt-1.5 flex items-center justify-center gap-1.5 text-[10px] font-normal normal-case">
-                            <span
-                              className="inline-flex items-center gap-0.5 text-emerald-700"
-                              title={`${stats.live} of ${stats.cells} listings are live`}
-                            >
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                              {stats.live}
-                            </span>
+                            <KpiPip
+                              tone="emerald"
+                              count={stats.live}
+                              title={`${stats.live} of ${stats.cells} listings are live — click to drill down`}
+                              active={pipFilter === `${key}:live`}
+                              onClick={() =>
+                                setPipFilter(pipFilter === `${key}:live` ? null : `${key}:live`)
+                              }
+                            />
                             {stats.errors > 0 && (
-                              <span
-                                className="inline-flex items-center gap-0.5 text-rose-700"
-                                title={`${stats.errors} listing${stats.errors === 1 ? '' : 's'} with sync error`}
-                              >
-                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                                {stats.errors}
-                              </span>
+                              <KpiPip
+                                tone="rose"
+                                count={stats.errors}
+                                title={`${stats.errors} listing${stats.errors === 1 ? '' : 's'} with sync error — click to drill down`}
+                                active={pipFilter === `${key}:errors`}
+                                onClick={() =>
+                                  setPipFilter(pipFilter === `${key}:errors` ? null : `${key}:errors`)
+                                }
+                              />
                             )}
                             {stats.suppressed > 0 && (
-                              <span
-                                className="inline-flex items-center gap-0.5 text-orange-700"
-                                title={`${stats.suppressed} listing${stats.suppressed === 1 ? '' : 's'} suppressed by ${ch}`}
-                              >
-                                <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
-                                {stats.suppressed}
-                              </span>
+                              <KpiPip
+                                tone="orange"
+                                count={stats.suppressed}
+                                title={`${stats.suppressed} listing${stats.suppressed === 1 ? '' : 's'} suppressed by ${ch} — click to drill down`}
+                                active={pipFilter === `${key}:suppressed`}
+                                onClick={() =>
+                                  setPipFilter(pipFilter === `${key}:suppressed` ? null : `${key}:suppressed`)
+                                }
+                              />
                             )}
                             {stats.drift > 0 && (
-                              <span
-                                className="inline-flex items-center gap-0.5 text-amber-700"
-                                title={`${stats.drift} listing${stats.drift === 1 ? '' : 's'} with drift from master (price/qty/title)`}
-                              >
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                                {stats.drift}
-                              </span>
+                              <KpiPip
+                                tone="amber"
+                                count={stats.drift}
+                                title={`${stats.drift} listing${stats.drift === 1 ? '' : 's'} with drift from master (price/qty/title) — click to drill down`}
+                                active={pipFilter === `${key}:drift`}
+                                onClick={() =>
+                                  setPipFilter(pipFilter === `${key}:drift` ? null : `${key}:drift`)
+                                }
+                              />
                             )}
                           </div>
                         )}
@@ -2907,7 +2992,7 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
                 </tr>
               </thead>
               <tbody>
-                {data.products.map((p: any) => {
+                {visibleProducts.map((p: any) => {
                   const cellByKey = new Map<string, any>()
                   p.cells.forEach((c: any) => cellByKey.set(`${c.channel}:${c.marketplace}`, c))
                   // C.9 — row-level master reference. Each channel cell
@@ -3008,6 +3093,58 @@ function formatRelative(ms: number): string {
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
   return `${Math.floor(diff / 86_400_000)}d ago`
+}
+
+// ────────────────────────────────────────────────────────────────────
+// KpiPip — clickable per-column health indicator. M.4 promotes the
+// M.3 read-only span into a button that toggles a row filter so
+// "Amazon DE has 3 sync errors" becomes "show me those 3 rows" with
+// one click. Active state inverts the colours so the operator can
+// see which pip is currently driving the filter.
+// ────────────────────────────────────────────────────────────────────
+function KpiPip({
+  tone,
+  count,
+  title,
+  active,
+  onClick,
+}: {
+  tone: 'emerald' | 'rose' | 'orange' | 'amber'
+  count: number
+  title: string
+  active: boolean
+  onClick: () => void
+}) {
+  const inactive: Record<typeof tone, string> = {
+    emerald: 'text-emerald-700 bg-emerald-50/50 hover:bg-emerald-100',
+    rose: 'text-rose-700 bg-rose-50/50 hover:bg-rose-100',
+    orange: 'text-orange-700 bg-orange-50/50 hover:bg-orange-100',
+    amber: 'text-amber-700 bg-amber-50/50 hover:bg-amber-100',
+  }
+  const activeCls: Record<typeof tone, string> = {
+    emerald: 'text-white bg-emerald-600 ring-2 ring-emerald-300',
+    rose: 'text-white bg-rose-600 ring-2 ring-rose-300',
+    orange: 'text-white bg-orange-600 ring-2 ring-orange-300',
+    amber: 'text-white bg-amber-600 ring-2 ring-amber-300',
+  }
+  const dot: Record<typeof tone, string> = {
+    emerald: 'bg-emerald-500',
+    rose: 'bg-rose-500',
+    orange: 'bg-orange-500',
+    amber: 'bg-amber-500',
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-pressed={active}
+      className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 ${active ? activeCls[tone] : inactive[tone]}`}
+    >
+      {!active && <span className={`w-1.5 h-1.5 rounded-full ${dot[tone]}`} />}
+      <span className="tabular-nums">{count}</span>
+    </button>
+  )
 }
 
 // ────────────────────────────────────────────────────────────────────
