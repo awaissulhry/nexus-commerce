@@ -119,6 +119,18 @@ function attachEventListeners(events: QueueEvents) {
 // ── Public proxy exports ─────────────────────────────────────────────────
 // These wrap the lazy getters so existing call sites (e.g. `outboundSyncQueue.add(...)`)
 // keep working unchanged. The first method invocation triggers initialization.
+//
+// SUSPECT SITE — TECH_DEBT #54.  `outboundSyncQueue.add()` awaited from
+// bulk-action's processJob (and from its request-scoped POST handler) hangs
+// indefinitely. `bulkListQueue` (constructed eagerly via `new Queue(...)` in
+// services/bulk-list.service.ts) does NOT hang from the same BullMQ version
+// + same redis.connection — strongly suggesting the discriminator is THIS
+// proxy. Hypothesis worth testing on a focused investigation session: rip
+// out the proxy for outboundSyncQueue and switch to the eager pattern,
+// keeping it lazy for the remaining queues. The lazy pattern was added to
+// prevent module-load Redis dial-out before REDIS_URL was in env on
+// Railway (boot failure); index.ts:1 now loads dotenv first via db.js so
+// the original race may no longer apply, but verify before changing.
 
 function makeQueueProxy(getter: () => Queue): Queue {
   return new Proxy({} as Queue, {
