@@ -24,6 +24,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Button } from '@/components/ui/Button'
 import { InlineEditTrigger } from '@/components/ui/InlineEditTrigger'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -833,21 +834,22 @@ export default function ProductsWorkspace() {
         description={`${stats.total.toLocaleString()} master SKUs · ${stats.active} active · ${stats.draft} draft · ${stats.inStock} in stock · ${stats.outOfStock} out`}
         actions={
           <div className="flex items-center gap-2">
-            {/* E.21 — actions promoted from the More menu (rolled
-                back from E.6) per operator preference: every primary
-                action visible in one click, no hidden dropdowns.
-                Visual hierarchy: secondary actions are outline
-                buttons; primary "+ New product" stays solid-dark. */}
-            <button
-              type="button"
+            {/* U.2a — page-header actions migrated to <Button> primitive.
+                Secondary outline kept for Upload/Export/Bundles. The
+                primary "+ New product" link keeps slate-900 (canonical
+                primary on /products); Button's primary is blue-600 so
+                we override className on the Link rather than introduce
+                a primitive variant change. */}
+            <Button
+              variant="secondary"
               onClick={() => setImageUploadOpen(true)}
               title="Drop a folder of product photos; we match each file to its SKU"
-              className="h-8 px-3 text-base border border-slate-200 text-slate-700 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+              icon={<Upload size={12} />}
             >
-              <Upload size={12} /> Upload photos
-            </button>
-            <button
-              type="button"
+              Upload photos
+            </Button>
+            <Button
+              variant="secondary"
               onClick={() => exportProductsCsv(products)}
               disabled={products.length === 0}
               title={
@@ -855,18 +857,21 @@ export default function ProductsWorkspace() {
                   ? 'Nothing to export'
                   : `Download ${products.length} row${products.length === 1 ? '' : 's'} as CSV`
               }
-              className="h-8 px-3 text-base border border-slate-200 text-slate-700 rounded-md hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
+              icon={<Download size={12} />}
             >
-              <Download size={12} /> Export
-            </button>
-            <button
-              type="button"
+              Export
+            </Button>
+            <Button
+              variant="secondary"
               onClick={() => setBundleEditorOpen(true)}
-              className="h-8 px-3 text-base border border-slate-200 text-slate-700 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+              icon={<Package size={12} />}
             >
-              <Package size={12} /> Bundles
-            </button>
-            <Link href="/products/new" className="h-8 px-3 text-base bg-slate-900 text-white rounded-md hover:bg-slate-800 inline-flex items-center gap-1.5">
+              Bundles
+            </Button>
+            <Link
+              href="/products/new"
+              className="h-8 px-3 text-md font-medium bg-slate-900 text-white border border-slate-900 rounded-md hover:bg-slate-800 inline-flex items-center justify-center gap-1.5 transition-colors"
+            >
               <Plus size={12} /> New product
             </Link>
             {lens === 'grid' ? (
@@ -1366,12 +1371,14 @@ function FilterBar(props: any) {
           )}
         </button>
         {filterCount > 0 && (
-          <button
+          <Button
+            variant="ghost"
             onClick={() => updateUrl({ status: '', channels: '', marketplaces: '', productTypes: '', brands: '', tags: '', fulfillment: '', missingChannels: '', stockLevel: undefined, hasPhotos: undefined, hasDescription: undefined, hasBrand: undefined, hasGtin: undefined, page: undefined })}
-            className="h-8 px-2 text-base text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
+            className="text-slate-500 hover:text-slate-900"
+            icon={<X size={12} />}
           >
-            <X size={12} /> Clear all
-          </button>
+            Clear all
+          </Button>
         )}
       </div>
 
