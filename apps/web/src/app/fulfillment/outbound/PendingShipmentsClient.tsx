@@ -1061,11 +1061,25 @@ export default function PendingShipmentsClient() {
                   <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
                     {t('outbound.pending.col.items')}
                   </th>
-                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  {/* O.88: clickable sort headers. The sort dropdown
+                      stays for explicit control, but power users can
+                      click any of value / ship-by directly — same
+                      Linear / Notion / Airtable pattern. Each column
+                      owns one direction (value-desc, ship-by-asc);
+                      arrow indicates the active column. */}
+                  <th
+                    onClick={() => setParam('sort', 'value-desc')}
+                    className={`px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider cursor-pointer select-none ${sort === 'value-desc' ? 'text-blue-700' : 'text-slate-700 hover:text-slate-900'}`}
+                  >
                     {t('outbound.pending.col.value')}
+                    <span className={`ml-1 ${sort === 'value-desc' ? 'opacity-100' : 'opacity-0'}`}>↓</span>
                   </th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th
+                    onClick={() => setParam('sort', null)}
+                    className={`px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider cursor-pointer select-none ${sort === 'ship-by-asc' ? 'text-blue-700' : 'text-slate-700 hover:text-slate-900'}`}
+                  >
                     {t('outbound.pending.col.shipBy')}
+                    <span className={`ml-1 ${sort === 'ship-by-asc' ? 'opacity-100' : 'opacity-0'}`}>↑</span>
                   </th>
                   <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
                     {t('outbound.pending.col.action')}
