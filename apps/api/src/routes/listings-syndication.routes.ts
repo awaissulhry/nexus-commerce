@@ -459,6 +459,16 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
   // ─────────────────────────────────────────────────────────────────
   // GET /api/listings/matrix — product × (channel,marketplace) cells
   // ?productIds=csv  ?channels=csv  ?limit=N
+  // ?coverage=everywhere|missing-amazon|missing-ebay|single-channel|uncovered
+  // ?sortBy=updated|coverage-gaps|most-channels|name
+  //
+  // S.1 — adds coverage and sortBy. The matrix becomes a live workspace
+  // rather than a status snapshot: operators can sort by gap density to
+  // find products needing publish, by recency to triage drift, or by
+  // most-channels to confirm cross-channel parity. Cell payload extended
+  // with syncStatus + lastSyncedAt + lastSyncError + masterPrice so the
+  // frontend can render drift indicators and per-cell error glyphs
+  // without an extra round-trip.
   // ─────────────────────────────────────────────────────────────────
   fastify.get('/listings/matrix', async (request, reply) => {
     try {
@@ -466,8 +476,23 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       const productIds = csvParam(q.productIds)
       const channels = csvParam(q.channels)
       const limit = Math.min(500, Math.max(1, Math.floor(safeNum(q.limit) ?? 100)))
+      const coverage = q.coverage as
+        | 'everywhere'
+        | 'missing-amazon'
+        | 'missing-ebay'
+        | 'single-channel'
+        | 'uncovered'
+        | undefined
+      const sortBy = (q.sortBy ?? 'updated') as
+        | 'updated'
+        | 'coverage-gaps'
+        | 'most-channels'
+        | 'name'
 
-      // Resolve which products to include: explicit list, otherwise the N most recently updated
+      // Resolve which products to include: explicit list, otherwise the
+      // N most recently updated. Note we pull a wider set when sorting
+      // by coverage so the post-filter step doesn't truncate too early.
+      const overshoot = sortBy === 'updated' || sortBy === 'name' ? limit : Math.min(500, limit * 3)
       let products: Array<{ id: string; sku: string; name: string; basePrice: any; totalStock: number; isParent: boolean }>
       if (productIds && productIds.length > 0) {
         products = await prisma.product.findMany({
@@ -477,8 +502,8 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       } else {
         products = await prisma.product.findMany({
           where: { isParent: false },
-          orderBy: { updatedAt: 'desc' },
-          take: limit,
+          orderBy: sortBy === 'name' ? { name: 'asc' } : { updatedAt: 'desc' },
+          take: overshoot,
           select: { id: true, sku: true, name: true, basePrice: true, totalStock: true, isParent: true },
         })
       }
@@ -492,7 +517,10 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         select: {
           id: true, productId: true, channel: true, marketplace: true,
           listingStatus: true, syncStatus: true, lastSyncStatus: true,
-          price: true, quantity: true, externalListingId: true, isPublished: true,
+          lastSyncedAt: true, lastSyncError: true,
+          price: true, masterPrice: true,
+          quantity: true, externalListingId: true, isPublished: true,
+          followMasterPrice: true,
         },
       })
 
@@ -507,7 +535,11 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           listingStatus: l.listingStatus,
           syncStatus: l.syncStatus,
           lastSyncStatus: l.lastSyncStatus,
+          lastSyncedAt: l.lastSyncedAt,
+          lastSyncError: l.lastSyncError,
           price: l.price == null ? null : Number(l.price),
+          masterPrice: l.masterPrice == null ? null : Number(l.masterPrice),
+          followMasterPrice: l.followMasterPrice,
           quantity: l.quantity,
           externalListingId: l.externalListingId,
           isPublished: l.isPublished,
@@ -516,8 +548,59 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         byProduct.set(l.productId, arr)
       }
 
+      // Coverage filter — narrow products[] before sort/limit. We
+      // compute over the channels actually represented in the data so
+      // a missing-shopify filter on a system with no Shopify rows is a
+      // no-op rather than returning everything.
+      const filteredProducts = (() => {
+        if (!coverage) return products
+        return products.filter((p) => {
+          const cells = byProduct.get(p.id) ?? []
+          const channelsForProduct = new Set(cells.map((c) => c.channel))
+          switch (coverage) {
+            case 'everywhere':
+              // Every channel currently in the data appears for this product
+              return ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY']
+                .every((ch) => channelsForProduct.has(ch))
+            case 'missing-amazon':
+              return !channelsForProduct.has('AMAZON')
+            case 'missing-ebay':
+              return !channelsForProduct.has('EBAY')
+            case 'single-channel':
+              return channelsForProduct.size === 1
+            case 'uncovered':
+              return channelsForProduct.size === 0
+            default:
+              return true
+          }
+        })
+      })()
+
+      // Sort: coverage-gaps and most-channels need the cell counts we
+      // just built, so they can't be done in the SQL orderBy.
+      const sortedProducts = (() => {
+        if (sortBy === 'coverage-gaps') {
+          return [...filteredProducts].sort((a, b) => {
+            const aCells = (byProduct.get(a.id) ?? []).length
+            const bCells = (byProduct.get(b.id) ?? []).length
+            return aCells - bCells // fewer cells first (most gaps first)
+          })
+        }
+        if (sortBy === 'most-channels') {
+          return [...filteredProducts].sort((a, b) => {
+            const aCells = (byProduct.get(a.id) ?? []).length
+            const bCells = (byProduct.get(b.id) ?? []).length
+            return bCells - aCells // more cells first
+          })
+        }
+        // 'updated' and 'name' were already enforced by the SQL orderBy
+        return filteredProducts
+      })()
+
+      const truncated = sortedProducts.slice(0, limit)
+
       return {
-        products: products.map((p) => ({
+        products: truncated.map((p) => ({
           id: p.id,
           sku: p.sku,
           name: p.name,
@@ -526,7 +609,8 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           isParent: p.isParent,
           cells: byProduct.get(p.id) ?? [],
         })),
-        count: products.length,
+        count: truncated.length,
+        totalMatched: sortedProducts.length, // before slice — for "showing N of M"
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[listings/matrix] failed')

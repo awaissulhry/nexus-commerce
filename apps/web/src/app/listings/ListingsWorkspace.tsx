@@ -11,7 +11,8 @@ import {
   Boxes, AlertTriangle, LayoutGrid, Sparkles, Search, RefreshCw,
   ExternalLink, Filter, Settings2, X, ChevronDown,
   Eye, EyeOff, CheckCircle2, XCircle, Clock, Tag, Link2,
-  ArrowUpRight, Layers, Package,
+  ArrowUpRight, Layers, Package, MoreHorizontal, Plus, Pause, Play,
+  TrendingUp, TrendingDown, Edit3,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -19,6 +20,8 @@ import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
+import { Skeleton } from '@/components/ui/Skeleton'
+import { Tooltip } from '@/components/ui/Tooltip'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
@@ -1422,16 +1425,53 @@ function HealthStat({ icon: Icon, tone, label, value }: { icon: any; tone: 'dang
 }
 
 // ────────────────────────────────────────────────────────────────────
-// MatrixLens
+// MatrixLens — S.1 rebuild
+//
+// One row per product, one column per (channel, marketplace) pair.
+// Cells are interactive surfaces: click to open the drawer, hover for
+// preview, kebab for per-cell actions. Empty cells turn into "+ List
+// here" affordances pointing at the wizard. The header carries
+// coverage filter, sort dropdown, and a refresh footer surfaces the
+// freshness from usePolledList.
+//
+// The cornerstone differentiator vs flat per-channel grids: a single
+// view shows where each product is live, where it's missing, what's
+// drifted, and what's broken — all clickable.
 // ────────────────────────────────────────────────────────────────────
+type Coverage = 'everywhere' | 'missing-amazon' | 'missing-ebay' | 'single-channel' | 'uncovered'
+type MatrixSort = 'updated' | 'coverage-gaps' | 'most-channels' | 'name'
+
+const COVERAGE_OPTIONS: Array<{ value: Coverage | ''; label: string }> = [
+  { value: '', label: 'All products' },
+  { value: 'everywhere', label: 'Listed everywhere' },
+  { value: 'missing-amazon', label: 'Missing on Amazon' },
+  { value: 'missing-ebay', label: 'Missing on eBay' },
+  { value: 'single-channel', label: 'Single channel only' },
+  { value: 'uncovered', label: 'Uncovered (0 channels)' },
+]
+
+const SORT_OPTIONS: Array<{ value: MatrixSort; label: string }> = [
+  { value: 'updated', label: 'Recently updated' },
+  { value: 'coverage-gaps', label: 'Most coverage gaps' },
+  { value: 'most-channels', label: 'Most channels' },
+  { value: 'name', label: 'Name (A→Z)' },
+]
+
 function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marketplace[] }) {
-  // S.0.5 / H-4 — usePolledList migration; same pattern as HealthLens.
+  const [coverage, setCoverage] = useState<Coverage | ''>('')
+  const [sortBy, setSortBy] = useState<MatrixSort>('updated')
+  const [drawerOpen, setDrawerOpen] = useState<string | null>(null)
+  const [optimisticSyncing, setOptimisticSyncing] = useState<Set<string>>(new Set())
+
   const url = useMemo(() => {
     const qs = new URLSearchParams({ limit: '50' })
     if (lockChannel) qs.set('channels', lockChannel)
+    if (coverage) qs.set('coverage', coverage)
+    qs.set('sortBy', sortBy)
     return `/api/listings/matrix?${qs.toString()}`
-  }, [lockChannel])
-  const { data, loading, error } = usePolledList<any>({
+  }, [lockChannel, coverage, sortBy])
+
+  const { data, loading, error, lastFetchedAt, refetch } = usePolledList<any>({
     url,
     intervalMs: 30_000,
     invalidationTypes: [
@@ -1445,9 +1485,64 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
     ],
   })
 
-  if (loading && !data) return <Card><div className="text-md text-slate-500 py-8 text-center">Loading matrix…</div></Card>
-  if (error && !data) return <Card><div className="text-md text-rose-600 py-8 text-center">Failed to load matrix: {error}</div></Card>
-  if (!data || !data.products?.length) return <EmptyState icon={LayoutGrid} title="Nothing to show" description="No products available." />
+  // S.1 — optimistic sync: when the user fires Sync now from a cell's
+  // kebab, mark the cell as syncing locally so the dot goes amber +
+  // spinner immediately. Cleared when the parent grid refetches and
+  // returns the new server-side syncStatus, OR after a 60s safety net.
+  const fireSync = useCallback(async (cellId: string) => {
+    setOptimisticSyncing((prev) => {
+      const next = new Set(prev)
+      next.add(cellId)
+      return next
+    })
+    try {
+      await fetch(`${getBackendUrl()}/api/listings/${cellId}/resync`, { method: 'POST' })
+    } finally {
+      // Clear after a short delay so the operator sees the amber state
+      // for at least a moment even on fast responses; the polled refetch
+      // (or invalidation broadcast) replaces with real server state.
+      setTimeout(() => {
+        setOptimisticSyncing((prev) => {
+          const next = new Set(prev)
+          next.delete(cellId)
+          return next
+        })
+      }, 800)
+      refetch()
+      emitInvalidation({ type: 'listing.updated', id: cellId })
+    }
+  }, [refetch])
+
+  // Loading state — Skeleton replaces the prior plain "Loading matrix…"
+  if (loading && !data) {
+    return (
+      <Card noPadding>
+        <div className="p-4 space-y-2">
+          <Skeleton variant="text" lines={1} width="40%" />
+          <Skeleton variant="block" height={32} />
+          <Skeleton variant="block" height={32} />
+          <Skeleton variant="block" height={32} />
+          <Skeleton variant="block" height={32} />
+        </div>
+      </Card>
+    )
+  }
+  if (error && !data) {
+    return (
+      <Card>
+        <div className="text-md text-rose-600 py-6 text-center space-y-2">
+          <div>Failed to load matrix: {error}</div>
+          <button
+            onClick={() => refetch()}
+            className="h-8 px-3 text-base bg-white text-rose-700 border border-rose-300 rounded hover:bg-rose-50 inline-flex items-center gap-1.5 mx-auto"
+          >
+            <RefreshCw size={12} /> Retry
+          </button>
+        </div>
+      </Card>
+    )
+  }
+  if (!data) return null
 
   // Compute distinct (channel, marketplace) columns from the data
   const cellKeys = new Set<string>()
@@ -1455,67 +1550,496 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
   const columns = Array.from(cellKeys).sort()
 
   return (
-    <Card noPadding>
-      <div className="overflow-x-auto">
-        <table className="text-base">
-          <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
-            <tr>
-              <th className="px-3 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wider sticky left-0 bg-slate-50 z-10 min-w-[260px]">Product</th>
-              {columns.map((key) => {
-                const [ch, mp] = key.split(':')
-                return (
-                  <th key={key} className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wider min-w-[110px]">
-                    <div className={`inline-block px-1.5 py-0.5 rounded border ${CHANNEL_TONE[ch] ?? ''}`}>{ch}</div>
-                    <div className="text-xs text-slate-500 font-mono mt-1">{mp}</div>
+    <div className="space-y-3">
+      {/* Header bar — coverage filter + sort + refresh */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          <Filter size={14} className="text-slate-500" />
+          <span className="text-sm uppercase tracking-wider text-slate-500">Coverage:</span>
+          <select
+            value={coverage}
+            onChange={(e) => setCoverage(e.target.value as Coverage | '')}
+            className="h-8 px-2 text-base bg-white border border-slate-200 rounded text-slate-700 hover:border-slate-300 focus:outline-none focus:border-blue-500"
+            aria-label="Filter by channel coverage"
+          >
+            {COVERAGE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm uppercase tracking-wider text-slate-500">Sort:</span>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as MatrixSort)}
+            className="h-8 px-2 text-base bg-white border border-slate-200 rounded text-slate-700 hover:border-slate-300 focus:outline-none focus:border-blue-500"
+            aria-label="Sort products"
+          >
+            {SORT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+        <span className="text-sm text-slate-500 ml-auto">
+          {data.totalMatched != null && data.totalMatched > data.count
+            ? `Showing ${data.count} of ${data.totalMatched} products`
+            : `${data.count} product${data.count === 1 ? '' : 's'}`}
+        </span>
+      </div>
+
+      {data.products.length === 0 ? (
+        <EmptyState
+          icon={LayoutGrid}
+          title="No matches"
+          description={coverage ? `No products match "${COVERAGE_OPTIONS.find((o) => o.value === coverage)?.label}".` : 'No products available.'}
+        />
+      ) : (
+        <Card noPadding>
+          <div className="overflow-x-auto">
+            <table
+              className="text-base"
+              role="grid"
+              aria-label="Multi-channel listing matrix"
+              aria-rowcount={data.products.length + 1}
+              aria-colcount={columns.length + 1}
+            >
+              <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-20">
+                <tr role="row">
+                  <th
+                    role="columnheader"
+                    className="px-3 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wider sticky left-0 bg-slate-50 z-30 min-w-[260px]"
+                  >
+                    Product
                   </th>
-                )
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {data.products.map((p: any) => {
-              const cellByKey = new Map<string, any>()
-              p.cells.forEach((c: any) => cellByKey.set(`${c.channel}:${c.marketplace}`, c))
-              return (
-                <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50/50">
-                  <td className="px-3 py-2 sticky left-0 bg-white border-r border-slate-100 z-10">
-                    <Link href={`/products/${p.id}/edit`} className="hover:text-blue-600 block">
-                      <div className="text-md font-medium text-slate-900 truncate max-w-xs">{p.name}</div>
-                      <div className="text-sm text-slate-500 font-mono">{p.sku}</div>
-                    </Link>
-                  </td>
                   {columns.map((key) => {
-                    const c = cellByKey.get(key)
-                    if (!c) return <td key={key} className="px-2 py-2 text-center text-slate-300">—</td>
+                    const [ch, mp] = key.split(':')
                     return (
-                      <td key={key} className="px-2 py-2 text-center">
-                        <MatrixCell cell={c} />
-                      </td>
+                      <th
+                        key={key}
+                        role="columnheader"
+                        className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wider min-w-[110px]"
+                      >
+                        <div className={`inline-block px-1.5 py-0.5 rounded border ${CHANNEL_TONE[ch] ?? ''}`}>{ch}</div>
+                        <div className="text-xs text-slate-500 font-mono mt-1">{mp}</div>
+                      </th>
                     )
                   })}
                 </tr>
-              )
-            })}
-          </tbody>
-        </table>
+              </thead>
+              <tbody>
+                {data.products.map((p: any) => {
+                  const cellByKey = new Map<string, any>()
+                  p.cells.forEach((c: any) => cellByKey.set(`${c.channel}:${c.marketplace}`, c))
+                  return (
+                    <tr key={p.id} role="row" className="border-b border-slate-100 hover:bg-slate-50/50">
+                      <td
+                        role="rowheader"
+                        className="px-3 py-2 sticky left-0 bg-white border-r border-slate-100 z-10"
+                      >
+                        <Link href={`/products/${p.id}/edit`} className="hover:text-blue-600 block">
+                          <div className="text-md font-medium text-slate-900 truncate max-w-xs">{p.name}</div>
+                          <div className="text-sm text-slate-500 font-mono">{p.sku}</div>
+                        </Link>
+                      </td>
+                      {columns.map((key) => {
+                        const c = cellByKey.get(key)
+                        const [ch, mp] = key.split(':')
+                        return (
+                          <td key={key} role="gridcell" className="px-2 py-2 text-center">
+                            {c ? (
+                              <MatrixCell
+                                cell={c}
+                                product={p}
+                                optimisticSyncing={optimisticSyncing.has(c.id)}
+                                onOpenDrawer={() => setDrawerOpen(c.id)}
+                                onSync={() => fireSync(c.id)}
+                              />
+                            ) : (
+                              <EmptyMatrixCell productId={p.id} channel={ch} marketplace={mp} />
+                            )}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* Refresh footer — surfaces freshness from usePolledList */}
+      <div className="flex items-center justify-between text-sm text-slate-500 px-1">
+        <span>
+          {lastFetchedAt
+            ? `Updated ${formatRelative(lastFetchedAt)}`
+            : 'Updated just now'}
+        </span>
+        <button
+          onClick={() => refetch()}
+          className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+          aria-label="Refresh matrix"
+        >
+          <RefreshCw size={11} /> Refresh
+        </button>
       </div>
-    </Card>
+
+      {drawerOpen && (
+        <ListingDrawer
+          id={drawerOpen}
+          onClose={() => setDrawerOpen(null)}
+          onChanged={() => refetch()}
+        />
+      )}
+    </div>
   )
 }
 
-function MatrixCell({ cell }: { cell: any }) {
+// Format a millisecond timestamp as "2m ago" / "just now" / "1h ago".
+// Tight inline because nothing else in /listings needs it yet; promote
+// to a shared util once a second caller appears.
+function formatRelative(ms: number): string {
+  const diff = Date.now() - ms
+  if (diff < 30_000) return 'just now'
+  if (diff < 60_000) return `${Math.floor(diff / 1000)}s ago`
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
+  return `${Math.floor(diff / 86_400_000)}d ago`
+}
+
+// ────────────────────────────────────────────────────────────────────
+// MatrixCell — populated cell for a (product, channel, marketplace) tuple.
+// ────────────────────────────────────────────────────────────────────
+function MatrixCell({
+  cell,
+  product,
+  optimisticSyncing,
+  onOpenDrawer,
+  onSync,
+}: {
+  cell: any
+  product: { id: string; sku: string; name: string }
+  optimisticSyncing: boolean
+  onOpenDrawer: () => void
+  onSync: () => void
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  // Effective sync status: optimistic flag wins until refetch lands.
+  const syncStatus = optimisticSyncing ? 'SYNCING' : (cell.syncStatus ?? 'IDLE')
+  const hasError =
+    cell.listingStatus === 'ERROR' ||
+    cell.lastSyncStatus === 'FAILED' ||
+    cell.syncStatus === 'FAILED'
+
+  // Drift: cell follows master price BUT channel.price !== masterPrice.
+  // Subtle indicator; tooltip carries the delta.
+  const drift =
+    cell.followMasterPrice === false &&
+    cell.price != null &&
+    cell.masterPrice != null &&
+    cell.price !== cell.masterPrice
+      ? cell.price - cell.masterPrice
+      : null
+
   const tone =
-    cell.listingStatus === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-    : cell.listingStatus === 'ERROR' || cell.lastSyncStatus === 'FAILED' ? 'bg-rose-50 text-rose-700 border-rose-200'
-    : cell.listingStatus === 'DRAFT' ? 'bg-slate-50 text-slate-600 border-slate-200'
-    : cell.listingStatus === 'SUPPRESSED' ? 'bg-amber-50 text-amber-700 border-amber-200'
-    : 'bg-white text-slate-600 border-slate-200'
-  return (
-    <div className={`inline-block min-w-[90px] px-1.5 py-1 border rounded text-xs ${tone}`}>
-      <div className="font-semibold uppercase tracking-wider">{cell.listingStatus}</div>
-      {cell.price != null && <div className="tabular-nums text-sm mt-0.5">{cell.price.toFixed(2)}</div>}
-      {cell.quantity != null && <div className="tabular-nums text-xs opacity-70">{cell.quantity} pcs</div>}
+    cell.listingStatus === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+    : hasError ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+    : cell.listingStatus === 'DRAFT' ? 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+    : cell.listingStatus === 'SUPPRESSED' ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+
+  const ariaLabel = [
+    `${cell.channel} ${cell.marketplace}`,
+    cell.listingStatus,
+    cell.price != null ? `price ${cell.price.toFixed(2)}` : null,
+    cell.quantity != null ? `${cell.quantity} units` : null,
+    cell.lastSyncedAt ? `synced ${formatRelative(new Date(cell.lastSyncedAt).getTime())}` : 'never synced',
+    cell.lastSyncError ? `error: ${cell.lastSyncError.slice(0, 80)}` : null,
+  ].filter(Boolean).join(', ')
+
+  const tooltipContent = (
+    <div className="space-y-1.5 max-w-[260px]">
+      <div className="font-semibold">{cell.channel} · {cell.marketplace}</div>
+      <div className="text-xs">
+        Status: {cell.listingStatus}
+        {cell.lastSyncStatus && ` · Sync: ${cell.lastSyncStatus}`}
+      </div>
+      {cell.price != null && (
+        <div className="text-xs">
+          Price: {cell.price.toFixed(2)}
+          {drift != null && (
+            <span className={drift > 0 ? 'text-emerald-300' : 'text-rose-300'}>
+              {' '}({drift > 0 ? '+' : ''}{drift.toFixed(2)} vs master)
+            </span>
+          )}
+        </div>
+      )}
+      {cell.quantity != null && <div className="text-xs">Stock: {cell.quantity} units</div>}
+      <div className="text-xs">
+        {cell.lastSyncedAt
+          ? `Last synced ${formatRelative(new Date(cell.lastSyncedAt).getTime())}`
+          : 'Never synced'}
+      </div>
+      {cell.lastSyncError && (
+        <div className="text-xs text-rose-300 border-t border-slate-700 pt-1.5 mt-1.5">
+          {cell.lastSyncError}
+        </div>
+      )}
     </div>
+  )
+
+  return (
+    <Tooltip content={tooltipContent} delay={400}>
+      <div className="group relative inline-block min-w-[100px]">
+        <button
+          type="button"
+          onClick={onOpenDrawer}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              onOpenDrawer()
+            }
+          }}
+          aria-label={ariaLabel}
+          className={`block w-full text-left px-1.5 py-1 border rounded text-xs transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${tone}`}
+        >
+          <div className="flex items-center justify-between gap-1.5">
+            <div className="font-semibold uppercase tracking-wider truncate">{cell.listingStatus}</div>
+            <SyncDot status={syncStatus} hasError={hasError} />
+          </div>
+          {cell.price != null && (
+            <div className="tabular-nums text-sm mt-0.5 flex items-center gap-1">
+              {cell.price.toFixed(2)}
+              {drift != null && (
+                <span className={drift > 0 ? 'text-emerald-600' : 'text-rose-600'} aria-hidden>
+                  {drift > 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                </span>
+              )}
+            </div>
+          )}
+          {cell.quantity != null && (
+            <div className="tabular-nums text-xs opacity-70">{cell.quantity} pcs</div>
+          )}
+          {cell.lastSyncError && (
+            <div className="text-xs text-rose-600 mt-0.5 truncate" title={cell.lastSyncError}>
+              ⚠ {cell.lastSyncError.slice(0, 24)}{cell.lastSyncError.length > 24 ? '…' : ''}
+            </div>
+          )}
+        </button>
+        <CellKebab
+          open={menuOpen}
+          onOpen={() => setMenuOpen(true)}
+          onClose={() => setMenuOpen(false)}
+          listingUrl={cell.listingUrl}
+          channel={cell.channel}
+          listingId={cell.id}
+          productId={product.id}
+          marketplace={cell.marketplace}
+          isPublished={cell.isPublished}
+          onOpenDrawer={onOpenDrawer}
+          onSync={onSync}
+        />
+      </div>
+    </Tooltip>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────
+// SyncDot — tiny status indicator inside a cell.
+// IN_SYNC=green, SYNCING=amber-pulse, FAILED=red, otherwise gray.
+// ────────────────────────────────────────────────────────────────────
+function SyncDot({ status, hasError }: { status: string; hasError: boolean }) {
+  if (hasError) return <span className="w-2 h-2 rounded-full bg-rose-500 flex-shrink-0" aria-hidden />
+  if (status === 'IN_SYNC') return <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" aria-hidden />
+  if (status === 'SYNCING' || status === 'PENDING') {
+    return (
+      <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0 animate-pulse" aria-hidden />
+    )
+  }
+  return <span className="w-2 h-2 rounded-full bg-slate-300 flex-shrink-0" aria-hidden />
+}
+
+// ────────────────────────────────────────────────────────────────────
+// CellKebab — per-cell action menu. Appears on hover/focus of the
+// parent cell. Click outside or on an action to dismiss.
+// ────────────────────────────────────────────────────────────────────
+function CellKebab({
+  open,
+  onOpen,
+  onClose,
+  listingUrl,
+  channel,
+  listingId,
+  productId,
+  marketplace,
+  isPublished,
+  onOpenDrawer,
+  onSync,
+}: {
+  open: boolean
+  onOpen: () => void
+  onClose: () => void
+  listingUrl: string | null
+  channel: string
+  listingId: string
+  productId: string
+  marketplace: string
+  isPublished: boolean
+  onOpenDrawer: () => void
+  onSync: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  // Click-outside dismissal.
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e: MouseEvent) => {
+      if (!ref.current) return
+      if (!ref.current.contains(e.target as Node)) onClose()
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open, onClose])
+
+  return (
+    <div ref={ref} className="absolute -top-1 -right-1">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          open ? onClose() : onOpen()
+        }}
+        aria-label="Cell actions"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className="w-5 h-5 inline-flex items-center justify-center bg-white border border-slate-200 rounded-full text-slate-500 hover:text-slate-900 hover:border-slate-300 shadow-sm opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+      >
+        <MoreHorizontal size={11} />
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute top-6 right-0 z-popover w-48 bg-white border border-slate-200 rounded-md shadow-lg py-1 text-left"
+        >
+          <KebabItem
+            icon={Eye}
+            label="View detail"
+            onClick={() => {
+              onClose()
+              onOpenDrawer()
+            }}
+          />
+          <KebabItem
+            icon={RefreshCw}
+            label="Sync now"
+            onClick={() => {
+              onClose()
+              onSync()
+            }}
+          />
+          {listingUrl && (
+            <KebabItem
+              icon={ExternalLink}
+              label={`Open on ${channel.charAt(0) + channel.slice(1).toLowerCase()}`}
+              onClick={() => {
+                onClose()
+                window.open(listingUrl, '_blank', 'noopener,noreferrer')
+              }}
+            />
+          )}
+          <KebabItem
+            icon={Edit3}
+            label="Open in editor"
+            onClick={() => {
+              onClose()
+              window.location.href = `/products/${productId}/edit?channel=${channel}&marketplace=${marketplace}`
+            }}
+          />
+          <div className="border-t border-slate-100 my-1" />
+          <KebabItem
+            icon={isPublished ? Pause : Play}
+            label={isPublished ? 'Pause listing' : 'Resume listing'}
+            onClick={async () => {
+              onClose()
+              await fetch(`${getBackendUrl()}/api/listings/bulk-action`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: isPublished ? 'unpublish' : 'publish',
+                  listingIds: [listingId],
+                }),
+              })
+              emitInvalidation({ type: 'listing.updated', id: listingId })
+            }}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function KebabItem({
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  icon: any
+  label: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className="w-full px-3 py-1.5 text-base text-slate-700 hover:bg-slate-50 inline-flex items-center gap-2"
+    >
+      <Icon size={12} className="text-slate-500" /> {label}
+    </button>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────
+// EmptyMatrixCell — product is not listed on this (channel, marketplace).
+// Click → list-wizard preset. The cell is the entry point for closing
+// coverage gaps from the matrix view.
+// ────────────────────────────────────────────────────────────────────
+function EmptyMatrixCell({
+  productId,
+  channel,
+  marketplace,
+}: {
+  productId: string
+  channel: string
+  marketplace: string
+}) {
+  const tooltipContent = (
+    <div className="text-xs">
+      Not listed on {channel} {marketplace}.
+      <br />
+      Click to publish.
+    </div>
+  )
+  return (
+    <Tooltip content={tooltipContent} delay={300}>
+      <Link
+        href={`/products/${productId}/list-wizard?channel=${channel}&marketplace=${marketplace}`}
+        aria-label={`List on ${channel} ${marketplace}`}
+        className="inline-flex items-center justify-center min-w-[100px] h-[44px] px-1.5 py-1 border border-dashed border-slate-200 rounded text-xs text-slate-300 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50/40 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+      >
+        <Plus size={12} className="mr-0.5" />
+        <span className="text-xs uppercase tracking-wider">List</span>
+      </Link>
+    </Tooltip>
   )
 }
 
