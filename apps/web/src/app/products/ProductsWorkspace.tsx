@@ -2945,7 +2945,7 @@ function GridLens(props: any) {
           translucent backdrop keeps body content visible behind the
           bar; rounded corners + shadow give it a panel feel without
           claiming a full Card. */}
-      <div className="sticky top-0 z-10 -mx-2 px-2 py-1.5 flex items-center gap-2 justify-between bg-white/85 backdrop-blur border-b border-slate-200">
+      <div className="sticky top-0 z-30 -mx-2 px-2 py-1.5 flex items-center gap-2 justify-between bg-white/85 backdrop-blur border-b border-slate-200">
         <div className="flex items-center gap-2">
           <span className="text-sm text-slate-500">
             <span className="font-semibold text-slate-700 tabular-nums">{total}</span> products · page {page} of {totalPages}
