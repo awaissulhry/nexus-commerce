@@ -436,6 +436,8 @@
   "rules.reorder.saved": "Priority order saved",
   "rules.reorder.partialFail": "Reorder partially failed ({n} rules) — refreshing",
   "rules.action.duplicate": "Duplicate this rule",
+  "rules.toggleInactive.show": "Show {n} disabled",
+  "rules.toggleInactive.hide": "Hide {n} disabled",
   "rules.duplicate.namePrefix": "Copy of {name}",
   "rules.toast.duplicated": "Rule duplicated — disabled until you enable it",
   "rules.simulator.openButton": "Simulate",

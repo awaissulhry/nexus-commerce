@@ -83,6 +83,11 @@ export default function RulesClient() {
   const askConfirm = useConfirm()
   const { t } = useTranslations()
   const [rules, setRules] = useState<ShippingRule[]>([])
+  // O.84: hide-disabled-rules toggle. As operators duplicate rules
+  // (O.73 creates clones with isActive=false) the list fills up with
+  // disabled rows that they're using as templates. Default to hidden;
+  // a count chip lets them flip back when they need to edit one.
+  const [showInactive, setShowInactive] = useState(false)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<ShippingRule | null>(null)
   const [showNew, setShowNew] = useState(false)
@@ -222,6 +227,22 @@ export default function RulesClient() {
         ]}
         actions={
           <div className="flex items-center gap-2">
+            {/* O.84: show-disabled toggle. Hidden when there are no
+                disabled rules so the chip doesn't add noise. */}
+            {rules.some((r) => !r.isActive) && (
+              <button
+                onClick={() => setShowInactive((s) => !s)}
+                className={`h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 ${
+                  showInactive
+                    ? 'bg-slate-50 text-slate-700 border-slate-300'
+                    : 'border-slate-200 text-slate-500 hover:bg-slate-50'
+                }`}
+              >
+                {showInactive
+                  ? t('rules.toggleInactive.hide', { n: rules.filter((r) => !r.isActive).length })
+                  : t('rules.toggleInactive.show', { n: rules.filter((r) => !r.isActive).length })}
+              </button>
+            )}
             <button onClick={() => setShowSimulator(true)} className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
               <FlaskConical size={12} /> {t('rules.simulator.openButton')}
             </button>
@@ -257,7 +278,7 @@ export default function RulesClient() {
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
           >
-            <SortableContext items={rules.map((r) => r.id)} strategy={verticalListSortingStrategy}>
+            <SortableContext items={(showInactive ? rules : rules.filter((r) => r.isActive)).map((r) => r.id)} strategy={verticalListSortingStrategy}>
           <table className="w-full text-md">
             <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
@@ -271,7 +292,7 @@ export default function RulesClient() {
               </tr>
             </thead>
             <tbody>
-              {rules.map((r) => (
+              {(showInactive ? rules : rules.filter((r) => r.isActive)).map((r) => (
                 <SortableRuleRow
                   key={r.id}
                   rule={r}

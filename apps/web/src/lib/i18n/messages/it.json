@@ -407,6 +407,8 @@
   "rules.reorder.saved": "Ordine priorità salvato",
   "rules.reorder.partialFail": "Riordino parzialmente fallito ({n} regole) — aggiorno",
   "rules.action.duplicate": "Duplica questa regola",
+  "rules.toggleInactive.show": "Mostra {n} disattivate",
+  "rules.toggleInactive.hide": "Nascondi {n} disattivate",
   "rules.duplicate.namePrefix": "Copia di {name}",
   "rules.toast.duplicated": "Regola duplicata — disattivata finché non la abiliti",
   "rules.simulator.openButton": "Simula",
