@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/Badge'
 import { useToast } from '@/components/ui/Toast'
 import { BarcodeScanInput } from '@/components/ui/BarcodeScanInput'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface ShipmentDetail {
@@ -167,6 +168,9 @@ export default function PackStationClient({ shipmentId }: Props) {
         return
       }
       toast.success(t('pack.toast.packed'))
+      // O.26: tell other tabs (Pending/Shipments/drawer/sidebar) the
+      // shipment transitioned so they refresh.
+      emitInvalidation({ type: 'shipment.updated', id: shipment.id })
       // Return to outbound, opening the drawer for this order so the
       // operator can immediately print the label.
       const data = await res.json()

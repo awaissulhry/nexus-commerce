@@ -64,6 +64,13 @@ export type InvalidationType =
   // alerts in one tab doesn't see stale state in another.
   | 'saved-view.changed'
   | 'saved-view-alert.changed'
+  // O.26 — outbound shipment events. Cross-tab sync for the Pending
+  // tab + Shipments tab + sidebar badge so a pack action in tab A
+  // refreshes the Pending list in tab B without polling.
+  | 'shipment.created'
+  | 'shipment.updated'
+  | 'shipment.deleted'
+  | 'order.shipped'
 
 export interface InvalidationEvent {
   type: InvalidationType

@@ -20,6 +20,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { getBackendUrl } from '@/lib/backend-url'
 
 type DrawerOrder = {
@@ -173,6 +174,19 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
 
   useEffect(() => { fetchDetail() }, [fetchDetail])
 
+  // O.26: re-fetch the open drawer when a sibling tab transitions
+  // this order's outbound state. Filters by id when the event has
+  // one to avoid full re-fetches for unrelated shipments.
+  useInvalidationChannel(
+    ['shipment.created', 'shipment.updated', 'order.shipped'],
+    () => {
+      // event.id may be a shipment id, not order id — easier to
+      // just refetch unconditionally since the drawer is open at
+      // most once.
+      if (orderId) fetchDetail()
+    },
+  )
+
   // Esc closes.
   useEffect(() => {
     if (!orderId) return
@@ -198,6 +212,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
         return
       }
       toast.success(t('outbound.pending.toast.createdAll', { n: 1 }))
+      emitInvalidation({ type: 'shipment.created', meta: { orderId } })
       fetchDetail()
     } catch {
       toast.error(t('common.error'))

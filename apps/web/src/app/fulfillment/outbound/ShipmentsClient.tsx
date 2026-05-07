@@ -21,6 +21,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { getBackendUrl } from '@/lib/backend-url'
 
 type Shipment = {
@@ -114,6 +115,12 @@ export default function ShipmentsClient() {
 
   useEffect(() => { fetchShipments(); fetchCarriers() }, [fetchShipments, fetchCarriers])
 
+  // O.26: refresh when sibling surfaces transition outbound state.
+  useInvalidationChannel(
+    ['shipment.created', 'shipment.updated', 'shipment.deleted', 'order.shipped'],
+    () => { fetchShipments() },
+  )
+
   const sendcloudConnected = carriers.find((c) => c.code === 'SENDCLOUD')?.isActive
 
   const counts = useMemo(() => {
@@ -139,11 +146,13 @@ export default function ShipmentsClient() {
       toast.error(err.error ?? t('common.error'))
       return
     }
+    emitInvalidation({ type: 'shipment.updated', id })
     fetchShipments()
   }
 
   const markShipped = async (id: string) => {
     await fetch(`${getBackendUrl()}/api/fulfillment/shipments/${id}/mark-shipped`, { method: 'POST' })
+    emitInvalidation({ type: 'order.shipped', id })
     fetchShipments()
   }
 
@@ -205,6 +214,7 @@ export default function ShipmentsClient() {
       return res.ok
     })
     reportBulk('printed', ok, eligible.length)
+    if (ok > 0) emitInvalidation({ type: 'shipment.updated', meta: { count: ok } })
     setSelected(new Set())
     fetchShipments()
   }
@@ -218,6 +228,7 @@ export default function ShipmentsClient() {
       return res.ok
     })
     reportBulk('shipped', ok, eligible.length)
+    if (ok > 0) emitInvalidation({ type: 'order.shipped', meta: { count: ok } })
     setSelected(new Set())
     fetchShipments()
   }

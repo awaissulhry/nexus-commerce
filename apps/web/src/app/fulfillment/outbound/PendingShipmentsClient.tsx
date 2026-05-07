@@ -16,6 +16,8 @@ import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
+import { useTranslations } from '@/lib/i18n/use-translations'
+import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { getBackendUrl } from '@/lib/backend-url'
 
 type Urgency = 'OVERDUE' | 'TODAY' | 'TOMORROW' | 'THIS_WEEK' | 'LATER' | 'UNKNOWN'
@@ -63,13 +65,13 @@ type Response = {
   counts: Counts
 }
 
-const URGENCY_TONE: Record<Urgency, { tint: string; label: string; icon: typeof Clock }> = {
-  OVERDUE: { tint: 'text-rose-700 bg-rose-50 border-rose-200', label: 'Overdue', icon: AlertTriangle },
-  TODAY: { tint: 'text-amber-700 bg-amber-50 border-amber-200', label: 'Today', icon: Clock },
-  TOMORROW: { tint: 'text-yellow-700 bg-yellow-50 border-yellow-200', label: 'Tomorrow', icon: Clock },
-  THIS_WEEK: { tint: 'text-slate-700 bg-slate-50 border-slate-200', label: 'This week', icon: Clock },
-  LATER: { tint: 'text-slate-500 bg-slate-50 border-slate-200', label: 'Later', icon: Clock },
-  UNKNOWN: { tint: 'text-slate-500 bg-slate-50 border-slate-200', label: 'No deadline', icon: Clock },
+const URGENCY_TONE: Record<Urgency, { tint: string; icon: typeof Clock }> = {
+  OVERDUE: { tint: 'text-rose-700 bg-rose-50 border-rose-200', icon: AlertTriangle },
+  TODAY: { tint: 'text-amber-700 bg-amber-50 border-amber-200', icon: Clock },
+  TOMORROW: { tint: 'text-yellow-700 bg-yellow-50 border-yellow-200', icon: Clock },
+  THIS_WEEK: { tint: 'text-slate-700 bg-slate-50 border-slate-200', icon: Clock },
+  LATER: { tint: 'text-slate-500 bg-slate-50 border-slate-200', icon: Clock },
+  UNKNOWN: { tint: 'text-slate-500 bg-slate-50 border-slate-200', icon: Clock },
 }
 
 const CHANNEL_LABEL: Record<string, string> = {
@@ -81,14 +83,14 @@ const CHANNEL_LABEL: Record<string, string> = {
   MANUAL: 'Manual',
 }
 
-const URGENCY_FILTERS: Array<{ key: Urgency | 'ALL'; label: string }> = [
-  { key: 'ALL', label: 'All' },
-  { key: 'OVERDUE', label: 'Overdue' },
-  { key: 'TODAY', label: 'Today' },
-  { key: 'TOMORROW', label: 'Tomorrow' },
-  { key: 'THIS_WEEK', label: 'This week' },
-  { key: 'LATER', label: 'Later' },
-  { key: 'UNKNOWN', label: 'No deadline' },
+const URGENCY_FILTERS: Array<{ key: Urgency | 'ALL'; tKey: string }> = [
+  { key: 'ALL', tKey: 'outbound.pending.urgency.all' },
+  { key: 'OVERDUE', tKey: 'outbound.pending.urgency.overdue' },
+  { key: 'TODAY', tKey: 'outbound.pending.urgency.today' },
+  { key: 'TOMORROW', tKey: 'outbound.pending.urgency.tomorrow' },
+  { key: 'THIS_WEEK', tKey: 'outbound.pending.urgency.thisWeek' },
+  { key: 'LATER', tKey: 'outbound.pending.urgency.later' },
+  { key: 'UNKNOWN', tKey: 'outbound.pending.urgency.unknown' },
 ]
 
 function formatRelative(d: string | null): string {
@@ -120,6 +122,7 @@ export default function PendingShipmentsClient() {
   const router = useRouter()
   const params = useSearchParams()
   const { toast } = useToast()
+  const { t } = useTranslations()
 
   // URL-state-backed filters so a refresh / bookmark survives.
   const channelFilter = (params.get('channel') ?? '').split(',').filter(Boolean)
@@ -156,15 +159,23 @@ export default function PendingShipmentsClient() {
         { cache: 'no-store' },
       )
       if (res.ok) setData(await res.json())
-      else toast.error('Failed to load pending orders')
+      else toast.error(t('outbound.pending.toast.loadFailed'))
     } catch (e) {
-      toast.error('Failed to load pending orders')
+      toast.error(t('outbound.pending.toast.loadFailed'))
     } finally {
       setLoading(false)
     }
   }, [channelFilter.join(','), urgencyFilter, search, sort, toast])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // O.26: cross-tab refresh. When ANY tab on the same origin creates
+  // a shipment, marks one shipped, or otherwise transitions outbound
+  // state, this list re-fetches without a manual refresh.
+  useInvalidationChannel(
+    ['shipment.created', 'shipment.updated', 'shipment.deleted', 'order.shipped'],
+    () => { fetchData() },
+  )
 
   // Debounced search → URL on Enter only (avoids URL-thrash while typing).
   const submitSearch = () => setParam('q', searchInput || null)
@@ -188,7 +199,7 @@ export default function PendingShipmentsClient() {
 
   const bulkCreateShipments = async () => {
     if (selected.size === 0) {
-      toast.error('Select orders first')
+      toast.error(t('outbound.pending.toast.selectFirst'))
       return
     }
     setCreating(true)
@@ -200,21 +211,27 @@ export default function PendingShipmentsClient() {
       })
       const out = await res.json()
       if (!res.ok) {
-        toast.error(out.error ?? 'Bulk create failed')
+        toast.error(out.error ?? t('outbound.pending.toast.createdNone', { errors: 1 }))
         return
       }
       const { created = 0, errors = [] } = out
       if (created === selected.size) {
-        toast.success(`Created ${created} shipment${created === 1 ? '' : 's'}`)
+        toast.success(
+          created === 1
+            ? t('outbound.pending.toast.createdAll', { n: created })
+            : t('outbound.pending.toast.createdAllPlural', { n: created }),
+        )
       } else if (created > 0) {
-        toast.warning(`Created ${created} of ${selected.size} (${errors.length} skipped)`)
+        toast.warning(t('outbound.pending.toast.createdPartial', { ok: created, total: selected.size, errors: errors.length }))
       } else {
-        toast.error(`No shipments created (${errors.length} errors)`)
+        toast.error(t('outbound.pending.toast.createdNone', { errors: errors.length }))
       }
+      // O.26: tell other tabs (sidebar, drawer, shipments tab) to refresh.
+      if (created > 0) emitInvalidation({ type: 'shipment.created', meta: { count: created } })
       setSelected(new Set())
       fetchData()
     } catch (e) {
-      toast.error('Bulk create failed')
+      toast.error(t('outbound.pending.toast.createdNone', { errors: 1 }))
     } finally {
       setCreating(false)
     }
@@ -258,7 +275,7 @@ export default function PendingShipmentsClient() {
                   : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
               }`}
             >
-              {f.label}
+              {t(f.tKey)}
               {count != null && (
                 <span className={`tabular-nums ${isActive ? 'text-slate-300' : 'text-slate-400'}`}>
                   {count}
@@ -271,7 +288,7 @@ export default function PendingShipmentsClient() {
           <div className="relative">
             <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <Input
-              placeholder="Order #, customer, SKU"
+              placeholder={t('outbound.pending.searchPlaceholder')}
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={(e) => {
@@ -289,15 +306,15 @@ export default function PendingShipmentsClient() {
             onChange={(e) => setParam('sort', e.target.value === 'ship-by-asc' ? null : e.target.value)}
             className="h-8 px-2 text-base border border-slate-200 rounded-md bg-white"
           >
-            <option value="ship-by-asc">Ship by · soonest</option>
-            <option value="value-desc">Value · highest</option>
-            <option value="age-desc">Age · oldest</option>
+            <option value="ship-by-asc">{t('outbound.pending.sort.shipBy')}</option>
+            <option value="value-desc">{t('outbound.pending.sort.value')}</option>
+            <option value="age-desc">{t('outbound.pending.sort.age')}</option>
           </select>
           <button
             onClick={fetchData}
             className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
           >
-            <RefreshCw size={12} /> Refresh
+            <RefreshCw size={12} /> {t('common.refresh')}
           </button>
         </div>
       </div>
@@ -305,7 +322,7 @@ export default function PendingShipmentsClient() {
       {/* ── Channel filter chips ────────────────────────────────────────── */}
       {channelChips.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm text-slate-500 uppercase tracking-wider">Channel</span>
+          <span className="text-sm text-slate-500 uppercase tracking-wider">{t('outbound.pending.channelLabel')}</span>
           {channelChips.map(([code, count]) => {
             const isActive = channelFilter.includes(code)
             return (
@@ -330,7 +347,7 @@ export default function PendingShipmentsClient() {
               onClick={() => setParam('channel', null)}
               className="h-6 px-2 text-sm text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
             >
-              <X size={11} /> Clear
+              <X size={11} /> {t('outbound.pending.clearFilter')}
             </button>
           )}
         </div>
@@ -342,7 +359,7 @@ export default function PendingShipmentsClient() {
           <Card>
             <div className="flex items-center gap-3">
               <span className="text-base font-semibold text-slate-700">
-                {selected.size} selected
+                {t('outbound.pending.selectedCount', { n: selected.size })}
               </span>
               <div className="h-4 w-px bg-slate-200" />
               <button
@@ -350,7 +367,7 @@ export default function PendingShipmentsClient() {
                 disabled={creating}
                 className="h-7 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
               >
-                <Plus size={12} /> Create shipments ({selected.size})
+                <Plus size={12} /> {t('outbound.pending.bulkCreate', { n: selected.size })}
               </button>
               <button
                 onClick={() => setSelected(new Set())}
@@ -366,16 +383,16 @@ export default function PendingShipmentsClient() {
       {/* ── List ────────────────────────────────────────────────────────── */}
       {loading && !data ? (
         <Card>
-          <div className="text-md text-slate-500 py-8 text-center">Loading pending orders…</div>
+          <div className="text-md text-slate-500 py-8 text-center">{t('common.loading')}</div>
         </Card>
       ) : !data || data.items.length === 0 ? (
         <EmptyState
           icon={Truck}
-          title="No pending shipments"
+          title={t('outbound.pending.empty.title')}
           description={
             urgencyFilter !== 'ALL' || channelFilter.length > 0 || search
-              ? 'No orders match your filters. Try clearing them.'
-              : 'All caught up — every paid order has a shipment in flight.'
+              ? t('outbound.pending.empty.filtered')
+              : t('outbound.pending.empty.allCaughtUp')
           }
         />
       ) : (
@@ -393,25 +410,25 @@ export default function PendingShipmentsClient() {
                     />
                   </th>
                   <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
-                    Order
+                    {t('outbound.pending.col.order')}
                   </th>
                   <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
-                    Channel
+                    {t('outbound.pending.col.channel')}
                   </th>
                   <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
-                    Customer
+                    {t('outbound.pending.col.customer')}
                   </th>
                   <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
-                    Items
+                    {t('outbound.pending.col.items')}
                   </th>
                   <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
-                    Value
+                    {t('outbound.pending.col.value')}
                   </th>
                   <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
-                    Ship by
+                    {t('outbound.pending.col.shipBy')}
                   </th>
                   <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
-                    Action
+                    {t('outbound.pending.col.action')}
                   </th>
                 </tr>
               </thead>
@@ -472,8 +489,10 @@ export default function PendingShipmentsClient() {
                         </div>
                       </td>
                       <td className="px-3 py-2 text-base text-slate-700">
-                        <span className="tabular-nums">{o.totalQuantity}</span> units ·{' '}
-                        {o.itemCount} SKU{o.itemCount === 1 ? '' : 's'}
+                        {t(o.itemCount === 1 ? 'outbound.pending.itemSummary' : 'outbound.pending.itemSummaryPlural', {
+                          units: o.totalQuantity,
+                          skus: o.itemCount,
+                        })}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums text-base text-slate-900">
                         {formatMoney(o.totalPrice, o.currencyCode)}
@@ -499,7 +518,7 @@ export default function PendingShipmentsClient() {
                           }}
                           className="h-6 px-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center gap-1"
                         >
-                          <Package size={11} /> Create shipment
+                          <Package size={11} /> {t('outbound.pending.createShipment')}
                         </button>
                       </td>
                     </tr>
