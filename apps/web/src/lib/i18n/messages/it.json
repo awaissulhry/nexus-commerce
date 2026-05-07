@@ -260,6 +260,7 @@
   "outbound.drawer.packedNext": "Imballato — ora stampa l'etichetta",
   "outbound.drawer.printLabel.button": "Stampa etichetta",
   "outbound.drawer.printLabel.toast": "Etichetta stampata — apro il PDF",
+  "outbound.drawer.printPackSlip": "Apri documento di trasporto",
   "outbound.drawer.openFullOrder": "Apri ordine completo",
   "outbound.drawer.generateReturn": "Genera reso",
   "outbound.drawer.generateAnotherReturn": "+ Nuovo reso",

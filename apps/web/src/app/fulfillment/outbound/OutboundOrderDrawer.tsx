@@ -15,7 +15,7 @@ import Link from 'next/link'
 import {
   X, Package, ExternalLink, Truck, Crown, AlertTriangle, Clock,
   MapPin, User, CreditCard, Plus, Printer, CheckCircle2, Undo2,
-  TrendingDown, Globe, Copy,
+  TrendingDown, Globe, Copy, FileText,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -816,13 +816,26 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                               €{(s.costCents / 100).toFixed(2)}
                             </span>
                           )}
+                          {/* O.80: pack slip — operator's "what goes in
+                              the box" reference. Useful before pack
+                              (to print and walk the warehouse) AND
+                              post-ship (to print a record copy). */}
+                          <a
+                            href={`${getBackendUrl()}/api/fulfillment/shipments/${s.id}/pack-slip.html`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-slate-400 hover:text-blue-600"
+                            title={t('outbound.drawer.printPackSlip')}
+                          >
+                            <FileText size={12} />
+                          </a>
                           {s.labelUrl && (
                             <a
                               href={s.labelUrl}
                               target="_blank"
                               rel="noreferrer"
                               className="text-slate-400 hover:text-blue-600"
-                              title="Open label"
+                              title={t('outbound.drawer.printLabel.button')}
                             >
                               <Printer size={12} />
                             </a>
