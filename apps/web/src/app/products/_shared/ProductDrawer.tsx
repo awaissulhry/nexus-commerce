@@ -2811,7 +2811,8 @@ function RelatedTab({
                       )
                     }
                     title="Open"
-                    className="h-7 w-7 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 rounded"
+                    aria-label="Open related"
+                    className="h-7 w-7 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 rounded"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                   </button>
@@ -2820,7 +2821,8 @@ function RelatedTab({
                     onClick={() => remove(r.id)}
                     disabled={busy}
                     title="Remove"
-                    className="h-7 w-7 inline-flex items-center justify-center text-slate-400 hover:text-rose-600 rounded"
+                    aria-label="Remove related"
+                    className="h-7 w-7 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-400 hover:text-rose-600 rounded"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -2936,7 +2938,8 @@ function RelatedTab({
                 <button
                   type="button"
                   onClick={() => setSelectedTo(null)}
-                  className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 rounded"
+                  aria-label="Clear selection"
+                  className="h-6 w-6 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 rounded"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>

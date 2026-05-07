@@ -406,7 +406,8 @@ export default function Step7Images({
                           onClick={() => move(idx, -1)}
                           disabled={idx === 0}
                           title="Move up"
-                          className="h-6 w-6 inline-flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed"
+                          aria-label="Move image up"
+                          className="h-6 w-6 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                           <ChevronUp className="w-3.5 h-3.5" />
                         </button>
@@ -416,7 +417,8 @@ export default function Step7Images({
                           onClick={() => move(idx, 1)}
                           disabled={idx === orderedUrls.length - 1}
                           title="Move down"
-                          className="h-6 w-6 inline-flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed"
+                          aria-label="Move image down"
+                          className="h-6 w-6 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                           <ChevronDown className="w-3.5 h-3.5" />
                         </button>

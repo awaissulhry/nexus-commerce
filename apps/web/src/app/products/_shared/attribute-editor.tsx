@@ -1280,7 +1280,8 @@ export function OverrideMenu({
         type="button"
         onClick={() => setOpen((s) => !s)}
         title="Copy or translate"
-        className="h-6 w-6 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded"
+        aria-label="Copy or translate"
+        className="h-6 w-6 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded"
       >
         {translateBusy ? (
           <Loader2 className="w-3 h-3 animate-spin" />
@@ -1504,7 +1505,8 @@ export function VariantBroadcastMenu({
         type="button"
         onClick={() => setOpen((s) => !s)}
         title="Apply this value to other variants"
-        className="h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded"
+        aria-label="Apply this value to other variants"
+        className="h-7 w-7 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded"
       >
         <span className="text-lg leading-none">⋯</span>
       </button>

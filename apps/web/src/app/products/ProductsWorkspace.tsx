@@ -1205,8 +1205,8 @@ function SavedViewsButton({ open, setOpen, views, onApply, onSaveCurrent, onDele
                           <span className="text-xs font-semibold tabular-nums">{alertCount}</span>
                         )}
                       </button>
-                      <button onClick={() => onSetDefault(v.id)} title="Set as default" aria-label={`Set "${v.name}" as default view`} className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-amber-500"><Star size={12} /></button>
-                      <button onClick={async () => { if (await askConfirm({ title: `Delete view "${v.name}"?`, description: 'This view + its alerts will be removed permanently.', confirmLabel: 'Delete', tone: 'danger' })) onDelete(v.id) }} title="Delete" aria-label={`Delete saved view "${v.name}"`} className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-rose-600"><Trash2 size={12} /></button>
+                      <button onClick={() => onSetDefault(v.id)} title="Set as default" aria-label={`Set "${v.name}" as default view`} className="h-6 w-6 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-400 hover:text-amber-500"><Star size={12} /></button>
+                      <button onClick={async () => { if (await askConfirm({ title: `Delete view "${v.name}"?`, description: 'This view + its alerts will be removed permanently.', confirmLabel: 'Delete', tone: 'danger' })) onDelete(v.id) }} title="Delete" aria-label={`Delete saved view "${v.name}"`} className="h-6 w-6 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-400 hover:text-rose-600"><Trash2 size={12} /></button>
                     </li>
                     )
                   })}
@@ -1506,7 +1506,7 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLooku
           </Link>
 
           {status && <span className="text-sm text-slate-500 ml-2">{status}</span>}
-          <button onClick={onClear} disabled={busy} className="ml-auto h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded">
+          <button onClick={onClear} disabled={busy} aria-label="Clear selection" className="ml-auto h-7 w-7 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded">
             <X size={14} />
           </button>
         </div>
@@ -3154,7 +3154,7 @@ function PageBtn({
       disabled={disabled}
       aria-label={ariaLabel}
       title={title}
-      className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 rounded text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+      className="h-7 w-7 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center border border-slate-200 rounded text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
     >
       {children}
     </button>
@@ -4379,7 +4379,7 @@ function TagEditor({ productId, onClose, onChanged, allTags }: { productId: stri
       <aside onClick={(e) => e.stopPropagation()} className="relative h-full w-full max-w-md bg-white shadow-2xl overflow-y-auto">
         <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white">
           <div className="text-md font-semibold text-slate-900 inline-flex items-center gap-1.5"><TagIcon size={14} /> Tags</div>
-          <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
+          <button onClick={onClose} aria-label="Close" className="h-7 w-7 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
         </header>
         <div className="p-5 space-y-4">
           <div>

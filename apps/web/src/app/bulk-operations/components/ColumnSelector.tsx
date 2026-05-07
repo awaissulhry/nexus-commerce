@@ -377,7 +377,8 @@ export default function ColumnSelector({
                       setSavePromptOpen(false)
                       setSavePromptName('')
                     }}
-                    className="h-6 w-6 flex items-center justify-center text-slate-400 hover:text-slate-700"
+                    aria-label="Cancel save"
+                    className="h-6 w-6 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 flex items-center justify-center text-slate-400 hover:text-slate-700"
                   >
                     <X className="w-3 h-3" />
                   </button>

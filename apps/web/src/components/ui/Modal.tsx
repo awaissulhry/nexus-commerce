@@ -238,7 +238,9 @@ function renderDefaultHeader(
         type="button"
         onClick={onClose}
         aria-label="Close"
-        className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded flex-shrink-0"
+        // C.13 — mobile parity: 44×44 tap area on coarse pointers
+        // (min-h-11 min-w-11), reverts to desktop density at sm.
+        className="inline-flex items-center justify-center min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 sm:p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded flex-shrink-0"
       >
         <X className="w-4 h-4" />
       </button>

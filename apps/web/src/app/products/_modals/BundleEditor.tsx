@@ -123,7 +123,7 @@ export default function BundleEditor({
       <div onClick={(e) => e.stopPropagation()} className="relative bg-white rounded-lg shadow-2xl w-full max-w-3xl max-h-[80vh] overflow-y-auto">
         <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
           <div className="text-lg font-semibold text-slate-900 inline-flex items-center gap-2"><Package size={16} /> Bundles</div>
-          <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
+          <button onClick={onClose} aria-label="Close" className="h-7 w-7 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
         </header>
         <div className="p-5 space-y-4">
           {!creating ? (
@@ -151,7 +151,7 @@ export default function BundleEditor({
                             ))}
                           </div>
                         </div>
-                        <button onClick={() => deleteBundle(b.id)} className="h-7 w-7 text-slate-400 hover:text-rose-600 inline-flex items-center justify-center rounded">
+                        <button onClick={() => deleteBundle(b.id)} aria-label={`Delete bundle ${b.name}`} className="h-7 w-7 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 text-slate-400 hover:text-rose-600 inline-flex items-center justify-center rounded">
                           <Trash2 size={14} />
                         </button>
                       </div>
