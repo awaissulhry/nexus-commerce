@@ -15,6 +15,8 @@
 // per-marketplace overview.
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
+import { Megaphone } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Tabs } from '@/components/ui/Tabs'
@@ -196,16 +198,25 @@ function EbayKpiStrip({
         }
         tone={markdowns.activeListingCount > 0 ? 'warning' : 'default'}
       />
-      <KpiTile
-        label="Promoted campaigns"
-        value={campaigns.activeCount}
-        sub={
-          campaigns.activeCount === 0
-            ? 'none running'
-            : 'currently running'
-        }
-        tone={campaigns.activeCount > 0 ? 'success' : 'default'}
-      />
+      <Link
+        href="/listings/ebay/campaigns"
+        className="block hover:shadow-sm rounded transition"
+        aria-label="Manage Promoted Listings campaigns"
+      >
+        <Card>
+          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 inline-flex items-center gap-1">
+            <Megaphone size={11} className="text-slate-400" /> Promoted campaigns
+          </div>
+          <div
+            className={`text-[24px] font-semibold tabular-nums leading-none ${
+              campaigns.activeCount > 0 ? 'text-emerald-700' : 'text-slate-900'
+            }`}
+          >
+            {campaigns.activeCount}
+          </div>
+          <div className="text-sm text-blue-600 mt-1">manage campaigns →</div>
+        </Card>
+      </Link>
     </div>
   )
 }

@@ -1385,6 +1385,240 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
   })
 
   // ─────────────────────────────────────────────────────────────────
+  // C.16 — Promoted Listings campaign CRUD.
+  //
+  // Local persistence only for v1: the operator creates campaigns in
+  // Nexus, they sit in EbayCampaign with status='DRAFT' until either
+  // (a) the eBay Marketing API push lands behind NEXUS_ENABLE_EBAY_PUBLISH
+  // in a follow-up commit, or (b) the operator manually flips status
+  // to 'RUNNING' as an honest local-only acknowledgement that they
+  // pushed via eBay's UI separately.
+  //
+  // Endpoints:
+  //   GET    /api/listings/ebay/campaigns        — list
+  //   POST   /api/listings/ebay/campaigns        — create
+  //   PATCH  /api/listings/ebay/campaigns/:id    — update status / fields
+  //   DELETE /api/listings/ebay/campaigns/:id    — hard delete (DRAFT only)
+  // ─────────────────────────────────────────────────────────────────
+
+  fastify.get('/listings/ebay/campaigns', async (request, reply) => {
+    try {
+      const q = request.query as Record<string, string | undefined>
+      const where: any = {}
+      if (q.marketplace) where.marketplace = q.marketplace
+      if (q.status) where.status = q.status
+
+      const campaigns = await prisma.ebayCampaign.findMany({
+        where,
+        orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+      })
+
+      return {
+        campaigns: campaigns.map((c) => ({
+          id: c.id,
+          channelConnectionId: c.channelConnectionId,
+          marketplace: c.marketplace,
+          externalCampaignId: c.externalCampaignId,
+          name: c.name,
+          fundingStrategy: c.fundingStrategy,
+          bidPercentage: c.bidPercentage == null ? null : Number(c.bidPercentage),
+          dailyBudget: c.dailyBudget == null ? null : Number(c.dailyBudget),
+          budgetCurrency: c.budgetCurrency,
+          status: c.status,
+          startDate: c.startDate,
+          endDate: c.endDate,
+          impressions: c.impressions,
+          clicks: c.clicks,
+          sales: Number(c.sales),
+          spend: Number(c.spend),
+          metricsAt: c.metricsAt,
+          createdAt: c.createdAt,
+          updatedAt: c.updatedAt,
+        })),
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[listings/ebay/campaigns] list failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.post('/listings/ebay/campaigns', async (request, reply) => {
+    try {
+      const body = request.body as {
+        name?: string
+        marketplace?: string
+        fundingStrategy?: 'STANDARD' | 'ADVANCED'
+        bidPercentage?: number
+        dailyBudget?: number
+        budgetCurrency?: string
+        startDate?: string
+        endDate?: string | null
+      }
+
+      if (!body.name?.trim()) {
+        return reply.code(400).send({ error: 'name is required' })
+      }
+      if (!body.marketplace) {
+        return reply.code(400).send({ error: 'marketplace is required (e.g. EBAY_IT)' })
+      }
+      if (body.fundingStrategy !== 'STANDARD' && body.fundingStrategy !== 'ADVANCED') {
+        return reply.code(400).send({
+          error: "fundingStrategy must be 'STANDARD' (CPM) or 'ADVANCED' (CPC)",
+        })
+      }
+      if (body.fundingStrategy === 'STANDARD') {
+        if (typeof body.bidPercentage !== 'number' || body.bidPercentage <= 0 || body.bidPercentage > 100) {
+          return reply.code(400).send({
+            error: 'STANDARD campaigns need a bidPercentage between 0 and 100',
+          })
+        }
+      } else {
+        if (typeof body.dailyBudget !== 'number' || body.dailyBudget <= 0) {
+          return reply.code(400).send({
+            error: 'ADVANCED campaigns need a positive dailyBudget',
+          })
+        }
+        if (!body.budgetCurrency) {
+          return reply.code(400).send({
+            error: 'ADVANCED campaigns need a budgetCurrency (EUR / GBP / USD)',
+          })
+        }
+      }
+      if (!body.startDate) {
+        return reply.code(400).send({ error: 'startDate is required' })
+      }
+
+      // Find an active eBay connection — any will do for v1; we can
+      // multi-account later via ?connectionId= when there's a need.
+      const connection = await prisma.channelConnection.findFirst({
+        where: { channelType: 'EBAY', isActive: true },
+        orderBy: { updatedAt: 'desc' },
+      })
+      if (!connection) {
+        return reply.code(400).send({
+          error: 'No active eBay connection — link an eBay account first.',
+        })
+      }
+
+      // Synthesize an externalCampaignId for DRAFT campaigns. When
+      // the Marketing API push lands, this gets overwritten with the
+      // eBay-issued id. Until then the prefix `local-` flags it as
+      // unsynced so dashboards can filter.
+      const externalCampaignId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
+      const created = await prisma.ebayCampaign.create({
+        data: {
+          channelConnectionId: connection.id,
+          marketplace: body.marketplace,
+          externalCampaignId,
+          name: body.name.trim(),
+          fundingStrategy: body.fundingStrategy,
+          bidPercentage:
+            body.fundingStrategy === 'STANDARD'
+              ? (body.bidPercentage as any)
+              : null,
+          dailyBudget:
+            body.fundingStrategy === 'ADVANCED'
+              ? (body.dailyBudget as any)
+              : null,
+          budgetCurrency:
+            body.fundingStrategy === 'ADVANCED' ? body.budgetCurrency! : null,
+          status: 'DRAFT',
+          startDate: new Date(body.startDate),
+          endDate: body.endDate ? new Date(body.endDate) : null,
+        },
+      })
+
+      return reply.code(201).send({ campaign: created })
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[listings/ebay/campaigns] create failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.patch<{ Params: { id: string } }>(
+    '/listings/ebay/campaigns/:id',
+    async (request, reply) => {
+      try {
+        const { id } = request.params
+        const body = request.body as {
+          status?: 'DRAFT' | 'RUNNING' | 'PAUSED' | 'ENDED'
+          name?: string
+          bidPercentage?: number
+          dailyBudget?: number
+          endDate?: string | null
+        }
+
+        const existing = await prisma.ebayCampaign.findUnique({ where: { id } })
+        if (!existing) return reply.code(404).send({ error: 'Campaign not found' })
+
+        // Status-transition rules. ENDED is terminal; can't unwind.
+        if (existing.status === 'ENDED' && body.status && body.status !== 'ENDED') {
+          return reply.code(409).send({
+            error: 'ENDED campaigns are terminal — create a new one instead.',
+          })
+        }
+
+        const data: any = {}
+        if (body.status) data.status = body.status
+        if (typeof body.name === 'string' && body.name.trim().length > 0) {
+          data.name = body.name.trim()
+        }
+        if (typeof body.bidPercentage === 'number' && existing.fundingStrategy === 'STANDARD') {
+          if (body.bidPercentage <= 0 || body.bidPercentage > 100) {
+            return reply.code(400).send({
+              error: 'bidPercentage must be between 0 and 100',
+            })
+          }
+          data.bidPercentage = body.bidPercentage
+        }
+        if (typeof body.dailyBudget === 'number' && existing.fundingStrategy === 'ADVANCED') {
+          if (body.dailyBudget <= 0) {
+            return reply.code(400).send({
+              error: 'dailyBudget must be positive',
+            })
+          }
+          data.dailyBudget = body.dailyBudget
+        }
+        if (body.endDate !== undefined) {
+          data.endDate = body.endDate ? new Date(body.endDate) : null
+        }
+
+        const updated = await prisma.ebayCampaign.update({ where: { id }, data })
+        return { campaign: updated }
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[listings/ebay/campaigns] patch failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
+  fastify.delete<{ Params: { id: string } }>(
+    '/listings/ebay/campaigns/:id',
+    async (request, reply) => {
+      try {
+        const { id } = request.params
+        const existing = await prisma.ebayCampaign.findUnique({ where: { id } })
+        if (!existing) return reply.code(404).send({ error: 'Campaign not found' })
+
+        // Only DRAFT campaigns can be hard-deleted. Anything live on
+        // eBay (or formerly live) needs the audit trail of an
+        // ENDED status — operators rely on the historical metrics.
+        if (existing.status !== 'DRAFT') {
+          return reply.code(409).send({
+            error: 'Only DRAFT campaigns can be deleted. PATCH status to ENDED instead to preserve metrics history.',
+          })
+        }
+        await prisma.ebayCampaign.delete({ where: { id } })
+        return { ok: true }
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[listings/ebay/campaigns] delete failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
+  // ─────────────────────────────────────────────────────────────────
   // POST /api/listings/amazon/suppressions — manually log a suppression
   //
   // S.5 — used by the resolver UI when an operator wants to record a
