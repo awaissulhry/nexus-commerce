@@ -453,8 +453,19 @@ export default function AppSidebar() {
             indicator={
               (counts.operations?.pendingOrders ?? 0) > 0 ? 'action' : undefined
             }
-            active={pathname === '/fulfillment/outbound' || pathname.startsWith('/fulfillment/outbound/')}
+            active={pathname === '/fulfillment/outbound' && !pathname.includes('/analytics')}
           />
+          {/* O.33: analytics sub-link rendered when operator is anywhere
+              in the outbound section. Discoverable from sidebar without
+              cluttering the top-level for non-active users. */}
+          {pathname.startsWith('/fulfillment/outbound') && (
+            <NavItem
+              href="/fulfillment/outbound/analytics"
+              icon={BarChart3}
+              label="↳ Outbound Analytics"
+              active={pathname === '/fulfillment/outbound/analytics'}
+            />
+          )}
           <NavItem
             href="/fulfillment/replenishment"
             icon={RefreshCw}

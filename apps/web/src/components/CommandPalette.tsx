@@ -59,6 +59,7 @@ const COMMANDS: Command[] = [
   { id: 'goto-pick-list', label: 'Go to Pick List (warehouse picking)', icon: ClipboardList, href: '/fulfillment/outbound/pick-list', group: 'Navigation', chord: 'g k' },
   { id: 'goto-outbound', label: 'Go to Outbound (pending shipments)', icon: ClipboardList, href: '/fulfillment/outbound', group: 'Navigation', chord: 'g f' },
   { id: 'goto-shipping-rules', label: 'Go to Shipping Rules', icon: FileEdit, href: '/fulfillment/outbound/rules', group: 'Navigation' },
+  { id: 'goto-outbound-analytics', label: 'Go to Outbound Analytics (cycle time, late rate, carrier perf)', icon: Activity, href: '/fulfillment/outbound/analytics', group: 'Navigation' },
   { id: 'goto-qc-queue', label: 'Go to QC Queue (inbound supervisor review)', icon: ClipboardList, href: '/fulfillment/inbound/qc-queue', group: 'Navigation', chord: 'g q' },
   { id: 'goto-routing-rules', label: 'Go to Order Routing Rules', icon: FileEdit, href: '/fulfillment/routing-rules', group: 'Navigation' },
   { id: 'goto-cycle-count', label: 'Go to Cycle Counts (physical inventory)', icon: ClipboardList, href: '/fulfillment/stock/cycle-count', group: 'Navigation' },
