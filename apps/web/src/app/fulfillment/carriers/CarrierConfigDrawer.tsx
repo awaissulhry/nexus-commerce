@@ -188,11 +188,19 @@ export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: 
     }
   }
 
-  const disconnect = async () => {
+  // CR.18: two-tier disconnect. Plain disconnect leaves service
+  // mappings + pickup schedules + preferences intact so a reconnect
+  // restores the operator's setup. Purge disconnect (held alt key)
+  // sweeps everything for a clean slate. UI surfaces the purge option
+  // through a separate "Purge" button later — for now the askConfirm
+  // dialog mentions the difference + the soft path is the default.
+  const disconnect = async (purge = false) => {
     const ok = await askConfirm({
       title: t('carriers.disconnect.title', { name: def.label }),
-      description: t('carriers.disconnect.description'),
-      confirmLabel: t('carriers.action.disconnect'),
+      description: purge
+        ? 'Purge: also remove all service mappings + cancel pickups. Existing shipments preserved. This is destructive — only use when starting over.'
+        : t('carriers.disconnect.description'),
+      confirmLabel: purge ? 'Purge + disconnect' : t('carriers.action.disconnect'),
       tone: 'danger',
     })
     if (!ok) return
@@ -200,9 +208,17 @@ export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: 
     try {
       const res = await fetch(
         `${getBackendUrl()}/api/fulfillment/carriers/${def.code}/disconnect`,
-        { method: 'POST' },
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ purge }),
+        },
       )
       if (!res.ok) throw new Error('Disconnect failed')
+      const body = await res.json().catch(() => ({}))
+      if (purge && (body.mappings > 0 || body.pickupsCancelled > 0)) {
+        toast.success(`Purged · ${body.mappings} mappings, ${body.pickupsCancelled} pickups cancelled`)
+      }
       onChanged()
       onClose()
     } catch (e: any) {
@@ -331,9 +347,23 @@ export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: 
       <ModalFooter className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           {isConnected && (
-            <Button variant="danger" size="sm" onClick={disconnect} disabled={busy}>
-              {t('carriers.action.disconnect')}
-            </Button>
+            <>
+              <Button variant="danger" size="sm" onClick={() => disconnect(false)} disabled={busy}>
+                {t('carriers.action.disconnect')}
+              </Button>
+              {/* CR.18: purge variant for clean-slate disconnects.
+                  Hidden behind alt-click + a destructive label so it
+                  isn't the default path. */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => disconnect(true)}
+                disabled={busy}
+                title="Disconnect + purge service mappings and cancel pickups"
+              >
+                Purge
+              </Button>
+            </>
           )}
         </div>
         <div className="flex items-center gap-2">

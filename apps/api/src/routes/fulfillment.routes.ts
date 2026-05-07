@@ -8475,14 +8475,47 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/fulfillment/carriers/:code/disconnect', async (request, reply) => {
     try {
       const { code } = request.params as { code: string }
+      const body = (request.body ?? {}) as { purge?: boolean }
       const existing = await prisma.carrier.findUnique({ where: { code: code as any } })
       if (!existing) return reply.code(404).send({ error: 'Carrier not connected' })
-      await prisma.carrier.update({
-        where: { code: code as any },
-        data: { isActive: false, credentialsEncrypted: null },
-      })
-      return { ok: true }
+
+      // CR.18: by default a soft-disconnect — flips isActive false +
+      // nulls credentials, but leaves CarrierServiceMapping rows,
+      // PickupSchedule rows, and preferences alone so a reconnect
+      // restores the operator's setup. With { purge: true } we sweep
+      // dependent rows for a clean slate.
+      const swept = body.purge
+        ? await prisma.$transaction(async (tx) => {
+            const mappingsCount = await tx.carrierServiceMapping.deleteMany({
+              where: { carrierId: existing.id },
+            })
+            // Cancel rather than delete pickups so the operator can see
+            // historical bookings + the externalRefs that hit Sendcloud.
+            const pickupsCount = await tx.pickupSchedule.updateMany({
+              where: { carrierId: existing.id, status: 'ACTIVE' },
+              data: { status: 'CANCELLED' },
+            })
+            await tx.carrier.update({
+              where: { code: code as any },
+              data: {
+                isActive: false,
+                credentialsEncrypted: null,
+                lastVerifiedAt: null,
+                lastError: null,
+                lastErrorAt: null,
+                preferences: undefined,
+              },
+            })
+            return { mappings: mappingsCount.count, pickupsCancelled: pickupsCount.count }
+          })
+        : (await prisma.carrier.update({
+            where: { code: code as any },
+            data: { isActive: false, credentialsEncrypted: null, lastError: null, lastErrorAt: null },
+          }), { mappings: 0, pickupsCancelled: 0 })
+
+      return { ok: true, purged: !!body.purge, ...swept }
     } catch (error: any) {
+      fastify.log.error({ err: error }, '[carriers/:code/disconnect] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })
