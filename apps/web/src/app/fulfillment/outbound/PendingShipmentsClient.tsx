@@ -841,27 +841,41 @@ export default function PendingShipmentsClient() {
               </>
             )}
           </div>
-          {/* O.70: show-snoozed toggle. Only renders when at least
-              one snooze is currently in effect — avoids visual noise
-              for users who never use the feature. Count reflects
-              currently-active (not yet expired) snoozes. */}
+          {/* O.70 + O.89: show-snoozed toggle + clear-all wake. Only
+              renders when at least one snooze is currently in effect.
+              Clicking the count flips the show-toggle; clicking the X
+              wakes them all (clears the localStorage snooze map). */}
           {(() => {
             const activeSnoozeCount = Object.values(snoozedUntil).filter(
               (until) => until > Date.now(),
             ).length
             if (activeSnoozeCount === 0) return null
             return (
-              <button
-                onClick={() => setShowSnoozed((s) => !s)}
-                className={`h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 ${
-                  showSnoozed
-                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                    : 'text-slate-600 border-slate-200 hover:bg-slate-50'
-                }`}
-              >
-                <Clock size={12} />
-                {t('outbound.pending.snooze.showToggle', { n: activeSnoozeCount })}
-              </button>
+              <div className="inline-flex items-center">
+                <button
+                  onClick={() => setShowSnoozed((s) => !s)}
+                  className={`h-8 px-3 text-base border rounded-l-md inline-flex items-center gap-1.5 ${
+                    showSnoozed
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : 'text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <Clock size={12} />
+                  {t('outbound.pending.snooze.showToggle', { n: activeSnoozeCount })}
+                </button>
+                <button
+                  onClick={() => {
+                    setSnoozedUntil({})
+                    try { localStorage.setItem(SNOOZE_KEY, '{}') } catch { /* quota */ }
+                    setShowSnoozed(false)
+                    toast.success(t('outbound.pending.snooze.wakeAllToast', { n: activeSnoozeCount }))
+                  }}
+                  className="h-8 w-8 inline-flex items-center justify-center border border-l-0 border-slate-200 rounded-r-md text-slate-500 hover:text-slate-900 hover:bg-slate-50"
+                  title={t('outbound.pending.snooze.wakeAllTooltip')}
+                >
+                  <X size={12} />
+                </button>
+              </div>
             )
           })()}
           <button

@@ -339,6 +339,8 @@
   "outbound.pending.snooze.wake": "Bring this row back to the active list",
   "outbound.pending.snooze.wakeLabel": "Wake",
   "outbound.pending.snooze.showToggle": "{n} snoozed",
+  "outbound.pending.snooze.wakeAllToast": "{n} order(s) woken",
+  "outbound.pending.snooze.wakeAllTooltip": "Wake all snoozed rows",
   "outbound.pending.snooze.bulkButton": "Snooze 1h",
   "outbound.pending.snooze.bulkTooltip": "Hide all selected rows for 1 hour",
   "outbound.pending.snooze.bulkToast": "{n} order(s) snoozed for {hours}h",
