@@ -58,7 +58,7 @@ interface Props {
   onChanged: () => void
 }
 
-type TabId = 'credentials' | 'services' | 'webhooks'
+type TabId = 'credentials' | 'services' | 'rules' | 'webhooks'
 
 export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: Props) {
   const { t } = useTranslations()
@@ -214,6 +214,13 @@ export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: 
     const list: Tab[] = [{ id: 'credentials', label: 'Credentials' }]
     if (def.code === 'SENDCLOUD') {
       list.push({ id: 'services', label: 'Services' })
+    }
+    // Rules tab is available for any carrier the rules engine can
+    // target (which is any with a real CarrierCode value).
+    if (def.code !== 'MANUAL') {
+      list.push({ id: 'rules', label: 'Rules' })
+    }
+    if (def.code === 'SENDCLOUD') {
       list.push({ id: 'webhooks', label: 'Webhooks' })
     }
     return list
@@ -283,6 +290,9 @@ export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: 
           )}
           {activeTab === 'services' && def.code === 'SENDCLOUD' && (
             <ServicesTab carrierCode={def.code} />
+          )}
+          {activeTab === 'rules' && (
+            <RulesTab carrierCode={def.code} />
           )}
           {activeTab === 'webhooks' && def.code === 'SENDCLOUD' && (
             <WebhooksTab />
@@ -641,6 +651,108 @@ function ServicesTab({ carrierCode }: { carrierCode: string }) {
           Add mapping
         </Button>
       )}
+    </div>
+  )
+}
+
+// ── Rules tab ──────────────────────────────────────────────────────
+// CR.14: surfaces ShippingRule rows whose actions.preferCarrierCode
+// targets this carrier. Lets operators jump from "what does this
+// carrier do" to "what rules drive shipments to it" without leaving
+// the drawer. Lists name, priority, lastFiredAt, triggerCount; full
+// edit happens at /fulfillment/outbound/rules.
+type ShippingRule = {
+  id: string
+  name: string
+  description: string | null
+  priority: number
+  isActive: boolean
+  conditions: any
+  actions: { preferCarrierCode?: string; preferServiceCode?: string }
+  lastFiredAt: string | null
+  triggerCount: number
+}
+
+function RulesTab({ carrierCode }: { carrierCode: string }) {
+  const [rules, setRules] = useState<ShippingRule[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let abort = false
+    fetch(`${getBackendUrl()}/api/fulfillment/shipping-rules`, { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : { items: [] })
+      .then((d) => { if (!abort) setRules(d.items ?? []) })
+      .catch(() => { /* */ })
+      .finally(() => { if (!abort) setLoading(false) })
+    return () => { abort = true }
+  }, [])
+
+  const matching = useMemo(
+    () => rules.filter((r) => r.actions?.preferCarrierCode === carrierCode),
+    [rules, carrierCode],
+  )
+  const matchingActive = matching.filter((r) => r.isActive)
+
+  if (loading) {
+    return <div className="text-base text-slate-500 dark:text-slate-400 py-2">Loading rules…</div>
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-base text-slate-700 dark:text-slate-300">
+        Shipping rules route shipments to this carrier when their conditions match. {matching.length === 0 ? 'No rules target this carrier yet.' : `${matchingActive.length} active of ${matching.length} total target this carrier.`}
+      </p>
+
+      {matching.length > 0 && (
+        <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+          <table className="w-full text-base">
+            <thead className="bg-slate-50 dark:bg-slate-800 text-xs uppercase tracking-wider text-slate-600 dark:text-slate-300">
+              <tr>
+                <th className="text-left px-3 py-2 font-semibold">Name</th>
+                <th className="text-left px-3 py-2 font-semibold w-16">Priority</th>
+                <th className="text-left px-3 py-2 font-semibold w-20">Status</th>
+                <th className="text-left px-3 py-2 font-semibold w-24">Triggers</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+              {matching.map((r) => (
+                <tr key={r.id} className="text-slate-800 dark:text-slate-100">
+                  <td className="px-3 py-2">
+                    <div className="font-medium">{r.name}</div>
+                    {r.description && (
+                      <div className="text-xs text-slate-500 dark:text-slate-400">{r.description}</div>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 font-mono text-sm">{r.priority}</td>
+                  <td className="px-3 py-2">
+                    {r.isActive
+                      ? <Badge variant="success" size="sm">Active</Badge>
+                      : <Badge variant="default" size="sm">Off</Badge>}
+                  </td>
+                  <td className="px-3 py-2 text-sm text-slate-600 dark:text-slate-300">
+                    {r.triggerCount} {r.lastFiredAt && (<span className="text-xs text-slate-400">· last {relTime(r.lastFiredAt)}</span>)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="flex items-center gap-2">
+        <a
+          href={`/fulfillment/outbound/rules${matching.length > 0 ? '' : `?carrierCode=${carrierCode}`}`}
+          className="inline-flex items-center gap-1 px-3 h-8 bg-blue-600 hover:bg-blue-700 text-white text-base rounded"
+        >
+          <Plus size={11} /> {matching.length > 0 ? 'Manage rules' : 'Add rule'}
+        </a>
+        <a
+          href="/fulfillment/outbound/rules"
+          className="text-sm text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
+        >
+          Open rules workspace <ExternalLink size={10} />
+        </a>
+      </div>
     </div>
   )
 }
