@@ -76,6 +76,10 @@ type DrawerOrder = {
     labelPrintedAt: string | null
     shippedAt: string | null
     deliveredAt: string | null
+    // O.83: hold-state metadata so the drawer can surface why a
+    // shipment is on hold + offer one-click release.
+    heldAt: string | null
+    heldReason: string | null
     items: Array<{ id: string; sku: string; quantity: number }>
     warehouse?: { code: string; name: string } | null
     createdAt: string
@@ -563,8 +567,49 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                 }
                 if (ship.status === 'ON_HOLD') {
                   return (
-                    <div className="flex items-center justify-center py-2">
+                    <div className="flex items-start gap-2 py-2 bg-amber-50 border border-amber-200 rounded px-3">
                       <Badge variant="warning" size="sm">ON HOLD</Badge>
+                      <div className="flex-1 text-sm">
+                        {/* O.83: surface heldReason inline so the
+                            operator doesn't have to dig the audit
+                            log to learn why something is blocked. */}
+                        {ship.heldReason ? (
+                          <div className="text-amber-900">{ship.heldReason}</div>
+                        ) : (
+                          <div className="text-amber-700">{t('outbound.drawer.held.noReason')}</div>
+                        )}
+                        {ship.heldAt && (
+                          <div className="text-xs text-amber-700 tabular-nums">
+                            {t('outbound.drawer.held.since', {
+                              date: new Date(ship.heldAt).toLocaleString('it-IT', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              }),
+                            })}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={async () => {
+                          const res = await fetch(
+                            `${getBackendUrl()}/api/fulfillment/shipments/${ship.id}/release`,
+                            { method: 'POST' },
+                          )
+                          if (!res.ok) {
+                            const out = await res.json().catch(() => ({}))
+                            toast.error(out.error ?? t('common.error'))
+                            return
+                          }
+                          toast.success(t('outbound.drawer.held.released'))
+                          emitInvalidation({ type: 'shipment.updated', meta: { shipmentId: ship.id } })
+                          fetchDetail()
+                        }}
+                        className="h-7 px-3 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700 inline-flex items-center gap-1"
+                      >
+                        {t('outbound.drawer.held.release')}
+                      </button>
                     </div>
                   )
                 }
