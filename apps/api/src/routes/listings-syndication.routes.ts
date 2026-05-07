@@ -818,7 +818,20 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           id: true, channel: true, marketplace: true,
           listingStatus: true, syncStatus: true, lastSyncStatus: true,
           lastSyncedAt: true, lastSyncError: true,
-          price: true, quantity: true, externalListingId: true, isPublished: true,
+          price: true, quantity: true,
+          // C.10 — fields the drawer's Per-channel comparison panel
+          // needs to render per-marketplace customization inline:
+          // master values for delta math, override flags so the
+          // operator sees which fields are explicitly overridden vs
+          // inherited, and effective title/description for the title
+          // mismatch indicator. Stored as part of ChannelListing — no
+          // join cost.
+          title: true, titleOverride: true, masterTitle: true,
+          masterPrice: true, masterQuantity: true,
+          priceOverride: true, quantityOverride: true,
+          followMasterTitle: true, followMasterPrice: true,
+          followMasterQuantity: true, followMasterDescription: true,
+          externalListingId: true, isPublished: true,
         },
         orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }],
       })
@@ -952,6 +965,26 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           externalListingId: c.externalListingId,
           isPublished: c.isPublished,
           listingUrl: listingUrlFor(c.channel, c.marketplace, c.externalListingId),
+          // C.10 — comparison-panel fields. effectiveTitle picks the
+          // override when set, else the channel-stored title.
+          title:
+            (c.titleOverride && c.titleOverride.length > 0
+              ? c.titleOverride
+              : c.title) ?? null,
+          masterTitle: c.masterTitle,
+          masterPrice: c.masterPrice == null ? null : Number(c.masterPrice),
+          masterQuantity: c.masterQuantity,
+          // Override indicators for per-marketplace customization view —
+          // surfaces "this channel's price/qty/title is explicitly
+          // overridden" without forcing a follow-up drawer-load.
+          hasPriceOverride: c.priceOverride != null,
+          hasQuantityOverride: c.quantityOverride != null,
+          hasTitleOverride:
+            c.titleOverride != null && c.titleOverride.length > 0,
+          followMasterTitle: c.followMasterTitle,
+          followMasterPrice: c.followMasterPrice,
+          followMasterQuantity: c.followMasterQuantity,
+          followMasterDescription: c.followMasterDescription,
         })),
         // S.5 — Amazon-specific context (null for non-Amazon channels)
         amazonContext,

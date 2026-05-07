@@ -3483,7 +3483,13 @@ function SuppressionLogModalLazy(props: {
 }
 
 // ────────────────────────────────────────────────────────────────────
-// ChannelsTab — companions: this product across all channels
+// ChannelsTab — comparison panel: this product across all channels.
+// C.10 — anchors the comparison with a master reference card at the
+// top, then renders each listing (current + companions) with drift
+// indicators against master inline + per-field override pills. The
+// operator sees at a glance: which channel/market has the highest
+// price, where qty diverges, what's explicitly overridden vs
+// inherited from master.
 // ────────────────────────────────────────────────────────────────────
 function ChannelsTab({
   listing,
@@ -3493,11 +3499,30 @@ function ChannelsTab({
   onSwitchListing: (id: string) => void
 }) {
   const companions = (listing.companions ?? []) as any[]
+  // Master reference — anchored to the product, identical across
+  // every card's drift math. Falls back to product-level fields when
+  // ChannelListing.master* aren't populated.
+  const master = {
+    title:
+      listing.masterTitle ??
+      listing.product?.name ??
+      null,
+    price:
+      listing.masterPrice ??
+      (listing.product?.basePrice ?? null),
+    quantity:
+      listing.masterQuantity ??
+      (listing.product?.totalStock ?? null),
+  }
   return (
     <div className="space-y-3">
       <div className="text-sm text-slate-600">
         This product is on <span className="font-semibold">{companions.length + 1}</span> channel/marketplace combo{companions.length === 0 ? '' : 's'}.
+        {' '}Each card below shows drift vs master.
       </div>
+
+      {/* Master reference card */}
+      <ComparisonMasterCard master={master} />
 
       {/* Self */}
       <CompanionCard
@@ -3507,8 +3532,14 @@ function ChannelsTab({
         syncStatus={listing.syncStatus}
         price={listing.price}
         quantity={listing.quantity}
+        title={listing.title}
         lastSyncError={listing.lastSyncError}
         listingUrl={listing.listingUrl}
+        master={master}
+        hasPriceOverride={listing.priceOverride != null}
+        hasQuantityOverride={listing.quantityOverride != null}
+        hasTitleOverride={listing.titleOverride != null && listing.titleOverride.length > 0}
+        followMasterPrice={listing.followMasterPrice}
         isCurrent
       />
 
@@ -3522,8 +3553,14 @@ function ChannelsTab({
           syncStatus={c.syncStatus}
           price={c.price}
           quantity={c.quantity}
+          title={c.title}
           lastSyncError={c.lastSyncError}
           listingUrl={c.listingUrl}
+          master={master}
+          hasPriceOverride={c.hasPriceOverride}
+          hasQuantityOverride={c.hasQuantityOverride}
+          hasTitleOverride={c.hasTitleOverride}
+          followMasterPrice={c.followMasterPrice}
           onClick={() => onSwitchListing(c.id)}
         />
       ))}
@@ -3545,6 +3582,36 @@ function ChannelsTab({
   )
 }
 
+// C.10 — leftmost reference in the comparison stack. Distinct slate
+// background so it never reads as a channel card. Shows master
+// price/qty/title; every CompanionCard below diffs against these
+// values via the existing DriftBadge component.
+function ComparisonMasterCard({
+  master,
+}: {
+  master: { title: string | null; price: number | null; quantity: number | null }
+}) {
+  return (
+    <div className="flex items-start gap-3 p-2.5 border border-slate-300 rounded-md bg-slate-50">
+      <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border border-slate-300 rounded bg-white text-slate-700 flex-shrink-0">
+        Master
+      </span>
+      <div className="flex-1 min-w-0">
+        {master.title && (
+          <div className="text-sm text-slate-700 truncate" title={master.title}>
+            {master.title}
+          </div>
+        )}
+        <div className="flex items-center gap-3 mt-0.5 text-xs tabular-nums text-slate-500">
+          {master.price != null && <span>Price {master.price.toFixed(2)}</span>}
+          {master.quantity != null && <span>Stock {master.quantity}</span>}
+        </div>
+      </div>
+      <div className="text-xs text-slate-400 flex-shrink-0">reference</div>
+    </div>
+  )
+}
+
 function CompanionCard({
   channel,
   marketplace,
@@ -3552,8 +3619,14 @@ function CompanionCard({
   syncStatus,
   price,
   quantity,
+  title,
   lastSyncError,
   listingUrl,
+  master,
+  hasPriceOverride,
+  hasQuantityOverride,
+  hasTitleOverride,
+  followMasterPrice,
   onClick,
   isCurrent,
 }: {
@@ -3563,32 +3636,93 @@ function CompanionCard({
   syncStatus?: string | null
   price: number | null
   quantity: number | null
+  title?: string | null
   lastSyncError?: string | null
   listingUrl?: string | null
+  master: { title: string | null; price: number | null; quantity: number | null }
+  hasPriceOverride?: boolean
+  hasQuantityOverride?: boolean
+  hasTitleOverride?: boolean
+  followMasterPrice?: boolean
   onClick?: () => void
   isCurrent?: boolean
 }) {
+  // C.10 — drift computations + override surfacing. Logic is the same
+  // shape as MatrixCell's: divergence from master regardless of the
+  // followMaster flags (a "follows master" cell with stale value IS
+  // drift), and explicit override badges so the operator can tell at
+  // a glance which fields were touched per-marketplace vs inherited.
+  const priceDrift =
+    price != null && master.price != null && price !== master.price
+      ? price - master.price
+      : null
+  const qtyDrift =
+    quantity != null &&
+    master.quantity != null &&
+    quantity !== master.quantity
+      ? quantity - master.quantity
+      : null
+  const titleDrift =
+    title != null &&
+    master.title != null &&
+    title.trim() !== master.title.trim()
+  const truncatedTitle =
+    title && title.length > 60 ? title.slice(0, 60) + '…' : title
+
   const Inner = (
-    <div className={`flex items-center gap-3 p-2.5 border rounded-md ${isCurrent ? 'border-blue-300 bg-blue-50/50' : 'border-slate-200 bg-white hover:bg-slate-50 cursor-pointer'}`}>
-      <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[channel] ?? ''} flex-shrink-0`}>
-        {channel}
-      </span>
-      <span className="font-mono text-sm font-semibold bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 flex-shrink-0">
-        {marketplace}
-      </span>
-      <div className="flex items-center gap-1.5 flex-shrink-0">
-        <StatusBadge status={listingStatus} />
-        {syncStatus && syncStatus !== 'IDLE' && <StatusBadge status={syncStatus} />}
+    <div
+      className={`p-2.5 border rounded-md ${isCurrent ? 'border-blue-300 bg-blue-50/50' : 'border-slate-200 bg-white hover:bg-slate-50 cursor-pointer'}`}
+    >
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[channel] ?? ''} flex-shrink-0`}>
+          {channel}
+        </span>
+        <span className="font-mono text-sm font-semibold bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 flex-shrink-0">
+          {marketplace}
+        </span>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <StatusBadge status={listingStatus} />
+          {syncStatus && syncStatus !== 'IDLE' && <StatusBadge status={syncStatus} />}
+        </div>
+        <div className="ml-auto flex items-center gap-2 text-sm tabular-nums flex-wrap">
+          {price != null && (
+            <span className="text-slate-700 inline-flex items-center gap-1">
+              {Number(price).toFixed(2)}
+              {priceDrift != null && <DriftBadge delta={priceDrift} unit="price" />}
+              {hasPriceOverride && <OverridePill label="override" />}
+              {!hasPriceOverride && followMasterPrice === false && (
+                <OverridePill label="unfollowed" tone="amber" />
+              )}
+            </span>
+          )}
+          {quantity != null && (
+            <span className="text-slate-500 inline-flex items-center gap-1">
+              {quantity} pcs
+              {qtyDrift != null && <DriftBadge delta={qtyDrift} unit="qty" />}
+              {hasQuantityOverride && <OverridePill label="override" />}
+            </span>
+          )}
+          {isCurrent ? (
+            <Badge variant="info" size="sm">Current</Badge>
+          ) : (
+            <ArrowUpRight size={12} className="text-slate-400" />
+          )}
+        </div>
       </div>
-      <div className="ml-auto flex items-center gap-3 text-sm tabular-nums">
-        {price != null && <span className="text-slate-700">{Number(price).toFixed(2)}</span>}
-        {quantity != null && <span className="text-slate-500">{quantity} pcs</span>}
-        {isCurrent ? (
-          <Badge variant="info" size="sm">Current</Badge>
-        ) : (
-          <ArrowUpRight size={12} className="text-slate-400" />
-        )}
-      </div>
+      {(truncatedTitle || titleDrift || hasTitleOverride) && (
+        <div className="mt-1.5 flex items-center gap-2 text-xs text-slate-500 flex-wrap">
+          <span className="text-slate-400 uppercase tracking-wider">Title</span>
+          <span className="truncate flex-1 min-w-0" title={title ?? undefined}>
+            {truncatedTitle ?? '—'}
+          </span>
+          {titleDrift && (
+            <span className="inline-flex items-center px-1 rounded border bg-amber-50 border-amber-200 text-amber-700">
+              ⚠ differs from master
+            </span>
+          )}
+          {hasTitleOverride && <OverridePill label="override" />}
+        </div>
+      )}
     </div>
   )
   if (isCurrent) return <div>{Inner}{lastSyncError && <ErrorRow error={lastSyncError} />}</div>
@@ -3607,6 +3741,32 @@ function CompanionCard({
         </a>
       )}
     </div>
+  )
+}
+
+// C.10 — small badge that flags an explicit per-marketplace override
+// on a field. Distinct from DriftBadge: a drift badge says "the value
+// differs from master right now"; an override pill says "the operator
+// explicitly set this value to be different (or is unfollowing the
+// master link)." Both can co-occur — that's expected.
+function OverridePill({
+  label,
+  tone = 'blue',
+}: {
+  label: string
+  tone?: 'blue' | 'amber'
+}) {
+  const toneClass =
+    tone === 'amber'
+      ? 'bg-amber-50 border-amber-200 text-amber-700'
+      : 'bg-blue-50 border-blue-200 text-blue-700'
+  return (
+    <span
+      className={`inline-flex items-center px-1 rounded border text-xs uppercase tracking-wider ${toneClass}`}
+      aria-label={label}
+    >
+      {label}
+    </span>
   )
 }
 

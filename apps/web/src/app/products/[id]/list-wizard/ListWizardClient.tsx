@@ -105,6 +105,12 @@ export interface StepProps {
 interface Props {
   initialWizard: WizardData
   product: WizardProduct
+  /** C.7 — true when /start created a fresh ListingWizard row (vs
+   *  resuming an existing DRAFT). When true, the client fires a
+   *  one-shot wizard.created broadcast on mount so /products/drafts
+   *  in another tab refreshes within ~200ms instead of waiting for
+   *  its 30s polling tick. */
+  isNew?: boolean
 }
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
@@ -112,6 +118,7 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 export default function ListWizardClient({
   initialWizard,
   product,
+  isNew,
 }: Props) {
   const router = useRouter()
 
@@ -463,6 +470,24 @@ export default function ListWizardClient({
     }, 1000)
     return () => window.clearInterval(id)
   }, [currentStep])
+
+  // C.7 — one-shot wizard.created broadcast on fresh mount. The /start
+  // handler returns isNew=true exactly when it created a new row (vs
+  // resuming an existing DRAFT). Guarded by a ref so React strict-mode
+  // double-invocation, hot reload, and re-mounts can't double-fire
+  // the event. /products/drafts subscribes and refreshes within
+  // ~200ms cross-tab instead of waiting for its 30s polling tick.
+  const wizardCreatedFiredRef = useRef(false)
+  useEffect(() => {
+    if (!isNew) return
+    if (wizardCreatedFiredRef.current) return
+    wizardCreatedFiredRef.current = true
+    emitInvalidation({
+      type: 'wizard.created',
+      id: wizardId,
+      meta: { productId: product.id },
+    })
+  }, [isNew, wizardId, product.id])
 
   // Step components mutate their slice of wizardState via this
   // callback. The patch is shallow-merged at the top level (so Step

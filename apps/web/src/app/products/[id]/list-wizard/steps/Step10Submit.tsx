@@ -177,6 +177,27 @@ export default function Step10Submit({
             failedCount: json.submissions.filter((s) => s.status === 'FAILED').length,
           },
         })
+        // C.7 — fire listing.created per channel that landed LIVE. The
+        // wizard.submitted event covers the wizard-specific
+        // subscribers; listing.created lets channel-list pages that
+        // only subscribe to listing-level events refresh too. Emitted
+        // once per channel so consumers can scope refetches by
+        // channelKey if they want.
+        for (const s of json.submissions) {
+          if (s.status === 'LIVE' || s.status === 'SUBMITTED') {
+            emitInvalidation({
+              type: 'listing.created',
+              id: s.submissionId ?? s.channelKey,
+              meta: {
+                productId: product.id,
+                channelKey: s.channelKey,
+                platform: s.platform,
+                marketplace: s.marketplace,
+                source: 'wizard-publish',
+              },
+            })
+          }
+        }
         stopPolling()
         return
       }
@@ -301,6 +322,24 @@ export default function Step10Submit({
             failedCount: json.submissions.filter((s) => s.status === 'FAILED').length,
           },
         })
+        // C.7 — listing.created per LIVE/SUBMITTED channel. Mirrors
+        // the polling-terminal branch above so listing-only
+        // subscribers refresh on either path.
+        for (const s of json.submissions) {
+          if (s.status === 'LIVE' || s.status === 'SUBMITTED') {
+            emitInvalidation({
+              type: 'listing.created',
+              id: s.submissionId ?? s.channelKey,
+              meta: {
+                productId: product.id,
+                channelKey: s.channelKey,
+                platform: s.platform,
+                marketplace: s.marketplace,
+                source: 'wizard-publish',
+              },
+            })
+          }
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))

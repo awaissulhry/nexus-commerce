@@ -54,6 +54,7 @@ export type InvalidationType =
   | 'listing.created'
   | 'listing.deleted'
   | 'wizard.submitted'
+  | 'wizard.created'
   | 'wizard.deleted'
   | 'bulk-job.completed'
   | 'pim.changed'

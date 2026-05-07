@@ -21,6 +21,10 @@ interface RawWizardResponse {
     updatedAt?: string
   }
   product?: WizardProduct
+  /** C.7 — true when /start created a fresh ListingWizard row
+   *  (vs resuming an existing DRAFT). Drives the one-shot
+   *  wizard.created broadcast on the client. */
+  isNew?: boolean
   error?: string
 }
 
@@ -115,7 +119,13 @@ export default async function ListWizardPage({
     updatedAt: json.wizard.updatedAt,
   }
 
-  return <ListWizardClient initialWizard={wizard} product={json.product} />
+  return (
+    <ListWizardClient
+      initialWizard={wizard}
+      product={json.product}
+      isNew={json.isNew === true}
+    />
+  )
 }
 
 function FailureView({

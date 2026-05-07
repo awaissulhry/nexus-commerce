@@ -171,8 +171,11 @@ export default function DraftsClient() {
       url,
       intervalMs: 30_000,
       // wizard.* keeps wizard rows fresh; product.deleted/created/updated
-      // keeps the Product DRAFT side in sync.
+      // keeps the Product DRAFT side in sync. wizard.created (C.7) lets
+      // a fresh wizard opened in another tab appear here within ~200ms
+      // instead of waiting for the 30s polling tick.
       invalidationTypes: [
+        'wizard.created',
         'wizard.submitted',
         'wizard.deleted',
         'product.deleted',

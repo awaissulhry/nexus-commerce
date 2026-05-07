@@ -660,7 +660,11 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         },
       })
 
-      return { wizard, product }
+      // C.7 — surface the find-or-create discriminator so the client
+      // can fire a one-shot wizard.created broadcast on fresh mounts.
+      // BroadcastChannel is browser-only, so the emission has to come
+      // from the client; isNew is the cleanest hint.
+      return { wizard, product, isNew }
     },
   )
 
