@@ -1135,11 +1135,39 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             ruleName: routingRuleName,
           }
 
+          // O.16: shipping rules — decide carrier + service from
+          // operator-defined rules. Caller-supplied carrierCode wins
+          // (explicit override); otherwise the rules engine picks;
+          // otherwise fall back to SENDCLOUD as the original default.
+          let resolvedCarrier = (body.carrierCode as any) ?? null
+          let resolvedService: string | null = null
+          if (!body.carrierCode) {
+            const { applyShippingRules } = await import('../services/shipping-rules/applier.js')
+            const dest = (order.shippingAddress as any)?.country
+              ?? (order.shippingAddress as any)?.CountryCode
+              ?? null
+            const applied = await applyShippingRules({
+              channel: order.channel,
+              marketplace: order.marketplace,
+              destinationCountry: typeof dest === 'string' ? dest : null,
+              weightGrams: null, // unknown until pack station
+              orderTotalCents: Math.round(Number(order.totalPrice) * 100),
+              itemCount: order.items.length,
+              isPrime: order.isPrime ?? null,
+              hasHazmat: false,
+              skus: order.items.map((it) => it.sku),
+            })
+            if (applied?.actions.preferCarrierCode) {
+              resolvedCarrier = applied.actions.preferCarrierCode as any
+              resolvedService = applied.actions.preferServiceCode ?? null
+            }
+          }
           await prisma.shipment.create({
             data: {
               orderId: oid,
               warehouseId: resolvedWarehouseId,
-              carrierCode: (body.carrierCode as any) ?? 'SENDCLOUD',
+              carrierCode: resolvedCarrier ?? 'SENDCLOUD',
+              serviceCode: resolvedService,
               status: 'DRAFT',
               items: {
                 create: order.items.map((it) => ({
@@ -1415,6 +1443,91 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // Order routing rules — CRUD for OrderRoutingRule. Powers the
+  // ── O.16: Shipping rules CRUD ──────────────────────────────────────
+  // Distinct from OrderRoutingRule (which decides warehouse): these
+  // rules decide carrier + service + insurance + signature + packaging
+  // when a shipment is created. The applier (services/shipping-rules/
+  // applier.ts) is invoked from bulk-create-shipments below.
+  fastify.get('/fulfillment/shipping-rules', async (_request, reply) => {
+    try {
+      const rules = await prisma.shippingRule.findMany({
+        orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+      })
+      return { items: rules }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[shipping-rules] list failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.post('/fulfillment/shipping-rules', async (request, reply) => {
+    try {
+      const body = request.body as {
+        name?: string
+        description?: string
+        priority?: number
+        isActive?: boolean
+        conditions?: any
+        actions?: any
+      }
+      if (!body.name?.trim()) return reply.code(400).send({ error: 'name is required' })
+      const created = await prisma.shippingRule.create({
+        data: {
+          name: body.name.trim(),
+          description: body.description ?? null,
+          priority: typeof body.priority === 'number' ? body.priority : 100,
+          isActive: body.isActive ?? true,
+          conditions: body.conditions ?? {},
+          actions: body.actions ?? {},
+        },
+      })
+      return created
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[shipping-rules] create failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.patch('/fulfillment/shipping-rules/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = request.body as Partial<{
+        name: string
+        description: string | null
+        priority: number
+        isActive: boolean
+        conditions: any
+        actions: any
+      }>
+      const updated = await prisma.shippingRule.update({
+        where: { id },
+        data: {
+          ...(body.name != null ? { name: body.name } : {}),
+          ...(body.description !== undefined ? { description: body.description } : {}),
+          ...(typeof body.priority === 'number' ? { priority: body.priority } : {}),
+          ...(typeof body.isActive === 'boolean' ? { isActive: body.isActive } : {}),
+          ...(body.conditions !== undefined ? { conditions: body.conditions } : {}),
+          ...(body.actions !== undefined ? { actions: body.actions } : {}),
+        },
+      })
+      return updated
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[shipping-rules] update failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.delete('/fulfillment/shipping-rules/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      await prisma.shippingRule.delete({ where: { id } })
+      return { ok: true }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[shipping-rules] delete failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // /fulfillment/routing-rules admin page and is consumed by
   // resolveWarehouseForOrder() when bulk-create-shipments runs.
   fastify.get('/fulfillment/routing-rules', async (_request, reply) => {
