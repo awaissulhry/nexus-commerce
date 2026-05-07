@@ -290,6 +290,8 @@
   "outbound.drawer.customs.fixProduct": "Apri il prodotto per aggiungere codice HS o paese d'origine",
   "outbound.drawer.copyAddress.title": "Copia indirizzo di spedizione",
   "outbound.drawer.copyAddress.toast": "Indirizzo copiato",
+  "outbound.drawer.copyChannelOrderId.title": "Copia ID ordine canale",
+  "outbound.drawer.copyChannelOrderId.toast": "ID ordine copiato",
   "outbound.drawer.activityViewAll": "Visualizza l'audit log completo per quest'ordine",
   "outbound.pending.bulkResults.title": "Creazione massiva — risultati",
   "outbound.pending.bulkResults.summary": "{ok} di {total} creati · {failed} falliti",

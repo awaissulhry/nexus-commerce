@@ -319,6 +319,8 @@
   "outbound.drawer.customs.fixProduct": "Open product to add the missing HS code or origin",
   "outbound.drawer.copyAddress.title": "Copy shipping address",
   "outbound.drawer.copyAddress.toast": "Address copied",
+  "outbound.drawer.copyChannelOrderId.title": "Copy channel order id",
+  "outbound.drawer.copyChannelOrderId.toast": "Order ID copied",
   "outbound.drawer.activityViewAll": "View full audit log for this order",
   "outbound.pending.bulkResults.title": "Bulk create — results",
   "outbound.pending.bulkResults.summary": "{ok} of {total} created · {failed} failed",

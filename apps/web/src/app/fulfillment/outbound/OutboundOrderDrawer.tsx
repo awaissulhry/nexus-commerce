@@ -538,8 +538,29 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-3 text-sm text-slate-500 font-mono mt-0.5">
-              <span>{data?.channelOrderId ?? '—'}</span>
+            <div className="flex items-center gap-2 text-sm text-slate-500 font-mono mt-0.5">
+              {/* O.87: click-to-copy on channel order id. Operators
+                  paste this constantly into Amazon Seller Central /
+                  eBay support / Shopify admin. Uses the existing
+                  copy-tracking-toast pattern from O.65. */}
+              {data?.channelOrderId ? (
+                <button
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(data.channelOrderId)
+                      toast.success(t('outbound.drawer.copyChannelOrderId.toast'))
+                    } catch {
+                      toast.error(t('common.error'))
+                    }
+                  }}
+                  title={t('outbound.drawer.copyChannelOrderId.title')}
+                  className="hover:text-slate-700 hover:underline"
+                >
+                  {data.channelOrderId}
+                </button>
+              ) : (
+                <span>—</span>
+              )}
               {data?.fulfillmentMethod && (
                 <span className="text-slate-400">{data.fulfillmentMethod}</span>
               )}
