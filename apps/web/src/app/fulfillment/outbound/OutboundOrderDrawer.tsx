@@ -225,6 +225,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
     lines: Array<{
       sku: string
       productSku: string | null
+      productId: string | null
       quantity: number
       unitPrice: number
       totalValue: number
@@ -920,21 +921,37 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {c.lines.map((l, idx) => (
-                                    <tr key={`${l.sku}-${idx}`} className="border-b border-slate-50 last:border-0">
-                                      <td className="py-1 font-mono text-slate-700">{l.sku}</td>
-                                      <td className="py-1 text-right tabular-nums text-slate-700">{l.quantity}</td>
-                                      <td className={`py-1 px-2 font-mono ${l.hsCode ? 'text-slate-700' : 'text-rose-600'}`}>
-                                        {l.hsCode ?? '—'}
-                                      </td>
-                                      <td className={`py-1 ${l.originCountry ? 'text-slate-700' : 'text-amber-600'}`}>
-                                        {l.originCountry ?? '—'}
-                                      </td>
-                                      <td className="py-1 text-right tabular-nums text-slate-700">
-                                        {l.totalValue.toFixed(2)}
-                                      </td>
-                                    </tr>
-                                  ))}
+                                  {c.lines.map((l, idx) => {
+                                    const missing = !l.hsCode || !l.originCountry
+                                    return (
+                                      <tr key={`${l.sku}-${idx}`} className="border-b border-slate-50 last:border-0">
+                                        <td className="py-1 font-mono text-slate-700">
+                                          {/* O.66: deep-link to product edit
+                                              when master data is missing —
+                                              one click to fix the gap. */}
+                                          {missing && l.productId ? (
+                                            <Link
+                                              href={`/products/${l.productId}/edit`}
+                                              className="hover:underline text-blue-600 inline-flex items-center gap-0.5"
+                                              title={t('outbound.drawer.customs.fixProduct')}
+                                            >
+                                              {l.sku} <ExternalLink size={9} />
+                                            </Link>
+                                          ) : l.sku}
+                                        </td>
+                                        <td className="py-1 text-right tabular-nums text-slate-700">{l.quantity}</td>
+                                        <td className={`py-1 px-2 font-mono ${l.hsCode ? 'text-slate-700' : 'text-rose-600'}`}>
+                                          {l.hsCode ?? '—'}
+                                        </td>
+                                        <td className={`py-1 ${l.originCountry ? 'text-slate-700' : 'text-amber-600'}`}>
+                                          {l.originCountry ?? '—'}
+                                        </td>
+                                        <td className="py-1 text-right tabular-nums text-slate-700">
+                                          {l.totalValue.toFixed(2)}
+                                        </td>
+                                      </tr>
+                                    )
+                                  })}
                                 </tbody>
                               </table>
                             )}

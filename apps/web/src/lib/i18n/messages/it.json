@@ -263,6 +263,7 @@
   "outbound.drawer.customs.col.value": "Valore",
   "outbound.shipments.copy.title": "Copia numero tracking",
   "outbound.shipments.copy.toast": "Numero tracking copiato",
+  "outbound.drawer.customs.fixProduct": "Apri il prodotto per aggiungere codice HS o paese d'origine",
   "outbound.drawer.cancel.button": "Annulla ordine",
   "outbound.drawer.cancel.title": "Annullare quest'ordine?",
   "outbound.drawer.cancel.description": "Segna l'ordine come ANNULLATO, annulla i pacchi Sendcloud non ancora spediti e ripristina lo stock. Il cliente sul marketplace NON viene avvisato automaticamente — annulla anche sul canale se necessario.",

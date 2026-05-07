@@ -592,8 +592,8 @@ model ChannelListing {
   // C.14 — eBay Path B back-refs. Stats are time-series (per-listing
   // hourly snapshots of watcher / hit / question counts); markdowns
   // are discrete sale events with start/end windows.
-  ebayWatcherStats   EbayWatcherStats[]
-  ebayMarkdowns      EbayMarkdown[]
+  ebayWatcherStats EbayWatcherStats[]
+  ebayMarkdowns    EbayMarkdown[]
 
   // NN.1 — optimistic concurrency on per-channel listing edits.
   version Int @default(1)
@@ -1374,15 +1374,15 @@ enum OrderChannel {
 
 enum OrderStatus {
   PENDING
-  PROCESSING        // O.1: paid, not yet shipped (Amazon "Unshipped", Woo "processing")
+  PROCESSING // O.1: paid, not yet shipped (Amazon "Unshipped", Woo "processing")
   PARTIALLY_SHIPPED // O.1: multi-package — some shipped, some not (Amazon "PartiallyShipped")
-  ON_HOLD           // O.1: fraud/address/inventory hold (Woo "on-hold")
-  AWAITING_PAYMENT  // O.1: Woo "pending", Shopify draft
+  ON_HOLD // O.1: fraud/address/inventory hold (Woo "on-hold")
+  AWAITING_PAYMENT // O.1: Woo "pending", Shopify draft
   SHIPPED
   DELIVERED
   CANCELLED
-  REFUNDED          // O.1: Woo "refunded", Amazon refunded
-  RETURNED          // O.1: shipped → returned (distinct from REFUNDED if no money back yet)
+  REFUNDED // O.1: Woo "refunded", Amazon refunded
+  RETURNED // O.1: shipped → returned (distinct from REFUNDED if no money back yet)
 }
 
 model Order {
@@ -2763,13 +2763,176 @@ model Carrier {
   code                 CarrierCode @unique
   name                 String
   isActive             Boolean     @default(false)
-  // Encrypted credentials JSON (AES-256-GCM, same pattern as MarketplaceCredential).
-  // Sendcloud: { publicKey, privateKey, integrationId }
+  // CR.1: AES-256-GCM envelope (apps/api/src/lib/crypto.ts).
+  // Sendcloud plaintext payload: { publicKey, privateKey, integrationId }
   credentialsEncrypted String?
-  // Default Sendcloud shipping_method_id mapping per channel/marketplace
+  // Default Sendcloud shipping_method_id mapping per channel/marketplace.
+  // Replaced operationally by CarrierServiceMapping rows in CR.7; kept
+  // for read-fallback during the cut-over.
   defaultServiceMap    Json? // { "AMAZON_IT": 12345, "EBAY_IT": 67890, ... }
-  createdAt            DateTime    @default(now())
-  updatedAt            DateTime    @updatedAt
+
+  // CR.3 — connection health columns. lastVerifiedAt is set by the
+  // /carriers/:code/test endpoint; lastError + lastErrorAt by failures
+  // from print-label / verify. lastUsedAt is bumped by the print-label
+  // path so the marketplace UI can show "active" carriers first.
+  lastUsedAt     DateTime?
+  lastVerifiedAt DateTime?
+  lastErrorAt    DateTime?
+  lastError      String?
+
+  // CR.3 — operator-visible label (e.g. "Sendcloud Riccione") so a
+  // single CarrierCode can have a meaningful name once CR.9 widens to
+  // multi-account. Pre-CR.9, falls back to `name` for display.
+  accountLabel String?
+
+  // CR.3 — mode flag mirrors NEXUS_SENDCLOUD_ENV at connect time so the
+  // UI can distinguish sandbox vs production accounts independently of
+  // the deploy-wide env var. "sandbox" | "production".
+  mode String @default("sandbox")
+
+  // CR.3 — per-carrier webhook signing secret. Today the Sendcloud
+  // webhook reads NEXUS_SENDCLOUD_WEBHOOK_SECRET from env; once CR.6's
+  // drawer ships, operator can rotate per-account from the UI without
+  // a deploy. Encrypted at rest using the same envelope as creds.
+  webhookSecret String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Cascading children added by CR.3.
+  serviceMappings CarrierServiceMapping[]
+  services        CarrierService[]
+  metrics         CarrierMetric[]
+  pickupSchedules PickupSchedule[]
+
+  @@index([isActive])
+  @@index([lastUsedAt])
+}
+
+// CR.3 — per-carrier service catalog. Synced from Sendcloud
+// /shipping_methods on connect + nightly job (CR.12). Replaces the
+// opaque defaultServiceMap blob. The (carrierId, externalId) pair is
+// unique because Sendcloud's shipping_method.id is stable per
+// integration. Capabilities (signature, insurance, intl) live on the
+// row so the rate-compare UI can filter without a second round-trip.
+model CarrierService {
+  id               String  @id @default(cuid())
+  carrier          Carrier @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+  carrierId        String
+  // Carrier-side identifier (Sendcloud shipping_method.id, Amazon
+  // ShippingServiceId, …). Stored as string so non-numeric IDs from
+  // future carriers fit without a schema bump.
+  externalId       String
+  name             String
+  carrierSubName   String? // e.g. "BRT" when Sendcloud aggregates BRT
+  // Normalized service tier — UI groups by this so an operator picks
+  // "Express" without caring about the underlying carrier.
+  tier             String? // "STANDARD" | "EXPRESS" | "PRIORITY" | "ECONOMY"
+  // Eligibility envelope (informational; the carrier still authoritative).
+  minWeightG       Int?
+  maxWeightG       Int?
+  countriesJson    Json? // ["IT","DE",…] — null = "any"
+  capabilitiesJson Json? // { signature, insurance, saturday, intl, cod }
+  // Indicative pricing from listShippingMethods; refresh nightly.
+  basePriceCents   Int?
+  currencyCode     String? @default("EUR")
+
+  isActive  Boolean  @default(true)
+  syncedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  mappings CarrierServiceMapping[]
+
+  @@unique([carrierId, externalId])
+  @@index([carrierId, isActive])
+  @@index([tier])
+}
+
+// CR.3 — visual service-mapping matrix. Replaces Carrier.defaultServiceMap
+// JSON. Rows answer "for this channel × marketplace × warehouse, use
+// this service". Resolution order in the print-label path:
+//   1. exact (channel, marketplace, warehouseId)
+//   2. (channel, marketplace, warehouseId=null)
+//   3. (channel, GLOBAL, warehouseId=null)
+//   4. fall through to Carrier.defaultServiceMap (legacy)
+// The unique tuple is partial: warehouseId is nullable, so the index
+// is created in raw SQL in the migration alongside the table.
+model CarrierServiceMapping {
+  id           String         @id @default(cuid())
+  carrier      Carrier        @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+  carrierId    String
+  service      CarrierService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  serviceId    String
+  channel      String // "AMAZON" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY" | "GLOBAL"
+  marketplace  String         @default("GLOBAL")
+  warehouseId  String?
+  // Operator override for tier when a mapping overrides the service's
+  // own tier (e.g. "use this Express method for AMAZON_IT Standard").
+  tierOverride String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([carrierId])
+  @@index([channel, marketplace])
+  @@index([warehouseId])
+}
+
+// CR.3 — denormalized per-carrier performance cache. Refreshed by the
+// metrics job (CR.15). Read by the per-carrier drawer's Performance tab
+// and the carrier marketplace's "active carriers" sort. Source-of-truth
+// for these numbers is still Shipment + TrackingEvent — this table is
+// just a precomputed cache. windowDays groups rows so 30/90/365 day
+// stats live as separate rows for the same carrier.
+model CarrierMetric {
+  id                  String   @id @default(cuid())
+  carrier             Carrier  @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+  carrierId           String
+  windowDays          Int // 30 | 90 | 365
+  shipmentCount       Int      @default(0)
+  totalCostCents      Int      @default(0)
+  avgCostCents        Int?
+  onTimeCount         Int      @default(0)
+  lateCount           Int      @default(0)
+  exceptionCount      Int      @default(0)
+  // Median delivery time (hours) — null until we have enough samples
+  // (we don't compute medians on n<5 to avoid noise).
+  medianDeliveryHours Decimal? @db.Decimal(10, 2)
+  computedAt          DateTime @default(now())
+
+  @@unique([carrierId, windowDays])
+  @@index([carrierId])
+}
+
+// CR.3 — pickup schedule rows. One-time pickups have isRecurring=false +
+// a single scheduledFor date; recurring pickups have isRecurring=true +
+// a daysOfWeek bitmap (Mon=1, Tue=2, … Sun=64) + a window. The pickup
+// job (CR.16) walks active rows + dispatches the carrier API call.
+model PickupSchedule {
+  id              String    @id @default(cuid())
+  carrier         Carrier   @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+  carrierId       String
+  warehouseId     String?
+  isRecurring     Boolean   @default(false)
+  daysOfWeek      Int? // bitmap; null when isRecurring=false
+  scheduledFor    DateTime?
+  windowStart     String? // "09:00"
+  windowEnd       String? // "17:00"
+  contactName     String?
+  contactPhone    String?
+  notes           String?
+  // Carrier-side handle (Sendcloud pickup id, BRT booking ref, …).
+  externalRef     String?
+  status          String    @default("ACTIVE") // ACTIVE | PAUSED | CANCELLED | COMPLETED
+  lastDispatchAt  DateTime?
+  lastDispatchErr String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([carrierId, status])
+  @@index([warehouseId])
 }
 
 // Outbound shipment for FBM/eBay/Shopify/Woo/Etsy orders.
@@ -2857,10 +3020,10 @@ model Shipment {
 //   DELIVERED | DELIVERY_ATTEMPTED | EXCEPTION |
 //   RETURNED_TO_SENDER | CANCELLED | INFO
 model TrackingEvent {
-  id          String   @id @default(cuid())
+  id String @id @default(cuid())
 
-  shipment    Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
-  shipmentId  String
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId String
 
   // Distinct from createdAt (= ingestion). The timeline sorts by this.
   occurredAt  DateTime
@@ -2875,7 +3038,7 @@ model TrackingEvent {
   carrierRawCode    String?
   carrierRawPayload Json?
 
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([shipmentId, occurredAt])
   @@index([code, occurredAt])
@@ -2883,10 +3046,10 @@ model TrackingEvent {
 }
 
 enum TrackingMessageStatus {
-  PENDING     // queued, waiting for retry job to pick up
-  IN_FLIGHT   // worker has claimed it, API call in progress
-  SUCCESS     // channel acked
-  FAILED      // last attempt failed; will retry per nextAttemptAt
+  PENDING // queued, waiting for retry job to pick up
+  IN_FLIGHT // worker has claimed it, API call in progress
+  SUCCESS // channel acked
+  FAILED // last attempt failed; will retry per nextAttemptAt
   DEAD_LETTER // exceeded maxAttempts; needs operator intervention
 }
 
@@ -2899,16 +3062,16 @@ enum TrackingMessageStatus {
 // pushback worker) so the typical "did this ship's tracking get
 // pushed?" check stays a single-row read.
 model TrackingMessageLog {
-  id          String       @id @default(cuid())
+  id String @id @default(cuid())
 
-  shipment    Shipment     @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
-  shipmentId  String
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId String
 
   channel     OrderChannel
   // Nullable for channels with no per-marketplace split (Shopify, Woo).
   marketplace String?
 
-  status      TrackingMessageStatus @default(PENDING)
+  status TrackingMessageStatus @default(PENDING)
 
   // Retry state. Default maxAttempts = 8 → ≈26h of exponential backoff
   // (5min × 2^n, capped at 12h per attempt) before DEAD_LETTER.
@@ -2967,7 +3130,7 @@ model ShipmentItem {
 //   requireInsurance, insuranceCents, packagingId, holdForReview,
 //   addLabel
 model ShippingRule {
-  id          String  @id @default(cuid())
+  id String @id @default(cuid())
 
   name        String
   description String?
@@ -4475,9 +4638,9 @@ model ProductRelation {
 model ChannelPublishAttempt {
   id String @id @default(cuid())
 
-  channel     String  // AMAZON, EBAY, SHOPIFY, WOOCOMMERCE, ETSY
-  marketplace String  // IT, DE, FR, UK, ES, US, GLOBAL …
-  sellerId    String  // SP-API merchant token, eBay user id, Shopify shop, etc.
+  channel     String // AMAZON, EBAY, SHOPIFY, WOOCOMMERCE, ETSY
+  marketplace String // IT, DE, FR, UK, ES, US, GLOBAL …
+  sellerId    String // SP-API merchant token, eBay user id, Shopify shop, etc.
   sku         String
 
   // Best-effort link back to the master Product. SetNull so an
@@ -4499,7 +4662,7 @@ model ChannelPublishAttempt {
   outcome String
 
   errorMessage String?
-  errorCode    String?  // SP-API issue code, eBay errorId, etc.
+  errorCode    String? // SP-API issue code, eBay errorId, etc.
 
   // Channel-issued submission identifier when one was returned (SP-API
   // submissionId, eBay item id, Shopify variant id, …). Null on
@@ -4555,10 +4718,10 @@ model EbayCampaign {
   // ── Connection scope ─────────────────────────────────────────────
   channelConnection   ChannelConnection @relation(fields: [channelConnectionId], references: [id], onDelete: Cascade)
   channelConnectionId String
-  marketplace         String  // EBAY_IT, EBAY_DE, EBAY_FR, EBAY_ES, EBAY_GB
+  marketplace         String // EBAY_IT, EBAY_DE, EBAY_FR, EBAY_ES, EBAY_GB
 
   // ── eBay identity ────────────────────────────────────────────────
-  externalCampaignId String  // eBay-issued campaign id
+  externalCampaignId String // eBay-issued campaign id
   name               String
 
   // ── Funding ──────────────────────────────────────────────────────
@@ -4572,7 +4735,7 @@ model EbayCampaign {
 
   // For ADVANCED: daily budget cap in marketplace currency.
   dailyBudget    Decimal? @db.Decimal(10, 2)
-  budgetCurrency String?  // 'EUR', 'GBP', 'USD'
+  budgetCurrency String? // 'EUR', 'GBP', 'USD'
 
   // ── Lifecycle ────────────────────────────────────────────────────
   // 'DRAFT' | 'RUNNING' | 'PAUSED' | 'ENDED' | 'SUSPENDED'
@@ -4608,8 +4771,8 @@ model EbayWatcherStats {
   // ── Snapshot ─────────────────────────────────────────────────────
   snapshotAt    DateTime @default(now())
   watcherCount  Int      @default(0)
-  hitCount      Int      @default(0)  // total view count (eBay's HitCount)
-  questionCount Int      @default(0)  // unanswered questions
+  hitCount      Int      @default(0) // total view count (eBay's HitCount)
+  questionCount Int      @default(0) // unanswered questions
 
   // ── Audit ────────────────────────────────────────────────────────
   createdAt DateTime @default(now())
@@ -4639,7 +4802,7 @@ model EbayMarkdown {
   // The current ChannelListing.price might have moved since.
   originalPrice Decimal @db.Decimal(10, 2)
   markdownPrice Decimal @db.Decimal(10, 2)
-  currency      String  // 'EUR', 'GBP', 'USD'
+  currency      String // 'EUR', 'GBP', 'USD'
 
   // ── Lifecycle ────────────────────────────────────────────────────
   // 'DRAFT' | 'SCHEDULED' | 'ACTIVE' | 'ENDED' | 'CANCELLED' | 'FAILED'
@@ -4649,7 +4812,7 @@ model EbayMarkdown {
 
   // Last attempt to push to eBay; null until that path ships.
   lastSyncedAt   DateTime?
-  lastSyncStatus String?  // 'SUCCESS' | 'FAILED' | 'PENDING'
+  lastSyncStatus String? // 'SUCCESS' | 'FAILED' | 'PENDING'
   lastSyncError  String?
 
   // ── Audit ────────────────────────────────────────────────────────

@@ -1924,6 +1924,9 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const lines = shipment.order.items.map((it) => ({
         sku: it.sku,
         productSku: it.product?.sku ?? null,
+        // O.66: include productId so the drawer can deep-link to the
+        // edit page when an HS code or origin country is missing.
+        productId: it.productId,
         quantity: it.quantity,
         unitPrice: Number(it.price),
         totalValue: Number(it.price) * it.quantity,
