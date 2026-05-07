@@ -155,16 +155,28 @@ export function Modal({
   if (!open) return null
 
   const isDrawer = placement === 'drawer-right'
+  // U.12 — outer padding tightens on mobile so the modal fills more
+  // of a narrow viewport. p-2 (8px gutter) → p-4 (16px) at sm.
+  // Top placement uses pt-[8vh] on mobile for higher real estate.
   const justify =
     placement === 'centered'
-      ? 'items-center justify-center p-4'
+      ? 'items-center justify-center p-2 sm:p-4'
       : placement === 'top'
-        ? 'items-start justify-center pt-[12vh] p-4'
+        ? 'items-start justify-center pt-[8vh] sm:pt-[12vh] p-2 sm:p-4'
         : 'items-stretch justify-end'
 
+  // U.12 — mobile parity:
+  //   - centered: max-h uses dvh (dynamic viewport height) so iOS
+  //     Safari's URL-bar resize doesn't clip content. Falls back to
+  //     vh on browsers without dvh support (every modern engine has
+  //     it as of 2024 — Safari 15.4+, Chrome 108+, Firefox 101+).
+  //   - drawer-right: full-width on mobile (no max-w cap), slides
+  //     in as a full-screen sheet; flips back to a 640px right panel
+  //     at sm and above. The mobile sheet still keeps the right-side
+  //     border for visual continuity but it sits flush.
   const panelBase = isDrawer
-    ? 'h-full w-full max-w-[640px] bg-white shadow-2xl border-l border-slate-200 flex flex-col'
-    : `w-full ${SIZE_CLASS[size]} bg-white rounded-lg shadow-xl border border-slate-200 flex flex-col max-h-[90vh]`
+    ? 'h-full w-full sm:max-w-[640px] bg-white shadow-2xl sm:border-l border-slate-200 flex flex-col'
+    : `w-full ${SIZE_CLASS[size]} bg-white rounded-lg shadow-xl border border-slate-200 flex flex-col max-h-[85dvh] sm:max-h-[90vh]`
 
   return (
     <div

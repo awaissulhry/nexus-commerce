@@ -15,9 +15,12 @@ export const dynamic = 'force-dynamic'
  * mount, gets a small (gzipped) JSON payload directly, and renders
  * progressively.
  */
+// U.12 — switched 100vh → 100dvh so iOS Safari's URL-bar hide/show
+// doesn't clip the bottom of the grid. dvh is supported by every
+// modern engine since 2024.
 export default function BulkOperationsPage() {
   return (
-    <div className="space-y-3 -mx-6 -my-6 h-[calc(100vh-1.5rem)] flex flex-col">
+    <div className="space-y-3 -mx-6 -my-6 h-[calc(100dvh-1.5rem)] flex flex-col">
       <div className="px-6 pt-6 flex-shrink-0">
         <PageHeader
           title="Bulk Operations"

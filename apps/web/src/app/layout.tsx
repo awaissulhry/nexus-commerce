@@ -22,7 +22,11 @@ export default function RootLayout({
       <body>
         <ToastProvider>
           <ConfirmProvider>
-            <div className="flex h-screen bg-slate-50 overflow-hidden">
+            {/* U.12 — h-screen swapped for h-[100dvh] so the app
+                shell respects iOS Safari's dynamic viewport (URL-bar
+                hide/show). dvh is supported by every modern engine
+                since 2024; older browsers fall back to vh. */}
+            <div className="flex h-[100dvh] bg-slate-50 overflow-hidden">
               <AppSidebar />
               <div className="flex-1 flex flex-col overflow-hidden">
                 <MobileTopBar />

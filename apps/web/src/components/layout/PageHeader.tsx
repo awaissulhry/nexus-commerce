@@ -56,13 +56,23 @@ export default function PageHeader({
         </nav>
       )}
 
-      <div className="flex items-start justify-between gap-4">
+      {/* U.12 — mobile parity: title stacks above actions on narrow
+          screens (flex-col), actions wrap if a toolbar overflows. The
+          desktop layout (sm:flex-row sm:items-start sm:justify-between)
+          is unchanged. Title swaps `truncate` for `break-words` since
+          wrapping a long title beats truncating it on mobile, where
+          horizontal space is precious. */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold text-slate-900 truncate">{title}</h1>
+          <h1 className="text-2xl font-semibold text-slate-900 break-words sm:truncate">
+            {title}
+          </h1>
           {desc && <p className="text-md text-slate-500 mt-0.5">{desc}</p>}
         </div>
         {actions && (
-          <div className="flex items-center gap-2 flex-shrink-0">{actions}</div>
+          <div className="flex items-center gap-2 flex-wrap sm:flex-shrink-0 sm:flex-nowrap">
+            {actions}
+          </div>
         )}
       </div>
     </div>
