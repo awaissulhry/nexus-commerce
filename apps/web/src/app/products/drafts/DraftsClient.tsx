@@ -12,6 +12,8 @@ import {
 import { cn } from '@/lib/utils'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import PageHeader from '@/components/layout/PageHeader'
+import { CHANNEL_TONE } from '@/lib/theme'
 
 interface ChannelTuple {
   platform: string
@@ -102,27 +104,26 @@ export default function DraftsClient() {
   )
 
   return (
-    <div className="px-6 py-6 max-w-[1400px] mx-auto">
-      <header className="mb-5 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-[24px] font-semibold text-slate-900">
-            Listing wizard drafts
-          </h1>
-          <p className="text-md text-slate-600 mt-0.5">
-            In-progress wizards that haven&rsquo;t been submitted yet. Click any
-            row to resume where you left off. Wizards expire after 30 days of
-            inactivity.
-          </p>
-        </div>
-        <FreshnessIndicator
-          lastFetchedAt={lastFetchedAt}
-          onRefresh={refetch}
-          loading={loading}
-          error={!!error}
-        />
-      </header>
+    <div className="px-6 py-6 max-w-[1400px] mx-auto space-y-5">
+      {/* U.7 — switched from a custom h1 (text-[24px] arbitrary value)
+          to the shared PageHeader for chrome consistency with /products
+          and to keep the header on the U.1 typography scale. The
+          freshness indicator slides into PageHeader's actions slot. */}
+      <PageHeader
+        title="Listing wizard drafts"
+        description="In-progress wizards that haven't been submitted yet. Click any row to resume where you left off. Wizards expire after 30 days of inactivity."
+        breadcrumbs={[{ label: 'Products', href: '/products' }, { label: 'Drafts' }]}
+        actions={
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={refetch}
+            loading={loading}
+            error={!!error}
+          />
+        }
+      />
 
-      <div className="flex flex-wrap items-center gap-2 mb-4">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[260px]">
           <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
           <input
@@ -155,7 +156,7 @@ export default function DraftsClient() {
       </div>
 
       {error && (
-        <div className="mb-3 border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800 flex items-start gap-2">
+        <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800 flex items-start gap-2">
           <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
           <span>Failed to load drafts: {error}</span>
         </div>
@@ -196,10 +197,24 @@ export default function DraftsClient() {
                 </td>
               </tr>
             )}
-            {drafts.map((d) => (
+            {drafts.map((d) => {
+              // U.7 — completion ratio drives both the badge label
+              // ("4/9 Variations") and a tiny progress bar under it,
+              // so the user sees how far along the draft is at a
+              // glance. Total step count is 9 (Step1 → Step10Submit).
+              const totalSteps = 9
+              const pct = Math.min(100, Math.round((d.currentStep / totalSteps) * 100))
+              return (
               <tr
                 key={d.id}
-                className="border-b border-slate-100 last:border-0 hover:bg-slate-50"
+                className={cn(
+                  'border-b border-slate-100 last:border-0 transition-colors',
+                  // U.7 — stale rows get an amber tint so the visual
+                  // weight of the warning isn't carried by a single
+                  // word of copy on the date column. Hover overrides
+                  // so the affordance is consistent with non-stale.
+                  d.isStale ? 'bg-amber-50/50 hover:bg-amber-50' : 'hover:bg-slate-50',
+                )}
               >
                 <td className="px-4 py-2.5">
                   <Link
@@ -224,25 +239,49 @@ export default function DraftsClient() {
                     {d.channels.length === 0 && (
                       <span className="text-slate-400 text-sm">none yet</span>
                     )}
-                    {d.channels.map((c, i) => (
-                      <span
-                        key={`${c.platform}:${c.marketplace}:${i}`}
-                        className="inline-flex items-center h-5 px-1.5 rounded text-xs font-medium bg-slate-100 text-slate-700"
-                      >
-                        <span className="font-mono">{c.platform}</span>
-                        <span className="text-slate-400 mx-0.5">·</span>
-                        <span>{c.marketplace}</span>
-                      </span>
-                    ))}
+                    {d.channels.map((c, i) => {
+                      // U.7 — per-platform color via the shared
+                      // CHANNEL_TONE map so AMAZON/eBay/etc. read at
+                      // a glance instead of all looking like generic
+                      // grey chips. Falls back to slate for unknown
+                      // platforms.
+                      const tone = CHANNEL_TONE[c.platform] ?? 'bg-slate-100 text-slate-700 border-slate-200'
+                      return (
+                        <span
+                          key={`${c.platform}:${c.marketplace}:${i}`}
+                          className={cn(
+                            'inline-flex items-center h-5 px-1.5 rounded text-xs font-medium border',
+                            tone,
+                          )}
+                        >
+                          <span className="font-mono">{c.platform}</span>
+                          <span className="opacity-50 mx-0.5">·</span>
+                          <span>{c.marketplace}</span>
+                        </span>
+                      )
+                    })}
                   </div>
                 </td>
                 <td className="px-4 py-2.5">
-                  <span className="inline-flex items-center h-5 px-1.5 rounded text-xs font-semibold bg-blue-50 text-blue-700">
-                    {d.currentStep}/9
-                  </span>
-                  <span className="text-slate-500 ml-1.5 text-sm">
-                    {STEP_LABELS[d.currentStep] ?? `Step ${d.currentStep}`}
-                  </span>
+                  <div className="flex flex-col gap-1 min-w-[120px]">
+                    <div className="flex items-center gap-1.5">
+                      <span className="inline-flex items-center h-5 px-1.5 rounded text-xs font-semibold tabular-nums bg-blue-50 text-blue-700">
+                        {d.currentStep}/{totalSteps}
+                      </span>
+                      <span className="text-slate-600 text-sm truncate">
+                        {STEP_LABELS[d.currentStep] ?? `Step ${d.currentStep}`}
+                      </span>
+                    </div>
+                    {/* U.7 — mini progress bar visualises how far
+                        along the wizard is. Caps at 100% so a finished
+                        draft (currentStep=9) reads as full. */}
+                    <div className="h-1 w-full bg-slate-100 rounded overflow-hidden">
+                      <div
+                        className="h-full bg-blue-500"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
                 </td>
                 <td className="px-4 py-2.5">
                   <span
@@ -261,22 +300,27 @@ export default function DraftsClient() {
                   </span>
                 </td>
                 <td className="px-4 py-2.5 text-right">
+                  {/* U.7 — Resume promoted from text-link to a button-
+                      shaped CTA. The action is the primary affordance
+                      on every row, so it deserves the visual weight of
+                      a button, not a hyperlink. */}
                   <Link
                     href={`/products/${d.productId}/list-wizard`}
-                    className="inline-flex items-center gap-1 text-sm font-medium text-blue-700 hover:underline"
+                    className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
                   >
                     Resume
                     <ArrowRight className="w-3 h-3" />
                   </Link>
                 </td>
               </tr>
-            ))}
+              )
+            })}
           </tbody>
         </table>
       </div>
 
       {!loading && drafts.length > 0 && (
-        <div className="text-sm text-slate-500 mt-3">
+        <div className="text-sm text-slate-500">
           Showing {drafts.length} of {total} drafts
           {staleCount > 0 && !staleOnly && (
             <>
