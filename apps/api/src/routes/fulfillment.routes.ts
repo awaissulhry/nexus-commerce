@@ -810,6 +810,67 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // O.62: Cmd+K shipment search. Returns a lean payload (no items,
+  // no warehouse) shaped for the global command palette: id +
+  // tracking + status + channel/marketplace + customer + ship-by so
+  // operators can hop straight to the shipment from anywhere.
+  // Searches across:
+  //   • tracking number
+  //   • sendcloud parcel id
+  //   • channel order id (Amazon "123-1234567-…", eBay, Shopify name)
+  //   • customer name / email
+  //   • shipment items SKU
+  // Capped at 12 hits because the palette UX wants instant scrolling.
+  fastify.get('/fulfillment/shipments/search', async (request, reply) => {
+    try {
+      const q = request.query as { q?: string; limit?: string }
+      const term = (q.q ?? '').trim()
+      if (term.length < 2) return { items: [] }
+      const limit = Math.min(20, Math.max(1, Number(q.limit ?? 12) || 12))
+      const items = await prisma.shipment.findMany({
+        where: {
+          OR: [
+            { trackingNumber: { contains: term, mode: 'insensitive' } },
+            { sendcloudParcelId: { contains: term, mode: 'insensitive' } },
+            { items: { some: { sku: { contains: term, mode: 'insensitive' } } } },
+            {
+              order: {
+                OR: [
+                  { channelOrderId: { contains: term, mode: 'insensitive' } },
+                  { customerName: { contains: term, mode: 'insensitive' } },
+                  { customerEmail: { contains: term, mode: 'insensitive' } },
+                ],
+              },
+            },
+          ],
+        },
+        select: {
+          id: true,
+          orderId: true,
+          status: true,
+          carrierCode: true,
+          trackingNumber: true,
+          createdAt: true,
+          order: {
+            select: {
+              channel: true,
+              marketplace: true,
+              channelOrderId: true,
+              customerName: true,
+              shipByDate: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+      })
+      return { items }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[fulfillment/shipments/search] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   fastify.get('/fulfillment/shipments/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     const shipment = await prisma.shipment.findUnique({
@@ -8177,6 +8238,33 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const { code } = request.params as { code: string }
       const body = request.body as { publicKey?: string; privateKey?: string; integrationId?: number; defaultServiceMap?: any }
+
+      // CR.2: validate Sendcloud credentials BEFORE persisting. Calls
+      // GET /user with the supplied public/private key; on 401/403 we
+      // refuse the connect with a 400 + clear reason. dryRun mode
+      // (NEXUS_ENABLE_SENDCLOUD_REAL=false) returns ok=true without a
+      // network call so local-dev connect flow stays usable. Other
+      // carrier codes (AMAZON_BUY_SHIPPING / MANUAL) skip validation
+      // — they have no secret to verify.
+      if (code === 'SENDCLOUD') {
+        if (!body.publicKey || !body.privateKey) {
+          return reply.code(400).send({ error: 'publicKey and privateKey are required.', code: 'MISSING_CREDENTIALS' })
+        }
+        const sendcloud = await import('../services/sendcloud/index.js')
+        const verify = await sendcloud.verifyCredentials({
+          publicKey: body.publicKey,
+          privateKey: body.privateKey,
+          integrationId: body.integrationId,
+        })
+        if (verify.ok === false) {
+          return reply.code(400).send({
+            error: `Sendcloud rejected the credentials: ${verify.reason}`,
+            code: 'CREDENTIAL_VERIFY_FAILED',
+            reason: verify.reason,
+          })
+        }
+      }
+
       // CR.1: encrypt the credential blob at rest with AES-256-GCM.
       // Envelope format documented in apps/api/src/lib/crypto.ts.
       // Empty payloads (AMAZON_BUY_SHIPPING / MANUAL connect with no
@@ -8206,6 +8294,39 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (error: any) {
       fastify.log.error({ err: error }, '[carriers/:code/connect] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // CR.2 — explicit "Test connection" endpoint. Used by the
+  // already-connected card's Test button (lands in CR.6/CR.8 UI) so
+  // operator can verify a stored credential without having to
+  // disconnect + reconnect. Decrypts the persisted creds and re-runs
+  // verifyCredentials. Read-only — no DB writes.
+  fastify.post('/fulfillment/carriers/:code/test', async (request, reply) => {
+    try {
+      const { code } = request.params as { code: string }
+      if (code !== 'SENDCLOUD') {
+        // Other carrier codes have no live API today — surface a clear
+        // status so the UI can disable the Test button rather than
+        // returning a misleading "ok".
+        return { ok: true, mode: 'no-op', message: `${code} has no test endpoint` }
+      }
+      const sendcloud = await import('../services/sendcloud/index.js')
+      let creds
+      try {
+        creds = await sendcloud.resolveCredentials()
+      } catch (e: any) {
+        if (e instanceof sendcloud.SendcloudError) {
+          return reply.code(e.status).send({ ok: false, error: e.message, code: e.code })
+        }
+        throw e
+      }
+      const result = await sendcloud.verifyCredentials(creds)
+      const mode = sendcloud.getSendcloudMode()
+      return { ...result, dryRun: mode.dryRun, env: mode.env }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[carriers/:code/test] failed')
+      return reply.code(500).send({ ok: false, error: error?.message ?? String(error) })
     }
   })
 

@@ -23,6 +23,7 @@ import {
   Plus,
   RefreshCw,
   X,
+  Truck,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -37,7 +38,7 @@ interface Command {
   /** Comma-separated extra keywords for fuzzy matching, e.g. for
    *  "Refresh page" we want "reload" / "fetch" to also match. */
   keywords?: string
-  group: 'Recent' | 'On this page' | 'Navigation' | 'Catalog' | 'System' | 'Action' | 'Listings'
+  group: 'Recent' | 'On this page' | 'Navigation' | 'Catalog' | 'System' | 'Action' | 'Listings' | 'Shipments'
   /** Either href (navigate) or run (callback). One must be set. */
   href?: string
   run?: (router: AppRouter) => void
@@ -216,27 +217,65 @@ export default function CommandPalette() {
   }
   const [remoteListings, setRemoteListings] = useState<ListingHit[]>([])
   const [remoteLoading, setRemoteLoading] = useState(false)
+  // O.62 — remote shipment search. Same debounce/cancel pattern as
+  // listings; runs in parallel against the fulfillment search
+  // endpoint. Surfaces shipments by tracking number, channel order
+  // id, customer name/email, or SKU — anywhere in the app the
+  // operator can hit Cmd+K and jump straight to a shipment.
+  type ShipmentHit = {
+    id: string
+    orderId: string | null
+    status: string
+    carrierCode: string
+    trackingNumber: string | null
+    createdAt: string
+    order: {
+      channel: string
+      marketplace: string | null
+      channelOrderId: string
+      customerName: string
+      shipByDate: string | null
+    } | null
+  }
+  const [remoteShipments, setRemoteShipments] = useState<ShipmentHit[]>([])
   useEffect(() => {
     if (!open) {
       setRemoteListings([])
+      setRemoteShipments([])
       return
     }
     const q = query.trim()
     if (q.length < 3) {
       setRemoteListings([])
+      setRemoteShipments([])
       return
     }
     const controller = new AbortController()
     const t = setTimeout(async () => {
       setRemoteLoading(true)
       try {
-        const res = await fetch(
-          `${getBackendUrl()}/api/listings?search=${encodeURIComponent(q)}&pageSize=8&sortBy=updatedAt&sortDir=desc`,
-          { cache: 'no-store', signal: controller.signal },
-        )
-        if (!res.ok) return
-        const data = await res.json()
-        setRemoteListings(Array.isArray(data?.listings) ? data.listings : [])
+        const [listingsRes, shipmentsRes] = await Promise.all([
+          fetch(
+            `${getBackendUrl()}/api/listings?search=${encodeURIComponent(q)}&pageSize=8&sortBy=updatedAt&sortDir=desc`,
+            { cache: 'no-store', signal: controller.signal },
+          ).catch(() => null),
+          fetch(
+            `${getBackendUrl()}/api/fulfillment/shipments/search?q=${encodeURIComponent(q)}&limit=8`,
+            { cache: 'no-store', signal: controller.signal },
+          ).catch(() => null),
+        ])
+        if (listingsRes?.ok) {
+          const data = await listingsRes.json()
+          setRemoteListings(Array.isArray(data?.listings) ? data.listings : [])
+        } else {
+          setRemoteListings([])
+        }
+        if (shipmentsRes?.ok) {
+          const data = await shipmentsRes.json()
+          setRemoteShipments(Array.isArray(data?.items) ? data.items : [])
+        } else {
+          setRemoteShipments([])
+        }
       } catch {
         /* AbortError + network failures: silent — palette UX shouldn't crash. */
       } finally {
@@ -453,9 +492,41 @@ export default function CommandPalette() {
     [remoteListings],
   )
 
+  // O.62 — wrap remote shipment matches in Command shape. Each hit
+  // deep-links to /fulfillment/outbound?drawer={orderId} (drawer-on-
+  // load pattern the workspace already supports) when an order is
+  // attached, falling back to the shipments list filtered by tracking
+  // when the shipment is order-less (rare — manual shipments).
+  const remoteShipmentCommands = useMemo<Command[]>(
+    () =>
+      remoteShipments.map((s) => {
+        const tracking = s.trackingNumber ? ` · ${s.trackingNumber}` : ''
+        const customer = s.order?.customerName ? ` · ${s.order.customerName}` : ''
+        const channelOrder = s.order?.channelOrderId ?? s.id.slice(0, 6)
+        const channelTag = s.order
+          ? ` · ${s.order.channel}${s.order.marketplace ? `:${s.order.marketplace}` : ''}`
+          : ''
+        // Order-attached shipments → drawer-on-load. Order-less
+        // manual shipments fall back to the shipments tab; the
+        // operator can refine from there.
+        const href = s.orderId
+          ? `/fulfillment/outbound?drawer=${s.orderId}`
+          : `/fulfillment/outbound?tab=shipments`
+        return {
+          id: `shipment-${s.id}`,
+          label: `${channelOrder}${customer}${tracking}`,
+          icon: Truck,
+          group: 'Shipments' as const,
+          keywords: `${s.status} ${s.carrierCode}${channelTag}`,
+          href,
+        } as Command
+      }),
+    [remoteShipments],
+  )
+
   const pool = useMemo(
-    () => [...activePageCommands, ...remoteListingCommands, ...COMMANDS],
-    [activePageCommands, remoteListingCommands],
+    () => [...activePageCommands, ...remoteShipmentCommands, ...remoteListingCommands, ...COMMANDS],
+    [activePageCommands, remoteShipmentCommands, remoteListingCommands],
   )
 
   // U.11 — fuzzy-ish match: query has to appear in label OR keywords
@@ -476,6 +547,7 @@ export default function CommandPalette() {
   // of results when remote matches are available.
   const GROUP_ORDER: Command['group'][] = [
     'On this page',
+    'Shipments',
     'Listings',
     'Recent',
     'Action',
