@@ -3,7 +3,8 @@
 // FULFILLMENT B.7 — Returns. RMA → receive → inspect (condition grade) → restock or scrap → refund.
 // Manual refund default (per user choice — they recheck before restock); auto-refund opt-in via toggle.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Undo2, Plus, RefreshCw, X, CheckCircle2, Package,
   ChevronRight, ArrowDownToLine, Copy, Mail, Tag, Trash2, Truck,
@@ -65,12 +66,35 @@ const CHANNEL_TONE: Record<string, string> = {
 }
 
 export default function ReturnsWorkspace() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const [tab, setTab] = useState<'ALL' | 'NON_FBA' | 'FBA'>('ALL')
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [items, setItems] = useState<ReturnRow[]>([])
   const [loading, setLoading] = useState(true)
   const [drawerId, setDrawerId] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
+
+  // O.53: read create-from-URL params. The outbound drawer (O.21)
+  // links here as /fulfillment/returns?new=1&orderId=X — open the
+  // modal auto-prefilled.
+  const prefillOrderId = useMemo(() => searchParams.get('orderId'), [searchParams])
+  const prefillNew = useMemo(() => searchParams.get('new') === '1' || !!prefillOrderId, [searchParams, prefillOrderId])
+  useEffect(() => {
+    if (prefillNew) setCreateOpen(true)
+  }, [prefillNew])
+
+  // After the modal closes (whether via cancel or successful create),
+  // strip the new/orderId params so a refresh doesn't re-open it.
+  const closeCreate = useCallback(() => {
+    setCreateOpen(false)
+    if (prefillNew) {
+      const next = new URLSearchParams(searchParams.toString())
+      next.delete('new')
+      next.delete('orderId')
+      router.replace(`?${next.toString()}`, { scroll: false })
+    }
+  }, [prefillNew, searchParams, router])
 
   const fetchReturns = useCallback(async () => {
     setLoading(true)
@@ -169,7 +193,13 @@ export default function ReturnsWorkspace() {
       )}
 
       {drawerId && <ReturnDrawer id={drawerId} onClose={() => setDrawerId(null)} onChanged={fetchReturns} />}
-      {createOpen && <CreateReturnModal onClose={() => setCreateOpen(false)} onCreated={() => { setCreateOpen(false); fetchReturns() }} />}
+      {createOpen && (
+        <CreateReturnModal
+          initialOrderId={prefillOrderId ?? undefined}
+          onClose={closeCreate}
+          onCreated={() => { closeCreate(); fetchReturns() }}
+        />
+      )}
     </div>
   )
 }
@@ -455,13 +485,53 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
   )
 }
 
-function CreateReturnModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+function CreateReturnModal({
+  initialOrderId,
+  onClose,
+  onCreated,
+}: {
+  initialOrderId?: string
+  onClose: () => void
+  onCreated: () => void
+}) {
   const { toast } = useToast()
-  const [orderId, setOrderId] = useState('')
+  const [orderId, setOrderId] = useState(initialOrderId ?? '')
   const [channel, setChannel] = useState('AMAZON')
   const [reason, setReason] = useState('')
   const [items, setItems] = useState<Array<{ sku: string; quantity: number }>>([{ sku: '', quantity: 1 }])
   const [busy, setBusy] = useState(false)
+  const [orderLoading, setOrderLoading] = useState(false)
+  const [orderHint, setOrderHint] = useState<string | null>(null)
+
+  // O.53: when initialOrderId is provided (deep-linked from outbound
+  // drawer), fetch the order detail and pre-fill channel + items so
+  // the operator doesn't re-type. Falls back to the original empty
+  // state on fetch failure (operator can still type manually).
+  useEffect(() => {
+    if (!initialOrderId) return
+    let cancelled = false
+    ;(async () => {
+      setOrderLoading(true)
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/fulfillment/outbound/orders/${initialOrderId}`,
+          { cache: 'no-store' },
+        )
+        if (!res.ok || cancelled) return
+        const data = await res.json()
+        setChannel(data.channel ?? 'AMAZON')
+        if (Array.isArray(data.items) && data.items.length > 0) {
+          setItems(data.items.map((it: any) => ({ sku: it.sku, quantity: it.quantity })))
+        }
+        setOrderHint(`${data.channel}${data.marketplace ? ` · ${data.marketplace}` : ''} — ${data.customerName ?? '—'}`)
+      } catch {
+        /* non-fatal */
+      } finally {
+        if (!cancelled) setOrderLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [initialOrderId])
 
   const submit = async () => {
     setBusy(true)
@@ -507,6 +577,9 @@ function CreateReturnModal({ onClose, onCreated }: { onClose: () => void; onCrea
             <div>
               <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1">Order ID (optional)</div>
               <input type="text" value={orderId} onChange={(e) => setOrderId(e.target.value)} className="h-8 w-full px-2 text-md font-mono border border-slate-200 rounded" />
+              {orderHint && (
+                <div className="text-xs text-slate-500 mt-1">{orderLoading ? 'Loading order…' : orderHint}</div>
+              )}
             </div>
           </div>
           <div>

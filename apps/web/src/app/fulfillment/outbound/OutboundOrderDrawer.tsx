@@ -932,7 +932,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                 engagement) handles the rest. */}
             {hasActiveShipment && (
               <Link
-                href={`/fulfillment/returns/new?orderId=${data.id}`}
+                href={`/fulfillment/returns?new=1&orderId=${data.id}`}
                 className="h-8 px-3 text-base text-slate-700 border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1.5"
               >
                 <Undo2 size={11} /> {t('outbound.drawer.generateReturn')}
