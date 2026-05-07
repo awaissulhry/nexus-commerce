@@ -524,9 +524,9 @@ gated on the wizard UI, which is what this round delivered.
 
 ---
 
-## 37. 🔴 Column-level schema drift detection (escalation of #0)
+## 37. ✅ Column-level schema drift detection (escalation of #0) — resolved 2026-05-07
 
-**Symptom:** Item #0's drift gate catches **table-level** drift (model in `schema.prisma` with no matching `CREATE TABLE` in any migration). It does NOT catch **column-level** drift — a model whose columns don't match the production table's columns. This bug class has now bitten three times in a single working session:
+**Symptom:** Item #0's drift gate catches **table-level** drift (model in `schema.prisma` with no matching `CREATE TABLE` in any migration). It did NOT catch **column-level** drift — a model whose columns don't match the production table's columns. This bug class bit three times in a single working session:
 - `ChannelConnection` columns added to schema, never migrated (resolved by #31)
 - `VariantChannelListing` columns drifted (resolved by #31)
 - `Return` table — schema redefined with 22 cols against an existing 8-col table from a 2026-04-22 phase-2 migration; `CREATE TABLE IF NOT EXISTS` silently no-op'd, then `CREATE INDEX ... ON ("channel")` failed with `42703 column does not exist`. Took down Railway production for ~30 min on 2026-05-05 with P3009 blocking all subsequent deploys until the failed migration was manually rolled back.
@@ -535,20 +535,14 @@ gated on the wizard UI, which is what this round delivered.
 
 **Workaround applied:** Manually edited the migration to `DROP TABLE IF EXISTS "Return" CASCADE;` before `CREATE TABLE "Return"`, removed `IF NOT EXISTS` so silent collisions become loud errors. Rolled back via `prisma migrate resolve --rolled-back` then redeployed.
 
-**Proper fix:** Pre-push gate runs `prisma migrate diff` against a shadow DB:
+**Resolution:** `packages/database/scripts/check-column-drift.mjs` — parses `schema.prisma` model fields, walks every `migration.sql` chronologically (CREATE TABLE / DROP TABLE / ALTER TABLE ADD/DROP/RENAME COLUMN), then diffs schema columns against the computed migration state. No shadow DB required — works in the existing pre-push hook unchanged. Wired into:
+- `.githooks/pre-push` — runs after the table-level drift check
+- `npm run check:drift` at root — runs both gates back-to-back
+- `npm run check:column-drift --workspace=@nexus/database` — the column gate alone
 
-```
-prisma migrate diff \
-  --from-migrations ./prisma/migrations \
-  --to-schema-datamodel ./prisma/schema.prisma \
-  --shadow-database-url $SHADOW_DATABASE_URL \
-  --exit-code
-```
+Has the same allow-list mechanism as the table-level gate; current state passes 113/113 tables with 2 known SyncLog drift entries on the allow list.
 
-This catches column-level drift the existing table-level gate can't. Requires:
-- Shadow Postgres URL (Railway dev DB or local Docker postgres) wired into pre-push hook + CI
-- `SHADOW_DATABASE_URL` env var available to the hook
-- ~2-3 hours of work
+The original "shadow DB + `prisma migrate diff`" plan is the heavyweight version (also catches type/default/constraint drift). Worth revisiting if a column-type drift incident slips past the regex parser.
 
 **Defense in depth:** also lint migrations themselves — see #38.
 
@@ -1126,7 +1120,7 @@ Tie this to S.4 channel adapter realization. Don't ship as a standalone fix — 
 
 **🔴 P0 — tackle next:**
 - **0** ✅ Schema-migration drift gate landed 2026-05-02 (script + npm script + .githooks/pre-push). Allow-list down to 0 as of S.0 (DraftListing migrated 2026-05-07). **#37 is the column-level escalation.**
-- **37** Column-level drift detection — table-level gate misses column drift. Three incidents this session, latest took prod down 30 min. Shadow-DB `prisma migrate diff` is the fix.
+- **37** ✅ Resolved 2026-05-07 — `check-column-drift.mjs` wired into pre-push + root `check:drift`. Catches column-level drift via migration-SQL parsing (no shadow DB needed). 113/113 tables clean with 2 known SyncLog allow-list entries. Original shadow-DB approach kept as a future heavyweight option for type/constraint drift.
 - **50** FBA Inbound v0 putTransportDetails deprecated — Amazon returns 400 on the real call. Migrate to v2024-03-20 (multi-step flow). Banner is misleading until then.
 - **8** ✅ Resolved 2026-05-02 — verified GTIN wizard validator was already on the correct ProductImage relation; deleted the orphan `Image` model + dead Express service & route (~1,213 lines). Demoted to P2 for the remaining UX polish.
 - **27** ✅ Resolved 2026-05-02 — TerminologyPreference table + CRUD API + AI prompt injection + admin UI at `/settings/terminology`. Seeded with 7 Xavia/IT entries (Giacca, Pantaloni, Casco, Stivali, Protezioni, Pelle, Rete). Verify post-deploy that "Giacca" wins consistently in regenerations; add new preferences inline as drift surfaces.

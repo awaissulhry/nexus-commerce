@@ -8,16 +8,25 @@
 # also run the command. CI is the long-term answer.)
 #
 # Stages:
-#   1. Schema-migration drift gate — see packages/database/scripts/
-#      check-schema-drift.mjs. Fast; fails fast.
-#   2. apps/web build (next build).
-#   3. apps/api build (tsc).
+#   1a. Schema-migration drift gate (table-level) — catches Prisma
+#       models with no CREATE TABLE in any migration.
+#   1b. Schema-migration drift gate (column-level) — catches schema
+#       fields with no matching ADD COLUMN. Closes TECH_DEBT #37
+#       (the bug class that took prod down 30 min on 2026-05-05).
+#   2.  apps/web build (next build).
+#   3.  apps/api build (tsc).
 set -e
 cd "$(git rev-parse --show-toplevel)"
 
-echo "→ Checking schema/migration drift..."
+echo "→ Checking schema/migration drift (table-level)..."
 node packages/database/scripts/check-schema-drift.mjs || {
-  echo "❌ Schema drift check FAILED — see message above"
+  echo "❌ Table-level drift check FAILED — see message above"
+  exit 1
+}
+
+echo "→ Checking schema/migration drift (column-level)..."
+node packages/database/scripts/check-column-drift.mjs || {
+  echo "❌ Column-level drift check FAILED — see message above"
   exit 1
 }
 
