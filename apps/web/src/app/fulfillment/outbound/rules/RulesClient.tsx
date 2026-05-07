@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import {
-  Plus, Pencil, Trash2, ScrollText, Check, X, RefreshCw,
+  Plus, Pencil, Trash2, ScrollText, Check, X, RefreshCw, FlaskConical, ArrowRight,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -68,6 +68,7 @@ export default function RulesClient() {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<ShippingRule | null>(null)
   const [showNew, setShowNew] = useState(false)
+  const [showSimulator, setShowSimulator] = useState(false)
 
   const fetchRules = useCallback(async () => {
     setLoading(true)
@@ -128,6 +129,9 @@ export default function RulesClient() {
         ]}
         actions={
           <div className="flex items-center gap-2">
+            <button onClick={() => setShowSimulator(true)} className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
+              <FlaskConical size={12} /> {t('rules.simulator.openButton')}
+            </button>
             <button onClick={fetchRules} className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
               <RefreshCw size={12} /> {t('common.refresh')}
             </button>
@@ -201,6 +205,9 @@ export default function RulesClient() {
         </Card>
       )}
 
+      {showSimulator && (
+        <SimulatorModal onClose={() => setShowSimulator(false)} />
+      )}
       {(showNew || editing) && (
         <RuleEditModal
           rule={editing}
@@ -436,5 +443,151 @@ function Field({ label, children, required = false }: { label: string; children:
       </span>
       {children}
     </label>
+  )
+}
+
+// O.57 — simulator modal. Operator constructs a hypothetical order
+// context; backend walks active rules in priority order + returns
+// the first match plus the full trace so operator can see "rule X
+// matched, but rule Y at higher priority would have shadowed it".
+function SimulatorModal({ onClose }: { onClose: () => void }) {
+  const { toast } = useToast()
+  const { t } = useTranslations()
+  const [channel, setChannel] = useState<string>('AMAZON')
+  const [destinationCountry, setDestinationCountry] = useState<string>('IT')
+  const [weightGrams, setWeightGrams] = useState<string>('1500')
+  const [orderTotalCents, setOrderTotalCents] = useState<string>('9900')
+  const [itemCount, setItemCount] = useState<string>('1')
+  const [isPrime, setIsPrime] = useState<'any' | 'yes' | 'no'>('any')
+  const [running, setRunning] = useState(false)
+  type SimResult = {
+    matchedRule: { ruleId: string; ruleName: string; priority: number; actions: Record<string, unknown> } | null
+    trace: Array<{ ruleId: string; ruleName: string; priority: number; matched: boolean }>
+    rulesEvaluated: number
+  }
+  const [result, setResult] = useState<SimResult | null>(null)
+
+  const run = async () => {
+    setRunning(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipping-rules/simulate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          context: {
+            channel,
+            destinationCountry: destinationCountry || null,
+            weightGrams: weightGrams ? Number(weightGrams) : null,
+            orderTotalCents: orderTotalCents ? Number(orderTotalCents) : null,
+            itemCount: itemCount ? Number(itemCount) : 1,
+            isPrime: isPrime === 'yes' ? true : isPrime === 'no' ? false : null,
+            hasHazmat: false,
+            skus: [],
+          },
+        }),
+      })
+      const out = await res.json()
+      if (!res.ok) {
+        toast.error(out.error ?? t('common.error'))
+        return
+      }
+      setResult(out)
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 bg-slate-900/30 flex justify-end" onClick={onClose} role="dialog" aria-modal="true">
+      <div className="w-full max-w-[640px] bg-white shadow-2xl border-l border-slate-200 flex flex-col h-full" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start gap-3 px-5 py-4 border-b border-slate-200">
+          <div className="flex-1">
+            <h2 className="text-lg font-semibold text-slate-900 inline-flex items-center gap-2">
+              <FlaskConical size={16} /> {t('rules.simulator.title')}
+            </h2>
+            <div className="text-sm text-slate-500">{t('rules.simulator.subtitle')}</div>
+          </div>
+          <button onClick={onClose} className="h-8 w-8 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          <Section title={t('rules.simulator.contextSection')}>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label={t('rules.field.channel')}>
+                <select value={channel} onChange={(e) => setChannel(e.target.value)} className="px-3 h-9 text-md border border-slate-300 rounded bg-white">
+                  <option value="AMAZON">AMAZON</option>
+                  <option value="EBAY">EBAY</option>
+                  <option value="SHOPIFY">SHOPIFY</option>
+                </select>
+              </Field>
+              <Field label={t('rules.field.country')}>
+                <input value={destinationCountry} onChange={(e) => setDestinationCountry(e.target.value.toUpperCase())} maxLength={2} className="px-3 h-9 text-md border border-slate-300 rounded font-mono" />
+              </Field>
+              <Field label={t('rules.field.weightMin').replace(' min', '')}>
+                <input type="number" value={weightGrams} onChange={(e) => setWeightGrams(e.target.value)} className="px-3 h-9 text-md tabular-nums border border-slate-300 rounded" />
+              </Field>
+              <Field label={t('rules.simulator.orderTotalCents')}>
+                <input type="number" value={orderTotalCents} onChange={(e) => setOrderTotalCents(e.target.value)} className="px-3 h-9 text-md tabular-nums border border-slate-300 rounded" />
+              </Field>
+              <Field label={t('rules.simulator.itemCount')}>
+                <input type="number" min="1" value={itemCount} onChange={(e) => setItemCount(e.target.value)} className="px-3 h-9 text-md tabular-nums border border-slate-300 rounded" />
+              </Field>
+              <Field label={t('rules.field.prime')}>
+                <select value={isPrime} onChange={(e) => setIsPrime(e.target.value as any)} className="px-3 h-9 text-md border border-slate-300 rounded bg-white">
+                  <option value="any">{t('rules.field.primeAny')}</option>
+                  <option value="yes">{t('rules.field.primeYes')}</option>
+                  <option value="no">{t('rules.field.primeNo')}</option>
+                </select>
+              </Field>
+            </div>
+          </Section>
+
+          <button onClick={run} disabled={running} className="h-9 px-4 text-md bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5">
+            <FlaskConical size={14} /> {running ? t('common.loading') : t('rules.simulator.runButton')}
+          </button>
+
+          {result && (
+            <Section title={t('rules.simulator.result')}>
+              {result.matchedRule ? (
+                <div className="bg-emerald-50 border border-emerald-200 rounded p-3 space-y-2">
+                  <div className="flex items-center gap-2 text-md font-semibold text-emerald-900">
+                    <Check size={14} /> {t('rules.simulator.matched', { name: result.matchedRule.ruleName, priority: result.matchedRule.priority })}
+                  </div>
+                  <pre className="text-xs bg-white border border-emerald-200 rounded p-2 overflow-x-auto">
+                    {JSON.stringify(result.matchedRule.actions, null, 2)}
+                  </pre>
+                </div>
+              ) : (
+                <div className="bg-slate-50 border border-slate-200 rounded p-3 text-md text-slate-700">
+                  {t('rules.simulator.noMatch', { n: result.rulesEvaluated })}
+                </div>
+              )}
+              {result.trace.length > 0 && (
+                <details className="group mt-2">
+                  <summary className="cursor-pointer text-sm font-semibold text-slate-500 uppercase tracking-wider hover:text-slate-700">
+                    {t('rules.simulator.trace', { n: result.trace.length })}
+                  </summary>
+                  <div className="mt-2 space-y-1">
+                    {result.trace.map((row) => (
+                      <div key={row.ruleId} className="flex items-center gap-2 text-sm">
+                        <span className="text-slate-500 w-8 text-right tabular-nums">{row.priority}</span>
+                        <span className={row.matched ? 'text-emerald-700 font-medium' : 'text-slate-500'}>
+                          {row.matched ? '✓' : '·'}
+                        </span>
+                        <span className="flex-1 text-slate-700">{row.ruleName}</span>
+                        {row.matched && (
+                          <ArrowRight size={11} className="text-emerald-600" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </Section>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }

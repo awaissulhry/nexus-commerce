@@ -2717,6 +2717,120 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── O.57: rules simulator ──────────────────────────────────────────
+  // POST /api/fulfillment/shipping-rules/simulate
+  //   Body: { context | orderId }
+  // Operator either passes a real orderId (we build the context from
+  // the Order) or a hand-rolled context. Returns the first matching
+  // rule (mirrors applyShippingRules' first-match-wins semantics) +
+  // every rule that was evaluated, so operator can see which rules
+  // came before the match. No audit / triggerCount bump (this is a
+  // dry simulation).
+  fastify.post('/fulfillment/shipping-rules/simulate', async (request, reply) => {
+    try {
+      const body = request.body as {
+        orderId?: string
+        context?: {
+          channel?: string
+          marketplace?: string | null
+          destinationCountry?: string | null
+          weightGrams?: number | null
+          orderTotalCents?: number | null
+          itemCount?: number
+          isPrime?: boolean | null
+          hasHazmat?: boolean
+          skus?: string[]
+        }
+      }
+
+      let ctx: any
+      if (body.orderId) {
+        const o = await prisma.order.findUnique({
+          where: { id: body.orderId },
+          include: { items: { select: { sku: true } } },
+        })
+        if (!o) return reply.code(404).send({ error: 'Order not found' })
+        const ship = (o.shippingAddress ?? {}) as any
+        const dest = ship.country ?? ship.CountryCode ?? ship.countryCode ?? null
+        ctx = {
+          channel: o.channel,
+          marketplace: o.marketplace,
+          destinationCountry: typeof dest === 'string' ? dest : null,
+          weightGrams: null,
+          orderTotalCents: Math.round(Number(o.totalPrice) * 100),
+          itemCount: o.items.length,
+          isPrime: o.isPrime ?? null,
+          hasHazmat: false,
+          skus: o.items.map((i) => i.sku),
+        }
+      } else if (body.context) {
+        ctx = {
+          channel: body.context.channel ?? 'AMAZON',
+          marketplace: body.context.marketplace ?? null,
+          destinationCountry: body.context.destinationCountry ?? null,
+          weightGrams: body.context.weightGrams ?? null,
+          orderTotalCents: body.context.orderTotalCents ?? null,
+          itemCount: body.context.itemCount ?? 1,
+          isPrime: body.context.isPrime ?? null,
+          hasHazmat: body.context.hasHazmat ?? false,
+          skus: body.context.skus ?? [],
+        }
+      } else {
+        return reply.code(400).send({ error: 'Provide either orderId or context' })
+      }
+
+      const { matchConditions } = (
+        await import('../services/shipping-rules/applier.js')
+      ).__test as any
+
+      // Walk active rules in priority order; record per-rule decision.
+      const rules = await prisma.shippingRule.findMany({
+        where: { isActive: true },
+        orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+        select: { id: true, name: true, priority: true, conditions: true, actions: true },
+      })
+      const trace: Array<{
+        ruleId: string
+        ruleName: string
+        priority: number
+        matched: boolean
+      }> = []
+      let matched: typeof rules[number] | null = null
+      for (const r of rules) {
+        const ok = matchConditions((r.conditions ?? {}) as any, ctx)
+        trace.push({
+          ruleId: r.id,
+          ruleName: r.name,
+          priority: r.priority,
+          matched: ok,
+        })
+        if (ok && !matched) {
+          matched = r
+          // Continue the trace so operator can see what would have
+          // matched at lower priority — useful for "is my rule shadowed
+          // by an earlier rule I forgot about?" debugging.
+        }
+      }
+
+      return {
+        context: ctx,
+        matchedRule: matched
+          ? {
+              ruleId: matched.id,
+              ruleName: matched.name,
+              priority: matched.priority,
+              actions: matched.actions,
+            }
+          : null,
+        trace,
+        rulesEvaluated: rules.length,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[shipping-rules/simulate] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   fastify.delete('/fulfillment/shipping-rules/:id', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
