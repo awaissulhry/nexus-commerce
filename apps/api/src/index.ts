@@ -56,7 +56,12 @@ import productRelationsRoutes from "./routes/product-relations.routes.js";
 import forecastRoutes from "./routes/forecast.routes.js";
 import aiUsageRoutes from "./routes/ai-usage.routes.js";
 import savedViewAlertsRoutes from "./routes/saved-view-alerts.routes.js";
-import savedViewsRoutes from "./routes/saved-views.routes.js";
+// saved-views CRUD lives in products-catalog.routes.ts (P.3); the
+// duplicate plugin in routes/saved-views.routes.ts (O.27) was crashing
+// boot with FST_ERR_DUPLICATED_ROUTE on `GET /api/saved-views`. The
+// products-catalog version is the one /products + /listings + the
+// pending-tab consume (it carries the alertSummary join those UIs
+// rely on); the O.27 file is removed.
 import notificationsRoutes from "./routes/notifications.routes.js";
 import ordersReviewsRoutes from "./routes/orders-reviews.routes.js";
 import connectionsRoutes from "./routes/connections.routes.js";
@@ -337,7 +342,8 @@ app.register(productRelationsRoutes, { prefix: '/api' });
 app.register(forecastRoutes, { prefix: '/api' });
 app.register(aiUsageRoutes, { prefix: '/api' });
 app.register(savedViewAlertsRoutes, { prefix: '/api' });
-app.register(savedViewsRoutes, { prefix: '/api' });
+// savedViewsRoutes register removed — see import comment above.
+// /api/saved-views{,/...} is owned by products-catalog.routes.ts.
 app.register(notificationsRoutes, { prefix: '/api' });
 app.register(ordersReviewsRoutes, { prefix: '/api' });
 app.register(connectionsRoutes, { prefix: '/api' });
