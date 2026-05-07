@@ -581,6 +581,11 @@ model ChannelListing {
   // bulk / webhook resync writes a row with status, duration, error.
   // The drawer's Sync tab renders these as a real timeline.
   syncAttempts      SyncAttempt[]
+  // S.5 — Amazon suppression events. One row per suppression episode
+  // (open + resolved span). The Amazon deep view's resolver lists
+  // active rows; resolved rows form an audit trail for "this listing
+  // was suppressed 3 times last quarter for the same reason."
+  amazonSuppressions AmazonSuppression[]
 
   // NN.1 — optimistic concurrency on per-channel listing edits.
   version Int @default(1)
@@ -702,6 +707,42 @@ model SyncAttempt {
   @@index([listingId, attemptedAt])
   @@index([status])
   @@index([source])
+}
+
+// ── S.5: AmazonSuppression — episode-shaped suppression audit ─────────────
+//
+// Amazon's marketplace flags listings as SUPPRESSED for many reasons —
+// missing safety warnings, GTIN issues, restricted category, hazmat,
+// pricing anomalies, etc. We model each suppression as an episode
+// (suppressedAt → resolvedAt) so the operator can see history ("this
+// SKU's been suppressed 3 times for the same reason this quarter").
+//
+// resolvedAt = null means the listing is currently suppressed; the
+// Amazon deep view's resolver panel queries on that exact predicate.
+//
+// Source vocabulary:
+//   manual      — user marked the listing suppressed in our UI
+//   sp-api-poll — cron-driven suppression detection (S.5b — not yet running)
+//   webhook     — Amazon push (Subscriptions API; S.5c)
+
+model AmazonSuppression {
+  id String @id @default(cuid())
+
+  channelListing ChannelListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listingId      String
+
+  suppressedAt   DateTime  @default(now())
+  resolvedAt     DateTime?
+  reasonCode     String? // SP-API reason code, when available
+  reasonText     String // human-readable description
+  severity       String  @default("ERROR") // ERROR | WARNING | INFO
+  source         String  @default("manual") // manual | sp-api-poll | webhook
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([listingId, suppressedAt])
+  @@index([resolvedAt])
 }
 
 // ── PHASE 9: Offer (Fulfillment-Specific SKU & Pricing) ──────────────────

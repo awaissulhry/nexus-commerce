@@ -795,6 +795,75 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }],
       })
 
+      // S.5 — Amazon-specific context. Included only when this is an
+      // Amazon listing; populates the drawer Detail tab's Amazon
+      // section (ASIN tree, FBA economics, Buy Box intelligence,
+      // active suppression record).
+      let amazonContext: any = null
+      if (l.channel === 'AMAZON') {
+        // Sibling variations (parent/child ASIN tree). When this product
+        // has a parent, fetch the parent and all its variations. When
+        // this IS a parent, fetch its own variations.
+        const product = await prisma.product.findUnique({
+          where: { id: l.productId },
+          select: {
+            id: true, sku: true, name: true,
+            isParent: true, parentId: true,
+            amazonAsin: true, parentAsin: true,
+            variations: {
+              select: { id: true, sku: true, name: true, amazonAsin: true, stock: true },
+            },
+          },
+        })
+
+        // Active suppression record, if any
+        const activeSuppression = await prisma.amazonSuppression.findFirst({
+          where: { listingId: l.id, resolvedAt: null },
+          orderBy: { suppressedAt: 'desc' },
+        })
+
+        // Buy Box intelligence: our price vs lowest competitor.
+        // `lowestCompetitorPrice` + `competitorFetchedAt` come from a
+        // future SP-API GetItemOffersBatch cron; today they may be
+        // null. Drawer renders gracefully either way.
+        const competitorDelta =
+          l.price != null && l.lowestCompetitorPrice != null
+            ? Number(l.price) - Number(l.lowestCompetitorPrice)
+            : null
+
+        amazonContext = {
+          asin: l.externalListingId,
+          parentAsin: l.externalParentId,
+          isParentSku: product?.isParent ?? false,
+          variations: product?.variations ?? [],
+          fbaEconomics: {
+            estimatedFbaFee: l.estimatedFbaFee == null ? null : Number(l.estimatedFbaFee),
+            referralFeePercent: l.referralFeePercent == null ? null : Number(l.referralFeePercent),
+            feeFetchedAt: l.feeFetchedAt,
+          },
+          buyBox: {
+            ourPrice: l.price == null ? null : Number(l.price),
+            lowestCompetitorPrice:
+              l.lowestCompetitorPrice == null ? null : Number(l.lowestCompetitorPrice),
+            competitorFetchedAt: l.competitorFetchedAt,
+            delta: competitorDelta,
+            losingOnPrice: competitorDelta != null && competitorDelta > 0,
+            // Real ownership requires SP-API GetItemOffersBatch — flagged honestly
+            ownershipKnown: false,
+          },
+          activeSuppression: activeSuppression
+            ? {
+                id: activeSuppression.id,
+                suppressedAt: activeSuppression.suppressedAt,
+                reasonCode: activeSuppression.reasonCode,
+                reasonText: activeSuppression.reasonText,
+                severity: activeSuppression.severity,
+                source: activeSuppression.source,
+              }
+            : null,
+        }
+      }
+
       return {
         id: l.id,
         productId: l.productId,
@@ -856,6 +925,8 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           isPublished: c.isPublished,
           listingUrl: listingUrlFor(c.channel, c.marketplace, c.externalListingId),
         })),
+        // S.5 — Amazon-specific context (null for non-Amazon channels)
+        amazonContext,
         // S.3 — computed health: score, category, structured issues.
         // The frontend HealthPanel renders this without recomputing.
         health: computeHealth({
@@ -979,6 +1050,235 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       return { ok: true, listing: { id: updated.id, version: updated.version } }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[listings/:id PATCH] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ─────────────────────────────────────────────────────────────────
+  // GET /api/listings/amazon/overview — Amazon-specific aggregates
+  //
+  // S.5 — powers the AmazonListingsClient header. KPIs are scoped to a
+  // single Amazon marketplace (IT/DE/FR/UK/ES/NL/PL/SE/US) when
+  // ?marketplace= is present, or to all Amazon marketplaces aggregated
+  // when omitted.
+  //
+  // Returned shape includes counts (live, suppressed, draft, error),
+  // FBA economics rollups (avg fee, avg referral %), parent ASIN count,
+  // currently-active suppressions list, and a per-marketplace
+  // breakdown for the marketplace tab strip badges.
+  // ─────────────────────────────────────────────────────────────────
+  fastify.get('/listings/amazon/overview', async (request, reply) => {
+    try {
+      const q = request.query as Record<string, string | undefined>
+      const marketplace = (q.marketplace ?? '').trim()
+
+      const where: any = { channel: 'AMAZON' }
+      if (marketplace) where.marketplace = marketplace
+
+      const [
+        total,
+        live,
+        draft,
+        error,
+        suppressed,
+        listings,
+        marketplaceBreakdown,
+        activeSuppressions,
+      ] = await Promise.all([
+        prisma.channelListing.count({ where }),
+        prisma.channelListing.count({ where: { ...where, listingStatus: 'ACTIVE' } }),
+        prisma.channelListing.count({ where: { ...where, listingStatus: 'DRAFT' } }),
+        prisma.channelListing.count({ where: { ...where, listingStatus: 'ERROR' } }),
+        prisma.channelListing.count({ where: { ...where, listingStatus: 'SUPPRESSED' } }),
+        prisma.channelListing.findMany({
+          where,
+          select: {
+            id: true,
+            estimatedFbaFee: true,
+            referralFeePercent: true,
+            externalParentId: true,
+            externalListingId: true,
+            price: true,
+            lowestCompetitorPrice: true,
+          },
+        }),
+        // Per-marketplace breakdown (always group all Amazon markets
+        // even when filtering — the tab strip needs the unfiltered set
+        // to render badge counts).
+        prisma.channelListing.groupBy({
+          by: ['marketplace'],
+          where: { channel: 'AMAZON' },
+          _count: true,
+        }),
+        prisma.amazonSuppression.findMany({
+          where: {
+            resolvedAt: null,
+            channelListing: { channel: 'AMAZON', ...(marketplace ? { marketplace } : {}) },
+          },
+          orderBy: { suppressedAt: 'desc' },
+          take: 50,
+          include: {
+            channelListing: {
+              select: {
+                id: true,
+                marketplace: true,
+                externalListingId: true,
+                listingStatus: true,
+                product: { select: { id: true, sku: true, name: true } },
+              },
+            },
+          },
+        }),
+      ])
+
+      // FBA economics rollups (only over rows that actually have fees set)
+      const withFee = listings.filter((l) => l.estimatedFbaFee != null)
+      const withReferral = listings.filter((l) => l.referralFeePercent != null)
+      const avgFbaFee =
+        withFee.length === 0
+          ? null
+          : withFee.reduce((acc, l) => acc + Number(l.estimatedFbaFee), 0) / withFee.length
+      const avgReferralPct =
+        withReferral.length === 0
+          ? null
+          : withReferral.reduce((acc, l) => acc + Number(l.referralFeePercent), 0) / withReferral.length
+
+      // Parent ASIN count = distinct externalParentId values present
+      const parentAsins = new Set<string>()
+      for (const l of listings) {
+        if (l.externalParentId) parentAsins.add(l.externalParentId)
+      }
+
+      // Pricing competitiveness: fraction of rows where our price >
+      // lowestCompetitorPrice (we're losing on price). Soft signal —
+      // real Buy Box requires SP-API.
+      const withCompetitor = listings.filter(
+        (l) => l.lowestCompetitorPrice != null && l.price != null,
+      )
+      const losingOnPrice = withCompetitor.filter(
+        (l) => Number(l.price) > Number(l.lowestCompetitorPrice),
+      ).length
+
+      return {
+        marketplace: marketplace || null,
+        counts: { total, live, draft, error, suppressed },
+        fbaEconomics: {
+          avgFbaFee,
+          avgReferralPct,
+          coverage: total === 0 ? 0 : Math.round((withFee.length / total) * 100),
+        },
+        parentAsinCount: parentAsins.size,
+        pricingIntelligence: {
+          listingsWithCompetitor: withCompetitor.length,
+          losingOnPrice,
+        },
+        marketplaceBreakdown: marketplaceBreakdown.map((b) => ({
+          marketplace: b.marketplace,
+          count: b._count,
+        })),
+        activeSuppressions: activeSuppressions.map((s) => ({
+          id: s.id,
+          listingId: s.listingId,
+          suppressedAt: s.suppressedAt,
+          reasonCode: s.reasonCode,
+          reasonText: s.reasonText,
+          severity: s.severity,
+          source: s.source,
+          listing: {
+            id: s.channelListing.id,
+            marketplace: s.channelListing.marketplace,
+            externalListingId: s.channelListing.externalListingId,
+            listingStatus: s.channelListing.listingStatus,
+            product: s.channelListing.product,
+          },
+        })),
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[listings/amazon/overview] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ─────────────────────────────────────────────────────────────────
+  // POST /api/listings/amazon/suppressions — manually log a suppression
+  //
+  // S.5 — used by the resolver UI when an operator wants to record a
+  // suppression event ahead of SP-API auto-detection (S.5b). Body
+  // carries listingId, reasonText, optional reasonCode + severity.
+  // ─────────────────────────────────────────────────────────────────
+  fastify.post('/listings/amazon/suppressions', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as {
+        listingId?: string
+        reasonText?: string
+        reasonCode?: string
+        severity?: 'ERROR' | 'WARNING' | 'INFO'
+      }
+      if (!body.listingId) return reply.code(400).send({ error: 'listingId required' })
+      if (!body.reasonText) return reply.code(400).send({ error: 'reasonText required' })
+
+      const listing = await prisma.channelListing.findUnique({
+        where: { id: body.listingId },
+        select: { id: true, channel: true },
+      })
+      if (!listing) return reply.code(404).send({ error: 'Listing not found' })
+      if (listing.channel !== 'AMAZON') {
+        return reply.code(400).send({ error: 'Suppressions are Amazon-only' })
+      }
+
+      const created = await prisma.amazonSuppression.create({
+        data: {
+          listingId: body.listingId,
+          reasonText: body.reasonText,
+          reasonCode: body.reasonCode ?? null,
+          severity: body.severity ?? 'ERROR',
+          source: 'manual',
+        },
+      })
+      // Reflect on the listing itself so the rest of the UI sees SUPPRESSED.
+      await prisma.channelListing.update({
+        where: { id: body.listingId },
+        data: { listingStatus: 'SUPPRESSED', version: { increment: 1 } },
+      })
+      publishListingEvent({ type: 'listing.updated', listingId: body.listingId, reason: 'suppression-opened', ts: Date.now() })
+      return { ok: true, suppression: created }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[listings/amazon/suppressions POST] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ─────────────────────────────────────────────────────────────────
+  // PATCH /api/listings/amazon/suppressions/:id — resolve a suppression
+  // ─────────────────────────────────────────────────────────────────
+  fastify.patch('/listings/amazon/suppressions/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as { resolved?: boolean; restoreStatus?: string }
+
+      const sup = await prisma.amazonSuppression.findUnique({
+        where: { id },
+        select: { id: true, listingId: true, resolvedAt: true },
+      })
+      if (!sup) return reply.code(404).send({ error: 'Suppression not found' })
+
+      if (body.resolved && !sup.resolvedAt) {
+        await prisma.amazonSuppression.update({
+          where: { id },
+          data: { resolvedAt: new Date() },
+        })
+        // Optional: restore the listing's status so the rest of the
+        // UI un-flags it. We default to ACTIVE; caller can override.
+        const newStatus = body.restoreStatus ?? 'ACTIVE'
+        await prisma.channelListing.update({
+          where: { id: sup.listingId },
+          data: { listingStatus: newStatus, version: { increment: 1 } },
+        })
+        publishListingEvent({ type: 'listing.updated', listingId: sup.listingId, reason: 'suppression-resolved', ts: Date.now() })
+      }
+      return { ok: true }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[listings/amazon/suppressions PATCH] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })

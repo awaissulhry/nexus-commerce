@@ -1,8 +1,12 @@
 import { COUNTRY_NAMES } from '@/lib/country-names'
-import ListingsWorkspace from '../../ListingsWorkspace'
+import AmazonListingsClient from '../AmazonListingsClient'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+
+// S.5 — per-market route locks the AmazonListingsClient to a specific
+// marketplace; the marketplace tab strip is hidden in lockMarketplace
+// mode (URL is the source of truth).
 
 export default async function AmazonMarketPage({
   params,
@@ -13,8 +17,7 @@ export default async function AmazonMarketPage({
   const code = market.toUpperCase()
   const label = COUNTRY_NAMES[code] ?? code
   return (
-    <ListingsWorkspace
-      lockChannel="AMAZON"
+    <AmazonListingsClient
       lockMarketplace={code}
       breadcrumbs={[
         { label: 'Listings', href: '/listings' },

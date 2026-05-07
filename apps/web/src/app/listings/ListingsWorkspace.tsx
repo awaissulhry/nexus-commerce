@@ -2704,6 +2704,17 @@ function DetailTab({ listing, patch }: { listing: any; patch: (body: any) => Pro
         <HealthPanel health={listing.health} handlers={healthHandlers} />
       )}
 
+      {/* S.5 — Amazon-specific context (ASIN tree, FBA economics,
+          Buy Box intelligence, active suppression). Renders only when
+          channel === 'AMAZON' and the backend returned amazonContext. */}
+      {listing.channel === 'AMAZON' && listing.amazonContext && (
+        <AmazonContextSection
+          listingId={listing.id}
+          listingLabel={`${listing.product?.name ?? listing.product?.sku} · AMAZON ${listing.marketplace}`}
+          ctx={listing.amazonContext}
+        />
+      )}
+
       {/* Master vs channel — Price */}
       <FieldComparison
         label="Price"
@@ -2930,6 +2941,241 @@ function FieldComparison({
       )}
     </div>
   )
+}
+
+// ────────────────────────────────────────────────────────────────────
+// AmazonContextSection — drawer Detail tab extension when channel='AMAZON'
+//
+// S.5 — surfaces ASIN tree (parent + child variations), FBA economics
+// with margin estimate, Buy Box intelligence (our price vs lowest
+// competitor with delta), and the active suppression record if any.
+// "Log suppression" CTA opens the SuppressionLogModal so operators
+// can record episodes ahead of SP-API auto-detection (S.5b).
+// ────────────────────────────────────────────────────────────────────
+function AmazonContextSection({
+  listingId,
+  listingLabel,
+  ctx,
+}: {
+  listingId: string
+  listingLabel: string
+  ctx: any
+}) {
+  const [logOpen, setLogOpen] = useState(false)
+
+  const margin =
+    ctx.fbaEconomics.estimatedFbaFee != null &&
+    ctx.fbaEconomics.referralFeePercent != null &&
+    ctx.buyBox.ourPrice != null
+      ? ctx.buyBox.ourPrice -
+        ctx.fbaEconomics.estimatedFbaFee -
+        (ctx.buyBox.ourPrice * ctx.fbaEconomics.referralFeePercent) / 100
+      : null
+
+  return (
+    <div className="border border-orange-200 bg-orange-50/30 rounded-md p-3 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs uppercase tracking-wider text-orange-700 font-semibold inline-flex items-center gap-1.5">
+          <Package size={12} /> Amazon
+        </div>
+        {!ctx.activeSuppression && (
+          <button
+            onClick={() => setLogOpen(true)}
+            className="h-6 px-2 text-xs bg-white text-rose-700 border border-rose-200 rounded hover:bg-rose-50 inline-flex items-center gap-1"
+            aria-label="Log a suppression"
+          >
+            <AlertTriangle size={10} /> Log suppression
+          </button>
+        )}
+      </div>
+
+      {/* ASIN identifiers */}
+      <div className="grid grid-cols-2 gap-3 text-sm">
+        <div>
+          <div className="text-xs uppercase tracking-wider text-slate-500 font-medium mb-0.5">ASIN</div>
+          <div className="font-mono text-slate-900 font-semibold">
+            {ctx.asin ?? <span className="text-slate-400">—</span>}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs uppercase tracking-wider text-slate-500 font-medium mb-0.5">Parent ASIN</div>
+          <div className="font-mono text-slate-900">
+            {ctx.parentAsin ?? <span className="text-slate-400">—</span>}
+          </div>
+        </div>
+      </div>
+
+      {/* Variation tree (when this is a parent SKU) */}
+      {ctx.isParentSku && Array.isArray(ctx.variations) && ctx.variations.length > 0 && (
+        <div>
+          <div className="text-xs uppercase tracking-wider text-slate-500 font-medium mb-1.5">
+            Variations ({ctx.variations.length})
+          </div>
+          <div className="border border-slate-200 rounded-md bg-white divide-y divide-slate-100">
+            {ctx.variations.map((v: any) => (
+              <div key={v.id} className="flex items-center gap-3 px-2.5 py-1.5">
+                <span className="font-mono text-xs font-semibold text-slate-700 truncate flex-1">
+                  {v.sku}
+                </span>
+                {v.amazonAsin && (
+                  <span className="font-mono text-xs text-slate-500">{v.amazonAsin}</span>
+                )}
+                <span className="text-xs text-slate-500 tabular-nums w-12 text-right">
+                  {v.stock ?? 0} pcs
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* FBA economics + margin estimate */}
+      <div>
+        <div className="text-xs uppercase tracking-wider text-slate-500 font-medium mb-1.5">
+          FBA economics
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-sm">
+          <FbaCell
+            label="FBA fee"
+            value={ctx.fbaEconomics.estimatedFbaFee != null ? `€${ctx.fbaEconomics.estimatedFbaFee.toFixed(2)}` : '—'}
+            sub="per unit"
+          />
+          <FbaCell
+            label="Referral"
+            value={ctx.fbaEconomics.referralFeePercent != null ? `${ctx.fbaEconomics.referralFeePercent.toFixed(1)}%` : '—'}
+            sub="of price"
+          />
+          <FbaCell
+            label="Net margin"
+            value={margin != null ? `€${margin.toFixed(2)}` : '—'}
+            sub={margin != null && ctx.buyBox.ourPrice ? `${((margin / ctx.buyBox.ourPrice) * 100).toFixed(0)}%` : 'pending'}
+            tone={margin != null && margin > 0 ? 'success' : margin != null && margin <= 0 ? 'danger' : 'default'}
+          />
+        </div>
+        {ctx.fbaEconomics.feeFetchedAt == null && (
+          <div className="text-xs text-slate-400 italic mt-1.5">
+            Fee data not yet fetched — runs via SP-API GetMyFeesEstimate cron (S.5b).
+          </div>
+        )}
+      </div>
+
+      {/* Buy Box intelligence */}
+      <div>
+        <div className="text-xs uppercase tracking-wider text-slate-500 font-medium mb-1.5">
+          Buy Box intelligence
+        </div>
+        {ctx.buyBox.lowestCompetitorPrice == null ? (
+          <div className="text-sm text-slate-500 bg-white border border-slate-200 rounded-md p-2.5">
+            Competitor pricing not yet fetched. Real Buy Box ownership requires the SP-API
+            GetItemOffersBatch integration (S.5b — pending).
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-2 text-sm bg-white border border-slate-200 rounded-md p-2.5">
+            <FbaCell
+              label="Our price"
+              value={ctx.buyBox.ourPrice != null ? `€${ctx.buyBox.ourPrice.toFixed(2)}` : '—'}
+            />
+            <FbaCell
+              label="Lowest competitor"
+              value={`€${ctx.buyBox.lowestCompetitorPrice.toFixed(2)}`}
+            />
+            <FbaCell
+              label="Delta"
+              value={
+                ctx.buyBox.delta != null
+                  ? `${ctx.buyBox.delta > 0 ? '+' : ''}€${ctx.buyBox.delta.toFixed(2)}`
+                  : '—'
+              }
+              tone={ctx.buyBox.losingOnPrice ? 'danger' : 'success'}
+              sub={ctx.buyBox.losingOnPrice ? 'losing on price' : 'competitive'}
+            />
+          </div>
+        )}
+        {ctx.buyBox.competitorFetchedAt && (
+          <div className="text-xs text-slate-400 mt-1">
+            Last competitor fetch: {new Date(ctx.buyBox.competitorFetchedAt).toLocaleString()}
+          </div>
+        )}
+      </div>
+
+      {/* Active suppression record */}
+      {ctx.activeSuppression && (
+        <div className="border border-rose-300 bg-rose-50 rounded-md p-2.5">
+          <div className="flex items-center gap-1.5 mb-1">
+            <AlertTriangle size={12} className="text-rose-600" />
+            <span className="text-xs uppercase tracking-wider font-semibold text-rose-700">
+              Active suppression
+            </span>
+          </div>
+          <div className="text-base text-rose-700">
+            {ctx.activeSuppression.reasonCode && (
+              <span className="font-mono mr-1">[{ctx.activeSuppression.reasonCode}]</span>
+            )}
+            {ctx.activeSuppression.reasonText}
+          </div>
+          <div className="text-xs text-slate-500 mt-1">
+            Suppressed {new Date(ctx.activeSuppression.suppressedAt).toLocaleString()} ·{' '}
+            source: {ctx.activeSuppression.source}
+          </div>
+        </div>
+      )}
+
+      <SuppressionLogModalLazy
+        open={logOpen}
+        onClose={() => setLogOpen(false)}
+        listingId={listingId}
+        listingLabel={listingLabel}
+      />
+    </div>
+  )
+}
+
+function FbaCell({
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  label: string
+  value: string
+  sub?: string
+  tone?: 'default' | 'success' | 'danger'
+}) {
+  const toneClass =
+    tone === 'success' ? 'text-emerald-700'
+    : tone === 'danger' ? 'text-rose-700'
+    : 'text-slate-900'
+  return (
+    <div>
+      <div className="text-xs uppercase tracking-wider text-slate-400 font-medium mb-0.5">{label}</div>
+      <div className={`text-base font-semibold tabular-nums ${toneClass}`}>{value}</div>
+      {sub && <div className="text-xs text-slate-500">{sub}</div>}
+    </div>
+  )
+}
+
+// SuppressionLogModal lives in AmazonListingsClient.tsx; lazy-import
+// here to avoid hard-coupling the workspace to the Amazon page.
+function SuppressionLogModalLazy(props: {
+  open: boolean
+  onClose: () => void
+  listingId: string
+  listingLabel: string
+}) {
+  // Conditional dynamic import: only loads the modal code when the
+  // operator clicks "Log suppression" — keeps the workspace bundle
+  // lean for non-Amazon channels.
+  const [Comp, setComp] = useState<any>(null)
+  useEffect(() => {
+    if (!props.open) return
+    let cancelled = false
+    import('./amazon/AmazonListingsClient').then((mod) => {
+      if (!cancelled) setComp(() => mod.SuppressionLogModal)
+    })
+    return () => { cancelled = true }
+  }, [props.open])
+  if (!props.open || !Comp) return null
+  return <Comp {...props} />
 }
 
 // ────────────────────────────────────────────────────────────────────
