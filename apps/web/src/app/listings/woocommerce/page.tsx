@@ -1,12 +1,11 @@
-import ListingsWorkspace from '../ListingsWorkspace'
+import WooCommerceListingsClient from './WooCommerceListingsClient'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 export default function WooCommerceListingsPage() {
   return (
-    <ListingsWorkspace
-      lockChannel="WOOCOMMERCE"
+    <WooCommerceListingsClient
       breadcrumbs={[{ label: 'Listings', href: '/listings' }, { label: 'WooCommerce' }]}
     />
   )
