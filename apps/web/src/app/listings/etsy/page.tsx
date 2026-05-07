@@ -1,12 +1,11 @@
-import ListingsWorkspace from '../ListingsWorkspace'
+import EtsyListingsClient from './EtsyListingsClient'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 export default function EtsyListingsPage() {
   return (
-    <ListingsWorkspace
-      lockChannel="ETSY"
+    <EtsyListingsClient
       breadcrumbs={[{ label: 'Listings', href: '/listings' }, { label: 'Etsy' }]}
     />
   )
