@@ -14,7 +14,7 @@ import { Card } from '@/components/ui/Card'
 import { getBackendUrl } from '@/lib/backend-url'
 
 type Overview = {
-  outbound: { pendingShipments: number; readyToPick: number; inTransit: number; deliveredToday: number }
+  outbound: { pendingShipments: number; readyToPick: number; inTransit: number; deliveredToday: number; overduePending?: number }
   inbound: { openInbound: number; receivingNow: number; openWorkOrders: number }
   stock: { lowStock: number; outOfStock: number }
   returns: { pending: number; inspecting: number }
@@ -58,10 +58,17 @@ export default function FulfillmentOverview() {
       ) : data ? (
         <>
           {/* Top alerts row */}
-          {(data.replenishment.critical > 0 || data.stock.outOfStock > 0) && (
+          {(data.replenishment.critical > 0 || data.stock.outOfStock > 0 || (data.outbound.overduePending ?? 0) > 0) && (
             <Card>
               <div className="flex items-center gap-3 flex-wrap">
                 <AlertTriangle size={18} className="text-rose-600" />
+                {/* O.81: overdue pending orders — past ship-by with no
+                    shipment yet. Highest-priority operator action. */}
+                {(data.outbound.overduePending ?? 0) > 0 && (
+                  <Link href="/fulfillment/outbound?urgency=OVERDUE" className="text-md text-rose-700 hover:underline font-medium">
+                    {data.outbound.overduePending} order{data.outbound.overduePending === 1 ? '' : 's'} past ship-by →
+                  </Link>
+                )}
                 {data.replenishment.critical > 0 && (
                   <Link href="/fulfillment/replenishment" className="text-md text-rose-700 hover:underline font-medium">
                     {data.replenishment.critical} SKU{data.replenishment.critical === 1 ? '' : 's'} need urgent reorder →

@@ -327,6 +327,11 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         totalSuppliers,
         defaultWarehouse,
         activePoCount,
+        // O.81: overdue pending orders — shipByDate has passed but no
+        // active shipment exists yet. Drives the alert-ribbon row at
+        // the top of the overview so operators see at-risk volume
+        // before drilling into outbound.
+        overduePending,
       ] = await Promise.all([
         prisma.shipment.count({ where: { status: { in: ['DRAFT', 'READY_TO_PICK'] as any } } }),
         prisma.shipment.count({ where: { status: 'READY_TO_PICK' as any } }),
@@ -353,10 +358,18 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             status: { in: ['DRAFT', 'REVIEW', 'APPROVED', 'SUBMITTED'] as any },
           },
         }),
+        // O.81: pending orders past their ship-by deadline.
+        prisma.order.count({
+          where: {
+            status: { in: ['PENDING', 'PROCESSING'] as any[] },
+            shipByDate: { lt: new Date() },
+            shipments: { none: { status: { not: 'CANCELLED' as any } } },
+          },
+        }),
       ])
 
       return {
-        outbound: { pendingShipments, readyToPick, inTransit, deliveredToday },
+        outbound: { pendingShipments, readyToPick, inTransit, deliveredToday, overduePending },
         inbound: { openInbound, receivingNow, openWorkOrders },
         stock: { lowStock: lowStockCount, outOfStock: outOfStockCount },
         returns: { pending: pendingReturns, inspecting: inspectingReturns },
