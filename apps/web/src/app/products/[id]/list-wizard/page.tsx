@@ -18,6 +18,7 @@ interface RawWizardResponse {
     channelStates?: Record<string, Record<string, unknown>> | null
     submissions?: unknown[] | null
     status: string
+    updatedAt?: string
   }
   product?: WizardProduct
   error?: string
@@ -111,6 +112,7 @@ export default async function ListWizardPage({
     >,
     submissions: (json.wizard.submissions ?? []) as unknown[],
     status: json.wizard.status,
+    updatedAt: json.wizard.updatedAt,
   }
 
   return <ListWizardClient initialWizard={wizard} product={json.product} />

@@ -172,6 +172,86 @@ export class AmazonSpApiClient {
   }
 
   /**
+   * C.1 — fetch wrapper with exponential backoff on transient errors.
+   *
+   * Retries on:
+   *   - Network errors (fetch throws — DNS / TCP / TLS / connection reset)
+   *   - HTTP 429 (Too Many Requests — SP-API rate limit + LWA throttling)
+   *   - HTTP 500, 502, 503, 504 (transient server / gateway issues)
+   *
+   * Does NOT retry on:
+   *   - 4xx (other than 429) — caller error, fail fast so wizard surfaces
+   *     it as actionable
+   *   - HTTP 401/403 — credentials wrong, retrying won't help
+   *
+   * Backoff schedule: 1s, 2s, 4s (3 retries on top of the initial attempt).
+   * Rate-limiter applies before EACH attempt so the per-request 200ms gap
+   * is preserved across retries.
+   *
+   * Failed-after-retries returns the last Response (so callers see the
+   * upstream status / body) or throws the last network error.
+   */
+  private static readonly RETRY_DELAYS_MS = [1000, 2000, 4000] as const
+  private static readonly RETRYABLE_STATUSES = new Set([
+    429, 500, 502, 503, 504,
+  ])
+
+  private async fetchWithRetry(
+    url: string,
+    init: RequestInit,
+    label: string,
+  ): Promise<Response> {
+    let lastErr: unknown = null
+    const maxAttempts = AmazonSpApiClient.RETRY_DELAYS_MS.length + 1
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      await this.applyRateLimit()
+      try {
+        const response = await fetch(url, init)
+        if (!AmazonSpApiClient.RETRY_DELAYS_MS[attempt]) {
+          // Final attempt — return whatever we got, retryable or not.
+          return response
+        }
+        if (!AmazonSpApiClient.RETRYABLE_STATUSES.has(response.status)) {
+          return response
+        }
+        // Response says "try again" — read body to free the connection,
+        // then sleep + loop. We don't reuse the response after this.
+        try {
+          await response.text()
+        } catch {
+          // Ignore body-read failures — we're discarding it anyway.
+        }
+        const delay = AmazonSpApiClient.RETRY_DELAYS_MS[attempt]!
+        logger.warn('SP-API retryable status — backing off', {
+          label,
+          attempt: attempt + 1,
+          status: response.status,
+          delayMs: delay,
+        })
+        await new Promise((r) => setTimeout(r, delay))
+        continue
+      } catch (err) {
+        lastErr = err
+        if (!AmazonSpApiClient.RETRY_DELAYS_MS[attempt]) {
+          throw err
+        }
+        const delay = AmazonSpApiClient.RETRY_DELAYS_MS[attempt]!
+        logger.warn('SP-API network error — backing off', {
+          label,
+          attempt: attempt + 1,
+          error: err instanceof Error ? err.message : String(err),
+          delayMs: delay,
+        })
+        await new Promise((r) => setTimeout(r, delay))
+      }
+    }
+    // Defensive fallthrough — the loop always returns or throws.
+    throw lastErr instanceof Error
+      ? lastErr
+      : new Error('SP-API fetchWithRetry exhausted')
+  }
+
+  /**
    * Parse SP-API errors. Returns a joined message of *blocking* (ERROR-
    * severity) issues only; WARNING and INFO issues do not fail the
    * publish — they're surfaced separately via parseWarnings(). Issues
@@ -245,10 +325,7 @@ export class AmazonSpApiClient {
     const { sellerId, sku, payload } = options
 
     try {
-      // Apply rate limiting
-      await this.applyRateLimit()
-
-      // Get access token
+      // Get access token (rate limit applied per attempt by fetchWithRetry)
       const accessToken = await this.getAccessToken()
 
       logger.info('Submitting listing to Amazon SP-API', {
@@ -257,8 +334,8 @@ export class AmazonSpApiClient {
         payloadSize: JSON.stringify(payload).length,
       })
 
-      // Submit to SP-API
-      const response = await fetch(
+      // Submit to SP-API (with retry/backoff on 429/5xx + network errors)
+      const response = await this.fetchWithRetry(
         `https://sellingpartnerapi-${this.region}.amazon.com/listings/2021-08-01/items/${sellerId}/${sku}`,
         {
           method: 'PATCH',
@@ -268,7 +345,8 @@ export class AmazonSpApiClient {
             Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify(payload),
-        }
+        },
+        `submitListingPayload(${sku})`,
       )
 
       const data = (await response.json()) as SPAPIResponse
@@ -355,7 +433,6 @@ export class AmazonSpApiClient {
     const { sellerId, sku, marketplaceId, productType, price, currencyCode, taxInclusive } = options
 
     try {
-      await this.applyRateLimit()
       const accessToken = await this.getAccessToken()
 
       // SP-API JSON Patch shape — replace purchasable_offer.our_price.schedule
@@ -396,15 +473,19 @@ export class AmazonSpApiClient {
         taxInclusive,
       })
 
-      const response = await fetch(url.toString(), {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-amzn-requestid': `nexus-${Date.now()}`,
-          Authorization: `Bearer ${accessToken}`,
+      const response = await this.fetchWithRetry(
+        url.toString(),
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-amzn-requestid': `nexus-${Date.now()}`,
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ productType, patches }),
         },
-        body: JSON.stringify({ productType, patches }),
-      })
+        `patchListingPrice(${sku})`,
+      )
       const data = (await response.json()) as SPAPIResponse
       const errorMessage = this.parseErrors(data)
       if (errorMessage) {
@@ -471,7 +552,6 @@ export class AmazonSpApiClient {
     } = options
 
     try {
-      await this.applyRateLimit()
       const accessToken = await this.getAccessToken()
 
       const body = {
@@ -495,15 +575,19 @@ export class AmazonSpApiClient {
       )
       url.searchParams.set('marketplaceIds', marketplaceId)
 
-      const response = await fetch(url.toString(), {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-amzn-requestid': `nexus-${Date.now()}`,
-          Authorization: `Bearer ${accessToken}`,
+      const response = await this.fetchWithRetry(
+        url.toString(),
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-amzn-requestid': `nexus-${Date.now()}`,
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify(body),
         },
-        body: JSON.stringify(body),
-      })
+        `putListingsItem(${sku})`,
+      )
 
       const data = (await response.json()) as SPAPIResponse
 
@@ -575,7 +659,6 @@ export class AmazonSpApiClient {
     } = options
 
     try {
-      await this.applyRateLimit()
       const accessToken = await this.getAccessToken()
 
       const url = new URL(
@@ -588,13 +671,17 @@ export class AmazonSpApiClient {
         url.searchParams.append('includedData', d)
       }
 
-      const response = await fetch(url.toString(), {
-        method: 'GET',
-        headers: {
-          'x-amzn-requestid': `nexus-${Date.now()}`,
-          Authorization: `Bearer ${accessToken}`,
+      const response = await this.fetchWithRetry(
+        url.toString(),
+        {
+          method: 'GET',
+          headers: {
+            'x-amzn-requestid': `nexus-${Date.now()}`,
+            Authorization: `Bearer ${accessToken}`,
+          },
         },
-      })
+        `getListingsItem(${sku})`,
+      )
 
       if (response.status === 404) {
         // Listing doesn't exist yet — typical right after a PUT, before

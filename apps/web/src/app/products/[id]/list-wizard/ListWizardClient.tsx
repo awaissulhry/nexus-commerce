@@ -7,6 +7,7 @@ import WizardStepper from './components/WizardStepper'
 import WizardHeader from './components/WizardHeader'
 import WizardNav from './components/WizardNav'
 import BlockerBanner from './components/BlockerBanner'
+import ResumeBanner from './components/ResumeBanner'
 import PlaceholderStep from './components/PlaceholderStep'
 import Step1Identifiers from './steps/Step1Identifiers'
 import Step3ProductType from './steps/Step3ProductType'
@@ -40,6 +41,9 @@ export interface WizardData {
   channelStates?: Record<string, Record<string, unknown>>
   submissions?: unknown[]
   status: string
+  /** ISO timestamp of the last server-side mutation. Used by the
+   *  resume context banner to compute "last edited X ago". */
+  updatedAt?: string
 }
 
 export interface WizardProduct {
@@ -545,6 +549,13 @@ export default function ListWizardClient({
         onStepClick={handleStepClick}
       />
       <div className="flex-1 overflow-y-auto">
+        {/* C.1 / A.5.5 — resume context banner. Renders briefly when
+            the user opened a wizard they had paused (>5min stale +
+            beyond Step 1). Self-dismisses after 8s. */}
+        <ResumeBanner
+          currentStep={initialWizard.currentStep}
+          updatedAt={initialWizard.updatedAt}
+        />
         {/* C.0 / A2 — global sticky blocker banner. Hidden on Step 5
             (Attributes) which has its richer in-step ValidationSummary.
             Visible on Steps 4, 6, 7, 8 — the steps where validity is

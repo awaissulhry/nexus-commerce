@@ -5,6 +5,8 @@ import {
   AlertCircle,
   ArrowRight,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   ExternalLink,
   Loader2,
   RotateCw,
@@ -17,6 +19,7 @@ import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
 import { postWizardEvent } from '../lib/telemetry'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 
 type SubmissionStatus =
   | 'PENDING'
@@ -195,7 +198,62 @@ export default function Step10Submit({
     return () => stopPolling()
   }, [stopPolling])
 
+  const confirm = useConfirm()
+
+  // C.1 / A.8 — submission history strip. Sourced from
+  // WizardStepEvent.submit_completed | submit_failed for this wizard.
+  // Empty for first-time submits; grows when the user retries.
+  type HistoryEvent = {
+    id: string
+    type: 'submit_completed' | 'submit_failed'
+    step: number
+    durationMs: number | null
+    errorCode: string | null
+    errorContext: {
+      channelsSucceeded?: number
+      channelsFailed?: number
+      totalDurationMs?: number
+    } | null
+    createdAt: string
+  }
+  const [history, setHistory] = useState<HistoryEvent[]>([])
+  const [historyExpanded, setHistoryExpanded] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    fetch(`${getBackendUrl()}/api/listing-wizard/${wizardId}/history`)
+      .then((r) => (r.ok ? r.json() : { events: [] }))
+      .then((j) => {
+        if (cancelled) return
+        const events = Array.isArray(j?.events) ? j.events : []
+        setHistory(events as HistoryEvent[])
+      })
+      .catch(() => {
+        // History is informational; failures are quietly ignored.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [wizardId, submissions])
+
   const onSubmit = useCallback(async () => {
+    // C.1 / A.7 — confirm before publishing. Listings are visible
+    // on real marketplaces; users can pause / discard the wizard
+    // beforehand, but published listings need to be removed via
+    // each channel's UI. Confirmation matches best-in-class
+    // checkout / publish patterns.
+    const channelCount = channels.length
+    const ok = await confirm({
+      title: `Publish "${product.name}" to ${channelCount} channel${
+        channelCount === 1 ? '' : 's'
+      }?`,
+      description:
+        'This will create live listings on the selected marketplaces. You can pause or discard the wizard, but published listings need to be removed via each channel’s native UI.',
+      confirmLabel: `Publish to ${channelCount} channel${
+        channelCount === 1 ? '' : 's'
+      }`,
+      tone: 'warning',
+    })
+    if (!ok) return
     setSubmitting(true)
     setError(null)
     try {
@@ -257,7 +315,16 @@ export default function Step10Submit({
     } finally {
       setSubmitting(false)
     }
-  }, [wizardId, product.id, poll, stopPolling, scheduleNextPoll])
+  }, [
+    wizardId,
+    product.id,
+    product.name,
+    channels.length,
+    confirm,
+    poll,
+    stopPolling,
+    scheduleNextPoll,
+  ])
 
   const onRetry = useCallback(
     async (channelKey: string) => {
@@ -402,6 +469,11 @@ export default function Step10Submit({
             Submit listings
           </button>
         </div>
+        <HistoryStrip
+          events={history}
+          expanded={historyExpanded}
+          onToggle={() => setHistoryExpanded((v) => !v)}
+        />
       </div>
     )
   }
@@ -532,6 +604,128 @@ export default function Step10Submit({
           <ArrowRight className="w-3.5 h-3.5" />
         </button>
       </div>
+      <HistoryStrip
+        events={history}
+        expanded={historyExpanded}
+        onToggle={() => setHistoryExpanded((v) => !v)}
+      />
+    </div>
+  )
+}
+
+// C.1 / A.8 — submission history strip. Renders a compact summary of
+// prior submit attempts (sourced from WizardStepEvent rows). Hidden
+// when there's no prior history; expandable when user wants detail.
+// Doesn't change behavior — purely informational so the operator
+// understands "this is my third attempt at this wizard."
+function HistoryStrip({
+  events,
+  expanded,
+  onToggle,
+}: {
+  events: Array<{
+    id: string
+    type: 'submit_completed' | 'submit_failed'
+    durationMs: number | null
+    errorContext: {
+      channelsSucceeded?: number
+      channelsFailed?: number
+      totalDurationMs?: number
+    } | null
+    createdAt: string
+  }>
+  expanded: boolean
+  onToggle: () => void
+}) {
+  if (events.length === 0) return null
+  const visible = expanded ? events : events.slice(0, 1)
+  const hiddenCount = events.length - visible.length
+  return (
+    <div className="mt-6 border border-slate-200 rounded-lg bg-white">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        className="w-full px-4 py-2.5 flex items-center justify-between gap-3 hover:bg-slate-50 text-left"
+      >
+        <div className="flex items-center gap-2">
+          {expanded ? (
+            <ChevronDown className="w-4 h-4 text-slate-500" aria-hidden="true" />
+          ) : (
+            <ChevronRight className="w-4 h-4 text-slate-500" aria-hidden="true" />
+          )}
+          <span className="text-md font-medium text-slate-700">
+            Previous attempts
+          </span>
+          <span className="text-sm text-slate-500 tabular-nums">
+            ({events.length})
+          </span>
+        </div>
+        {!expanded && hiddenCount > 0 && (
+          <span className="text-sm text-slate-500 tabular-nums">
+            +{hiddenCount} more
+          </span>
+        )}
+      </button>
+      <ul className="divide-y divide-slate-100">
+        {visible.map((e) => {
+          const ok = e.type === 'submit_completed'
+          const succeeded = e.errorContext?.channelsSucceeded ?? 0
+          const failed = e.errorContext?.channelsFailed ?? 0
+          const total = succeeded + failed
+          const dur =
+            e.errorContext?.totalDurationMs ??
+            e.durationMs ??
+            0
+          return (
+            <li
+              key={e.id}
+              className="px-4 py-2 flex items-center gap-3 text-sm"
+            >
+              {ok ? (
+                <CheckCircle2
+                  className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0"
+                  aria-hidden="true"
+                />
+              ) : (
+                <XCircle
+                  className="w-3.5 h-3.5 text-rose-600 flex-shrink-0"
+                  aria-hidden="true"
+                />
+              )}
+              <span className="text-slate-700 tabular-nums">
+                {new Date(e.createdAt).toLocaleString()}
+              </span>
+              <span className="text-slate-500">·</span>
+              <span
+                className={cn(
+                  'font-medium',
+                  ok ? 'text-emerald-700' : 'text-rose-700',
+                )}
+              >
+                {ok ? 'Completed' : 'Failed'}
+              </span>
+              {total > 0 && (
+                <>
+                  <span className="text-slate-500">·</span>
+                  <span className="text-slate-700 tabular-nums">
+                    {succeeded}/{total} channel
+                    {total === 1 ? '' : 's'}
+                  </span>
+                </>
+              )}
+              {dur > 0 && (
+                <>
+                  <span className="text-slate-500">·</span>
+                  <span className="text-slate-500 tabular-nums">
+                    {(dur / 1000).toFixed(1)}s
+                  </span>
+                </>
+              )}
+            </li>
+          )
+        })}
+      </ul>
     </div>
   )
 }

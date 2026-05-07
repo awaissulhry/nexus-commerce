@@ -723,6 +723,43 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.code(204).send()
   })
 
+  // ── C.1 — GET /api/listing-wizard/:id/history ─────────────────
+  // Submission history: prior submit_completed / submit_failed events
+  // for this wizard. Sourced from WizardStepEvent so the trail
+  // survives across retries and adapter wiring changes. Ordered
+  // newest-first; UI renders the most recent N inline + "show all"
+  // expand. Capped at 50 to keep response size bounded.
+  fastify.get<{ Params: { id: string } }>(
+    '/listing-wizard/:id/history',
+    async (request, reply) => {
+      const wizard = await prisma.listingWizard.findUnique({
+        where: { id: request.params.id },
+        select: { id: true },
+      })
+      if (!wizard) {
+        return reply.code(404).send({ error: 'Wizard not found' })
+      }
+      const events = await prisma.wizardStepEvent.findMany({
+        where: {
+          wizardId: wizard.id,
+          type: { in: ['submit_completed', 'submit_failed'] },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        select: {
+          id: true,
+          type: true,
+          step: true,
+          durationMs: true,
+          errorCode: true,
+          errorContext: true,
+          createdAt: true,
+        },
+      })
+      return { events }
+    },
+  )
+
   // ── C.0 — DELETE /api/listing-wizard/:id ──────────────────────
   // Soft-deletes a DRAFT wizard by flipping status to DISCARDED so
   // the row + its WizardStepEvent trail survive (cascade-on-delete
@@ -1748,7 +1785,18 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           >) ?? {},
         product: product ? { sku: product.sku } : undefined,
       }
-      const validation = submissionService.validateMultiChannel(w)
+      // C.1 — pre-flight readiness. AMAZON env-driven; EBAY is
+      // ChannelConnection-driven. Passed to validateMultiChannel so
+      // missing creds surface as a blocking checklist item rather
+      // than a post-submit FAILED entry.
+      const readiness: Record<string, boolean> = {
+        AMAZON: amazonService.isConfigured(),
+        EBAY:
+          (await prisma.channelConnection.count({
+            where: { channelType: 'EBAY', isActive: true },
+          })) > 0,
+      }
+      const validation = submissionService.validateMultiChannel(w, readiness)
       const payloads = await submissionService.composeMultiChannelPayloads(w)
       return {
         wizard: {
@@ -1836,7 +1884,18 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           >) ?? {},
         product: product ? { sku: product.sku } : undefined,
       }
-      const validation = submissionService.validateMultiChannel(w)
+      // C.1 — pre-flight readiness. AMAZON env-driven; EBAY is
+      // ChannelConnection-driven. Passed to validateMultiChannel so
+      // missing creds surface as a blocking checklist item rather
+      // than a post-submit FAILED entry.
+      const readiness: Record<string, boolean> = {
+        AMAZON: amazonService.isConfigured(),
+        EBAY:
+          (await prisma.channelConnection.count({
+            where: { channelType: 'EBAY', isActive: true },
+          })) > 0,
+      }
+      const validation = submissionService.validateMultiChannel(w, readiness)
       if (!validation.allReady) {
         return reply.code(400).send({
           error: 'Wizard state has incomplete steps for some channels.',

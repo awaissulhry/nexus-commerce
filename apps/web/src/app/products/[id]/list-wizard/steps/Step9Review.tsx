@@ -62,6 +62,90 @@ interface ReviewResponse {
   payloads: ChannelPayloadEntry[]
 }
 
+// C.1 / A.4 — Amazon region grouping. SP-API surfaces each marketplace
+// as a separate (channel, marketplace) tuple; the operator's mental
+// model is "Amazon EU" / "Amazon NA". Grouping the Step 9 cards
+// matches that mental model + collapses noise when a seller targets
+// every EU marketplace.
+type AmazonRegion = 'EU' | 'NA' | 'FE' | 'OTHER'
+
+const AMAZON_EU = new Set([
+  'IT', 'DE', 'FR', 'ES', 'GB', 'UK', 'NL', 'PL', 'SE', 'BE', 'IE',
+])
+const AMAZON_NA = new Set(['US', 'CA', 'MX'])
+const AMAZON_FE = new Set(['JP', 'AU', 'SG', 'IN', 'AE', 'SA', 'TR'])
+
+function amazonRegion(marketplace: string): AmazonRegion {
+  const m = marketplace.toUpperCase()
+  if (AMAZON_EU.has(m)) return 'EU'
+  if (AMAZON_NA.has(m)) return 'NA'
+  if (AMAZON_FE.has(m)) return 'FE'
+  return 'OTHER'
+}
+
+interface ChannelGroup {
+  /** Stable id, used as React key. */
+  id: string
+  /** Display label: "Amazon EU", "eBay", "Shopify". */
+  label: string
+  members: Array<{
+    report: ChannelValidationReport
+    payload: ChannelPayloadEntry | undefined
+  }>
+}
+
+function groupChannels(
+  reports: ChannelValidationReport[],
+  payloads: ChannelPayloadEntry[],
+): Array<{ kind: 'group'; group: ChannelGroup } | { kind: 'single'; report: ChannelValidationReport; payload: ChannelPayloadEntry | undefined }> {
+  // Build (platform → region|null → members) buckets.
+  const buckets = new Map<
+    string, // group id
+    ChannelGroup
+  >()
+  const labelFor = (platform: string, region?: AmazonRegion) => {
+    if (platform === 'AMAZON') {
+      if (region === 'EU') return 'Amazon EU'
+      if (region === 'NA') return 'Amazon NA'
+      if (region === 'FE') return 'Amazon Asia / Pacific'
+      return 'Amazon'
+    }
+    if (platform === 'EBAY') return 'eBay'
+    if (platform === 'SHOPIFY') return 'Shopify'
+    if (platform === 'WOOCOMMERCE') return 'WooCommerce'
+    return platform
+  }
+  for (const report of reports) {
+    const platform = report.platform.toUpperCase()
+    const region =
+      platform === 'AMAZON' ? amazonRegion(report.marketplace) : undefined
+    const id = region ? `${platform}:${region}` : platform
+    const payload = payloads.find((p) => p.channelKey === report.channelKey)
+    const existing = buckets.get(id)
+    if (existing) {
+      existing.members.push({ report, payload })
+    } else {
+      buckets.set(id, {
+        id,
+        label: labelFor(platform, region),
+        members: [{ report, payload }],
+      })
+    }
+  }
+  // Singletons render as plain cards; multi-member groups render as
+  // collapsible group cards.
+  return Array.from(buckets.values()).map((g) => {
+    if (g.members.length === 1) {
+      return {
+        kind: 'single' as const,
+        report: g.members[0]!.report,
+        payload: g.members[0]!.payload,
+      }
+    }
+    return { kind: 'group' as const, group: g }
+  })
+}
+
 export default function Step9Review({
   wizardId,
   updateWizardState,
@@ -253,31 +337,69 @@ export default function Step9Review({
             <ReadyBadge allReady={data.validation.allReady} />
           </div>
 
-          {/* Per-channel cards */}
+          {/* Per-channel cards (C.1 / A.4 grouped: "Amazon EU (5)") */}
           <div className="space-y-3">
-            {data.validation.channels.map((report) => {
-              const payload = data.payloads.find(
-                (p) => p.channelKey === report.channelKey,
+            {groupChannels(
+              data.validation.channels,
+              data.payloads,
+            ).map((entry) => {
+              if (entry.kind === 'single') {
+                const isFirstBlocked =
+                  data.validation.blockingChannels.length > 0 &&
+                  entry.report.channelKey ===
+                    data.validation.blockingChannels[0]
+                return (
+                  <div
+                    key={entry.report.channelKey}
+                    data-blocker-row={
+                      isFirstBlocked ? 'true' : undefined
+                    }
+                    className="scroll-mt-24"
+                  >
+                    <ChannelCard
+                      report={entry.report}
+                      payload={entry.payload}
+                      checklistExpanded={expandedChecklists.has(
+                        entry.report.channelKey,
+                      )}
+                      payloadExpanded={expandedPayloads.has(
+                        entry.report.channelKey,
+                      )}
+                      onToggleChecklist={() =>
+                        toggleChecklist(entry.report.channelKey)
+                      }
+                      onTogglePayload={() =>
+                        togglePayload(entry.report.channelKey)
+                      }
+                      onJumpToStep={onJumpToStep}
+                    />
+                  </div>
+                )
+              }
+              // Multi-member group card.
+              const groupHasFirstBlocker = entry.group.members.some(
+                (m) =>
+                  data.validation.blockingChannels[0] ===
+                  m.report.channelKey,
               )
-              // C.0 / A1 — first blocking channel gets a jump hook.
-              const isFirstBlocked =
-                data.validation.blockingChannels.length > 0 &&
-                report.channelKey ===
-                  data.validation.blockingChannels[0]
               return (
                 <div
-                  key={report.channelKey}
-                  data-blocker-row={isFirstBlocked ? 'true' : undefined}
+                  key={entry.group.id}
+                  data-blocker-row={
+                    groupHasFirstBlocker ? 'true' : undefined
+                  }
                   className="scroll-mt-24"
                 >
-                  <ChannelCard
-                    report={report}
-                    payload={payload}
-                    checklistExpanded={expandedChecklists.has(report.channelKey)}
-                    payloadExpanded={expandedPayloads.has(report.channelKey)}
-                    onToggleChecklist={() => toggleChecklist(report.channelKey)}
-                    onTogglePayload={() => togglePayload(report.channelKey)}
+                  <ChannelGroupCard
+                    group={entry.group}
+                    expandedChecklists={expandedChecklists}
+                    expandedPayloads={expandedPayloads}
+                    onToggleChecklist={toggleChecklist}
+                    onTogglePayload={togglePayload}
                     onJumpToStep={onJumpToStep}
+                    blockingChannelsHeadKey={
+                      data.validation.blockingChannels[0]
+                    }
                   />
                 </div>
               )
@@ -308,6 +430,133 @@ export default function Step9Review({
             </button>
           </div>
         </>
+      )}
+    </div>
+  )
+}
+
+// C.1 / A.4 — collapsible group wrapper for multi-marketplace
+// platforms (e.g. Amazon EU spanning IT/DE/FR/ES/UK). Default-expand
+// when any member is blocking so the operator sees what needs fixing
+// without an extra click; default-collapse when everything is ready
+// to keep the review surface scannable.
+function ChannelGroupCard({
+  group,
+  expandedChecklists,
+  expandedPayloads,
+  onToggleChecklist,
+  onTogglePayload,
+  onJumpToStep,
+  blockingChannelsHeadKey,
+}: {
+  group: ChannelGroup
+  expandedChecklists: Set<string>
+  expandedPayloads: Set<string>
+  onToggleChecklist: (channelKey: string) => void
+  onTogglePayload: (channelKey: string) => void
+  onJumpToStep: (stepId: number) => void
+  blockingChannelsHeadKey: string | undefined
+}) {
+  const totalCount = group.members.length
+  const readyCount = group.members.filter((m) => m.report.ready).length
+  const blockingCount = totalCount - readyCount
+  const allReady = blockingCount === 0
+  // Default expand when any member is blocking.
+  const [expanded, setExpanded] = useState(!allReady)
+
+  return (
+    <div
+      className={cn(
+        'border rounded-lg bg-white',
+        allReady ? 'border-slate-200' : 'border-amber-200 bg-amber-50/30',
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        aria-controls={`group-${group.id}`}
+        className={cn(
+          'w-full px-4 py-3 flex items-center justify-between gap-3 text-left',
+          'border-b border-slate-100',
+          'hover:bg-slate-50/60',
+        )}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          {expanded ? (
+            <ChevronDown
+              className="w-4 h-4 text-slate-500 flex-shrink-0"
+              aria-hidden="true"
+            />
+          ) : (
+            <ChevronRight
+              className="w-4 h-4 text-slate-500 flex-shrink-0"
+              aria-hidden="true"
+            />
+          )}
+          {allReady ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+          ) : (
+            <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+          )}
+          <div className="min-w-0">
+            <div className="text-md text-slate-900 font-semibold truncate">
+              {group.label}{' '}
+              <span className="text-slate-500 font-normal tabular-nums">
+                ({totalCount} marketplace{totalCount === 1 ? '' : 's'})
+              </span>
+            </div>
+            <div className="text-sm text-slate-500 truncate">
+              {group.members
+                .map((m) => m.report.marketplace)
+                .join(' · ')}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {allReady ? (
+            <span className="text-xs uppercase tracking-wide font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+              All ready
+            </span>
+          ) : (
+            <span className="text-xs uppercase tracking-wide font-medium text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded tabular-nums">
+              {readyCount}/{totalCount} ready
+            </span>
+          )}
+        </div>
+      </button>
+      {expanded && (
+        <div id={`group-${group.id}`} className="p-3 space-y-3">
+          {group.members.map((m) => {
+            const isFirstBlocked =
+              blockingChannelsHeadKey === m.report.channelKey
+            return (
+              <div
+                key={m.report.channelKey}
+                data-blocker-row={isFirstBlocked ? 'true' : undefined}
+                className="scroll-mt-24"
+              >
+                <ChannelCard
+                  report={m.report}
+                  payload={m.payload}
+                  checklistExpanded={expandedChecklists.has(
+                    m.report.channelKey,
+                  )}
+                  payloadExpanded={expandedPayloads.has(
+                    m.report.channelKey,
+                  )}
+                  onToggleChecklist={() =>
+                    onToggleChecklist(m.report.channelKey)
+                  }
+                  onTogglePayload={() =>
+                    onTogglePayload(m.report.channelKey)
+                  }
+                  onJumpToStep={onJumpToStep}
+                />
+              </div>
+            )
+          })}
+        </div>
       )}
     </div>
   )

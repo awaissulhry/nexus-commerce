@@ -614,7 +614,15 @@ export class SubmissionService {
 
   // ── Phase I — multi-channel validation + payload composition ──
 
-  validateMultiChannel(wizard: MultiChannelWizard): MultiChannelValidation {
+  validateMultiChannel(
+    wizard: MultiChannelWizard,
+    /** C.1 — pre-flight readiness keyed by platform. Caller computes
+     *  this (env vars for Amazon, ChannelConnection for eBay) and
+     *  passes it in so the service stays sync. Undefined entries
+     *  skip the check (back-compat with callers that don't yet
+     *  provide it). */
+    readiness?: Partial<Record<string, boolean>>,
+  ): MultiChannelValidation {
     const state = wizard.state ?? {}
     const channelStates = wizard.channelStates ?? {}
     const channels = wizard.channels.map((c) => ({
@@ -845,9 +853,36 @@ export class SubmissionService {
         })
       }
 
+      // C.1 — pre-flight credentials check. When the caller provides
+      // `readiness`, surface it as a blocker so the user fixes
+      // configuration BEFORE submit (rather than seeing a generic
+      // FAILED entry from the adapter post-publish).
+      if (readiness && readiness[c.platform] !== undefined) {
+        if (readiness[c.platform] === true) {
+          items.push({
+            step: 8,
+            title: 'Channel credentials',
+            status: 'complete',
+          })
+        } else {
+          const message =
+            c.platform === 'AMAZON'
+              ? 'Amazon SP-API not configured. Set AMAZON_SELLER_ID + AMAZON_REFRESH_TOKEN env vars on the API server.'
+              : c.platform === 'EBAY'
+                ? 'No active eBay ChannelConnection — link an eBay account in Settings.'
+                : `${c.platform} channel credentials not configured.`
+          items.push({
+            step: 8,
+            title: 'Channel credentials',
+            status: 'incomplete',
+            message,
+          })
+        }
+      }
+
       // Non-Amazon advisory warning — these channels can't actually
       // be published yet (TECH_DEBT #35).
-      if (c.platform !== 'AMAZON') {
+      if (c.platform !== 'AMAZON' && c.platform !== 'EBAY') {
         warnings.push(
           `${c.platform} publish adapter not yet wired — wizard state will save but submit shows the prepared payload only.`,
         )

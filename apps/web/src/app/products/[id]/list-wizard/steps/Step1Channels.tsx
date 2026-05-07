@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
@@ -15,6 +15,7 @@ import Link from 'next/link'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 
 interface MarketplaceOption {
   code: string
@@ -99,6 +100,12 @@ export default function Step1Channels({
   updateWizardChannels,
   reportValidity,
 }: StepProps) {
+  const confirm = useConfirm()
+  // Refs so the async toggle reads CURRENT wizardState/selected at
+  // click time, without forcing the callback identity to thrash on
+  // every state change.
+  const wizardStateRef = useRef(wizardState)
+  wizardStateRef.current = wizardState
   const [status, setStatus] = useState<ConnectionStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -112,6 +119,8 @@ export default function Step1Channels({
     }
     return set
   })
+  const selectedRef = useRef(selected)
+  selectedRef.current = selected
 
   // E.3 — SKU strategy. Defaults to "shared parent, shared children,
   // same FBA/FBM SKU" — the model that fits ~95% of multi-marketplace
@@ -164,15 +173,41 @@ export default function Step1Channels({
     }
   }, [])
 
-  const toggle = useCallback((platform: string, market: string) => {
-    setSelected((prev) => {
+  // C.1 / A.6 — when toggling OFF a channel with populated state
+  // (category / attributes / pricing in channelStates), confirm
+  // before discarding. ON-toggles are unconditional. Cancellation
+  // preserves selection. The actual channelStates slice for the
+  // removed channel stays in the wizard row until the next PATCH —
+  // server-side cleanup is acceptable since later steps no longer
+  // reference the deselected channel.
+  const toggle = useCallback(
+    async (platform: string, market: string) => {
       const key = `${platform}:${market}`
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }, [])
+      const isRemoving = selectedRef.current.has(key)
+      if (isRemoving) {
+        const channelStates = (wizardStateRef.current.channelStates ??
+          {}) as Record<string, Record<string, unknown>>
+        const slice = channelStates[key]
+        const hasData = !!slice && Object.keys(slice).length > 0
+        if (hasData) {
+          const ok = await confirm({
+            title: `Remove ${key}?`,
+            description: `You have category, attributes, or pricing filled in for ${key}. Removing this channel will discard that work — the other channels stay intact.`,
+            confirmLabel: 'Remove channel',
+            tone: 'danger',
+          })
+          if (!ok) return
+        }
+      }
+      setSelected((prev) => {
+        const next = new Set(prev)
+        if (next.has(key)) next.delete(key)
+        else next.add(key)
+        return next
+      })
+    },
+    [confirm],
+  )
 
   // Phase 7 — once the connection-status payload lands, drop any
   // previously-selected entries for platforms whose adapter isn't wired.

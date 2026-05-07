@@ -21,8 +21,59 @@ import prisma from '../../db.js'
 import { ebayAuthService } from '../ebay-auth.service.js'
 import { ebayAccountService } from '../ebay-account.service.js'
 import { EbayCategoryService } from '../ebay-category.service.js'
+import { logger } from '../../utils/logger.js'
 
 const ebayCategoryService = new EbayCategoryService()
+
+// C.1 — symmetric retry/backoff for eBay Inventory API. Same policy as
+// the Amazon SP-API client: 3 retries (1s/2s/4s) on 429 + 5xx +
+// network errors; non-retryable on 4xx (other than 429) so caller
+// errors fail fast.
+const EBAY_RETRY_DELAYS_MS = [1000, 2000, 4000] as const
+const EBAY_RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504])
+
+async function ebayFetchWithRetry(
+  url: string,
+  init: RequestInit,
+  label: string,
+): Promise<Response> {
+  let lastErr: unknown = null
+  const maxAttempts = EBAY_RETRY_DELAYS_MS.length + 1
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const response = await fetch(url, init)
+      if (!EBAY_RETRY_DELAYS_MS[attempt]) return response
+      if (!EBAY_RETRYABLE_STATUSES.has(response.status)) return response
+      try {
+        await response.text()
+      } catch {
+        // ignore body-read failures on a discarded response
+      }
+      const delay = EBAY_RETRY_DELAYS_MS[attempt]!
+      logger.warn('eBay retryable status — backing off', {
+        label,
+        attempt: attempt + 1,
+        status: response.status,
+        delayMs: delay,
+      })
+      await new Promise((r) => setTimeout(r, delay))
+    } catch (err) {
+      lastErr = err
+      if (!EBAY_RETRY_DELAYS_MS[attempt]) throw err
+      const delay = EBAY_RETRY_DELAYS_MS[attempt]!
+      logger.warn('eBay network error — backing off', {
+        label,
+        attempt: attempt + 1,
+        error: err instanceof Error ? err.message : String(err),
+        delayMs: delay,
+      })
+      await new Promise((r) => setTimeout(r, delay))
+    }
+  }
+  throw lastErr instanceof Error
+    ? lastErr
+    : new Error('eBay fetchWithRetry exhausted')
+}
 
 export interface EbayPublishResult {
   ok: boolean
@@ -116,7 +167,7 @@ export class EbayPublishAdapter {
         shipToLocationAvailability: { quantity: 1 },
       },
     }
-    const invRes = await fetch(
+    const invRes = await ebayFetchWithRetry(
       `${apiBase}/sell/inventory/v1/inventory_item/${encodeURIComponent(
         payload.sku,
       )}`,
@@ -125,6 +176,7 @@ export class EbayPublishAdapter {
         headers,
         body: JSON.stringify(inventoryBody),
       },
+      `createOrReplaceInventoryItem(${payload.sku})`,
     )
     if (!invRes.ok && invRes.status !== 204) {
       const body = await invRes.text().catch(() => '')
@@ -275,11 +327,15 @@ export class EbayPublishAdapter {
       }
     }
 
-    const offerRes = await fetch(`${apiBase}/sell/inventory/v1/offer`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(offerBody),
-    })
+    const offerRes = await ebayFetchWithRetry(
+      `${apiBase}/sell/inventory/v1/offer`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(offerBody),
+      },
+      `createOffer(${payload.sku})`,
+    )
     if (!offerRes.ok) {
       const body = await offerRes.text().catch(() => '')
       return {
@@ -303,7 +359,7 @@ export class EbayPublishAdapter {
     }
 
     // ── Step 3: publishOffer ─────────────────────────────────────
-    const pubRes = await fetch(
+    const pubRes = await ebayFetchWithRetry(
       `${apiBase}/sell/inventory/v1/offer/${encodeURIComponent(
         offerId,
       )}/publish`,
@@ -311,6 +367,7 @@ export class EbayPublishAdapter {
         method: 'POST',
         headers,
       },
+      `publishOffer(${offerId})`,
     )
     if (!pubRes.ok) {
       const body = await pubRes.text().catch(() => '')
