@@ -1114,6 +1114,100 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── O.29: Multi-package — split shipment ────────────────────────────
+  // POST /api/fulfillment/shipments/:id/split { items: [{ shipmentItemId,
+  // quantity }] } — moves the specified quantities to a new sibling
+  // shipment for the same order. Used for orders that need multiple
+  // packages (e.g., helmet + jacket = 2 boxes). Both shipments share
+  // the order; tracking/labels are independent.
+  fastify.post('/fulfillment/shipments/:id/split', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = request.body as {
+        items?: Array<{ shipmentItemId?: string; quantity?: number }>
+      }
+      if (!body.items?.length) {
+        return reply.code(400).send({ error: 'items[] required' })
+      }
+      const shipment = await prisma.shipment.findUnique({
+        where: { id },
+        include: { items: true },
+      })
+      if (!shipment) return reply.code(404).send({ error: 'Shipment not found' })
+      // Only allow splitting before label is printed.
+      if (['LABEL_PRINTED', 'SHIPPED', 'IN_TRANSIT', 'DELIVERED'].includes(shipment.status)) {
+        return reply.code(400).send({
+          error: 'Cannot split a shipment after the label is printed. Void the label first.',
+        })
+      }
+      if (!shipment.orderId) {
+        return reply.code(400).send({ error: 'Shipment has no order; cannot split.' })
+      }
+
+      // Validate the requested splits and decide what to move vs decrement.
+      const moves: Array<{ source: typeof shipment.items[number]; takeQty: number }> = []
+      for (const req of body.items) {
+        if (!req.shipmentItemId || !req.quantity || req.quantity <= 0) {
+          return reply.code(400).send({ error: 'Each items[] entry needs shipmentItemId + positive quantity' })
+        }
+        const src = shipment.items.find((it) => it.id === req.shipmentItemId)
+        if (!src) {
+          return reply.code(400).send({ error: `Shipment item ${req.shipmentItemId} not in this shipment` })
+        }
+        if (req.quantity > src.quantity) {
+          return reply.code(400).send({
+            error: `Cannot move ${req.quantity} of ${src.sku}; shipment only has ${src.quantity}`,
+          })
+        }
+        moves.push({ source: src, takeQty: req.quantity })
+      }
+
+      // Atomic split: create new sibling + decrement / delete source items.
+      const newShipment = await prisma.$transaction(async (tx) => {
+        const created = await tx.shipment.create({
+          data: {
+            orderId: shipment.orderId,
+            warehouseId: shipment.warehouseId,
+            carrierCode: shipment.carrierCode,
+            status: 'DRAFT',
+            items: {
+              create: moves.map((m) => ({
+                orderItemId: m.source.orderItemId,
+                productId: m.source.productId,
+                sku: m.source.sku,
+                quantity: m.takeQty,
+              })),
+            },
+          },
+          include: { items: true },
+        })
+        for (const m of moves) {
+          if (m.takeQty === m.source.quantity) {
+            // Full take — remove the source line entirely.
+            await tx.shipmentItem.delete({ where: { id: m.source.id } })
+          } else {
+            // Partial — decrement the source quantity.
+            await tx.shipmentItem.update({
+              where: { id: m.source.id },
+              data: { quantity: m.source.quantity - m.takeQty },
+            })
+          }
+        }
+        // Bump source version since its items changed.
+        await tx.shipment.update({
+          where: { id: shipment.id },
+          data: { version: { increment: 1 } },
+        })
+        return created
+      })
+
+      return { ok: true, source: { id: shipment.id }, created: newShipment }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[shipments/:id/split] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // ── O.18: Customs preflight ────────────────────────────────────────
   // For international shipments, surfaces what will be declared on the
   // commercial invoice (HS codes, origin countries, declared values)

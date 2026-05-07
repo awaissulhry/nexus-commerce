@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Package, CheckCircle2, AlertTriangle, Loader2, Scale, Globe } from 'lucide-react'
+import { ArrowLeft, Package, CheckCircle2, AlertTriangle, Loader2, Scale, Globe, Boxes, Split } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -23,6 +23,7 @@ import { useTranslations } from '@/lib/i18n/use-translations'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { getBackendUrl } from '@/lib/backend-url'
 
+interface ShipmentItem { id: string; sku: string; quantity: number; productId: string | null }
 interface ShipmentDetail {
   id: string
   orderId: string | null
@@ -33,7 +34,7 @@ interface ShipmentDetail {
   widthCm: number | null
   heightCm: number | null
   notes: string | null
-  items: Array<{ id: string; sku: string; quantity: number; productId: string | null }>
+  items: ShipmentItem[]
   warehouse?: { code: string; name: string } | null
 }
 
@@ -68,6 +69,10 @@ export default function PackStationClient({ shipmentId }: Props) {
   const [customs, setCustoms] = useState<CustomsPreflight | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  // O.29: multi-package — operator picks which items to move into a
+  // new sibling shipment. Quantity per source line; default 0 = no move.
+  const [splitMode, setSplitMode] = useState(false)
+  const [splitQty, setSplitQty] = useState<Record<string, number>>({})
 
   // Per-SKU scan counts. Initialized to 0; ticks up each time the
   // operator scans the SKU. Must reach the line's required quantity
@@ -132,6 +137,43 @@ export default function PackStationClient({ shipmentId }: Props) {
     },
     [shipment, scanCounts, toast],
   )
+
+  const splitTotal = useMemo(
+    () => Object.values(splitQty).reduce((n, v) => n + (v || 0), 0),
+    [splitQty],
+  )
+
+  const submitSplit = async () => {
+    if (!shipment || splitTotal === 0) return
+    const items = Object.entries(splitQty)
+      .filter(([, qty]) => qty > 0)
+      .map(([shipmentItemId, quantity]) => ({ shipmentItemId, quantity }))
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/shipments/${shipment.id}/split`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items }),
+        },
+      )
+      const out = await res.json()
+      if (!res.ok) {
+        toast.error(out.error ?? t('common.error'))
+        return
+      }
+      toast.success(t('pack.split.toast.created'))
+      emitInvalidation({ type: 'shipment.created', id: out.created?.id })
+      // Reset split state + refetch source shipment items.
+      setSplitMode(false)
+      setSplitQty({})
+      // Reset scan counts since item quantities changed.
+      setScanCounts({})
+      fetchShipment()
+    } catch {
+      toast.error(t('common.error'))
+    }
+  }
 
   const allVerified = useMemo(() => {
     if (!shipment) return false
@@ -249,30 +291,54 @@ export default function PackStationClient({ shipmentId }: Props) {
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
             <Package size={12} /> {t('pack.scanItems')}
+            <button
+              onClick={() => {
+                setSplitMode((v) => !v)
+                setSplitQty({})
+              }}
+              className="ml-auto h-6 px-2 text-xs text-slate-600 border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1 normal-case font-normal tracking-normal"
+            >
+              <Split size={11} />
+              {splitMode ? t('common.cancel') : t('pack.split.cta')}
+            </button>
           </div>
-          <BarcodeScanInput
-            onScan={onScan}
-            placeholder={t('pack.scanPlaceholder')}
-            disabled={saving}
-            className="w-full"
-          />
+          {!splitMode && (
+            <BarcodeScanInput
+              onScan={onScan}
+              placeholder={t('pack.scanPlaceholder')}
+              disabled={saving}
+              className="w-full"
+            />
+          )}
+          {splitMode && (
+            <div className="text-sm text-slate-600 bg-blue-50 px-3 py-2 rounded border border-blue-200">
+              {t('pack.split.hint')}
+            </div>
+          )}
           <div className="space-y-1.5">
             {shipment.items.map((it) => {
               const count = scanCounts[it.sku] ?? 0
               const verified = count >= it.quantity
               const overscan = count > it.quantity
+              const splitVal = splitQty[it.id] ?? 0
               return (
                 <div
                   key={it.id}
                   className={`flex items-center gap-3 px-3 py-2 border rounded transition-colors ${
-                    verified
+                    splitMode
+                      ? splitVal > 0
+                        ? 'bg-blue-50 border-blue-200'
+                        : 'bg-white border-slate-200'
+                      : verified
                       ? 'bg-emerald-50 border-emerald-200'
                       : count > 0
                       ? 'bg-amber-50 border-amber-200'
                       : 'bg-white border-slate-200'
                   }`}
                 >
-                  {verified ? (
+                  {splitMode ? (
+                    <Boxes size={14} className="text-blue-600" />
+                  ) : verified ? (
                     <CheckCircle2 size={14} className="text-emerald-600" />
                   ) : (
                     <Package size={14} className="text-slate-400" />
@@ -280,20 +346,54 @@ export default function PackStationClient({ shipmentId }: Props) {
                   <div className="flex-1 min-w-0">
                     <div className="text-md font-mono text-slate-900">{it.sku}</div>
                   </div>
-                  <div className="text-md tabular-nums">
-                    <span
-                      className={
-                        overscan ? 'text-rose-700 font-semibold' : verified ? 'text-emerald-700' : 'text-slate-700'
-                      }
-                    >
-                      {count}
-                    </span>
-                    <span className="text-slate-400"> / {it.quantity}</span>
-                  </div>
+                  {splitMode ? (
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-slate-500">{t('pack.split.move')}</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={it.quantity}
+                        value={splitVal}
+                        onChange={(e) =>
+                          setSplitQty((prev) => ({
+                            ...prev,
+                            [it.id]: Math.min(Math.max(0, Number(e.target.value) || 0), it.quantity),
+                          }))
+                        }
+                        className="w-16 h-7 px-2 text-md tabular-nums border border-slate-300 rounded outline-none focus:border-blue-500 text-right"
+                      />
+                      <span className="text-slate-400">/ {it.quantity}</span>
+                    </div>
+                  ) : (
+                    <div className="text-md tabular-nums">
+                      <span
+                        className={
+                          overscan ? 'text-rose-700 font-semibold' : verified ? 'text-emerald-700' : 'text-slate-700'
+                        }
+                      >
+                        {count}
+                      </span>
+                      <span className="text-slate-400"> / {it.quantity}</span>
+                    </div>
+                  )}
                 </div>
               )
             })}
           </div>
+          {splitMode && (
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                onClick={submitSplit}
+                disabled={splitTotal === 0}
+                className="h-8 px-3 text-md bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+              >
+                <Boxes size={12} /> {t('pack.split.confirm', { n: splitTotal })}
+              </button>
+              <span className="text-sm text-slate-500">
+                {t('pack.split.willCreate')}
+              </span>
+            </div>
+          )}
         </div>
       </Card>
 

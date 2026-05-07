@@ -88,6 +88,12 @@
   "wizard.saveFailed": "Save failed",
   "wizard.finalStep": "Final step",
 
+  "pack.split.cta": "Split into new package",
+  "pack.split.hint": "Enter how many units of each line to move into a new sibling shipment. Use this when items don't fit one box.",
+  "pack.split.move": "Move",
+  "pack.split.confirm": "Move {n} unit(s) to new package",
+  "pack.split.willCreate": "Creates a new shipment for the same order",
+  "pack.split.toast.created": "New package created",
   "rates.title": "Compare rates",
   "rates.compare": "Compare rates",
   "rates.cheapest": "Cheapest",

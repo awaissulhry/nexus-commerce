@@ -59,6 +59,12 @@
   "wizard.saveFailed": "Salvataggio non riuscito",
   "wizard.finalStep": "Ultimo passaggio",
 
+  "pack.split.cta": "Dividi in pacco nuovo",
+  "pack.split.hint": "Indica quante unità di ogni riga spostare in una spedizione nuova. Usa quando gli articoli non entrano in una sola scatola.",
+  "pack.split.move": "Sposta",
+  "pack.split.confirm": "Sposta {n} unità in pacco nuovo",
+  "pack.split.willCreate": "Crea una nuova spedizione per lo stesso ordine",
+  "pack.split.toast.created": "Nuovo pacco creato",
   "rates.title": "Confronta tariffe",
   "rates.compare": "Confronta tariffe",
   "rates.cheapest": "Più economico",
