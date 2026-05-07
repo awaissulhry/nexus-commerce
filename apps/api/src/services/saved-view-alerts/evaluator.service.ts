@@ -43,7 +43,7 @@ interface AlertWithView {
   baselineCount: number
   lastFiredAt: Date | null
   cooldownMinutes: number
-  savedView: { id: string; name: string; filters: unknown }
+  savedView: { id: string; name: string; surface: string; filters: unknown }
 }
 
 function compare(
@@ -123,16 +123,96 @@ function buildHref(filters: unknown): string {
   return qs ? `/products?${qs}` : '/products'
 }
 
+// O.52: outbound.pending href builder. Mirrors the URL shape the
+// PendingShipmentsClient reads on mount.
+function buildOutboundHref(filters: unknown): string {
+  const params = new URLSearchParams()
+  if (filters && typeof filters === 'object') {
+    const f = filters as Record<string, unknown>
+    if (typeof f.q === 'string' && f.q) params.set('q', f.q)
+    if (typeof f.urgency === 'string' && f.urgency && f.urgency !== 'ALL') {
+      params.set('urgency', f.urgency)
+    }
+    if (typeof f.sort === 'string' && f.sort && f.sort !== 'ship-by-asc') {
+      params.set('sort', f.sort)
+    }
+    if (Array.isArray(f.channel) && f.channel.length > 0) {
+      params.set('channel', f.channel.filter((c): c is string => typeof c === 'string').join(','))
+    } else if (typeof f.channel === 'string' && f.channel) {
+      params.set('channel', f.channel)
+    }
+  }
+  const qs = params.toString()
+  return qs ? `/fulfillment/outbound?${qs}` : '/fulfillment/outbound'
+}
+
+// O.52: count pending orders matching a saved view's filters. Mirrors
+// the GET /api/fulfillment/outbound/pending-orders where clause.
+async function countOutboundPending(
+  prisma: PrismaClient,
+  filters: unknown,
+): Promise<number> {
+  const f = (filters as Record<string, unknown>) ?? {}
+  const channelList = Array.isArray(f.channel)
+    ? f.channel.filter((c): c is string => typeof c === 'string')
+    : typeof f.channel === 'string' && f.channel
+      ? f.channel.split(',').map((s) => s.trim()).filter(Boolean)
+      : []
+  const urgency = typeof f.urgency === 'string' ? f.urgency : null
+
+  const now = new Date()
+  const t24 = new Date(now.getTime() + 24 * 3_600_000)
+  const t48 = new Date(now.getTime() + 48 * 3_600_000)
+  const t7d = new Date(now.getTime() + 7 * 24 * 3_600_000)
+
+  const where: any = {
+    status: { in: ['PENDING', 'PROCESSING'] as any[] },
+    shipments: { none: { status: { not: 'CANCELLED' as any } } },
+  }
+  if (channelList.length) where.channel = { in: channelList as any }
+
+  if (urgency && urgency !== 'ALL') {
+    if (urgency === 'OVERDUE') where.shipByDate = { lt: now }
+    else if (urgency === 'TODAY') where.shipByDate = { gte: now, lt: t24 }
+    else if (urgency === 'TOMORROW') where.shipByDate = { gte: t24, lt: t48 }
+    else if (urgency === 'THIS_WEEK') where.shipByDate = { gte: t48, lt: t7d }
+    else if (urgency === 'LATER') where.shipByDate = { gte: t7d }
+    else if (urgency === 'UNKNOWN') where.shipByDate = null
+  }
+
+  if (typeof f.q === 'string' && f.q.trim()) {
+    const s = f.q.trim()
+    where.OR = [
+      { channelOrderId: { contains: s, mode: 'insensitive' } },
+      { customerName: { contains: s, mode: 'insensitive' } },
+      { customerEmail: { contains: s, mode: 'insensitive' } },
+      { items: { some: { sku: { contains: s, mode: 'insensitive' } } } },
+    ]
+  }
+
+  return prisma.order.count({ where })
+}
+
 export async function evaluateAlert(
   ctx: AlertEvalContext,
   alert: AlertWithView,
 ): Promise<AlertEvalResult> {
   const { prisma } = ctx
-  const where = await buildProductWhereFromSavedView(
-    prisma,
-    alert.savedView.filters as any,
-  )
-  const count = await prisma.product.count({ where })
+  // O.52: surface-aware counter. The default 'products' surface
+  // counts via the existing buildProductWhereFromSavedView; the new
+  // 'outbound.pending' surface counts pending orders. Future surfaces
+  // (returns.pending, etc.) plug in here.
+  const surface = alert.savedView.surface ?? 'products'
+  let count: number
+  if (surface === 'outbound.pending') {
+    count = await countOutboundPending(prisma, alert.savedView.filters)
+  } else {
+    const where = await buildProductWhereFromSavedView(
+      prisma,
+      alert.savedView.filters as any,
+    )
+    count = await prisma.product.count({ where })
+  }
   const threshold = Number(alert.threshold)
   const matched = compare(
     alert.comparison,
@@ -187,7 +267,10 @@ export async function evaluateAlert(
         body: `Saved view "${alert.savedView.name}" tripped.`,
         entityType: 'SavedView',
         entityId: alert.savedView.id,
-        href: buildHref(alert.savedView.filters),
+        href:
+          surface === 'outbound.pending'
+            ? buildOutboundHref(alert.savedView.filters)
+            : buildHref(alert.savedView.filters),
         meta: {
           alertId: alert.id,
           comparison: alert.comparison,
@@ -214,7 +297,9 @@ export async function evaluateAllActiveAlerts(
   const alerts = await ctx.prisma.savedViewAlert.findMany({
     where: { isActive: true },
     include: {
-      savedView: { select: { id: true, name: true, filters: true } },
+      // O.52: surface included so the evaluator dispatches to the
+      // right counter (products vs outbound.pending vs future).
+      savedView: { select: { id: true, name: true, surface: true, filters: true } },
     },
     orderBy: { lastCheckedAt: 'asc' },
   })

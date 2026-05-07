@@ -11,6 +11,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Truck, Search, RefreshCw, Crown, AlertTriangle, Clock, Package, X, Plus,
   Bookmark, BookmarkPlus, ChevronDown, Trash2, Star, ArrowRight, Sparkles,
+  Bell, BellOff,
 } from 'lucide-react'
 import Link from 'next/link'
 import { Card } from '@/components/ui/Card'
@@ -140,8 +141,19 @@ export default function PendingShipmentsClient() {
 
   // O.27: saved views — persistent filter combinations.
   type SavedView = { id: string; name: string; filters: any; isDefault: boolean }
+  type AlertRow = {
+    id: string
+    name: string
+    isActive: boolean
+    comparison: string
+    threshold: number
+    lastCount: number
+    cooldownMinutes: number
+  }
   const [views, setViews] = useState<SavedView[]>([])
   const [showViewsMenu, setShowViewsMenu] = useState(false)
+  // O.52: per-view alert subscriptions. Map of viewId → alerts[].
+  const [alertsByView, setAlertsByView] = useState<Record<string, AlertRow[]>>({})
 
   const fetchViews = useCallback(async () => {
     try {
@@ -149,12 +161,75 @@ export default function PendingShipmentsClient() {
         `${getBackendUrl()}/api/saved-views?surface=outbound.pending`,
         { cache: 'no-store' },
       )
-      if (res.ok) setViews(((await res.json()).items ?? []) as SavedView[])
+      if (res.ok) {
+        const data = (await res.json()).items ?? []
+        setViews(data as SavedView[])
+        // O.52: parallel-fetch alert subscriptions per view.
+        const alertEntries = await Promise.all(
+          (data as SavedView[]).map(async (v): Promise<[string, AlertRow[]]> => {
+            try {
+              const ar = await fetch(
+                `${getBackendUrl()}/api/saved-views/${v.id}/alerts`,
+                { cache: 'no-store' },
+              )
+              if (!ar.ok) return [v.id, []]
+              const body = await ar.json()
+              return [v.id, (body.items ?? body.alerts ?? []) as AlertRow[]]
+            } catch {
+              return [v.id, []]
+            }
+          }),
+        )
+        const map: Record<string, AlertRow[]> = {}
+        for (const [id, list] of alertEntries) map[id] = list
+        setAlertsByView(map)
+      }
     } catch {
       /* non-fatal */
     }
   }, [])
   useEffect(() => { fetchViews() }, [fetchViews])
+
+  // O.52: create / delete alert on a view. Defaults to "GT 5" so the
+  // operator gets a useful threshold without a config dialog.
+  const subscribeAlert = async (view: SavedView) => {
+    const thresholdStr = window.prompt(t('outbound.alerts.prompt'), '5')
+    if (thresholdStr == null) return
+    const threshold = Number(thresholdStr)
+    if (!Number.isFinite(threshold) || threshold < 0) {
+      toast.error(t('outbound.alerts.invalidThreshold'))
+      return
+    }
+    const res = await fetch(`${getBackendUrl()}/api/saved-views/${view.id}/alerts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: view.name,
+        comparison: 'GT',
+        threshold,
+        cooldownMinutes: 60,
+      }),
+    })
+    if (res.ok) {
+      toast.success(t('outbound.alerts.created'))
+      fetchViews()
+    } else {
+      toast.error(t('common.error'))
+    }
+  }
+
+  const unsubscribeAlert = async (view: SavedView, alertId: string) => {
+    const res = await fetch(
+      `${getBackendUrl()}/api/saved-views/${view.id}/alerts/${alertId}`,
+      { method: 'DELETE' },
+    )
+    if (res.ok) {
+      toast.success(t('outbound.alerts.removed'))
+      fetchViews()
+    } else {
+      toast.error(t('common.error'))
+    }
+  }
 
   // O.42: cross-tab refresh of the views dropdown when a sibling tab
   // edits the list (saved a new view, deleted one, toggled default).
@@ -507,35 +582,72 @@ export default function PendingShipmentsClient() {
                         {t('savedViews.empty')}
                       </div>
                     ) : (
-                      views.map((v) => (
-                        <div
-                          key={v.id}
-                          className="flex items-center gap-1 px-2 py-1.5 hover:bg-slate-50 rounded group"
-                        >
-                          <button
-                            onClick={() => applyView(v)}
-                            className="flex-1 text-left text-md text-slate-700 truncate"
+                      views.map((v) => {
+                        const alerts = alertsByView[v.id] ?? []
+                        const hasAlert = alerts.some((a) => a.isActive)
+                        return (
+                          <div
+                            key={v.id}
+                            className="flex items-center gap-1 px-2 py-1.5 hover:bg-slate-50 rounded group"
                           >
-                            {v.name}
-                          </button>
-                          <button
-                            onClick={() => toggleDefault(v)}
-                            title={v.isDefault ? t('savedViews.unsetDefault') : t('savedViews.setDefault')}
-                            className={`h-6 w-6 inline-flex items-center justify-center rounded ${
-                              v.isDefault ? 'text-amber-500' : 'text-slate-300 hover:text-amber-500'
-                            }`}
-                          >
-                            <Star size={11} fill={v.isDefault ? 'currentColor' : 'none'} />
-                          </button>
-                          <button
-                            onClick={() => deleteView(v.id)}
-                            title={t('common.delete')}
-                            className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-rose-600 rounded opacity-0 group-hover:opacity-100"
-                          >
-                            <Trash2 size={11} />
-                          </button>
-                        </div>
-                      ))
+                            <button
+                              onClick={() => applyView(v)}
+                              className="flex-1 text-left text-md text-slate-700 truncate"
+                              title={
+                                hasAlert
+                                  ? t('outbound.alerts.viewHasAlert', {
+                                      threshold: alerts[0].threshold,
+                                      count: alerts[0].lastCount,
+                                    })
+                                  : v.name
+                              }
+                            >
+                              {v.name}
+                              {hasAlert && (
+                                <span className="ml-1 text-xs text-amber-600">●</span>
+                              )}
+                            </button>
+                            {/* O.52: alerts toggle. If alerts exist, click to
+                                remove (single-active-alert per view in v0); if
+                                none, click to create. */}
+                            {hasAlert ? (
+                              <button
+                                onClick={() => unsubscribeAlert(v, alerts[0].id)}
+                                title={t('outbound.alerts.unsubscribe', {
+                                  threshold: alerts[0].threshold,
+                                })}
+                                className="h-6 w-6 inline-flex items-center justify-center text-amber-500 hover:text-amber-700 rounded"
+                              >
+                                <Bell size={11} fill="currentColor" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => subscribeAlert(v)}
+                                title={t('outbound.alerts.subscribe')}
+                                className="h-6 w-6 inline-flex items-center justify-center text-slate-300 hover:text-amber-500 rounded"
+                              >
+                                <BellOff size={11} />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => toggleDefault(v)}
+                              title={v.isDefault ? t('savedViews.unsetDefault') : t('savedViews.setDefault')}
+                              className={`h-6 w-6 inline-flex items-center justify-center rounded ${
+                                v.isDefault ? 'text-amber-500' : 'text-slate-300 hover:text-amber-500'
+                              }`}
+                            >
+                              <Star size={11} fill={v.isDefault ? 'currentColor' : 'none'} />
+                            </button>
+                            <button
+                              onClick={() => deleteView(v.id)}
+                              title={t('common.delete')}
+                              className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-rose-600 rounded opacity-0 group-hover:opacity-100"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
+                        )
+                      })
                     )}
                   </div>
                   <div className="border-t border-slate-200 p-1">
