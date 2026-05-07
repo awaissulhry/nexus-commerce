@@ -215,6 +215,57 @@ export async function sendcloudWebhookRoutes(app: FastifyInstance) {
           data: updateData,
         })
 
+        // O.30: customer email on terminal transitions for direct
+        // channels (Shopify, Woo). Marketplace channels (Amazon, eBay)
+        // skip — those marketplaces send their own. Fire-and-forget
+        // (non-blocking).
+        if (shipment.order && (newStatus === 'SHIPPED' || newStatus === 'DELIVERED')) {
+          const isDirect = ['SHOPIFY', 'WOOCOMMERCE'].includes(shipment.order.channel as string)
+          if (isDirect) {
+            void (async () => {
+              try {
+                const { sendShipmentEmail } = await import('../services/email/index.js')
+                // Need full order for email — re-fetch with the
+                // customer fields. Cheap; webhook is rare.
+                const fullOrder = await prisma.order.findUnique({
+                  where: { id: shipment.order!.id },
+                  select: {
+                    customerEmail: true,
+                    customerName: true,
+                    channelOrderId: true,
+                    latestDeliveryDate: true,
+                    shippingAddress: true,
+                  },
+                })
+                if (!fullOrder?.customerEmail) return
+                const ship = fullOrder.shippingAddress as any
+                const destCity = ship?.City ?? ship?.city ?? null
+                const baseUrl = process.env.NEXUS_BRANDED_TRACKING_BASE_URL ?? ''
+                await sendShipmentEmail(newStatus === 'SHIPPED' ? 'shipped' : 'delivered', {
+                  to: fullOrder.customerEmail,
+                  customerName: fullOrder.customerName ?? '',
+                  orderId: shipment.order!.id,
+                  orderChannelId: fullOrder.channelOrderId,
+                  trackingNumber: parcel.tracking_number ?? shipment.trackingNumber,
+                  trackingUrl: parcel.tracking_url ?? shipment.trackingUrl,
+                  carrier: parcel.carrier?.code ?? shipment.carrierCode,
+                  estimatedDelivery: fullOrder.latestDeliveryDate
+                    ? fullOrder.latestDeliveryDate.toISOString()
+                    : null,
+                  destinationCity: destCity,
+                  brandedTrackingUrl:
+                    baseUrl && shipment.trackingNumber
+                      ? `${baseUrl}/track/${encodeURIComponent(shipment.trackingNumber)}`
+                      : null,
+                  locale: 'it',
+                })
+              } catch (err) {
+                app.log.warn({ err }, '[sendcloud-webhook] customer email failed (non-fatal)')
+              }
+            })()
+          }
+        }
+
         // Enqueue channel pushback (only when an actual ship-out
         // happened — DELIVERED / IN_TRANSIT updates aren't separately
         // pushed to Amazon/eBay; their first SHIPPED event is what
