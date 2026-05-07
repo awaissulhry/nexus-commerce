@@ -2928,6 +2928,56 @@ model ShipmentItem {
   @@index([productId])
 }
 
+// O.3: Ordered rules engine for outbound shipments. WHEN <conditions>
+// THEN <actions>, walked in priority order ASC. The applier (O.16)
+// loads the active rule set into TS, matches in-process, and applies
+// the first hit's actions to the shipment being created.
+//
+// conditions + actions are intentionally JSONB rather than normalized
+// columns: the rule taxonomy expands fast (new channels, carrier
+// services, packaging dimensions) and reads are always whole-rule —
+// we never query "find rules where weight > X". Typed shape lives
+// alongside the applier code (O.16), validated at write time.
+//
+// Documented condition keys (all optional; empty = "don't filter"):
+//   channel, marketplace, destinationCountry, weightGramsMin,
+//   weightGramsMax, orderTotalCentsMin, orderTotalCentsMax,
+//   itemCountMin, itemCountMax, isPrime, hasHazmat, skuMatch
+// Documented action keys:
+//   preferCarrierCode, preferServiceCode, requireSignature,
+//   requireInsurance, insuranceCents, packagingId, holdForReview,
+//   addLabel
+model ShippingRule {
+  id          String  @id @default(cuid())
+
+  name        String
+  description String?
+
+  // Lower number = higher priority. Applier walks ASC and uses first match.
+  priority Int     @default(100)
+  // Inactive rules don't fire but stay visible for editing/cloning.
+  isActive Boolean @default(true)
+
+  conditions Json @default("{}")
+  actions    Json @default("{}")
+
+  // Audit + analytics; lastFiredAt drives rules-list "most active" sort.
+  lastFiredAt  DateTime?
+  triggerCount Int       @default(0)
+
+  // Free-form operator ID (no first-class User model in this repo yet).
+  createdBy String?
+  updatedBy String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Applier's primary read: active rules in priority order.
+  @@index([isActive, priority])
+  // Rules-list UI: "stale" / "most recently fired" sorts.
+  @@index([lastFiredAt])
+}
+
 model Supplier {
   id                     String    @id @default(cuid())
   name                   String
