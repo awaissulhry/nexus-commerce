@@ -8423,6 +8423,158 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ═══════════════════════════════════════════════════════════════════
+  // CR.7 — CARRIER SERVICES + SERVICE MAPPING
+  // ═══════════════════════════════════════════════════════════════════
+
+  // GET /fulfillment/carriers/:code/services — live services from the
+  // carrier's API + cached CarrierService rows. Today: only SENDCLOUD;
+  // calls listShippingMethods with a probe weight + country (operator
+  // can override via query). dryRun returns the three Sendcloud mocks.
+  // Hits the carrier on every call (no cache). Cache lands in CR.12
+  // when the nightly catalog sync ships.
+  fastify.get('/fulfillment/carriers/:code/services', async (request, reply) => {
+    try {
+      const { code } = request.params as { code: string }
+      const q = request.query as { weightKg?: string; toCountry?: string }
+      if (code !== 'SENDCLOUD') {
+        return { items: [] }
+      }
+      const sendcloud = await import('../services/sendcloud/index.js')
+      let creds
+      try {
+        creds = await sendcloud.resolveCredentials()
+      } catch (e: any) {
+        if (e instanceof sendcloud.SendcloudError) {
+          return reply.code(e.status).send({ error: e.message, code: e.code })
+        }
+        throw e
+      }
+      const methods = await sendcloud.listShippingMethods(creds, {
+        weightKg: q.weightKg ? Number(q.weightKg) : 1.5,
+        toCountry: (q.toCountry ?? 'IT').toUpperCase(),
+      })
+      return {
+        items: methods.map((m) => ({
+          externalId: String(m.id),
+          name: m.name,
+          carrier: m.carrier,
+          minWeightKg: m.minWeightKg,
+          maxWeightKg: m.maxWeightKg,
+          basePriceEur: m.price,
+        })),
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[carriers/:code/services] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // GET /fulfillment/carriers/:code/mappings — list existing channel ×
+  // marketplace × warehouse → service mappings for this carrier.
+  fastify.get('/fulfillment/carriers/:code/mappings', async (request, reply) => {
+    try {
+      const { code } = request.params as { code: string }
+      const carrier = await prisma.carrier.findUnique({ where: { code: code as any } })
+      if (!carrier) return { items: [] }
+      const items = await prisma.carrierServiceMapping.findMany({
+        where: { carrierId: carrier.id },
+        orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }, { warehouseId: 'asc' }],
+        include: {
+          service: { select: { name: true, externalId: true, carrierSubName: true, tier: true } },
+        },
+      })
+      return { items }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[carriers/:code/mappings GET] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // POST /fulfillment/carriers/:code/mappings — create or upsert a
+  // mapping. Body: { channel, marketplace, warehouseId?, service:
+  // { externalId, name, tier?, carrierSubName? } }. Auto-creates the
+  // CarrierService row if it doesn't exist (operator picked from the
+  // live /services list). Upserts on the (carrier, channel, market,
+  // warehouse) tuple via the partial unique indexes from CR.3.
+  fastify.post('/fulfillment/carriers/:code/mappings', async (request, reply) => {
+    try {
+      const { code } = request.params as { code: string }
+      const body = request.body as {
+        channel?: string
+        marketplace?: string
+        warehouseId?: string | null
+        tierOverride?: string | null
+        service?: { externalId?: string; name?: string; tier?: string; carrierSubName?: string }
+      }
+      if (!body.channel || !body.service?.externalId || !body.service?.name) {
+        return reply.code(400).send({ error: 'channel + service.externalId + service.name required' })
+      }
+      const carrier = await prisma.carrier.findUnique({ where: { code: code as any } })
+      if (!carrier) return reply.code(404).send({ error: 'Carrier not found' })
+
+      // Upsert the CarrierService row keyed on (carrierId, externalId).
+      const service = await prisma.carrierService.upsert({
+        where: { carrierId_externalId: { carrierId: carrier.id, externalId: body.service.externalId } },
+        create: {
+          carrierId: carrier.id,
+          externalId: body.service.externalId,
+          name: body.service.name,
+          tier: body.service.tier ?? null,
+          carrierSubName: body.service.carrierSubName ?? null,
+        },
+        update: {
+          name: body.service.name,
+          tier: body.service.tier ?? null,
+          carrierSubName: body.service.carrierSubName ?? null,
+        },
+      })
+
+      const market = body.marketplace ?? 'GLOBAL'
+      const warehouseId = body.warehouseId ?? null
+
+      // Manual upsert because Prisma can't express the partial-unique
+      // index from CR.3 (warehouseId NULL vs NOT NULL split). Find by
+      // tuple, update or create.
+      const existing = await prisma.carrierServiceMapping.findFirst({
+        where: { carrierId: carrier.id, channel: body.channel, marketplace: market, warehouseId },
+      })
+      const saved = existing
+        ? await prisma.carrierServiceMapping.update({
+            where: { id: existing.id },
+            data: { serviceId: service.id, tierOverride: body.tierOverride ?? null },
+          })
+        : await prisma.carrierServiceMapping.create({
+            data: {
+              carrierId: carrier.id,
+              serviceId: service.id,
+              channel: body.channel,
+              marketplace: market,
+              warehouseId,
+              tierOverride: body.tierOverride ?? null,
+            },
+          })
+      return { ok: true, mapping: saved }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[carriers/:code/mappings POST] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // DELETE /fulfillment/carriers/:code/mappings/:id — remove a mapping.
+  // Doesn't touch the underlying CarrierService row (other mappings
+  // may still point at it).
+  fastify.delete('/fulfillment/carriers/:code/mappings/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      await prisma.carrierServiceMapping.delete({ where: { id } })
+      return { ok: true }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[carriers/:code/mappings DELETE] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ═══════════════════════════════════════════════════════════════════
   // WAREHOUSE
   // ═══════════════════════════════════════════════════════════════════
 

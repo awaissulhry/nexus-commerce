@@ -117,14 +117,51 @@ export async function resolveCredentials(): Promise<SendcloudCredentials> {
 export async function resolveServiceMap(
   channel: string,
   marketplace: string | null | undefined,
+  warehouseId?: string | null,
 ): Promise<number | null> {
+  // CR.7: prefer the normalized CarrierServiceMapping rows over the
+  // legacy defaultServiceMap JSON. Resolution order:
+  //   1. exact (channel, marketplace, warehouseId)        — most specific
+  //   2. (channel, marketplace, warehouseId=null)         — channel+market default
+  //   3. (channel, GLOBAL, warehouseId=null)              — channel default
+  //   4. defaultServiceMap[channel_marketplace]           — legacy fallback
+  //   5. defaultServiceMap[channel_GLOBAL]                — legacy fallback
+  // Returns the Sendcloud shipping_method id (CarrierService.externalId
+  // parsed as int) or null when nothing maps.
   const carrier = await prisma.carrier.findUnique({
     where: { code: 'SENDCLOUD' },
-    select: { defaultServiceMap: true },
+    select: { id: true, defaultServiceMap: true },
   })
-  const map = (carrier?.defaultServiceMap as ServiceMap | null) ?? null
+  if (!carrier) return null
+
+  const market = marketplace ?? 'GLOBAL'
+
+  // (1) + (2) + (3): walk specificity tiers in CarrierServiceMapping.
+  const candidates: Array<{ marketplace: string; warehouseId: string | null }> = []
+  if (warehouseId) candidates.push({ marketplace: market, warehouseId })
+  candidates.push({ marketplace: market, warehouseId: null })
+  if (market !== 'GLOBAL') candidates.push({ marketplace: 'GLOBAL', warehouseId: null })
+
+  for (const c of candidates) {
+    const mapping = await prisma.carrierServiceMapping.findFirst({
+      where: {
+        carrierId: carrier.id,
+        channel,
+        marketplace: c.marketplace,
+        warehouseId: c.warehouseId,
+      },
+      include: { service: { select: { externalId: true } } },
+    })
+    if (mapping?.service?.externalId) {
+      const parsed = parseInt(mapping.service.externalId, 10)
+      if (Number.isFinite(parsed)) return parsed
+    }
+  }
+
+  // (4) + (5): legacy fallback for rows that haven't been migrated yet.
+  const map = (carrier.defaultServiceMap as ServiceMap | null) ?? null
   if (!map) return null
-  const key = `${channel}_${marketplace ?? 'GLOBAL'}`
+  const key = `${channel}_${market}`
   return map[key] ?? map[`${channel}_GLOBAL`] ?? null
 }
 

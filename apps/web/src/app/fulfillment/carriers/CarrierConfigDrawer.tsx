@@ -15,8 +15,8 @@
 // screens. Drawer-right placement (640px max) so the marketplace
 // stays partially visible behind it for context.
 
-import { useEffect, useMemo, useState } from 'react'
-import { Copy, Check, Lock, AlertCircle, ExternalLink } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Copy, Check, Lock, AlertCircle, ExternalLink, Plus, Trash2 } from 'lucide-react'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { Tabs, type Tab } from '@/components/ui/Tabs'
 import { Button } from '@/components/ui/Button'
@@ -58,7 +58,7 @@ interface Props {
   onChanged: () => void
 }
 
-type TabId = 'credentials' | 'webhooks'
+type TabId = 'credentials' | 'services' | 'webhooks'
 
 export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: Props) {
   const { t } = useTranslations()
@@ -186,12 +186,13 @@ export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: 
   // SP-API notifications, configured at the seller-account level
   // outside Nexus).
   const tabs: Tab[] = useMemo(() => {
-    const list: Tab[] = [{ id: 'credentials', label: t('carriers.title') + ' · ' + (t('carriers.field.publicKey') as string).split(' ')[0] }]
+    const list: Tab[] = [{ id: 'credentials', label: 'Credentials' }]
     if (def.code === 'SENDCLOUD') {
+      list.push({ id: 'services', label: 'Services' })
       list.push({ id: 'webhooks', label: 'Webhooks' })
     }
     return list
-  }, [def.code, t])
+  }, [def.code])
 
   const headerStatus = isConnected ? (
     <Badge variant="success" size="sm">{t('carriers.status.connected')}</Badge>
@@ -231,6 +232,9 @@ export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: 
               fields={fields}
               onField={updateField}
             />
+          )}
+          {activeTab === 'services' && def.code === 'SENDCLOUD' && (
+            <ServicesTab carrierCode={def.code} />
           )}
           {activeTab === 'webhooks' && def.code === 'SENDCLOUD' && (
             <WebhooksTab />
@@ -330,6 +334,249 @@ function CredentialsTab({
         >
           {t('carriers.action.docs')} <ExternalLink size={10} />
         </a>
+      )}
+    </div>
+  )
+}
+
+// ── Services tab ───────────────────────────────────────────────────
+// Replaces the opaque defaultServiceMap JSON. Operator picks
+// (channel, marketplace, warehouse?) → carrier service mapping. Saved
+// rows feed resolveServiceMap on the print-label path.
+//
+// Today's UX: a list of existing mappings + an "Add mapping" form.
+// The matrix view (rows = channel × marketplace, columns = service
+// tier) lands in CR.7+ once we have enough channels live to make a
+// matrix cleaner than a list. Today (Amazon-only with 2 marketplaces)
+// the list is shorter to scan.
+type Mapping = {
+  id: string
+  channel: string
+  marketplace: string
+  warehouseId: string | null
+  tierOverride: string | null
+  service: { name: string; externalId: string; carrierSubName?: string | null; tier?: string | null } | null
+}
+
+type Service = {
+  externalId: string
+  name: string
+  carrier: string
+  basePriceEur: number
+}
+
+const CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY'] as const
+const COMMON_MARKETPLACES = ['IT', 'DE', 'FR', 'ES', 'GB', 'US', 'GLOBAL']
+
+function ServicesTab({ carrierCode }: { carrierCode: string }) {
+  const { toast } = useToast()
+  const askConfirm = useConfirm()
+
+  const [mappings, setMappings] = useState<Mapping[]>([])
+  const [services, setServices] = useState<Service[]>([])
+  const [loading, setLoading] = useState(true)
+  const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState({
+    channel: 'AMAZON',
+    marketplace: 'IT',
+    serviceExternalId: '',
+  })
+  const [busy, setBusy] = useState(false)
+
+  const fetchAll = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [mRes, sRes] = await Promise.all([
+        fetch(`${getBackendUrl()}/api/fulfillment/carriers/${carrierCode}/mappings`, { cache: 'no-store' }),
+        fetch(`${getBackendUrl()}/api/fulfillment/carriers/${carrierCode}/services`, { cache: 'no-store' }),
+      ])
+      if (mRes.ok) {
+        const m = await mRes.json()
+        setMappings(m.items ?? [])
+      }
+      if (sRes.ok) {
+        const s = await sRes.json()
+        setServices(s.items ?? [])
+      } else {
+        // Sendcloud not connected yet — services list will be empty.
+        setServices([])
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [carrierCode])
+
+  useEffect(() => { fetchAll() }, [fetchAll])
+
+  const save = async () => {
+    const svc = services.find((s) => s.externalId === draft.serviceExternalId)
+    if (!svc) {
+      toast.error('Pick a service first')
+      return
+    }
+    setBusy(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/carriers/${carrierCode}/mappings`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            channel: draft.channel,
+            marketplace: draft.marketplace,
+            service: {
+              externalId: svc.externalId,
+              name: svc.name,
+              carrierSubName: svc.carrier,
+            },
+          }),
+        },
+      )
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error ?? 'Save failed')
+      }
+      setAdding(false)
+      setDraft({ channel: 'AMAZON', marketplace: 'IT', serviceExternalId: '' })
+      fetchAll()
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const remove = async (id: string) => {
+    const ok = await askConfirm({
+      title: 'Remove this mapping?',
+      description: 'Future shipments matching this channel/marketplace will fall back to the carrier auto-pick.',
+      confirmLabel: 'Remove',
+      tone: 'danger',
+    })
+    if (!ok) return
+    const res = await fetch(
+      `${getBackendUrl()}/api/fulfillment/carriers/${carrierCode}/mappings/${id}`,
+      { method: 'DELETE' },
+    )
+    if (res.ok) fetchAll()
+    else toast.error('Delete failed')
+  }
+
+  if (loading) {
+    return <div className="text-base text-slate-500 dark:text-slate-400 py-2">Loading…</div>
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="text-base text-slate-700 dark:text-slate-300">
+          Map (channel, marketplace) → carrier service. The print-label flow uses these mappings before falling back to the carrier's automatic pick.
+        </p>
+        {services.length === 0 && (
+          <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+            No services available. Connect the carrier first to populate the picker.
+          </p>
+        )}
+      </div>
+
+      {/* Existing mappings */}
+      {mappings.length === 0 ? (
+        <div className="text-base text-slate-500 dark:text-slate-400 italic py-2">
+          No mappings yet. Add one below.
+        </div>
+      ) : (
+        <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+          <table className="w-full text-base">
+            <thead className="bg-slate-50 dark:bg-slate-800 text-xs uppercase tracking-wider text-slate-600 dark:text-slate-300">
+              <tr>
+                <th className="text-left px-3 py-2 font-semibold">Channel</th>
+                <th className="text-left px-3 py-2 font-semibold">Marketplace</th>
+                <th className="text-left px-3 py-2 font-semibold">Service</th>
+                <th className="px-3 py-2 w-10" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+              {mappings.map((m) => (
+                <tr key={m.id} className="text-slate-800 dark:text-slate-100">
+                  <td className="px-3 py-2 font-medium">{m.channel}</td>
+                  <td className="px-3 py-2">{m.marketplace}</td>
+                  <td className="px-3 py-2">
+                    <div className="font-medium">{m.service?.name ?? '—'}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                      {m.service?.carrierSubName} · id {m.service?.externalId}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <button
+                      onClick={() => remove(m.id)}
+                      className="p-1 rounded hover:bg-rose-50 dark:hover:bg-rose-900/30 text-rose-600 dark:text-rose-400"
+                      aria-label="Remove mapping"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Add new mapping */}
+      {adding ? (
+        <div className="space-y-2 p-3 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div>
+              <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5 block">Channel</label>
+              <select
+                value={draft.channel}
+                onChange={(e) => setDraft({ ...draft, channel: e.target.value })}
+                className="h-9 w-full px-2 text-base border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+              >
+                {CHANNELS.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5 block">Marketplace</label>
+              <select
+                value={draft.marketplace}
+                onChange={(e) => setDraft({ ...draft, marketplace: e.target.value })}
+                className="h-9 w-full px-2 text-base border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+              >
+                {COMMON_MARKETPLACES.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5 block">Service</label>
+              <select
+                value={draft.serviceExternalId}
+                onChange={(e) => setDraft({ ...draft, serviceExternalId: e.target.value })}
+                className="h-9 w-full px-2 text-base border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded"
+              >
+                <option value="">— pick —</option>
+                {services.map((s) => (
+                  <option key={s.externalId} value={s.externalId}>
+                    {s.name} ({s.carrier}, €{s.basePriceEur})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="primary" size="sm" onClick={save} loading={busy}>Save mapping</Button>
+            <Button variant="ghost" size="sm" onClick={() => setAdding(false)}>Cancel</Button>
+          </div>
+        </div>
+      ) : (
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<Plus size={11} />}
+          onClick={() => setAdding(true)}
+          disabled={services.length === 0}
+        >
+          Add mapping
+        </Button>
       )}
     </div>
   )
