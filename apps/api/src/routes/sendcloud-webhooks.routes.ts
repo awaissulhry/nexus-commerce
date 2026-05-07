@@ -130,12 +130,72 @@ export async function sendcloudWebhookRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'parcel.id required' })
     }
 
-    // Resolve parcel → Shipment.
+    // Resolve parcel → Shipment first (the common, outbound path).
     const shipment = await prisma.shipment.findUnique({
       where: { sendcloudParcelId: String(parcel.id) },
       include: { order: { select: { id: true, channel: true, marketplace: true } } },
     })
     if (!shipment) {
+      // R0.3 (B3) — fall back to Return resolution. /generate-label
+      // creates Sendcloud parcels with is_return=true and stores the
+      // parcel id on Return.sendcloudParcelId. When the customer
+      // hands the box to a carrier, the same status webhook fires
+      // and we want to advance Return.status (REQUESTED → IN_TRANSIT)
+      // instead of black-boxing.
+      const ret = await prisma.return.findFirst({
+        where: { sendcloudParcelId: String(parcel.id) },
+        select: {
+          id: true,
+          status: true,
+          rmaNumber: true,
+          returnTrackingNumber: true,
+        },
+      })
+      if (ret) {
+        const mapped = PARCEL_STATUS_MAP[parcel.status?.id ?? 0] ?? { trackingCode: 'INFO' }
+        // Only advance to IN_TRANSIT on the first carrier scan; never
+        // auto-promote to RECEIVED — that requires physical-receipt
+        // confirmation by the operator (we don't trust "delivered to
+        // warehouse" scans to skip the inspection workflow).
+        const isFirstScan =
+          (mapped.trackingCode === 'PICKED_UP' || mapped.trackingCode === 'IN_TRANSIT') &&
+          ret.status === 'REQUESTED'
+        const updateData: any = {
+          version: { increment: 1 },
+        }
+        if (isFirstScan) updateData.status = 'IN_TRANSIT'
+        if (parcel.tracking_number && !ret.returnTrackingNumber) {
+          updateData.returnTrackingNumber = parcel.tracking_number
+        }
+        if (Object.keys(updateData).length > 1) {
+          await prisma.return.update({
+            where: { id: ret.id },
+            data: updateData,
+          })
+        }
+        // Audit the carrier event regardless of whether we advanced
+        // status — operators reading the audit trail want to see all
+        // carrier scans, not just the ones that flipped state.
+        try {
+          await prisma.auditLog.create({
+            data: {
+              entityType: 'Return',
+              entityId: ret.id,
+              action: 'carrier-scan',
+              metadata: {
+                source: 'SENDCLOUD',
+                code: mapped.trackingCode,
+                statusId: parcel.status?.id ?? null,
+                tracking: parcel.tracking_number ?? null,
+                advancedTo: isFirstScan ? 'IN_TRANSIT' : null,
+              } as any,
+            },
+          })
+        } catch (e) {
+          app.log.warn({ err: e }, '[sendcloud-webhook] return audit write failed')
+        }
+        return { ok: true, kind: 'return', returnId: ret.id, advanced: isFirstScan }
+      }
       // Unknown parcel — log + 200 so Sendcloud doesn't retry forever.
       app.log.info({ parcelId: parcel.id }, '[sendcloud-webhook] unknown parcel')
       return reply.code(200).send({ ok: true, ignored: 'unknown_parcel' })

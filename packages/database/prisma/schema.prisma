@@ -12,14 +12,6 @@ enum FulfillmentMethod {
   FBM
 }
 
-enum ReturnStatus {
-  REQUESTED
-  APPROVED
-  RECEIVED
-  REFUNDED
-  DENIED
-}
-
 enum CampaignType {
   SP // Sponsored Products
   SB // Sponsored Brands
@@ -3613,7 +3605,25 @@ model Return {
   notes   String?
   version Int     @default(1)
 
-  items ReturnItem[]
+  // R0.3 — Sendcloud parcel id mirror so the Sendcloud webhook can
+  // resolve incoming carrier-scan events back to this Return (the
+  // existing webhook only resolves to Shipment via Shipment.sendcloud-
+  // ParcelId; without this column return-leg tracking events were
+  // black-boxed).
+  sendcloudParcelId String?
+
+  // R0.3 — idempotency key for POST /fulfillment/returns. Operators
+  // running on flaky mobile networks double-create RMAs by re-tapping
+  // before the first response lands; the unique index lets the route
+  // short-circuit on the second submit.
+  idempotencyKey String? @unique
+
+  items   ReturnItem[]
+  // R0.1 — normalized refund history. Return.refundCents/refundStatus/
+  // channelRefundId/channelRefundError/channelRefundedAt remain as a
+  // denormalized projection of the latest POSTED Refund for fast list
+  // rendering; Refund[] is the source of truth.
+  refunds Refund[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3623,6 +3633,7 @@ model Return {
   @@index([channel])
   @@index([isFbaReturn])
   @@index([returnTrackingNumber])
+  @@index([sendcloudParcelId])
 }
 
 model ReturnItem {
@@ -3639,6 +3650,119 @@ model ReturnItem {
 
   @@index([returnId])
   @@index([productId])
+}
+
+// ── R0.1 — Refund domain ──────────────────────────────────────────────
+//
+// One Refund row per refund-attempt-set against a Return. Supports
+// partial refunds (perLineAmounts JSON), store credit, exchanges,
+// and multi-attempt audit via RefundAttempt[].
+//
+// Return.refundCents / refundStatus / channelRefundId etc. remain as
+// a write-through cache of the latest POSTED Refund so existing list/
+// drawer queries stay fast and one-shot. Source of truth = Refund[].
+model Refund {
+  id       String @id @default(cuid())
+  return   Return @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  returnId String
+
+  amountCents    Int
+  currencyCode   String @default("EUR")
+  // Per-line allocation when the operator splits the refund across
+  // ReturnItems. Map shape: { [returnItemId]: amountCents }. Sum must
+  // equal amountCents (enforced at the route layer, not DB).
+  perLineAmounts Json?
+
+  kind   RefundKind @default(CASH)
+  reason String?
+
+  // Channel publish state
+  channel         String // AMAZON | EBAY | SHOPIFY
+  channelRefundId String?
+  channelStatus   RefundChannelStatus @default(PENDING)
+  channelError    String?
+  channelPostedAt DateTime?
+
+  actor String?
+  notes String?
+
+  attempts RefundAttempt[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([returnId])
+  @@index([channelRefundId])
+  @@index([channelStatus])
+  @@index([channel])
+}
+
+enum RefundKind {
+  CASH
+  STORE_CREDIT
+  EXCHANGE
+}
+
+enum RefundChannelStatus {
+  PENDING
+  POSTED
+  FAILED
+  MANUAL_REQUIRED
+  NOT_IMPLEMENTED
+}
+
+// One row per channel-API call. Lets us retry FAILED refunds with full
+// audit (which attempt, what the channel said, what the request was).
+// rawResponse is the channel's raw response body for forensic debug.
+model RefundAttempt {
+  id       String @id @default(cuid())
+  refund   Refund @relation(fields: [refundId], references: [id], onDelete: Cascade)
+  refundId String
+
+  attemptedAt     DateTime @default(now())
+  outcome         String // OK | FAILED | NOT_IMPLEMENTED | OK_MANUAL_REQUIRED | SKIPPED
+  channelRefundId String?
+  errorMessage    String?
+  rawRequest      Json?
+  rawResponse     Json?
+  durationMs      Int?
+
+  @@index([refundId])
+  @@index([attemptedAt])
+}
+
+// ── R0.1 — Return policy ─────────────────────────────────────────────
+//
+// Drives EU consumer-law enforcement, auto-approval, restocking-fee
+// math, and high-value alerts. Resolution order at the route layer:
+//   (channel, marketplace, productType) → (channel, marketplace, null)
+//   → (channel, null, null) → fallback EU defaults (14d / 14d).
+//
+// Active-channel scope: AMAZON | EBAY | SHOPIFY. Woo/Etsy excluded.
+model ReturnPolicy {
+  id          String  @id @default(cuid())
+  channel     String // AMAZON | EBAY | SHOPIFY
+  marketplace String? // null = all marketplaces for channel
+  productType String? // null = all product types
+
+  // EU Consumer Rights Directive defaults
+  windowDays         Int @default(14) // days from delivery for buyer to request return
+  refundDeadlineDays Int @default(14) // days from receipt for seller to refund
+
+  buyerPaysReturn         Boolean  @default(false)
+  restockingFeePct        Decimal? @db.Decimal(5, 2)
+  autoApprove             Boolean  @default(false)
+  highValueThresholdCents Int?
+
+  isActive Boolean @default(true)
+  notes    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([channel, marketplace, productType])
+  @@index([channel])
+  @@index([isActive])
 }
 
 model ReplenishmentRule {
