@@ -36,7 +36,8 @@ export interface CancellationCleanupResult {
   shipmentsCancelled: number
   parcelsVoided: number
   parcelsVoidFailed: number
-  errors: Array<{ shipmentId: string; error: string }>
+  itemsRestocked: number
+  errors: Array<{ shipmentId?: string; itemId?: string; error: string }>
 }
 
 const TERMINAL_STATUSES = ['CANCELLED', 'DELIVERED', 'RETURNED'] as const
@@ -51,6 +52,7 @@ export async function handleOrderCancelled(
     shipmentsCancelled: 0,
     parcelsVoided: 0,
     parcelsVoidFailed: 0,
+    itemsRestocked: 0,
     errors: [],
   }
 
@@ -66,16 +68,61 @@ export async function handleOrderCancelled(
   })
   result.shipmentsScanned = shipments.length
 
-  if (shipments.length === 0) return result
-
   // Defer the heavy imports so callers that pass in non-cancelled
   // orders (defensive) don't pay for the modules.
-  const [{ publishOutboundEvent }, { auditLogService }, sendcloud] =
-    await Promise.all([
-      import('../outbound-events.service.js'),
-      import('../audit-log.service.js'),
-      import('../sendcloud/index.js'),
-    ])
+  const [
+    { publishOutboundEvent },
+    { auditLogService },
+    sendcloud,
+    { applyStockMovement },
+  ] = await Promise.all([
+    import('../outbound-events.service.js'),
+    import('../audit-log.service.js'),
+    import('../sendcloud/index.js'),
+    import('../stock-movement.service.js'),
+  ])
+
+  // O.46: stock restoration first. Order ingestion decremented stock at
+  // ORDER_PLACED time; cancellation must restore it or inventory
+  // drifts under-counted. Idempotency: we look for an existing
+  // ORDER_CANCELLED movement for this order on each item — if it
+  // already exists, skip (avoids double-restore on re-runs).
+  const orderItems = await prisma.orderItem.findMany({
+    where: { orderId },
+    select: { id: true, productId: true, sku: true, quantity: true },
+  })
+  for (const it of orderItems) {
+    if (!it.productId || it.quantity <= 0) continue
+    try {
+      const alreadyRestocked = await prisma.stockMovement.findFirst({
+        where: {
+          orderId,
+          productId: it.productId,
+          reason: 'ORDER_CANCELLED',
+        },
+        select: { id: true },
+      })
+      if (alreadyRestocked) continue
+      await applyStockMovement({
+        productId: it.productId,
+        change: it.quantity,
+        reason: 'ORDER_CANCELLED',
+        referenceType: 'Order',
+        referenceId: orderId,
+        orderId,
+        notes: `Auto-restock: order ${orderId} cancelled by channel`,
+        actor: 'system',
+      })
+      result.itemsRestocked++
+    } catch (err: any) {
+      result.errors.push({
+        itemId: it.id,
+        error: `Restock ${it.sku} ×${it.quantity}: ${err?.message ?? String(err)}`,
+      })
+    }
+  }
+
+  if (shipments.length === 0) return result
 
   for (const s of shipments) {
     if (TERMINAL_STATUSES.includes(s.status as any)) continue
