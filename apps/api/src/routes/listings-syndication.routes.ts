@@ -1830,6 +1830,103 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
   )
 
   // ─────────────────────────────────────────────────────────────────
+  // C.18 / C.19 / C.20 — Path A channel overview (Shopify/Woo/Etsy).
+  //
+  // Single endpoint with a ?channel= discriminator instead of three
+  // near-identical handlers. Path A channels don't have campaigns or
+  // markdowns or watcher snapshots — the overview is just listing
+  // counts + channel-specific aggregates derived from existing
+  // ChannelListing columns:
+  //   - Shopify: listings with isPublished=true (proxy for "online
+  //     store visible"), distinct platformAttributes vendor count
+  //   - WooCommerce: listings with platformAttributes-set, on-sale
+  //     count (salePrice not null)
+  //   - Etsy: listings published count, distinct sections (when
+  //     platformAttributes carries a section_id field)
+  //
+  // The aggregates intentionally stay light. When operators actually
+  // start listing on these channels, the per-listing field UI lands
+  // alongside (toggle visibility, set vendor, etc.) — for now this
+  // surface is the entry point they need.
+  // ─────────────────────────────────────────────────────────────────
+  fastify.get('/listings/path-a/overview', async (request, reply) => {
+    try {
+      const q = request.query as Record<string, string | undefined>
+      const channel = (q.channel ?? '').toUpperCase()
+      if (
+        channel !== 'SHOPIFY' &&
+        channel !== 'WOOCOMMERCE' &&
+        channel !== 'ETSY'
+      ) {
+        return reply.code(400).send({
+          error: "channel must be 'SHOPIFY', 'WOOCOMMERCE', or 'ETSY'",
+        })
+      }
+
+      const where = { channel }
+
+      const [total, live, draft, error, listings] = await Promise.all([
+        prisma.channelListing.count({ where }),
+        prisma.channelListing.count({ where: { ...where, listingStatus: 'ACTIVE' } }),
+        prisma.channelListing.count({ where: { ...where, listingStatus: 'DRAFT' } }),
+        prisma.channelListing.count({ where: { ...where, listingStatus: 'ERROR' } }),
+        prisma.channelListing.findMany({
+          where,
+          select: {
+            id: true,
+            isPublished: true,
+            salePrice: true,
+            platformAttributes: true,
+          },
+        }),
+      ])
+
+      const publishedCount = listings.filter((l) => l.isPublished).length
+      const onSaleCount = listings.filter((l) => l.salePrice != null).length
+
+      // Channel-specific facets pulled from platformAttributes JSON.
+      // Each channel's payload shape lives in the publish path; we
+      // extract the slot we care about here. Missing keys = 0.
+      const distinctVendors = new Set<string>()
+      const distinctSections = new Set<string>()
+      const distinctCategories = new Set<string>()
+      for (const l of listings) {
+        const attrs = (l.platformAttributes ?? {}) as Record<string, unknown>
+        if (channel === 'SHOPIFY') {
+          const v = attrs.vendor
+          if (typeof v === 'string' && v.length > 0) distinctVendors.add(v)
+        } else if (channel === 'ETSY') {
+          const s = attrs.section_id ?? attrs.sectionId
+          if (typeof s === 'string' || typeof s === 'number') {
+            distinctSections.add(String(s))
+          }
+        } else if (channel === 'WOOCOMMERCE') {
+          const c = attrs.category_id ?? attrs.categoryId
+          if (typeof c === 'string' || typeof c === 'number') {
+            distinctCategories.add(String(c))
+          }
+        }
+      }
+
+      return {
+        channel,
+        counts: { total, live, draft, error },
+        published: { count: publishedCount },
+        onSale: { count: onSaleCount },
+        // Channel-specific facet — the frontend renders the right tile
+        // based on `channel`.
+        shopify: channel === 'SHOPIFY' ? { vendorCount: distinctVendors.size } : null,
+        etsy: channel === 'ETSY' ? { sectionCount: distinctSections.size } : null,
+        woocommerce:
+          channel === 'WOOCOMMERCE' ? { categoryCount: distinctCategories.size } : null,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[listings/path-a/overview] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ─────────────────────────────────────────────────────────────────
   // POST /api/listings/amazon/suppressions — manually log a suppression
   //
   // S.5 — used by the resolver UI when an operator wants to record a
