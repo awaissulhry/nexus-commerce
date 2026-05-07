@@ -22,6 +22,17 @@ import { ebayAuthService } from '../ebay-auth.service.js'
 import { ebayAccountService } from '../ebay-account.service.js'
 import { EbayCategoryService } from '../ebay-category.service.js'
 import { logger } from '../../utils/logger.js'
+import {
+  acquireEbayPublishToken,
+  checkEbayCircuit,
+  getEbayApiBaseForMode,
+  getEbayPublishMode,
+  recordEbayOutcome,
+} from '../ebay-publish-gate.service.js'
+import {
+  digestPayload,
+  writeAttemptLog,
+} from '../channel-publish-audit.service.js'
 
 const ebayCategoryService = new EbayCategoryService()
 
@@ -120,6 +131,43 @@ export class EbayPublishAdapter {
       return { ok: false, error: 'categoryId is required for eBay publish.' }
     }
 
+    // C.7 — feature-flag gate. Runs FIRST, before any DB read or
+    // network call, so a gated outcome is genuinely free of side
+    // effects. We don't yet know the connectionId here (we look it
+    // up below) so the audit row uses the marketplaceId itself as
+    // the seller key — good enough since gated rows can't be tied
+    // to a specific connection anyway, and the dashboard groups by
+    // (channel, marketplace) for this case.
+    const mode = getEbayPublishMode()
+    const digest = digestPayload({
+      sku: payload.sku,
+      marketplaceId: payload.marketplaceId,
+      categoryId: payload.categoryId,
+      product: payload.product,
+      condition: payload.condition,
+      price: payload.price,
+      availability: payload.availability,
+    })
+    if (mode === 'gated') {
+      writeAttemptLog({
+        channel: 'EBAY',
+        marketplace: payload.marketplaceId,
+        sellerId: payload.marketplaceId, // pre-connection-lookup placeholder
+        sku: payload.sku,
+        mode: 'gated',
+        outcome: 'gated',
+        payloadDigest: digest,
+        errorMessage:
+          'NEXUS_ENABLE_EBAY_PUBLISH=false — set true to enable eBay publishes.',
+      })
+      return {
+        ok: false,
+        sku: payload.sku,
+        error:
+          'eBay publish disabled by feature flag (NEXUS_ENABLE_EBAY_PUBLISH=false).',
+      }
+    }
+
     // Pick the first active eBay connection. Multi-account support
     // keys off marketplaceId once that lands.
     const connection = await prisma.channelConnection.findFirst({
@@ -134,19 +182,131 @@ export class EbayPublishAdapter {
       }
     }
 
+    // C.7 — circuit breaker check. Per (connectionId, marketplaceId)
+    // so a broken sandbox account doesn't trip the prod connection.
+    const circuit = checkEbayCircuit(connection.id, payload.marketplaceId)
+    if (!circuit.ok) {
+      writeAttemptLog({
+        channel: 'EBAY',
+        marketplace: payload.marketplaceId,
+        sellerId: connection.id,
+        sku: payload.sku,
+        mode,
+        outcome: 'circuit-open',
+        payloadDigest: digest,
+        errorMessage: circuit.error,
+      })
+      return { ok: false, sku: payload.sku, error: circuit.error }
+    }
+
+    // C.7 — rate limiter. One token per publish attempt; the 3
+    // internal HTTP calls share the token because they're sequential
+    // and tied to a single operator action.
+    const tokenStart = Date.now()
+    const acquired = await acquireEbayPublishToken(
+      connection.id,
+      payload.marketplaceId,
+    )
+    if (!acquired.ok) {
+      writeAttemptLog({
+        channel: 'EBAY',
+        marketplace: payload.marketplaceId,
+        sellerId: connection.id,
+        sku: payload.sku,
+        mode,
+        outcome: 'rate-limited',
+        payloadDigest: digest,
+        errorMessage: acquired.error,
+      })
+      return { ok: false, sku: payload.sku, error: acquired.error }
+    }
+
+    // C.7 — dry-run short-circuit. Mirrors Amazon's: log the would-be
+    // payload, write an audit row, return synthetic success so the
+    // wizard's downstream bookkeeping (status transitions,
+    // listing.created emit) runs naturally without external side
+    // effect. We skip the DB token fetch too because that has its own
+    // side effect (lastUsedAt update).
+    if (mode === 'dry-run') {
+      const fakeOfferId = `dry-run-offer-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      const fakeListingId = `dry-run-listing-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      logger.info('eBay publish (dry-run, no HTTP)', {
+        sku: payload.sku,
+        marketplaceId: payload.marketplaceId,
+        categoryId: payload.categoryId,
+        connectionId: connection.id,
+        title: payload.product?.title,
+      })
+      recordEbayOutcome(connection.id, payload.marketplaceId, true)
+      writeAttemptLog({
+        channel: 'EBAY',
+        marketplace: payload.marketplaceId,
+        sellerId: connection.id,
+        sku: payload.sku,
+        mode: 'dry-run',
+        outcome: 'success',
+        payloadDigest: digest,
+        submissionId: fakeOfferId,
+        durationMs: Date.now() - tokenStart,
+      })
+      return {
+        ok: true,
+        sku: payload.sku,
+        offerId: fakeOfferId,
+        listingId: fakeListingId,
+      }
+    }
+
     let token: string
     try {
       token = await ebayAuthService.getValidToken(connection.id)
     } catch (err) {
-      return {
-        ok: false,
-        error: `Could not obtain eBay token: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      }
+      const message = `Could not obtain eBay token: ${
+        err instanceof Error ? err.message : String(err)
+      }`
+      recordEbayOutcome(connection.id, payload.marketplaceId, false)
+      writeAttemptLog({
+        channel: 'EBAY',
+        marketplace: payload.marketplaceId,
+        sellerId: connection.id,
+        sku: payload.sku,
+        mode,
+        outcome: 'failed',
+        payloadDigest: digest,
+        errorMessage: message,
+        durationMs: Date.now() - tokenStart,
+      })
+      return { ok: false, error: message }
     }
 
-    const apiBase = process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
+    // C.7 — sandbox URL swap. The mode resolver returns the right
+    // base for the active mode; live falls through to EBAY_API_BASE
+    // env or the production default.
+    const apiBase = getEbayApiBaseForMode(mode)
+
+    // C.7 — single source of truth for the audit log + circuit
+    // outcome at every exit of the 3-step HTTP flow below. The 8
+    // existing returns become `return finalize(<existing shape>)`
+    // so the publish-once-write-once-record-once invariant holds
+    // without inline duplication at every branch.
+    const httpStart = Date.now()
+    const finalize = (result: EbayPublishResult): EbayPublishResult => {
+      recordEbayOutcome(connection.id, payload.marketplaceId, result.ok)
+      writeAttemptLog({
+        channel: 'EBAY',
+        marketplace: payload.marketplaceId,
+        sellerId: connection.id,
+        sku: payload.sku,
+        mode,
+        outcome: result.ok ? 'success' : 'failed',
+        payloadDigest: digest,
+        errorMessage: result.error ?? null,
+        errorCode: result.failedStep ?? null,
+        submissionId: result.offerId ?? result.listingId ?? null,
+        durationMs: Date.now() - httpStart,
+      })
+      return result
+    }
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
@@ -180,7 +340,7 @@ export class EbayPublishAdapter {
     )
     if (!invRes.ok && invRes.status !== 204) {
       const body = await invRes.text().catch(() => '')
-      return {
+      return finalize({
         ok: false,
         sku: payload.sku,
         failedStep: 'createInventory',
@@ -188,7 +348,7 @@ export class EbayPublishAdapter {
           0,
           500,
         )}`,
-      }
+      })
     }
 
     // ── Step 2: createOffer ──────────────────────────────────────
@@ -240,14 +400,14 @@ export class EbayPublishAdapter {
           policies.merchantLocationKey = snapshot.locations[0]?.key
         }
       } catch (err) {
-        return {
+        return finalize({
           ok: false,
           sku: payload.sku,
           failedStep: 'createOffer',
           error: `Could not fetch seller policies via Account API: ${
             err instanceof Error ? err.message : String(err)
           }`,
-        }
+        })
       }
     }
     if (
@@ -261,12 +421,12 @@ export class EbayPublishAdapter {
       if (!policies.paymentPolicyId) missing.push('payment')
       if (!policies.returnPolicyId) missing.push('return')
       if (!policies.merchantLocationKey) missing.push('merchantLocation')
-      return {
+      return finalize({
         ok: false,
         sku: payload.sku,
         failedStep: 'createOffer',
         error: `Seller has no ${missing.join(' / ')} policy/location for ${payload.marketplaceId}. Create one in eBay Seller Hub or set ChannelConnection.connectionMetadata.ebayPolicies.`,
-      }
+      })
     }
 
     // GG.1 — validate the picked condition against eBay's live policy
@@ -291,12 +451,12 @@ export class EbayPublishAdapter {
           const labels = allowedConditions
             .map((c) => c.conditionDescription)
             .join(', ')
-          return {
+          return finalize({
             ok: false,
             sku: payload.sku,
             failedStep: 'createInventory',
             error: `Condition "${requestedCondition}" not allowed for category ${payload.categoryId} on ${payload.marketplaceId}. Allowed: ${labels}.`,
-          }
+          })
         }
       }
     } catch {
@@ -338,24 +498,24 @@ export class EbayPublishAdapter {
     )
     if (!offerRes.ok) {
       const body = await offerRes.text().catch(() => '')
-      return {
+      return finalize({
         ok: false,
         sku: payload.sku,
         failedStep: 'createOffer',
         error: `createOffer ${offerRes.status}: ${body.slice(0, 500)}`,
-      }
+      })
     }
     const offerJson = (await offerRes.json().catch(() => null)) as {
       offerId?: string
     } | null
     const offerId = offerJson?.offerId
     if (!offerId) {
-      return {
+      return finalize({
         ok: false,
         sku: payload.sku,
         failedStep: 'createOffer',
         error: 'createOffer succeeded but returned no offerId.',
-      }
+      })
     }
 
     // ── Step 3: publishOffer ─────────────────────────────────────
@@ -371,20 +531,20 @@ export class EbayPublishAdapter {
     )
     if (!pubRes.ok) {
       const body = await pubRes.text().catch(() => '')
-      return {
+      return finalize({
         ok: false,
         sku: payload.sku,
         offerId,
         failedStep: 'publishOffer',
         error: `publishOffer ${pubRes.status}: ${body.slice(0, 500)}`,
-      }
+      })
     }
     const pubJson = (await pubRes.json().catch(() => null)) as {
       listingId?: string
     } | null
     const listingId = pubJson?.listingId
 
-    return {
+    return finalize({
       ok: true,
       sku: payload.sku,
       offerId,
@@ -392,7 +552,7 @@ export class EbayPublishAdapter {
       listingUrl: listingId
         ? marketplaceListingUrl(payload.marketplaceId, listingId)
         : undefined,
-    }
+    })
   }
 }
 
