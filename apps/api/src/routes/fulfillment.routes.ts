@@ -977,6 +977,194 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── O.4: Pending-shipment aggregation ─────────────────────────────────
+  // The cornerstone read for /fulfillment/outbound. Returns orders that
+  // need a shipment created (status ∈ PENDING|PROCESSING, no active
+  // shipment yet) decorated with ship-by urgency buckets. Replaces the
+  // "go look at /orders, then create shipment, then come back" two-step
+  // operators have been doing.
+  //
+  // Filters: channel[], marketplace[], urgency[], warehouse, search.
+  // Sort: ship-by-asc (default), value-desc, age-desc.
+  // Counts: overdue/today/tomorrow/this-week/later/unknown + per-channel.
+  fastify.get('/fulfillment/outbound/pending-orders', async (request, reply) => {
+    try {
+      const q = request.query as any
+      const page = Math.max(1, safeNum(q.page, 1) ?? 1)
+      const pageSize = Math.min(200, safeNum(q.pageSize, 50) ?? 50)
+      const sort = (q.sort as string) || 'ship-by-asc'
+
+      const channelList: string[] | undefined = q.channel
+        ? String(q.channel).split(',').map((s: string) => s.trim()).filter(Boolean)
+        : undefined
+      const marketplaceList: string[] | undefined = q.marketplace
+        ? String(q.marketplace).split(',').map((s: string) => s.trim()).filter(Boolean)
+        : undefined
+      const urgencyList: string[] | undefined = q.urgency
+        ? String(q.urgency).split(',').map((s: string) => s.trim().toUpperCase()).filter(Boolean)
+        : undefined
+
+      // ── Urgency window math (UTC-anchored). Buckets:
+      //   OVERDUE   shipByDate < now
+      //   TODAY     now ≤ shipByDate < now + 24h
+      //   TOMORROW  +24h ≤ shipByDate < +48h
+      //   THIS_WEEK +48h ≤ shipByDate < +7d
+      //   LATER     shipByDate ≥ +7d
+      //   UNKNOWN   shipByDate IS NULL
+      const now = new Date()
+      const inHrs = (h: number) => new Date(now.getTime() + h * 3_600_000)
+      const t24 = inHrs(24)
+      const t48 = inHrs(48)
+      const t7d = inHrs(24 * 7)
+
+      const where: any = {
+        status: { in: ['PENDING', 'PROCESSING'] as any[] },
+        // Exclude orders that already have an active shipment. Cancelled
+        // shipments don't count — operator may have voided + needs to
+        // re-create from scratch.
+        shipments: { none: { status: { not: 'CANCELLED' as any } } },
+      }
+      if (channelList?.length) where.channel = { in: channelList as any }
+      if (marketplaceList?.length) where.marketplace = { in: marketplaceList }
+      if (q.search?.trim()) {
+        const s = q.search.trim()
+        where.OR = [
+          { channelOrderId: { contains: s, mode: 'insensitive' } },
+          { customerName: { contains: s, mode: 'insensitive' } },
+          { customerEmail: { contains: s, mode: 'insensitive' } },
+          { items: { some: { sku: { contains: s, mode: 'insensitive' } } } },
+        ]
+      }
+      // Urgency is ANDed with the existing where via a discriminated OR.
+      if (urgencyList?.length) {
+        const urgencyClauses: any[] = []
+        for (const u of urgencyList) {
+          if (u === 'OVERDUE') urgencyClauses.push({ shipByDate: { lt: now } })
+          else if (u === 'TODAY') urgencyClauses.push({ shipByDate: { gte: now, lt: t24 } })
+          else if (u === 'TOMORROW') urgencyClauses.push({ shipByDate: { gte: t24, lt: t48 } })
+          else if (u === 'THIS_WEEK') urgencyClauses.push({ shipByDate: { gte: t48, lt: t7d } })
+          else if (u === 'LATER') urgencyClauses.push({ shipByDate: { gte: t7d } })
+          else if (u === 'UNKNOWN') urgencyClauses.push({ shipByDate: null })
+        }
+        // AND with existing search OR (if any) by nesting under AND.
+        const prevOR = where.OR
+        delete where.OR
+        where.AND = [
+          ...(prevOR ? [{ OR: prevOR }] : []),
+          { OR: urgencyClauses },
+        ]
+      }
+
+      // Sort. Postgres sorts NULLs last for ASC by default in Prisma 5+.
+      let orderBy: any = [{ shipByDate: 'asc' }, { purchaseDate: 'asc' }]
+      if (sort === 'value-desc') orderBy = [{ totalPrice: 'desc' }, { shipByDate: 'asc' }]
+      else if (sort === 'age-desc') orderBy = [{ purchaseDate: 'asc' }, { shipByDate: 'asc' }]
+
+      const [total, items] = await Promise.all([
+        prisma.order.count({ where }),
+        prisma.order.findMany({
+          where,
+          orderBy,
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+          select: {
+            id: true,
+            channel: true,
+            marketplace: true,
+            channelOrderId: true,
+            status: true,
+            customerName: true,
+            customerEmail: true,
+            shippingAddress: true,
+            purchaseDate: true,
+            shipByDate: true,
+            earliestShipDate: true,
+            latestDeliveryDate: true,
+            fulfillmentLatency: true,
+            isPrime: true,
+            totalPrice: true,
+            currencyCode: true,
+            createdAt: true,
+            items: {
+              select: { id: true, sku: true, quantity: true, productId: true, price: true },
+            },
+          },
+        }),
+      ])
+
+      // Decorate each row with derived urgency + line-item totals, and
+      // serialize Decimal → number to keep the wire shape JSON-safe
+      // (D.2 lesson — see TECH_DEBT.md on Decimal+gzip).
+      const classifyUrgency = (d: Date | null | undefined): string => {
+        if (!d) return 'UNKNOWN'
+        const t = d.getTime()
+        if (t < now.getTime()) return 'OVERDUE'
+        if (t < t24.getTime()) return 'TODAY'
+        if (t < t48.getTime()) return 'TOMORROW'
+        if (t < t7d.getTime()) return 'THIS_WEEK'
+        return 'LATER'
+      }
+      const decorated = items.map((o) => {
+        const totalQuantity = o.items.reduce((n, it) => n + it.quantity, 0)
+        return {
+          ...o,
+          totalPrice: Number(o.totalPrice),
+          items: o.items.map((it) => ({ ...it, price: Number(it.price) })),
+          itemCount: o.items.length,
+          totalQuantity,
+          urgency: classifyUrgency(o.shipByDate),
+        }
+      })
+
+      // Counts — cheap aggregate queries against the same base where
+      // (minus the urgency filter so the count chips reflect "of all
+      // pending orders matching channel/search, how many overdue?").
+      const baseWhere: any = { ...where }
+      delete baseWhere.AND
+      delete baseWhere.OR
+      // Re-apply non-urgency clauses
+      if (q.search?.trim()) {
+        const s = q.search.trim()
+        baseWhere.OR = [
+          { channelOrderId: { contains: s, mode: 'insensitive' } },
+          { customerName: { contains: s, mode: 'insensitive' } },
+          { customerEmail: { contains: s, mode: 'insensitive' } },
+          { items: { some: { sku: { contains: s, mode: 'insensitive' } } } },
+        ]
+      }
+
+      const [overdue, today, tomorrow, thisWeek, later, unknown, byChannelRows] =
+        await Promise.all([
+          prisma.order.count({ where: { ...baseWhere, shipByDate: { lt: now } } }),
+          prisma.order.count({ where: { ...baseWhere, shipByDate: { gte: now, lt: t24 } } }),
+          prisma.order.count({ where: { ...baseWhere, shipByDate: { gte: t24, lt: t48 } } }),
+          prisma.order.count({ where: { ...baseWhere, shipByDate: { gte: t48, lt: t7d } } }),
+          prisma.order.count({ where: { ...baseWhere, shipByDate: { gte: t7d } } }),
+          prisma.order.count({ where: { ...baseWhere, shipByDate: null } }),
+          prisma.order.groupBy({
+            by: ['channel'],
+            where: baseWhere,
+            _count: { _all: true },
+          }),
+        ])
+
+      const byChannel: Record<string, number> = {}
+      for (const row of byChannelRows) byChannel[row.channel as string] = row._count._all
+
+      return {
+        items: decorated,
+        total,
+        page,
+        pageSize,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+        counts: { overdue, today, tomorrow, thisWeek, later, unknown, byChannel },
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[outbound/pending-orders] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // Order routing rules — CRUD for OrderRoutingRule. Powers the
   // /fulfillment/routing-rules admin page and is consumed by
   // resolveWarehouseForOrder() when bulk-create-shipments runs.
