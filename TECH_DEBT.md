@@ -1202,3 +1202,27 @@ searches that come up empty otherwise.
   `DriftBadge`) and `apps/api/src/routes/listings-syndication.routes.ts`
   matrix handler (added `title`, `masterTitle`, `masterPriceForCompare`,
   `masterQuantityForCompare`).
+
+- **C.10 — Drawer cross-channel comparison panel + per-marketplace
+  overrides** shipped in `1dcdf06 C.7: cross-page event taxonomy —
+  wizard.created emission + listing.created on publish`. The 1dcdf06
+  commit bundled the C.10 diff (35 LOC backend + 200 LOC frontend)
+  alongside an unrelated cross-page event-taxonomy refactor; the
+  commit message confusingly reuses the "C.7" label even though the
+  syndication roadmap's C.7 (eBay AddItem gating) shipped earlier as
+  `0646b6d`. C.10 changes:
+  - `apps/api/src/routes/listings-syndication.routes.ts` drawer
+    endpoint companions select extended with `title`, `titleOverride`,
+    `masterTitle`, `masterPrice`, `masterQuantity`, `priceOverride`,
+    `quantityOverride`, `followMaster*` flags. Each companion now
+    carries `hasPriceOverride` / `hasQuantityOverride` /
+    `hasTitleOverride` derived booleans.
+  - `apps/web/src/app/listings/ListingsWorkspace.tsx` `ChannelsTab`
+    rebuilt: `ComparisonMasterCard` anchors the stack; `CompanionCard`
+    renders DriftBadge for price/qty inline, title row with mismatch
+    pill, `OverridePill` for explicit per-marketplace overrides.
+
+- **Note on collision pattern**: C.9 and C.10 both got bundled into
+  parallel-agent commits during the same session. Worth investigating
+  the staging pattern (likely `git add -A` from sibling agents) before
+  it bites again.
