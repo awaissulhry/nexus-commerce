@@ -1222,7 +1222,28 @@ searches that come up empty otherwise.
     renders DriftBadge for price/qty inline, title row with mismatch
     pill, `OverridePill` for explicit per-marketplace overrides.
 
-- **Note on collision pattern**: C.9 and C.10 both got bundled into
-  parallel-agent commits during the same session. Worth investigating
-  the staging pattern (likely `git add -A` from sibling agents) before
-  it bites again.
+- **C.12 — Italian i18n sweep on /listings** shipped in two parallel-
+  agent commits: `52aff10` (parallel "C.10: AI provider switching +
+  cost tracking UI on the wizard" — bundled the 200-LOC ListingsWorkspace
+  i18n wrap-up: useTranslations() in LensTabs, MatrixLens, BulkActionBar,
+  SavedViewsButton, ChannelsTab, ComparisonMasterCard, OverridePill,
+  CompanionCard) and `43e8d7a` (parallel "O.27: saved views on Pending
+  tab" — bundled the ~70 listings.* keys per catalog in en.json + it.json,
+  Italian translations of lens names ("Griglia"/"Stato"/"Matrice"/"Bozze"),
+  filter labels, action buttons, drift/override pills, save view dialog).
+  Functionality is correct — switching locale on /listings now flips
+  every operator-facing string except per-row dynamic content
+  (status enum keys, marketplace codes, channel names — all proper
+  nouns or operational keys that intentionally stay English).
+
+- **Note on collision pattern**: C.9, C.10, and C.12 all got bundled
+  into parallel-agent commits during the same session — only C.11
+  (saved views) shipped under its own commit. The pattern: parallel
+  agents staging via `git add -A` (or equivalent) sweep up my
+  uncommitted work into their own commits, attaching it to whatever
+  commit message they happened to be writing. Worth investigating
+  the multi-agent staging behavior before it bites again. Three
+  different "C.10" commits now exist in the session log
+  (`1dcdf06` drawer comparison, `52aff10` rates AI switching, plus
+  the parallel-C.10 from the earlier collision) which makes
+  `git log | grep C.10` ambiguous.
