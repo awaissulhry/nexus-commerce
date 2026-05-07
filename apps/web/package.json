@@ -16,6 +16,8 @@
     "@nexus/database": "*",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.13.24",
+    "@zxing/browser": "^0.2.0",
+    "@zxing/library": "^0.22.0",
     "axios": "^1.15.2",
     "immer": "^10.2.0",
     "lucide-react": "^0.263.1",
