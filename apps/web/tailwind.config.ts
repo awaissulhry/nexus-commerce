@@ -85,6 +85,36 @@ const config: Config = {
         out: 'cubic-bezier(0.16, 1, 0.3, 1)',
       },
 
+      // ── Animation (U.16) ──────────────────────────────────────────
+      // Named keyframes + animations for entrance polish on overlays.
+      // Modal/Drawer/Toast use these; consumer UI keeps using the
+      // standard `transition-colors` / `transition-all` for hover/
+      // interactive states.
+      keyframes: {
+        'fade-in': {
+          from: { opacity: '0' },
+          to: { opacity: '1' },
+        },
+        'scale-in': {
+          from: { opacity: '0', transform: 'scale(0.96)' },
+          to: { opacity: '1', transform: 'scale(1)' },
+        },
+        'slide-from-right': {
+          from: { transform: 'translateX(100%)' },
+          to: { transform: 'translateX(0)' },
+        },
+        'slide-up': {
+          from: { opacity: '0', transform: 'translateY(8px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
+      },
+      animation: {
+        'fade-in': 'fade-in 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+        'scale-in': 'scale-in 180ms cubic-bezier(0.16, 1, 0.3, 1)',
+        'slide-from-right': 'slide-from-right 240ms cubic-bezier(0.16, 1, 0.3, 1)',
+        'slide-up': 'slide-up 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+      },
+
       // ── Z-index ──────────────────────────────────────────────────
       // Semantic, not magic numbers. Migration mapping (U.17 sweep):
       //   z-10  → z-dropdown

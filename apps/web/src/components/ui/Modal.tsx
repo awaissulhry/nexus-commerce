@@ -185,7 +185,9 @@ export function Modal({
       aria-labelledby={title ? 'modal-title' : undefined}
       onMouseDown={onBackdropMouseDown}
       className={cn(
-        'fixed inset-0 z-50 flex bg-slate-900/40 backdrop-blur-[1px]',
+        // U.16 — backdrop fades in to soften the focus shift away
+        // from the underlying page.
+        'fixed inset-0 z-50 flex bg-slate-900/40 backdrop-blur-[1px] animate-fade-in',
         justify,
       )}
     >
@@ -194,7 +196,15 @@ export function Modal({
         // Stop bubbling so a click inside the panel never reaches the
         // backdrop's onClick.
         onMouseDown={(e) => e.stopPropagation()}
-        className={cn(panelBase, className)}
+        className={cn(
+          panelBase,
+          // U.16 — panel scales in (centered) or slides in from the
+          // right (drawer). Honors `prefers-reduced-motion` via the
+          // `motion-reduce:animate-none` utility.
+          isDrawer ? 'animate-slide-from-right' : 'animate-scale-in',
+          'motion-reduce:animate-none',
+          className,
+        )}
       >
         {header !== null && (header ?? renderDefaultHeader(title, description, onClose))}
         {children}

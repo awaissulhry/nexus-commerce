@@ -247,7 +247,11 @@ function ToastItem({
     <div
       className={cn(
         'pointer-events-auto rounded-lg border shadow-md px-3.5 py-3 flex items-start gap-2.5',
-        'animate-[slide-in-right_180ms_ease-out]',
+        // U.16 — slide in from the right edge. The previous arbitrary
+        // value (`animate-[slide-in-right_…]`) referenced a keyframe
+        // that was never defined in tailwind.config, so it silently
+        // no-op'd. Now points at the keyframe added in tailwind config.
+        'animate-slide-from-right motion-reduce:animate-none',
         style.bg,
         style.border,
         style.text,
