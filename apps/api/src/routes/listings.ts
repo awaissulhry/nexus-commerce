@@ -296,63 +296,11 @@ export async function listingsRoutes(app: FastifyInstance) {
           prisma
         );
 
-        // Publish the draft
+        // publishDraft is now end-to-end: it calls eBay, updates the
+        // DraftListing to PUBLISHED, upserts VariantChannelListing,
+        // and emits `listing.created` so SSE consumers refresh. The
+        // bulk-list worker shares the same path.
         const publishResult = await ebayPublishService.publishDraft(draftId);
-
-        // Update DraftListing status
-        await (prisma as any).draftListing.update({
-          where: { id: draftId },
-          data: {
-            status: "PUBLISHED",
-            publishedAt: new Date(),
-          },
-        });
-
-        // Fetch the draft to get product and variant info
-        const draft = await (prisma as any).draftListing.findUnique({
-          where: { id: draftId },
-          include: {
-            product: {
-              include: {
-                variations: true,
-              },
-            },
-          },
-        });
-
-        // Create VariantChannelListing record
-        if (draft && draft.product.variations && draft.product.variations.length > 0) {
-          const variant = draft.product.variations[0];
-
-          await (prisma as any).variantChannelListing.upsert({
-            where: {
-              variantId_channelId: {
-                variantId: variant.id,
-                channelId: "EBAY",
-              },
-            },
-            update: {
-              externalListingId: publishResult.listingId,
-              listingStatus: "ACTIVE",
-              listingUrl: publishResult.listingUrl,
-              lastSyncedAt: new Date(),
-              lastSyncStatus: "SUCCESS",
-            },
-            create: {
-              variantId: variant.id,
-              channel: "EBAY",
-              channelSku: draft.product.sku,
-              externalListingId: publishResult.listingId,
-              externalSku: draft.product.sku,
-              channelPrice: draft.product.basePrice,
-              channelQuantity: draft.product.totalStock,
-              listingStatus: "ACTIVE",
-              listingUrl: publishResult.listingUrl,
-              lastSyncedAt: new Date(),
-              lastSyncStatus: "SUCCESS",
-            },
-          });
-        }
 
         return reply.status(200).send({
           success: true,

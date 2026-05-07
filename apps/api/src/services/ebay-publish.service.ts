@@ -1,15 +1,19 @@
 import { PrismaClient } from "@prisma/client";
 import { EbayService } from "./marketplaces/ebay.service.js";
 import prisma from "@nexus/database";
+import { publishListingEvent } from "./listing-events.service.js";
 
 export interface PublishResult {
   success: boolean;
   draftId: string;
   productId: string;
+  /** eBay's external item ID returned by the Trading API. */
   listingId: string;
   listingUrl: string;
   publishedAt: string;
   message: string;
+  /** Internal VariantChannelListing.id created/updated by the publish. Absent when the product has no variations — in that case no internal listing row is persisted yet (a known gap; see TECH_DEBT for the variation-mechanism cleanup). */
+  variantChannelListingId?: string;
 }
 
 export interface PublishError {
@@ -30,23 +34,24 @@ export class EbayPublishService {
   ) {}
 
   /**
-   * Publishes a draft listing to eBay
-   * 1. Fetches draft with product relations
-   * 2. Validates draft data
-   * 3. Calls eBay API to publish
-   * 4. Returns publish result with metadata
+   * Publishes a draft listing to eBay end-to-end:
+   *   1. Fetch draft + product + variations
+   *   2. Validate draft data
+   *   3. Call eBay Trading API
+   *   4. Update DraftListing → PUBLISHED
+   *   5. Upsert VariantChannelListing (when the product has variations)
+   *   6. Emit `listing.created` so SSE consumers refresh within ~200ms
+   *
+   * Both call sites (POST /api/listings/:draftId/publish and the
+   * bulk-list BullMQ worker) go through this single method so the
+   * recording + emit step never gets accidentally skipped.
    */
   async publishDraft(draftId: string, options?: PublishOptions): Promise<PublishResult> {
-    // Step 1: Fetch draft with product relations
     const draft = await this.fetchDraftWithRelations(draftId);
-
-    // Step 2: Validate draft data
     this.validateDraftData(draft);
 
-    // Step 3: Determine final price (use override if provided)
     const finalPrice = options?.overridePrice ?? Number(draft.product.basePrice);
 
-    // Step 4: Call eBay API to publish
     const listingId = await this.ebayService.publishNewListing(
       draft.product.sku,
       {
@@ -59,15 +64,65 @@ export class EbayPublishService {
       draft.product.totalStock
     );
 
-    // Step 5: Return result
+    const listingUrl = `https://www.ebay.com/itm/${listingId}`;
+
+    await (this.prisma as any).draftListing.update({
+      where: { id: draftId },
+      data: { status: "PUBLISHED", publishedAt: new Date() },
+    });
+
+    let variantChannelListingId: string | undefined;
+    if (draft.product.variations && draft.product.variations.length > 0) {
+      const variant = draft.product.variations[0];
+      const vcl = await (this.prisma as any).variantChannelListing.upsert({
+        where: {
+          variantId_channelId: { variantId: variant.id, channelId: "EBAY" },
+        },
+        update: {
+          externalListingId: listingId,
+          listingStatus: "ACTIVE",
+          listingUrl,
+          lastSyncedAt: new Date(),
+          lastSyncStatus: "SUCCESS",
+        },
+        create: {
+          variantId: variant.id,
+          channel: "EBAY",
+          channelSku: draft.product.sku,
+          externalListingId: listingId,
+          externalSku: draft.product.sku,
+          channelPrice: finalPrice,
+          channelQuantity: draft.product.totalStock,
+          listingStatus: "ACTIVE",
+          listingUrl,
+          lastSyncedAt: new Date(),
+          lastSyncStatus: "SUCCESS",
+        },
+      });
+      variantChannelListingId = vcl.id;
+    }
+
+    // Cross-process refresh signal — both the originating tab (via
+    // SSE roundtrip) and any other open session pick this up and
+    // refetch within ~200ms instead of waiting for the next 30s
+    // polling tick. We pass the internal id when we have one and
+    // fall back to the eBay external id so the event always carries
+    // a stable identifier.
+    publishListingEvent({
+      type: "listing.created",
+      listingId: variantChannelListingId ?? listingId,
+      ts: Date.now(),
+    });
+
     return {
       success: true,
       draftId,
       productId: draft.productId,
       listingId,
-      listingUrl: `https://www.ebay.com/itm/${listingId}`,
+      listingUrl,
       publishedAt: new Date().toISOString(),
       message: "Listing published successfully",
+      variantChannelListingId,
     };
   }
 

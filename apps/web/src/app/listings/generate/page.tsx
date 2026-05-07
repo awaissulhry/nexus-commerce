@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Loader, AlertCircle, CheckCircle, Zap } from 'lucide-react'
+import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 
 interface Product {
   id: string
@@ -183,14 +184,31 @@ export default function GeneratorPage() {
  
       // Success
       showNotification('success', 'Listing published to eBay successfully!')
- 
+
+      // Snappy local refresh — same-tab CustomEvent + cross-tab
+      // BroadcastChannel. The backend ALSO emits `listing.created`
+      // via SSE inside EbayPublishService.publishDraft, so this is
+      // belt-and-braces: this fires immediately (~0ms) while the
+      // SSE roundtrip lands a moment later. Listeners debounce
+      // refetches, so duplicates are harmless.
+      emitInvalidation({
+        type: 'listing.created',
+        id: result?.data?.variantChannelListingId ?? result?.data?.listingId,
+        meta: {
+          source: 'generator',
+          draftId,
+          productId: selectedDraft.productId,
+          channel: 'EBAY',
+        },
+      })
+
       // Update state to remove from queue
       setGenerationState((prev) => {
         const newState = { ...prev }
         delete newState[selectedDraft.productId]
         return newState
       })
- 
+
       // Close modal
       setShowPreviewModal(false)
       setSelectedDraft(null)
