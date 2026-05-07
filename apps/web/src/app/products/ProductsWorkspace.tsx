@@ -3003,6 +3003,36 @@ function VirtualizedGrid({
     [visible],
   )
 
+  // E.9 — right-click context menu state. Tracks the click position
+  // (so the menu pops where the cursor was) and which product was
+  // right-clicked. null means closed. Document-level listeners close
+  // it on outside click + Escape; the menu itself stops propagation.
+  const [contextMenu, setContextMenu] = useState<
+    { x: number; y: number; product: ProductRow } | null
+  >(null)
+  useEffect(() => {
+    if (!contextMenu) return
+    const onAway = () => setContextMenu(null)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setContextMenu(null)
+    }
+    document.addEventListener('mousedown', onAway)
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('scroll', onAway, true)
+    return () => {
+      document.removeEventListener('mousedown', onAway)
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('scroll', onAway, true)
+    }
+  }, [contextMenu])
+  const onRowContextMenu = useCallback(
+    (e: React.MouseEvent, product: ProductRow) => {
+      e.preventDefault()
+      setContextMenu({ x: e.clientX, y: e.clientY, product })
+    },
+    [],
+  )
+
   const containerRef = useRef<HTMLDivElement>(null)
   const rowVirtualizer = useVirtualizer({
     count: flatRows.length,
@@ -3140,6 +3170,10 @@ function VirtualizedGrid({
               const isExpanded = productId
                 ? expandedParents.has(productId)
                 : false
+              const productForMenu =
+                row.kind === 'parent' || row.kind === 'child'
+                  ? row.product
+                  : null
               return (
                 <div
                   key={vRow.key}
@@ -3147,6 +3181,11 @@ function VirtualizedGrid({
                   ref={rowVirtualizer.measureElement}
                   role="row"
                   className="border-b border-slate-100 flex"
+                  onContextMenu={
+                    productForMenu
+                      ? (e) => onRowContextMenu(e, productForMenu)
+                      : undefined
+                  }
                   style={{
                     position: 'absolute',
                     top: 0,
@@ -3211,7 +3250,149 @@ function VirtualizedGrid({
           </div>
         </div>
       </div>
+      {contextMenu && (
+        <RowContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          product={contextMenu.product}
+          onClose={() => setContextMenu(null)}
+          onChanged={onChanged}
+        />
+      )}
     </Card>
+  )
+}
+
+// E.9 — right-click context menu for a product row. Pops at the
+// click position; closes on outside-click, Escape, or scroll. Actions
+// are scoped to a single product (the right-clicked one) — bulk
+// actions stay in the bottom-rising bulk action bar. Status flips
+// and duplicate hit the existing bulk-status / bulk-duplicate
+// endpoints with a one-element productIds array.
+function RowContextMenu({
+  x,
+  y,
+  product,
+  onClose,
+  onChanged,
+}: {
+  x: number
+  y: number
+  product: ProductRow
+  onClose: () => void
+  onChanged: () => void
+}) {
+  const [busy, setBusy] = useState(false)
+  // Clamp position to viewport so the menu doesn't render off-screen
+  // when right-clicked near the right or bottom edge. 240×340 = the
+  // menu's max footprint (8 items + gutters + label header).
+  const W = 240
+  const H = 340
+  const adjX = Math.min(x, window.innerWidth - W - 8)
+  const adjY = Math.min(y, window.innerHeight - H - 8)
+  const flip = async (status: 'ACTIVE' | 'DRAFT' | 'INACTIVE') => {
+    setBusy(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/products/bulk-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productIds: [product.id], status }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error)
+      emitInvalidation({
+        type: 'product.updated',
+        meta: { productIds: [product.id], source: 'row-context-menu', status },
+      })
+      onChanged()
+    } finally {
+      setBusy(false)
+      onClose()
+    }
+  }
+  const duplicate = async () => {
+    setBusy(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/bulk-duplicate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productIds: [product.id] }),
+        },
+      )
+      if (!res.ok) throw new Error((await res.json()).error)
+      emitInvalidation({
+        type: 'product.created',
+        meta: { sourceProductIds: [product.id], source: 'row-context-menu' },
+      })
+      onChanged()
+    } finally {
+      setBusy(false)
+      onClose()
+    }
+  }
+  const item = (
+    icon: React.ReactNode,
+    label: string,
+    onClick: () => void,
+    disabled = false,
+  ) => (
+    <button
+      type="button"
+      disabled={disabled || busy}
+      onClick={(e) => {
+        e.stopPropagation()
+        if (disabled || busy) return
+        onClick()
+      }}
+      className="w-full flex items-center gap-2 h-8 px-2.5 text-base text-left rounded text-slate-700 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:text-slate-200 dark:hover:bg-slate-800"
+    >
+      <span className="text-slate-500 dark:text-slate-400" aria-hidden="true">
+        {icon}
+      </span>
+      <span className="flex-1">{label}</span>
+    </button>
+  )
+  // Stop the menu's own mousedown from triggering the outside-click
+  // close handler; click-outside still works for clicks elsewhere.
+  return (
+    <div
+      role="menu"
+      aria-label={`Actions for ${product.sku}`}
+      onMouseDown={(e) => e.stopPropagation()}
+      onContextMenu={(e) => e.preventDefault()}
+      style={{ left: adjX, top: adjY }}
+      className="fixed z-50 w-60 bg-white border border-slate-200 rounded-md shadow-xl p-1 dark:bg-slate-900 dark:border-slate-800 animate-fade-in"
+    >
+      <div className="px-2.5 py-1.5 text-xs uppercase tracking-wider text-slate-500 font-semibold border-b border-slate-100 mb-1 truncate dark:text-slate-400 dark:border-slate-800">
+        {product.sku}
+      </div>
+      {item(<Eye size={14} />, 'Open in drawer', () => {
+        window.dispatchEvent(
+          new CustomEvent('nexus:open-product-drawer', {
+            detail: { productId: product.id },
+          }),
+        )
+        onClose()
+      })}
+      {item(<ExternalLink size={14} />, 'Open edit page', () => {
+        window.location.href = `/products/${product.id}/edit`
+      })}
+      {item(<Sparkles size={14} />, 'Open list wizard', () => {
+        window.location.href = `/products/${product.id}/list-wizard`
+      })}
+      <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+      {product.status !== 'ACTIVE' &&
+        item(<CheckCircle2 size={14} />, 'Activate', () => flip('ACTIVE'))}
+      {product.status !== 'DRAFT' &&
+        item(<EyeOff size={14} />, 'Set to draft', () => flip('DRAFT'))}
+      {product.status !== 'INACTIVE' &&
+        item(<XCircle size={14} />, 'Set to inactive', () =>
+          flip('INACTIVE'),
+        )}
+      <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+      {item(<Copy size={14} />, 'Duplicate', duplicate)}
+    </div>
   )
 }
 
