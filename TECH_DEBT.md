@@ -306,16 +306,11 @@ Drift gate allow-list removed `ChannelConnection`; remaining allow-list entries 
 
 Verified at Phase 1 push: `/api/ebay/auth/create-connection` returns 201 (was 500), drift gate passes with 45 models / 1 allow-list entry. The OAuth callback flow itself is end-to-end-tested at Gate 1 by the user connecting a real eBay account.
 
-## 32. 🟢 DraftListing — orphan model, zero callers
+## 32. ✅ DraftListing — resolved 2026-05-07 in S.0
 
-**Symptom:** `model DraftListing` exists in `schema.prisma`, no migration creates the table, and `grep -rn "prisma.draftListing"` returns zero hits across `apps/`. Pure orphan from a Phase 5 design that never landed.
+**Resolution:** Phase 1 syndication audit found `DraftListing` was actually live-wired (`/listings/generate` page calls it via `POST /api/listings/generate`) — earlier "zero callers" assessment was wrong. Picking option 2 (land the migration) was correct: deleting the model would have broken the eBay AI generator. Migration `20260507_s0_draft_listing_table` ships the table; allow-list entry removed from `check-schema-drift.mjs`.
 
-**Workaround:** Allow-listed in the drift check.
-
-**Proper fix:** Decide between:
-
-1. **Delete the model.** Lowest-risk default — if no code uses it, the schema doesn't need to describe it. Ship a one-line schema.prisma diff and remove the allow-list line.
-2. **Land the migration.** Only if there's a concrete plan to use it in the next sprint. Otherwise option 1 is correct (YAGNI).
+**Original symptom (kept for history):** `model DraftListing` existed in `schema.prisma` with no migration creating the table. Hits to `prisma.draftListing` from `ai-listing.service.ts` crashed at runtime — silent production failure of the eBay AI generator surface.
 
 ## 34. 🟢 eBay OAuth scopes don't include `commerce.identity.readonly`
 
@@ -1053,10 +1048,84 @@ The flow is asynchronous — each step polls an `operationId` until the operatio
 
 ---
 
+## 55. 🟡 Bulk resync needs an inbound queue (S.4 scope)
+
+**Symptom:** S.0 wired `POST /api/listings/:id/resync` as a synchronous inline pull from the channel adapter — solves the single-listing case ("operator clicks Resync in the drawer"). The bulk-action endpoint at `/api/listings/bulk-action` still routes resync through the in-memory `BULK_JOBS` Map, which loses state on API restart. Bulk resync (>1 listing) is on shaky ground until we have a real inbound queue.
+
+**Surfaced at:** Phase 1 syndication audit + S.0 design review (2026-05-07).
+
+**Workaround applied:** S.0 single-listing resync works correctly. Bulk resync is currently a no-op for >50 listings (the in-memory Map's 60s polling timeout will silently report "Done" without finishing).
+
+**Proper fix (planned for S.4):** Two viable shapes:
+
+1. **Repurpose `OutboundSyncQueue`** with a new `INBOUND_REFRESH` syncType. Cleanest reuse of existing infrastructure (cron worker, retry logic, holdUntil grace) but bends the queue's mental model from "outbound mutation queue" to "bidirectional sync queue".
+2. **Sibling `InboundSyncQueue` table.** Dedicated to pull-style operations. Cleaner separation of concerns; small migration.
+
+Either way, also requires fleshing out the channel adapters' inbound primitives (Amazon's `getListingState` exists per S.0; eBay/Shopify/WooCommerce/Etsy need similar). Deciding which approach to use is part of S.4's design phase.
+
+**Risk if left:** Bulk operations on >50 listings silently fail. Operator sees "Done" but nothing happened. Currently low-impact (8 listings in DB) but blocks scaling to real Xavia volume.
+
+---
+
+## 56. 🟢 OutboundSyncService.syncTo* methods are simulated stubs
+
+**Symptom:** `apps/api/src/services/outbound-sync.service.ts:286,328,366,406` — the `syncToAmazon`, `syncToEbay`, `syncToShopify`, `syncToWoocommerce` methods are placeholder demos using `Math.random() > 0.1` to simulate a 90% success rate. They construct payloads but never call the actual marketplace APIs.
+
+**Surfaced at:** Phase 1 syndication audit (2026-05-07) — discovered while planning C-3.
+
+**Why it matters:** Any code path that enqueues an `OutboundSyncQueue` row (price change, quantity change) gets simulated success/failure rather than real propagation. The `Math.random()` is enough to pass smoke tests but doesn't actually push data to channels.
+
+**Proper fix:** Wire each method to its real adapter:
+- `syncToAmazon` → `amazonService.updateVariantPrice` / SP-API patchListingsItem
+- `syncToEbay` → `ebayService.updatePrice` / `updateInventory`
+- `syncToShopify` → `shopifyService.updateProduct`
+- `syncToWoocommerce` → `woocommerceService.updateProduct`
+
+Tie this to S.4 channel adapter realization. Don't ship as a standalone fix — it's coupled to inbound queue design (#55) and rate-limit persistence (currently in-memory, won't survive horizontal scaling).
+
+**Risk if left:** None today (8 listings, never synced). Becomes 🔴 the moment a real Xavia listing goes live and operator expects price/stock changes to actually propagate.
+
+---
+
+## 57. 🟡 Syndication channels deferred (Shopify / WooCommerce / Etsy)
+
+**Symptom:** Phase 1 audit confirmed zero ChannelListings exist for Shopify, WooCommerce, or Etsy as of 2026-05-07. The `/listings/{shopify,woocommerce,etsy}` page routes are 13-line stubs around `ListingsWorkspace` with `lockChannel` set. The workspace has no channel-specific UI for any of these.
+
+**Surfaced at:** Phase 1 syndication audit + S.0 roadmap calibration (2026-05-07).
+
+**Decision (with operator):** Defer S.7 (Shopify deep view), S.8 (WooCommerce deep view), S.9 (Etsy deep view). Don't build for hypothetical demand; revive when Awa indicates intent to publish on these channels. Each represents 3–4 weeks of dedicated work.
+
+**What stays (minimal viable):**
+- The stub pages keep working (workspace shell renders, just no channel-specific tools).
+- ChannelListing schema supports all five channels — no data model change needed when revived.
+- Outbound sync queue routes already include all five channels (modulo #56's stub status).
+
+**Trigger to revive:** Operator says "we're going to start selling on {channel}" or DB shows ChannelListings being created for the channel through any path.
+
+**Risk if left:** None — explicit YAGNI. The trade-off is more depth for Amazon (S.5) and eBay (S.6).
+
+---
+
+## 58. 🟢 ChannelListingOverride system unused — validate before S.12
+
+**Symptom:** Phase 1 audit DB query confirms `ChannelListingOverride` table has 0 rows. The schema is in place (audit trail per-field, undo history), but no code path writes to it. The override toggles on `ChannelListing` (`followMasterPrice`, `followMasterTitle`, etc.) are also in place but operator has never used them.
+
+**Surfaced at:** Phase 1 syndication audit (2026-05-07).
+
+**Why it matters:** S.12 ("Bulk content management — per-marketplace override management") is on the roadmap. Before building UX muscle for an unused feature, validate that overrides are actually a thing operators want.
+
+**Validation plan:** After S.5 (Amazon deep view) and S.6 (eBay deep view), check `ChannelListingOverride` row count. If still zero, drop S.12 entirely and document. If non-zero, S.12 ships normally.
+
+**Don't kill the schema.** It's in place and not hurting anything; deletion only after confirmed unused for 3+ months.
+
+**Risk if left:** None. Either the schema validates on use, or it's quietly unused — both are fine.
+
+---
+
 ## Triage summary
 
 **🔴 P0 — tackle next:**
-- **0** ✅ Schema-migration drift gate landed 2026-05-02 (script + npm script + .githooks/pre-push). Allow-list down to 1 (DraftListing only). **#37 is the column-level escalation.**
+- **0** ✅ Schema-migration drift gate landed 2026-05-02 (script + npm script + .githooks/pre-push). Allow-list down to 0 as of S.0 (DraftListing migrated 2026-05-07). **#37 is the column-level escalation.**
 - **37** Column-level drift detection — table-level gate misses column drift. Three incidents this session, latest took prod down 30 min. Shadow-DB `prisma migrate diff` is the fix.
 - **50** FBA Inbound v0 putTransportDetails deprecated — Amazon returns 400 on the real call. Migrate to v2024-03-20 (multi-step flow). Banner is misleading until then.
 - **8** ✅ Resolved 2026-05-02 — verified GTIN wizard validator was already on the correct ProductImage relation; deleted the orphan `Image` model + dead Express service & route (~1,213 lines). Demoted to P2 for the remaining UX polish.
@@ -1089,6 +1158,8 @@ The flow is asynchronous — each step polls an `operationId` until the operatio
 - **45** Local apps/api Prisma client v6 vs v7 mismatch — local dev API can't serve Prisma queries; production unaffected. Onboarding blocker.
 - **48** ✅ Resolved 2026-05-06 in `e55ed37` — Phase 28 recompute now honours `followMasterPrice`.
 - **49** ✅ Resolved 2026-05-06 in `e55ed37` — `processPendingSyncs` now filters by `holdUntil`.
+- **55** Bulk resync needs an inbound queue — single-listing inline pull shipped in S.0; bulk path defers to S.4
+- **57** Syndication channels deferred (Shopify/WooCommerce/Etsy) — Phase 1 audit confirmed zero usage; stubs sufficient until operator triggers
 
 **🟢 P2 — when in the area:**
 - **4** CategorySchema "unknown" rows
@@ -1101,7 +1172,7 @@ The flow is asynchronous — each step polls an `operationId` until the operatio
 - **21** `/api/products/:id` for the edit page
 - **22** Derived-column sort
 - **23–24** `/inventory` sub-routes URL migration + legacy component cleanup
-- **32** Delete the orphan `DraftListing` model from schema.prisma
+- **32** ✅ Resolved 2026-05-07 in S.0 — DraftListing migration shipped; eBay AI generator no longer crashes. Allow-list entry removed.
 - **39** Per-seller primary marketplace setting — replaces hardcoded `'IT'` in E.9 backfill + future resolver fallbacks; needed once Nexus serves a second tenant
 - **40** SP-API variation attribute mapping seed — auto-populate `ChannelListing.variationMapping` from `getProductTypeDefinitions` once a real publish lands; tied to #35
 - **41** Order-driven stock decrement — fulfillment-method-aware location routing (FBA → `AMAZON-EU-FBA`, rest → `IT-MAIN`); promote to 🔴 once real orders flow
@@ -1110,3 +1181,5 @@ The flow is asynchronous — each step polls an `operationId` until the operatio
 - **44** Saved views + column reorder/resize on /fulfillment/stock — URL state covers the common case; dnd-kit + UserView model when explicitly asked
 - **46** `Channel` table empty + `ChannelListing.channel` is a string — implicit FK contract; populate + migrate to real FK, or delete the table to make the contract explicit. Tied to multi-tenant readiness.
 - **47** ✅ Resolved 2026-05-06 — Vercel auto-deploy gap was a routing confusion; production URL is `nexus-commerce-three.vercel.app` not `nexus-commerce.vercel.app`. Documented for future audits.
+- **56** OutboundSyncService.syncTo* methods are simulated stubs — paired with #55 in S.4 channel adapter realization
+- **58** ChannelListingOverride system unused — validation gate before committing to S.12; check row count after S.5/S.6

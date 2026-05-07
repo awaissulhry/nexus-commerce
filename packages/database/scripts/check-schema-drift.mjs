@@ -115,12 +115,10 @@ for (const sqlPath of listMigrationDirs()) {
 //
 // To remove an entry: ship the missing migration (or remove the model
 // from schema.prisma) and delete the line below.
-const ALLOW_LIST = new Map([
-  // TECH_DEBT #32 — DraftListing is in schema with zero call sites.
-  // Pure orphan. Decide: write the migration to keep it for future
-  // use, or delete the model entirely.
-  ['DraftListing', 'TECH_DEBT #32'],
-])
+//
+// 2026-05-07 / S.0 — DraftListing entry removed; migration
+// `20260507_s0_draft_listing_table` ships the table.
+const ALLOW_LIST = new Map([])
 
 // ── Diff: every model must have a CREATE TABLE for its mapped name ──
 const missing = []

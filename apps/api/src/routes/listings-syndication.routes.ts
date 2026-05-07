@@ -618,32 +618,121 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
   })
 
   // ─────────────────────────────────────────────────────────────────
-  // POST /api/listings/:id/resync — mark for re-pull from channel
-  // The actual fetch happens via the channel's sync service; here we
-  // flip the listing into PENDING + reset the retry counter so the
-  // next worker tick picks it up.
+  // POST /api/listings/:id/resync — synchronous inline pull from channel
+  //
+  // S.0 / C-3 — was a placebo (just flipped a flag with no consumer).
+  // Now hits the channel adapter directly and merges the response.
+  // Single-listing only; bulk resync stays on the bulk-action endpoint
+  // until S.4 builds the inbound queue.
+  //
+  // Status transitions:
+  //   pre-call:  syncStatus = 'SYNCING'
+  //   success:   syncStatus = 'IN_SYNC',  lastSyncStatus = 'SUCCESS'
+  //   timeout:   syncStatus = 'FAILED',   lastSyncStatus = 'FAILED'
+  //   error:     syncStatus = 'FAILED',   lastSyncStatus = 'FAILED'
+  //   501 path:  syncStatus untouched (channel adapter not wired —
+  //              not the listing's fault)
   // ─────────────────────────────────────────────────────────────────
   fastify.post('/listings/:id/resync', async (request, reply) => {
+    const { id } = request.params as { id: string }
+
+    const existing = await prisma.channelListing.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        channel: true,
+        marketplace: true,
+        externalListingId: true,
+        version: true,
+      },
+    })
+    if (!existing) return reply.code(404).send({ error: 'Listing not found' })
+
+    if (!existing.externalListingId) {
+      return reply.code(400).send({
+        error:
+          'Listing has no externalListingId — never been published. Cannot resync.',
+      })
+    }
+
+    // Lazy-import so the route module compiles even if the resync
+    // service file moves later. Path is relative-with-extension to
+    // match the rest of the codebase's NodeNext resolution.
+    const { pullListingFromChannel, ChannelNotSupportedError, ResyncTimeoutError } =
+      await import('../services/listings/resync.service.js')
+
+    // Mark in-flight first so concurrent polls / drawer reopens see
+    // SYNCING rather than the stale prior status.
+    await prisma.channelListing.update({
+      where: { id },
+      data: {
+        syncStatus: 'SYNCING',
+        lastSyncStatus: 'PENDING',
+      },
+    })
+
     try {
-      const { id } = request.params as { id: string }
-      const existing = await prisma.channelListing.findUnique({ where: { id }, select: { id: true, version: true } })
-      if (!existing) return reply.code(404).send({ error: 'Listing not found' })
+      const remote = await pullListingFromChannel(
+        {
+          channel: existing.channel,
+          marketplace: existing.marketplace,
+          externalListingId: existing.externalListingId,
+        },
+        { timeoutMs: 10_000 },
+      )
 
       const updated = await prisma.channelListing.update({
         where: { id },
         data: {
-          syncStatus: 'PENDING',
-          lastSyncStatus: 'PENDING',
-          syncRetryCount: 0,
+          // Only overwrite columns the channel actually returned a value
+          // for. `undefined` skips the column in Prisma update payloads,
+          // so a marketplace that doesn't surface (say) a title leaves
+          // our title as-is rather than nulling it.
+          ...(remote.price != null ? { price: remote.price } : {}),
+          ...(remote.quantity != null ? { quantity: remote.quantity } : {}),
+          ...(remote.title != null ? { title: remote.title } : {}),
+          ...(remote.listingStatus != null
+            ? { listingStatus: remote.listingStatus }
+            : {}),
+          syncStatus: 'IN_SYNC',
+          lastSyncStatus: 'SUCCESS',
+          lastSyncedAt: new Date(),
           lastSyncError: null,
+          syncRetryCount: 0,
           version: { increment: 1 },
         },
-        select: { id: true, syncStatus: true, lastSyncStatus: true, version: true },
       })
       return { ok: true, listing: updated }
     } catch (error: any) {
-      fastify.log.error({ err: error }, '[listings/:id/resync] failed')
-      return reply.code(500).send({ error: error?.message ?? String(error) })
+      // Channel adapter not implemented for this channel — revert the
+      // pre-call SYNCING marker and surface 501 cleanly. Don't write
+      // FAILED; this isn't the listing's fault.
+      if (error instanceof ChannelNotSupportedError) {
+        await prisma.channelListing.update({
+          where: { id },
+          data: { syncStatus: 'IDLE', lastSyncStatus: null },
+        })
+        return reply.code(501).send({
+          error: 'NOT_IMPLEMENTED',
+          detail: error.message,
+        })
+      }
+
+      const isTimeout = error instanceof ResyncTimeoutError
+      await prisma.channelListing.update({
+        where: { id },
+        data: {
+          syncStatus: 'FAILED',
+          lastSyncStatus: 'FAILED',
+          lastSyncError: error?.message ?? String(error),
+          syncRetryCount: { increment: 1 },
+        },
+      })
+      fastify.log.error({ err: error, listingId: id }, '[listings/:id/resync] failed')
+      return reply.code(isTimeout ? 504 : 502).send({
+        error: isTimeout ? 'CHANNEL_TIMEOUT' : 'CHANNEL_ERROR',
+        detail: error?.message ?? String(error),
+      })
     }
   })
 

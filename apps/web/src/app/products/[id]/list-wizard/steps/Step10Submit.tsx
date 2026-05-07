@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
+import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
 
@@ -149,6 +150,19 @@ export default function Step10Submit({
           s.status === 'SUBMITTED',
       )
       if (!inFlight) {
+        // S.0 / H-1 — wizard reached terminal state via polling. Notify
+        // /listings, /products, /bulk-operations, and the drafts surfaces
+        // so they refresh without waiting for their next polling tick.
+        emitInvalidation({
+          type: 'wizard.submitted',
+          id: wizardId,
+          meta: {
+            productId: product.id,
+            overallStatus: json.wizard?.status ?? null,
+            liveCount: json.submissions.filter((s) => s.status === 'LIVE').length,
+            failedCount: json.submissions.filter((s) => s.status === 'FAILED').length,
+          },
+        })
         stopPolling()
         return
       }
@@ -157,7 +171,7 @@ export default function Step10Submit({
       // Network error — schedule the next tick instead of dying.
       scheduleNextPoll(poll)
     }
-  }, [wizardId, stopPolling, scheduleNextPoll])
+  }, [wizardId, product.id, stopPolling, scheduleNextPoll])
 
   // NN.10 — manual refresh fallback once polling has timed out.
   const manualRefresh = useCallback(() => {
@@ -203,13 +217,28 @@ export default function Step10Submit({
         pollStartedAt.current = Date.now()
         pollTickRef.current = 0
         scheduleNextPoll(poll)
+      } else {
+        // S.0 / H-1 — synchronous-terminal case (rare: all adapters
+        // returned NOT_IMPLEMENTED, or all FAILED at the dispatcher
+        // before any in-flight state). Same emit as the polling-terminal
+        // path so subscribers refresh either way.
+        emitInvalidation({
+          type: 'wizard.submitted',
+          id: wizardId,
+          meta: {
+            productId: product.id,
+            overallStatus: json.wizard?.status ?? null,
+            liveCount: json.submissions.filter((s) => s.status === 'LIVE').length,
+            failedCount: json.submissions.filter((s) => s.status === 'FAILED').length,
+          },
+        })
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setSubmitting(false)
     }
-  }, [wizardId, poll, stopPolling, scheduleNextPoll])
+  }, [wizardId, product.id, poll, stopPolling, scheduleNextPoll])
 
   const onRetry = useCallback(
     async (channelKey: string) => {

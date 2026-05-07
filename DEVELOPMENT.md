@@ -63,6 +63,28 @@ Limitations (consciously out of scope):
 
 `packages/database/scripts/check-schema-drift.mjs` has a small `ALLOW_LIST` near the top for pre-existing drift that's tracked in `TECH_DEBT.md` (entries #31, #32 as of 2026-05-02). Each entry must reference a ticket. Removing an entry: ship the missing migration, then delete the line. Adding new entries silently to bypass the gate is a footgun — don't.
 
+## Health endpoint conventions
+
+The /listings surface and /products surface both have "health" features but
+they are **NOT the same endpoint**:
+
+- `GET /api/listings/health` — overview rollup for the syndication
+  workspace. Returns errorCount, suppressedCount, draftCount,
+  pendingSyncCount, top error reasons, and recent failed listings.
+  Defined in `apps/api/src/routes/listings-syndication.routes.ts`.
+  Used by `ListingsWorkspace`'s Health lens.
+
+- `GET /api/catalog/:productId/listing-health` — per-product readiness
+  scores across all channels (title length OK, price > 0, has images,
+  has variations, etc.). Defined in
+  `apps/api/src/routes/listing-health.routes.ts`. Used by
+  `ListingHealth.tsx` inside the product editor.
+
+Don't conflate them. The first answers "are my live listings healthy?";
+the second answers "is this product ready to be listed?". The route
+file `listing-health.routes.ts` declares full `/api/catalog/...` paths
+internally, so it is registered without a prefix in `apps/api/src/index.ts`.
+
 ## Useful commands
 
 ```bash

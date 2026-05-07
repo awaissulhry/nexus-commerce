@@ -45,6 +45,7 @@ import dashboardRoutes from "./routes/dashboard.routes.js";
 import pimRoutes from "./routes/pim.routes.js";
 import auditLogRoutes from "./routes/audit-log.routes.js";
 import { listingsSyndicationRoutes } from "./routes/listings-syndication.routes.js";
+import { listingHealthRoutes } from "./routes/listing-health.routes.js";
 import productsCatalogRoutes from "./routes/products-catalog.routes.js";
 import productsAiRoutes from "./routes/products-ai.routes.js";
 import productsImagesRoutes from "./routes/products-images.routes.js";
@@ -291,6 +292,11 @@ app.register(ebayAuthRoutes);
 app.register(ebayRoutes);
 app.register(ebayOrdersRoutes);
 app.register(catalogRoutes, { prefix: '/api/catalog' });
+// S.0 / C-2 — listing-health.routes declares full /api/catalog/... paths
+// internally, so register without a prefix. See DEVELOPMENT.md "Health
+// endpoint conventions" for why /api/listings/health and
+// /api/catalog/:productId/listing-health coexist as distinct concepts.
+app.register(listingHealthRoutes);
 app.register(outboundRoutes);
 app.register(matrixRoutes);
 app.register(inboundRoutes);

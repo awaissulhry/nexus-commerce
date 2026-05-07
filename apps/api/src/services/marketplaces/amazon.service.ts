@@ -1072,4 +1072,81 @@ export class AmazonService {
       }
     }
   }
+
+  /* ────────────────────────────────────────────────────────────── */
+  /*  S.0 / C-3 — getListingState                                   */
+  /*  Minimal primitive used by the /api/listings/:id/resync inline */
+  /*  pull path. Distinct from fetchProductDetails which is a full  */
+  /*  catalog import (title/brand/dims/identifiers/images). Resync  */
+  /*  only needs the live state fields a marketplace might have     */
+  /*  drifted on: price, quantity, listingStatus, title.            */
+  /*                                                                */
+  /*  Unlike fetchProductDetails, this takes an explicit            */
+  /*  marketplaceId (SP-API ID like A1RKKUPIHCS9HS) — Resync hits   */
+  /*  one specific marketplace per call, not whatever              */
+  /*  AMAZON_MARKETPLACE_ID happens to be set to in env.            */
+  /* ────────────────────────────────────────────────────────────── */
+  async getListingState(
+    sku: string,
+    marketplaceId: string,
+  ): Promise<{
+    price: number | null
+    quantity: number | null
+    listingStatus: string | null
+    title: string | null
+    asin: string | null
+  }> {
+    const sellerId =
+      process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+    if (!sellerId) {
+      throw new Error(
+        'AMAZON_SELLER_ID (or AMAZON_MERCHANT_ID) env var not set; cannot call getListingsItem.',
+      )
+    }
+
+    const sp = await this.getClient()
+    const res: any = await sp.callAPI({
+      operation: 'getListingsItem',
+      endpoint: 'listingsItems',
+      path: { sellerId, sku },
+      query: {
+        marketplaceIds: [marketplaceId],
+        includedData: ['summaries', 'attributes', 'offers'],
+      },
+    })
+
+    const summaries = res?.summaries
+    const summary =
+      Array.isArray(summaries) && summaries.length > 0 ? summaries[0] : null
+
+    // Listing status surfaces under different keys on different SP-API
+    // shapes. `status` carries a string array (e.g. ['BUYABLE']) on
+    // recent versions; older shapes use itemStatus. Default to null
+    // rather than guessing — the route will leave the field unchanged
+    // if the marketplace doesn't return it.
+    const rawStatus =
+      (Array.isArray(summary?.status) ? summary.status[0] : summary?.status) ??
+      summary?.itemStatus ??
+      null
+
+    let price: number | null = null
+    let quantity: number | null = null
+    const offers = res?.offers
+    if (Array.isArray(offers) && offers.length > 0) {
+      const offer = offers[0]
+      const amount = offer?.buyingPrice?.listingPrice?.amount
+      const parsedPrice = amount != null ? parseFloat(amount) : NaN
+      price = Number.isFinite(parsedPrice) ? parsedPrice : null
+      const parsedQty = parseInt(offer?.quantity ?? '', 10)
+      quantity = Number.isFinite(parsedQty) ? parsedQty : null
+    }
+
+    return {
+      price,
+      quantity,
+      listingStatus: typeof rawStatus === 'string' ? rawStatus : null,
+      title: typeof summary?.itemName === 'string' ? summary.itemName : null,
+      asin: typeof res?.asin === 'string' ? res.asin : null,
+    }
+  }
 }
