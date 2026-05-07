@@ -90,11 +90,27 @@ type DrawerOrder = {
     activity: Array<{
       id: string
       action: string
+      before: any
+      after: any
       metadata: any
       userId: string | null
       createdAt: string
     }>
   }>
+}
+
+// O.51: human-readable label per audit action. Falls through to the
+// raw action keyword when no key is present so new actions degrade
+// gracefully instead of disappearing.
+const ACTION_LABEL: Record<string, string> = {
+  'print-label': 'Label printed',
+  'void-label': 'Label voided',
+  'void-label-failed': 'Void refused by carrier',
+  'mark-shipped': 'Marked shipped',
+  'hold': 'Put on hold',
+  'release': 'Hold released',
+  'auto-cancel-from-order': 'Auto-cancelled (order cancelled)',
+  'manual-cancel': 'Manually cancelled',
 }
 
 const TRACKING_TONE: Record<string, string> = {
@@ -769,6 +785,8 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                         .map((a) => {
                           const reason = (a.metadata as any)?.reason
                           const dryRun = (a.metadata as any)?.dryRun
+                          const beforeStatus = (a.before as any)?.status
+                          const afterStatus = (a.after as any)?.status
                           const tone =
                             a.action.includes('void') || a.action.includes('cancel')
                               ? 'text-rose-700 bg-rose-50'
@@ -777,6 +795,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                               : a.action.includes('release') || a.action.includes('shipped') || a.action.includes('print')
                               ? 'text-emerald-700 bg-emerald-50'
                               : 'text-slate-700 bg-slate-100'
+                          const label = ACTION_LABEL[a.action] ?? a.action
                           return (
                             <div key={a.id} className="flex items-start gap-3 text-sm">
                               <div className="text-slate-500 tabular-nums w-32 flex-shrink-0">
@@ -788,12 +807,23 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                                 })}
                               </div>
                               <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${tone}`}>
-                                {a.action}
+                                {label}
                               </span>
-                              <div className="flex-1 min-w-0 text-slate-600">
-                                {a.userId ? `by ${a.userId}` : 'by system'}
-                                {reason ? ` · ${reason}` : ''}
-                                {dryRun ? ' · dryRun' : ''}
+                              <div className="flex-1 min-w-0 text-slate-600 space-y-0.5">
+                                <div>
+                                  {a.userId ? `by ${a.userId}` : 'by system'}
+                                  {reason ? ` · ${reason}` : ''}
+                                  {dryRun ? ' · dryRun' : ''}
+                                </div>
+                                {/* O.51: state-change diff. Only render
+                                    when both sides are status-typed +
+                                    actually different. Operator-readable
+                                    visual: BEFORE → AFTER with arrow. */}
+                                {beforeStatus && afterStatus && beforeStatus !== afterStatus && (
+                                  <div className="text-xs text-slate-500 font-mono">
+                                    {beforeStatus.replace(/_/g, ' ')} → {afterStatus.replace(/_/g, ' ')}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           )

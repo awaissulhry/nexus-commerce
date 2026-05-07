@@ -2555,6 +2555,11 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
               id: true,
               entityId: true,
               action: true,
+              // O.51: include before/after so the drawer can render
+              // the actual state change ("PACKED → LABEL_PRINTED")
+              // instead of just the verb.
+              before: true,
+              after: true,
               metadata: true,
               userId: true,
               createdAt: true,
