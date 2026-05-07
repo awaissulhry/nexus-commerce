@@ -22,6 +22,10 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Tooltip } from '@/components/ui/Tooltip'
+import { Tabs } from '@/components/ui/Tabs'
+import { IconButton } from '@/components/ui/IconButton'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { InlineEditTrigger } from '@/components/ui/InlineEditTrigger'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
@@ -2143,15 +2147,29 @@ function DraftsLens({ lockChannel, lockMarketplace, search }: { lockChannel?: st
 // ────────────────────────────────────────────────────────────────────
 // ListingDrawer — slide-over detail panel
 // ────────────────────────────────────────────────────────────────────
-function ListingDrawer({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
+// ────────────────────────────────────────────────────────────────────
+// ListingDrawer — S.2 rebuild
+//
+// Tabbed surface (Detail · Per-channel · Sync · Activity) replacing the
+// prior single-page drawer. The drawer is a workspace-within-workspace
+// for catalog ops: from a single panel you see the listing's current
+// state, where else this product is live, and what's happening with
+// sync — without leaving the matrix view.
+// ────────────────────────────────────────────────────────────────────
+type DrawerTab = 'detail' | 'channels' | 'sync' | 'activity'
+
+function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
+  // Internal id state lets the Per-channel tab switch context without
+  // close/reopen flicker — click a companion → swap id → drawer reloads.
+  const [id, setId] = useState(initialId)
+  useEffect(() => setId(initialId), [initialId])
+
   const [listing, setListing] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [resyncing, setResyncing] = useState(false)
+  const [activeTab, setActiveTab] = useState<DrawerTab>('detail')
+  const [actionPending, setActionPending] = useState<string | null>(null)
 
-  // S.0.5 / M-9 — drawer fetch now has a real .catch and surfaces an
-  // error state in the body. Previously a network failure left the
-  // drawer in "Loading…" forever.
   const loadListing = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -2171,33 +2189,92 @@ function ListingDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
     loadListing()
   }, [loadListing])
 
+  // Cross-tab invalidation: if another surface updates this listing
+  // while the drawer is open, refresh.
+  useInvalidationChannel(
+    ['listing.updated', 'bulk-job.completed'],
+    (event) => {
+      // Filter — only refresh if the event is about this listing or
+      // unscoped (bulk events). Avoid hammering on every product update.
+      if (!event.id || event.id === id) loadListing()
+    },
+  )
+
+  const patch = useCallback(async (body: any): Promise<boolean> => {
+    if (!listing) return false
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/listings/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...body, expectedVersion: listing.version }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setError(err?.error ?? `HTTP ${res.status}`)
+        return false
+      }
+      onChanged()
+      emitInvalidation({ type: 'listing.updated', id })
+      await loadListing()
+      return true
+    } catch (e: any) {
+      setError(e?.message ?? String(e))
+      return false
+    }
+  }, [id, listing, loadListing, onChanged])
+
   const resync = async () => {
-    setResyncing(true)
+    setActionPending('resync')
     try {
       await fetch(`${getBackendUrl()}/api/listings/${id}/resync`, { method: 'POST' })
       onChanged()
-      // Refresh local listing with the post-resync values so the drawer
-      // reflects new sync status without waiting for the parent grid
-      // refetch + reopen.
+      emitInvalidation({ type: 'listing.updated', id })
       await loadListing()
-    } finally { setResyncing(false) }
+    } finally {
+      setActionPending(null)
+    }
   }
 
-  // S.0.5 / M-4 — Modal primitive replaces the hand-rolled `fixed inset-0`
-  // overlay. Brings focus trap, aria-modal=true, Escape key, click-outside,
-  // and body-scroll-lock for free. drawer-right placement matches the
-  // previous side-panel UX exactly.
+  const togglePublish = async () => {
+    if (!listing) return
+    setActionPending('publish')
+    await patch({ isPublished: !listing.isPublished })
+    setActionPending(null)
+  }
+
+  const tabs = useMemo(() => {
+    const errorCount = listing?.lastSyncError ? 1 : 0
+    return [
+      { id: 'detail', label: 'Detail' },
+      {
+        id: 'channels',
+        label: 'Per-channel',
+        count: listing?.companions?.length,
+      },
+      { id: 'sync', label: 'Sync', count: errorCount > 0 ? errorCount : undefined },
+      { id: 'activity', label: 'Activity' },
+    ]
+  }, [listing])
+
   return (
     <Modal
       open={true}
       onClose={onClose}
-      title="Listing detail"
+      title={null}
+      header={null}
       placement="drawer-right"
     >
-      <ModalBody>
-        {loading ? (
-          <div className="text-base text-slate-500">Loading…</div>
-        ) : error ? (
+      {loading && !listing ? (
+        <ModalBody>
+          <div className="space-y-4">
+            <Skeleton variant="thumbnail" width={64} height={64} />
+            <Skeleton variant="text" lines={2} />
+            <Skeleton variant="block" height={120} />
+            <Skeleton variant="block" height={80} />
+          </div>
+        </ModalBody>
+      ) : error ? (
+        <ModalBody>
           <div className="bg-rose-50 border border-rose-200 rounded-md p-3 space-y-2">
             <div className="text-sm font-semibold uppercase tracking-wider text-rose-700">Failed to load listing</div>
             <div className="text-base text-rose-700">{error}</div>
@@ -2208,64 +2285,658 @@ function ListingDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
               <RefreshCw size={12} /> Retry
             </button>
           </div>
-        ) : !listing ? (
+        </ModalBody>
+      ) : !listing ? (
+        <ModalBody>
           <div className="text-base text-slate-500">Listing not found.</div>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex items-start gap-3">
-              {listing.product?.images?.[0] && <img src={listing.product.images[0]} alt="" className="w-16 h-16 rounded-md object-cover bg-slate-100" />}
-              <div className="min-w-0 flex-1">
-                <div className="text-lg font-semibold text-slate-900">{listing.product?.name}</div>
-                <div className="text-sm text-slate-500 font-mono">{listing.product?.sku}</div>
-                <div className="flex items-center gap-2 mt-1.5">
-                  <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[listing.channel] ?? ''}`}>{listing.channel}</span>
-                  <span className="font-mono text-sm font-semibold bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">{listing.marketplace}</span>
-                  <Badge variant={STATUS_VARIANT[listing.listingStatus] ?? 'default'} size="sm">{listing.listingStatus}</Badge>
+        </ModalBody>
+      ) : (
+        <>
+          {/* Header: thumbnail + name + channel/marketplace + action toolbar */}
+          <div className="px-5 py-3 border-b border-slate-200 flex-shrink-0">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="flex items-start gap-3 min-w-0 flex-1">
+                {listing.product?.images?.[0] && (
+                  <img
+                    src={listing.product.images[0]}
+                    alt=""
+                    className="w-12 h-12 rounded-md object-cover bg-slate-100 flex-shrink-0"
+                  />
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="text-md font-semibold text-slate-900 truncate">{listing.product?.name}</div>
+                  <div className="text-sm text-slate-500 font-mono truncate">{listing.product?.sku}</div>
+                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                    <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[listing.channel] ?? ''}`}>{listing.channel}</span>
+                    <span className="font-mono text-sm font-semibold bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">{listing.marketplace}</span>
+                    <StatusBadge status={listing.listingStatus} />
+                    {listing.syncStatus && listing.syncStatus !== 'IDLE' && (
+                      <StatusBadge status={listing.syncStatus} />
+                    )}
+                  </div>
                 </div>
               </div>
+              <IconButton aria-label="Close" onClick={onClose} size="md">
+                <X size={14} />
+              </IconButton>
             </div>
 
-            {listing.lastSyncError && (
-              <div className="bg-rose-50 border border-rose-200 rounded-md p-3">
-                <div className="text-sm font-semibold uppercase tracking-wider text-rose-700 mb-1">Last sync error</div>
-                <div className="text-base text-rose-700">{listing.lastSyncError}</div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-3">
-              <Detail label="Price" value={listing.price != null ? `${listing.product?.basePrice ?? ''} ${Number(listing.price).toFixed(2)}` : '—'} />
-              <Detail label="Quantity" value={listing.quantity ?? '—'} />
-              <Detail label="Sync status" value={listing.syncStatus ?? '—'} />
-              <Detail label="Last sync" value={listing.lastSyncedAt ? new Date(listing.lastSyncedAt).toLocaleString() : 'Never'} />
-              <Detail label="Pricing rule" value={listing.pricingRule ?? '—'} />
-              <Detail label="Retry count" value={listing.syncRetryCount} />
-              {listing.externalListingId && <Detail label="External ID" value={listing.externalListingId} />}
-              <Detail label="Published" value={listing.isPublished ? 'Yes' : 'No'} />
-            </div>
-
-            {listing.listingUrl && (
-              <a href={listing.listingUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-base text-blue-600 hover:underline">
-                Open on {listing.channel.charAt(0) + listing.channel.slice(1).toLowerCase()} <ExternalLink size={12} />
-              </a>
-            )}
-
-            <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
-              <button
-                onClick={resync}
-                disabled={resyncing}
-                className="h-8 px-3 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 disabled:opacity-50 inline-flex items-center gap-1.5"
-              >
-                <RefreshCw size={12} className={resyncing ? 'animate-spin' : ''} /> Resync from channel
-              </button>
+            {/* Action toolbar */}
+            <div className="flex items-center gap-1 flex-wrap">
+              <Tooltip content="Pull latest state from the marketplace">
+                <button
+                  onClick={resync}
+                  disabled={actionPending === 'resync'}
+                  className="h-7 px-2.5 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 disabled:opacity-50 inline-flex items-center gap-1.5"
+                >
+                  <RefreshCw size={11} className={actionPending === 'resync' ? 'animate-spin' : ''} />
+                  Sync
+                </button>
+              </Tooltip>
+              <Tooltip content={listing.isPublished ? 'Pause this listing on the marketplace' : 'Resume this listing'}>
+                <button
+                  onClick={togglePublish}
+                  disabled={actionPending === 'publish'}
+                  className="h-7 px-2.5 text-sm bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
+                >
+                  {listing.isPublished ? <Pause size={11} /> : <Play size={11} />}
+                  {listing.isPublished ? 'Pause' : 'Resume'}
+                </button>
+              </Tooltip>
+              {listing.listingUrl && (
+                <Tooltip content={`Open on ${listing.channel.toLowerCase()}`}>
+                  <a
+                    href={listing.listingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="h-7 px-2.5 text-sm bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+                  >
+                    <ExternalLink size={11} />
+                    On marketplace
+                  </a>
+                </Tooltip>
+              )}
               <Link
                 href={`/products/${listing.productId}/edit?channel=${listing.channel}&marketplace=${listing.marketplace}`}
-                className="h-8 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
-              ><ArrowUpRight size={12} /> Open in editor</Link>
+                className="h-7 px-2.5 text-sm bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+              >
+                <Edit3 size={11} />
+                Open in editor
+              </Link>
             </div>
           </div>
-        )}
-      </ModalBody>
+
+          {/* Tabs */}
+          <Tabs
+            tabs={tabs}
+            activeTab={activeTab}
+            onChange={(t) => setActiveTab(t as DrawerTab)}
+            className="px-5 flex-shrink-0"
+          />
+
+          <ModalBody>
+            {activeTab === 'detail' && <DetailTab listing={listing} patch={patch} />}
+            {activeTab === 'channels' && (
+              <ChannelsTab
+                listing={listing}
+                onSwitchListing={(newId) => {
+                  setId(newId)
+                  setActiveTab('detail')
+                }}
+              />
+            )}
+            {activeTab === 'sync' && (
+              <SyncTab listing={listing} resyncing={actionPending === 'resync'} onResync={resync} />
+            )}
+            {activeTab === 'activity' && <ActivityTab listing={listing} />}
+          </ModalBody>
+        </>
+      )}
     </Modal>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────
+// DetailTab — master vs channel side-by-side, follow toggles, pricing
+// ────────────────────────────────────────────────────────────────────
+function DetailTab({ listing, patch }: { listing: any; patch: (body: any) => Promise<boolean> }) {
+  const [editingRule, setEditingRule] = useState(false)
+  const [editingBuffer, setEditingBuffer] = useState(false)
+  const [editingPercent, setEditingPercent] = useState(false)
+
+  const masterPrice = listing.product?.basePrice ?? listing.masterPrice
+  const channelPrice = listing.price
+  const priceDrift =
+    masterPrice != null && channelPrice != null
+      ? Number(channelPrice) - Number(masterPrice)
+      : null
+
+  const expectedQuantity =
+    listing.product?.totalStock != null
+      ? Math.max(0, Number(listing.product.totalStock) - (listing.stockBuffer ?? 0))
+      : null
+  const channelQuantity = listing.quantity
+  const quantityDrift =
+    expectedQuantity != null && channelQuantity != null
+      ? channelQuantity - expectedQuantity
+      : null
+
+  return (
+    <div className="space-y-4">
+      {/* Last sync error — surfaced at the top of Detail too because
+          operators triage errors first */}
+      {listing.lastSyncError && (
+        <div className="bg-rose-50 border border-rose-200 rounded-md p-3">
+          <div className="text-sm font-semibold uppercase tracking-wider text-rose-700 mb-1">Last sync error</div>
+          <div className="text-base text-rose-700">{listing.lastSyncError}</div>
+        </div>
+      )}
+
+      {/* Validation errors */}
+      {listing.validationErrors && listing.validationErrors.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
+          <div className="text-sm font-semibold uppercase tracking-wider text-amber-700 mb-1">
+            Validation issues
+          </div>
+          <ul className="text-base text-amber-800 list-disc list-inside space-y-0.5">
+            {listing.validationErrors.map((e: string, i: number) => (
+              <li key={i}>{e}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Master vs channel — Price */}
+      <FieldComparison
+        label="Price"
+        masterValue={masterPrice != null ? Number(masterPrice).toFixed(2) : '—'}
+        channelValue={channelPrice != null ? Number(channelPrice).toFixed(2) : '—'}
+        followingMaster={listing.followMasterPrice}
+        drifted={priceDrift != null && priceDrift !== 0}
+        driftLabel={
+          priceDrift != null
+            ? `${priceDrift > 0 ? '+' : ''}${priceDrift.toFixed(2)} vs master`
+            : null
+        }
+        onSnapToMaster={async () => {
+          await patch({ followMasterPrice: true })
+        }}
+        onUnfollow={async () => {
+          await patch({ followMasterPrice: false })
+        }}
+      />
+
+      {/* Master vs channel — Quantity */}
+      <FieldComparison
+        label="Quantity"
+        masterValue={
+          expectedQuantity != null
+            ? `${expectedQuantity} (${listing.product?.totalStock ?? 0} stock − ${listing.stockBuffer ?? 0} buffer)`
+            : '—'
+        }
+        channelValue={channelQuantity != null ? String(channelQuantity) : '—'}
+        followingMaster={listing.followMasterQuantity}
+        drifted={quantityDrift != null && quantityDrift !== 0}
+        driftLabel={
+          quantityDrift != null
+            ? `${quantityDrift > 0 ? '+' : ''}${quantityDrift} vs expected`
+            : null
+        }
+        onSnapToMaster={async () => {
+          await patch({ followMasterQuantity: true })
+        }}
+        onUnfollow={async () => {
+          await patch({ followMasterQuantity: false })
+        }}
+      />
+
+      {/* Master vs channel — Title (no edit; just visibility — heavy
+          editing belongs in /products/:id/edit) */}
+      <FieldComparison
+        label="Title"
+        masterValue={listing.product?.name ?? listing.masterTitle ?? '—'}
+        channelValue={listing.title ?? listing.product?.name ?? '—'}
+        followingMaster={listing.followMasterTitle}
+        drifted={
+          listing.title != null &&
+          listing.title !== (listing.product?.name ?? listing.masterTitle)
+        }
+        driftLabel={null}
+        onSnapToMaster={async () => {
+          await patch({ followMasterTitle: true })
+        }}
+        onUnfollow={async () => {
+          await patch({ followMasterTitle: false })
+        }}
+        compact
+      />
+
+      {/* Pricing rule + adjustment percent — drawer-level inline edits */}
+      <div className="grid grid-cols-2 gap-3 pt-2">
+        <div>
+          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-0.5">Pricing rule</div>
+          {editingRule ? (
+            <select
+              value={listing.pricingRule ?? 'FIXED'}
+              onChange={async (e) => {
+                await patch({ pricingRule: e.target.value })
+                setEditingRule(false)
+              }}
+              onBlur={() => setEditingRule(false)}
+              autoFocus
+              className="h-7 px-1 text-base border border-blue-400 rounded text-slate-900 bg-white"
+            >
+              <option value="FIXED">FIXED</option>
+              <option value="MATCH_AMAZON">MATCH_AMAZON</option>
+              <option value="PERCENT_OF_MASTER">PERCENT_OF_MASTER</option>
+            </select>
+          ) : (
+            <InlineEditTrigger label="pricing rule" onClick={() => setEditingRule(true)}>
+              <span className="text-base text-slate-900">{listing.pricingRule ?? '—'}</span>
+            </InlineEditTrigger>
+          )}
+        </div>
+        {listing.pricingRule === 'PERCENT_OF_MASTER' && (
+          <div>
+            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-0.5">Adjustment %</div>
+            {editingPercent ? (
+              <Input
+                type="number"
+                step="0.01"
+                defaultValue={listing.priceAdjustmentPercent ?? 0}
+                autoFocus
+                onBlur={async (e) => {
+                  await patch({ priceAdjustmentPercent: Number(e.currentTarget.value) })
+                  setEditingPercent(false)
+                }}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter') {
+                    await patch({ priceAdjustmentPercent: Number(e.currentTarget.value) })
+                    setEditingPercent(false)
+                  } else if (e.key === 'Escape') {
+                    setEditingPercent(false)
+                  }
+                }}
+                className="h-7 text-base"
+              />
+            ) : (
+              <InlineEditTrigger label="adjustment percent" onClick={() => setEditingPercent(true)}>
+                <span className="text-base text-slate-900 tabular-nums">
+                  {listing.priceAdjustmentPercent != null ? `${listing.priceAdjustmentPercent}%` : '—'}
+                </span>
+              </InlineEditTrigger>
+            )}
+          </div>
+        )}
+        <div>
+          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-0.5">Stock buffer</div>
+          {editingBuffer ? (
+            <Input
+              type="number"
+              min="0"
+              defaultValue={listing.stockBuffer ?? 0}
+              autoFocus
+              onBlur={async (e) => {
+                await patch({ stockBuffer: Number(e.currentTarget.value) })
+                setEditingBuffer(false)
+              }}
+              onKeyDown={async (e) => {
+                if (e.key === 'Enter') {
+                  await patch({ stockBuffer: Number(e.currentTarget.value) })
+                  setEditingBuffer(false)
+                } else if (e.key === 'Escape') {
+                  setEditingBuffer(false)
+                }
+              }}
+              className="h-7 text-base"
+            />
+          ) : (
+            <InlineEditTrigger label="stock buffer" onClick={() => setEditingBuffer(true)}>
+              <span className="text-base text-slate-900 tabular-nums">
+                {listing.stockBuffer ?? 0} units reserved
+              </span>
+            </InlineEditTrigger>
+          )}
+        </div>
+        <div>
+          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-0.5">External ID</div>
+          <div className="text-base font-mono text-slate-900 truncate" title={listing.externalListingId ?? ''}>
+            {listing.externalListingId ?? '—'}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────
+// FieldComparison — master / channel side-by-side with drift indicator
+// ────────────────────────────────────────────────────────────────────
+function FieldComparison({
+  label,
+  masterValue,
+  channelValue,
+  followingMaster,
+  drifted,
+  driftLabel,
+  onSnapToMaster,
+  onUnfollow,
+  compact,
+}: {
+  label: string
+  masterValue: string
+  channelValue: string
+  followingMaster: boolean
+  drifted: boolean
+  driftLabel: string | null
+  onSnapToMaster: () => Promise<void>
+  onUnfollow: () => Promise<void>
+  compact?: boolean
+}) {
+  return (
+    <div className={`border border-slate-200 rounded-md p-3 ${drifted && !followingMaster ? 'bg-amber-50/40' : 'bg-white'}`}>
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="text-sm font-semibold uppercase tracking-wider text-slate-700">{label}</div>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={followingMaster ? onUnfollow : onSnapToMaster}
+            className={`h-6 px-2 text-xs rounded inline-flex items-center gap-1 transition-colors ${
+              followingMaster
+                ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+            aria-label={followingMaster ? `Unfollow master ${label.toLowerCase()}` : `Follow master ${label.toLowerCase()}`}
+          >
+            <Link2 size={10} />
+            {followingMaster ? 'Following master' : 'Follow master'}
+          </button>
+        </div>
+      </div>
+      <div className={`grid grid-cols-2 gap-3 ${compact ? 'text-sm' : 'text-base'}`}>
+        <div>
+          <div className="text-xs uppercase tracking-wider text-slate-400 font-medium mb-0.5">Master</div>
+          <div className="text-slate-700 truncate" title={masterValue}>{masterValue}</div>
+        </div>
+        <div>
+          <div className="text-xs uppercase tracking-wider text-slate-400 font-medium mb-0.5">
+            Channel
+            {drifted && (
+              <span className="ml-1.5 text-amber-700 normal-case font-semibold">drifted</span>
+            )}
+          </div>
+          <div className="text-slate-900 truncate" title={channelValue}>{channelValue}</div>
+        </div>
+      </div>
+      {driftLabel && drifted && (
+        <div className="mt-2 text-xs text-amber-700">{driftLabel}</div>
+      )}
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────
+// ChannelsTab — companions: this product across all channels
+// ────────────────────────────────────────────────────────────────────
+function ChannelsTab({
+  listing,
+  onSwitchListing,
+}: {
+  listing: any
+  onSwitchListing: (id: string) => void
+}) {
+  const companions = (listing.companions ?? []) as any[]
+  return (
+    <div className="space-y-3">
+      <div className="text-sm text-slate-600">
+        This product is on <span className="font-semibold">{companions.length + 1}</span> channel/marketplace combo{companions.length === 0 ? '' : 's'}.
+      </div>
+
+      {/* Self */}
+      <CompanionCard
+        channel={listing.channel}
+        marketplace={listing.marketplace}
+        listingStatus={listing.listingStatus}
+        syncStatus={listing.syncStatus}
+        price={listing.price}
+        quantity={listing.quantity}
+        lastSyncError={listing.lastSyncError}
+        listingUrl={listing.listingUrl}
+        isCurrent
+      />
+
+      {/* Companions */}
+      {companions.map((c) => (
+        <CompanionCard
+          key={c.id}
+          channel={c.channel}
+          marketplace={c.marketplace}
+          listingStatus={c.listingStatus}
+          syncStatus={c.syncStatus}
+          price={c.price}
+          quantity={c.quantity}
+          lastSyncError={c.lastSyncError}
+          listingUrl={c.listingUrl}
+          onClick={() => onSwitchListing(c.id)}
+        />
+      ))}
+
+      {companions.length === 0 && (
+        <div className="border border-dashed border-slate-300 rounded-md py-6 text-center text-sm text-slate-500">
+          No other channel listings for this product yet.
+          <div className="mt-2">
+            <Link
+              href={`/products/${listing.productId}/list-wizard`}
+              className="inline-flex items-center gap-1.5 text-blue-600 hover:underline"
+            >
+              <Plus size={11} /> List on another channel
+            </Link>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CompanionCard({
+  channel,
+  marketplace,
+  listingStatus,
+  syncStatus,
+  price,
+  quantity,
+  lastSyncError,
+  listingUrl,
+  onClick,
+  isCurrent,
+}: {
+  channel: string
+  marketplace: string
+  listingStatus: string
+  syncStatus?: string | null
+  price: number | null
+  quantity: number | null
+  lastSyncError?: string | null
+  listingUrl?: string | null
+  onClick?: () => void
+  isCurrent?: boolean
+}) {
+  const Inner = (
+    <div className={`flex items-center gap-3 p-2.5 border rounded-md ${isCurrent ? 'border-blue-300 bg-blue-50/50' : 'border-slate-200 bg-white hover:bg-slate-50 cursor-pointer'}`}>
+      <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[channel] ?? ''} flex-shrink-0`}>
+        {channel}
+      </span>
+      <span className="font-mono text-sm font-semibold bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 flex-shrink-0">
+        {marketplace}
+      </span>
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        <StatusBadge status={listingStatus} />
+        {syncStatus && syncStatus !== 'IDLE' && <StatusBadge status={syncStatus} />}
+      </div>
+      <div className="ml-auto flex items-center gap-3 text-sm tabular-nums">
+        {price != null && <span className="text-slate-700">{Number(price).toFixed(2)}</span>}
+        {quantity != null && <span className="text-slate-500">{quantity} pcs</span>}
+        {isCurrent ? (
+          <Badge variant="info" size="sm">Current</Badge>
+        ) : (
+          <ArrowUpRight size={12} className="text-slate-400" />
+        )}
+      </div>
+    </div>
+  )
+  if (isCurrent) return <div>{Inner}{lastSyncError && <ErrorRow error={lastSyncError} />}</div>
+  return (
+    <div>
+      <button onClick={onClick} className="w-full text-left">{Inner}</button>
+      {lastSyncError && <ErrorRow error={lastSyncError} />}
+      {listingUrl && (
+        <a
+          href={listingUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-blue-600 hover:underline ml-3 mt-0.5 inline-flex items-center gap-1"
+        >
+          <ExternalLink size={9} /> Open on marketplace
+        </a>
+      )}
+    </div>
+  )
+}
+
+function ErrorRow({ error }: { error: string }) {
+  return (
+    <div className="text-xs text-rose-700 mt-1 ml-3 truncate" title={error}>
+      ⚠ {error}
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────
+// SyncTab — sync state, history, and re-pull action
+// ────────────────────────────────────────────────────────────────────
+function SyncTab({
+  listing,
+  resyncing,
+  onResync,
+}: {
+  listing: any
+  resyncing: boolean
+  onResync: () => Promise<void>
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 p-3 border border-slate-200 rounded-md bg-slate-50">
+        <div>
+          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-0.5">Current sync state</div>
+          <div className="flex items-center gap-2">
+            <StatusBadge status={listing.syncStatus ?? 'IDLE'} />
+            {listing.lastSyncStatus && (
+              <span className="text-sm text-slate-600">
+                last attempt: <StatusBadge status={listing.lastSyncStatus} />
+              </span>
+            )}
+          </div>
+          <div className="text-sm text-slate-500 mt-1">
+            {listing.lastSyncedAt
+              ? `Last synced ${new Date(listing.lastSyncedAt).toLocaleString()}`
+              : 'Never synced'}
+          </div>
+          {listing.syncRetryCount > 0 && (
+            <div className="text-sm text-slate-500 mt-0.5">
+              Retry count: <span className="tabular-nums">{listing.syncRetryCount}</span>
+            </div>
+          )}
+        </div>
+        <button
+          onClick={onResync}
+          disabled={resyncing}
+          className="h-9 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+        >
+          <RefreshCw size={12} className={resyncing ? 'animate-spin' : ''} />
+          {resyncing ? 'Syncing…' : 'Sync now'}
+        </button>
+      </div>
+
+      {listing.lastSyncError && (
+        <div className="bg-rose-50 border border-rose-200 rounded-md p-3">
+          <div className="text-sm font-semibold uppercase tracking-wider text-rose-700 mb-1">Last sync error</div>
+          <div className="text-base text-rose-700 whitespace-pre-wrap">{listing.lastSyncError}</div>
+        </div>
+      )}
+
+      {/* Real sync history requires a SyncAttempt table that doesn't
+          exist yet — TECH_DEBT. For now, surface what we know from the
+          listing's own fields as a single-entry timeline. */}
+      <div>
+        <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">Recent activity</div>
+        <div className="border-l-2 border-slate-200 pl-3 space-y-3">
+          {listing.lastSyncedAt && (
+            <TimelineEntry
+              status={listing.lastSyncStatus ?? 'UNKNOWN'}
+              when={listing.lastSyncedAt}
+              detail={
+                listing.lastSyncStatus === 'SUCCESS'
+                  ? 'Successfully pulled latest state from channel'
+                  : listing.lastSyncError ?? 'Sync attempt'
+              }
+            />
+          )}
+          <TimelineEntry
+            status="CREATED"
+            when={listing.createdAt}
+            detail={`Listing record created (version ${listing.version})`}
+          />
+        </div>
+        <div className="text-xs text-slate-400 mt-3 italic">
+          Full sync history requires the SyncAttempt audit table — coming with S.4 inbound queue.
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TimelineEntry({
+  status,
+  when,
+  detail,
+}: {
+  status: string
+  when: string
+  detail: string
+}) {
+  return (
+    <div className="relative">
+      <div className={`absolute -left-[17px] top-0.5 w-3 h-3 rounded-full border-2 ${
+        status === 'SUCCESS' ? 'bg-emerald-500 border-emerald-200'
+        : status === 'FAILED' ? 'bg-rose-500 border-rose-200'
+        : 'bg-slate-300 border-slate-100'
+      }`} />
+      <div className="text-base text-slate-700">{detail}</div>
+      <div className="text-xs text-slate-500 tabular-nums mt-0.5">
+        {new Date(when).toLocaleString()}
+      </div>
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────
+// ActivityTab — basic listing-level metadata (real audit log = future)
+// ────────────────────────────────────────────────────────────────────
+function ActivityTab({ listing }: { listing: any }) {
+  return (
+    <div className="space-y-4">
+      <div className="text-sm text-slate-600">
+        Listing-level activity. A full per-field audit log requires a dedicated
+        ChannelListingActivity table (TECH_DEBT — coming with S.5 deep view).
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Detail label="Created" value={new Date(listing.createdAt).toLocaleString()} />
+        <Detail label="Last updated" value={new Date(listing.updatedAt).toLocaleString()} />
+        <Detail label="Version" value={listing.version} />
+        <Detail label="Validation status" value={listing.validationStatus} />
+        {listing.product?.brand && <Detail label="Brand" value={listing.product.brand} />}
+        {listing.variationTheme && <Detail label="Variation theme" value={listing.variationTheme} />}
+      </div>
+    </div>
   )
 }
 

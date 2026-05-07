@@ -712,6 +712,12 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
 
   // ─────────────────────────────────────────────────────────────────
   // GET /api/listings/:id — single listing for the drawer
+  //
+  // S.2 — also returns `companions`: every other ChannelListing for the
+  // same product. The drawer's "Per-channel" tab uses this to surface
+  // "this product is also live on AMAZON DE, EBAY IT, …" without a
+  // separate round-trip. Companions are kept lean (status, price, qty,
+  // sync state, listingUrl) — no need for the full detail shape.
   // ─────────────────────────────────────────────────────────────────
   fastify.get('/listings/:id', async (request, reply) => {
     try {
@@ -729,6 +735,17 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         },
       })
       if (!l) return reply.code(404).send({ error: 'Listing not found' })
+
+      const companions = await prisma.channelListing.findMany({
+        where: { productId: l.productId, id: { not: id } },
+        select: {
+          id: true, channel: true, marketplace: true,
+          listingStatus: true, syncStatus: true, lastSyncStatus: true,
+          lastSyncedAt: true, lastSyncError: true,
+          price: true, quantity: true, externalListingId: true, isPublished: true,
+        },
+        orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }],
+      })
 
       return {
         id: l.id,
@@ -776,11 +793,119 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           brand: l.product.brand,
           images: l.product.images.map((i) => i.url),
         },
+        companions: companions.map((c) => ({
+          id: c.id,
+          channel: c.channel,
+          marketplace: c.marketplace,
+          listingStatus: c.listingStatus,
+          syncStatus: c.syncStatus,
+          lastSyncStatus: c.lastSyncStatus,
+          lastSyncedAt: c.lastSyncedAt,
+          lastSyncError: c.lastSyncError,
+          price: c.price == null ? null : Number(c.price),
+          quantity: c.quantity,
+          externalListingId: c.externalListingId,
+          isPublished: c.isPublished,
+          listingUrl: listingUrlFor(c.channel, c.marketplace, c.externalListingId),
+        })),
         createdAt: l.createdAt,
         updatedAt: l.updatedAt,
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[listings/:id] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ─────────────────────────────────────────────────────────────────
+  // PATCH /api/listings/:id — single-listing field updates
+  //
+  // S.2 — narrow surface for drawer-driven edits: per-field
+  // followMaster toggles, pricingRule, priceAdjustmentPercent,
+  // isPublished, stockBuffer. The bulk-action endpoint covers
+  // multi-listing operations and is awkward for single-row UX
+  // (job polling, async, etc.) so this provides direct synchronous
+  // updates with optimistic-concurrency via `version`.
+  //
+  // Heavy authoring (title/description/price/quantity overrides) stays
+  // in /products/:id/edit — the drawer is for toggles and quick
+  // adjustments, not deep editing.
+  // ─────────────────────────────────────────────────────────────────
+  fastify.patch('/listings/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as {
+        followMasterTitle?: boolean
+        followMasterDescription?: boolean
+        followMasterPrice?: boolean
+        followMasterQuantity?: boolean
+        followMasterImages?: boolean
+        followMasterBulletPoints?: boolean
+        pricingRule?: 'FIXED' | 'MATCH_AMAZON' | 'PERCENT_OF_MASTER'
+        priceAdjustmentPercent?: number
+        isPublished?: boolean
+        stockBuffer?: number
+        expectedVersion?: number
+      }
+
+      const data: any = {}
+      const boolFields = [
+        'followMasterTitle', 'followMasterDescription', 'followMasterPrice',
+        'followMasterQuantity', 'followMasterImages', 'followMasterBulletPoints',
+        'isPublished',
+      ] as const
+      for (const k of boolFields) {
+        if (typeof body[k] === 'boolean') data[k] = body[k]
+      }
+      if (body.pricingRule) {
+        const valid = ['FIXED', 'MATCH_AMAZON', 'PERCENT_OF_MASTER']
+        if (!valid.includes(body.pricingRule)) {
+          return reply.code(400).send({ error: `pricingRule must be ${valid.join('|')}` })
+        }
+        data.pricingRule = body.pricingRule
+      }
+      if (body.priceAdjustmentPercent != null) {
+        const n = Number(body.priceAdjustmentPercent)
+        if (!Number.isFinite(n)) {
+          return reply.code(400).send({ error: 'priceAdjustmentPercent must be a number' })
+        }
+        data.priceAdjustmentPercent = n
+      }
+      if (body.stockBuffer != null) {
+        const n = Math.floor(Number(body.stockBuffer))
+        if (!Number.isFinite(n) || n < 0) {
+          return reply.code(400).send({ error: 'stockBuffer must be a non-negative integer' })
+        }
+        data.stockBuffer = n
+      }
+
+      if (Object.keys(data).length === 0) {
+        return reply.code(400).send({ error: 'No updatable fields provided' })
+      }
+
+      // Optimistic concurrency: if the client tells us what version it
+      // saw, refuse to write over a newer one. Without expectedVersion
+      // we still increment, just no concurrent-edit detection.
+      const current = await prisma.channelListing.findUnique({
+        where: { id },
+        select: { id: true, version: true },
+      })
+      if (!current) return reply.code(404).send({ error: 'Listing not found' })
+      if (
+        body.expectedVersion != null &&
+        Number(body.expectedVersion) !== current.version
+      ) {
+        return reply.code(409).send({
+          error: 'Version conflict — another tab edited this listing. Refresh and retry.',
+          currentVersion: current.version,
+        })
+      }
+
+      data.version = { increment: 1 }
+      const updated = await prisma.channelListing.update({ where: { id }, data })
+      return { ok: true, listing: { id: updated.id, version: updated.version } }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[listings/:id PATCH] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })
