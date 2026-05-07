@@ -12,7 +12,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Truck, Search, RefreshCw, Printer, ExternalLink, X, CheckCircle2,
-  AlertTriangle, Send, Download, RotateCcw, Trash,
+  AlertTriangle, Send, Download, RotateCcw, Trash, Pause, Play,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -44,6 +44,8 @@ type Shipment = {
   trackingPushedAt: string | null
   trackingPushError: string | null
   notes: string | null
+  heldAt: string | null
+  heldReason: string | null
   warehouse?: { code: string; name: string } | null
   items: Array<{ id: string; sku: string; quantity: number; productId: string | null }>
   createdAt: string
@@ -60,12 +62,14 @@ const STATUS_TONE: Record<string, 'default' | 'success' | 'warning' | 'danger' |
   DELIVERED: 'success',
   CANCELLED: 'default',
   RETURNED: 'danger',
+  ON_HOLD: 'warning',
 }
 
 const PIPELINE: Array<{ key: string; tKey: string }> = [
   { key: 'ALL', tKey: 'outbound.shipments.pipeline.all' },
   { key: 'DRAFT', tKey: 'outbound.shipments.pipeline.draft' },
   { key: 'READY_TO_PICK', tKey: 'outbound.shipments.pipeline.ready' },
+  { key: 'ON_HOLD', tKey: 'outbound.shipments.pipeline.onHold' },
   { key: 'LABEL_PRINTED', tKey: 'outbound.shipments.pipeline.labeled' },
   { key: 'SHIPPED', tKey: 'outbound.shipments.pipeline.shipped' },
   { key: 'DELIVERED', tKey: 'outbound.shipments.pipeline.delivered' },
@@ -168,6 +172,37 @@ export default function ShipmentsClient() {
     }
     const { labelUrl } = await res.json()
     if (labelUrl) window.open(labelUrl, '_blank')
+  }
+
+  // O.36: hold + release.
+  const hold = async (id: string) => {
+    const reason = window.prompt(t('outbound.shipments.hold.prompt')) ?? ''
+    if (!reason.trim()) return
+    const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipments/${id}/hold`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason.trim() }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      toast.error(err.error ?? t('common.error'))
+      return
+    }
+    toast.success(t('outbound.shipments.hold.toast'))
+    emitInvalidation({ type: 'shipment.updated', id })
+    fetchShipments()
+  }
+
+  const release = async (id: string) => {
+    const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipments/${id}/release`, { method: 'POST' })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      toast.error(err.error ?? t('common.error'))
+      return
+    }
+    toast.success(t('outbound.shipments.release.toast'))
+    emitInvalidation({ type: 'shipment.updated', id })
+    fetchShipments()
   }
 
   // O.34: void label — destructive, ask before proceeding. Resets
@@ -462,8 +497,26 @@ export default function ShipmentsClient() {
                     <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1 justify-end">
                         {(s.status === 'DRAFT' || s.status === 'READY_TO_PICK' || s.status === 'PACKED') && (
-                          <button onClick={() => printLabel(s.id)} title={t('outbound.shipments.action.label')} className="h-6 px-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center gap-1">
-                            <Printer size={11} /> {t('outbound.shipments.action.label')}
+                          <>
+                            <button
+                              onClick={() => hold(s.id)}
+                              title={t('outbound.shipments.action.hold')}
+                              className="h-6 w-6 inline-flex items-center justify-center text-slate-500 hover:text-amber-700 hover:bg-amber-50 rounded"
+                            >
+                              <Pause size={11} />
+                            </button>
+                            <button onClick={() => printLabel(s.id)} title={t('outbound.shipments.action.label')} className="h-6 px-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center gap-1">
+                              <Printer size={11} /> {t('outbound.shipments.action.label')}
+                            </button>
+                          </>
+                        )}
+                        {s.status === 'ON_HOLD' && (
+                          <button
+                            onClick={() => release(s.id)}
+                            title={s.heldReason ?? t('outbound.shipments.action.release')}
+                            className="h-6 px-2 text-sm bg-amber-50 text-amber-700 border border-amber-200 rounded hover:bg-amber-100 inline-flex items-center gap-1"
+                          >
+                            <Play size={11} /> {t('outbound.shipments.action.release')}
                           </button>
                         )}
                         {s.status === 'LABEL_PRINTED' && (

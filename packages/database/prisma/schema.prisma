@@ -2501,6 +2501,7 @@ enum ShipmentStatusFBM {
   DELIVERED
   CANCELLED
   RETURNED
+  ON_HOLD // O.36: paused by an operator/rule pending review
 }
 
 enum ReturnStatusFlow {
@@ -2816,6 +2817,13 @@ model Shipment {
 
   pickedBy String?
   packedBy String?
+
+  // O.36: hold-for-review state. Set when the rules engine fires a
+  // holdForReview action or when the operator manually pauses a
+  // shipment. Operator releases via the holds-queue UI which clears
+  // both fields and transitions back to DRAFT.
+  heldAt     DateTime?
+  heldReason String?
 
   notes   String?
   version Int     @default(1)

@@ -1114,6 +1114,67 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── O.36: holds queue — release shipment from ON_HOLD ──────────────
+  // POST /api/fulfillment/shipments/:id/release — operator clears the
+  // hold (after review) and the shipment transitions back to DRAFT.
+  fastify.post('/fulfillment/shipments/:id/release', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const shipment = await prisma.shipment.findUnique({ where: { id } })
+      if (!shipment) return reply.code(404).send({ error: 'Shipment not found' })
+      if (shipment.status !== ('ON_HOLD' as any)) {
+        return reply.code(400).send({ error: `Shipment is not on hold (status: ${shipment.status})` })
+      }
+      const updated = await prisma.shipment.update({
+        where: { id },
+        data: {
+          status: 'DRAFT',
+          heldAt: null,
+          heldReason: null,
+          version: { increment: 1 },
+        },
+      })
+      const { publishOutboundEvent } = await import('../services/outbound-events.service.js')
+      publishOutboundEvent({ type: 'shipment.updated', shipmentId: id, status: 'DRAFT', ts: Date.now() })
+      return updated
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[shipments/:id/release] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // POST /api/fulfillment/shipments/:id/hold — operator puts a draft
+  // on hold manually (e.g., suspect address, fraud check, customer
+  // contacted us). Body { reason: string } persists the reason.
+  fastify.post('/fulfillment/shipments/:id/hold', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = request.body as { reason?: string }
+      const shipment = await prisma.shipment.findUnique({ where: { id } })
+      if (!shipment) return reply.code(404).send({ error: 'Shipment not found' })
+      if (['LABEL_PRINTED', 'SHIPPED', 'IN_TRANSIT', 'DELIVERED'].includes(shipment.status)) {
+        return reply.code(400).send({
+          error: `Cannot hold a shipment in status ${shipment.status}. Void the label first if needed.`,
+        })
+      }
+      const updated = await prisma.shipment.update({
+        where: { id },
+        data: {
+          status: 'ON_HOLD' as any,
+          heldAt: new Date(),
+          heldReason: body.reason?.trim() || 'Manually held by operator',
+          version: { increment: 1 },
+        },
+      })
+      const { publishOutboundEvent } = await import('../services/outbound-events.service.js')
+      publishOutboundEvent({ type: 'shipment.updated', shipmentId: id, status: 'ON_HOLD', ts: Date.now() })
+      return updated
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[shipments/:id/hold] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // ── O.32: SSE event stream ──────────────────────────────────────────
   // GET /api/fulfillment/outbound/events — long-lived text/event-stream
   // connection that pushes shipment events to subscribed browsers.
@@ -1803,6 +1864,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           // otherwise fall back to SENDCLOUD as the original default.
           let resolvedCarrier = (body.carrierCode as any) ?? null
           let resolvedService: string | null = null
+          // O.36: hold-for-review state. Set when the matching rule's
+          // actions.holdForReview = true.
+          let holdForReview = false
+          let holdReason: string | null = null
           if (!body.carrierCode) {
             const { applyShippingRules } = await import('../services/shipping-rules/applier.js')
             const dest = (order.shippingAddress as any)?.country
@@ -1823,6 +1888,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
               resolvedCarrier = applied.actions.preferCarrierCode as any
               resolvedService = applied.actions.preferServiceCode ?? null
             }
+            if (applied?.actions.holdForReview) {
+              holdForReview = true
+              holdReason = `Auto-held by rule "${applied.ruleName}"`
+            }
           }
           await prisma.shipment.create({
             data: {
@@ -1830,7 +1899,9 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
               warehouseId: resolvedWarehouseId,
               carrierCode: resolvedCarrier ?? 'SENDCLOUD',
               serviceCode: resolvedService,
-              status: 'DRAFT',
+              status: holdForReview ? ('ON_HOLD' as any) : 'DRAFT',
+              heldAt: holdForReview ? new Date() : null,
+              heldReason: holdReason,
               items: {
                 create: order.items.map((it) => ({
                   orderItemId: it.id, productId: it.productId, sku: it.sku, quantity: it.quantity,
