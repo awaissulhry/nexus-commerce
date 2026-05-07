@@ -227,6 +227,7 @@ model Product {
   substitutionsAsPrimary    ProductSubstitution[]         @relation("SubstitutionPrimary") // R.17
   substitutionsAsSubstitute ProductSubstitution[]         @relation("SubstitutionSubstitute") // R.17
   wizardStepEvents          WizardStepEvent[] // C.0: per-step wizard telemetry
+  channelPublishAttempts    ChannelPublishAttempt[] // C.6: every publish attempt audit
 
   // H.16 — Compliance master data. HS code = customs classification,
   // mostly 6-digit (HS) or 8-10 digit (CN/HTS); stored as text since
@@ -4438,4 +4439,69 @@ model ProductRelation {
   @@unique([fromProductId, toProductId, type])
   @@index([fromProductId, type])
   @@index([toProductId, type])
+}
+
+// ── C.6: Channel publish audit log ────────────────────────────────────
+// Every Amazon (and later eBay/Shopify) publish ATTEMPT writes one row
+// here, regardless of outcome. Captures gated, dry-run, sandbox, live,
+// rate-limited, circuit-open, failed, and successful attempts so we
+// have a forensic trail for the dryRun → sandbox → canary → graduated
+// rollout. Indexes target the dashboards we'll add in a later commit
+// (per-channel timeline, per-SKU timeline, "what's failing right now").
+//
+// Why a dedicated table vs. SyncAttempt: SyncAttempt covers RESYNC pulls
+// from a channel (we read; it tells us state). ChannelPublishAttempt
+// covers PUBLISH pushes (we write; channel acks or rejects). The two
+// have different shapes (no read returns submissionId; reads don't
+// have payloadDigest) and different SLAs.
+model ChannelPublishAttempt {
+  id String @id @default(cuid())
+
+  channel     String  // AMAZON, EBAY, SHOPIFY, WOOCOMMERCE, ETSY
+  marketplace String  // IT, DE, FR, UK, ES, US, GLOBAL …
+  sellerId    String  // SP-API merchant token, eBay user id, Shopify shop, etc.
+  sku         String
+
+  // Best-effort link back to the master Product. SetNull so an
+  // operator cleaning up an orphan SKU doesn't lose the audit trail.
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  // 'gated' = NEXUS_ENABLE_<CHANNEL>_PUBLISH=false rejected the attempt
+  // 'dry-run' = composed payload + logged + audited, no HTTP
+  // 'sandbox' = real HTTP to channel sandbox host
+  // 'live' = real HTTP to production
+  mode String
+
+  // 'success'      | 'failed'      = HTTP completed; channel ack / reject
+  // 'gated'        = feature flag off; never reached HTTP
+  // 'rate-limited' = local token bucket exhausted; never reached HTTP
+  // 'circuit-open' = circuit breaker tripped; never reached HTTP
+  // 'timeout'      = HTTP deadline exceeded
+  outcome String
+
+  errorMessage String?
+  errorCode    String?  // SP-API issue code, eBay errorId, etc.
+
+  // Channel-issued submission identifier when one was returned (SP-API
+  // submissionId, eBay item id, Shopify variant id, …). Null on
+  // gated/rate-limited/circuit-open/dry-run/failed-pre-ack.
+  submissionId String?
+
+  // sha256 of the canonicalised attribute JSON. Lets us spot duplicate
+  // publishes (same SKU + same digest within a short window) and
+  // detect drift (same SKU + different digest = legitimate change).
+  payloadDigest String
+
+  // Wall-clock duration of the attempt — including waits in the rate
+  // limiter but excluding circuit-open / gated short-circuits.
+  durationMs Int?
+
+  attemptedAt DateTime @default(now())
+
+  // Indexes the rollout dashboards + investigation queries care about.
+  @@index([channel, marketplace, attemptedAt])
+  @@index([sku, attemptedAt])
+  @@index([outcome, attemptedAt])
+  @@index([productId])
 }

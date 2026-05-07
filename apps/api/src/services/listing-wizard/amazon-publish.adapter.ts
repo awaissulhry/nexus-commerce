@@ -27,6 +27,16 @@
 
 import { amazonSpApiClient } from '../../clients/amazon-sp-api.client.js'
 import { logger } from '../../utils/logger.js'
+import {
+  acquireAmazonPublishToken,
+  checkAmazonCircuit,
+  getAmazonPublishMode,
+  recordAmazonOutcome,
+} from '../amazon-publish-gate.service.js'
+import {
+  digestPayload,
+  writeAttemptLog,
+} from '../channel-publish-audit.service.js'
 
 interface AmazonPayload {
   productType: string
@@ -120,6 +130,130 @@ export class AmazonPublishAdapter {
 
     const parentSku = payload.parentSku
     const children = Array.isArray(payload.children) ? payload.children : []
+    const marketplaceCode = payload.marketplaceId
+
+    // C.6 — single helper threads each PUT through the gate sequence:
+    // feature flag → rate limiter → circuit breaker → SP-API client →
+    // audit log → circuit outcome record. Both the parent PUT and
+    // each child PUT use it, so a misconfigured account can't silently
+    // burn through 50 children before the breaker trips.
+    //
+    // Returns the same shape as the underlying client call so the
+    // existing parent/child branching logic doesn't change.
+    const gatedPut = async (
+      sku: string,
+      attributes: Record<string, unknown>,
+    ): Promise<ReturnType<typeof amazonSpApiClient.putListingsItem>> => {
+      const mode = getAmazonPublishMode()
+      const digest = digestPayload({ productType: payload.productType, attributes })
+
+      // 1. Feature flag (resolved as 'gated' mode)
+      if (mode === 'gated') {
+        writeAttemptLog({
+          channel: 'AMAZON',
+          marketplace: marketplaceCode,
+          sellerId,
+          sku,
+          mode: 'gated',
+          outcome: 'gated',
+          payloadDigest: digest,
+          errorMessage:
+            'NEXUS_ENABLE_AMAZON_PUBLISH=false — set true to enable Amazon publishes.',
+        })
+        return {
+          success: false,
+          sku,
+          error:
+            'Amazon publish disabled by feature flag (NEXUS_ENABLE_AMAZON_PUBLISH=false).',
+        }
+      }
+
+      // 2. Circuit breaker
+      const circuit = checkAmazonCircuit(sellerId, marketplaceCode)
+      if (!circuit.ok) {
+        writeAttemptLog({
+          channel: 'AMAZON',
+          marketplace: marketplaceCode,
+          sellerId,
+          sku,
+          mode,
+          outcome: 'circuit-open',
+          payloadDigest: digest,
+          errorMessage: circuit.error,
+        })
+        return { success: false, sku, error: circuit.error }
+      }
+
+      // 3. Rate limiter
+      const tokenStart = Date.now()
+      const acquired = await acquireAmazonPublishToken(
+        sellerId,
+        marketplaceCode,
+      )
+      if (!acquired.ok) {
+        writeAttemptLog({
+          channel: 'AMAZON',
+          marketplace: marketplaceCode,
+          sellerId,
+          sku,
+          mode,
+          outcome: 'rate-limited',
+          payloadDigest: digest,
+          errorMessage: acquired.error,
+        })
+        return { success: false, sku, error: acquired.error }
+      }
+
+      // 4. Real call (or dry-run short-circuit inside the client)
+      const t0 = tokenStart
+      let result: Awaited<ReturnType<typeof amazonSpApiClient.putListingsItem>>
+      try {
+        result = await amazonSpApiClient.putListingsItem({
+          sellerId,
+          sku,
+          marketplaceId: marketplaceCode,
+          productType: payload.productType,
+          attributes,
+          requirements: 'LISTING',
+        })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        recordAmazonOutcome(sellerId, marketplaceCode, false)
+        writeAttemptLog({
+          channel: 'AMAZON',
+          marketplace: marketplaceCode,
+          sellerId,
+          sku,
+          mode,
+          outcome: 'timeout',
+          payloadDigest: digest,
+          errorMessage: message,
+          durationMs: Date.now() - t0,
+        })
+        return { success: false, sku, error: message }
+      }
+
+      // 5. Record outcome + audit
+      const succeeded = result.success
+      recordAmazonOutcome(sellerId, marketplaceCode, succeeded)
+      writeAttemptLog({
+        channel: 'AMAZON',
+        marketplace: marketplaceCode,
+        sellerId,
+        sku,
+        mode: result.dryRun ? 'dry-run' : mode,
+        outcome: succeeded ? 'success' : 'failed',
+        payloadDigest: digest,
+        errorMessage: result.error ?? null,
+        errorCode:
+          result.issues && result.issues.length > 0
+            ? result.issues[0].code
+            : null,
+        submissionId: result.submissionId ?? null,
+        durationMs: Date.now() - t0,
+      })
+      return result
+    }
 
     // Collect every non-blocking issue across parent + child PUTs so
     // the wizard UI can render them all together. Each entry tagged
@@ -133,14 +267,7 @@ export class AmazonPublishAdapter {
     }
 
     // ── Step 1: PUT parent ───────────────────────────────────────────
-    const parentResult = await amazonSpApiClient.putListingsItem({
-      sellerId,
-      sku: parentSku,
-      marketplaceId: payload.marketplaceId,
-      productType: payload.productType,
-      attributes: payload.attributes,
-      requirements: 'LISTING',
-    })
+    const parentResult = await gatedPut(parentSku, payload.attributes)
     if (parentResult.warnings) stampWarnings(parentSku, parentResult.warnings)
     if (!parentResult.success) {
       return {
@@ -167,14 +294,7 @@ export class AmazonPublishAdapter {
           quantity: child.quantity,
         })
 
-        const childResult = await amazonSpApiClient.putListingsItem({
-          sellerId,
-          sku: child.channelSku,
-          marketplaceId: payload.marketplaceId,
-          productType: payload.productType,
-          attributes: childAttributes,
-          requirements: 'LISTING',
-        })
+        const childResult = await gatedPut(child.channelSku, childAttributes)
         childSkusSent.push(child.channelSku)
         if (childResult.warnings) {
           stampWarnings(child.channelSku, childResult.warnings)

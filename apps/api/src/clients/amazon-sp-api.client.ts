@@ -541,6 +541,10 @@ export class AmazonSpApiClient {
     }>
     error?: string
     rawResponse?: SPAPIResponse
+    /** C.6 — set when AMAZON_PUBLISH_MODE=dry-run short-circuited this
+     *  call. Lets the adapter and audit log distinguish "would have
+     *  succeeded" from a live publish without inventing a fake state. */
+    dryRun?: boolean
   }> {
     const {
       sellerId,
@@ -550,6 +554,30 @@ export class AmazonSpApiClient {
       attributes,
       requirements = 'LISTING',
     } = options
+
+    // C.6 — dry-run short-circuit. The adapter has already written a
+    // ChannelPublishAttempt row (mode='dry-run', outcome='success'),
+    // so callers see a normal success path and the wizard's downstream
+    // bookkeeping (status transitions, listing.created emit) runs end-
+    // to-end without any side effect on Amazon. We mint a synthetic
+    // submissionId so logs can still grep for it.
+    const mode = (process.env.AMAZON_PUBLISH_MODE ?? 'dry-run').toLowerCase()
+    if (mode === 'dry-run' || mode === 'dryrun') {
+      logger.info('SP-API putListingsItem (dry-run, no HTTP)', {
+        sku,
+        sellerId,
+        marketplaceId,
+        productType,
+        attributeCount: Object.keys(attributes).length,
+      })
+      return {
+        success: true,
+        sku,
+        submissionId: `dry-run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        status: 'ACCEPTED',
+        dryRun: true,
+      }
+    }
 
     try {
       const accessToken = await this.getAccessToken()
@@ -566,10 +594,21 @@ export class AmazonSpApiClient {
         marketplaceId,
         productType,
         attributeCount: Object.keys(attributes).length,
+        mode,
       })
 
+      // C.6 — sandbox host swap. Amazon publishes a separate sandbox
+      // base URL (sandbox.sellingpartnerapi-<region>.amazon.com) that
+      // accepts the same auth + payload shape but never produces a
+      // real listing. LWA tokens are normally re-usable across the
+      // pair; if they're not, the auth call fails fast with a clear
+      // 401 and the audit log captures the outcome.
+      const host =
+        mode === 'sandbox'
+          ? `sandbox.sellingpartnerapi-${this.region}.amazon.com`
+          : `sellingpartnerapi-${this.region}.amazon.com`
       const url = new URL(
-        `https://sellingpartnerapi-${this.region}.amazon.com/listings/2021-08-01/items/${sellerId}/${encodeURIComponent(
+        `https://${host}/listings/2021-08-01/items/${sellerId}/${encodeURIComponent(
           sku,
         )}`,
       )
