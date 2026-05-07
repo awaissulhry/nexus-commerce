@@ -905,6 +905,27 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const order = shipment.order
+
+      // O.17: address preflight. Errors block (Sendcloud will reject
+      // anyway and we'd waste a round-trip); warnings get logged but
+      // don't block — operator may have override knowledge.
+      {
+        const { validateAddress, extractAddressFromOrder } = await import('../services/address-validation/index.js')
+        const validation = validateAddress(extractAddressFromOrder(order))
+        const errors = validation.issues.filter((i) => i.severity === 'error')
+        if (errors.length > 0) {
+          return reply.code(400).send({
+            error: 'Address validation failed',
+            code: 'ADDRESS_INVALID',
+            issues: validation.issues,
+          })
+        }
+        const warnings = validation.issues.filter((i) => i.severity === 'warning')
+        if (warnings.length > 0) {
+          fastify.log.warn({ shipmentId: id, warnings }, '[print-label] address warnings')
+        }
+      }
+
       const ship = order.shippingAddress as any
       // The address blob arrives in two shapes — Amazon-PascalCase
       // (AddressLine1, City, ...) and generic camelCase (addressLine1,
