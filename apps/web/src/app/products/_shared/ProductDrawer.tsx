@@ -59,6 +59,15 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { InlineEditTrigger } from '@/components/ui/InlineEditTrigger'
 
+// U.1 — focusable-element selector for the drawer's a11y focus trap.
+// Standard set of natively-tabbable elements. We additionally filter
+// disabled + hidden (offsetParent === null) at query time so the trap
+// stays accurate to the currently-visible UI (inactive tab content is
+// excluded). [tabindex="-1"] is excluded because those are
+// programmatically focusable but not in the tab cycle.
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
 interface ProductDetail {
   id: string
   sku: string
@@ -171,6 +180,11 @@ export default function ProductDrawer({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
+  // U.1 — captures the element that had focus at the moment the drawer
+  // opened (typically a row's "View" button or a Cmd+K palette item).
+  // The cleanup branch of the focus-management effect returns focus to
+  // it on close so keyboard users don't get stranded at <body>.
+  const previouslyFocused = useRef<HTMLElement | null>(null)
 
   // Reset state when productId changes (e.g. user clicks a different
   // row while the drawer is open). We do NOT reset the tab — the user
@@ -232,14 +246,75 @@ export default function ProductDrawer({
     },
   )
 
-  // Esc closes. Click outside the inner panel closes too.
+  // U.1 — full a11y focus trap. Replaces the prior Esc-only effect.
+  // On open: capture trigger element, focus first focusable inside the
+  // panel (deferred 10ms so children mount first). On Tab/Shift+Tab:
+  // cycle within the panel — when the active element is the last, Tab
+  // wraps to first; Shift+Tab from the first wraps to last. Tab from
+  // outside the panel (shouldn't happen since the dialog is modal but
+  // covers the focus-stolen-by-async-render edge case) lands on first.
+  // On Escape: close. On unmount/productId-clear: return focus to the
+  // captured trigger if it's still in the DOM (virtualized rows that
+  // scrolled out of view get the body-contains guard, falling through
+  // to browser default focus).
   useEffect(() => {
     if (!productId) return
+    previouslyFocused.current =
+      (document.activeElement as HTMLElement | null) ?? null
+
+    const initialFocusTimer = window.setTimeout(() => {
+      const first = containerRef.current?.querySelector<HTMLElement>(
+        FOCUSABLE_SELECTOR,
+      )
+      first?.focus()
+    }, 10)
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (e.key !== 'Tab') return
+      const root = containerRef.current
+      if (!root) return
+      const focusables = Array.from(
+        root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+      ).filter(
+        (el) =>
+          !el.hasAttribute('disabled') &&
+          // offsetParent === null catches display:none (e.g. inactive
+          // tab content) without triggering layout via getBoundingClientRect.
+          el.offsetParent !== null,
+      )
+      if (focusables.length === 0) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      const active = document.activeElement as HTMLElement | null
+      if (e.shiftKey) {
+        if (active === first || !root.contains(active)) {
+          e.preventDefault()
+          last.focus()
+        }
+      } else {
+        if (active === last || !root.contains(active)) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
     }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+
+    return () => {
+      window.clearTimeout(initialFocusTimer)
+      window.removeEventListener('keydown', onKey)
+      const trigger = previouslyFocused.current
+      // Guard: trigger may have been removed (virtualized row scrolled
+      // off, modal dismissed, etc). Skipping the focus call lets the
+      // browser fall back to body — better than throwing.
+      if (trigger && document.body.contains(trigger)) {
+        trigger.focus()
+      }
+    }
   }, [productId, onClose])
 
   if (!productId) return null
