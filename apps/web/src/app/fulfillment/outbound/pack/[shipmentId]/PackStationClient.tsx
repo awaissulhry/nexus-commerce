@@ -393,7 +393,7 @@ export default function PackStationClient({ shipmentId }: Props) {
               <button
                 onClick={submitSplit}
                 disabled={splitTotal === 0}
-                className="h-8 px-3 text-md bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+                className="h-11 md:h-8 px-4 md:px-3 text-md bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
               >
                 <Boxes size={12} /> {t('pack.split.confirm', { n: splitTotal })}
               </button>
@@ -527,7 +527,7 @@ export default function PackStationClient({ shipmentId }: Props) {
             <button
               onClick={submit}
               disabled={!canPack}
-              className="ml-auto h-9 px-4 text-md bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+              className="ml-auto h-11 md:h-9 px-5 md:px-4 text-md bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
               {t('pack.markPacked')}

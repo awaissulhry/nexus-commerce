@@ -605,7 +605,7 @@ export default function PendingShipmentsClient() {
               <button
                 onClick={bulkCreateShipments}
                 disabled={creating}
-                className="h-7 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+                className="h-11 md:h-7 px-4 md:px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
               >
                 <Plus size={12} /> {t('outbound.pending.bulkCreate', { n: selected.size })}
               </button>

@@ -177,13 +177,13 @@ export function BarcodeScanInput({
             disabled={disabled}
             title={cameraMode ? 'Stop camera' : 'Scan with camera'}
             className={cn(
-              'h-8 w-8 rounded inline-flex items-center justify-center transition-colors',
+              'h-11 w-11 md:h-8 md:w-8 rounded inline-flex items-center justify-center transition-colors',
               cameraMode
                 ? 'bg-blue-600 text-white hover:bg-blue-700'
                 : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900',
             )}
           >
-            {cameraMode ? <CameraOff size={14} /> : <Camera size={14} />}
+            {cameraMode ? <CameraOff size={16} /> : <Camera size={16} />}
           </button>
         )}
         {/* Live region for screen-reader announcements on each scan. */}
