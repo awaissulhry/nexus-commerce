@@ -1,9 +1,41 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+// C.21 — multi-channel AI listing-content generator.
+//
+// Replaces the eBay-DraftListing-hardcoded surface with a flow that
+// reads from the modern listing-content service (per-field generation,
+// per-marketplace prompts, provider switching, terminology injection,
+// cost tracking).
+//
+// Page-level config: channel (Amazon / eBay / Shopify per active scope),
+// marketplace (per-channel list), provider (auto / Gemini / Claude),
+// fields (title / bullets / description / keywords). Picks persist to
+// localStorage so the operator's last setup carries across sessions.
+//
+// Per-product flow: search the catalog, hit Generate on a row, see the
+// generated content + cost inline. Results are ephemeral — copy them
+// out, paste into the listing wizard or product editor. The save-as-
+// draft + publish-to-channel flows live elsewhere (per-channel adapters
+// gated behind NEXUS_ENABLE_<CH>_PUBLISH from C.6/C.7).
+
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import {
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  Zap,
+  Search,
+  Sparkles,
+  Copy,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
-import { Loader, AlertCircle, CheckCircle, Zap } from 'lucide-react'
-import { emitInvalidation } from '@/lib/sync/invalidation-channel'
+import { Card } from '@/components/ui/Card'
+import { Skeleton } from '@/components/ui/Skeleton'
+import { Input } from '@/components/ui/Input'
+import { useToast } from '@/components/ui/Toast'
+import { getBackendUrl } from '@/lib/backend-url'
 
 interface Product {
   id: string
@@ -11,629 +43,597 @@ interface Product {
   name: string
   basePrice: number
   totalStock: number
-  images: Array<{ url: string }>
+  brand?: string | null
+  images?: Array<{ url: string }>
 }
 
-interface DraftListing {
-  draftListingId: string
-  productId: string
-  productName: string
-  productSku: string
-  ebayTitle: string
-  categoryId: string
-  itemSpecifics: Record<string, string>
-  htmlDescription: string
-  status: string
-  createdAt: string
+type Field = 'title' | 'bullets' | 'description' | 'keywords'
+type Channel = 'AMAZON' | 'EBAY' | 'SHOPIFY'
+
+interface ProviderUsage {
+  inputTokens: number
+  outputTokens: number
+  costUSD: number
+  model: string
+  provider: string
 }
 
-interface GenerationState {
-  [productId: string]: {
-    loading: boolean
-    error?: string
-    draft?: DraftListing
-    publishing?: boolean
-    publishError?: string
+interface GenerationResult {
+  title?: { content: string; charCount: number; insights: string[] }
+  bullets?: { content: string[]; charCounts: number[]; insights: string[] }
+  description?: { content: string; preview: string; insights: string[] }
+  keywords?: { content: string; charCount: number; insights: string[] }
+  usage: ProviderUsage[]
+  metadata: {
+    productSku: string
+    marketplace: string
+    language: string
+    model: string
+    provider: string
+    elapsedMs: number
+    generatedAt: string
+  }
+}
+
+// Active channel scope per project memory: Amazon + eBay + Shopify.
+// Marketplace lists per channel — Amazon/eBay both seed the EU 5
+// markets used by Xavia; Shopify is single-shop so just the global
+// option (locale tag drives prompt language).
+const MARKETPLACE_OPTIONS: Record<Channel, Array<{ id: string; label: string }>> = {
+  AMAZON: [
+    { id: 'IT', label: 'Italy (IT)' },
+    { id: 'DE', label: 'Germany (DE)' },
+    { id: 'FR', label: 'France (FR)' },
+    { id: 'ES', label: 'Spain (ES)' },
+    { id: 'UK', label: 'United Kingdom (UK)' },
+  ],
+  EBAY: [
+    { id: 'EBAY_IT', label: 'Italy (EBAY_IT)' },
+    { id: 'EBAY_DE', label: 'Germany (EBAY_DE)' },
+    { id: 'EBAY_ES', label: 'Spain (EBAY_ES)' },
+    { id: 'EBAY_FR', label: 'France (EBAY_FR)' },
+    { id: 'EBAY_GB', label: 'United Kingdom (EBAY_GB)' },
+  ],
+  SHOPIFY: [{ id: 'GLOBAL', label: 'Shop (GLOBAL)' }],
+}
+
+const PROVIDER_OPTIONS: Array<{ id: string; label: string }> = [
+  { id: '', label: 'Auto (env default)' },
+  { id: 'gemini', label: 'Google Gemini' },
+  { id: 'anthropic', label: 'Anthropic Claude' },
+]
+
+const FIELD_OPTIONS: Array<{ id: Field; label: string }> = [
+  { id: 'title', label: 'Title' },
+  { id: 'bullets', label: 'Bullets' },
+  { id: 'description', label: 'Description' },
+  { id: 'keywords', label: 'Keywords' },
+]
+
+const STORAGE_KEY = 'listings.generate.config.v2'
+
+interface SavedConfig {
+  channel?: Channel
+  marketplace?: string
+  provider?: string
+  fields?: Field[]
+}
+
+function loadConfig(): SavedConfig {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY)
+    return raw ? (JSON.parse(raw) as SavedConfig) : {}
+  } catch {
+    return {}
   }
 }
 
 export default function GeneratorPage() {
+  const { toast } = useToast()
   const [products, setProducts] = useState<Product[]>([])
-  const [loading, setLoading] = useState(true)
+  const [productsLoading, setProductsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
-  const [generationState, setGenerationState] = useState<GenerationState>({})
-  const [selectedDraft, setSelectedDraft] = useState<DraftListing | null>(null)
-  const [showPreviewModal, setShowPreviewModal] = useState(false)
-  const [notification, setNotification] = useState<{
-    type: 'success' | 'error'
-    message: string
-  } | null>(null)
 
-  // Fetch products on mount
+  // Page-level config — persisted across sessions.
+  const [channel, setChannel] = useState<Channel>('AMAZON')
+  const [marketplace, setMarketplace] = useState<string>('IT')
+  const [provider, setProvider] = useState<string>('')
+  const [fields, setFields] = useState<Field[]>(['title', 'bullets', 'description'])
+
+  // Hydrate from localStorage on mount.
   useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        const response = await fetch('/api/products')
-        const data = await response.json()
-        setProducts(data || [])
-      } catch (error) {
-        console.error('Error fetching products:', error)
-        showNotification('error', 'Failed to load products')
-      } finally {
-        setLoading(false)
-      }
+    const saved = loadConfig()
+    if (saved.channel && saved.channel in MARKETPLACE_OPTIONS) {
+      setChannel(saved.channel)
     }
-
-    fetchProducts()
+    if (saved.marketplace) setMarketplace(saved.marketplace)
+    if (typeof saved.provider === 'string') setProvider(saved.provider)
+    if (Array.isArray(saved.fields) && saved.fields.length > 0) {
+      setFields(saved.fields as Field[])
+    }
   }, [])
 
-  // Auto-hide notifications after 5 seconds
+  // Persist on change.
   useEffect(() => {
-    if (notification) {
-      const timer = setTimeout(() => setNotification(null), 5000)
-      return () => clearTimeout(timer)
-    }
-  }, [notification])
-
-  const showNotification = (type: 'success' | 'error', message: string) => {
-    setNotification({ type, message })
-  }
-
-  const handleGenerateListing = async (productId: string) => {
-    setGenerationState((prev) => ({
-      ...prev,
-      [productId]: { loading: true },
-    }))
-
     try {
-      const response = await fetch('/api/listings/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId, regenerate: false }),
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        const errorMessage =
-          result.error?.message || 'Failed to generate listing'
-        throw new Error(errorMessage)
-      }
-
-      const draft = result.data as DraftListing
-      setGenerationState((prev) => ({
-        ...prev,
-        [productId]: { loading: false, draft },
-      }))
-
-      setSelectedDraft(draft)
-      setShowPreviewModal(true)
-      showNotification('success', 'Listing generated successfully!')
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error'
-      setGenerationState((prev) => ({
-        ...prev,
-        [productId]: { loading: false, error: errorMessage },
-      }))
-      showNotification('error', errorMessage)
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ channel, marketplace, provider, fields }),
+      )
+    } catch {
+      /* swallow — quota / privacy mode */
     }
-  }
+  }, [channel, marketplace, provider, fields])
 
-  const handleRegenerateListing = async (productId: string) => {
-    setGenerationState((prev) => ({
-      ...prev,
-      [productId]: { loading: true },
-    }))
-
-    try {
-      const response = await fetch('/api/listings/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId, regenerate: true }),
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error?.message || 'Failed to regenerate listing')
-      }
-
-      const draft = result.data as DraftListing
-      setGenerationState((prev) => ({
-        ...prev,
-        [productId]: { loading: false, draft },
-      }))
-
-      setSelectedDraft(draft)
-      setShowPreviewModal(true)
-      showNotification('success', 'Listing regenerated successfully!')
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error'
-      setGenerationState((prev) => ({
-        ...prev,
-        [productId]: { loading: false, error: errorMessage },
-      }))
-      showNotification('error', errorMessage)
+  // When channel changes, snap marketplace to the first valid option
+  // for that channel — prevents an "Italy (IT)" picked under Amazon
+  // sticking when the operator switches to eBay (where the value is
+  // "EBAY_IT" not "IT").
+  useEffect(() => {
+    const opts = MARKETPLACE_OPTIONS[channel]
+    if (!opts.some((o) => o.id === marketplace)) {
+      setMarketplace(opts[0].id)
     }
-  }
- 
-  const handlePublishDraft = async (draftId: string) => {
-    if (!selectedDraft) return
- 
-    setGenerationState((prev) => ({
-      ...prev,
-      [selectedDraft.productId]: {
-        ...prev[selectedDraft.productId],
-        publishing: true,
-      },
-    }))
- 
-    try {
-      const response = await fetch(`/api/listings/${draftId}/publish`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      })
- 
-      const result = await response.json()
- 
-      if (!response.ok) {
-        throw new Error(result.error?.message || 'Failed to publish listing')
+  }, [channel, marketplace])
+
+  // ── Per-product generation state ────────────────────────────────
+  const [resultByProduct, setResultByProduct] = useState<
+    Record<string, { loading: boolean; result?: GenerationResult; error?: string; expanded?: boolean }>
+  >({})
+
+  useEffect(() => {
+    let cancelled = false
+    const fetchProducts = async () => {
+      try {
+        const res = await fetch(`${getBackendUrl()}/api/products?limit=200`)
+        const data = await res.json()
+        const list = Array.isArray(data) ? data : (data.products ?? [])
+        if (!cancelled) setProducts(list)
+      } catch (err) {
+        if (!cancelled) toast.error('Failed to load products')
+      } finally {
+        if (!cancelled) setProductsLoading(false)
       }
- 
-      // Success
-      showNotification('success', 'Listing published to eBay successfully!')
-
-      // Snappy local refresh — same-tab CustomEvent + cross-tab
-      // BroadcastChannel. The backend ALSO emits `listing.created`
-      // via SSE inside EbayPublishService.publishDraft, so this is
-      // belt-and-braces: this fires immediately (~0ms) while the
-      // SSE roundtrip lands a moment later. Listeners debounce
-      // refetches, so duplicates are harmless.
-      emitInvalidation({
-        type: 'listing.created',
-        id: result?.data?.variantChannelListingId ?? result?.data?.listingId,
-        meta: {
-          source: 'generator',
-          draftId,
-          productId: selectedDraft.productId,
-          channel: 'EBAY',
-        },
-      })
-
-      // Update state to remove from queue
-      setGenerationState((prev) => {
-        const newState = { ...prev }
-        delete newState[selectedDraft.productId]
-        return newState
-      })
-
-      // Close modal
-      setShowPreviewModal(false)
-      setSelectedDraft(null)
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error'
- 
-      showNotification('error', errorMessage)
- 
-      setGenerationState((prev) => ({
-        ...prev,
-        [selectedDraft.productId]: {
-          ...prev[selectedDraft.productId],
-          publishing: false,
-          publishError: errorMessage,
-        },
-      }))
     }
-  }
- 
-  const filteredProducts = products.filter(
-    (p) =>
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.sku.toLowerCase().includes(searchTerm.toLowerCase())
+    fetchProducts()
+    return () => {
+      cancelled = true
+    }
+  }, [toast])
+
+  const filteredProducts = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase()
+    if (!q) return products
+    return products.filter(
+      (p) =>
+        p.sku.toLowerCase().includes(q) ||
+        p.name.toLowerCase().includes(q),
+    )
+  }, [products, searchTerm])
+
+  const generate = useCallback(
+    async (productId: string) => {
+      if (fields.length === 0) {
+        toast.error('Pick at least one field to generate')
+        return
+      }
+      setResultByProduct((prev) => ({
+        ...prev,
+        [productId]: { loading: true, expanded: true },
+      }))
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/listing-content/generate`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              productId,
+              marketplace,
+              fields,
+              variant: 0,
+              provider: provider || undefined,
+            }),
+          },
+        )
+        if (res.status === 503) {
+          const j = await res.json().catch(() => ({}))
+          throw new Error(
+            j.error ??
+              'AI provider not configured — set GEMINI_API_KEY or ANTHROPIC_API_KEY on the API.',
+          )
+        }
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}))
+          throw new Error(j.error ?? `HTTP ${res.status}`)
+        }
+        const data = (await res.json()) as GenerationResult
+        setResultByProduct((prev) => ({
+          ...prev,
+          [productId]: { loading: false, result: data, expanded: true },
+        }))
+      } catch (e: any) {
+        setResultByProduct((prev) => ({
+          ...prev,
+          [productId]: { loading: false, error: e?.message ?? String(e), expanded: true },
+        }))
+        toast.error(e?.message ?? 'Generation failed')
+      }
+    },
+    [fields, marketplace, provider, toast],
   )
 
-  const productsWithDrafts = filteredProducts.filter(
-    (p) => generationState[p.id]?.draft
-  )
-  const productsWithoutDrafts = filteredProducts.filter(
-    (p) => !generationState[p.id]?.draft
-  )
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <Loader className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
-          <p className="text-gray-600">Loading products...</p>
-        </div>
-      </div>
+  const toggleField = (f: Field) => {
+    setFields((prev) =>
+      prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f],
     )
   }
 
+  const totalCost = useMemo(() => {
+    let sum = 0
+    for (const v of Object.values(resultByProduct)) {
+      if (v.result) {
+        for (const u of v.result.usage) sum += u.costUSD
+      }
+    }
+    return sum
+  }, [resultByProduct])
+
+  const generationCount = useMemo(
+    () =>
+      Object.values(resultByProduct).filter((v) => v.result).length,
+    [resultByProduct],
+  )
+
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
-        title="AI Listing Generator"
-        subtitle="Generate eBay-optimized listings from your products"
-        breadcrumbs={[
-          { label: 'Products', href: '/products' },
-          { label: 'Generate Listings' },
-        ]}
+        title="AI listing content"
+        description="Generate per-channel, per-marketplace listing copy with provider switching + cost tracking. Ephemeral — copy results out and paste into the listing wizard or product editor."
+        breadcrumbs={[{ label: 'Listings', href: '/listings' }, { label: 'AI generate' }]}
       />
 
-      {/* Notification Toast */}
-      {notification && (
-        <div
-          className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg flex items-center gap-3 z-50 ${
-            notification.type === 'success'
-              ? 'bg-green-50 border border-green-200'
-              : 'bg-red-50 border border-red-200'
-          }`}
-        >
-          {notification.type === 'success' ? (
-            <CheckCircle className="w-5 h-5 text-green-600" />
-          ) : (
-            <AlertCircle className="w-5 h-5 text-red-600" />
-          )}
-          <span
-            className={
-              notification.type === 'success'
-                ? 'text-green-800'
-                : 'text-red-800'
-            }
-          >
-            {notification.message}
-          </span>
+      {/* Config panel */}
+      <Card>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+              Channel
+            </label>
+            <select
+              value={channel}
+              onChange={(e) => setChannel(e.target.value as Channel)}
+              className="w-full h-9 px-2 text-md border border-slate-200 rounded"
+            >
+              <option value="AMAZON">Amazon</option>
+              <option value="EBAY">eBay</option>
+              <option value="SHOPIFY">Shopify</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+              Marketplace
+            </label>
+            <select
+              value={marketplace}
+              onChange={(e) => setMarketplace(e.target.value)}
+              className="w-full h-9 px-2 text-md border border-slate-200 rounded"
+            >
+              {MARKETPLACE_OPTIONS[channel].map((opt) => (
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+              Provider
+            </label>
+            <select
+              value={provider}
+              onChange={(e) => setProvider(e.target.value)}
+              className="w-full h-9 px-2 text-md border border-slate-200 rounded"
+            >
+              {PROVIDER_OPTIONS.map((opt) => (
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+              Fields
+            </label>
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {FIELD_OPTIONS.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => toggleField(f.id)}
+                  className={`h-7 px-2 text-sm rounded border transition ${
+                    fields.includes(f.id)
+                      ? 'bg-blue-50 border-blue-300 text-blue-700'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                  aria-pressed={fields.includes(f.id)}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
-      )}
+      </Card>
 
-      {/* Search Bar */}
-      <div className="mb-6">
-        <input
-          type="text"
-          placeholder="Search by product name or SKU..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-        />
+      {/* Search + cost rollup */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-1 min-w-[200px] max-w-md">
+          <Search size={14} className="text-slate-400" />
+          <Input
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search SKU or name…"
+          />
+        </div>
+        {generationCount > 0 && (
+          <div className="text-sm text-slate-500 ml-auto inline-flex items-center gap-3">
+            <span>
+              <span className="font-semibold text-slate-700 tabular-nums">
+                {generationCount}
+              </span>{' '}
+              generated
+            </span>
+            <span className="text-slate-300">·</span>
+            <span>
+              Total cost{' '}
+              <span className="font-semibold text-slate-700 tabular-nums">
+                ${totalCost.toFixed(4)}
+              </span>
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Products with Drafts Section */}
-      {productsWithDrafts.length > 0 && (
-        <div className="mb-8">
-          <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
-            <h2 className="text-lg font-semibold text-green-900 mb-2 flex items-center gap-2">
-              <CheckCircle className="w-5 h-5" />
-              Generated Listings ({productsWithDrafts.length})
-            </h2>
-            <p className="text-green-800">
-              These products have AI-generated draft listings ready for review
-            </p>
+      {/* Product list */}
+      {productsLoading ? (
+        <Card>
+          <Skeleton variant="text" lines={4} />
+        </Card>
+      ) : filteredProducts.length === 0 ? (
+        <Card>
+          <div className="text-center py-8 text-sm text-slate-500">
+            {searchTerm ? 'No products match the search.' : 'No products available.'}
           </div>
-
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                    Product
-                  </th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                    Price
-                  </th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                    Stock
-                  </th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                    eBay Title
-                  </th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {productsWithDrafts.map((product) => {
-                  const draft = generationState[product.id]?.draft
-                  return (
-                    <tr key={product.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 text-sm">
-                        <div className="flex items-center gap-3">
-                          {product.images.length > 0 && (
-                            <img
-                              src={product.images[0].url}
-                              alt={product.name}
-                              className="w-10 h-10 rounded object-cover"
-                            />
-                          )}
-                          <div>
-                            <p className="font-medium text-gray-900">
-                              {product.name}
-                            </p>
-                            <p className="text-xs text-gray-500">{product.sku}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm font-semibold text-gray-900">
-                        ${product.basePrice.toFixed(2)}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">
-                        {product.totalStock}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">
-                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                          {draft?.ebayTitle.substring(0, 40)}...
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm space-x-2">
-                        <button
-                          onClick={() => {
-                            setSelectedDraft(draft!)
-                            setShowPreviewModal(true)
-                          }}
-                          className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-xs font-medium"
-                        >
-                          Preview
-                        </button>
-                        <button
-                          onClick={() => handleRegenerateListing(product.id)}
-                          disabled={generationState[product.id]?.loading}
-                          className="px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:bg-gray-400 transition-colors text-xs font-medium"
-                        >
-                          {generationState[product.id]?.loading
-                            ? 'Regenerating...'
-                            : 'Regenerate'}
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {filteredProducts.map((p) => {
+            const state = resultByProduct[p.id]
+            return (
+              <ProductRow
+                key={p.id}
+                product={p}
+                state={state}
+                onGenerate={() => generate(p.id)}
+                onToggle={() =>
+                  setResultByProduct((prev) => ({
+                    ...prev,
+                    [p.id]: { ...prev[p.id], expanded: !prev[p.id]?.expanded },
+                  }))
+                }
+              />
+            )
+          })}
         </div>
       )}
+    </div>
+  )
+}
 
-      {/* Products without Drafts Section */}
-      {productsWithoutDrafts.length > 0 && (
-        <div>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
-            <h2 className="text-lg font-semibold text-blue-900 mb-2 flex items-center gap-2">
-              <Zap className="w-5 h-5" />
-              Ready to Generate ({productsWithoutDrafts.length})
-            </h2>
-            <p className="text-blue-800">
-              Click "Generate" to create AI-optimized eBay listings for these
-              products
-            </p>
+// ────────────────────────────────────────────────────────────────────
+// ProductRow — collapsed by default; expands inline with results.
+// ────────────────────────────────────────────────────────────────────
+function ProductRow({
+  product,
+  state,
+  onGenerate,
+  onToggle,
+}: {
+  product: Product
+  state?: { loading: boolean; result?: GenerationResult; error?: string; expanded?: boolean }
+  onGenerate: () => void
+  onToggle: () => void
+}) {
+  const expanded = state?.expanded ?? false
+  return (
+    <Card>
+      <div className="flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-slate-900 truncate">
+            {product.name}
           </div>
-
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                    Product
-                  </th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                    Price
-                  </th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                    Stock
-                  </th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {productsWithoutDrafts.map((product) => {
-                  const state = generationState[product.id]
-                  return (
-                    <tr key={product.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 text-sm">
-                        <div className="flex items-center gap-3">
-                          {product.images && product.images.length > 0 && (
-                            <img
-                              src={product.images[0].url}
-                              alt={product.name}
-                              className="w-10 h-10 rounded object-cover"
-                            />
-                          )}
-                          <div>
-                            <p className="font-medium text-gray-900">
-                              {product.name}
-                            </p>
-                            <p className="text-xs text-gray-500">{product.sku}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm font-semibold text-gray-900">
-                        ${product.basePrice.toFixed(2)}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">
-                        {product.totalStock}
-                      </td>
-                      <td className="px-6 py-4 text-sm">
-                        {state?.error ? (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                            ✗ Error
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                            Ready
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-sm">
-                        <button
-                          onClick={() => handleGenerateListing(product.id)}
-                          disabled={state?.loading}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium text-sm flex items-center gap-2"
-                        >
-                          {state?.loading ? (
-                            <>
-                              <Loader className="w-4 h-4 animate-spin" />
-                              Generating...
-                            </>
-                          ) : (
-                            <>
-                              <Zap className="w-4 h-4" />
-                              Generate
-                            </>
-                          )}
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+          <div className="text-sm text-slate-500 font-mono">{product.sku}</div>
         </div>
-      )}
-
-      {filteredProducts.length === 0 && (
-        <div className="bg-white rounded-lg shadow p-12 text-center">
-          <p className="text-gray-600 text-lg">
-            {searchTerm
-              ? 'No products found matching your search'
-              : 'No products available'}
-          </p>
+        <div className="flex items-center gap-2">
+          {state?.result && (
+            <button
+              onClick={onToggle}
+              aria-label={expanded ? 'Collapse result' : 'Expand result'}
+              className="h-8 w-8 inline-flex items-center justify-center text-slate-400 hover:text-slate-700"
+            >
+              {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+          )}
+          <button
+            onClick={onGenerate}
+            disabled={state?.loading}
+            className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-60 inline-flex items-center gap-1.5"
+          >
+            {state?.loading ? (
+              <>
+                <Loader2 size={12} className="animate-spin" /> Generating
+              </>
+            ) : state?.result ? (
+              <>
+                <Sparkles size={12} /> Regenerate
+              </>
+            ) : (
+              <>
+                <Zap size={12} /> Generate
+              </>
+            )}
+          </button>
         </div>
-      )}
-
-      {/* Preview Modal */}
-      {showPreviewModal && selectedDraft && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            {/* Modal Header */}
-            <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 flex justify-between items-center">
-              <div>
-                <h2 className="text-2xl font-bold">Listing Preview</h2>
-                <p className="text-blue-100 text-sm mt-1">
-                  {selectedDraft.productName} ({selectedDraft.productSku})
-                </p>
-              </div>
-              <button
-                onClick={() => setShowPreviewModal(false)}
-                className="text-white hover:bg-blue-800 p-2 rounded transition-colors"
-              >
-                ✕
-              </button>
+      </div>
+      {expanded && state && (
+        <div className="mt-3 border-t border-slate-100 pt-3">
+          {state.loading && (
+            <div className="text-sm text-slate-500 inline-flex items-center gap-2">
+              <Loader2 size={12} className="animate-spin" /> Generating with the
+              configured provider…
             </div>
-
-            {/* Modal Content */}
-            <div className="p-6 space-y-6">
-              {/* eBay Title */}
-              <div>
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">
-                  eBay Title (80 chars max)
-                </h3>
-                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                  <p className="text-lg font-semibold text-gray-900">
-                    {selectedDraft.ebayTitle}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-2">
-                    {selectedDraft.ebayTitle.length} / 80 characters
-                  </p>
-                </div>
-              </div>
-
-              {/* Category ID */}
-              <div>
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">
-                  eBay Category ID
-                </h3>
-                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                  <p className="text-gray-900 font-mono">
-                    {selectedDraft.categoryId}
-                  </p>
-                </div>
-              </div>
-
-              {/* Item Specifics */}
-              <div>
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">
-                  Item Specifics
-                </h3>
-                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                  <div className="grid grid-cols-2 gap-4">
-                    {Object.entries(selectedDraft.itemSpecifics).map(
-                      ([key, value]) => (
-                        <div key={key}>
-                          <p className="text-xs font-semibold text-gray-600 uppercase">
-                            {key}
-                          </p>
-                          <p className="text-sm text-gray-900">{value}</p>
-                        </div>
-                      )
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* HTML Description Preview */}
-              <div>
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">
-                  Description Preview
-                </h3>
-                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 max-h-96 overflow-y-auto">
-                  <div
-                    className="prose prose-sm max-w-none"
-                    dangerouslySetInnerHTML={{
-                      __html: selectedDraft.htmlDescription,
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Raw HTML (for debugging) */}
-              <details className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <summary className="text-sm font-semibold text-gray-700 cursor-pointer">
-                  View Raw HTML
-                </summary>
-                <pre className="mt-4 text-xs bg-gray-900 text-gray-100 p-4 rounded overflow-x-auto">
-                  {selectedDraft.htmlDescription}
-                </pre>
-              </details>
+          )}
+          {state.error && (
+            <div className="text-sm text-rose-700 inline-flex items-center gap-2">
+              <AlertCircle size={12} /> {state.error}
             </div>
-
-            {/* Modal Footer */}
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-6 flex justify-end gap-3">
-              <button
-                onClick={() => setShowPreviewModal(false)}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium"
-              >
-                Close
-              </button>
-              <button
-                onClick={() => handlePublishDraft(selectedDraft!.draftListingId)}
-                disabled={generationState[selectedDraft!.productId]?.publishing}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-2"
-              >
-                {generationState[selectedDraft!.productId]?.publishing ? (
-                  <>
-                    <Loader className="w-4 h-4 animate-spin" />
-                    Publishing...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-4 h-4" />
-                    Publish to eBay
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
+          )}
+          {state.result && <GenerationResultView result={state.result} />}
         </div>
       )}
+    </Card>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────
+// GenerationResultView — title / bullets / description / keywords +
+// per-field copy buttons + cost summary.
+// ────────────────────────────────────────────────────────────────────
+function GenerationResultView({ result }: { result: GenerationResult }) {
+  const { toast } = useToast()
+  const copyToClipboard = (label: string, text: string) => {
+    if (typeof navigator === 'undefined' || !navigator.clipboard) {
+      toast.error('Clipboard unavailable')
+      return
+    }
+    navigator.clipboard
+      .writeText(text)
+      .then(() => toast.success(`${label} copied`))
+      .catch(() => toast.error('Copy failed'))
+  }
+
+  const totalCost = result.usage.reduce((acc, u) => acc + u.costUSD, 0)
+  const totalTokens = result.usage.reduce(
+    (acc, u) => acc + u.inputTokens + u.outputTokens,
+    0,
+  )
+
+  return (
+    <div className="space-y-3">
+      <div className="text-xs text-slate-500 inline-flex items-center gap-3 flex-wrap">
+        <span className="inline-flex items-center gap-1 text-emerald-700">
+          <CheckCircle2 size={11} /> {result.metadata.provider} ·{' '}
+          {result.metadata.model}
+        </span>
+        <span className="text-slate-300">·</span>
+        <span className="tabular-nums">
+          ${totalCost.toFixed(4)} · {totalTokens.toLocaleString()} tokens
+        </span>
+        <span className="text-slate-300">·</span>
+        <span className="tabular-nums">
+          {result.metadata.elapsedMs} ms
+        </span>
+        <span className="text-slate-300">·</span>
+        <span>{result.metadata.marketplace}</span>
+      </div>
+
+      {result.title && (
+        <FieldBlock
+          label="Title"
+          subtitle={`${result.title.charCount} chars`}
+          onCopy={() => copyToClipboard('Title', result.title!.content)}
+        >
+          <div className="text-sm text-slate-800">{result.title.content}</div>
+        </FieldBlock>
+      )}
+
+      {result.bullets && (
+        <FieldBlock
+          label="Bullets"
+          subtitle={`${result.bullets.content.length} bullets`}
+          onCopy={() =>
+            copyToClipboard('Bullets', result.bullets!.content.join('\n'))
+          }
+        >
+          <ul className="text-sm text-slate-800 list-disc pl-5 space-y-0.5">
+            {result.bullets.content.map((b, i) => (
+              <li key={i}>
+                {b}
+                <span className="text-xs text-slate-400 ml-2 tabular-nums">
+                  ({result.bullets!.charCounts[i]})
+                </span>
+              </li>
+            ))}
+          </ul>
+        </FieldBlock>
+      )}
+
+      {result.description && (
+        <FieldBlock
+          label="Description"
+          subtitle={`${result.description.content.length} chars`}
+          onCopy={() => copyToClipboard('Description', result.description!.content)}
+        >
+          <div className="text-sm text-slate-800 whitespace-pre-wrap">
+            {result.description.preview}
+          </div>
+        </FieldBlock>
+      )}
+
+      {result.keywords && (
+        <FieldBlock
+          label="Keywords"
+          subtitle={`${result.keywords.charCount} chars`}
+          onCopy={() => copyToClipboard('Keywords', result.keywords!.content)}
+        >
+          <div className="text-sm text-slate-800 font-mono">
+            {result.keywords.content}
+          </div>
+        </FieldBlock>
+      )}
+    </div>
+  )
+}
+
+function FieldBlock({
+  label,
+  subtitle,
+  onCopy,
+  children,
+}: {
+  label: string
+  subtitle?: string
+  onCopy: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <div className="border border-slate-200 rounded p-3">
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="inline-flex items-center gap-2">
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+            {label}
+          </div>
+          {subtitle && (
+            <div className="text-xs text-slate-400">{subtitle}</div>
+          )}
+        </div>
+        <button
+          onClick={onCopy}
+          aria-label={`Copy ${label}`}
+          className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-blue-600 rounded"
+        >
+          <Copy size={11} />
+        </button>
+      </div>
+      {children}
     </div>
   )
 }
