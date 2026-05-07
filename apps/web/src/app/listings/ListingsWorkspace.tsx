@@ -11,7 +11,7 @@ import {
   Boxes, AlertTriangle, LayoutGrid, Sparkles, Search, RefreshCw,
   ExternalLink, Filter, Settings2, X, ChevronDown,
   Eye, EyeOff, CheckCircle2, Tag, Link2,
-  ArrowUpRight, Layers, Package, MoreHorizontal, Plus, Pause, Play,
+  ArrowUpRight, Layers, Package, Plus, Pause, Play,
   Edit3, Bookmark, BookmarkPlus, Star, Trash2,
   Download, FilterX, AlertCircle, Activity, TrendingUp,
 } from 'lucide-react'
@@ -2881,7 +2881,6 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
                               <MatrixCell
                                 cell={c}
                                 master={master}
-                                product={p}
                                 optimisticSyncing={optimisticSyncing.has(c.id)}
                                 onOpenDrawer={() => setDrawerOpen(c.id)}
                                 onSync={() => fireSync(c.id)}
@@ -2951,20 +2950,16 @@ function formatRelative(ms: number): string {
 function MatrixCell({
   cell,
   master,
-  product,
   optimisticSyncing,
   onOpenDrawer,
   onSync,
 }: {
   cell: any
   master: { title: string | null; price: number | null; quantity: number | null }
-  product: { id: string; sku: string; name: string }
   optimisticSyncing: boolean
   onOpenDrawer: () => void
   onSync: () => void
 }) {
-  const [menuOpen, setMenuOpen] = useState(false)
-
   // Effective sync status: optimistic flag wins until refetch lands.
   const syncStatus = optimisticSyncing ? 'SYNCING' : (cell.syncStatus ?? 'IDLE')
   const hasError =
@@ -3116,17 +3111,11 @@ function MatrixCell({
             </div>
           )}
         </button>
-        <CellKebab
-          open={menuOpen}
-          onOpen={() => setMenuOpen(true)}
-          onClose={() => setMenuOpen(false)}
+        <CellInlineActions
           listingUrl={cell.listingUrl}
           channel={cell.channel}
           listingId={cell.id}
-          productId={product.id}
-          marketplace={cell.marketplace}
           isPublished={cell.isPublished}
-          onOpenDrawer={onOpenDrawer}
           onSync={onSync}
         />
       </div>
@@ -3244,148 +3233,86 @@ function SyncDot({ status, hasError }: { status: string; hasError: boolean }) {
 }
 
 // ────────────────────────────────────────────────────────────────────
-// CellKebab — per-cell action menu. Appears on hover/focus of the
-// parent cell. Click outside or on an action to dismiss.
+// CellInlineActions — always-visible mini toolbar at the cell's
+// top-right. Replaces the old 3-dot kebab menu so high-frequency
+// operator actions (sync, pause/resume, open on channel) are one
+// click away, never hidden behind a hover-then-click. Drawer (cell
+// click) still owns "view detail" and "open in editor" — keeping the
+// inline strip focused on actions that genuinely benefit from
+// matrix-level access.
 // ────────────────────────────────────────────────────────────────────
-function CellKebab({
-  open,
-  onOpen,
-  onClose,
+function CellInlineActions({
   listingUrl,
   channel,
   listingId,
-  productId,
-  marketplace,
   isPublished,
-  onOpenDrawer,
   onSync,
 }: {
-  open: boolean
-  onOpen: () => void
-  onClose: () => void
   listingUrl: string | null
   channel: string
   listingId: string
-  productId: string
-  marketplace: string
   isPublished: boolean
-  onOpenDrawer: () => void
   onSync: () => void
 }) {
-  const ref = useRef<HTMLDivElement>(null)
-
-  // Click-outside dismissal.
-  useEffect(() => {
-    if (!open) return
-    const onDoc = (e: MouseEvent) => {
-      if (!ref.current) return
-      if (!ref.current.contains(e.target as Node)) onClose()
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('mousedown', onDoc)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDoc)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open, onClose])
-
+  const channelLabel = channel.charAt(0) + channel.slice(1).toLowerCase()
   return (
-    <div ref={ref} className="absolute -top-1 -right-1">
-      <button
-        type="button"
+    <div className="absolute top-0.5 right-0.5 inline-flex items-center gap-0.5">
+      <CellActionButton
+        icon={RefreshCw}
+        label="Sync now"
         onClick={(e) => {
           e.stopPropagation()
-          open ? onClose() : onOpen()
+          onSync()
         }}
-        aria-label="Cell actions"
-        aria-expanded={open}
-        aria-haspopup="menu"
-        className="w-5 h-5 inline-flex items-center justify-center bg-white border border-slate-200 rounded-full text-slate-500 hover:text-slate-900 hover:border-slate-300 shadow-sm opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
-      >
-        <MoreHorizontal size={11} />
-      </button>
-      {open && (
-        <div
-          role="menu"
-          className="absolute top-6 right-0 z-popover w-48 bg-white border border-slate-200 rounded-md shadow-lg py-1 text-left"
-        >
-          <KebabItem
-            icon={Eye}
-            label="View detail"
-            onClick={() => {
-              onClose()
-              onOpenDrawer()
-            }}
-          />
-          <KebabItem
-            icon={RefreshCw}
-            label="Sync now"
-            onClick={() => {
-              onClose()
-              onSync()
-            }}
-          />
-          {listingUrl && (
-            <KebabItem
-              icon={ExternalLink}
-              label={`Open on ${channel.charAt(0) + channel.slice(1).toLowerCase()}`}
-              onClick={() => {
-                onClose()
-                window.open(listingUrl, '_blank', 'noopener,noreferrer')
-              }}
-            />
-          )}
-          <KebabItem
-            icon={Edit3}
-            label="Open in editor"
-            onClick={() => {
-              onClose()
-              window.location.href = `/products/${productId}/edit?channel=${channel}&marketplace=${marketplace}`
-            }}
-          />
-          <div className="border-t border-slate-100 my-1" />
-          <KebabItem
-            icon={isPublished ? Pause : Play}
-            label={isPublished ? 'Pause listing' : 'Resume listing'}
-            onClick={async () => {
-              onClose()
-              await fetch(`${getBackendUrl()}/api/listings/bulk-action`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  action: isPublished ? 'unpublish' : 'publish',
-                  listingIds: [listingId],
-                }),
-              })
-              emitInvalidation({ type: 'listing.updated', id: listingId })
-            }}
-          />
-        </div>
+      />
+      <CellActionButton
+        icon={isPublished ? Pause : Play}
+        label={isPublished ? 'Pause listing' : 'Resume listing'}
+        onClick={async (e) => {
+          e.stopPropagation()
+          await fetch(`${getBackendUrl()}/api/listings/bulk-action`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: isPublished ? 'unpublish' : 'publish',
+              listingIds: [listingId],
+            }),
+          })
+          emitInvalidation({ type: 'listing.updated', id: listingId })
+        }}
+      />
+      {listingUrl && (
+        <CellActionButton
+          icon={ExternalLink}
+          label={`Open on ${channelLabel}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            window.open(listingUrl, '_blank', 'noopener,noreferrer')
+          }}
+        />
       )}
     </div>
   )
 }
 
-function KebabItem({
+function CellActionButton({
   icon: Icon,
   label,
   onClick,
 }: {
   icon: any
   label: string
-  onClick: () => void
+  onClick: (e: React.MouseEvent) => void
 }) {
   return (
     <button
       type="button"
-      role="menuitem"
       onClick={onClick}
-      className="w-full px-3 py-1.5 text-base text-slate-700 hover:bg-slate-50 inline-flex items-center gap-2"
+      aria-label={label}
+      title={label}
+      className="w-5 h-5 inline-flex items-center justify-center bg-white/85 border border-slate-200 rounded text-slate-500 hover:text-slate-900 hover:border-slate-400 hover:bg-white shadow-sm transition-colors"
     >
-      <Icon size={12} className="text-slate-500" /> {label}
+      <Icon size={11} />
     </button>
   )
 }
