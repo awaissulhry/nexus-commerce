@@ -101,9 +101,27 @@ export async function sendcloudWebhookRoutes(app: FastifyInstance) {
   // parse manually (form bodies wrap the JSON payload as a single
   // `payload` field per Sendcloud's docs).
   app.post('/api/webhooks/sendcloud', async (request, reply) => {
-    const secret = process.env.NEXUS_SENDCLOUD_WEBHOOK_SECRET
+    // CR.20: prefer the per-carrier rotated secret over the env var.
+    // Decrypts on each request — cheap (<1ms) and keeps the cleartext
+    // out of memory between webhook deliveries. Falls back to the env
+    // var so existing deployments keep working until operator rotates.
+    let secret: string | null = process.env.NEXUS_SENDCLOUD_WEBHOOK_SECRET ?? null
+    try {
+      const carrier = await prisma.carrier.findUnique({
+        where: { code: 'SENDCLOUD' },
+        select: { webhookSecret: true },
+      })
+      if (carrier?.webhookSecret) {
+        const { decryptSecret, isEncrypted } = await import('../lib/crypto.js')
+        secret = isEncrypted(carrier.webhookSecret)
+          ? decryptSecret(carrier.webhookSecret)
+          : carrier.webhookSecret
+      }
+    } catch (err) {
+      app.log.warn({ err }, '[sendcloud-webhook] per-carrier secret load failed; falling back to env')
+    }
     if (!secret) {
-      app.log.warn('[sendcloud-webhook] NEXUS_SENDCLOUD_WEBHOOK_SECRET not set — refusing')
+      app.log.warn('[sendcloud-webhook] no signing secret configured (env or carrier) — refusing')
       return reply.code(503).send({ error: 'Webhook secret not configured' })
     }
 

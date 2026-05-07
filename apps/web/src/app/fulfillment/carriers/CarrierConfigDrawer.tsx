@@ -1642,7 +1642,15 @@ function PickupsTab({ carrierCode }: { carrierCode: string }) {
 // + a hint. Per-carrier secret rotation from the UI lands in a later
 // commit alongside Carrier.webhookSecret persistence.
 function WebhooksTab() {
+  const { toast } = useToast()
+  const askConfirm = useConfirm()
   const [copied, setCopied] = useState(false)
+  const [secretCopied, setSecretCopied] = useState(false)
+  const [rotating, setRotating] = useState(false)
+  // CR.20: hold the freshly-rotated plaintext secret in component
+  // state for the operator to paste into Sendcloud's panel. Cleared
+  // when the drawer closes — never re-fetchable from the backend.
+  const [freshSecret, setFreshSecret] = useState<string | null>(null)
   const url = useMemo(() => `${getBackendUrl()}/api/webhooks/sendcloud`, [])
 
   const copy = async () => {
@@ -1652,6 +1660,42 @@ function WebhooksTab() {
       setTimeout(() => setCopied(false), 1500)
     } catch {
       /* clipboard blocked — operator pastes manually */
+    }
+  }
+
+  const copySecret = async () => {
+    if (!freshSecret) return
+    try {
+      await navigator.clipboard.writeText(freshSecret)
+      setSecretCopied(true)
+      setTimeout(() => setSecretCopied(false), 1500)
+    } catch { /* */ }
+  }
+
+  const rotate = async () => {
+    const ok = await askConfirm({
+      title: 'Rotate webhook secret?',
+      description: 'Sendcloud will reject events signed with the old secret immediately. You must paste the new secret into Sendcloud panel right after rotating, or webhooks will fail.',
+      confirmLabel: 'Rotate',
+      tone: 'danger',
+    })
+    if (!ok) return
+    setRotating(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/carriers/SENDCLOUD/webhook-secret/rotate`,
+        { method: 'POST' },
+      )
+      if (!res.ok) throw new Error('Rotation failed')
+      const body = await res.json().catch(() => ({}))
+      if (body.secret) {
+        setFreshSecret(body.secret)
+        toast.success('Secret rotated — paste into Sendcloud panel now.')
+      }
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setRotating(false)
     }
   }
 
@@ -1674,11 +1718,38 @@ function WebhooksTab() {
         </p>
       </div>
 
-      <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded p-3">
-        <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
-        <div>
-          The signing secret is currently configured via the <code className="px-1 py-0.5 bg-amber-100 dark:bg-amber-900/40 rounded text-xs">NEXUS_SENDCLOUD_WEBHOOK_SECRET</code> environment variable. Per-carrier secret rotation from this drawer lands in a follow-up commit.
+      {/* CR.20: rotation surface */}
+      <div className="space-y-2">
+        <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
+          Signing secret
         </div>
+        {freshSecret ? (
+          <div className="space-y-2">
+            <div className="text-sm text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded p-3">
+              <div className="font-semibold mb-1">New secret — copy now, it won't be shown again.</div>
+              <div className="flex items-stretch gap-1">
+                <code className="flex-1 px-2 py-1 text-xs font-mono bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 rounded break-all select-all">
+                  {freshSecret}
+                </code>
+                <Button variant="secondary" size="sm" onClick={copySecret} icon={secretCopied ? <Check size={11} /> : <Copy size={11} />}>
+                  {secretCopied ? 'Copied' : 'Copy'}
+                </Button>
+              </div>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setFreshSecret(null)}>
+              Done — hide secret
+            </Button>
+          </div>
+        ) : (
+          <>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Falls back to the <code className="px-1 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-xs">NEXUS_SENDCLOUD_WEBHOOK_SECRET</code> env var when no per-carrier secret is set. Rotating generates a new 256-bit secret, persists it encrypted, and returns the plaintext once for you to paste into Sendcloud.
+            </p>
+            <Button variant="secondary" size="sm" onClick={rotate} loading={rotating}>
+              Rotate webhook secret
+            </Button>
+          </>
+        )}
       </div>
     </div>
   )

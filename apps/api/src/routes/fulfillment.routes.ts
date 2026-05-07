@@ -8720,6 +8720,53 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // CR.20 — rotate the per-carrier webhook signing secret.
+  //
+  // POST /carriers/:code/webhook-secret/rotate
+  //
+  // Generates 32 random bytes (256 bits, base64), encrypts with the
+  // CR.1 envelope, persists to Carrier.webhookSecret. Returns the
+  // PLAINTEXT secret in the response — operator pastes it into
+  // Sendcloud's panel. The plaintext is NEVER returned again; on
+  // subsequent reads only the encrypted blob exists, and even the
+  // webhook handler decrypts per-request rather than caching.
+  fastify.post('/fulfillment/carriers/:code/webhook-secret/rotate', async (request, reply) => {
+    try {
+      const { code } = request.params as { code: string }
+      if (code !== 'SENDCLOUD') {
+        return reply.code(400).send({ error: `${code} has no webhook secret to rotate` })
+      }
+      const carrier = await prisma.carrier.findUnique({ where: { code: code as any } })
+      if (!carrier) return reply.code(404).send({ error: 'Carrier not connected' })
+
+      const crypto = await import('node:crypto')
+      const { encryptSecret } = await import('../lib/crypto.js')
+      const plaintext = crypto.randomBytes(32).toString('base64')
+      const encrypted = encryptSecret(plaintext)
+      await prisma.carrier.update({
+        where: { code: code as any },
+        data: { webhookSecret: encrypted },
+      })
+
+      // Audit-log the rotation (no payload; the fact-of-rotation is
+      // the audit trail — the secret itself never lands in AuditLog).
+      const { auditLogService } = await import('../services/audit-log.service.js')
+      void auditLogService.write({
+        entityType: 'Carrier',
+        entityId: carrier.id,
+        action: 'rotate-webhook-secret',
+        before: null,
+        after: { rotated: true },
+        metadata: { code },
+      })
+
+      return { ok: true, secret: plaintext, hint: 'Paste this into Sendcloud → Settings → Integrations → Webhooks. It will not be shown again.' }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[carriers/:code/webhook-secret/rotate] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // CR.12 — manual catalog refresh. Runs the same logic as the
   // nightly cron but on demand. Returns counts so the UI can show
   // a toast like "Synced 12 services". Sendcloud-only today.
