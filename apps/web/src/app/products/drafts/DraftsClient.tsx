@@ -186,7 +186,35 @@ export default function DraftsClient() {
       ],
     })
 
-  const drafts = data?.drafts ?? []
+  const draftsRaw = data?.drafts ?? []
+  // C.12 — optimistic-delete state. Keys hidden here disappear from
+  // the displayed list immediately on a delete attempt, before the
+  // server confirms. On success the next poll cycle naturally drops
+  // them from `drafts` (server side gone too), so the hidden set
+  // can clear without a flicker. On error we clear the hidden set
+  // so the rows reappear and the operator sees the error toast.
+  const [optimisticallyHidden, setOptimisticallyHidden] = useState<Set<string>>(
+    new Set(),
+  )
+  const drafts = useMemo(
+    () =>
+      optimisticallyHidden.size === 0
+        ? draftsRaw
+        : draftsRaw.filter((d) => !optimisticallyHidden.has(selectionKey(d))),
+    [draftsRaw, optimisticallyHidden],
+  )
+  // When the server's drafts list refreshes, drop any hidden keys
+  // that the server has already removed — keeps the hidden set from
+  // growing unbounded across many delete cycles.
+  useEffect(() => {
+    if (optimisticallyHidden.size === 0) return
+    const presentKeys = new Set(draftsRaw.map(selectionKey))
+    setOptimisticallyHidden((prev) => {
+      const next = new Set<string>()
+      for (const k of prev) if (presentKeys.has(k)) next.add(k)
+      return next.size === prev.size ? prev : next
+    })
+  }, [draftsRaw, optimisticallyHidden.size])
   const total = data?.total ?? 0
   const staleCount = useMemo(
     () => drafts.filter((d) => d.isStale).length,
@@ -248,6 +276,15 @@ export default function DraftsClient() {
       const productIds = rows
         .filter((d) => d.kind === 'product')
         .map((d) => d.id)
+      // C.12 — optimistic remove: hide rows immediately so the
+      // operator sees the result before the server confirms. We
+      // remember the set so we can restore on error.
+      const optimisticKeys = rows.map(selectionKey)
+      setOptimisticallyHidden((prev) => {
+        const next = new Set(prev)
+        for (const k of optimisticKeys) next.add(k)
+        return next
+      })
       setBusyDelete(true)
       try {
         const res = await fetch(
@@ -266,6 +303,12 @@ export default function DraftsClient() {
           error?: string
         }
         if (!res.ok || !json.success) {
+          // Roll back: rows reappear in the list.
+          setOptimisticallyHidden((prev) => {
+            const next = new Set(prev)
+            for (const k of optimisticKeys) next.delete(k)
+            return next
+          })
           toast({
             tone: 'error',
             title: 'Delete failed',
@@ -298,6 +341,13 @@ export default function DraftsClient() {
         }
         await refetch()
       } catch (err) {
+        // Network error or unexpected throw — roll back optimistic
+        // hide so the rows reappear, and surface the failure.
+        setOptimisticallyHidden((prev) => {
+          const next = new Set(prev)
+          for (const k of optimisticKeys) next.delete(k)
+          return next
+        })
         toast({
           tone: 'error',
           title: 'Delete failed',

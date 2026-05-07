@@ -1851,6 +1851,29 @@ function ParentsTab({
   const performDetach = useCallback(
     async (parentId: string, childIds: string[]) => {
       if (childIds.length === 0) return
+      // C.12 — optimistic remove: children disappear from the inline
+      // panel immediately, before the server confirms. Capture the
+      // pre-mutation rows so we can roll back precisely on error.
+      const idSet = new Set(childIds)
+      const snapshotChildren = childrenByParent[parentId]?.children ?? null
+      setChildrenByParent((s) => {
+        const cur = s[parentId]
+        if (!cur || !cur.children) return s
+        return {
+          ...s,
+          [parentId]: {
+            ...cur,
+            children: cur.children.filter((c) => !idSet.has(c.id)),
+          },
+        }
+      })
+      // Selection is cleared optimistically too — operator sees the
+      // bulk toolbar disappear at the same moment as the rows.
+      setSelectedChildren((s) => {
+        const next = new Set(s)
+        for (const id of childIds) next.delete(id)
+        return next
+      })
       try {
         const res = await fetch(
           `${getBackendUrl()}/api/amazon/pim/unlink-child`,
@@ -1862,6 +1885,19 @@ function ParentsTab({
         )
         const json = await res.json().catch(() => ({}))
         if (!res.ok || json?.success === false) {
+          // Roll back: restore the children panel to its pre-mutation
+          // state. selectedChildren stays cleared — the operator can
+          // re-select if they want to retry.
+          if (snapshotChildren) {
+            setChildrenByParent((s) => {
+              const cur = s[parentId]
+              if (!cur) return s
+              return {
+                ...s,
+                [parentId]: { ...cur, children: snapshotChildren },
+              }
+            })
+          }
           onStatus({
             kind: 'error',
             text: json?.error ?? `Detach failed (HTTP ${res.status})`,
@@ -1876,21 +1912,30 @@ function ParentsTab({
           type: 'pim.changed',
           meta: { detached: json.detached ?? childIds.length },
         })
-        setSelectedChildren((s) => {
-          const next = new Set(s)
-          for (const id of childIds) next.delete(id)
-          return next
-        })
+        // Refetch as a consistency check — server is the source of
+        // truth; the optimistic state should already match but a
+        // refresh catches any drift (e.g. another tab added a child
+        // between optimistic-hide and request-finish).
         await loadChildren(parentId, true)
         await refetch()
       } catch (err) {
+        if (snapshotChildren) {
+          setChildrenByParent((s) => {
+            const cur = s[parentId]
+            if (!cur) return s
+            return {
+              ...s,
+              [parentId]: { ...cur, children: snapshotChildren },
+            }
+          })
+        }
         onStatus({
           kind: 'error',
           text: err instanceof Error ? err.message : String(err),
         })
       }
     },
-    [onStatus, loadChildren, refetch],
+    [onStatus, loadChildren, refetch, childrenByParent],
   )
 
   const onDetachOne = useCallback(
