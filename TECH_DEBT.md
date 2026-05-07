@@ -1181,5 +1181,24 @@ Tie this to S.4 channel adapter realization. Don't ship as a standalone fix — 
 - **44** Saved views + column reorder/resize on /fulfillment/stock — URL state covers the common case; dnd-kit + UserView model when explicitly asked
 - **46** `Channel` table empty + `ChannelListing.channel` is a string — implicit FK contract; populate + migrate to real FK, or delete the table to make the contract explicit. Tied to multi-tenant readiness.
 - **47** ✅ Resolved 2026-05-06 — Vercel auto-deploy gap was a routing confusion; production URL is `nexus-commerce-three.vercel.app` not `nexus-commerce.vercel.app`. Documented for future audits.
-- **56** OutboundSyncService.syncTo* methods are simulated stubs — paired with #55 in S.4 channel adapter realization
+- **56** ✅ Resolved 2026-05-07 in C.8 — Math.random stubs replaced with real Amazon submitListingPayload + eBay createOrReplaceInventoryItem (gated by NEXUS_ENABLE_<CH>_PUBLISH); Shopify/Woo become honest NOT_IMPLEMENTED until Wave 6.
 - **58** ChannelListingOverride system unused — validation gate before committing to S.12; check row count after S.5/S.6
+
+---
+
+## Commit-attribution notes
+
+Place to record when a roadmap commit landed under a different commit
+message than the one its diff describes. Useful for `git log | grep`
+searches that come up empty otherwise.
+
+- **C.9 — Matrix v2 (side-by-side cross-channel diff)** shipped in
+  `6c916d8 O.19: outbound late-shipment risk cron`. The O.19 commit
+  bundled the C.9 diff (32 LOC backend + 261 LOC frontend) alongside
+  the actual late-shipment cron work. Functionality is correct: the
+  Matrix lens now renders the Master reference column, DriftBadge for
+  price/qty/title divergence, two-column tooltip, and row-hover ring.
+  See `apps/web/src/app/listings/ListingsWorkspace.tsx` (`MasterCell`,
+  `DriftBadge`) and `apps/api/src/routes/listings-syndication.routes.ts`
+  matrix handler (added `title`, `masterTitle`, `masterPriceForCompare`,
+  `masterQuantityForCompare`).
