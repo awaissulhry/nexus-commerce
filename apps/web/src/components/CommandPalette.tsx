@@ -26,6 +26,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getBackendUrl } from '@/lib/backend-url'
 
 type AppRouter = ReturnType<typeof useRouterType>
 
@@ -36,7 +37,7 @@ interface Command {
   /** Comma-separated extra keywords for fuzzy matching, e.g. for
    *  "Refresh page" we want "reload" / "fetch" to also match. */
   keywords?: string
-  group: 'Recent' | 'On this page' | 'Navigation' | 'Catalog' | 'System' | 'Action'
+  group: 'Recent' | 'On this page' | 'Navigation' | 'Catalog' | 'System' | 'Action' | 'Listings'
   /** Either href (navigate) or run (callback). One must be set. */
   href?: string
   run?: (router: AppRouter) => void
@@ -197,6 +198,56 @@ export default function CommandPalette() {
   const router = useRouter()
   const pathname = usePathname()
   const inputRef = useRef<HTMLInputElement | null>(null)
+
+  // U.2 — remote listing search. When the operator types 3+ chars in
+  // the palette (and the palette is open), fire `/api/listings?search=`
+  // with a 200ms debounce; matches show as a `Listings` group at the
+  // top of results. Click → /listings?search={SKU} which loads the
+  // master view filtered to that SKU. Cheap by design: pageSize=8 cap,
+  // request cancelled by the next keystroke via AbortController.
+  type ListingHit = {
+    id: string
+    channel: string
+    marketplace: string
+    listingStatus: string
+    price: number | null
+    currency: string | null
+    product: { sku: string; name: string }
+  }
+  const [remoteListings, setRemoteListings] = useState<ListingHit[]>([])
+  const [remoteLoading, setRemoteLoading] = useState(false)
+  useEffect(() => {
+    if (!open) {
+      setRemoteListings([])
+      return
+    }
+    const q = query.trim()
+    if (q.length < 3) {
+      setRemoteListings([])
+      return
+    }
+    const controller = new AbortController()
+    const t = setTimeout(async () => {
+      setRemoteLoading(true)
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/listings?search=${encodeURIComponent(q)}&pageSize=8&sortBy=updatedAt&sortDir=desc`,
+          { cache: 'no-store', signal: controller.signal },
+        )
+        if (!res.ok) return
+        const data = await res.json()
+        setRemoteListings(Array.isArray(data?.listings) ? data.listings : [])
+      } catch {
+        /* AbortError + network failures: silent — palette UX shouldn't crash. */
+      } finally {
+        setRemoteLoading(false)
+      }
+    }, 200)
+    return () => {
+      clearTimeout(t)
+      controller.abort()
+    }
+  }, [open, query])
 
   // U.11 — execute a command. Either navigates (href) or runs the
   // callback; both paths close the palette so the user lands on the
@@ -374,7 +425,38 @@ export default function CommandPalette() {
   // U.11 — palette pool. Page-context commands precede the global
   // ones so "On this page" sits at the top when present, matching
   // the ordering most users expect (current scope first).
-  const pool = useMemo(() => [...activePageCommands, ...COMMANDS], [activePageCommands])
+  // U.2 — wrap each remote listing match in a Command shape so the
+  // existing render path (active-row, Enter-to-run, click-to-run)
+  // works without special-casing. Status hint (DRAFT/ACTIVE/etc.) +
+  // channel/marketplace string fold into the label so a screen-reader
+  // pass and a sighted scan both surface the same context.
+  const remoteListingCommands = useMemo<Command[]>(
+    () =>
+      remoteListings.map((l) => {
+        const priceLabel =
+          l.price != null
+            ? ` · ${l.currency ?? ''}${l.price.toFixed(2)}`.trim().replace(/^· $/, '')
+            : ''
+        return {
+          id: `listing-${l.id}`,
+          label: `${l.product.sku} — ${l.product.name}`,
+          icon: Boxes,
+          group: 'Listings' as const,
+          keywords: `${l.channel} ${l.marketplace} ${l.listingStatus}${priceLabel}`,
+          // Search lands the operator on the master view filtered to
+          // that exact SKU. /listings's grid shows it as the only row;
+          // if multiple channels carry the SKU each appears so the
+          // operator can pick the right marketplace.
+          href: `/listings?search=${encodeURIComponent(l.product.sku)}`,
+        } as Command
+      }),
+    [remoteListings],
+  )
+
+  const pool = useMemo(
+    () => [...activePageCommands, ...remoteListingCommands, ...COMMANDS],
+    [activePageCommands, remoteListingCommands],
+  )
 
   // U.11 — fuzzy-ish match: query has to appear in label OR keywords
   // (not full Levenshtein, but enough that "reload" → "Refresh page"
@@ -390,8 +472,11 @@ export default function CommandPalette() {
   }, [pool, query])
 
   // Group filtered list, preserving the canonical group order.
+  // U.2 — Listings sits high so a SKU lookup query lands at the top
+  // of results when remote matches are available.
   const GROUP_ORDER: Command['group'][] = [
     'On this page',
+    'Listings',
     'Recent',
     'Action',
     'Catalog',
@@ -467,7 +552,7 @@ export default function CommandPalette() {
         <div className="max-h-[400px] overflow-y-auto p-2">
           {flat.length === 0 ? (
             <div className="text-center text-md text-slate-500 py-8">
-              No commands found
+              {remoteLoading ? 'Searching listings…' : 'No commands found'}
             </div>
           ) : (
             GROUP_ORDER.filter((g) => grouped[g]).map((group) => (
