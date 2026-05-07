@@ -1601,6 +1601,19 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       let costsCounted = 0
       const byCarrier: Record<string, { count: number; totalCostCents: number; lateCount: number }> = {}
       const byChannel: Record<string, number> = {}
+      // O.72: per-channel + per-marketplace SLA. Channel-level alone
+      // misses that Amazon-IT-Prime is much stricter than Shopify;
+      // an aggregate "5% late rate" can hide an Amazon-Prime-only
+      // crisis. Marketplace key = "AMAZON:IT" / "EBAY:DE" / etc.,
+      // falling back to "AMAZON:?" when marketplace is null.
+      const byChannelSLA: Record<
+        string,
+        { count: number; lateCount: number; onTimeCount: number; sumHours: number; samples: number }
+      > = {}
+      const byMarketplaceSLA: Record<
+        string,
+        { count: number; lateCount: number; onTimeCount: number; channel: string; marketplace: string | null }
+      > = {}
       // Daily trend — yyyy-mm-dd → ships
       const dailyShips: Record<string, number> = {}
 
@@ -1628,6 +1641,36 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         if (s.order?.channel) {
           const k = s.order.channel as string
           byChannel[k] = (byChannel[k] ?? 0) + 1
+          // O.72: SLA by channel. Same gating as the global lateCount
+          // (need both shippedAt + shipByDate to compute on-time vs
+          // late); count tallies all shipped regardless.
+          if (!byChannelSLA[k]) byChannelSLA[k] = { count: 0, lateCount: 0, onTimeCount: 0, sumHours: 0, samples: 0 }
+          byChannelSLA[k].count++
+          if (s.shippedAt && s.order?.shipByDate) {
+            if (s.shippedAt.getTime() > s.order.shipByDate.getTime()) byChannelSLA[k].lateCount++
+            else byChannelSLA[k].onTimeCount++
+          }
+          if (s.shippedAt && s.order?.purchaseDate) {
+            byChannelSLA[k].sumHours += (s.shippedAt.getTime() - s.order.purchaseDate.getTime()) / 3_600_000
+            byChannelSLA[k].samples++
+          }
+          // O.72: marketplace breakdown — surfaces Amazon-IT vs
+          // Amazon-DE divergence inside one channel.
+          const mpKey = `${k}:${s.order?.marketplace ?? '?'}`
+          if (!byMarketplaceSLA[mpKey]) {
+            byMarketplaceSLA[mpKey] = {
+              count: 0,
+              lateCount: 0,
+              onTimeCount: 0,
+              channel: k,
+              marketplace: s.order?.marketplace ?? null,
+            }
+          }
+          byMarketplaceSLA[mpKey].count++
+          if (s.shippedAt && s.order?.shipByDate) {
+            if (s.shippedAt.getTime() > s.order.shipByDate.getTime()) byMarketplaceSLA[mpKey].lateCount++
+            else byMarketplaceSLA[mpKey].onTimeCount++
+          }
         }
         if (s.shippedAt) {
           const day = s.shippedAt.toISOString().slice(0, 10)
@@ -1772,6 +1815,28 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         },
         byCarrier: carriersOut,
         byChannel,
+        // O.72: SLA dimensions. byChannelSLA arrays are sorted by
+        // count desc so the table renders busy channels first.
+        byChannelSLA: Object.entries(byChannelSLA)
+          .map(([channel, v]) => ({
+            channel,
+            count: v.count,
+            lateCount: v.lateCount,
+            onTimeCount: v.onTimeCount,
+            lateRate: v.onTimeCount + v.lateCount > 0 ? v.lateCount / (v.onTimeCount + v.lateCount) : null,
+            avgTimeToShipHours: v.samples > 0 ? v.sumHours / v.samples : null,
+          }))
+          .sort((a, b) => b.count - a.count),
+        byMarketplaceSLA: Object.values(byMarketplaceSLA)
+          .map((v) => ({
+            channel: v.channel,
+            marketplace: v.marketplace,
+            count: v.count,
+            lateCount: v.lateCount,
+            onTimeCount: v.onTimeCount,
+            lateRate: v.onTimeCount + v.lateCount > 0 ? v.lateCount / (v.onTimeCount + v.lateCount) : null,
+          }))
+          .sort((a, b) => b.count - a.count),
         byPicker: pickersOut,
         trend,
         insights,

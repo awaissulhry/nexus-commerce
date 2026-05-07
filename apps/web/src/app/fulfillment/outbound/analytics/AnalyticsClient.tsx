@@ -28,6 +28,22 @@ interface Analytics {
     lateRate: number | null
   }>
   byChannel: Record<string, number>
+  byChannelSLA?: Array<{
+    channel: string
+    count: number
+    lateCount: number
+    onTimeCount: number
+    lateRate: number | null
+    avgTimeToShipHours: number | null
+  }>
+  byMarketplaceSLA?: Array<{
+    channel: string
+    marketplace: string | null
+    count: number
+    lateCount: number
+    onTimeCount: number
+    lateRate: number | null
+  }>
   byPicker: Array<{
     operator: string
     count: number
@@ -364,6 +380,107 @@ export default function AnalyticsClient() {
                           <span className="text-sm tabular-nums text-slate-600">
                             {count} · {pct.toFixed(0)}%
                           </span>
+                        </div>
+                      )
+                    })}
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {/* O.72: SLA per channel + per marketplace. Splits the
+              global late-rate KPI into the dimensions operators
+              actually care about. Amazon-IT-Prime is much stricter
+              than eBay or Shopify; an aggregate "5% late" can hide a
+              marketplace-specific crisis. Highlights any row whose
+              late rate is materially worse than the global. */}
+          {data.byChannelSLA && data.byChannelSLA.length > 0 && (
+            <Card>
+              <div className="space-y-2">
+                <div className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                  {t('analytics.slaByChannel.title')}
+                </div>
+                <table className="w-full text-base">
+                  <thead className="border-b border-slate-200">
+                    <tr>
+                      <th className="px-3 py-1.5 text-left text-sm font-semibold text-slate-700">
+                        {t('analytics.slaByChannel.col.channel')}
+                      </th>
+                      <th className="px-3 py-1.5 text-right text-sm font-semibold text-slate-700">
+                        {t('analytics.slaByChannel.col.shipped')}
+                      </th>
+                      <th className="px-3 py-1.5 text-right text-sm font-semibold text-slate-700">
+                        {t('analytics.slaByChannel.col.late')}
+                      </th>
+                      <th className="px-3 py-1.5 text-right text-sm font-semibold text-slate-700">
+                        {t('analytics.slaByChannel.col.lateRate')}
+                      </th>
+                      <th className="px-3 py-1.5 text-right text-sm font-semibold text-slate-700">
+                        {t('analytics.slaByChannel.col.avgTtS')}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.byChannelSLA.map((row) => {
+                      const tone =
+                        row.lateRate != null && row.lateRate > 0.1
+                          ? 'text-rose-700'
+                          : row.lateRate != null && row.lateRate > 0.05
+                          ? 'text-amber-700'
+                          : 'text-slate-700'
+                      return (
+                        <tr key={row.channel} className="border-b border-slate-100 last:border-0">
+                          <td className="px-3 py-1.5 font-medium text-slate-900">{row.channel}</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums text-slate-700">{row.count}</td>
+                          <td className={`px-3 py-1.5 text-right tabular-nums ${tone}`}>{row.lateCount}</td>
+                          <td className={`px-3 py-1.5 text-right tabular-nums font-medium ${tone}`}>
+                            {formatPct(row.lateRate)}
+                          </td>
+                          <td className="px-3 py-1.5 text-right tabular-nums text-slate-700">
+                            {formatHours(row.avgTimeToShipHours)}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+
+          {data.byMarketplaceSLA && data.byMarketplaceSLA.filter((r) => r.marketplace).length > 1 && (
+            <Card>
+              <div className="space-y-2">
+                <div className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                  {t('analytics.slaByMarketplace.title')}
+                </div>
+                <div className="text-xs text-slate-500">{t('analytics.slaByMarketplace.subtitle')}</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {data.byMarketplaceSLA
+                    .filter((r) => r.marketplace)
+                    .map((row) => {
+                      const key = `${row.channel}:${row.marketplace}`
+                      const tone =
+                        row.lateRate != null && row.lateRate > 0.1
+                          ? 'border-rose-200 bg-rose-50'
+                          : row.lateRate != null && row.lateRate > 0.05
+                          ? 'border-amber-200 bg-amber-50'
+                          : 'border-slate-200 bg-slate-50'
+                      return (
+                        <div
+                          key={key}
+                          className={`flex items-center justify-between px-3 py-1.5 border rounded ${tone}`}
+                        >
+                          <div className="font-medium text-slate-900 text-base">
+                            {row.channel}
+                            <span className="text-slate-500 mx-1">·</span>
+                            {row.marketplace}
+                          </div>
+                          <div className="flex items-center gap-2 text-sm tabular-nums">
+                            <span className="text-slate-600">{row.count}</span>
+                            <span className="text-slate-400">·</span>
+                            <span className="font-medium text-slate-900">{formatPct(row.lateRate)}</span>
+                          </div>
                         </div>
                       )
                     })}
