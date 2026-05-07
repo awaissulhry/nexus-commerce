@@ -249,17 +249,11 @@ Storage already exists — just need pre-value capture in the apply path and a s
 
 **Original friction:** "Drag-fill went outside intended row, no easy way to cancel." Esc-cancel was already wired into the drag handler — the gap was discoverability and the missing mouse-driven path.
 
-## 27. 🔴 Listing wizard: AI title terminology drift ("Giubbotto" vs "Giacca")
+## 27. ✅ Listing wizard: AI title terminology drift ("Giubbotto" vs "Giacca") — resolved 2026-05-08
 
-**Friction:** "AI title was wrong — kept saying 'Giubbotto' when should be 'Giacca'."
+**Resolution:** `TerminologyPreference` table shipped (schema:850) keyed by `brand` + `marketplace` + `language` with `preferred` and `avoid[]` columns + free-text `context`. The four content-generation prompts (title / bullets / description / keywords) all inject a "Terminology preferences (STRICTLY FOLLOW — do not substitute synonyms)" block via `terminologyBlock()` in `apps/api/src/services/ai/listing-content.service.ts`. Wizard + ai-bulk routes pull entries with `OR: [{ brand: product.brand }, { brand: null }]` so global rules apply when product.brand is NULL (which is every Xavia row per DQ-5). Frontend admin at `/settings/terminology` exposes CRUD. Seed (7 rows) installed for IT marketplace: Giacca, Casco, Pantaloni, Pelle, Protezioni, Rete, plus a Giubbotto→Giacca rule. Re-verifiable via `node scripts/check-terminology.mjs`.
 
-Concrete Xavia-Italian-motorcycle case: "Giubbotto" usually implies a padded/winter jacket; for breathable mesh riding gear the correct term is "Giacca." The model picked the wrong noun even though the source description used "Giacca."
-
-This isn't a generic translation issue — it's a brand-glossary issue. The user can't trust AI titles right now without re-reading every single one.
-
-**Proper fix (cheapest):** brand-level glossary table — `BrandTerminology { brandId, locale, preferTerm, avoidTerm, reason }` — fed into the Phase 5.5 prompt as a "must use / must avoid" section. Highest ROI feature for user trust. P0 because it actively undermines the AI feature shipped yesterday.
-
-**Proper fix (better):** swap to a constrained-decoding step where the model rewrites the source description's existing nouns rather than picking new ones. Heavier; do glossary first.
+**Original friction:** "AI title was wrong — kept saying 'Giubbotto' when should be 'Giacca'." Concrete Xavia case: "Giubbotto" implies padded/winter; for breathable mesh riding gear the correct term is "Giacca." The model picked the wrong noun even though the source used "Giacca."
 
 ## 28. 🟡 Listing wizard: apply to multiple marketplaces in one pass
 

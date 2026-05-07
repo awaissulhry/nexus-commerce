@@ -1,22 +1,22 @@
 'use client'
 
-// C.21 — multi-channel AI listing-content generator.
+// M.1 — multi-marketplace AI listing-content generator.
 //
-// Replaces the eBay-DraftListing-hardcoded surface with a flow that
-// reads from the modern listing-content service (per-field generation,
-// per-marketplace prompts, provider switching, terminology injection,
-// cost tracking).
+// Replaces single-marketplace flow with one-pass fan-out across the
+// operator's selected marketplaces. Each marketplace gets its own
+// LLM call (terminology block + language differ per marketplace), but
+// all of them fire from one Generate click — eliminates the "had to
+// do separately" friction (TECH_DEBT #28).
 //
 // Page-level config: channel (Amazon / eBay / Shopify per active scope),
-// marketplace (per-channel list), provider (auto / Gemini / Claude),
-// fields (title / bullets / description / keywords). Picks persist to
-// localStorage so the operator's last setup carries across sessions.
+// marketplaces (multi-select chips, ≥1 required), provider, fields.
+// Picks persist to localStorage.
 //
-// Per-product flow: search the catalog, hit Generate on a row, see the
-// generated content + cost inline. Results are ephemeral — copy them
-// out, paste into the listing wizard or product editor. The save-as-
-// draft + publish-to-channel flows live elsewhere (per-channel adapters
-// gated behind NEXUS_ENABLE_<CH>_PUBLISH from C.6/C.7).
+// Per-product flow: search the catalog, hit Generate on a row, see N
+// per-marketplace result tabs inline. Results are ephemeral — copy out,
+// paste into the listing wizard or product editor. The save-as-draft +
+// publish-to-channel flows live elsewhere (per-channel adapters gated
+// behind NEXUS_ENABLE_<CH>_PUBLISH from C.6/C.7).
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
@@ -81,20 +81,20 @@ interface GenerationResult {
 // option (locale tag drives prompt language).
 const MARKETPLACE_OPTIONS: Record<Channel, Array<{ id: string; label: string }>> = {
   AMAZON: [
-    { id: 'IT', label: 'Italy (IT)' },
-    { id: 'DE', label: 'Germany (DE)' },
-    { id: 'FR', label: 'France (FR)' },
-    { id: 'ES', label: 'Spain (ES)' },
-    { id: 'UK', label: 'United Kingdom (UK)' },
+    { id: 'IT', label: 'Italy' },
+    { id: 'DE', label: 'Germany' },
+    { id: 'FR', label: 'France' },
+    { id: 'ES', label: 'Spain' },
+    { id: 'UK', label: 'United Kingdom' },
   ],
   EBAY: [
-    { id: 'EBAY_IT', label: 'Italy (EBAY_IT)' },
-    { id: 'EBAY_DE', label: 'Germany (EBAY_DE)' },
-    { id: 'EBAY_ES', label: 'Spain (EBAY_ES)' },
-    { id: 'EBAY_FR', label: 'France (EBAY_FR)' },
-    { id: 'EBAY_GB', label: 'United Kingdom (EBAY_GB)' },
+    { id: 'EBAY_IT', label: 'Italy' },
+    { id: 'EBAY_DE', label: 'Germany' },
+    { id: 'EBAY_ES', label: 'Spain' },
+    { id: 'EBAY_FR', label: 'France' },
+    { id: 'EBAY_GB', label: 'United Kingdom' },
   ],
-  SHOPIFY: [{ id: 'GLOBAL', label: 'Shop (GLOBAL)' }],
+  SHOPIFY: [{ id: 'GLOBAL', label: 'Shop' }],
 }
 
 const PROVIDER_OPTIONS: Array<{ id: string; label: string }> = [
@@ -110,11 +110,12 @@ const FIELD_OPTIONS: Array<{ id: Field; label: string }> = [
   { id: 'keywords', label: 'Keywords' },
 ]
 
-const STORAGE_KEY = 'listings.generate.config.v2'
+const STORAGE_KEY = 'listings.generate.config.v3'
+const STORAGE_KEY_LEGACY = 'listings.generate.config.v2'
 
 interface SavedConfig {
   channel?: Channel
-  marketplace?: string
+  marketplaces?: string[]
   provider?: string
   fields?: Field[]
 }
@@ -123,10 +124,38 @@ function loadConfig(): SavedConfig {
   if (typeof window === 'undefined') return {}
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as SavedConfig) : {}
+    if (raw) return JSON.parse(raw) as SavedConfig
+    // Backwards-compat: v2 stored a single `marketplace` string.
+    const legacy = window.localStorage.getItem(STORAGE_KEY_LEGACY)
+    if (legacy) {
+      const parsed = JSON.parse(legacy) as { marketplace?: string } & SavedConfig
+      const upgraded: SavedConfig = {
+        channel: parsed.channel,
+        marketplaces: parsed.marketplace ? [parsed.marketplace] : undefined,
+        provider: parsed.provider,
+        fields: parsed.fields,
+      }
+      return upgraded
+    }
+    return {}
   } catch {
     return {}
   }
+}
+
+// One product × one marketplace generation slice.
+type MarketplaceState = {
+  loading: boolean
+  result?: GenerationResult
+  error?: string
+}
+
+// One product, expanded inline with N marketplace tabs.
+type ProductState = {
+  expanded?: boolean
+  /** Active marketplace tab. Defaults to first selected marketplace. */
+  activeTab?: string
+  byMarketplace: Record<string, MarketplaceState>
 }
 
 export default function GeneratorPage() {
@@ -137,7 +166,7 @@ export default function GeneratorPage() {
 
   // Page-level config — persisted across sessions.
   const [channel, setChannel] = useState<Channel>('AMAZON')
-  const [marketplace, setMarketplace] = useState<string>('IT')
+  const [marketplaces, setMarketplaces] = useState<string[]>(['IT'])
   const [provider, setProvider] = useState<string>('')
   const [fields, setFields] = useState<Field[]>(['title', 'bullets', 'description'])
 
@@ -147,7 +176,9 @@ export default function GeneratorPage() {
     if (saved.channel && saved.channel in MARKETPLACE_OPTIONS) {
       setChannel(saved.channel)
     }
-    if (saved.marketplace) setMarketplace(saved.marketplace)
+    if (Array.isArray(saved.marketplaces) && saved.marketplaces.length > 0) {
+      setMarketplaces(saved.marketplaces)
+    }
     if (typeof saved.provider === 'string') setProvider(saved.provider)
     if (Array.isArray(saved.fields) && saved.fields.length > 0) {
       setFields(saved.fields as Field[])
@@ -159,27 +190,30 @@ export default function GeneratorPage() {
     try {
       window.localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ channel, marketplace, provider, fields }),
+        JSON.stringify({ channel, marketplaces, provider, fields }),
       )
     } catch {
       /* swallow — quota / privacy mode */
     }
-  }, [channel, marketplace, provider, fields])
+  }, [channel, marketplaces, provider, fields])
 
-  // When channel changes, snap marketplace to the first valid option
-  // for that channel — prevents an "Italy (IT)" picked under Amazon
+  // When channel changes, drop marketplaces that don't belong to the
+  // new channel's option set. Prevents an "IT" picked under Amazon
   // sticking when the operator switches to eBay (where the value is
   // "EBAY_IT" not "IT").
   useEffect(() => {
-    const opts = MARKETPLACE_OPTIONS[channel]
-    if (!opts.some((o) => o.id === marketplace)) {
-      setMarketplace(opts[0].id)
+    const valid = new Set(MARKETPLACE_OPTIONS[channel].map((o) => o.id))
+    const filtered = marketplaces.filter((m) => valid.has(m))
+    if (filtered.length === 0) {
+      setMarketplaces([MARKETPLACE_OPTIONS[channel][0].id])
+    } else if (filtered.length !== marketplaces.length) {
+      setMarketplaces(filtered)
     }
-  }, [channel, marketplace])
+  }, [channel, marketplaces])
 
-  // ── Per-product generation state ────────────────────────────────
+  // ── Per-product per-marketplace generation state ────────────────
   const [resultByProduct, setResultByProduct] = useState<
-    Record<string, { loading: boolean; result?: GenerationResult; error?: string; expanded?: boolean }>
+    Record<string, ProductState>
   >({})
 
   useEffect(() => {
@@ -212,56 +246,98 @@ export default function GeneratorPage() {
     )
   }, [products, searchTerm])
 
+  const generateOne = useCallback(
+    async (productId: string, mp: string) => {
+      const res = await fetch(
+        `${getBackendUrl()}/api/listing-content/generate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productId,
+            marketplace: mp,
+            fields,
+            variant: 0,
+            provider: provider || undefined,
+          }),
+        },
+      )
+      if (res.status === 503) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(
+          j.error ??
+            'AI provider not configured — set GEMINI_API_KEY or ANTHROPIC_API_KEY on the API.',
+        )
+      }
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error ?? `HTTP ${res.status}`)
+      }
+      return (await res.json()) as GenerationResult
+    },
+    [fields, provider],
+  )
+
   const generate = useCallback(
     async (productId: string) => {
       if (fields.length === 0) {
         toast.error('Pick at least one field to generate')
         return
       }
-      setResultByProduct((prev) => ({
-        ...prev,
-        [productId]: { loading: true, expanded: true },
-      }))
-      try {
-        const res = await fetch(
-          `${getBackendUrl()}/api/listing-content/generate`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              productId,
-              marketplace,
-              fields,
-              variant: 0,
-              provider: provider || undefined,
-            }),
-          },
-        )
-        if (res.status === 503) {
-          const j = await res.json().catch(() => ({}))
-          throw new Error(
-            j.error ??
-              'AI provider not configured — set GEMINI_API_KEY or ANTHROPIC_API_KEY on the API.',
-          )
-        }
-        if (!res.ok) {
-          const j = await res.json().catch(() => ({}))
-          throw new Error(j.error ?? `HTTP ${res.status}`)
-        }
-        const data = (await res.json()) as GenerationResult
-        setResultByProduct((prev) => ({
-          ...prev,
-          [productId]: { loading: false, result: data, expanded: true },
-        }))
-      } catch (e: any) {
-        setResultByProduct((prev) => ({
-          ...prev,
-          [productId]: { loading: false, error: e?.message ?? String(e), expanded: true },
-        }))
-        toast.error(e?.message ?? 'Generation failed')
+      if (marketplaces.length === 0) {
+        toast.error('Pick at least one marketplace')
+        return
       }
+      // Initialise loading=true for every selected marketplace, set
+      // active tab to the first one.
+      setResultByProduct((prev) => {
+        const next: ProductState = {
+          expanded: true,
+          activeTab: marketplaces[0],
+          byMarketplace: { ...(prev[productId]?.byMarketplace ?? {}) },
+        }
+        for (const mp of marketplaces) {
+          next.byMarketplace[mp] = { loading: true }
+        }
+        return { ...prev, [productId]: next }
+      })
+
+      // Fan out one fetch per marketplace, in parallel. The backend's
+      // listing-content.service.ts already runs the field tasks in
+      // parallel for one call, so this gives us full marketplace ×
+      // field parallelism. Each marketplace is allowed to fail
+      // independently so a 429 on one doesn't poison the others.
+      await Promise.all(
+        marketplaces.map(async (mp) => {
+          try {
+            const r = await generateOne(productId, mp)
+            setResultByProduct((prev) => ({
+              ...prev,
+              [productId]: {
+                ...(prev[productId] ?? { byMarketplace: {} }),
+                byMarketplace: {
+                  ...(prev[productId]?.byMarketplace ?? {}),
+                  [mp]: { loading: false, result: r },
+                },
+              },
+            }))
+          } catch (e: any) {
+            setResultByProduct((prev) => ({
+              ...prev,
+              [productId]: {
+                ...(prev[productId] ?? { byMarketplace: {} }),
+                byMarketplace: {
+                  ...(prev[productId]?.byMarketplace ?? {}),
+                  [mp]: { loading: false, error: e?.message ?? String(e) },
+                },
+              },
+            }))
+            toast.error(`${mp}: ${e?.message ?? 'Generation failed'}`)
+          }
+        }),
+      )
     },
-    [fields, marketplace, provider, toast],
+    [fields, marketplaces, generateOne, toast],
   )
 
   const toggleField = (f: Field) => {
@@ -270,93 +346,140 @@ export default function GeneratorPage() {
     )
   }
 
+  const toggleMarketplace = (id: string) => {
+    setMarketplaces((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    )
+  }
+
+  const selectAllMarketplaces = () => {
+    setMarketplaces(MARKETPLACE_OPTIONS[channel].map((o) => o.id))
+  }
+
+  // Cost rollup: sum across every product × marketplace result.
   const totalCost = useMemo(() => {
     let sum = 0
-    for (const v of Object.values(resultByProduct)) {
-      if (v.result) {
-        for (const u of v.result.usage) sum += u.costUSD
+    for (const ps of Object.values(resultByProduct)) {
+      for (const ms of Object.values(ps.byMarketplace)) {
+        if (ms.result) {
+          for (const u of ms.result.usage) sum += u.costUSD
+        }
       }
     }
     return sum
   }, [resultByProduct])
 
-  const generationCount = useMemo(
-    () =>
-      Object.values(resultByProduct).filter((v) => v.result).length,
-    [resultByProduct],
-  )
+  // Generation count = total successful (product × marketplace) pairs.
+  const generationCount = useMemo(() => {
+    let n = 0
+    for (const ps of Object.values(resultByProduct)) {
+      for (const ms of Object.values(ps.byMarketplace)) {
+        if (ms.result) n++
+      }
+    }
+    return n
+  }, [resultByProduct])
 
   return (
     <div className="space-y-4">
       <PageHeader
         title="AI listing content"
-        description="Generate per-channel, per-marketplace listing copy with provider switching + cost tracking. Ephemeral — copy results out and paste into the listing wizard or product editor."
+        description="Generate per-channel, per-marketplace listing copy. Fan out to multiple marketplaces in one pass — terminology + language adapt per marketplace. Ephemeral — copy results out and paste into the listing wizard or product editor."
         breadcrumbs={[{ label: 'Listings', href: '/listings' }, { label: 'AI generate' }]}
       />
 
       {/* Config panel */}
       <Card>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-              Channel
-            </label>
-            <select
-              value={channel}
-              onChange={(e) => setChannel(e.target.value as Channel)}
-              className="w-full h-9 px-2 text-md border border-slate-200 rounded"
-            >
-              <option value="AMAZON">Amazon</option>
-              <option value="EBAY">eBay</option>
-              <option value="SHOPIFY">Shopify</option>
-            </select>
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                Channel
+              </label>
+              <select
+                value={channel}
+                onChange={(e) => setChannel(e.target.value as Channel)}
+                className="w-full h-9 px-2 text-md border border-slate-200 rounded"
+              >
+                <option value="AMAZON">Amazon</option>
+                <option value="EBAY">eBay</option>
+                <option value="SHOPIFY">Shopify</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                Provider
+              </label>
+              <select
+                value={provider}
+                onChange={(e) => setProvider(e.target.value)}
+                className="w-full h-9 px-2 text-md border border-slate-200 rounded"
+              >
+                {PROVIDER_OPTIONS.map((opt) => (
+                  <option key={opt.id} value={opt.id}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                Fields
+              </label>
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {FIELD_OPTIONS.map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => toggleField(f.id)}
+                    className={`h-7 px-2 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                      fields.includes(f.id)
+                        ? 'bg-blue-50 border-blue-300 text-blue-700'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                    aria-pressed={fields.includes(f.id)}
+                    aria-label={`Toggle ${f.label} field`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
+
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-              Marketplace
-            </label>
-            <select
-              value={marketplace}
-              onChange={(e) => setMarketplace(e.target.value)}
-              className="w-full h-9 px-2 text-md border border-slate-200 rounded"
-            >
-              {MARKETPLACE_OPTIONS[channel].map((opt) => (
-                <option key={opt.id} value={opt.id}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-              Provider
-            </label>
-            <select
-              value={provider}
-              onChange={(e) => setProvider(e.target.value)}
-              className="w-full h-9 px-2 text-md border border-slate-200 rounded"
-            >
-              {PROVIDER_OPTIONS.map((opt) => (
-                <option key={opt.id} value={opt.id}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-              Fields
-            </label>
-            <div className="flex flex-wrap gap-1.5 mt-1">
-              {FIELD_OPTIONS.map((f) => (
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Marketplaces
+                {marketplaces.length > 1 && (
+                  <span className="ml-2 text-xs font-normal normal-case text-blue-600">
+                    {marketplaces.length} selected — one Generate click fans out to all
+                  </span>
+                )}
+              </label>
+              {MARKETPLACE_OPTIONS[channel].length > 1 && (
                 <button
-                  key={f.id}
-                  onClick={() => toggleField(f.id)}
-                  className={`h-7 px-2 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
-                    fields.includes(f.id)
+                  onClick={selectAllMarketplaces}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Select all
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {MARKETPLACE_OPTIONS[channel].map((opt) => (
+                <button
+                  key={opt.id}
+                  onClick={() => toggleMarketplace(opt.id)}
+                  className={`h-7 px-2.5 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                    marketplaces.includes(opt.id)
                       ? 'bg-blue-50 border-blue-300 text-blue-700'
                       : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                   }`}
-                  aria-pressed={fields.includes(f.id)}
-                  aria-label={`Toggle ${f.label} field`}
+                  aria-pressed={marketplaces.includes(opt.id)}
+                  aria-label={`Toggle ${opt.label} marketplace`}
                 >
-                  {f.label}
+                  {opt.label}{' '}
+                  <span className="text-xs text-slate-400 ml-0.5 font-mono">
+                    {opt.id}
+                  </span>
                 </button>
               ))}
             </div>
@@ -413,11 +536,24 @@ export default function GeneratorPage() {
                 key={p.id}
                 product={p}
                 state={state}
+                marketplaces={marketplaces}
                 onGenerate={() => generate(p.id)}
                 onToggle={() =>
                   setResultByProduct((prev) => ({
                     ...prev,
-                    [p.id]: { ...prev[p.id], expanded: !prev[p.id]?.expanded },
+                    [p.id]: {
+                      ...(prev[p.id] ?? { byMarketplace: {} }),
+                      expanded: !prev[p.id]?.expanded,
+                    },
+                  }))
+                }
+                onSelectTab={(mp) =>
+                  setResultByProduct((prev) => ({
+                    ...prev,
+                    [p.id]: {
+                      ...(prev[p.id] ?? { byMarketplace: {} }),
+                      activeTab: mp,
+                    },
                   }))
                 }
               />
@@ -430,20 +566,38 @@ export default function GeneratorPage() {
 }
 
 // ────────────────────────────────────────────────────────────────────
-// ProductRow — collapsed by default; expands inline with results.
+// ProductRow — collapsed by default; expanded reveals N marketplace tabs.
 // ────────────────────────────────────────────────────────────────────
 function ProductRow({
   product,
   state,
+  marketplaces,
   onGenerate,
   onToggle,
+  onSelectTab,
 }: {
   product: Product
-  state?: { loading: boolean; result?: GenerationResult; error?: string; expanded?: boolean }
+  state?: ProductState
+  marketplaces: string[]
   onGenerate: () => void
   onToggle: () => void
+  onSelectTab: (mp: string) => void
 }) {
   const expanded = state?.expanded ?? false
+  // Are any marketplaces still loading for this product?
+  const anyLoading = state
+    ? Object.values(state.byMarketplace).some((m) => m.loading)
+    : false
+  // Has any marketplace produced a result?
+  const anyResult = state
+    ? Object.values(state.byMarketplace).some((m) => m.result)
+    : false
+  const activeTab =
+    state?.activeTab && state.byMarketplace[state.activeTab]
+      ? state.activeTab
+      : Object.keys(state?.byMarketplace ?? {})[0]
+  const activeSlice = activeTab ? state?.byMarketplace[activeTab] : undefined
+
   return (
     <Card>
       <div className="flex items-center gap-3">
@@ -454,7 +608,7 @@ function ProductRow({
           <div className="text-sm text-slate-500 font-mono">{product.sku}</div>
         </div>
         <div className="flex items-center gap-2">
-          {state?.result && (
+          {anyResult && (
             <button
               onClick={onToggle}
               aria-label={expanded ? 'Collapse result' : 'Expand result'}
@@ -465,27 +619,36 @@ function ProductRow({
           )}
           <button
             onClick={onGenerate}
-            disabled={state?.loading}
+            disabled={anyLoading}
             aria-label={
-              state?.loading
+              anyLoading
                 ? `Generating content for ${product.sku}`
-                : state?.result
+                : anyResult
                   ? `Regenerate content for ${product.sku}`
                   : `Generate AI content for ${product.sku}`
             }
             className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-60 inline-flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300"
           >
-            {state?.loading ? (
+            {anyLoading ? (
               <>
-                <Loader2 size={12} className="animate-spin" /> Generating
+                <Loader2 size={12} className="animate-spin" />{' '}
+                {marketplaces.length > 1
+                  ? `Generating × ${marketplaces.length}`
+                  : 'Generating'}
               </>
-            ) : state?.result ? (
+            ) : anyResult ? (
               <>
                 <Sparkles size={12} /> Regenerate
+                {marketplaces.length > 1 && (
+                  <span className="text-xs opacity-90">× {marketplaces.length}</span>
+                )}
               </>
             ) : (
               <>
                 <Zap size={12} /> Generate
+                {marketplaces.length > 1 && (
+                  <span className="text-xs opacity-90">× {marketplaces.length}</span>
+                )}
               </>
             )}
           </button>
@@ -493,18 +656,59 @@ function ProductRow({
       </div>
       {expanded && state && (
         <div className="mt-3 border-t border-slate-100 pt-3">
-          {state.loading && (
-            <div className="text-sm text-slate-500 inline-flex items-center gap-2">
-              <Loader2 size={12} className="animate-spin" /> Generating with the
-              configured provider…
+          {/* Marketplace tabs */}
+          {Object.keys(state.byMarketplace).length > 1 && (
+            <div className="flex items-center gap-1 mb-3 flex-wrap">
+              {Object.entries(state.byMarketplace).map(([mp, slice]) => {
+                const tone = slice.error
+                  ? 'border-rose-200 text-rose-700'
+                  : slice.loading
+                    ? 'border-slate-200 text-slate-500'
+                    : 'border-emerald-200 text-emerald-700'
+                const isActive = mp === activeTab
+                return (
+                  <button
+                    key={mp}
+                    onClick={() => onSelectTab(mp)}
+                    className={`h-7 px-2.5 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 inline-flex items-center gap-1.5 ${
+                      isActive
+                        ? 'bg-blue-50 border-blue-400 text-blue-800 font-semibold'
+                        : `bg-white ${tone} hover:bg-slate-50`
+                    }`}
+                    aria-pressed={isActive}
+                  >
+                    {slice.loading ? (
+                      <Loader2 size={10} className="animate-spin" />
+                    ) : slice.error ? (
+                      <AlertCircle size={10} />
+                    ) : (
+                      <CheckCircle2 size={10} />
+                    )}
+                    <span className="font-mono text-xs">{mp}</span>
+                  </button>
+                )
+              })}
             </div>
           )}
-          {state.error && (
-            <div className="text-sm text-rose-700 inline-flex items-center gap-2">
-              <AlertCircle size={12} /> {state.error}
-            </div>
+          {/* Active tab content */}
+          {activeSlice && (
+            <>
+              {activeSlice.loading && (
+                <div className="text-sm text-slate-500 inline-flex items-center gap-2">
+                  <Loader2 size={12} className="animate-spin" /> Generating with the
+                  configured provider…
+                </div>
+              )}
+              {activeSlice.error && (
+                <div className="text-sm text-rose-700 inline-flex items-center gap-2">
+                  <AlertCircle size={12} /> {activeSlice.error}
+                </div>
+              )}
+              {activeSlice.result && (
+                <GenerationResultView result={activeSlice.result} />
+              )}
+            </>
           )}
-          {state.result && <GenerationResultView result={state.result} />}
         </div>
       )}
     </Card>
