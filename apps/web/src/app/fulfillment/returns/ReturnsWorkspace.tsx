@@ -74,6 +74,21 @@ export default function ReturnsWorkspace() {
   const [loading, setLoading] = useState(true)
   const [drawerId, setDrawerId] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
+  // O.76: aggregate KPI strip. Cheap fetch — narrow set of counts +
+  // top-5 reasons. Refreshes whenever the list refreshes so a new
+  // return immediately moves the numbers.
+  type Analytics = {
+    windowDays: number
+    last30: number
+    prior30: number
+    trendPct: number | null
+    byChannel: Array<{ channel: string; count: number }>
+    topReasons: Array<{ reason: string; count: number }>
+    fbaCount: number
+    warehouseCount: number
+    totalCount: number
+  }
+  const [analytics, setAnalytics] = useState<Analytics | null>(null)
 
   // O.53: read create-from-URL params. The outbound drawer (O.21)
   // links here as /fulfillment/returns?new=1&orderId=X — open the
@@ -113,6 +128,30 @@ export default function ReturnsWorkspace() {
 
   useEffect(() => { fetchReturns() }, [fetchReturns])
 
+  // O.76: parallel KPI fetch. Same trigger as the list so it stays
+  // in sync (e.g., creating a new return bumps the last30 count).
+  // Failures are silent — the strip just doesn't render rather
+  // than blocking the workspace.
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/fulfillment/returns/analytics`,
+          { cache: 'no-store' },
+        )
+        if (!res.ok || cancelled) return
+        const data = (await res.json()) as Analytics
+        if (!cancelled) setAnalytics(data)
+      } catch {
+        /* non-fatal */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [items.length])
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -120,6 +159,71 @@ export default function ReturnsWorkspace() {
         description="Receive, inspect, refund, and restock customer returns. FBA returns mirrored read-only from Amazon."
         breadcrumbs={[{ label: 'Fulfillment', href: '/fulfillment' }, { label: 'Returns' }]}
       />
+
+      {/* O.76: KPI strip. Last-30-day count + trend, FBA vs warehouse
+          split, top reasons, top channel. Stays visible across the
+          tab/status filters because it's a summary of the whole
+          surface, not the filtered slice. */}
+      {analytics && analytics.totalCount > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <Card>
+            <div className="space-y-0.5">
+              <div className="text-xs uppercase tracking-wider text-slate-500">Last 30 days</div>
+              <div className="text-2xl font-semibold text-slate-900 tabular-nums">{analytics.last30}</div>
+              {analytics.trendPct != null && (
+                <div className={`text-xs tabular-nums ${
+                  analytics.trendPct > 5 ? 'text-rose-600' : analytics.trendPct < -5 ? 'text-emerald-600' : 'text-slate-500'
+                }`}>
+                  {analytics.trendPct > 0 ? '+' : ''}{analytics.trendPct.toFixed(0)}% vs prior 30d
+                </div>
+              )}
+            </div>
+          </Card>
+          <Card>
+            <div className="space-y-0.5">
+              <div className="text-xs uppercase tracking-wider text-slate-500">Total returns</div>
+              <div className="text-2xl font-semibold text-slate-900 tabular-nums">{analytics.totalCount}</div>
+              <div className="text-xs text-slate-500 tabular-nums">
+                {analytics.warehouseCount} warehouse · {analytics.fbaCount} FBA
+              </div>
+            </div>
+          </Card>
+          <Card>
+            <div className="space-y-1">
+              <div className="text-xs uppercase tracking-wider text-slate-500">Top channel (30d)</div>
+              {analytics.byChannel.length > 0 ? (
+                <>
+                  <div className="text-base font-semibold text-slate-900">
+                    {analytics.byChannel[0].channel}
+                  </div>
+                  <div className="text-xs text-slate-500 tabular-nums">
+                    {analytics.byChannel[0].count} of {analytics.last30}
+                  </div>
+                </>
+              ) : (
+                <div className="text-sm text-slate-400">—</div>
+              )}
+            </div>
+          </Card>
+          <Card>
+            <div className="space-y-1">
+              <div className="text-xs uppercase tracking-wider text-slate-500">Top reason (30d)</div>
+              {analytics.topReasons.length > 0 ? (
+                <>
+                  <div className="text-base font-semibold text-slate-900 truncate" title={analytics.topReasons[0].reason}>
+                    {analytics.topReasons[0].reason}
+                  </div>
+                  <div className="text-xs text-slate-500 tabular-nums">
+                    {analytics.topReasons[0].count} return{analytics.topReasons[0].count === 1 ? '' : 's'}
+                  </div>
+                </>
+              ) : (
+                <div className="text-sm text-slate-400">—</div>
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
 
       <div className="flex items-center gap-2 flex-wrap">
         <div className="inline-flex items-center bg-slate-100 rounded-md p-0.5">
