@@ -518,6 +518,141 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
       })
     }
   })
+
+  // ── GET /pim/parent/:id/children ─────────────────────────────────
+  // C.4 — child-list preview drawer on the Parents tab. Returns the
+  // Product rows whose parentId matches, with the columns needed to
+  // render the inline children panel without navigating away. Cached
+  // briefly (no ETag yet — small payload, sub-second query).
+  fastify.get<{ Params: { id: string } }>(
+    '/pim/parent/:id/children',
+    async (request, reply) => {
+      try {
+        const parent = await prisma.product.findUnique({
+          where: { id: request.params.id },
+          select: { id: true, isParent: true, sku: true, name: true },
+        })
+        if (!parent) {
+          return reply.code(404).send({ error: 'Parent not found' })
+        }
+        const children = await prisma.product.findMany({
+          where: { parentId: parent.id },
+          orderBy: { sku: 'asc' },
+          select: {
+            id: true,
+            sku: true,
+            name: true,
+            variantAttributes: true,
+            amazonAsin: true,
+            ebayItemId: true,
+          },
+        })
+        return {
+          success: true,
+          parent: { id: parent.id, sku: parent.sku, name: parent.name },
+          children,
+        }
+      } catch (err) {
+        fastify.log.error(
+          { err },
+          '[pim/parent/:id/children] failed',
+        )
+        return reply.code(500).send({
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    },
+  )
+
+  // ── POST /pim/bulk-promote-to-parent ─────────────────────────────
+  // C.4 — multi-select promote. Each id is promoted independently;
+  // ids that are currently children (parentId set) are skipped with
+  // a per-id reason in the response. Variation theme + axes apply
+  // uniformly to every promoted product so the typical use case
+  // ("promote 12 standalones into shared 'Color/Size' parents") is
+  // a single request. Capped at 100.
+  fastify.post<{
+    Body: {
+      productIds: string[]
+      variationTheme?: string
+      variationAxes?: string[]
+    }
+  }>('/pim/bulk-promote-to-parent', async (request, reply) => {
+    const body = request.body ?? ({} as any)
+    const ids = Array.isArray(body.productIds)
+      ? body.productIds.filter(
+          (id: unknown): id is string =>
+            typeof id === 'string' && id.length > 0,
+        )
+      : []
+    if (ids.length === 0) {
+      return reply.code(400).send({ error: 'productIds required' })
+    }
+    if (ids.length > 100) {
+      return reply
+        .code(400)
+        .send({ error: 'Bulk promote capped at 100 entries.' })
+    }
+    try {
+      const candidates = await prisma.product.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, sku: true, parentId: true, isParent: true },
+      })
+      const present = new Set(candidates.map((c) => c.id))
+      const missingIds = ids.filter((id) => !present.has(id))
+      const childIds = candidates.filter((c) => c.parentId).map((c) => c.id)
+      const eligible = candidates.filter(
+        (c) => !c.parentId && !c.isParent,
+      )
+      const eligibleIds = eligible.map((c) => c.id)
+
+      let promoted = 0
+      if (eligibleIds.length > 0) {
+        const result = await prisma.product.updateMany({
+          where: { id: { in: eligibleIds } },
+          data: {
+            isParent: true,
+            ...(typeof body.variationTheme === 'string' && body.variationTheme
+              ? { variationTheme: body.variationTheme }
+              : {}),
+            ...(Array.isArray(body.variationAxes)
+              ? { variationAxes: body.variationAxes as any }
+              : {}),
+          },
+        })
+        promoted = result.count
+        for (const id of eligibleIds) {
+          void auditLogService.write({
+            userId: null,
+            ip: request.ip ?? null,
+            entityType: 'Product',
+            entityId: id,
+            action: 'promote-to-parent',
+            after: {
+              variationTheme: body.variationTheme,
+              variationAxes: body.variationAxes,
+            },
+            metadata: { source: 'pim-review-bulk' },
+          })
+        }
+      }
+
+      return {
+        success: true,
+        promoted,
+        skipped: {
+          alreadyParent: candidates.filter((c) => c.isParent).map((c) => c.id),
+          currentlyChild: childIds,
+          notFound: missingIds,
+        },
+      }
+    } catch (err) {
+      fastify.log.error({ err }, '[pim/bulk-promote-to-parent] failed')
+      return reply.code(500).send({
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  })
 }
 
 export default pimRoutes

@@ -1138,23 +1138,43 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  // POST /api/amazon/pim/unlink-child — detach a single child from its master
-  fastify.post<{ Body: { productId: string } }>(
-    '/pim/unlink-child',
-    async (request, reply) => {
-      try {
-        const { productId } = request.body
-        if (!productId) return reply.code(400).send({ error: 'productId required' })
-        await prisma.product.update({
-          where: { id: productId },
-          data: { parentId: null, variantAttributes: undefined },
-        })
-        return { success: true }
-      } catch (error: any) {
-        return reply.code(500).send({ error: error?.message ?? String(error) })
+  // POST /api/amazon/pim/unlink-child — detach one or many children
+  // from their master. C.4 — accepts either {productId} (legacy, kept
+  // for back-compat with existing callers) or {productIds: []} (bulk).
+  // Bulk runs as a single updateMany so partial-failure semantics are
+  // simpler — either the row matches the WHERE or it doesn't. Capped
+  // at 200 entries to avoid runaway updates.
+  fastify.post<{
+    Body: { productId?: string; productIds?: string[] }
+  }>('/pim/unlink-child', async (request, reply) => {
+    try {
+      const body = request.body ?? {}
+      const ids = Array.isArray(body.productIds)
+        ? body.productIds.filter(
+            (id): id is string => typeof id === 'string' && id.length > 0,
+          )
+        : body.productId
+          ? [body.productId]
+          : []
+      if (ids.length === 0) {
+        return reply
+          .code(400)
+          .send({ error: 'productId or productIds required' })
       }
+      if (ids.length > 200) {
+        return reply
+          .code(400)
+          .send({ error: 'Bulk unlink capped at 200 entries.' })
+      }
+      const result = await prisma.product.updateMany({
+        where: { id: { in: ids } },
+        data: { parentId: null, variantAttributes: undefined },
+      })
+      return { success: true, detached: result.count }
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
     }
-  )
+  })
 
   // DELETE /api/amazon/pim/master/:masterId — unlink children, delete master
   fastify.delete<{ Params: { masterId: string } }>(

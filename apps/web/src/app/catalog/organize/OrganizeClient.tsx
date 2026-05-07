@@ -22,7 +22,7 @@
 
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   Boxes,
@@ -45,6 +45,11 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
+import { Modal, ModalFooter } from '@/components/ui/Modal'
+import { Skeleton } from '@/components/ui/Skeleton'
+import { Tooltip } from '@/components/ui/Tooltip'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { useRouter, useSearchParams } from 'next/navigation'
 import PageHeader from '@/components/layout/PageHeader'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -130,7 +135,26 @@ const TABS: Array<{ id: Tab; label: string; description: string }> = [
 ]
 
 export default function OrganizeClient() {
-  const [tab, setTab] = useState<Tab>('groups')
+  const router = useRouter()
+  const params = useSearchParams()
+  // C.4 — URL-driven tab + per-tab search. Bookmarkable, reload-stable.
+  // Tab default 'groups' (auto-detected variation clusters); the
+  // search/filters per tab live in their own components and read from
+  // the same URL params via useSearchParams individually.
+  const initialTab = ((): Tab => {
+    const t = params.get('tab')
+    if (t === 'standalone' || t === 'parents' || t === 'groups') return t
+    return 'groups'
+  })()
+  const [tab, setTab] = useState<Tab>(initialTab)
+  useEffect(() => {
+    const next = new URLSearchParams(Array.from(params.entries()))
+    if (tab === 'groups') next.delete('tab')
+    else next.set('tab', tab)
+    const qs = next.toString()
+    router.replace(qs ? `?${qs}` : '?', { scroll: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab])
   const { toast } = useToast()
 
   // U.8 — adapter so the existing tab signatures
@@ -220,12 +244,26 @@ function GroupsTab({
 }: {
   onStatus: (s: { kind: 'success' | 'error'; text: string }) => void
 }) {
+  // C.4 — URL state for search. Shared `?q=` param across tabs so
+  // a search persists when the user switches tabs (matches the
+  // expectation that they're hunting for the same thing in different
+  // views).
+  const router = useRouter()
+  const urlParams = useSearchParams()
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null)
   const [approved, setApproved] = useState<Set<string>>(new Set())
   const [rejected, setRejected] = useState<Set<string>>(new Set())
   const [applying, setApplying] = useState(false)
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(() => urlParams.get('q') ?? '')
   const [minConfidence, setMinConfidence] = useState(0)
+  useEffect(() => {
+    const next = new URLSearchParams(Array.from(urlParams.entries()))
+    if (search.trim()) next.set('q', search.trim())
+    else next.delete('q')
+    const qs = next.toString()
+    router.replace(qs ? `?${qs}` : '?', { scroll: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search])
 
   // Phase 10 — usePolledList centralises fetch + ETag + 30s polling +
   // visibility refresh + invalidation listening. Listens for
@@ -399,12 +437,18 @@ function GroupsTab({
       </div>
 
       {loading && groups.length === 0 ? (
-        <div className="space-y-3">
+        <div
+          className="space-y-3"
+          aria-busy="true"
+          aria-label="Loading suggested groups"
+        >
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="bg-white border border-slate-200 rounded-lg p-4 animate-pulse h-16"
-            />
+              className="bg-white border border-slate-200 rounded-lg p-4"
+            >
+              <Skeleton variant="text" lines={2} />
+            </div>
           ))}
         </div>
       ) : filtered.length === 0 ? (
@@ -603,12 +647,38 @@ function StandaloneTab({
 }: {
   onStatus: (s: { kind: 'success' | 'error'; text: string }) => void
 }) {
-  const [search, setSearch] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
+  // C.4 — URL state. ?q seeds search; ?coverage seeds the coverage
+  // filter. Both flow back to the URL via the writeback effect.
+  const router = useRouter()
+  const urlParams = useSearchParams()
+  const [search, setSearch] = useState(() => urlParams.get('q') ?? '')
+  const [debouncedSearch, setDebouncedSearch] = useState(
+    urlParams.get('q') ?? '',
+  )
   const [coverage, setCoverage] = useState<
     'all' | 'unlisted' | 'partial' | 'complete'
-  >('all')
+  >(() => {
+    const c = urlParams.get('coverage')
+    return c === 'unlisted' || c === 'partial' || c === 'complete'
+      ? c
+      : 'all'
+  })
+  useEffect(() => {
+    const next = new URLSearchParams(Array.from(urlParams.entries()))
+    if (search.trim()) next.set('q', search.trim())
+    else next.delete('q')
+    if (coverage !== 'all') next.set('coverage', coverage)
+    else next.delete('coverage')
+    const qs = next.toString()
+    router.replace(qs ? `?${qs}` : '?', { scroll: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, coverage])
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  // C.4 — bulk promote target. When non-null, PromoteModal renders
+  // in bulk mode and calls /pim/bulk-promote-to-parent.
+  const [bulkPromoteOpen, setBulkPromoteOpen] = useState<
+    StandaloneItem[] | null
+  >(null)
   const [attachOpen, setAttachOpen] = useState<{
     productIds: string[]
   } | null>(null)
@@ -689,15 +759,32 @@ function StandaloneTab({
             Refresh
           </button>
           {selected.size > 0 && (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() =>
-                setAttachOpen({ productIds: Array.from(selected) })
-              }
-            >
-              Attach {selected.size} to parent
-            </Button>
+            <>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() =>
+                  setAttachOpen({ productIds: Array.from(selected) })
+                }
+              >
+                Attach {selected.size} to parent
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  // C.4 — bulk promote uses the same PromoteModal in
+                  // bulk mode. Resolves the StandaloneItem objects from
+                  // the current items list since the modal needs SKUs
+                  // for display + ids for the request.
+                  const targets = items.filter((i) => selected.has(i.id))
+                  setBulkPromoteOpen(targets)
+                }}
+              >
+                <PackagePlus className="w-3.5 h-3.5" />
+                Promote {selected.size} to parents
+              </Button>
+            </>
           )}
         </div>
         <div className="mt-2 text-sm text-slate-500">
@@ -707,12 +794,18 @@ function StandaloneTab({
       </div>
 
       {loading && items.length === 0 ? (
-        <div className="space-y-2">
+        <div
+          className="space-y-2"
+          aria-busy="true"
+          aria-label="Loading standalone products"
+        >
           {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="bg-white border border-slate-200 rounded-lg p-3 animate-pulse h-16"
-            />
+              className="border border-slate-200 rounded-lg bg-white p-3"
+            >
+              <Skeleton variant="text" lines={2} />
+            </div>
           ))}
         </div>
       ) : items.length === 0 ? (
@@ -857,6 +950,29 @@ function StandaloneTab({
         />
       )}
 
+      {bulkPromoteOpen && bulkPromoteOpen.length > 0 && (
+        <PromoteModal
+          products={bulkPromoteOpen}
+          onClose={() => setBulkPromoteOpen(null)}
+          onPromoted={(count) => {
+            onStatus({
+              kind: 'success',
+              text: `Promoted ${count ?? bulkPromoteOpen.length} product${(count ?? bulkPromoteOpen.length) === 1 ? '' : 's'} to parent.`,
+            })
+            setBulkPromoteOpen(null)
+            setSelected(new Set())
+            emitInvalidation({
+              type: 'pim.changed',
+              meta: {
+                bulkPromoted: count ?? bulkPromoteOpen.length,
+              },
+            })
+            void refetch()
+          }}
+          onError={(text) => onStatus({ kind: 'error', text })}
+        />
+      )}
+
       {promoteId && (
         <PromoteModal
           product={promoteId}
@@ -926,6 +1042,8 @@ function AttachModal({
   onAttached: (count: number) => void
   onError: (text: string) => void
 }) {
+  // AttachModal's search is modal-internal (parent typeahead) — not
+  // URL state. Stays as plain useState.
   const [search, setSearch] = useState('')
   const [results, setResults] = useState<ParentSearchHit[]>([])
   const [searching, setSearching] = useState(false)
@@ -1036,14 +1154,27 @@ function AttachModal({
     }
   }, [selected])
 
+  // C.4 — axis values keep insertion order from the Set, which
+  // mirrored DB-row order and felt random to the user. Sort
+  // alphabetically when extracting so the dropdown reads
+  // consistently (S/M/L style, Black/Brown/Red etc.). Numeric-aware
+  // compare so '8' / '10' / '12' sort the right way.
   const valuesByAxis = useMemo(() => {
-    const m = new Map<string, Set<string>>()
-    for (const ax of parentAxes) m.set(ax, new Set())
+    const m = new Map<string, string[]>()
+    for (const ax of parentAxes) m.set(ax, [])
     for (const v of parentVariants) {
       for (const ax of parentAxes) {
         const val = v.attrs?.[ax]
-        if (val) m.get(ax)!.add(val)
+        if (!val) continue
+        const list = m.get(ax)!
+        if (!list.includes(val)) list.push(val)
       }
+    }
+    for (const [ax, list] of m) {
+      list.sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }),
+      )
+      m.set(ax, list)
     }
     return m
   }, [parentAxes, parentVariants])
@@ -1088,32 +1219,23 @@ function AttachModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/40 backdrop-blur-sm pt-[6vh] px-4"
-      role="dialog"
-      aria-modal="true"
-      onClick={() => !submitting && onClose()}
+    <Modal
+      open
+      onClose={() => !submitting && onClose()}
+      title={`Attach ${productIds.length} product${productIds.length === 1 ? '' : 's'} to parent`}
+      size="2xl"
+      placement="top"
+      dismissOnBackdrop={!submitting}
+      dismissOnEscape={!submitting}
     >
-      <div
-        className="bg-white rounded-lg shadow-xl border border-slate-200 w-[680px] max-w-[92vw] flex flex-col max-h-[85vh]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900">
-            Attach {productIds.length} product{productIds.length === 1 ? '' : 's'}{' '}
-            to parent
-          </h2>
-          <button
-            type="button"
-            onClick={() => !submitting && onClose()}
-            disabled={submitting}
-            className="text-slate-400 hover:text-slate-700 disabled:opacity-50"
-            aria-label="Close"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+      <div className="space-y-4">
+        {/*
+          C.4 — Modal primitive replaces the prior `fixed inset-0`
+          overlay. Focus trap, body scroll lock, escape-to-close,
+          restored focus on dismiss, and the X close button are all
+          primitive-handled. Backdrop dismissal honors submitting so
+          a mid-flight click can't dismount the modal.
+        */}
           {!selected && (
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -1237,29 +1359,27 @@ function AttachModal({
               </div>
             </>
           )}
-        </div>
-
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => !submitting && onClose()}
-            disabled={submitting}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => void handleAttach()}
-            disabled={!selected || submitting}
-            loading={submitting}
-          >
-            Attach
-          </Button>
-        </div>
       </div>
-    </div>
+      <ModalFooter>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => !submitting && onClose()}
+          disabled={submitting}
+        >
+          Cancel
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() => void handleAttach()}
+          disabled={!selected || submitting}
+          loading={submitting}
+        >
+          Attach
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 }
 
@@ -1273,7 +1393,10 @@ function ProductAxisRow({
   productId: string
   axes: string[]
   values: Record<string, string>
-  valuesByAxis: Map<string, Set<string>>
+  /** C.4 — sorted string list (alphabetical, numeric-aware) instead
+   *  of an unordered Set. The Map shape stays so callers don't have
+   *  to change their lookups. */
+  valuesByAxis: Map<string, string[]>
   onChange: (axis: string, value: string) => void
 }) {
   return (
@@ -1283,7 +1406,7 @@ function ProductAxisRow({
       </div>
       <div className="grid grid-cols-2 gap-2">
         {axes.map((axis) => {
-          const known = Array.from(valuesByAxis.get(axis) ?? [])
+          const known = valuesByAxis.get(axis) ?? []
           const v = values[axis] ?? ''
           const isCustom = v !== '' && !known.includes(v)
           return (
@@ -1322,111 +1445,251 @@ function ProductAxisRow({
   )
 }
 
+// C.4 — guided theme picker. Replaces the prior free-text input
+// that left the user staring at a blank field. The 5 common themes
+// cover ~90% of motorcycle/apparel catalogs; "Custom…" preserves
+// the free-text path for unusual cases. Format matches what
+// /pim/promote-to-parent already accepts: '/'-separated axis names.
+const COMMON_THEMES: Array<{ value: string; label: string; hint: string }> = [
+  { value: 'Size', label: 'Size', hint: 'XS / S / M / L / XL' },
+  { value: 'Color', label: 'Color', hint: 'Black / Brown / Red…' },
+  { value: 'Size / Color', label: 'Size + Color', hint: 'Apparel default' },
+  {
+    value: 'Size / Material',
+    label: 'Size + Material',
+    hint: 'Boots, jackets',
+  },
+  {
+    value: 'BodyType / Size',
+    label: 'Body type + Size',
+    hint: "Men's / Women's / Kids'",
+  },
+]
+
 function PromoteModal({
   product,
+  // C.4 — bulk variant: when products is provided, the modal calls
+  // /pim/bulk-promote-to-parent instead of the single endpoint and
+  // shows aggregate copy.
+  products,
   onClose,
   onPromoted,
   onError,
 }: {
-  product: StandaloneItem
+  product?: StandaloneItem
+  products?: StandaloneItem[]
   onClose: () => void
-  onPromoted: () => void
+  onPromoted: (count?: number) => void
   onError: (text: string) => void
 }) {
-  const [theme, setTheme] = useState('')
+  // Picker state: which theme tile is selected, or 'CUSTOM' for free-text.
+  const [selectedTheme, setSelectedTheme] = useState<string | null>(null)
+  const [customTheme, setCustomTheme] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const isBulk = !!products && products.length > 0
+  const targets = isBulk ? products! : product ? [product] : []
+  const titleSku =
+    targets.length === 1
+      ? targets[0]!.sku
+      : `${targets.length} products`
+
+  const effectiveTheme =
+    selectedTheme === 'CUSTOM'
+      ? customTheme.trim()
+      : selectedTheme ?? ''
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/40 backdrop-blur-sm pt-[12vh] px-4"
-      role="dialog"
-      aria-modal="true"
-      onClick={() => !submitting && onClose()}
+    <Modal
+      open
+      onClose={() => !submitting && onClose()}
+      title={`Promote ${titleSku} to parent${targets.length === 1 ? '' : 's'}`}
+      size="lg"
+      placement="top"
+      dismissOnBackdrop={!submitting}
+      dismissOnEscape={!submitting}
     >
-      <div
-        className="bg-white rounded-lg shadow-xl border border-slate-200 w-[460px] max-w-[92vw]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="px-5 py-3 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900">
-            Promote {product.sku} to parent
-          </h2>
-        </div>
-        <div className="px-5 py-4 space-y-3">
-          <p className="text-base text-slate-700">
-            Marks this product as a parent. You can then add child variants
-            from the Variations tab on its edit page, or attach existing
-            standalones to it from this page.
-          </p>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Variation theme (optional)
-              <span className="ml-2 font-normal text-xs text-slate-500">
-                e.g. "Size / Color"
-              </span>
-            </label>
+      <div className="space-y-4">
+        <p className="text-base text-slate-700">
+          {isBulk
+            ? `Marks ${targets.length} products as parents. You can attach standalones to them from this page; existing variants on each product carry through.`
+            : 'Marks this product as a parent. You can then add child variants from the Variations tab on its edit page, or attach existing standalones to it from this page.'}
+        </p>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            Variation theme{' '}
+            <span className="font-normal text-xs text-slate-500">
+              (optional — controls which axes children share)
+            </span>
+          </label>
+          <div className="grid grid-cols-2 gap-1.5">
+            {COMMON_THEMES.map((t) => {
+              const active = selectedTheme === t.value
+              return (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => setSelectedTheme(t.value)}
+                  disabled={submitting}
+                  className={cn(
+                    'text-left rounded-md border px-2.5 py-2 transition-colors',
+                    active
+                      ? 'border-blue-300 bg-blue-50/40 ring-1 ring-blue-200'
+                      : 'border-slate-200 bg-white hover:border-slate-300',
+                    submitting && 'opacity-50 cursor-not-allowed',
+                  )}
+                  aria-pressed={active}
+                >
+                  <div className="text-base font-medium text-slate-900">
+                    {t.label}
+                  </div>
+                  <div className="text-xs text-slate-500">{t.hint}</div>
+                </button>
+              )
+            })}
+            <button
+              type="button"
+              onClick={() => setSelectedTheme('CUSTOM')}
+              disabled={submitting}
+              className={cn(
+                'text-left rounded-md border px-2.5 py-2 transition-colors',
+                selectedTheme === 'CUSTOM'
+                  ? 'border-blue-300 bg-blue-50/40 ring-1 ring-blue-200'
+                  : 'border-slate-200 bg-white hover:border-slate-300',
+                submitting && 'opacity-50 cursor-not-allowed',
+              )}
+              aria-pressed={selectedTheme === 'CUSTOM'}
+            >
+              <div className="text-base font-medium text-slate-900">
+                Custom…
+              </div>
+              <div className="text-xs text-slate-500">
+                Free-form, e.g. "Color / Material"
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedTheme(null)}
+              disabled={submitting}
+              className={cn(
+                'text-left rounded-md border px-2.5 py-2 transition-colors',
+                selectedTheme === null
+                  ? 'border-blue-300 bg-blue-50/40 ring-1 ring-blue-200'
+                  : 'border-slate-200 bg-white hover:border-slate-300',
+                submitting && 'opacity-50 cursor-not-allowed',
+              )}
+              aria-pressed={selectedTheme === null}
+            >
+              <div className="text-base font-medium text-slate-900">
+                No theme yet
+              </div>
+              <div className="text-xs text-slate-500">
+                Set later from the parent's Variations tab
+              </div>
+            </button>
+          </div>
+
+          {selectedTheme === 'CUSTOM' && (
             <input
               type="text"
-              value={theme}
-              onChange={(e) => setTheme(e.target.value)}
+              value={customTheme}
+              onChange={(e) => setCustomTheme(e.target.value)}
               placeholder="Size / Color"
-              className="w-full h-8 px-2.5 text-base border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              autoFocus
+              className="mt-2 w-full h-8 px-2.5 text-base border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               disabled={submitting}
             />
-          </div>
+          )}
         </div>
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => !submitting && onClose()}
-            disabled={submitting}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            loading={submitting}
-            disabled={submitting}
-            onClick={async () => {
-              setSubmitting(true)
-              try {
-                const axes = theme.trim()
-                  ? theme.split(/\s*\/\s*/).filter(Boolean)
-                  : undefined
+      </div>
+      <ModalFooter>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => !submitting && onClose()}
+          disabled={submitting}
+        >
+          Cancel
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
+          loading={submitting}
+          disabled={
+            submitting ||
+            (selectedTheme === 'CUSTOM' && customTheme.trim().length === 0)
+          }
+          onClick={async () => {
+            setSubmitting(true)
+            try {
+              const axes = effectiveTheme
+                ? effectiveTheme.split(/\s*\/\s*/).filter(Boolean)
+                : undefined
+              if (isBulk) {
                 const res = await fetch(
-                  `${getBackendUrl()}/api/pim/promote-to-parent`,
+                  `${getBackendUrl()}/api/pim/bulk-promote-to-parent`,
                   {
                     method: 'POST',
                     headers: {
                       'Content-Type': 'application/json',
-                      'Idempotency-Key': `pim-promote:${product.id}`,
+                      'Idempotency-Key': `pim-bulk-promote:${targets
+                        .map((t) => t.id)
+                        .sort()
+                        .join(',')}`,
                     },
                     body: JSON.stringify({
-                      productId: product.id,
-                      variationTheme: theme.trim() || undefined,
+                      productIds: targets.map((t) => t.id),
+                      variationTheme: effectiveTheme || undefined,
                       variationAxes: axes,
                     }),
                   },
                 )
                 const json = await res.json().catch(() => ({}))
                 if (!res.ok || json?.success === false) {
-                  onError(json?.error ?? `Promote failed (HTTP ${res.status})`)
+                  onError(
+                    json?.error ?? `Bulk promote failed (HTTP ${res.status})`,
+                  )
                   return
                 }
-                onPromoted()
-              } catch (err) {
-                onError(err instanceof Error ? err.message : String(err))
-              } finally {
-                setSubmitting(false)
+                onPromoted(json.promoted ?? targets.length)
+              } else {
+                const res = await fetch(
+                  `${getBackendUrl()}/api/pim/promote-to-parent`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Idempotency-Key': `pim-promote:${targets[0]!.id}`,
+                    },
+                    body: JSON.stringify({
+                      productId: targets[0]!.id,
+                      variationTheme: effectiveTheme || undefined,
+                      variationAxes: axes,
+                    }),
+                  },
+                )
+                const json = await res.json().catch(() => ({}))
+                if (!res.ok || json?.success === false) {
+                  onError(
+                    json?.error ?? `Promote failed (HTTP ${res.status})`,
+                  )
+                  return
+                }
+                onPromoted(1)
               }
-            }}
-          >
-            Promote to parent
-          </Button>
-        </div>
-      </div>
-    </div>
+            } catch (err) {
+              onError(err instanceof Error ? err.message : String(err))
+            } finally {
+              setSubmitting(false)
+            }
+          }}
+        >
+          {isBulk
+            ? `Promote ${targets.length} to parents`
+            : 'Promote to parent'}
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 }
 
@@ -1439,9 +1702,50 @@ function ParentsTab({
 }: {
   onStatus: (s: { kind: 'success' | 'error'; text: string }) => void
 }) {
-  const [search, setSearch] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [incompleteOnly, setIncompleteOnly] = useState(false)
+  const router = useRouter()
+  const urlParams = useSearchParams()
+  const [search, setSearch] = useState(() => urlParams.get('q') ?? '')
+  const [debouncedSearch, setDebouncedSearch] = useState(
+    urlParams.get('q') ?? '',
+  )
+  const [incompleteOnly, setIncompleteOnly] = useState(
+    urlParams.get('incomplete') === '1',
+  )
+  useEffect(() => {
+    const next = new URLSearchParams(Array.from(urlParams.entries()))
+    if (search.trim()) next.set('q', search.trim())
+    else next.delete('q')
+    if (incompleteOnly) next.set('incomplete', '1')
+    else next.delete('incomplete')
+    const qs = next.toString()
+    router.replace(qs ? `?${qs}` : '?', { scroll: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, incompleteOnly])
+  // C.4 / A.5 — child-list preview state. expandedId = which parent's
+  // children panel is open. childrenByParent caches the fetched
+  // children so collapsing + re-expanding doesn't re-fetch.
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [childrenByParent, setChildrenByParent] = useState<
+    Record<
+      string,
+      {
+        loading: boolean
+        children: Array<{
+          id: string
+          sku: string
+          name: string
+          variantAttributes: Record<string, unknown> | null
+          amazonAsin: string | null
+          ebayItemId: string | null
+        }> | null
+        error: string | null
+      }
+    >
+  >({})
+  const [selectedChildren, setSelectedChildren] = useState<Set<string>>(
+    new Set(),
+  )
+  const confirm = useConfirm()
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(search), 250)
     return () => window.clearTimeout(t)
@@ -1470,6 +1774,147 @@ function ParentsTab({
       onStatus({ kind: 'error', text: `Couldn't load parents: ${error}` })
     }
   }, [error, onStatus])
+
+  // C.4 / A.5 — fetch children for a parent on first expand. Hits
+  // the new /pim/parent/:id/children endpoint; cached in state so
+  // subsequent toggles are free. invalidationTypes on the outer
+  // poll already include pim.changed, so a detach elsewhere triggers
+  // a refetch of the list — for the inline panel we re-fetch on
+  // demand below after a successful detach.
+  const loadChildren = useCallback(
+    async (parentId: string, force = false) => {
+      if (!force && childrenByParent[parentId]?.children) return
+      setChildrenByParent((s) => ({
+        ...s,
+        [parentId]: { loading: true, children: null, error: null },
+      }))
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/pim/parent/${encodeURIComponent(parentId)}/children`,
+        )
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok || json?.success === false) {
+          setChildrenByParent((s) => ({
+            ...s,
+            [parentId]: {
+              loading: false,
+              children: null,
+              error: json?.error ?? `HTTP ${res.status}`,
+            },
+          }))
+          return
+        }
+        setChildrenByParent((s) => ({
+          ...s,
+          [parentId]: {
+            loading: false,
+            children: json.children ?? [],
+            error: null,
+          },
+        }))
+      } catch (err) {
+        setChildrenByParent((s) => ({
+          ...s,
+          [parentId]: {
+            loading: false,
+            children: null,
+            error: err instanceof Error ? err.message : String(err),
+          },
+        }))
+      }
+    },
+    [childrenByParent],
+  )
+
+  const toggleExpand = useCallback(
+    (parentId: string) => {
+      setExpandedId((cur) => {
+        const next = cur === parentId ? null : parentId
+        if (next) void loadChildren(next)
+        return next
+      })
+      // Clear cross-parent selection when switching panels.
+      setSelectedChildren(new Set())
+    },
+    [loadChildren],
+  )
+
+  const performDetach = useCallback(
+    async (parentId: string, childIds: string[]) => {
+      if (childIds.length === 0) return
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/amazon/pim/unlink-child`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productIds: childIds }),
+          },
+        )
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok || json?.success === false) {
+          onStatus({
+            kind: 'error',
+            text: json?.error ?? `Detach failed (HTTP ${res.status})`,
+          })
+          return
+        }
+        onStatus({
+          kind: 'success',
+          text: `Detached ${json.detached ?? childIds.length} child${(json.detached ?? childIds.length) === 1 ? '' : 'ren'}.`,
+        })
+        emitInvalidation({
+          type: 'pim.changed',
+          meta: { detached: json.detached ?? childIds.length },
+        })
+        setSelectedChildren((s) => {
+          const next = new Set(s)
+          for (const id of childIds) next.delete(id)
+          return next
+        })
+        await loadChildren(parentId, true)
+        await refetch()
+      } catch (err) {
+        onStatus({
+          kind: 'error',
+          text: err instanceof Error ? err.message : String(err),
+        })
+      }
+    },
+    [onStatus, loadChildren, refetch],
+  )
+
+  const onDetachOne = useCallback(
+    async (parentId: string, child: { id: string; sku: string }) => {
+      const ok = await confirm({
+        title: `Detach ${child.sku}?`,
+        description:
+          'The child will become a standalone product. Listings remain on the channels — only the catalog hierarchy changes.',
+        confirmLabel: 'Detach',
+        tone: 'danger',
+      })
+      if (!ok) return
+      await performDetach(parentId, [child.id])
+    },
+    [confirm, performDetach],
+  )
+
+  const onDetachBulk = useCallback(
+    async (parentId: string) => {
+      const ids = Array.from(selectedChildren)
+      if (ids.length === 0) return
+      const ok = await confirm({
+        title: `Detach ${ids.length} child${ids.length === 1 ? '' : 'ren'}?`,
+        description:
+          'They become standalone products. Listings on channels are kept; only the catalog hierarchy changes.',
+        confirmLabel: 'Detach selected',
+        tone: 'danger',
+      })
+      if (!ok) return
+      await performDetach(parentId, ids)
+    },
+    [selectedChildren, confirm, performDetach],
+  )
 
   return (
     <div className="space-y-4">
@@ -1514,12 +1959,18 @@ function ParentsTab({
       </div>
 
       {loading && items.length === 0 ? (
-        <div className="space-y-2">
+        <div
+          className="space-y-2"
+          aria-busy="true"
+          aria-label="Loading parents"
+        >
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="bg-white border border-slate-200 rounded-lg p-3 animate-pulse h-16"
-            />
+              className="border border-slate-200 rounded-lg p-3 bg-white"
+            >
+              <Skeleton variant="text" lines={2} />
+            </div>
           ))}
         </div>
       ) : items.length === 0 ? (
@@ -1533,6 +1984,7 @@ function ParentsTab({
           <table className="w-full text-base">
             <thead className="bg-slate-50">
               <tr>
+                <th className="px-3 py-2 w-[36px]" />
                 <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 font-semibold">
                   SKU
                 </th>
@@ -1557,88 +2009,264 @@ function ParentsTab({
               </tr>
             </thead>
             <tbody>
-              {items.map((p) => (
-                <tr
-                  key={p.id}
-                  className="border-t border-slate-100 hover:bg-slate-50/50"
-                >
-                  <td className="px-3 py-2 font-mono text-sm">
-                    <Link
-                      href={`/products/${p.id}/edit`}
-                      className="text-blue-600 hover:underline"
-                    >
-                      {p.sku}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2 max-w-[260px]">
-                    <div className="truncate text-slate-800">{p.name}</div>
-                    {p.brand && (
-                      <div className="text-xs text-slate-500">
-                        {p.brand}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    {p.variationTheme ? (
-                      <span className="text-slate-700">{p.variationTheme}</span>
-                    ) : (
-                      <span className="text-slate-300">—</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    <span
-                      className={
-                        p.childCount === 0 ? 'text-amber-600' : 'text-slate-700'
-                      }
-                    >
-                      {p.childCount}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="inline-flex gap-1">
-                      <span className="px-1.5 py-0.5 text-xs rounded border border-emerald-200 bg-emerald-50 text-emerald-700 tabular-nums">
-                        {p.listings.live} live
-                      </span>
-                      {p.listings.draft > 0 && (
-                        <span className="px-1.5 py-0.5 text-xs rounded border border-amber-200 bg-amber-50 text-amber-700 tabular-nums">
-                          {p.listings.draft} draft
-                        </span>
+              {items.map((p) => {
+                const isExpanded = expandedId === p.id
+                const panel = childrenByParent[p.id]
+                return (
+                  <Fragment key={p.id}>
+                    <tr
+                      className={cn(
+                        'border-t border-slate-100',
+                        isExpanded
+                          ? 'bg-blue-50/40'
+                          : 'hover:bg-slate-50/50',
                       )}
-                      {p.listings.failed > 0 && (
-                        <span className="px-1.5 py-0.5 text-xs rounded border border-rose-200 bg-rose-50 text-rose-700 tabular-nums">
-                          {p.listings.failed} failed
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex flex-wrap gap-1 max-w-[180px]">
-                      {p.listings.channels.slice(0, 4).map((c) => (
-                        <span
-                          key={c}
-                          className="font-mono text-xs px-1 py-0.5 rounded bg-slate-100 text-slate-700"
+                    >
+                      <td className="px-3 py-2">
+                        <Tooltip
+                          content={
+                            isExpanded
+                              ? 'Collapse children'
+                              : 'Show children inline'
+                          }
+                          placement="right"
                         >
-                          {c.replace(':', '·')}
+                          <button
+                            type="button"
+                            onClick={() => toggleExpand(p.id)}
+                            disabled={p.childCount === 0}
+                            aria-expanded={isExpanded}
+                            aria-controls={`children-${p.id}`}
+                            aria-label={
+                              isExpanded
+                                ? 'Collapse children'
+                                : 'Show children inline'
+                            }
+                            className={cn(
+                              'inline-flex items-center justify-center w-6 h-6 rounded text-slate-500',
+                              p.childCount === 0
+                                ? 'opacity-30 cursor-not-allowed'
+                                : 'hover:bg-slate-100 hover:text-slate-900',
+                            )}
+                          >
+                            <ChevronRight
+                              className={cn(
+                                'w-3.5 h-3.5 transition-transform',
+                                isExpanded && 'rotate-90',
+                              )}
+                            />
+                          </button>
+                        </Tooltip>
+                      </td>
+                      <td className="px-3 py-2 font-mono text-sm">
+                        <Link
+                          href={`/products/${p.id}/edit`}
+                          className="text-blue-600 hover:underline"
+                        >
+                          {p.sku}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-2 max-w-[260px]">
+                        <div className="truncate text-slate-800">{p.name}</div>
+                        {p.brand && (
+                          <div className="text-xs text-slate-500">
+                            {p.brand}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        {p.variationTheme ? (
+                          <span className="text-slate-700">
+                            {p.variationTheme}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        <span
+                          className={
+                            p.childCount === 0
+                              ? 'text-amber-600'
+                              : 'text-slate-700'
+                          }
+                        >
+                          {p.childCount}
                         </span>
-                      ))}
-                      {p.listings.channels.length > 4 && (
-                        <span className="text-xs text-slate-500">
-                          +{p.listings.channels.length - 4}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <Link
-                      href={`/products/${p.id}/edit`}
-                      className="inline-flex items-center gap-1 h-6 px-2 text-xs rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700"
-                    >
-                      Open
-                      <ChevronRight className="w-3 h-3" />
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="inline-flex gap-1">
+                          <span className="px-1.5 py-0.5 text-xs rounded border border-emerald-200 bg-emerald-50 text-emerald-700 tabular-nums">
+                            {p.listings.live} live
+                          </span>
+                          {p.listings.draft > 0 && (
+                            <span className="px-1.5 py-0.5 text-xs rounded border border-amber-200 bg-amber-50 text-amber-700 tabular-nums">
+                              {p.listings.draft} draft
+                            </span>
+                          )}
+                          {p.listings.failed > 0 && (
+                            <span className="px-1.5 py-0.5 text-xs rounded border border-rose-200 bg-rose-50 text-rose-700 tabular-nums">
+                              {p.listings.failed} failed
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex flex-wrap gap-1 max-w-[180px]">
+                          {p.listings.channels.slice(0, 4).map((c) => (
+                            <span
+                              key={c}
+                              className="font-mono text-xs px-1 py-0.5 rounded bg-slate-100 text-slate-700"
+                            >
+                              {c.replace(':', '·')}
+                            </span>
+                          ))}
+                          {p.listings.channels.length > 4 && (
+                            <span className="text-xs text-slate-500">
+                              +{p.listings.channels.length - 4}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <Link
+                          href={`/products/${p.id}/edit`}
+                          className="inline-flex items-center gap-1 h-6 px-2 text-xs rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700"
+                        >
+                          Open
+                          <ChevronRight className="w-3 h-3" />
+                        </Link>
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr id={`children-${p.id}`}>
+                        <td
+                          colSpan={8}
+                          className="bg-slate-50/60 border-t border-slate-100 px-4 py-3"
+                        >
+                          {panel?.loading && (
+                            <div
+                              className="space-y-1.5"
+                              aria-busy="true"
+                            >
+                              <Skeleton variant="text" lines={3} />
+                            </div>
+                          )}
+                          {panel?.error && !panel.loading && (
+                            <div className="text-sm text-rose-700">
+                              Failed to load children: {panel.error}
+                            </div>
+                          )}
+                          {panel?.children && (
+                            <div className="space-y-2">
+                              {selectedChildren.size > 0 && (
+                                <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-blue-50 border border-blue-200">
+                                  <span className="text-base font-medium text-blue-900 tabular-nums">
+                                    {selectedChildren.size} selected
+                                  </span>
+                                  <span className="text-blue-300">·</span>
+                                  <Button
+                                    variant="danger"
+                                    size="sm"
+                                    onClick={() => void onDetachBulk(p.id)}
+                                  >
+                                    Detach {selectedChildren.size}
+                                  </Button>
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() =>
+                                      setSelectedChildren(new Set())
+                                    }
+                                  >
+                                    Clear
+                                  </Button>
+                                </div>
+                              )}
+                              {panel.children.length === 0 ? (
+                                <div className="text-sm text-slate-500 px-2 py-1">
+                                  No children — this parent is empty.
+                                </div>
+                              ) : (
+                                <ul className="divide-y divide-slate-100 border border-slate-200 rounded-md bg-white">
+                                  {panel.children.map((c) => {
+                                    const checked = selectedChildren.has(c.id)
+                                    const attrs = c.variantAttributes
+                                      ? Object.entries(c.variantAttributes)
+                                          .map(
+                                            ([k, v]) =>
+                                              `${k}=${String(v ?? '')}`,
+                                          )
+                                          .join(' · ')
+                                      : ''
+                                    return (
+                                      <li
+                                        key={c.id}
+                                        className="flex items-center gap-3 px-3 py-2 text-sm"
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={checked}
+                                          onChange={() =>
+                                            setSelectedChildren((s) => {
+                                              const next = new Set(s)
+                                              if (next.has(c.id))
+                                                next.delete(c.id)
+                                              else next.add(c.id)
+                                              return next
+                                            })
+                                          }
+                                          aria-label={`Select ${c.sku}`}
+                                          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-2 focus:ring-blue-500"
+                                        />
+                                        <div className="font-mono text-slate-700 min-w-[120px]">
+                                          {c.sku}
+                                        </div>
+                                        <div className="flex-1 min-w-0 truncate text-slate-700">
+                                          {c.name}
+                                        </div>
+                                        {attrs && (
+                                          <div className="text-xs text-slate-500 truncate max-w-[260px]">
+                                            {attrs}
+                                          </div>
+                                        )}
+                                        <div className="flex items-center gap-1">
+                                          <Link
+                                            href={`/products/${c.id}/edit`}
+                                            className="inline-flex items-center gap-1 h-6 px-2 text-xs rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700"
+                                          >
+                                            Open
+                                            <ChevronRight className="w-3 h-3" />
+                                          </Link>
+                                          <Tooltip
+                                            content="Detach from parent"
+                                            placement="top"
+                                          >
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                void onDetachOne(p.id, c)
+                                              }
+                                              aria-label="Detach from parent"
+                                              className="inline-flex items-center justify-center w-6 h-6 rounded text-slate-400 hover:text-rose-700 hover:bg-rose-50"
+                                            >
+                                              <X className="w-3.5 h-3.5" />
+                                            </button>
+                                          </Tooltip>
+                                        </div>
+                                      </li>
+                                    )
+                                  })}
+                                </ul>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                )
+              })}
             </tbody>
           </table>
         </div>
