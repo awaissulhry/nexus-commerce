@@ -18,9 +18,12 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { produce } from 'immer'
 import {
+  AlertTriangle,
   ChevronRight,
+  Loader2,
   Lock,
   Redo2,
+  RefreshCw,
   RotateCcw,
   Search,
   Undo2,
@@ -3263,13 +3266,21 @@ export default function BulkOperationsClient() {
             </div>
           </div>
 
-          {/* Middle: status, fills available space. */}
+          {/* Middle: status, fills available space.
+              U.9 — bare "Loading…" replaced with spinner + label so
+              the inline status reads as actually-running rather than
+              static text on a slow fetch. */}
           <div className="flex-1 min-w-0 text-slate-500 tabular-nums truncate">
-            {loading
-              ? 'Loading…'
-              : filteredProducts.length === products.length
-              ? `${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`
-              : `${filteredProducts.length.toLocaleString()} of ${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`}
+            {loading ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Loading…
+              </span>
+            ) : filteredProducts.length === products.length ? (
+              `${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`
+            ) : (
+              `${filteredProducts.length.toLocaleString()} of ${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`
+            )}
           </div>
 
           {/* Right: view tools. */}
@@ -3421,9 +3432,69 @@ export default function BulkOperationsClient() {
 
       <div
         ref={containerRef}
-        className="flex-1 min-h-0 overflow-auto bg-white border border-slate-200 rounded-lg select-none"
+        className="flex-1 min-h-0 overflow-auto bg-white border border-slate-200 rounded-lg select-none relative"
         style={{ contain: 'strict' }}
       >
+        {/* U.9 — empty-grid overlay. The virtualized table renders no
+            visible rows when products is empty post-load, leaving the
+            user with a blank canvas and no path forward. Two cases:
+            1) catalog has products but the active filter excluded
+               everything → offer a Clear filters CTA
+            2) catalog itself is empty → encourage upload/new product
+            Both are non-modal centred cards over the grid surface. */}
+        {!loading && !error && filteredProducts.length === 0 && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/95 pointer-events-none">
+            <div className="max-w-md w-full mx-6 text-center pointer-events-auto">
+              <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 border border-slate-200 mb-3">
+                <Search className="w-4 h-4 text-slate-500" />
+              </div>
+              {products.length > 0 ? (
+                <>
+                  <div className="text-md font-semibold text-slate-900 mb-1">
+                    No products match your filters
+                  </div>
+                  <div className="text-base text-slate-600 mb-3">
+                    {products.length.toLocaleString()} loaded · 0 visible
+                  </div>
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-slate-900 text-white text-sm font-medium hover:bg-slate-800"
+                  >
+                    Clear filters
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="text-md font-semibold text-slate-900 mb-1">
+                    No products in your catalog
+                  </div>
+                  <div className="text-base text-slate-600 mb-3">
+                    Upload a CSV or create your first product to get going.
+                  </div>
+                  <div className="inline-flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setUploadOpen(true)}
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-slate-900 text-white text-sm font-medium hover:bg-slate-800"
+                    >
+                      <Upload className="w-3 h-3" />
+                      Upload CSV
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewProductOpen(true)}
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50"
+                    >
+                      New product
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* T.3 — group band: one chip per visible-field group, click
             chevron to collapse. Sits above the column header row inside
             the same scroll container so it scrolls horizontally with
@@ -3816,9 +3887,27 @@ export default function BulkOperationsClient() {
         </div>
 
         {error && (
+          // U.9 — error overlay upgraded from a single-line red box to
+          // a centred card with an icon, the failure reason, and a
+          // Retry button so the user can recover without reloading
+          // the whole page.
           <div className="absolute inset-0 flex items-center justify-center bg-white/90">
-            <div className="text-md text-red-700 bg-red-50 border border-red-200 rounded-md px-4 py-2">
-              Failed to load: {error}
+            <div className="max-w-md w-full mx-6 border border-red-200 bg-white rounded-lg shadow-elevated p-4 text-center">
+              <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-red-50 border border-red-200 mb-3">
+                <AlertTriangle className="w-4 h-4 text-red-600" />
+              </div>
+              <div className="text-md font-semibold text-slate-900 mb-1">
+                Failed to load products
+              </div>
+              <div className="text-base text-slate-600 mb-3 break-words">{error}</div>
+              <button
+                type="button"
+                onClick={reloadProducts}
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-slate-900 text-white text-sm font-medium hover:bg-slate-800"
+              >
+                <RefreshCw className="w-3 h-3" />
+                Retry
+              </button>
             </div>
           </div>
         )}
