@@ -34,6 +34,74 @@ export type BulkActionType =
   | 'MARKETPLACE_OVERRIDE_UPDATE';
 
 /**
+ * C.9 — strict allowlist for ATTRIBUTE_UPDATE scalar Product columns.
+ * Anything else in the attributeName payload is interpreted as a
+ * one-level dot-path inside categoryAttributes (e.g.
+ * `categoryAttributes.material`). FK columns / IDs / version /
+ * status / pricing fields are intentionally excluded — those have
+ * dedicated action types (STATUS_UPDATE, PRICING_UPDATE, …) or are
+ * not safe for bulk write.
+ */
+const ATTRIBUTE_SCALAR_ALLOWLIST: ReadonlySet<string> = new Set([
+  'name',
+  'brand',
+  'manufacturer',
+  'productType',
+  'hsCode',
+  'countryOfOrigin',
+  'fulfillmentMethod',
+  'weightValue',
+  'weightUnit',
+  'dimLength',
+  'dimWidth',
+  'dimHeight',
+  'dimUnit',
+])
+
+const CATEGORY_ATTRIBUTES_PREFIX = 'categoryAttributes.'
+
+type ProductLike = {
+  categoryAttributes?: unknown
+  [key: string]: unknown
+}
+
+/**
+ * Read the current value of the attribute referenced by attributeName.
+ * Returns kind='unsupported' for keys outside the allowlist + the
+ * categoryAttributes prefix so callers can surface a clear preview
+ * skip without writing.
+ */
+function readProductAttribute(
+  product: ProductLike,
+  attributeName: string,
+): {
+  currentValue: unknown
+  kind: 'scalar' | 'categoryAttribute' | 'unsupported'
+  /** When kind='categoryAttribute', the inner key (after the prefix). */
+  jsonKey?: string
+} {
+  if (ATTRIBUTE_SCALAR_ALLOWLIST.has(attributeName)) {
+    return {
+      currentValue: product[attributeName] ?? null,
+      kind: 'scalar',
+    }
+  }
+  if (attributeName.startsWith(CATEGORY_ATTRIBUTES_PREFIX)) {
+    const jsonKey = attributeName.slice(CATEGORY_ATTRIBUTES_PREFIX.length)
+    if (jsonKey.length === 0) {
+      return { currentValue: null, kind: 'unsupported' }
+    }
+    const raw = product.categoryAttributes
+    const obj =
+      raw && typeof raw === 'object' && !Array.isArray(raw)
+        ? (raw as Record<string, unknown>)
+        : {}
+    return { currentValue: obj[jsonKey] ?? null, kind: 'categoryAttribute', jsonKey }
+  }
+  return { currentValue: null, kind: 'unsupported' }
+}
+
+/**
  * Which Prisma entity each action type operates on. Keeps
  * getItemsForJob honest — STATUS lives on Product, everything
  * else lives on ProductVariation. E.5a adds 'channelListing' for
@@ -49,12 +117,15 @@ const ACTION_ENTITY = {
   PRICING_UPDATE: 'product',
   INVENTORY_UPDATE: 'product',
   STATUS_UPDATE: 'product',
-  // ATTRIBUTE + LISTING_SYNC still target ProductVariation. PV is
-  // currently empty in production (variants live as Product children
-  // via Product.parentId); these are deferred to a follow-up commit
-  // (see TECH_DEBT.md). LISTING_SYNC throws "deferred to v2".
-  ATTRIBUTE_UPDATE: 'variation',
-  LISTING_SYNC: 'variation',
+  // C.9 — ATTRIBUTE_UPDATE + LISTING_SYNC now target Product (was
+  // 'variation'). The ProductVariation table is empty in production —
+  // variants live as Product children via Product.parentId. C.9
+  // rewires both action types to operate on Product rows directly.
+  // ATTRIBUTE_UPDATE supports a strict allowlist of scalar columns
+  // plus the categoryAttributes JSON path; LISTING_SYNC enqueues
+  // OutboundSyncQueue rows per ChannelListing.
+  ATTRIBUTE_UPDATE: 'product',
+  LISTING_SYNC: 'product',
   MARKETPLACE_OVERRIDE_UPDATE: 'channelListing',
 } as const satisfies Record<
   BulkActionType,
@@ -342,8 +413,13 @@ export class BulkActionService {
       // errorMessage on throw). The errorLog JSON on BulkActionJob
       // is still populated for backwards compat.
       const actionType = job.actionType as BulkActionType;
+      const jobPayload = (job.actionPayload ?? {}) as Record<string, any>;
       for (const item of items) {
-        const beforeState = this.extractItemState(item, actionType);
+        const beforeState = this.extractItemState(
+          item,
+          actionType,
+          jobPayload,
+        );
         const itemRow = await this.prisma.bulkActionItem.create({
           data: {
             jobId,
@@ -358,6 +434,7 @@ export class BulkActionService {
           const afterState = await this.refetchAfterState(
             item.id,
             actionType,
+            jobPayload,
           );
 
           await this.prisma.bulkActionItem.update({
@@ -585,10 +662,20 @@ export class BulkActionService {
       throw new Error('Job is marked non-rollbackable');
     }
 
-    const SUPPORTED = new Set(['PRICING_UPDATE', 'INVENTORY_UPDATE', 'STATUS_UPDATE']);
+    // C.9 — ATTRIBUTE_UPDATE added to the supported set. Rollback
+    // path reverses by writing beforeState.value back to the same
+    // attributeName + re-running channel propagation through the
+    // OutboundSyncQueue. LISTING_SYNC stays unsupported (no Product
+    // mutation = nothing to invert; the queued syncs already pushed).
+    const SUPPORTED = new Set([
+      'PRICING_UPDATE',
+      'INVENTORY_UPDATE',
+      'STATUS_UPDATE',
+      'ATTRIBUTE_UPDATE',
+    ])
     if (!SUPPORTED.has(original.actionType)) {
       throw new Error(
-        `Rollback not supported for actionType=${original.actionType} (PRICING_UPDATE / INVENTORY_UPDATE / STATUS_UPDATE only in v0)`,
+        `Rollback not supported for actionType=${original.actionType} (PRICING_UPDATE / INVENTORY_UPDATE / STATUS_UPDATE / ATTRIBUTE_UPDATE only)`,
       );
     }
 
@@ -744,6 +831,34 @@ export class BulkActionService {
             );
             break;
           }
+          case 'ATTRIBUTE_UPDATE': {
+            // C.9 — replay processAttributeUpdate with the captured
+            // beforeState as the new value. Re-runs the same
+            // OutboundSyncQueue fanout so live channels learn about
+            // the reversal. attributeName comes from beforeState
+            // (extractItemState writes it under that key).
+            const attributeName =
+              typeof before.attributeName === 'string'
+                ? before.attributeName
+                : null
+            if (!attributeName) {
+              throw new Error(
+                'beforeState.attributeName missing — cannot rollback ATTRIBUTE_UPDATE without it',
+              )
+            }
+            // Read current Product so processAttributeUpdate can
+            // compute its idempotent skip. Single indexed read.
+            const product = await this.prisma.product.findUnique({
+              where: { id: item.productId! },
+            })
+            if (!product) throw new Error('Product no longer exists')
+            await this.processAttributeUpdate(
+              product as Product,
+              { attributeName, value: before.value },
+              rollbackJob.id,
+            )
+            break
+          }
           default:
             // Already gated above; defensive.
             throw new Error(
@@ -866,13 +981,13 @@ export class BulkActionService {
       ACTION_ENTITY[original.actionType as BulkActionType];
     let targetProductIds: string[] = [];
     let targetVariationIds: string[] = [];
+    // C.9 — 'variation' branch removed; ProductVariation is empty in
+    // production and no live action types target it. targetVariationIds
+    // stays in the response shape (kept empty) for back-compat with
+    // any caller that reads it.
     if (target === 'product') {
       targetProductIds = Array.from(
         new Set(failed.map((f) => f.productId).filter(Boolean) as string[]),
-      );
-    } else if (target === 'variation') {
-      targetVariationIds = Array.from(
-        new Set(failed.map((f) => f.variationId).filter(Boolean) as string[]),
       );
     } else if (target === 'channelListing') {
       // ChannelListing-targeted: re-scope by the parent productIds so
@@ -1415,22 +1530,60 @@ export class BulkActionService {
       }
 
       case 'ATTRIBUTE_UPDATE': {
-        const variation = item as ProductVariation;
-        const raw = variation.variationAttributes;
-        const attrs =
-          raw && typeof raw === 'object' && !Array.isArray(raw)
-            ? (raw as Record<string, unknown>)
-            : {};
-        const currentValue = attrs[payload.attributeName] ?? null;
+        // C.9 — Product-targeting with strict allowlist. The
+        // attributeName is either a scalar Product column (one of
+        // ATTRIBUTE_SCALAR_ALLOWLIST) or a one-level dot-path into
+        // categoryAttributes (e.g., 'categoryAttributes.material').
+        // Unknown keys are rejected at the apply step; preview just
+        // surfaces what the value would change.
+        const product = item as Product;
+        const attributeName = String(payload.attributeName ?? '')
+        const newValue = payload.value
+        const { currentValue, kind } = readProductAttribute(
+          product,
+          attributeName,
+        )
+        if (kind === 'unsupported') {
+          return {
+            currentValue,
+            newValue,
+            // Surface unsupported as 'skipped' so the operator sees
+            // it in the preview without aborting the whole job.
+            status: 'skipped',
+          }
+        }
+        // Idempotent skip: if the value already matches, don't fire
+        // a no-op update + a redundant queue row.
+        const same =
+          currentValue === newValue ||
+          JSON.stringify(currentValue) === JSON.stringify(newValue)
         return {
           currentValue,
-          newValue: payload.value,
-          status: 'processed',
-        };
+          newValue,
+          status: same ? 'skipped' : 'processed',
+        }
       }
 
-      case 'LISTING_SYNC':
-        throw new Error('LISTING_SYNC deferred to v2 (see TECH_DEBT)');
+      case 'LISTING_SYNC': {
+        // C.9 — preview returns the count of ChannelListings that
+        // would be queued. Channels filter applies if the payload
+        // includes channels[]. The count itself isn't fetched here
+        // (the service-wide preview is item-level, not row-level);
+        // we surface the channel filter in newValue so the operator
+        // can sanity-check the scope.
+        const channelsFilter = Array.isArray(payload.channels)
+          ? (payload.channels as string[]).filter(
+              (c) => typeof c === 'string' && c.length > 0,
+            )
+          : null
+        return {
+          currentValue: 'product',
+          newValue: channelsFilter
+            ? `queue (${channelsFilter.join(', ')})`
+            : 'queue (all channels)',
+          status: 'processed',
+        }
+      }
 
       default:
         throw new Error(`Unknown action type: ${actionType}`);
@@ -1580,6 +1733,7 @@ export class BulkActionService {
   private extractItemState(
     item: any,
     actionType: BulkActionType,
+    payload?: Record<string, any>,
   ): Record<string, any> {
     switch (actionType) {
       case 'PRICING_UPDATE':
@@ -1591,8 +1745,26 @@ export class BulkActionService {
         return { totalStock: item.totalStock ?? null };
       case 'STATUS_UPDATE':
         return { status: item.status ?? null };
-      case 'ATTRIBUTE_UPDATE':
-        return { variationAttributes: item.variationAttributes ?? null };
+      case 'ATTRIBUTE_UPDATE': {
+        // C.9 — capture the attribute slice the job is targeting so
+        // rollback can restore it precisely. attributeName is in the
+        // job payload; fall back to a full categoryAttributes snapshot
+        // if missing (defensive — should never happen post-validation).
+        const attributeName = String(payload?.attributeName ?? '')
+        if (!attributeName) {
+          return { categoryAttributes: item.categoryAttributes ?? null }
+        }
+        const { currentValue, kind, jsonKey } = readProductAttribute(
+          item as ProductLike,
+          attributeName,
+        )
+        return {
+          attributeName,
+          kind,
+          jsonKey: jsonKey ?? null,
+          value: currentValue,
+        }
+      }
       case 'MARKETPLACE_OVERRIDE_UPDATE':
         return {
           priceOverride:
@@ -1622,6 +1794,7 @@ export class BulkActionService {
   private async refetchAfterState(
     itemId: string,
     actionType: BulkActionType,
+    payload?: Record<string, any>,
   ): Promise<Record<string, any>> {
     switch (actionType) {
       case 'PRICING_UPDATE':
@@ -1634,11 +1807,29 @@ export class BulkActionService {
         return fresh ? this.extractItemState(fresh, actionType) : {};
       }
       case 'ATTRIBUTE_UPDATE': {
-        const fresh = await this.prisma.productVariation.findUnique({
+        // C.9 — Product (was ProductVariation). Re-reads the slice
+        // the payload's attributeName targets so afterState mirrors
+        // the captured beforeState shape.
+        const fresh = await this.prisma.product.findUnique({
           where: { id: itemId },
-          select: { variationAttributes: true },
+          select: {
+            name: true,
+            brand: true,
+            manufacturer: true,
+            productType: true,
+            hsCode: true,
+            countryOfOrigin: true,
+            fulfillmentMethod: true,
+            weightValue: true,
+            weightUnit: true,
+            dimLength: true,
+            dimWidth: true,
+            dimHeight: true,
+            dimUnit: true,
+            categoryAttributes: true,
+          },
         });
-        return fresh ? this.extractItemState(fresh, actionType) : {};
+        return fresh ? this.extractItemState(fresh, actionType, payload) : {};
       }
       case 'MARKETPLACE_OVERRIDE_UPDATE': {
         const fresh = await this.prisma.channelListing.findUnique({
@@ -1675,11 +1866,11 @@ export class BulkActionService {
     channelListingId?: string;
   } {
     const target = ACTION_ENTITY[actionType];
+    // C.9 — 'variation' was a possible value before; removed since
+    // every live action type now targets 'product' or 'channelListing'.
     switch (target) {
       case 'product':
         return { productId: itemId };
-      case 'variation':
-        return { variationId: itemId };
       case 'channelListing':
         return { channelListingId: itemId };
     }
@@ -1716,14 +1907,15 @@ export class BulkActionService {
         );
       case 'ATTRIBUTE_UPDATE':
         return await this.processAttributeUpdate(
-          item as ProductVariation,
+          item as Product,
           payload,
+          job.id,
         );
       case 'LISTING_SYNC':
         return await this.processListingSync(
-          item as ProductVariation | Product,
+          item as Product,
           payload,
-          channel,
+          job.id,
         );
       case 'MARKETPLACE_OVERRIDE_UPDATE':
         return await this.processMarketplaceOverrideUpdate(
@@ -1948,47 +2140,163 @@ export class BulkActionService {
    *   attributeName: string      (the JSON key to write)
    *   value: any                 (the value — primitive or object/array)
    *
-   * variationAttributes is a Json? column. We read the existing object
-   * (default {} if null), shallow-merge the new key, write back.
+   * C.9 — Product-targeting with strict allowlist for scalar columns
+   * + one-level dot-paths into categoryAttributes. Persists the change
+   * + enqueues OutboundSyncQueue rows for each ChannelListing of the
+   * product so the cron worker can push the new value to live channels.
    */
   private async processAttributeUpdate(
-    item: ProductVariation,
+    item: Product,
     payload: Record<string, any>,
+    jobId: string,
   ): Promise<{ status: 'processed' | 'skipped' }> {
-    const attributeName = payload.attributeName;
+    const attributeName = payload.attributeName
     if (
       typeof attributeName !== 'string' ||
       attributeName.trim().length === 0
     ) {
       throw new Error(
         'Invalid ATTRIBUTE_UPDATE payload: attributeName required (non-empty string)',
-      );
+      )
+    }
+    const newValue = payload.value
+    const { kind, jsonKey, currentValue } = readProductAttribute(
+      item as ProductLike,
+      attributeName,
+    )
+    if (kind === 'unsupported') {
+      throw new Error(
+        `Invalid ATTRIBUTE_UPDATE attributeName "${attributeName}": not in scalar allowlist + not a categoryAttributes path`,
+      )
+    }
+    // Idempotent skip — same as previewItem.
+    if (
+      currentValue === newValue ||
+      JSON.stringify(currentValue) === JSON.stringify(newValue)
+    ) {
+      return { status: 'skipped' }
     }
 
-    const raw = item.variationAttributes;
-    const current =
-      raw && typeof raw === 'object' && !Array.isArray(raw)
-        ? (raw as Record<string, unknown>)
-        : {};
-    const updated = { ...current, [attributeName]: payload.value };
+    if (kind === 'scalar') {
+      await this.prisma.product.update({
+        where: { id: item.id },
+        data: { [attributeName]: newValue } as any,
+      })
+    } else {
+      // categoryAttributes JSON merge.
+      const raw = (item as ProductLike).categoryAttributes
+      const current =
+        raw && typeof raw === 'object' && !Array.isArray(raw)
+          ? (raw as Record<string, unknown>)
+          : {}
+      const merged = { ...current, [jsonKey!]: newValue }
+      await this.prisma.product.update({
+        where: { id: item.id },
+        data: { categoryAttributes: merged as any },
+      })
+    }
 
-    await this.prisma.productVariation.update({
-      where: { id: item.id },
-      data: { variationAttributes: updated },
-    });
+    // Enqueue per-ChannelListing OutboundSyncQueue rows so the cron
+    // worker pushes the new attribute to live channels. Same pattern
+    // PRICING_UPDATE uses via MasterPriceService.
+    const listings = await this.prisma.channelListing.findMany({
+      where: { productId: item.id },
+      select: { id: true, channel: true, marketplace: true },
+    })
+    if (listings.length > 0) {
+      await this.prisma.outboundSyncQueue.createMany({
+        data: listings.map((l) => ({
+          productId: item.id,
+          channelListingId: l.id,
+          // ChannelListing.channel is String; SyncChannel is an enum.
+          // Cast through unknown so the runtime value (already
+          // 'AMAZON'/'EBAY'/'SHOPIFY'/'WOOCOMMERCE') maps cleanly.
+          targetChannel: l.channel as unknown as 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'WOOCOMMERCE',
+          targetRegion: l.marketplace,
+          // syncType is the column-level discriminator the cron worker
+          // dispatches on. LISTING_SYNC is the closest match for a
+          // generic attribute push (no dedicated ATTRIBUTE_UPDATE
+          // value in the worker's switch yet); the JSON payload carries
+          // the actual attribute name + value.
+          syncType: 'LISTING_SYNC',
+          payload: {
+            kind: 'ATTRIBUTE_UPDATE',
+            attributeName,
+            value: newValue,
+            source: 'bulk-action',
+            bulkJobId: jobId,
+          } as any,
+          syncStatus: 'PENDING',
+        })),
+      })
+    }
 
-    return { status: 'processed' };
+    return { status: 'processed' }
   }
 
+  /**
+   * C.9 — LISTING_SYNC: queue a full-state push for every ChannelListing
+   * of the product. No Product mutation. Optional channels[] payload
+   * filter scopes the queue rows to a subset (e.g. ['AMAZON']) so an
+   * operator can resync just one channel without touching others.
+   * Skipped when the product has no ChannelListings (nothing to sync).
+   */
   private async processListingSync(
-    _item: ProductVariation | Product,
-    _payload: Record<string, any>,
-    _channel?: string,
+    item: Product,
+    payload: Record<string, any>,
+    jobId: string,
   ): Promise<{ status: 'processed' | 'skipped' }> {
-    // Deferred to v2 — needs parent Product + first VariantImage
-    // resolution + verified marketplace provider write paths. Out of
-    // v1 scope per the audit.
-    throw new Error('LISTING_SYNC deferred to v2 (see TECH_DEBT)');
+    const channelsFilter = Array.isArray(payload.channels)
+      ? (payload.channels as unknown[])
+          .filter((c): c is string => typeof c === 'string' && c.length > 0)
+          .map((c) => c.toUpperCase())
+      : null
+    const syncType =
+      typeof payload.syncType === 'string' &&
+      ['FULL_SYNC', 'PRICE_UPDATE', 'QUANTITY_UPDATE', 'ATTRIBUTE_UPDATE'].includes(
+        payload.syncType,
+      )
+        ? (payload.syncType as
+            | 'FULL_SYNC'
+            | 'PRICE_UPDATE'
+            | 'QUANTITY_UPDATE'
+            | 'ATTRIBUTE_UPDATE')
+        : 'FULL_SYNC'
+
+    const listings = await this.prisma.channelListing.findMany({
+      where: {
+        productId: item.id,
+        ...(channelsFilter ? { channel: { in: channelsFilter as any[] } } : {}),
+      },
+      select: { id: true, channel: true, marketplace: true },
+    })
+    if (listings.length === 0) {
+      return { status: 'skipped' }
+    }
+    await this.prisma.outboundSyncQueue.createMany({
+      data: listings.map((l) => ({
+        productId: item.id,
+        channelListingId: l.id,
+        targetChannel: l.channel as unknown as
+          | 'AMAZON'
+          | 'EBAY'
+          | 'SHOPIFY'
+          | 'WOOCOMMERCE',
+        targetRegion: l.marketplace,
+        // Column-level discriminator the cron worker switches on.
+        // The payload's syncType (passed through from the job) is the
+        // operator-chosen variant for the sync run.
+        syncType,
+        payload: {
+          kind: 'LISTING_SYNC',
+          syncType,
+          source: 'bulk-listing-sync',
+          bulkJobId: jobId,
+        } as any,
+        syncStatus: 'PENDING',
+      })),
+    })
+    return { status: 'processed' }
   }
 
   /**
