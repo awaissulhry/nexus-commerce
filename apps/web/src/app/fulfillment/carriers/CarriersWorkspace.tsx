@@ -20,10 +20,9 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { useToast } from '@/components/ui/Toast'
-import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
+import { CarrierConfigDrawer } from './CarrierConfigDrawer'
 
 // ── Types ───────────────────────────────────────────────────────────
 type CarrierRow = {
@@ -135,6 +134,8 @@ export default function CarriersWorkspace() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [region, setRegion] = useState<Region | 'ALL'>('ALL')
+  // CR.6: which carrier's config drawer is open. null = closed.
+  const [drawerCode, setDrawerCode] = useState<string | null>(null)
 
   const fetchCarriers = useCallback(async () => {
     setLoading(true)
@@ -152,6 +153,18 @@ export default function CarriersWorkspace() {
   useEffect(() => {
     fetchCarriers()
   }, [fetchCarriers])
+
+  // CR.6: via-Sendcloud cards dispatch this event when their inline
+  // "Connect Sendcloud" link is clicked. Listening here lets a deeply
+  // nested card open the top-level drawer without prop drilling.
+  useEffect(() => {
+    function onOpen(e: Event) {
+      const detail = (e as CustomEvent).detail as { code?: string }
+      if (detail?.code) setDrawerCode(detail.code)
+    }
+    window.addEventListener('carriers:open-drawer', onOpen)
+    return () => window.removeEventListener('carriers:open-drawer', onOpen)
+  }, [])
 
   // Sendcloud is the cornerstone of the via-Sendcloud rows. When it's
   // not connected, those rows show as "via Sendcloud — connect Sendcloud
@@ -253,6 +266,7 @@ export default function CarriersWorkspace() {
                   carrier={carrier}
                   sendcloudConnected={sendcloudConnected}
                   onChanged={fetchCarriers}
+                  onOpen={() => setDrawerCode(def.code)}
                 />
               )
             })}
@@ -268,6 +282,7 @@ export default function CarriersWorkspace() {
                   carrier={null}
                   sendcloudConnected={sendcloudConnected}
                   onChanged={fetchCarriers}
+                  onOpen={() => setDrawerCode(def.code)}
                 />
               ))}
             </Section>
@@ -287,12 +302,31 @@ export default function CarriersWorkspace() {
                   carrier={null}
                   sendcloudConnected={sendcloudConnected}
                   onChanged={fetchCarriers}
+                  onOpen={() => setDrawerCode(def.code)}
                 />
               ))}
             </Section>
           )}
         </div>
       )}
+
+      {/* CR.6: per-carrier configuration drawer. One instance, swapped
+          by carrier code. Renders only when drawerCode is set so the
+          drawer's own state resets cleanly between carriers. */}
+      {drawerCode && (() => {
+        const def = CATALOG.find((d) => d.code === drawerCode)
+        if (!def) return null
+        const carrier = carriers.find((c) => c.code === drawerCode) ?? null
+        return (
+          <CarrierConfigDrawer
+            def={def}
+            carrier={carrier}
+            open={true}
+            onClose={() => setDrawerCode(null)}
+            onChanged={fetchCarriers}
+          />
+        )
+      })()}
 
       {/* How it works */}
       <Card>
@@ -341,87 +375,26 @@ function Section({
 }
 
 // ── Carrier card ───────────────────────────────────────────────────
+// CR.6: card no longer owns the inline form / disconnect / test logic.
+// All actions hand off to CarrierConfigDrawer via onOpen(). The card
+// stays focused on display + a single "configure" affordance.
 function CarrierCard({
-  def, carrier, sendcloudConnected, onChanged,
+  def, carrier, sendcloudConnected, onChanged, onOpen,
 }: {
   def: CarrierDef
   carrier: CarrierRow | null
   sendcloudConnected: boolean
   onChanged: () => void
+  onOpen: () => void
 }) {
   const { t } = useTranslations()
-  const { toast } = useToast()
-  const askConfirm = useConfirm()
-  const [open, setOpen] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [fields, setFields] = useState<Record<string, string>>({})
 
   const isConnected = !!carrier?.isActive
   const hasError = !!(carrier?.lastError && carrier?.lastErrorAt)
-
-  const connect = async () => {
-    setBusy(true)
-    try {
-      const body: any = {}
-      for (const f of def.fields) {
-        const v = fields[f.key]
-        if (f.type === 'number') body[f.key] = v ? Number(v) : undefined
-        else body[f.key] = v
-      }
-      const res = await fetch(
-        `${getBackendUrl()}/api/fulfillment/carriers/${def.code}/connect`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        },
-      )
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error ?? 'Connect failed')
-      }
-      setOpen(false)
-      setFields({})
-      onChanged()
-    } catch (e: any) {
-      toast.error(e.message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const disconnect = async () => {
-    const ok = await askConfirm({
-      title: t('carriers.disconnect.title', { name: def.label }),
-      description: t('carriers.disconnect.description'),
-      confirmLabel: t('carriers.action.disconnect'),
-      tone: 'danger',
-    })
-    if (!ok) return
-    const res = await fetch(
-      `${getBackendUrl()}/api/fulfillment/carriers/${def.code}/disconnect`,
-      { method: 'POST' },
-    )
-    if (res.ok) onChanged()
-    else toast.error('Disconnect failed')
-  }
-
-  const testConnection = async () => {
-    const res = await fetch(
-      `${getBackendUrl()}/api/fulfillment/carriers/${def.code}/test`,
-      { method: 'POST' },
-    )
-    const body = await res.json().catch(() => ({}))
-    if (body.dryRun) {
-      toast.success(t('carriers.test.dryRun'))
-      return
-    }
-    if (body.ok) {
-      toast.success(t('carriers.test.success', { username: body.username ?? '?' }))
-    } else {
-      toast.error(t('carriers.test.failed', { reason: body.error ?? body.reason ?? 'unknown' }))
-    }
-  }
+  // onChanged is forwarded into the drawer; the card itself doesn't
+  // mutate state. Keep the prop in the signature for API symmetry +
+  // future hover-affordances (test on hover, etc.).
+  void onChanged
 
   // Status pill resolution
   const statusPill = isConnected
@@ -524,7 +497,9 @@ function CarrierCard({
           </a>
         )}
 
-        {/* Actions */}
+        {/* CR.6: actions hand off to the carrier config drawer. The
+            card surfaces a single primary affordance per state; all
+            credential entry / test / disconnect happen in the drawer. */}
         {def.connect === 'via-sendcloud' ? (
           <div className="text-sm text-slate-500 dark:text-slate-400">
             {sendcloudConnected
@@ -532,71 +507,27 @@ function CarrierCard({
               : (
                 <a
                   href="#"
-                  onClick={(e) => { e.preventDefault(); document.getElementById('connect-SENDCLOUD')?.scrollIntoView({ behavior: 'smooth' }) }}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    // Open the Sendcloud drawer directly — no scroll
+                    // dance. Bubbles up to the workspace via a custom
+                    // event the parent listens for.
+                    window.dispatchEvent(
+                      new CustomEvent('carriers:open-drawer', { detail: { code: 'SENDCLOUD' } }),
+                    )
+                  }}
                   className="text-blue-600 dark:text-blue-400 hover:underline"
                 >
                   {t('carriers.action.connect')} Sendcloud →
                 </a>
               )}
           </div>
-        ) : def.connect === 'manual' ? (
-          isConnected ? (
-            <div className="flex gap-2">
-              <Button variant="danger" size="sm" onClick={disconnect}>
-                {t('carriers.action.disconnect')}
-              </Button>
-            </div>
-          ) : (
-            <Button variant="primary" size="sm" icon={<Lock size={11} />} onClick={() => connect()} loading={busy}>
-              {t('carriers.action.connect')}
-            </Button>
-          )
-        ) : open ? (
-          <div id={`connect-${def.code}`} className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-            {def.fields.map((f) => (
-              <div key={f.key}>
-                <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5 block">
-                  {t(f.labelKey)}
-                </label>
-                <input
-                  type={f.password ? 'password' : f.type === 'number' ? 'number' : 'text'}
-                  value={fields[f.key] ?? ''}
-                  onChange={(e) => setFields({ ...fields, [f.key]: e.target.value })}
-                  className="h-8 w-full px-2 text-base font-mono border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-100 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  autoComplete="off"
-                  aria-label={t(f.labelKey)}
-                />
-              </div>
-            ))}
-            <div className="flex items-center gap-2 pt-1">
-              <Button variant="primary" size="sm" onClick={connect} loading={busy}>
-                {t('common.save')}
-              </Button>
-              <Button variant="secondary" size="sm" onClick={() => { setOpen(false); setFields({}) }}>
-                {t('common.cancel')}
-              </Button>
-            </div>
-          </div>
         ) : isConnected ? (
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
-              {t('carriers.action.update')}
-            </Button>
-            <Button variant="secondary" size="sm" onClick={testConnection}>
-              {t('carriers.action.test')}
-            </Button>
-            <Button variant="danger" size="sm" onClick={disconnect}>
-              {t('carriers.action.disconnect')}
-            </Button>
-          </div>
+          <Button variant="secondary" size="sm" onClick={onOpen}>
+            {t('common.edit')} →
+          </Button>
         ) : (
-          <Button
-            variant="primary"
-            size="sm"
-            icon={<Lock size={11} />}
-            onClick={() => setOpen(true)}
-            id={`connect-${def.code}`}
-          >
+          <Button variant="primary" size="sm" icon={<Lock size={11} />} onClick={onOpen}>
             {t('carriers.action.connect')}
           </Button>
         )}
