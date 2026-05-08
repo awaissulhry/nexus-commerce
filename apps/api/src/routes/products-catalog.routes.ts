@@ -1553,6 +1553,146 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       }
     },
   )
+
+  // ═══════════════════════════════════════════════════════════════════
+  // U.28 — BULK SET FIELD
+  //
+  // POST /api/products/bulk-set-field
+  //   Body: { productIds, field, value }
+  //
+  // Generic single-field bulk update. Closes the loop the
+  // HygieneStrip opens: operator filters to "missing brand", selects
+  // the page, applies "Xavia" → 100 rows fixed in one shot.
+  //
+  // Whitelist of editable fields. Each entry maps to a Prisma field
+  // and a value coercer; anything outside the whitelist returns 400.
+  // Status / totalStock / basePrice are intentionally excluded — they
+  // already have dedicated endpoints (bulk-status, bulk-set-stock,
+  // master-price) that handle ChannelListing cascades + AuditLog +
+  // outbound queue. This endpoint is for "plain field set" with no
+  // downstream wiring.
+  // ═══════════════════════════════════════════════════════════════════
+  fastify.post('/products/bulk-set-field', async (request, reply) => {
+    try {
+      const body = request.body as {
+        productIds?: string[]
+        field?: string
+        value?: string | number | null
+      }
+      const productIds = Array.isArray(body.productIds)
+        ? body.productIds
+        : []
+      const field = body.field
+      const rawValue = body.value
+      if (productIds.length === 0) {
+        return reply.code(400).send({ error: 'productIds[] required' })
+      }
+      if (productIds.length > 200) {
+        return reply.code(400).send({
+          error: `max 200 products per bulk-set-field call (got ${productIds.length})`,
+        })
+      }
+
+      const fieldHandlers: Record<
+        string,
+        (v: unknown) => string | number | null
+      > = {
+        brand: (v) => {
+          if (v === null || v === '' || v === undefined) return null
+          if (typeof v !== 'string') throw new Error('brand must be string')
+          return v.trim() || null
+        },
+        productType: (v) => {
+          if (v === null || v === '' || v === undefined) return null
+          if (typeof v !== 'string')
+            throw new Error('productType must be string')
+          return v.trim() || null
+        },
+        manufacturer: (v) => {
+          if (v === null || v === '' || v === undefined) return null
+          if (typeof v !== 'string')
+            throw new Error('manufacturer must be string')
+          return v.trim() || null
+        },
+        description: (v) => {
+          if (v === null || v === undefined) return null
+          if (typeof v !== 'string')
+            throw new Error('description must be string')
+          return v
+        },
+        fulfillmentMethod: (v) => {
+          if (v === null || v === '' || v === undefined) return null
+          if (v !== 'FBA' && v !== 'FBM')
+            throw new Error('fulfillmentMethod must be FBA, FBM, or null')
+          return v
+        },
+        lowStockThreshold: (v) => {
+          if (typeof v !== 'number' || !Number.isFinite(v) || v < 0)
+            throw new Error('lowStockThreshold must be non-negative number')
+          return Math.floor(v)
+        },
+        costPrice: (v) => {
+          if (v === null || v === undefined) return null
+          if (typeof v !== 'number' || !Number.isFinite(v) || v < 0)
+            throw new Error('costPrice must be non-negative number or null')
+          return Math.round(v * 100) / 100
+        },
+        minMargin: (v) => {
+          if (v === null || v === undefined) return null
+          if (typeof v !== 'number' || !Number.isFinite(v))
+            throw new Error('minMargin must be number or null')
+          return v
+        },
+      }
+      if (!field || !(field in fieldHandlers)) {
+        return reply.code(400).send({
+          error: `field must be one of: ${Object.keys(fieldHandlers).join(', ')}`,
+        })
+      }
+
+      let coerced: string | number | null
+      try {
+        coerced = fieldHandlers[field](rawValue)
+      } catch (err) {
+        return reply
+          .code(400)
+          .send({ error: err instanceof Error ? err.message : String(err) })
+      }
+
+      const actor = userIdFor(request)
+
+      const result = await prisma.$transaction(async (tx) => {
+        // Snapshot before-values for AuditLog diff per row.
+        const rows = await tx.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, sku: true, [field]: true } as any,
+        })
+        const updated = await tx.product.updateMany({
+          where: { id: { in: productIds } },
+          data: {
+            [field]: coerced as any,
+            version: { increment: 1 },
+          },
+        })
+        await tx.auditLog.createMany({
+          data: rows.map((r: any) => ({
+            userId: actor,
+            entityType: 'Product',
+            entityId: r.id,
+            action: 'update',
+            before: { [field]: r[field] ?? null },
+            after: { [field]: coerced },
+            metadata: { sku: r.sku, source: 'bulk-set-field' },
+          })),
+        })
+        return { changed: updated.count, snapshotted: rows.length }
+      })
+
+      return { ok: true, ...result }
+    } catch (err: any) {
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
 }
 
 export default productsCatalogRoutes

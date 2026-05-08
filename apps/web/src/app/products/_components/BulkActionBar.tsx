@@ -41,6 +41,7 @@ import {
   Trash2,
   RotateCcw,
   Calendar,
+  Pencil,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
@@ -66,6 +67,12 @@ const ScheduleChangeModal = dynamic(
   () => import('../_modals/ScheduleChangeModal'),
   { ssr: false },
 )
+// U.28 — bulk "Set field" modal. Closes the loop the HygieneStrip
+// opens — operator filters → selects → applies one field set across
+// N products via the bulk-set-field endpoint.
+const SetFieldModal = dynamic(() => import('../_modals/SetFieldModal'), {
+  ssr: false,
+})
 
 interface Tag {
   id: string
@@ -114,6 +121,8 @@ export function BulkActionBar({
   // F.3.b — bulk-schedule modal state. Always available (any
   // selection ≥ 1) in the active scope; hidden in the recycle bin.
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false)
+  // U.28 — bulk-set-field modal state. Active scope only.
+  const [setFieldModalOpen, setSetFieldModalOpen] = useState(false)
   const compareEligible = selectedIds.length >= 2 && selectedIds.length <= 4
   const compareSubjects = useMemo(() => {
     if (!compareEligible) return []
@@ -527,6 +536,20 @@ export function BulkActionBar({
             AI fill
           </Button>
 
+          {/* U.28 — set a single field (brand / productType / etc.)
+              across all selected products. Closes the loop the
+              HygieneStrip opens. */}
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setSetFieldModalOpen(true)}
+            disabled={busy || !hasSelection}
+            title="Set brand / productType / description / fulfillment / threshold / cost / margin across selected products"
+            icon={<Pencil size={12} />}
+          >
+            Set field
+          </Button>
+
           {/* F.3.b — schedule a status flip or price change for a
               future moment. The cron worker applies the change at
               the chosen time via the same master*Service path as a
@@ -614,6 +637,16 @@ export function BulkActionBar({
           onClose={() => setScheduleModalOpen(false)}
           onComplete={() => {
             setScheduleModalOpen(false)
+            onComplete()
+          }}
+        />
+      )}
+      {setFieldModalOpen && (
+        <SetFieldModal
+          productIds={selectedIds}
+          onClose={() => setSetFieldModalOpen(false)}
+          onComplete={() => {
+            setSetFieldModalOpen(false)
             onComplete()
           }}
         />
