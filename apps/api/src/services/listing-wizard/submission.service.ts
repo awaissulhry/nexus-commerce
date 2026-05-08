@@ -344,19 +344,25 @@ async function resolveAmazonChildren(
   )
   if (amazonChannels.length === 0) return { byChannel: out, missingSkus: [] }
 
-  const variants = await prisma.productVariation.findMany({
-    where: { sku: { in: includedSkus } },
+  // TECH_DEBT #43.2 — read child variants via Product.parentId children
+  // (the canonical mechanism, 244 active rows in prod) instead of the empty
+  // ProductVariation table. Per-marketplace channel data comes from
+  // ChannelListing scoped on the child's productId — each child has its
+  // own ChannelListing row per (channel, marketplace), and externalListingId
+  // holds the child ASIN that VCL.channelProductId used to.
+  const variants = await prisma.product.findMany({
+    where: { sku: { in: includedSkus }, parentId: { not: null } },
     select: {
       id: true,
       sku: true,
-      variationAttributes: true,
-      price: true,
-      stock: true,
+      variantAttributes: true,
+      basePrice: true,
+      totalStock: true,
     },
   })
 
   // Audit-fix #6 — compute the diff between requested SKUs and resolved
-  // variants. Set lookup is O(1); array remains the source of truth for
+  // children. Set lookup is O(1); array remains the source of truth for
   // ordering downstream.
   const foundSet = new Set(variants.map((v) => v.sku))
   const missingSkus = includedSkus.filter((sku) => !foundSet.has(sku))
@@ -365,30 +371,29 @@ async function resolveAmazonChildren(
     return { byChannel: out, missingSkus }
   }
 
-  const variantIds = variants.map((v) => v.id)
+  const variantProductIds = variants.map((v) => v.id)
   const marketplaces = [
     ...new Set(amazonChannels.map((c) => c.marketplace.toUpperCase())),
   ]
-  const vcls = await prisma.variantChannelListing.findMany({
+  const channelListings = await prisma.channelListing.findMany({
     where: {
-      variantId: { in: variantIds },
+      productId: { in: variantProductIds },
       channel: 'AMAZON',
       marketplace: { in: marketplaces },
     },
     select: {
-      variantId: true,
+      productId: true,
       marketplace: true,
-      channelSku: true,
-      channelProductId: true,
-      channelPrice: true,
-      channelQuantity: true,
+      externalListingId: true,
+      price: true,
+      quantity: true,
     },
   })
 
-  // Index VCL rows by (variantId, marketplace) for inline lookup.
-  const vclByVariantMp = new Map<string, (typeof vcls)[number]>()
-  for (const vcl of vcls) {
-    vclByVariantMp.set(`${vcl.variantId}:${vcl.marketplace}`, vcl)
+  // Index ChannelListing rows by (productId, marketplace) for inline lookup.
+  const clByProductMp = new Map<string, (typeof channelListings)[number]>()
+  for (const cl of channelListings) {
+    clByProductMp.set(`${cl.productId}:${cl.marketplace}`, cl)
   }
 
   for (const c of amazonChannels) {
@@ -397,20 +402,22 @@ async function resolveAmazonChildren(
     const childMap = new Map<string, ChildResolved>()
 
     for (const v of variants) {
-      const vcl = vclByVariantMp.get(`${v.id}:${mp}`)
+      const cl = clByProductMp.get(`${v.id}:${mp}`)
       const variationAttributes =
-        (v.variationAttributes as Record<string, unknown> | null) ?? {}
+        (v.variantAttributes as Record<string, unknown> | null) ?? {}
       childMap.set(v.sku, {
         masterSku: v.sku,
-        channelSku: applySkuStrategy(v.sku, mp, childStrategy, vcl?.channelSku),
-        channelProductId: vcl?.channelProductId ?? null,
+        // ChannelListing has no per-child SKU override field; pass undefined
+        // so applySkuStrategy generates from the master SKU + marketplace.
+        channelSku: applySkuStrategy(v.sku, mp, childStrategy, undefined),
+        channelProductId: cl?.externalListingId ?? null,
         variationAttributes,
-        price: vcl?.channelPrice
-          ? Number(vcl.channelPrice)
-          : v.price
-          ? Number(v.price)
+        price: cl?.price
+          ? Number(cl.price)
+          : v.basePrice
+          ? Number(v.basePrice)
           : null,
-        quantity: vcl?.channelQuantity ?? v.stock ?? null,
+        quantity: cl?.quantity ?? v.totalStock ?? null,
       })
     }
     out.set(channelKey, childMap)
@@ -1331,8 +1338,12 @@ export class SubmissionService {
     const skus = Object.keys(childMap)
     if (skus.length === 0) return
 
-    const variants = await this.prisma.productVariation.findMany({
-      where: { sku: { in: skus }, productId: args.productId },
+    // TECH_DEBT #43.2 — child variants live on Product.parentId, not the
+    // empty ProductVariation table. Per-marketplace child ASINs are
+    // written to ChannelListing.externalListingId scoped to the child's
+    // own productId (each child has its own ChannelListing rows).
+    const variants = await this.prisma.product.findMany({
+      where: { sku: { in: skus }, parentId: args.productId },
       select: { id: true, sku: true },
     })
 
@@ -1340,24 +1351,26 @@ export class SubmissionService {
       variants.map((v) => {
         const asin = childMap[v.sku]
         if (!asin) return Promise.resolve()
-        return this.prisma.variantChannelListing.upsert({
+        return this.prisma.channelListing.upsert({
           where: {
-            variantId_channel_marketplace: {
-              variantId: v.id,
+            productId_channel_marketplace: {
+              productId: v.id,
               channel: 'AMAZON',
               marketplace,
             },
           },
           create: {
-            variantId: v.id,
+            productId: v.id,
             channel: 'AMAZON',
             marketplace,
-            channelProductId: asin,
-            channelPrice: 0,
-            channelQuantity: 0,
+            region: marketplace,
+            channelMarket: `AMAZON_${marketplace}`,
+            externalListingId: asin,
+            platformProductId: asin,
           },
           update: {
-            channelProductId: asin,
+            externalListingId: asin,
+            platformProductId: asin,
           },
         })
       }),
