@@ -60,47 +60,56 @@ export function StockSubNav({ cycleCountActive = 0 }: StockSubNavProps) {
   }
 
   return (
-    <nav
-      aria-label={t('stock.subnav.ariaLabel')}
-      className="border-b border-slate-200 dark:border-slate-700 -mx-3 sm:-mx-4 px-3 sm:px-4 overflow-x-auto"
-    >
-      <ul className="flex items-center gap-0.5 sm:gap-1 min-w-max">
-        {tabs.map((tab) => {
-          const active = isActive(tab)
-          const Icon = tab.icon
-          const badge = (tab as { badge?: number }).badge ?? 0
-          return (
-            <li key={tab.href}>
-              <Link
-                href={tab.href}
-                aria-current={active ? 'page' : undefined}
-                className={cn(
-                  'inline-flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap',
-                  'min-h-[44px] sm:min-h-0',
-                  active
-                    ? 'border-blue-600 text-slate-900 dark:text-slate-100 dark:border-blue-400'
-                    : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600',
-                )}
-              >
-                <Icon
-                  size={14}
-                  aria-hidden="true"
-                  className={active ? 'text-blue-600 dark:text-blue-400' : ''}
-                />
-                {t(tab.labelKey)}
-                {badge > 0 && (
-                  <span
-                    className="ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-xs font-semibold rounded-full bg-amber-500 text-white tabular-nums"
-                    aria-label={t('stock.subnav.badgeAriaLabel', { n: badge })}
-                  >
-                    {badge}
-                  </span>
-                )}
-              </Link>
-            </li>
-          )
-        })}
-      </ul>
-    </nav>
+    // The wrapper isolates the scroll: width:100% + min-w-0 +
+    // overflow-x-hidden keeps the nav inside its grid/flex parent so
+    // the page itself never scrolls sideways. The inner <nav> is the
+    // actual scroll viewport; only the tab list overflows, never the
+    // page. (min-w-0 alone is insufficient when a sibling table or
+    // wide content forces the parent wider than the viewport.)
+    <div className="w-full min-w-0 overflow-x-hidden">
+      <nav
+        aria-label={t('stock.subnav.ariaLabel')}
+        className="border-b border-slate-200 dark:border-slate-700 overflow-x-auto overscroll-x-contain"
+      >
+        <ul className="flex items-center gap-0.5 w-max">
+          {tabs.map((tab) => {
+            const active = isActive(tab)
+            const Icon = tab.icon
+            const badge = (tab as { badge?: number }).badge ?? 0
+            return (
+              <li key={tab.href}>
+                <Link
+                  href={tab.href}
+                  aria-current={active ? 'page' : undefined}
+                  title={t(tab.labelKey)}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 px-2.5 py-2 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap',
+                    'min-h-[44px] sm:min-h-[36px]',
+                    active
+                      ? 'border-blue-600 text-slate-900 dark:text-slate-100 dark:border-blue-400'
+                      : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600',
+                  )}
+                >
+                  <Icon
+                    size={13}
+                    aria-hidden="true"
+                    className={cn('shrink-0', active ? 'text-blue-600 dark:text-blue-400' : '')}
+                  />
+                  {t(tab.labelKey)}
+                  {badge > 0 && (
+                    <span
+                      className="ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-xs font-semibold rounded-full bg-amber-500 text-white tabular-nums"
+                      aria-label={t('stock.subnav.badgeAriaLabel', { n: badge })}
+                    >
+                      {badge}
+                    </span>
+                  )}
+                </Link>
+              </li>
+            )
+          })}
+        </ul>
+      </nav>
+    </div>
   )
 }
