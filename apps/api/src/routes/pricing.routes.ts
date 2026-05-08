@@ -34,6 +34,82 @@ import { runPromotionScheduler } from '../services/promotion-scheduler.service.j
 import { Prisma } from '@prisma/client'
 
 const pricingRoutes: FastifyPluginAsync = async (fastify) => {
+  // B.1 — KPI strip on /pricing index. Single endpoint serves four counts so
+  // the matrix UI can render the strip without firing four parallel requests.
+  // Each count is independent + cheap (indexed COUNTs / single-row aggregates),
+  // so the endpoint stays under ~50ms even on the full Xavia catalog.
+  fastify.get('/pricing/kpis', async (_request, reply) => {
+    try {
+      const [
+        driftCount,
+        alertCount,
+        salesCount,
+        snapshotAgg,
+        marginAtRiskCount,
+      ] = await Promise.all([
+        // Drift: master cascade gone wrong (sync-drift-detection.job.ts logs
+        // these as PRICE_MISMATCH SyncHealthLog rows).
+        prisma.syncHealthLog.count({
+          where: { conflictType: 'PRICE_MISMATCH', resolutionStatus: 'UNRESOLVED' },
+        }),
+        // Alerts: clamped / fallback / warnings on PricingSnapshot — same set
+        // /pricing/alerts surfaces.
+        prisma.pricingSnapshot.count({
+          where: {
+            OR: [
+              { isClamped: true },
+              { source: 'FALLBACK' },
+              { warnings: { isEmpty: false } },
+            ],
+          },
+        }),
+        // Sales: RetailEventPriceAction in an active window. Engine sources
+        // SCHEDULED_SALE from the materialized salePrice these rows produce.
+        prisma.retailEventPriceAction.count({
+          where: {
+            isActive: true,
+            event: {
+              isActive: true,
+              startDate: { lte: new Date() },
+              endDate: { gte: new Date() },
+            },
+          },
+        }),
+        // Snapshot total + oldest computedAt → hours. With the A.5 hourly
+        // cron a healthy state shows oldest_age_hours ≤ 1; >2 means cron
+        // hasn't ticked recently and the matrix is stale.
+        prisma.pricingSnapshot.aggregate({
+          _count: { _all: true },
+          _min: { computedAt: true },
+        }),
+        // Margin floor unenforceable — every "no cost price" warning hits
+        // this. Useful to surface the "fix costs first" call-to-action.
+        prisma.product.count({
+          where: { isParent: false, costPrice: null, basePrice: { gt: 0 } },
+        }),
+      ])
+
+      const oldest = snapshotAgg._min.computedAt
+      const snapshotAgeHours = oldest
+        ? Math.max(0, (Date.now() - oldest.getTime()) / (60 * 60 * 1000))
+        : null
+
+      return {
+        drift: driftCount,
+        alerts: alertCount,
+        salesActive: salesCount,
+        snapshots: {
+          total: snapshotAgg._count._all,
+          oldestAgeHours: snapshotAgeHours,
+        },
+        marginAtRisk: marginAtRiskCount,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[pricing/kpis] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   fastify.get('/pricing/explain', async (request, reply) => {
     try {
       const q = request.query as Record<string, string | undefined>

@@ -11,15 +11,20 @@
 // apply SET_FIXED / SET_PERCENT_DISCOUNT / CLEAR, snapshots refresh.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import {
   AlertCircle,
+  AlertTriangle,
   Box,
   CheckCircle2,
   ChevronRight,
+  Clock,
   Loader2,
   RefreshCw,
   Search,
   Send,
+  Tag,
+  TrendingDown,
   X,
   Zap,
 } from 'lucide-react'
@@ -52,6 +57,14 @@ interface MatrixResponse {
   limit: number
 }
 
+interface KpiResponse {
+  drift: number
+  alerts: number
+  salesActive: number
+  snapshots: { total: number; oldestAgeHours: number | null }
+  marginAtRisk: number
+}
+
 const SOURCE_TONE: Record<string, string> = {
   SCHEDULED_SALE: 'bg-pink-50 text-pink-700 border-pink-200',
   OFFER_OVERRIDE: 'bg-blue-50 text-blue-700 border-blue-200',
@@ -74,6 +87,7 @@ const SOURCE_LABEL: Record<string, string> = {
 
 export default function PricingMatrixClient() {
   const [data, setData] = useState<MatrixResponse | null>(null)
+  const [kpis, setKpis] = useState<KpiResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -122,6 +136,24 @@ export default function PricingMatrixClient() {
     fetchData()
   }, [fetchData])
 
+  // KPI strip — independent fetch so a slow KPI query doesn't block the
+  // matrix table render. Refetched alongside the table on every refresh
+  // so counts stay in step with whatever the user just did.
+  const fetchKpis = useCallback(async () => {
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/pricing/kpis`, {
+        cache: 'no-store',
+      })
+      if (res.ok) setKpis((await res.json()) as KpiResponse)
+    } catch {
+      // KPI strip is non-blocking. Render '—' if it fails.
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchKpis()
+  }, [fetchKpis])
+
   const refreshAll = async () => {
     setRefreshing(true)
     try {
@@ -130,7 +162,7 @@ export default function PricingMatrixClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       })
-      await fetchData()
+      await Promise.all([fetchData(), fetchKpis()])
     } finally {
       setRefreshing(false)
     }
@@ -199,6 +231,9 @@ export default function PricingMatrixClient() {
 
   return (
     <div className="space-y-4">
+      {/* B.1 — KPI strip */}
+      <KpiStrip kpis={kpis} />
+
       {/* Filter bar */}
       <Card>
         <div className="flex items-center gap-2 flex-wrap">
@@ -783,4 +818,112 @@ function Item({
       </dd>
     </>
   )
+}
+
+// B.1 — KPI strip. Five tiles, dense Salesforce/Airtable style (per the
+// visibility-over-minimalism feedback memory). Each tile shows the count
+// + a one-word label + a hint sentence. Drift + Alerts deep-link to
+// /pricing/alerts; the rest are read-only signals for now.
+function KpiStrip({ kpis }: { kpis: KpiResponse | null }) {
+  // Snapshot age: green ≤1h (cron just ran), amber ≤4h, rose >4h.
+  const stale = kpis?.snapshots.oldestAgeHours
+  const staleTone =
+    stale == null
+      ? 'slate'
+      : stale <= 1
+      ? 'emerald'
+      : stale <= 4
+      ? 'amber'
+      : 'rose'
+  const staleLabel =
+    stale == null ? '—' : stale < 1 ? '<1h' : `${Math.round(stale)}h`
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+      <KpiTile
+        href="/pricing/alerts"
+        icon={TrendingDown}
+        value={kpis?.drift ?? '—'}
+        label="Drift"
+        tone={kpis && kpis.drift > 0 ? 'rose' : 'slate'}
+        hint="Listing.price ≠ master"
+      />
+      <KpiTile
+        href="/pricing/alerts"
+        icon={AlertTriangle}
+        value={kpis?.alerts ?? '—'}
+        label="Alerts"
+        tone={kpis && kpis.alerts > 0 ? 'amber' : 'slate'}
+        hint="Clamped / fallback / warnings"
+      />
+      <KpiTile
+        icon={Tag}
+        value={kpis?.salesActive ?? '—'}
+        label="On sale"
+        tone={kpis && kpis.salesActive > 0 ? 'pink' : 'slate'}
+        hint="Active retail events"
+      />
+      <KpiTile
+        icon={Clock}
+        value={staleLabel}
+        label="Snapshot age"
+        tone={staleTone}
+        hint="Hourly cron expected"
+      />
+      <KpiTile
+        icon={AlertCircle}
+        value={kpis?.marginAtRisk ?? '—'}
+        label="No cost"
+        tone={kpis && kpis.marginAtRisk > 0 ? 'amber' : 'slate'}
+        hint="Margin floor unenforceable"
+      />
+    </div>
+  )
+}
+
+function KpiTile({
+  href,
+  icon: Icon,
+  value,
+  label,
+  tone,
+  hint,
+}: {
+  href?: string
+  icon: typeof TrendingDown
+  value: number | string
+  label: string
+  tone: 'rose' | 'amber' | 'pink' | 'emerald' | 'slate'
+  hint: string
+}) {
+  const toneClasses: Record<typeof tone, string> = {
+    rose: 'border-rose-200 bg-rose-50 text-rose-700',
+    amber: 'border-amber-200 bg-amber-50 text-amber-700',
+    pink: 'border-pink-200 bg-pink-50 text-pink-700',
+    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    slate: 'border-slate-200 bg-white text-slate-500',
+  }
+  const inner = (
+    <div
+      className={cn(
+        'border rounded-md px-3 py-2 flex items-start gap-2',
+        toneClasses[tone],
+        href && 'hover:shadow-sm transition-shadow cursor-pointer',
+      )}
+    >
+      <Icon size={14} className="mt-0.5 flex-shrink-0" />
+      <div className="min-w-0">
+        <div className="text-[20px] leading-tight font-semibold tabular-nums">
+          {value}
+        </div>
+        <div className="text-base font-medium text-slate-700 leading-tight">
+          {label}
+        </div>
+        <div className="text-sm text-slate-500 leading-tight mt-0.5 truncate">
+          {hint}
+        </div>
+      </div>
+    </div>
+  )
+  return href ? <Link href={href}>{inner}</Link> : inner
 }
