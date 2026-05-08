@@ -10,7 +10,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   Boxes, AlertTriangle, LayoutGrid, Sparkles, RefreshCw,
-  Settings2, X, ChevronRight, Eye, EyeOff, Tag as TagIcon,
+  Settings2, X, ChevronRight, Eye, EyeOff,
   Package, Plus, FolderTree, Network,
   ExternalLink, Copy, Layers, Image as ImageIcon,
   CheckCircle2, XCircle, AlertCircle, Loader2, Upload,
@@ -51,6 +51,8 @@ import { FilterBar } from './_components/FilterBar'
 import { SavedViewsButton } from './_components/SavedViewsButton'
 import { Pagination } from './_components/Pagination'
 import { MobileProductList } from './_components/MobileProductList'
+import { ColumnPickerMenu } from './_components/ColumnPickerMenu'
+import { TagEditor } from './_components/TagEditor'
 
 // E.3 — lazy-load the heavy modals so they don't ship in /products'
 // initial bundle. Each is gated by a boolean state in the workspace,
@@ -154,30 +156,9 @@ type SavedView = {
   }
 }
 
-const ALL_COLUMNS: Array<{ key: string; label: string; width: number; locked?: boolean }> = [
-  { key: 'thumb', label: '', width: 56, locked: true },
-  { key: 'sku', label: 'SKU', width: 140, locked: true },
-  { key: 'name', label: 'Name', width: 280, locked: true },
-  { key: 'status', label: 'Status', width: 110 },
-  { key: 'price', label: 'Price', width: 110 },
-  { key: 'stock', label: 'Stock', width: 90 },
-  { key: 'threshold', label: 'Low @', width: 80 },
-  { key: 'brand', label: 'Brand', width: 120 },
-  { key: 'productType', label: 'Type', width: 130 },
-  { key: 'fulfillment', label: 'FBA/FBM', width: 80 },
-  { key: 'coverage', label: 'Channels', width: 180 },
-  { key: 'tags', label: 'Tags', width: 160 },
-  { key: 'photos', label: 'Photos', width: 70 },
-  { key: 'variants', label: 'Var.', width: 70 },
-  // F.2 — per-row completeness % computed from name/brand/type/
-  // photos/channel-coverage/tags. Hidden by default; operators
-  // who care about data quality enable it via the Cols picker.
-  { key: 'completeness', label: 'Complete', width: 110 },
-  { key: 'updated', label: 'Updated', width: 110 },
-  { key: 'actions', label: '', width: 110, locked: true },
-]
-
-const DEFAULT_VISIBLE = ['thumb', 'sku', 'name', 'status', 'price', 'stock', 'coverage', 'tags', 'photos', 'updated', 'actions']
+// ALL_COLUMNS + DEFAULT_VISIBLE moved to ./_columns.ts (P.1l) so
+// ColumnPickerMenu can share the same source of truth.
+import { ALL_COLUMNS, DEFAULT_VISIBLE } from './_columns'
 
 // F7 — density modes for the grid. Affects row padding + cell font
 // size. Compact gets a power-user up to ~50 rows on a laptop screen;
@@ -3662,235 +3643,6 @@ const ProductCell = memo(function ProductCell({ col, product, onTagEdit, onChang
   }
 })
 
-function ColumnPickerMenu({ visible, setVisible, onClose }: { visible: string[]; setVisible: (v: string[]) => void; onClose: () => void }) {
-  const ref = useRef<HTMLDivElement>(null)
-  // F7 — drag-drop column reorder. Native HTML5 dragstart/dragover/drop
-  // (no library). Tracks the drag source key in state; on drop, splices
-  // the array. Only togglable columns participate — locked columns
-  // (thumb/sku/name/actions) keep their positions in the rendered
-  // table via the visible useMemo's missingLeading/missingTrailing
-  // logic.
-  const [dragKey, setDragKey] = useState<string | null>(null)
-  useEffect(() => {
-    const onClick = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose() }
-    document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
-  }, [onClose])
-  const togglable = ALL_COLUMNS.filter((c) => !c.locked && c.label)
-
-  // The picker shows columns in the user's current order (visible[])
-  // for togglable rows that ARE visible, then non-visible togglable
-  // rows at the end. So drag-reorder only happens within visible.
-  const visibleTogglable = visible
-    .map((k) => togglable.find((c) => c.key === k))
-    .filter((c): c is (typeof togglable)[number] => !!c)
-  const hiddenTogglable = togglable.filter((c) => !visible.includes(c.key))
-
-  const onDragStart = (key: string) => (e: React.DragEvent) => {
-    setDragKey(key)
-    e.dataTransfer.effectAllowed = 'move'
-  }
-  const onDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-  }
-  const onDrop = (targetKey: string) => (e: React.DragEvent) => {
-    e.preventDefault()
-    if (!dragKey || dragKey === targetKey) {
-      setDragKey(null)
-      return
-    }
-    const next = [...visible]
-    const fromIdx = next.indexOf(dragKey)
-    const toIdx = next.indexOf(targetKey)
-    if (fromIdx === -1 || toIdx === -1) {
-      setDragKey(null)
-      return
-    }
-    next.splice(fromIdx, 1)
-    next.splice(toIdx, 0, dragKey)
-    setVisible(next)
-    setDragKey(null)
-  }
-
-  return (
-    <div ref={ref} className="absolute right-0 top-full mt-1 w-64 bg-white border border-slate-200 rounded-md shadow-lg z-20 p-1.5 max-h-[480px] overflow-y-auto">
-      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1.5 flex items-center justify-between">
-        <span>Visible (drag to reorder)</span>
-      </div>
-      {visibleTogglable.map((c) => (
-        <div
-          key={c.key}
-          draggable
-          onDragStart={onDragStart(c.key)}
-          onDragOver={onDragOver}
-          onDrop={onDrop(c.key)}
-          className={`flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-base cursor-move ${dragKey === c.key ? 'opacity-40' : ''}`}
-        >
-          <span className="text-slate-300 font-mono select-none">⠿</span>
-          <input
-            type="checkbox"
-            checked
-            onChange={() => setVisible(visible.filter((k) => k !== c.key))}
-          />
-          <span className="text-slate-700">{c.label}</span>
-        </div>
-      ))}
-      {hiddenTogglable.length > 0 && (
-        <>
-          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1.5 mt-1">
-            Hidden
-          </div>
-          {hiddenTogglable.map((c) => (
-            <label key={c.key} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-base cursor-pointer">
-              <span className="text-transparent select-none">⠿</span>
-              <input
-                type="checkbox"
-                checked={false}
-                onChange={() => setVisible([...visible, c.key])}
-              />
-              <span className="text-slate-700">{c.label}</span>
-            </label>
-          ))}
-        </>
-      )}
-      <div className="border-t border-slate-100 mt-1.5 pt-1.5 px-2 py-1 flex items-center justify-between">
-        <button onClick={() => setVisible(DEFAULT_VISIBLE)} className="text-sm text-slate-500 hover:text-slate-900">Reset order</button>
-        <button onClick={onClose} className="text-sm text-slate-500 hover:text-slate-900">Close</button>
-      </div>
-    </div>
-  )
-}
-
-// ────────────────────────────────────────────────────────────────────
-// Secondary lenses (Hierarchy, Coverage, Pricing, Health, Drafts)
-// ────────────────────────────────────────────────────────────────────
-// P.1a-e — extracted to ./_lenses/* in dedicated commits.
-// Imports at the top of this file route the workspace's lens-switch
-// JSX to those files. Only the GridLens body remains inline below.
-
-// ────────────────────────────────────────────────────────────────────
-// TagEditor — drawer for product tags
-// ────────────────────────────────────────────────────────────────────
-function TagEditor({ productId, onClose, onChanged, allTags }: { productId: string; onClose: () => void; onChanged: () => void; allTags: Tag[] }) {
-  const { toast } = useToast()
-  const [productTags, setProductTags] = useState<Tag[]>([])
-  const [newTagName, setNewTagName] = useState('')
-  const [newTagColor, setNewTagColor] = useState('#3b82f6')
-  const [loading, setLoading] = useState(true)
-
-  const refresh = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await fetch(`${getBackendUrl()}/api/products/${productId}/tags`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tagIds: [] }),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setProductTags(data.tags ?? [])
-      }
-    } finally { setLoading(false) }
-  }, [productId])
-
-  useEffect(() => { refresh() }, [refresh])
-
-  const toggle = async (tag: Tag) => {
-    const has = productTags.some((t) => t.id === tag.id)
-    if (has) {
-      await fetch(`${getBackendUrl()}/api/products/${productId}/tags/${tag.id}`, { method: 'DELETE' })
-    } else {
-      await fetch(`${getBackendUrl()}/api/products/${productId}/tags`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tagIds: [tag.id] }),
-      })
-    }
-    refresh()
-    onChanged()
-  }
-
-  const createTag = async () => {
-    if (!newTagName.trim()) return
-    const res = await fetch(`${getBackendUrl()}/api/tags`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newTagName.trim(), color: newTagColor }),
-    })
-    if (res.ok) {
-      const newTag = await res.json()
-      // Attach to current product
-      await fetch(`${getBackendUrl()}/api/products/${productId}/tags`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tagIds: [newTag.id] }),
-      })
-      setNewTagName('')
-      onChanged()
-      refresh()
-    } else {
-      const err = await res.json()
-      toast.error(err.error ?? 'Failed to create tag')
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-30 flex justify-end" onClick={onClose}>
-      <div className="absolute inset-0 bg-slate-900/30" />
-      <aside onClick={(e) => e.stopPropagation()} className="relative h-full w-full max-w-md bg-white shadow-2xl overflow-y-auto">
-        <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white">
-          <div className="text-md font-semibold text-slate-900 inline-flex items-center gap-1.5"><TagIcon size={14} /> Tags</div>
-          <button onClick={onClose} aria-label="Close" className="h-7 w-7 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
-        </header>
-        <div className="p-5 space-y-4">
-          <div>
-            <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-2">Available tags</div>
-            {loading ? <div className="text-base text-slate-500">Loading…</div> : (
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {allTags.map((t) => {
-                  const active = productTags.some((p) => p.id === t.id)
-                  return (
-                    <button
-                      key={t.id}
-                      onClick={() => toggle(t)}
-                      className={`inline-flex items-center gap-1 px-2 py-1 text-sm border rounded transition-colors ${active ? 'border-slate-900' : 'border-slate-200 hover:border-slate-300'}`}
-                      style={active ? { background: t.color ? `${t.color}20` : '#f1f5f9', color: t.color ?? '#64748b' } : undefined}
-                    >
-                      {t.color && <span className="w-1.5 h-1.5 rounded-full" style={{ background: t.color }} />}
-                      {t.name}
-                      {active && <CheckCircle2 size={10} />}
-                    </button>
-                  )
-                })}
-                {allTags.length === 0 && <span className="text-base text-slate-400">No tags yet — create one below.</span>}
-              </div>
-            )}
-          </div>
-          <div className="border-t border-slate-100 pt-4 space-y-2">
-            <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">Create new tag</div>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={newTagName}
-                onChange={(e) => setNewTagName(e.target.value)}
-                placeholder="Tag name"
-                className="flex-1 h-8 px-2 text-md border border-slate-200 rounded"
-              />
-              <input
-                type="color"
-                value={newTagColor}
-                onChange={(e) => setNewTagColor(e.target.value)}
-                className="h-8 w-10 border border-slate-200 rounded"
-              />
-              <button onClick={createTag} className="h-8 px-3 text-base bg-slate-900 text-white rounded-md hover:bg-slate-800">Add</button>
-            </div>
-          </div>
-        </div>
-      </aside>
-    </div>
-  )
-}
 
 // ────────────────────────────────────────────────────────────────────
 // P.19 — CSV export of the loaded grid view

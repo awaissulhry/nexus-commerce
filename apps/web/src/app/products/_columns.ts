@@ -1,0 +1,55 @@
+/**
+ * P.1l — column registry for the /products grid.
+ *
+ * Extracted from ProductsWorkspace.tsx so ColumnPickerMenu (and any
+ * future column-aware modules) can import the same source of truth
+ * without circular reference. Workspace still imports + re-uses
+ * these for grid header/cell sizing.
+ *
+ * `locked` columns (thumb/sku/name/actions) keep fixed positions in
+ * the rendered grid regardless of the user's saved order.
+ */
+
+export interface ColumnDef {
+  key: string
+  label: string
+  width: number
+  locked?: boolean
+}
+
+export const ALL_COLUMNS: ColumnDef[] = [
+  { key: 'thumb', label: '', width: 56, locked: true },
+  { key: 'sku', label: 'SKU', width: 140, locked: true },
+  { key: 'name', label: 'Name', width: 280, locked: true },
+  { key: 'status', label: 'Status', width: 110 },
+  { key: 'price', label: 'Price', width: 110 },
+  { key: 'stock', label: 'Stock', width: 90 },
+  { key: 'threshold', label: 'Low @', width: 80 },
+  { key: 'brand', label: 'Brand', width: 120 },
+  { key: 'productType', label: 'Type', width: 130 },
+  { key: 'fulfillment', label: 'FBA/FBM', width: 80 },
+  { key: 'coverage', label: 'Channels', width: 180 },
+  { key: 'tags', label: 'Tags', width: 160 },
+  { key: 'photos', label: 'Photos', width: 70 },
+  { key: 'variants', label: 'Var.', width: 70 },
+  // F.2 — per-row completeness % computed from name/brand/type/
+  // photos/channel-coverage/tags. Hidden by default; operators
+  // who care about data quality enable it via the Cols picker.
+  { key: 'completeness', label: 'Complete', width: 110 },
+  { key: 'updated', label: 'Updated', width: 110 },
+  { key: 'actions', label: '', width: 110, locked: true },
+]
+
+export const DEFAULT_VISIBLE = [
+  'thumb',
+  'sku',
+  'name',
+  'status',
+  'price',
+  'stock',
+  'coverage',
+  'tags',
+  'photos',
+  'updated',
+  'actions',
+]
