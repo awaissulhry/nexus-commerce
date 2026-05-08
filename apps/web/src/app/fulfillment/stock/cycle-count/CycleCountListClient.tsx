@@ -18,6 +18,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 
 interface CountSummary {
@@ -62,16 +63,19 @@ function statusVariant(status: string): 'success' | 'warning' | 'danger' | 'info
   }
 }
 
+// S.11 — labels resolve via t() per render so locale flips refresh
+// the chip text. Keys stay declarative.
 const STATUS_FILTERS = [
-  { key: 'all', label: 'All' },
-  { key: 'DRAFT', label: 'Draft' },
-  { key: 'IN_PROGRESS', label: 'In Progress' },
-  { key: 'COMPLETED', label: 'Completed' },
-  { key: 'CANCELLED', label: 'Cancelled' },
+  { key: 'all', labelKey: 'cycleCount.list.statusAll' },
+  { key: 'DRAFT', labelKey: 'cycleCount.list.statusDraft' },
+  { key: 'IN_PROGRESS', labelKey: 'cycleCount.list.statusInProgress' },
+  { key: 'COMPLETED', labelKey: 'cycleCount.list.statusCompleted' },
+  { key: 'CANCELLED', labelKey: 'cycleCount.list.statusCancelled' },
 ] as const
 
 export default function CycleCountListClient() {
   const { toast } = useToast()
+  const { t } = useTranslations()
   const [counts, setCounts] = useState<CountSummary[] | null>(null)
   const [locations, setLocations] = useState<Location[]>([])
   const [loading, setLoading] = useState(true)
@@ -124,7 +128,7 @@ export default function CycleCountListClient() {
 
   const handleCreate = async () => {
     if (!newLocationId) {
-      toast.error('Select a location')
+      toast.error(t('cycleCount.list.toast.selectLocation'))
       return
     }
     setCreating(true)
@@ -139,13 +143,13 @@ export default function CycleCountListClient() {
       })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`)
-      toast.success('Cycle count created — open it to start counting')
+      toast.success(t('cycleCount.list.toast.created'))
       setCreateOpen(false)
       setNewLocationId('')
       setNewNotes('')
       await fetchData()
     } catch (err) {
-      toast.error(`Create failed: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(t('cycleCount.list.toast.createFailed', { error: err instanceof Error ? err.message : String(err) }))
     } finally {
       setCreating(false)
     }
@@ -167,18 +171,18 @@ export default function CycleCountListClient() {
                   : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300',
               )}
             >
-              {f.label}
+              {t(f.labelKey)}
             </button>
           ))}
         </div>
         <div className="flex items-center gap-2">
           <Button variant="secondary" size="sm" onClick={fetchData} disabled={loading}>
             <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
-            Refresh
+            {t('cycleCount.list.actionRefresh')}
           </Button>
           <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
             <Plus className="w-3.5 h-3.5" />
-            New count
+            {t('cycleCount.list.actionNew')}
           </Button>
         </div>
       </div>
@@ -201,9 +205,9 @@ export default function CycleCountListClient() {
       {counts && counts.length === 0 && !loading && (
         <EmptyState
           icon={ClipboardCheck}
-          title="No cycle counts yet"
-          description="Create a count session to spot-check or fully audit physical inventory at a warehouse location. Variances apply through StockMovement so the audit trail explains every count-driven adjustment."
-          action={{ label: 'Start first count', onClick: () => setCreateOpen(true) }}
+          title={t('cycleCount.list.empty.title')}
+          description={t('cycleCount.list.empty.description')}
+          action={{ label: t('cycleCount.list.empty.action'), onClick: () => setCreateOpen(true) }}
         />
       )}
 
@@ -237,21 +241,28 @@ export default function CycleCountListClient() {
                     </div>
                     <div className="flex items-center gap-3 mt-1 text-sm text-slate-500 flex-wrap">
                       <span>
-                        {c.totalItems} items · {pending} pending · {counted} counted ·{' '}
-                        <span className="text-green-700 font-medium">{c.itemTotals.RECONCILED ?? 0}</span> reconciled
+                        {t('cycleCount.list.row.itemsSummary', {
+                          n: c.totalItems,
+                          pending,
+                          counted,
+                        })}
+                        {' · '}
+                        <span className="text-green-700 font-medium">
+                          {t('cycleCount.list.row.reconciledSuffix', { n: c.itemTotals.RECONCILED ?? 0 })}
+                        </span>
                         {(c.itemTotals.IGNORED ?? 0) > 0 && (
-                          <> · <span className="text-amber-700">{c.itemTotals.IGNORED}</span> ignored</>
+                          <> · <span className="text-amber-700">{t('cycleCount.list.row.ignoredSuffix', { n: c.itemTotals.IGNORED })}</span></>
                         )}
                       </span>
                       <span>·</span>
                       <span title={new Date(c.createdAt).toLocaleString()}>
-                        Created {relativeTime(c.createdAt)}
+                        {t('cycleCount.list.row.created', { when: relativeTime(c.createdAt) })}
                       </span>
                       {c.startedAt && (
-                        <span>· Started {relativeTime(c.startedAt)}</span>
+                        <span>· {t('cycleCount.list.row.started', { when: relativeTime(c.startedAt) })}</span>
                       )}
                       {c.completedAt && (
-                        <span>· Completed {relativeTime(c.completedAt)}</span>
+                        <span>· {t('cycleCount.list.row.completed', { when: relativeTime(c.completedAt) })}</span>
                       )}
                     </div>
                     {c.notes && (
@@ -292,7 +303,7 @@ export default function CycleCountListClient() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-900">New cycle count</h2>
+              <h2 className="text-lg font-semibold text-slate-900">{t('cycleCount.list.modal.title')}</h2>
               <button
                 type="button"
                 onClick={() => setCreateOpen(false)}
@@ -306,14 +317,14 @@ export default function CycleCountListClient() {
             <div className="p-5 space-y-3">
               <div>
                 <label className="text-sm font-medium text-slate-700 uppercase tracking-wide">
-                  Location <span className="text-red-600">*</span>
+                  {t('cycleCount.list.modal.locationLabel')} <span className="text-red-600">*</span>
                 </label>
                 <select
                   value={newLocationId}
                   onChange={(e) => setNewLocationId(e.target.value)}
                   className="mt-1 w-full px-3 py-1.5 text-md border border-slate-200 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
                 >
-                  <option value="">Select…</option>
+                  <option value="">{t('cycleCount.list.modal.locationPlaceholder')}</option>
                   {locations.map((l) => (
                     <option key={l.id} value={l.id}>
                       {l.code} — {l.name}
@@ -321,18 +332,18 @@ export default function CycleCountListClient() {
                   ))}
                 </select>
                 <p className="text-xs text-slate-500 mt-1">
-                  Every product with a stock level at this location will be snapshotted.
+                  {t('cycleCount.list.modal.locationHelp')}
                 </p>
               </div>
               <div>
                 <label className="text-sm font-medium text-slate-700 uppercase tracking-wide">
-                  Notes (optional)
+                  {t('cycleCount.list.modal.notesLabel')}
                 </label>
                 <Input
                   type="text"
                   value={newNotes}
                   onChange={(e) => setNewNotes(e.target.value)}
-                  placeholder='e.g. "Q2 spot check", "post-move audit"'
+                  placeholder={t('cycleCount.list.modal.notesPlaceholder')}
                   className="mt-1"
                 />
               </div>
@@ -343,7 +354,7 @@ export default function CycleCountListClient() {
                   ) : (
                     <CheckCircle2 className="w-3.5 h-3.5" />
                   )}
-                  Create
+                  {t('cycleCount.list.modal.create')}
                 </Button>
                 <Button
                   variant="secondary"
@@ -351,7 +362,7 @@ export default function CycleCountListClient() {
                   onClick={() => setCreateOpen(false)}
                   disabled={creating}
                 >
-                  Cancel
+                  {t('cycleCount.list.modal.cancel')}
                 </Button>
               </div>
             </div>

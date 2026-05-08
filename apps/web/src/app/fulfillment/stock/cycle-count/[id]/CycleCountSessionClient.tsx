@@ -21,6 +21,7 @@ import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 
 interface CountItem {
@@ -77,6 +78,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
   const router = useRouter()
   const { toast } = useToast()
   const askConfirm = useConfirm()
+  const { t } = useTranslations()
   const [data, setData] = useState<CountSession | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -168,17 +170,22 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
         const body = await res.json().catch(() => ({}))
         throw new Error(body.error ?? `HTTP ${res.status}`)
       }
-      toast.success('Count session started')
+      toast.success(t('cycleCount.session.startedToast'))
       await fetchData()
     } catch (err) {
-      toast.error(`Start failed: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(t('cycleCount.session.startFailed', { error: err instanceof Error ? err.message : String(err) }))
     } finally {
       setBusyTopAction(null)
     }
   }
 
   const handleComplete = async () => {
-    if (!(await askConfirm({ title: 'Complete this count session?', description: 'Make sure every variance has been resolved.', confirmLabel: 'Complete', tone: 'warning' }))) return
+    if (!(await askConfirm({
+      title: t('cycleCount.session.completeConfirmTitle'),
+      description: t('cycleCount.session.completeConfirmDescription'),
+      confirmLabel: t('cycleCount.session.completeConfirm'),
+      tone: 'warning',
+    }))) return
     setBusyTopAction('complete')
     try {
       const res = await fetch(
@@ -187,10 +194,10 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
       )
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`)
-      toast.success('Count completed')
+      toast.success(t('cycleCount.session.completedToast'))
       await fetchData()
     } catch (err) {
-      toast.error(`Complete failed: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(t('cycleCount.session.completeFailed', { error: err instanceof Error ? err.message : String(err) }))
     } finally {
       setBusyTopAction(null)
     }
@@ -218,10 +225,10 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
         const body = await res.json().catch(() => ({}))
         throw new Error(body.error ?? `HTTP ${res.status}`)
       }
-      toast.success('Count cancelled')
+      toast.success(t('cycleCount.session.cancelledToast'))
       await fetchData()
     } catch (err) {
-      toast.error(`Cancel failed: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(t('cycleCount.session.cancelFailed', { error: err instanceof Error ? err.message : String(err) }))
     } finally {
       setBusyTopAction(null)
     }
@@ -232,7 +239,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
     if (trimmed === '') return
     const qty = Number(trimmed)
     if (!Number.isInteger(qty) || qty < 0) {
-      toast.error('Counted quantity must be a non-negative integer')
+      toast.error(t('cycleCount.session.qtyInvalid'))
       return
     }
     setActingId(item.id)
@@ -256,7 +263,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
       })
       await fetchData()
     } catch (err) {
-      toast.error(`Record failed: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(t('cycleCount.session.recordFailed', { error: err instanceof Error ? err.message : String(err) }))
     } finally {
       setActingId(null)
     }
@@ -276,12 +283,16 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
       const variance = (item.countedQuantity ?? 0) - item.expectedQuantity
       toast.success(
         variance === 0
-          ? `${item.sku}: matched (no variance)`
-          : `${item.sku}: variance ${variance > 0 ? '+' : ''}${variance} applied`,
+          ? t('cycleCount.session.matchedToast', { sku: item.sku })
+          : t('cycleCount.session.varianceAppliedToast', {
+              sku: item.sku,
+              sign: variance > 0 ? '+' : '',
+              n: variance,
+            }),
       )
       await fetchData()
     } catch (err) {
-      toast.error(`Reconcile failed: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(t('cycleCount.session.reconcileFailed', { error: err instanceof Error ? err.message : String(err) }))
     } finally {
       setActingId(null)
     }
@@ -307,10 +318,10 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
         const body = await res.json().catch(() => ({}))
         throw new Error(body.error ?? `HTTP ${res.status}`)
       }
-      toast.success(`${sku} marked ignored`)
+      toast.success(t('cycleCount.session.ignoredToast', { sku }))
       await fetchData()
     } catch (err) {
-      toast.error(`Ignore failed: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(t('cycleCount.session.ignoreFailed', { error: err instanceof Error ? err.message : String(err) }))
     } finally {
       setActingId(null)
     }
@@ -331,11 +342,11 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
       if (!target) return
       const item = data.items.find((it) => it.sku.toUpperCase() === target)
       if (!item) {
-        toast.error(`SKU ${raw.trim()} not in this count`)
+        toast.error(t('cycleCount.session.scanNotInCount', { sku: raw.trim() }))
         return
       }
       if (item.status === 'RECONCILED' || item.status === 'IGNORED') {
-        toast.success(`${item.sku} already ${item.status.toLowerCase()}`)
+        toast.success(t('cycleCount.session.scanAlreadyResolved', { sku: item.sku, status: item.status.toLowerCase() }))
         return
       }
       // querySelector targets the data attribute we'll set on each
@@ -350,11 +361,11 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
           el.focus()
           el.select()
         } else {
-          toast.error(`Row hidden by current filter — clear the filter to count ${item.sku}`)
+          toast.error(t('cycleCount.session.scanRowHidden', { sku: item.sku }))
         }
       }, 0)
     },
-    [data, toast],
+    [data, toast, t],
   )
 
   // S.5 — submit handler for the reason prompt modal. Routes to the
