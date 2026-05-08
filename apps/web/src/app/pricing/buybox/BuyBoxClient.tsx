@@ -14,7 +14,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   AlertCircle,
-  CheckCircle2,
   Loader2,
   RefreshCw,
   Trophy,
