@@ -11,6 +11,8 @@ import { resolveAtp } from '../services/atp.service.js'
 import { getReservationSweepStatus } from '../jobs/reservation-sweep.job.js'
 import * as abcService from '../services/abc-classification.service.js'
 import { listLayers, recomputeWac } from '../services/cost-layers.service.js'
+import * as shopifyLocations from '../services/shopify-locations.service.js'
+import { ShopifyService } from '../services/marketplaces/shopify.service.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // H.2 — Stock API surface for /fulfillment/stock rebuild.
@@ -1417,6 +1419,66 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/analytics/dead-stock] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── GET /api/stock/shopify-locations ─────────────────────────────
+  // S.22 — list Nexus StockLocation rows mapped to Shopify locations.
+  // Includes per-location SKU count + total quantity for the upcoming
+  // S.23 settings UI.
+  fastify.get('/stock/shopify-locations', async (_request, reply) => {
+    try {
+      const list = await shopifyLocations.listShopifyLocationsWithStock()
+      return { locations: list }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/shopify-locations] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── POST /api/stock/shopify-locations/discover ───────────────────
+  // S.22 — pull every Shopify location + upsert as StockLocation.
+  // Idempotent (per-row unique partial index on externalChannel +
+  // externalLocationId; safe to call concurrently).
+  fastify.post('/stock/shopify-locations/discover', async (_request, reply) => {
+    try {
+      // Lazy-construct the Shopify client. The discovery service
+      // accepts a thin shape with just `makeRequest`; ShopifyService
+      // exposes that via the public makeRequestPublic shim.
+      let svc: { makeRequest: (m: 'GET', p: string) => Promise<unknown> } | null = null
+      try {
+        const inner = new ShopifyService()
+        svc = { makeRequest: (m, p) => inner.makeRequestPublic(m, p) }
+      } catch (err) {
+        fastify.log.warn({ err }, '[shopify-locations/discover] Shopify not configured')
+      }
+      const summary = await shopifyLocations.discoverShopifyLocations(svc)
+      return summary
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/shopify-locations/discover] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── PATCH /api/stock/shopify-locations/:id ──────────────────────
+  // S.22 — toggle isActive on a Shopify-mapped StockLocation. The
+  // operator hits this from the S.23 settings UI to disable a
+  // Shopify location without unmapping it.
+  fastify.patch<{
+    Params: { id: string }
+    Body: { isActive?: boolean }
+  }>('/stock/shopify-locations/:id', async (request, reply) => {
+    try {
+      const { id } = request.params
+      const body = request.body ?? {}
+      if (body.isActive === undefined) {
+        return reply.code(400).send({ error: 'isActive required (boolean)' })
+      }
+      const r = await shopifyLocations.setShopifyLocationActive({ id, isActive: !!body.isActive })
+      return r
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/shopify-locations/:id PATCH] failed')
+      return reply.code(400).send({ error: error?.message ?? String(error) })
     }
   })
 

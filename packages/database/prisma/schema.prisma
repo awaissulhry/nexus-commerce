@@ -2646,13 +2646,19 @@ model Warehouse {
 // (type=CHANNEL_RESERVED) have warehouseId=NULL.
 model StockLocation {
   id                 String   @id @default(cuid())
-  type               String // 'WAREHOUSE' | 'AMAZON_FBA' | 'CHANNEL_RESERVED'
+  type               String // 'WAREHOUSE' | 'AMAZON_FBA' | 'CHANNEL_RESERVED' | 'SHOPIFY_LOCATION'
   code               String   @unique // 'IT-MAIN', 'AMAZON-EU-FBA', ...
   name               String
   address            Json?
   isActive           Boolean  @default(true)
   // Marketplaces this location can fulfil (capability, not commitment)
   servesMarketplaces String[] @default([])
+
+  // S.22 — channel-side mapping. SHOPIFY_LOCATION rows carry the
+  // Shopify Location ID; AMAZON_FBA rows can carry the marketplace
+  // ID. NULL pairs are allowed (warehouses have no external mapping).
+  externalLocationId String?
+  externalChannel    String? // 'SHOPIFY' | 'AMAZON' | etc
 
   // Optional join to legacy Warehouse for type=WAREHOUSE rows
   warehouseId String?    @unique
@@ -2671,6 +2677,7 @@ model StockLocation {
 
   @@index([type])
   @@index([isActive])
+  @@index([externalChannel, externalLocationId])
 }
 
 // Per-location, per-product (or per-variation) quantity ledger.

@@ -89,6 +89,22 @@ export class ShopifyService {
   }
 
   /**
+   * S.22 — public wrapper for Admin API GETs. Used by
+   * shopify-locations.service for the discovery flow without
+   * exposing the full makeRequest contract.
+   */
+  async getRaw(path: string): Promise<unknown> {
+    return this.makeRequest('GET', path);
+  }
+
+  // S.22 — delegating shim that lets discoverShopifyLocations()
+  // accept either a ShopifyEnhancedService or this lighter
+  // ShopifyService — the only contract is `makeRequest('GET', path)`.
+  async makeRequestPublic(method: 'GET', path: string): Promise<unknown> {
+    return this.makeRequest(method, path);
+  }
+
+  /**
    * Get the base URL for Shopify API calls
    */
   private getBaseUrl(): string {
