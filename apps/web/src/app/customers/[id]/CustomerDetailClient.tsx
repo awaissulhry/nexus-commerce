@@ -94,6 +94,12 @@ type CustomerDetail = {
   tags: string[]
   riskFlag: string | null
   manualReviewState: string | null
+  // FU.3 — Italian fiscal identity (operator-editable).
+  codiceFiscale: string | null
+  partitaIva: string | null
+  fiscalKind: 'B2B' | 'B2C' | null
+  pecEmail: string | null
+  codiceDestinatario: string | null
   addresses: Address[]
   notes: Note[]
   orders: Order[]
@@ -555,6 +561,11 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
         </div>
 
         <div className="space-y-3">
+          {/* FU.3 — Italian fiscal data (operator-editable). Renders
+              for everyone, not just IT customers, since cross-border
+              B2B customers may need codice fiscale entered too. */}
+          <FiscalDataCard customer={customer} onSaved={refresh} />
+
           <Card>
             <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 mb-2 inline-flex items-center gap-1.5">
               <MapPin size={12} /> {t('customers.detail.addressesTitle')}
@@ -677,5 +688,231 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
         </div>
       </div>
     </div>
+  )
+}
+
+// ── FU.3: Italian fiscal-data editor ──────────────────────────────────
+// Operator captures codice fiscale / partita IVA / fiscalKind / PEC /
+// codice destinatario. Channel ingest rarely surfaces this data, so
+// this is the primary entry point. Saves via PATCH /api/customers/:id
+// /fiscal; FU.3's customer-cache snapshot then propagates to incoming
+// orders that haven't already been frozen with sale-time values.
+function FiscalDataCard({
+  customer,
+  onSaved,
+}: {
+  customer: CustomerDetail
+  onSaved: () => void
+}) {
+  const { toast } = useToast()
+  const [editing, setEditing] = useState(false)
+  const [codiceFiscale, setCodiceFiscale] = useState(customer.codiceFiscale ?? '')
+  const [partitaIva, setPartitaIva] = useState(customer.partitaIva ?? '')
+  const [fiscalKind, setFiscalKind] = useState<'' | 'B2B' | 'B2C'>(
+    customer.fiscalKind ?? '',
+  )
+  const [pecEmail, setPecEmail] = useState(customer.pecEmail ?? '')
+  const [codiceDestinatario, setCodiceDestinatario] = useState(
+    customer.codiceDestinatario ?? '',
+  )
+  const [busy, setBusy] = useState(false)
+
+  // Reset local state when the customer prop changes (e.g. after a
+  // refresh from another panel's save).
+  useEffect(() => {
+    setCodiceFiscale(customer.codiceFiscale ?? '')
+    setPartitaIva(customer.partitaIva ?? '')
+    setFiscalKind(customer.fiscalKind ?? '')
+    setPecEmail(customer.pecEmail ?? '')
+    setCodiceDestinatario(customer.codiceDestinatario ?? '')
+  }, [customer])
+
+  const save = async () => {
+    setBusy(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/customers/${customer.id}/fiscal`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            codiceFiscale: codiceFiscale || null,
+            partitaIva: partitaIva || null,
+            fiscalKind: fiscalKind || null,
+            pecEmail: pecEmail || null,
+            codiceDestinatario: codiceDestinatario || null,
+          }),
+        },
+      )
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error ?? 'Save failed')
+      }
+      toast.success('Dati fiscali salvati')
+      setEditing(false)
+      onSaved()
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Read-only preview (not editing).
+  if (!editing) {
+    const hasAny =
+      customer.codiceFiscale ||
+      customer.partitaIva ||
+      customer.fiscalKind ||
+      customer.pecEmail
+    return (
+      <Card>
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-sm font-semibold uppercase tracking-wider text-slate-700">
+            Dati fiscali
+          </div>
+          <button
+            onClick={() => setEditing(true)}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            {hasAny ? 'Modifica' : 'Aggiungi'}
+          </button>
+        </div>
+        {!hasAny ? (
+          <div className="text-md text-slate-500">
+            Nessun dato fiscale. Aggiungi codice fiscale o partita IVA per
+            generare fatture italiane.
+          </div>
+        ) : (
+          <dl className="text-sm space-y-1">
+            {customer.fiscalKind && (
+              <div className="flex items-center gap-2">
+                <dt className="text-slate-500 w-32">Tipo:</dt>
+                <dd>
+                  <Badge variant={customer.fiscalKind === 'B2B' ? 'info' : 'default'} size="sm">
+                    {customer.fiscalKind}
+                  </Badge>
+                </dd>
+              </div>
+            )}
+            {customer.codiceFiscale && (
+              <div className="flex items-center gap-2">
+                <dt className="text-slate-500 w-32">Codice fiscale:</dt>
+                <dd className="font-mono text-slate-800">{customer.codiceFiscale}</dd>
+              </div>
+            )}
+            {customer.partitaIva && (
+              <div className="flex items-center gap-2">
+                <dt className="text-slate-500 w-32">Partita IVA:</dt>
+                <dd className="font-mono text-slate-800">IT{customer.partitaIva}</dd>
+              </div>
+            )}
+            {customer.pecEmail && (
+              <div className="flex items-center gap-2">
+                <dt className="text-slate-500 w-32">PEC:</dt>
+                <dd className="text-slate-800 truncate">{customer.pecEmail}</dd>
+              </div>
+            )}
+            {customer.codiceDestinatario && (
+              <div className="flex items-center gap-2">
+                <dt className="text-slate-500 w-32">Cod. destinatario:</dt>
+                <dd className="font-mono text-slate-800">{customer.codiceDestinatario}</dd>
+              </div>
+            )}
+          </dl>
+        )}
+      </Card>
+    )
+  }
+
+  // Editor.
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-sm font-semibold uppercase tracking-wider text-slate-700">
+          Dati fiscali
+        </div>
+      </div>
+      <div className="space-y-2">
+        <div>
+          <label className="text-xs uppercase tracking-wider text-slate-500 font-semibold block mb-0.5">
+            Tipo cliente
+          </label>
+          <select
+            value={fiscalKind}
+            onChange={(e) => setFiscalKind(e.target.value as '' | 'B2B' | 'B2C')}
+            className="w-full h-8 px-2 text-base border border-slate-200 rounded"
+          >
+            <option value="">— Non specificato</option>
+            <option value="B2B">B2B (azienda con P. IVA)</option>
+            <option value="B2C">B2C (privato)</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs uppercase tracking-wider text-slate-500 font-semibold block mb-0.5">
+            Codice fiscale
+          </label>
+          <input
+            value={codiceFiscale}
+            onChange={(e) => setCodiceFiscale(e.target.value.toUpperCase())}
+            placeholder="16 caratteri alfanumerici"
+            maxLength={16}
+            className="w-full h-8 px-2 text-base border border-slate-200 rounded font-mono"
+          />
+        </div>
+        <div>
+          <label className="text-xs uppercase tracking-wider text-slate-500 font-semibold block mb-0.5">
+            Partita IVA
+          </label>
+          <input
+            value={partitaIva}
+            onChange={(e) => setPartitaIva(e.target.value.replace(/\D/g, '').slice(0, 11))}
+            placeholder="11 cifre"
+            inputMode="numeric"
+            className="w-full h-8 px-2 text-base border border-slate-200 rounded font-mono"
+          />
+        </div>
+        <div>
+          <label className="text-xs uppercase tracking-wider text-slate-500 font-semibold block mb-0.5">
+            PEC
+          </label>
+          <input
+            value={pecEmail}
+            onChange={(e) => setPecEmail(e.target.value)}
+            placeholder="indirizzo@pec.it (per fallback SDI)"
+            type="email"
+            className="w-full h-8 px-2 text-base border border-slate-200 rounded"
+          />
+        </div>
+        <div>
+          <label className="text-xs uppercase tracking-wider text-slate-500 font-semibold block mb-0.5">
+            Codice destinatario
+          </label>
+          <input
+            value={codiceDestinatario}
+            onChange={(e) => setCodiceDestinatario(e.target.value.toUpperCase().slice(0, 7))}
+            placeholder="7 caratteri (vuoto = SDI usa PEC)"
+            maxLength={7}
+            className="w-full h-8 px-2 text-base border border-slate-200 rounded font-mono"
+          />
+        </div>
+        <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+          <button
+            onClick={save}
+            disabled={busy}
+            className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50"
+          >
+            Salva
+          </button>
+          <button
+            onClick={() => setEditing(false)}
+            disabled={busy}
+            className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50"
+          >
+            Annulla
+          </button>
+        </div>
+      </div>
+    </Card>
   )
 }

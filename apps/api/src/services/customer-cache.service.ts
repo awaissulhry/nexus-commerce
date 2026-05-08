@@ -45,23 +45,39 @@ function customerIdFromEmail(email: string): string {
  * Find-or-create the Customer for an order's customerEmail, then
  * link the FK back onto the Order. Returns the resolved Customer
  * id (or null when the order has no email to anchor on).
+ *
+ * FU.3: also snapshots the Customer's Italian fiscal data (codice
+ * fiscale, partita IVA, fiscalKind, PEC, codice destinatario) onto
+ * the Order — but only when Order.codiceFiscale et al are still
+ * NULL (operator hasn't manually adjusted yet). This way the
+ * customer's profile fiscal data lazily flows to incoming orders,
+ * and historical orders stay frozen at sale-time values.
  */
 export async function ensureCustomerForOrder(orderId: string): Promise<string | null> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    select: { id: true, customerEmail: true, customerName: true, customerId: true },
+    select: {
+      id: true,
+      customerEmail: true,
+      customerName: true,
+      customerId: true,
+      codiceFiscale: true,
+      partitaIva: true,
+      fiscalKind: true,
+      pecEmail: true,
+      codiceDestinatario: true,
+    },
   })
   if (!order) return null
   if (!order.customerEmail || order.customerEmail.trim() === '') return null
-  if (order.customerId) return order.customerId
 
   const email = order.customerEmail.toLowerCase()
-  const id = customerIdFromEmail(email)
+  const id = order.customerId ?? customerIdFromEmail(email)
 
   // Find-or-create via upsert. createOnly fields stay sticky on
   // re-link of an existing row (e.g. operator-edited name wins
   // over the channel-supplied value).
-  await prisma.customer.upsert({
+  const customer = await prisma.customer.upsert({
     where: { email },
     create: {
       id,
@@ -69,14 +85,49 @@ export async function ensureCustomerForOrder(orderId: string): Promise<string | 
       name: order.customerName || null,
     },
     update: {},
+    select: {
+      id: true,
+      codiceFiscale: true,
+      partitaIva: true,
+      fiscalKind: true,
+      pecEmail: true,
+      codiceDestinatario: true,
+    },
   })
 
-  await prisma.order.update({
-    where: { id: orderId },
-    data: { customerId: id },
-  })
+  // FU.3 — snapshot fiscal fields onto Order when not yet set.
+  // We only snapshot a field if it's currently NULL on the Order
+  // AND non-NULL on the Customer; that way historical orders
+  // stay frozen and operators can override per-order if needed.
+  const fiscalSnapshot: Record<string, string | null> = {}
+  if (!order.codiceFiscale && customer.codiceFiscale) {
+    fiscalSnapshot.codiceFiscale = customer.codiceFiscale
+  }
+  if (!order.partitaIva && customer.partitaIva) {
+    fiscalSnapshot.partitaIva = customer.partitaIva
+  }
+  if (!order.fiscalKind && customer.fiscalKind) {
+    fiscalSnapshot.fiscalKind = customer.fiscalKind
+  }
+  if (!order.pecEmail && customer.pecEmail) {
+    fiscalSnapshot.pecEmail = customer.pecEmail
+  }
+  if (!order.codiceDestinatario && customer.codiceDestinatario) {
+    fiscalSnapshot.codiceDestinatario = customer.codiceDestinatario
+  }
 
-  return id
+  const orderUpdate: Record<string, any> = {}
+  if (!order.customerId) orderUpdate.customerId = customer.id
+  Object.assign(orderUpdate, fiscalSnapshot)
+
+  if (Object.keys(orderUpdate).length > 0) {
+    await prisma.order.update({
+      where: { id: orderId },
+      data: orderUpdate,
+    })
+  }
+
+  return customer.id
 }
 
 /**

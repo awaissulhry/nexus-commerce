@@ -249,6 +249,74 @@ export async function customersRoutes(app: FastifyInstance) {
     }
   })
 
+  // ── FU.3: fiscal data (codice fiscale / partita IVA / B2B-B2C) ─────
+  // Operator-editable Italian fiscal identity. Channel ingest rarely
+  // surfaces this data (Amazon doesn't pass codice fiscale; Shopify
+  // captures it as a custom field but inconsistently), so the
+  // operator usually fills it in manually post-sale before generating
+  // the fattura.
+  app.patch('/api/customers/:id/fiscal', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = request.body as {
+        codiceFiscale?: string | null
+        partitaIva?: string | null
+        fiscalKind?: 'B2B' | 'B2C' | null
+        pecEmail?: string | null
+        codiceDestinatario?: string | null
+      }
+      const norm = (s: string | null | undefined): string | null => {
+        if (s == null) return null
+        const t = s.trim()
+        return t === '' ? null : t
+      }
+      const cf = norm(body.codiceFiscale)?.toUpperCase() ?? null
+      const piva = norm(body.partitaIva)?.replace(/^IT/i, '').toUpperCase() ?? null
+      const fk = body.fiscalKind ?? null
+      if (fk != null && fk !== 'B2B' && fk !== 'B2C') {
+        return reply.code(400).send({ error: "fiscalKind must be 'B2B', 'B2C', or null" })
+      }
+      if (cf != null && (cf.length !== 16 || !/^[A-Z0-9]+$/.test(cf))) {
+        return reply.code(400).send({
+          error: 'codiceFiscale must be 16 alphanumeric characters',
+        })
+      }
+      if (piva != null && !/^[0-9]{11}$/.test(piva)) {
+        return reply.code(400).send({
+          error: 'partitaIva must be 11 digits (IT prefix is stripped automatically)',
+        })
+      }
+      const cd = norm(body.codiceDestinatario)?.toUpperCase() ?? null
+      if (cd != null && cd.length !== 7) {
+        return reply.code(400).send({
+          error: 'codiceDestinatario must be exactly 7 characters',
+        })
+      }
+
+      const updated = await prisma.customer.update({
+        where: { id },
+        data: {
+          codiceFiscale: cf,
+          partitaIva: piva,
+          fiscalKind: fk,
+          pecEmail: norm(body.pecEmail),
+          codiceDestinatario: cd,
+        },
+        select: {
+          id: true,
+          codiceFiscale: true,
+          partitaIva: true,
+          fiscalKind: true,
+          pecEmail: true,
+          codiceDestinatario: true,
+        },
+      })
+      return updated
+    } catch (err: any) {
+      return reply.code(500).send({ error: err?.message ?? 'failed' })
+    }
+  })
+
   // ── Tags (replace-array semantics) ─────────────────────────────────
   app.patch('/api/customers/:id/tags', async (request, reply) => {
     try {
