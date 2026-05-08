@@ -29,6 +29,7 @@
 
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { convertCentsToEur } from './fx-rate.service.js'
 
 const LTV_EXCLUDE_STATUSES = ['CANCELLED', 'REFUNDED'] as const
 
@@ -147,6 +148,7 @@ export async function refreshCustomerCache(customerId: string): Promise<void> {
         channel: true,
         status: true,
         totalPrice: true,
+        currencyCode: true,
         purchaseDate: true,
         createdAt: true,
       },
@@ -170,7 +172,18 @@ export async function refreshCustomerCache(customerId: string): Promise<void> {
       // ago" even if the interaction was a cancel.
       if (LTV_EXCLUDE_STATUSES.includes(o.status as any)) continue
       totalOrders++
-      totalSpentCents += BigInt(Math.round(Number(o.totalPrice) * 100))
+      // AU.10 — normalize to EUR before summing. Otherwise GBP £100 +
+      // EUR €100 produces 20000 cents (meaningless). Use the order's
+      // purchase date for asOf so historical orders use the historical
+      // rate, not today's.
+      const cents = Math.round(Number(o.totalPrice) * 100)
+      const eurCents = await convertCentsToEur(
+        prisma,
+        o.currencyCode ?? 'EUR',
+        cents,
+        o.purchaseDate ?? o.createdAt,
+      )
+      totalSpentCents += BigInt(eurCents)
       channelOrderCounts[o.channel] = (channelOrderCounts[o.channel] ?? 0) + 1
     }
 

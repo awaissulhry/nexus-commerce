@@ -188,3 +188,28 @@ function startOfDay(d: Date): Date {
   out.setUTCHours(0, 0, 0, 0)
   return out
 }
+
+/**
+ * AU.10 — convert an amount-in-cents from `fromCurrency` to EUR-cents.
+ *
+ * Stored FX rows are EUR → X (master = EUR). For X → EUR we invert.
+ * Returns the original cents when fromCurrency is already EUR or when
+ * no rate exists (caller's choice — keeping legacy summation behavior
+ * over silently zeroing).
+ *
+ * Used by: customer-cache.service to normalize Customer.totalSpentCents
+ * across orders priced in non-EUR (Amazon UK GBP, Amazon US USD, etc.)
+ * so LTV numbers in /customers and /risk-queue are comparable.
+ */
+export async function convertCentsToEur(
+  prisma: PrismaClient,
+  fromCurrency: string,
+  cents: number,
+  asOf: Date = new Date(),
+): Promise<number> {
+  if (!fromCurrency || fromCurrency === 'EUR') return cents
+  // getFxRate('EUR', X) returns "1 EUR = X units of from-currency"; invert.
+  const rate = await getFxRate(prisma, 'EUR', fromCurrency, asOf)
+  if (!rate || rate <= 0) return cents
+  return Math.round(cents / rate)
+}
