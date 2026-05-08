@@ -530,14 +530,16 @@ export class SchemaParserService {
     const fieldsArr = Array.from(byId.values())
 
     // K.4 — load variation children once for the per-variant override
-    // grid. Lower-cases attribute keys to match the way the variations
-    // service surfaces them so the frontend's lookups line up.
-    const variationRows = await this.prisma.productVariation.findMany({
-      where: { productId: opts.productId },
-      select: { id: true, sku: true, variationAttributes: true },
+    // grid. TECH_DEBT #43.3: read children via Product.parentId (the
+    // canonical mechanism, 244 active rows in prod) instead of the
+    // empty PV table. Lower-cases attribute keys to match the way the
+    // variations service surfaces them so the frontend's lookups line up.
+    const variationRows = await this.prisma.product.findMany({
+      where: { parentId: opts.productId },
+      select: { id: true, sku: true, variantAttributes: true },
     })
     const variations = variationRows.map((v) => {
-      const raw = (v.variationAttributes ?? {}) as Record<string, unknown>
+      const raw = (v.variantAttributes ?? {}) as Record<string, unknown>
       const attrs: Record<string, string> = {}
       for (const [k, val] of Object.entries(raw)) {
         if (typeof val === 'string') attrs[k.toLowerCase()] = val
