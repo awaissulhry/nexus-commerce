@@ -734,33 +734,19 @@ export default function BulkOperationsClient() {
       if (s?.rafId !== null && s?.rafId !== undefined) {
         cancelAnimationFrame(s.rafId)
       }
-      const didMove = !!s?.didMove
+      // U.40 — removed the document-wide capture-phase click
+      // listener that suppressed the next click after a multi-
+      // cell drag (intent: prevent the drop-target cell from
+      // entering edit mode for what was clearly a select-rect
+      // gesture). Even after U.37 scoped its preventDefault to
+      // `[data-row-idx]` cells, the listener still attached to
+      // document — and the user reported sidebar + Job-History
+      // Link clicks failing on /bulk-operations.
+      // The consequence (cell may enter edit mode after a drag)
+      // is a minor UX nit; navigation must work.
       dragStateRef.current = null
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
-      // If the drag actually moved across cells, suppress the click
-      // that follows so EditableCell at the drop target doesn't enter
-      // edit mode for what was clearly a select-rectangle gesture.
-      //
-      // U.37 — was a document-wide capture-phase listener that
-      // swallowed the NEXT click ANYWHERE on the page, including
-      // sidebar nav links. Operators dragging-to-select then trying
-      // to click a sidebar link found their first click silently
-      // dropped. Now scoped to clicks inside a `[data-row-idx]`
-      // cell only — the original intent (block the cell from
-      // entering edit mode) — leaves clicks on sidebar / chrome
-      // alone.
-      if (didMove) {
-        const onClickOnce = (ce: MouseEvent) => {
-          const target = ce.target as HTMLElement | null
-          if (target?.closest('[data-row-idx]')) {
-            ce.stopPropagation()
-            ce.preventDefault()
-          }
-          document.removeEventListener('click', onClickOnce, true)
-        }
-        document.addEventListener('click', onClickOnce, true)
-      }
     }
 
     document.addEventListener('mousemove', onMove)
