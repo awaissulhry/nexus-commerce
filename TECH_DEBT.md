@@ -492,7 +492,20 @@ The original "shadow DB + `prisma migrate diff`" plan is the heavyweight version
 
 ---
 
-## 38. 🟡 Audit `IF NOT EXISTS` patterns in migrations
+## 38. ✅ Audit `IF NOT EXISTS` patterns in migrations — partially resolved 2026-05-08 (M.18)
+
+**Resolution (defense in depth, not a bulk rewrite):** A `CREATE TABLE/INDEX IF NOT EXISTS` sweep + bulk-rewrite would be high-risk (turning idempotent statements into raw CREATEs could fail on environments that already partially-applied a migration). Instead M.18 ships a lint tool — `node packages/database/scripts/audit-if-not-exists.mjs` — that:
+
+  • Scans every migration for `CREATE TABLE/INDEX IF NOT EXISTS`.
+  • Classifies each occurrence as LEGITIMATE (preceded by a matching DROP, or wrapped in a `DO $$ ... $$` block, or in a migration whose name starts with `catchup_` / contains `backfill_fix`) or BARE (no protective context).
+  • Reports a per-migration breakdown of bare occurrences so reviewers can see where the highest-risk concentrations live.
+  • In `--strict` mode, returns non-zero exit code only if NEW bare occurrences land — preserves the status quo for the existing 221 occurrences (snapshot baseline) while preventing new ones without explicit opt-in.
+
+The strict mode is intended for a future prepush hook addition — not wired in yet to avoid blocking parallel-agent in-flight work, but the tool is ready to drop into the gate whenever the team wants the rachet.
+
+**Original symptom:** `CREATE TABLE/INDEX IF NOT EXISTS` is silent on collision — when a model is redefined with new columns but the table already exists with the old shape, the CREATE no-ops and any subsequent reference to the new columns crashes far from the actual bug. This is what hid the Return-table collision through the entire fulfillment B.1 review cycle.
+
+**Why P1 not P0:** #37's shadow-DB column-drift gate caught the Return collision before it shipped (and prevents that class of bug going forward). This sweep is defense-in-depth — load-bearing fix is #37; M.18 is the rachet that prevents the count from growing.
 
 **Symptom:** `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS` are silent on collision. When a model is redefined with new columns but the table already exists with the old shape, the CREATE no-ops and any subsequent reference to the new columns crashes — far from the actual bug. This is what hid the Return table collision for the entire fulfillment B.1 review cycle.
 
