@@ -919,6 +919,18 @@ The flow is asynchronous — each step polls an `operationId` until the operatio
 
 **Estimated effort:** 4–6 commits. State machine rewrite + polling-based operation tracking + UI redesign for the multi-step flow.
 
+**Migration roadmap (phased):**
+
+  1. **F.1 — SP-API client wrappers** (additive). Add `apps/api/src/clients/amazon-fba-inbound-v2.client.ts` with typed wrappers for the 9 v2024-03-20 endpoints. No behaviour change — additive code only. ~1 commit.
+  2. **F.2 — Schema for the multi-step plan**. New model `FbaInboundPlanV2` (planId, status, currentStep, operationIds JSON, packingOptionId, placementOptionId, transportationOptionId, shipmentIds[]) + migration. ~1 commit.
+  3. **F.3 — Polling service**. `apps/api/src/services/fba-inbound-v2.service.ts` with `pollOperation(operationId)` (per-step polling that yields `{ status, completedAt, error }`) and per-step state transitions. ~1 commit.
+  4. **F.4 — Routes**. POST per step + GET plan-state for the UI to drive the flow. ~1 commit.
+  5. **F.5 — UI redesign**. Replace the single-form `FbaTransportBooking` with a multi-step wizard surface. Status banners per step. Resume mid-flow on page reload. ~1-2 commits.
+
+Each commit is independently shippable: F.1 alone unblocks anyone who wants to call v2 from a Node script; F.2-F.4 build the backend incrementally; F.5 is the operator-facing reveal.
+
+**Operator-action mitigation in place today:** The InboundWorkspace banner reads "Plan + Labels + Status polling live · Transport v0 deprecated by Amazon"; the FbaTransportBooking form has an inline amber notice ("Use Seller Central for transport booking — Amazon deprecated the v0 booking endpoint, this form returns 400 in production") and the submit button is demoted with the label "Try v0 booking (likely fails)". Operator routes transport bookings through Seller Central until F.5 lands. Plan-shipment + getLabels (the two v0 endpoints that still work) remain the recommended path for non-transport operations.
+
 ---
 
 ## 52. ✅ Bulk ATTRIBUTE_UPDATE now also writes variantAttributes — resolved 2026-05-08 (M.21)
