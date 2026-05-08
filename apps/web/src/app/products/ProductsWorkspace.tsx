@@ -44,6 +44,11 @@ import {
   DENSITY_ROW_HEIGHT,
   CHANNEL_TONE,
 } from '@/lib/products/theme'
+// P.1a — lens components extracted to /_lenses/* in this commit and
+// follow-ups. HierarchyLens is the first; CoverageLens, PricingLens,
+// HealthLens, DraftsLens follow in the same sweep.
+import { HierarchyLens } from './_lenses/HierarchyLens'
+
 // E.3 — lazy-load the heavy modals so they don't ship in /products'
 // initial bundle. Each is gated by a boolean state in the workspace,
 // so the user only pays the JS download when they actually open one.
@@ -5209,79 +5214,7 @@ function ColumnPickerMenu({ visible, setVisible, onClose }: { visible: string[];
 // ────────────────────────────────────────────────────────────────────
 // HierarchyLens — parent + children grouped tree
 // ────────────────────────────────────────────────────────────────────
-function HierarchyLens({ search }: { search: string }) {
-  const [parents, setParents] = useState<any[]>([])
-  const [standalones, setStandalones] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    setLoading(true)
-    Promise.all([
-      fetch(`${getBackendUrl()}/api/pim/parents-overview?search=${encodeURIComponent(search)}&limit=100`).then((r) => r.json()),
-      fetch(`${getBackendUrl()}/api/pim/standalones?search=${encodeURIComponent(search)}&limit=100`).then((r) => r.json()),
-    ]).then(([p, s]) => { setParents(p.items ?? []); setStandalones(s.items ?? []) })
-      .finally(() => setLoading(false))
-  }, [search])
-
-  if (loading) return <Card><div className="text-md text-slate-500 py-8 text-center">Loading hierarchy…</div></Card>
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <Card title={`Parents (${parents.length})`} description="Products with at least one child variation">
-        {parents.length === 0 ? (
-          <div className="py-8 text-center text-base text-slate-500">
-            <FolderTree className="w-6 h-6 mx-auto text-slate-300 mb-2" />
-            No parent products yet.
-            <div className="text-sm text-slate-400 mt-1">
-              Use{' '}
-              <Link href="/catalog/organize" className="text-blue-700 hover:underline">
-                Organize → Parents
-              </Link>
-              {' '}to group SKUs that share variant attributes.
-            </div>
-          </div>
-        ) : (
-          <ul className="space-y-1 -my-1">
-            {parents.slice(0, 50).map((p) => (
-              <li key={p.id}>
-                <Link href={`/products/${p.id}/edit?tab=variations`} className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 rounded hover:bg-slate-50">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-md text-slate-900 truncate">{p.name}</div>
-                    <div className="text-sm text-slate-500 font-mono">{p.sku} · {p.childCount ?? 0} children</div>
-                  </div>
-                  <ChevronDown size={14} className="text-slate-400 -rotate-90" />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-      <Card title={`Standalones (${standalones.length})`} description="Products that aren't parents (could be promoted, attached, or kept standalone)">
-        {standalones.length === 0 ? (
-          <div className="py-8 text-center text-base text-slate-500">
-            <Package className="w-6 h-6 mx-auto text-slate-300 mb-2" />
-            All products belong to a parent.
-            <div className="text-sm text-slate-400 mt-1">
-              Standalone products will appear here as you create new SKUs.
-            </div>
-          </div>
-        ) : (
-          <ul className="space-y-1 -my-1">
-            {standalones.slice(0, 50).map((p) => (
-              <li key={p.id} className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 rounded hover:bg-slate-50">
-                <div className="min-w-0 flex-1">
-                  <div className="text-md text-slate-900 truncate">{p.name}</div>
-                  <div className="text-sm text-slate-500 font-mono">{p.sku}</div>
-                </div>
-                <Link href="/catalog/organize" className="text-sm text-blue-600 hover:underline">Group →</Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-    </div>
-  )
-}
+// P.1a — HierarchyLens extracted to ./_lenses/HierarchyLens.tsx
 
 // ────────────────────────────────────────────────────────────────────
 // CoverageLens — channel matrix per product
