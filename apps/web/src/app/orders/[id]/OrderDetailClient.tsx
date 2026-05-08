@@ -223,6 +223,11 @@ export default function OrderDetailClient({ id }: { id: string }) {
             <ShopifyDiscountsCard meta={order.shopifyMetadata} />
           )}
 
+          {/* O.17 — eBay buyer messaging */}
+          {order.channel === 'EBAY' && order.ebayMetadata && (
+            <EbayMessagingCard meta={order.ebayMetadata} channelOrderId={order.channelOrderId} />
+          )}
+
           {/* Shipments */}
           {order.shipments && order.shipments.length > 0 && (
             <Card title="Shipments" description={`${order.shipments.length} shipment${order.shipments.length === 1 ? '' : 's'}`}>
@@ -374,6 +379,71 @@ function FinTile({ label, value, tone }: { label: string; value: number; tone: '
       <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">{label}</div>
       <div className={`text-2xl font-semibold tabular-nums ${cls}`}>€{value.toFixed(2)}</div>
     </div>
+  )
+}
+
+// ── O.17: eBay buyer messaging surface ─────────────────────────────────
+// eBay's full Messaging API is gated behind a separate scope (and the
+// modern Messaging API is still in beta as of 2026). Until that's
+// wired, this card surfaces what we already have: `buyerCheckoutNotes`
+// from the Fulfillment API order payload (cached on
+// Order.ebayMetadata at ingest time). Plus a deep-link to the seller-
+// hub messages tab so operators can read/reply in eBay directly.
+//
+// When the Messaging API does get wired (env-flag-gated commit), the
+// card grows a thread list — the surface stays the same.
+function EbayMessagingCard({
+  meta,
+  channelOrderId,
+}: {
+  meta: any
+  channelOrderId: string
+}) {
+  const checkoutNotes: string | null =
+    meta?.buyerCheckoutNotes ?? meta?.checkoutMessage ?? null
+  const buyerUsername: string | null = meta?.buyer?.username ?? null
+
+  // Always render the card on eBay orders so operators have a
+  // reliable place to deep-link from, even if no message text was
+  // supplied at checkout. Empty-state copy is honest about why.
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 inline-flex items-center gap-1.5">
+          <Mail size={12} /> eBay messages
+        </div>
+        <a
+          href={`https://www.ebay.com/mesh/msg/inbox?buyerUsername=${encodeURIComponent(buyerUsername ?? '')}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1"
+        >
+          Open inbox <ExternalLink size={11} />
+        </a>
+      </div>
+      {checkoutNotes ? (
+        <div className="text-base text-slate-800 whitespace-pre-wrap border-l-2 border-blue-300 pl-3 py-1">
+          {checkoutNotes}
+          <div className="text-xs text-slate-500 mt-1">
+            — {buyerUsername ?? 'buyer'}, at checkout
+          </div>
+        </div>
+      ) : (
+        <div className="text-sm text-slate-500">
+          No checkout note from{' '}
+          <span className="font-mono">{buyerUsername ?? 'the buyer'}</span>.
+          Live message threads land here once the Messaging API is wired
+          (set <code className="font-mono">NEXUS_ENABLE_EBAY_MESSAGING=1</code>{' '}
+          + grant the messaging OAuth scope on your eBay connection).
+        </div>
+      )}
+      <div className="mt-2 pt-2 border-t border-slate-100 text-xs text-slate-500">
+        Order {channelOrderId} ·{' '}
+        {meta?.lastModifiedDate
+          ? `updated ${new Date(meta.lastModifiedDate).toLocaleString()}`
+          : 'no recent activity'}
+      </div>
+    </Card>
   )
 }
 
