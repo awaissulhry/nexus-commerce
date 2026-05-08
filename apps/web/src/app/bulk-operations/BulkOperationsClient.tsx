@@ -3011,7 +3011,18 @@ export default function BulkOperationsClient() {
   ])
 
   return (
-    <div className="flex-1 min-h-0 px-6 pb-6 flex flex-col">
+    // U.38 — was `flex-1 min-h-0 px-6 pb-6 flex flex-col` which
+    // depended on the page wrapper being a flex column with an
+    // explicit height. After the page wrapper was simplified to
+    // remove the negative-margin trickery (so it stops fighting the
+    // layout's sidebar / scroll context), this client anchors its
+    // own max-height to the viewport via dvh. 12rem accommodates
+    // PageHeader + ActiveJobsStrip + the layout's p-3/md:p-6 padding
+    // + the mobile top bar; close-enough on every breakpoint.
+    <div
+      className="flex flex-col"
+      style={{ height: 'calc(100dvh - 12rem)' }}
+    >
       {!online && (
         <div className="flex-shrink-0 mb-3 flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-base text-amber-800">
           <WifiOff className="w-3.5 h-3.5 flex-shrink-0" />
