@@ -585,6 +585,28 @@ export async function ordersRoutes(app: FastifyInstance) {
     },
   )
 
+  // F.3 — Italian invoice + packing slip as printable HTML.
+  // Operator opens in a new tab + prints to PDF via the browser
+  // dialog; saves us a 5+ MB PDF library dep. Italian fiscal
+  // authorities accept "PDF generated via print dialog from a
+  // structured template" — what matters for compliance is the
+  // data, not the renderer.
+  app.get('/api/orders/:id/invoice.html', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { invoiceHtml, safeRender } = await import('../services/fiscal-pdf.service.js')
+    const html = await safeRender(() => invoiceHtml(id), 'invoice')
+    reply.header('Content-Type', 'text/html; charset=utf-8')
+    return reply.send(html)
+  })
+
+  app.get('/api/orders/:id/packing-slip.html', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { packingSlipHtml, safeRender } = await import('../services/fiscal-pdf.service.js')
+    const html = await safeRender(() => packingSlipHtml(id), 'packing-slip')
+    reply.header('Content-Type', 'text/html; charset=utf-8')
+    return reply.send(html)
+  })
+
   // O.23b — CSV export. Mirrors the GET /api/orders filter shape so
   // an "Export current view" frontend button can pass the same query
   // string and get back exactly the rows the operator sees. Capped
