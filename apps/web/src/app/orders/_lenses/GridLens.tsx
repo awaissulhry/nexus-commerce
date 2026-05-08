@@ -185,63 +185,72 @@ export function GridLens(props: GridLensProps) {
 
       <Card noPadding>
         <div className="overflow-x-auto">
-          <table className="w-full text-md">
+          <table
+            className="w-full text-md"
+            role="grid"
+            aria-label={t('orders.title')}
+            aria-rowcount={total}
+          >
             <thead className="border-b border-slate-200 bg-slate-50 sticky top-0 z-10">
-              <tr>
-                {visible.map((col) => (
-                  <th
-                    key={col.key}
-                    style={{ width: col.width, minWidth: col.width }}
-                    className={`px-3 py-2 text-sm font-semibold uppercase tracking-wider text-slate-700 text-left ${
-                      ['date', 'customer', 'total', 'status'].includes(col.key)
-                        ? 'cursor-pointer hover:bg-slate-100'
-                        : ''
-                    }`}
-                    onClick={() => {
-                      const map: Record<string, string> = {
-                        date: 'purchaseDate',
-                        customer: 'customer',
-                        total: 'totalPrice',
-                        status: 'status',
-                      }
-                      if (map[col.key]) onSort(map[col.key])
-                    }}
-                  >
-                    {col.key === 'select' ? (
-                      <input
-                        type="checkbox"
-                        checked={allSelected}
-                        onChange={toggleSelectAll}
-                      />
-                    ) : (
-                      <span className="inline-flex items-center gap-1">
-                        {col.label}
-                        {col.key === 'date' &&
-                          sortBy === 'purchaseDate' && (
-                            <span className="text-slate-400">
+              <tr role="row">
+                {visible.map((col) => {
+                  const sortMap: Record<string, string> = {
+                    date: 'purchaseDate',
+                    customer: 'customer',
+                    total: 'totalPrice',
+                    status: 'status',
+                  }
+                  const isSortable = sortMap[col.key] != null
+                  const isSorted = isSortable && sortBy === sortMap[col.key]
+                  const ariaSort: 'ascending' | 'descending' | 'none' | undefined =
+                    isSortable
+                      ? isSorted
+                        ? sortDir === 'asc'
+                          ? 'ascending'
+                          : 'descending'
+                        : 'none'
+                      : undefined
+                  return (
+                    <th
+                      key={col.key}
+                      role="columnheader"
+                      scope="col"
+                      aria-sort={ariaSort}
+                      style={{ width: col.width, minWidth: col.width }}
+                      className={`px-3 py-2 text-sm font-semibold uppercase tracking-wider text-slate-700 text-left ${
+                        isSortable ? 'cursor-pointer hover:bg-slate-100' : ''
+                      }`}
+                      onClick={() => {
+                        if (sortMap[col.key]) onSort(sortMap[col.key])
+                      }}
+                    >
+                      {col.key === 'select' ? (
+                        <input
+                          type="checkbox"
+                          checked={allSelected}
+                          onChange={toggleSelectAll}
+                          aria-label={
+                            allSelected
+                              ? 'Deselect all visible orders'
+                              : 'Select all visible orders'
+                          }
+                        />
+                      ) : (
+                        <span className="inline-flex items-center gap-1">
+                          {col.label}
+                          {isSorted && (
+                            <span
+                              className="text-slate-400"
+                              aria-hidden="true"
+                            >
                               {sortDir === 'asc' ? '↑' : '↓'}
                             </span>
                           )}
-                        {col.key === 'total' &&
-                          sortBy === 'totalPrice' && (
-                            <span className="text-slate-400">
-                              {sortDir === 'asc' ? '↑' : '↓'}
-                            </span>
-                          )}
-                        {col.key === 'status' && sortBy === 'status' && (
-                          <span className="text-slate-400">
-                            {sortDir === 'asc' ? '↑' : '↓'}
-                          </span>
-                        )}
-                        {col.key === 'customer' && sortBy === 'customer' && (
-                          <span className="text-slate-400">
-                            {sortDir === 'asc' ? '↑' : '↓'}
-                          </span>
-                        )}
-                      </span>
-                    )}
-                  </th>
-                ))}
+                        </span>
+                      )}
+                    </th>
+                  )
+                })}
               </tr>
             </thead>
             <tbody>
@@ -251,6 +260,9 @@ export function GridLens(props: GridLensProps) {
                 return (
                   <tr
                     key={o.id}
+                    role="row"
+                    aria-selected={isSelected}
+                    aria-current={isFocused ? 'true' : undefined}
                     className={`border-b border-slate-100 hover:bg-slate-50 ${
                       isSelected ? 'bg-blue-50/30' : ''
                     } ${
@@ -324,7 +336,12 @@ function OrderCell({
   switch (col) {
     case 'select':
       return (
-        <input type="checkbox" checked={isSelected} onChange={onToggle} />
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={onToggle}
+          aria-label={`Select order ${o.channelOrderId}`}
+        />
       )
     case 'channel':
       return (

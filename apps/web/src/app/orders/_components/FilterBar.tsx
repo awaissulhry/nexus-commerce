@@ -276,6 +276,9 @@ function FilterGroup({
           return (
             <button
               key={opt}
+              type="button"
+              role="checkbox"
+              aria-checked={active}
               onClick={() => onToggle(opt)}
               className={`h-7 px-2 text-sm border rounded inline-flex items-center gap-1.5 ${
                 active
@@ -285,7 +288,10 @@ function FilterGroup({
             >
               {renderLabel ? renderLabel(opt) : opt}
               {count != null && (
-                <span className={active ? 'text-slate-300' : 'text-slate-400'}>
+                <span
+                  className={active ? 'text-slate-300' : 'text-slate-400'}
+                  aria-label={`${count} matching`}
+                >
                   {count}
                 </span>
               )}
@@ -314,6 +320,8 @@ function ToggleChip({ active, label, onClick, tone }: ToggleChipProps) {
     : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
   return (
     <button
+      type="button"
+      aria-pressed={active}
       onClick={onClick}
       className={`h-7 px-3 text-sm border rounded-full font-medium ${cls}`}
     >

@@ -371,15 +371,22 @@ function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) =>
     { key: 'reviews', label: t('orders.lens.reviews'), icon: Star },
   ]
   return (
-    <div className="inline-flex items-center bg-slate-100 rounded-md p-0.5">
-      {tabs.map((t) => (
+    <div
+      role="tablist"
+      aria-label="Order lenses"
+      className="inline-flex items-center bg-slate-100 rounded-md p-0.5"
+    >
+      {tabs.map((tab) => (
         <button
-          key={t.key}
-          onClick={() => onChange(t.key)}
-          className={`h-7 px-3 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${current === t.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+          key={tab.key}
+          role="tab"
+          aria-selected={current === tab.key}
+          aria-controls={`orders-lens-${tab.key}`}
+          onClick={() => onChange(tab.key)}
+          className={`h-7 px-3 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${current === tab.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
         >
-          <t.icon size={12} />
-          {t.label}
+          <tab.icon size={12} aria-hidden="true" />
+          {tab.label}
         </button>
       ))}
     </div>
