@@ -405,7 +405,25 @@ Cross-targeting policy is unchanged: a Product-targeted action given variation I
 
 The `BulkOperationsClient` parent maps its row-range selection (`rangeBounds.minRow..maxRow`) to product IDs via `products.slice(min, max+1).map(p => p.id)`. The new mode is disabled when the operator hasn't picked any rows on the parent grid; the radio label includes the count and a hint when zero ("0 — pick rows on the grid first").
 
-## 35. 🟡 Listing wizard — channel publish not yet wired
+## 35. ⏸ Listing wizard — channel publish wired, gated dry-run by default — operator-action 2026-05-08
+
+**Status update (verified 2026-05-08 against the current codebase):**
+
+  • **Amazon SP-API** — fully wired. `apps/api/src/services/listing-wizard/amazon-publish.adapter.ts` has `gatedPut()` wrapping `putListingsItem` for both parent SKU (line 270) + every child variation SKU (line 297). The publish gate (C.6) makes every call defaulting to `dry-run`; the operator flips to `live` via Railway env vars (`NEXUS_ENABLE_AMAZON_PUBLISH=true`, `AMAZON_PUBLISH_MODE=live`).
+  • **eBay** — fully wired. `apps/api/src/services/listing-wizard/ebay-publish.adapter.ts` has the three-step Inventory API flow (createOrReplaceInventoryItem → createOffer → publishOffer) wrapped in the C.7 gate (`NEXUS_ENABLE_EBAY_PUBLISH` + `EBAY_PUBLISH_MODE`).
+  • **Shopify** — gated dry-run path in `apps/api/src/services/outbound-sync.service.ts` (M.12 round); needs the operator's Shopify shop credentials configured on a `ChannelConnection` to flip live.
+  • **WooCommerce / Etsy** — explicitly skipped per memory `project_active_channels.md`.
+
+**Phase B observability (also live):**
+  • V.1 audit CLI: `node scripts/audit-channel-publish-attempts.mjs`
+  • V.1 operator runbook: `PHASE_B_VERIFICATION.md`
+  • M.7 live status page: `/listings/publish-status`
+  • M.8 per-listing publishes tab in the drawer
+  • M.10 14-day trend sparkline per channel rollup
+
+**Gating to operator (the actual remaining work):** The publish gate defaults to `gated` (master flag off) and `dry-run` (when on but mode unset). Going to `live` is a Railway env-var change. PHASE_B_VERIFICATION.md documents the Phase B.0 → B.1 → B.2 → B.3 → B.4 sequence (sanity → dry-run → sandbox → canary → graduated). This entry stays open as a tracker until Awa runs Phase B for real.
+
+**Original symptom (kept for context):** The /submit endpoint composed a payload but didn't push to channel. That's no longer true — composition + push are both wired; the gate is what holds it back from production credentials by default.
 
 **Surfaced at:** Listing wizard Steps 9/10 closeout. The ten-step
 wizard is now end-to-end navigable (audit + rebuild on 2026-05-03 →
@@ -413,71 +431,7 @@ wizard is now end-to-end navigable (audit + rebuild on 2026-05-03 →
 state transition all work. The actual channel push to Amazon (and
 Shopify, eBay, WooCommerce) is the remaining piece.
 
-**What works today:**
-
-- All 10 steps render real components (Steps 1, 2, 6 from earlier
-  phases; 3, 4, 5, 7, 8, 9, 10 added in this round).
-- `POST /api/listing-wizard/:id/submit` validates state, composes
-  the Amazon listings payload (wraps each user-supplied attribute
-  in the `[{ marketplace_id, value }]` convention, builds the
-  `purchasable_offer`, attaches main + alt image URLs in
-  `main_product_image_locator` / `other_product_image_locator`,
-  records variation theme + child SKUs), transitions wizard.status
-  to SUBMITTED, and returns the prepared payload so the user can
-  inspect what *would* be sent.
-- The endpoint response includes
-  `channelPushed: false` and a human-readable
-  `channelPushReason` so the UI can be honest about what's wired.
-
-**What's missing:**
-
-- **Amazon SP-API `putListingsItem` integration.** No
-  `putListingsItem` wrapper exists in `apps/api/src/services/marketplaces/amazon.service.ts`
-  (only `getListingsItem` for read). Building this means: take the
-  composed payload, call SP-API with `productType`, `requirements:
-  LISTING`, the wrapped attributes, plus the seller + marketplace
-  IDs; capture the submission ID; poll `getListingsItem` /
-  `getListingsItemIssues` until the listing is `BUYABLE` or surface
-  the specific issues. ~6-10 hours, plus integration testing.
-- **Shopify**: `ShopifyService.createProduct` already exists
-  (`apps/api/src/services/marketplaces/shopify.service.ts:320`) —
-  just needs an adapter that maps wizard state → its signature.
-  ~1-2 hours.
-- **WooCommerce**: no `createProduct` exists; only PUT for
-  existing rows. Building create is straightforward (POST to
-  `/products` with the same shape as the PUT). ~1-2 hours.
-- **eBay**: adapter scaffolded in DD.4
-  (`apps/api/src/services/listing-wizard/ebay-publish.adapter.ts`).
-  Three-step Inventory-API flow wired
-  (createOrReplaceInventoryItem → createOffer → publishOffer); error
-  mapping per-step. **NOT END-TO-END TESTED.** Requires:
-  (1) eBay developer credentials configured on a ChannelConnection
-  (`channelType='EBAY'`, `isActive=true`, OAuth tokens),
-  (2) `connectionMetadata.ebayPolicies.{fulfillmentPolicyId, paymentPolicyId, returnPolicyId, merchantLocationKey}` set on that connection,
-  (3) sandbox or production seller account to test against.
-  Once those are in place the existing /submit endpoint exercises it
-  with no further wiring. Composition lives at
-  `apps/api/src/services/listing-wizard/submission.service.ts` (EBAY branch).
-- **Per-channel status polling** to surface "submitted → indexed →
-  searchable" once the push lands. The `state.submission` slot is
-  already wired in the schema for this.
-- **Variation publishing** — when `state.variations.includedSkus`
-  has children, each child needs its own `putListingsItem` call
-  (Amazon publishes children as siblings of the parent under the
-  variation theme). The composition layer surfaces them on
-  `amazonPayload.childSkus`; the per-child payload still needs to
-  be expanded.
-
-**Workaround:** Users walk the wizard, hit Submit, see the prepared
-payload, and copy it manually into Seller Central if they need to
-list right now. Wizard state is preserved as SUBMITTED with the
-prepared payload in `state.submission` so nothing is lost when the
-integration eventually lands.
-
-**Why this isn't in scope for the current round:** The channel-push
-integrations are substantial backend work that benefit from a
-dedicated phase with credentialed integration testing. They aren't
-gated on the wizard UI, which is what this round delivered.
+**Reference (kept for tracker continuity):** see the status update block above for the current state of the wiring (all channel adapters now exist + wrapped in the publish gate; remaining work is operator credential + env-var flip).
 
 ---
 
@@ -783,8 +737,10 @@ Disabling the wizard's PV writes without first refactoring these readers would s
 
 **Still open:**
 - `ATTRIBUTE_UPDATE` still targets `ProductVariation.variationAttributes`. PV is empty so this is a silent no-op against current data. Retargeting requires a schema decision: which Product column holds variant-level attributes? See entry #52.
-- `LISTING_SYNC` still throws "deferred to v2" — separate concern tracked in #34.
-- The BullMQ post-commit enqueue from bulk-action context hangs indefinitely (root cause TBD — see #54). Worked around with `skipBullMQEnqueue: true`; cron worker drains PENDING rows within ~60s.
+- The BullMQ post-commit enqueue from bulk-action context: dev-fixed in #54; production validation still pending.
+
+**Closed by sibling commits:**
+- `LISTING_SYNC` — handler implemented + UI exposed in M.15 (modal "Resync to channels"); see #34b.
 
 **Note:** The PATCH `/api/products/bulk` path (used by the BulkOperationsClient grid for inline cell edits, Cmd+S) targets `Product` directly and was unaffected — that's a separate code path that has always worked.
 
@@ -1059,9 +1015,17 @@ getter-resolution `this`.
 
 ---
 
-## 55. 🟡 Bulk resync needs an inbound queue (S.4 scope)
+## 55. ⏸ Bulk resync needs an inbound queue (S.4 scope) — design-blocked, mitigated 2026-05-08
 
-**Symptom:** S.0 wired `POST /api/listings/:id/resync` as a synchronous inline pull from the channel adapter — solves the single-listing case ("operator clicks Resync in the drawer"). The bulk-action endpoint at `/api/listings/bulk-action` still routes resync through the in-memory `BULK_JOBS` Map, which loses state on API restart. Bulk resync (>1 listing) is on shaky ground until we have a real inbound queue.
+**Status update:** Operator-impact bounded today. Xavia has 8 listings in production; M.5 single-listing resync (V.2 inline action) and bulk resync from the matrix (M.5 — fan-out via per-cell `/resync` calls) cover all current usage. The "in-memory Map silently reports Done after 60s" failure mode requires >50 listings on a single bulk call, which Xavia hasn't hit and won't until the catalog scales 10×.
+
+**Decision needed for the proper fix** (gating S.4 implementation):
+  • **Option 1**: Repurpose `OutboundSyncQueue` with a new `INBOUND_REFRESH` `syncType`. Reuses existing cron worker + retry logic + `holdUntil` grace.
+  • **Option 2**: Sibling `InboundSyncQueue` table. Cleaner separation of concerns, small migration cost.
+
+Each option carries multi-commit work (new model or column, channel adapter inbound primitives, cron worker wiring, bulk-action route refactor, UI updates). Both are deferred until either (a) the catalog crosses ~50 listings or (b) operator reports the failure mode.
+
+**Symptom (kept for context):** S.0 wired `POST /api/listings/:id/resync` as a synchronous inline pull from the channel adapter — solves the single-listing case. The bulk-action endpoint at `/api/listings/bulk-action` still routes resync through the in-memory `BULK_JOBS` Map, which loses state on API restart.
 
 **Surfaced at:** Phase 1 syndication audit + S.0 design review (2026-05-07).
 
