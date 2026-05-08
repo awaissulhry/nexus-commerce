@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Bell, X, Plus, Trash2, RefreshCw } from 'lucide-react'
 import { IconButton } from '@/components/ui/IconButton'
+import { Modal } from '@/components/ui/Modal'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import {
@@ -235,14 +236,14 @@ export default function ManageAlertsModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
+    // U.3 — Modal primitive replaces the hand-rolled fixed inset-0 +
+    // backdrop + click-outside + Esc plumbing. Modal owns: backdrop
+    // opacity + blur, scroll lock, Esc dismissal, click-outside
+    // dismissal, focus capture/restore on open/close, animate-scale-in
+    // on appear. We pass header={null} because the existing custom
+    // header has both title + subtitle + Bell icon — richer than what
+    // Modal's default `title` prop renders.
+    <Modal open onClose={onClose} placement="centered" size="2xl" header={null}>
         <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
           <div>
             <div className="text-lg font-semibold text-slate-900 inline-flex items-center gap-1.5">
@@ -491,7 +492,6 @@ export default function ManageAlertsModal({
             </button>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
