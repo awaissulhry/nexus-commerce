@@ -1,7 +1,11 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
+// TECH_DEBT #6 — swapped from `xlsx` (npm 0.18.5, CVE-2023-30533)
+// to `exceljs` (MIT, actively maintained). Drops .xls (legacy
+// BIFF) support — modern xlsx is universally available, .xls
+// users get a clear error with re-save instructions.
 import { getBackendUrl } from '@/lib/backend-url'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -107,14 +111,58 @@ export default function InventoryUploadPage() {
 
   const parseFile = useCallback((file: File) => {
     setFileName(file.name)
+    if (file.name.toLowerCase().endsWith('.xls')) {
+      setImportError(
+        'Legacy .xls files are not supported. Please re-save your spreadsheet as .xlsx and try again.',
+      )
+      return
+    }
     const reader = new FileReader()
 
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer)
-        const workbook = XLSX.read(data, { type: 'array' })
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
-        const jsonData = XLSX.utils.sheet_to_json<Record<string, any>>(firstSheet)
+        const data = e.target?.result as ArrayBuffer
+        const workbook = new ExcelJS.Workbook()
+        await workbook.xlsx.load(data)
+        const sheet = workbook.worksheets[0]
+        if (!sheet) {
+          setImportError('The file has no sheets')
+          return
+        }
+
+        // Build header → column-index lookup from row 1.
+        const headerRow = sheet.getRow(1)
+        const headers: string[] = []
+        headerRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          const v = cell.value
+          headers[colNumber - 1] =
+            v == null ? '' :
+            typeof v === 'object' && 'text' in (v as any) ? String((v as any).text).trim() :
+            typeof v === 'object' && 'result' in (v as any) ? String((v as any).result ?? '').trim() :
+            String(v).trim()
+        })
+
+        // Iterate rows 2+ → header-keyed objects mirroring the
+        // shape `xlsx.utils.sheet_to_json` returned.
+        const jsonData: Record<string, any>[] = []
+        const lastRow = sheet.actualRowCount ?? sheet.rowCount
+        for (let r = 2; r <= lastRow; r++) {
+          const row = sheet.getRow(r)
+          if (row.actualCellCount === 0) continue
+          const obj: Record<string, any> = {}
+          row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+            const h = headers[colNumber - 1]
+            if (!h) return
+            const v = cell.value
+            obj[h] =
+              v == null ? '' :
+              v instanceof Date ? v.toISOString() :
+              typeof v === 'object' && 'text' in (v as any) ? (v as any).text :
+              typeof v === 'object' && 'result' in (v as any) ? (v as any).result :
+              v
+          })
+          jsonData.push(obj)
+        }
 
         if (jsonData.length === 0) {
           setImportError('The file contains no data rows')

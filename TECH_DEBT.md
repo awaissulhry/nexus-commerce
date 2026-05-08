@@ -95,18 +95,18 @@ The /orders rebuild (D.2) replaced `reply.status(200).send(...)` with `return { 
 
 **Proper fix:** Pass a `pendingValue` prop down to EditableCell when there's an entry in the changes Map for it. EditableCell's `useState(() => …)` initialiser seeds `draftValue` from `pendingValue ?? initialValue` so the yellow tint shows on first mount. Memo comparator already includes the relevant fields; one extra prop keyed on cellKey is enough.
 
-## 6. 🟡 SheetJS (`xlsx`) CVE-2023-30533 + maintenance posture
+## 6. ✅ SheetJS (`xlsx`) CVE-2023-30533 — resolved 2026-05-08 in M.12
 
-**Symptom / risk:** `xlsx` is used in D.4 (bulk CSV/XLSX upload) to parse user-provided spreadsheets. CVE-2023-30533 is a prototype-pollution issue in older versions; the package's maintenance moved to a CDN/commercial track and the npm tarball is no longer the maintainer's preferred distribution.
+**Resolution:** Both call sites swapped to `exceljs` (MIT, actively maintained):
 
-**Surfaced at:** D.4 dependency install (`npm audit` flagged it).
+  • `apps/api/src/services/products/bulk-upload.service.ts` — `parseUploadBuffer` is now `async`, uses `ExcelJS.Workbook().xlsx.load(buf)`, builds the same `Record<string, string>[]` shape via header-row + per-row `eachCell` iteration. The lone caller in `products.routes.ts` was updated to `await` the call.
+  • `apps/web/src/app/inventory/upload/page.tsx` — same swap on the FileReader.onload path; handles formula `result`, hyperlink `text`, and rich-text `richText` cell shapes that `xlsx.utils.sheet_to_json` previously flattened automatically.
 
-**Workaround / current mitigations:**
-- Parse-only path on authenticated user input (no `eval`, no dynamic property assignment).
-- 50 MB / 50,000 row caps enforced by `@fastify/multipart` config + the upload service.
-- The parse result is normalised through the same field-registry validation as the rest of the bulk API, so a malicious cell can't slip through to Prisma as an attacker-controlled key.
+`xlsx` removed from both workspace package.json files. Bundle size impact: exceljs is ~2× xlsx but only loaded on the upload pages (not the hot path). Trade-off accepted to close the CVE.
 
-**Proper fix:** Replace with `exceljs` (MIT, actively maintained) when we have time to swap. `exceljs` has a slightly different API but supports CSV + XLSX with the same row-shape we need.
+**Trade-off:** Drops `.xls` (legacy BIFF) support — `exceljs` is `.xlsx`-only. Both call sites detect the extension and emit a clear "Please re-save as .xlsx" error pointing the operator at the fix. Modern spreadsheet tools have been emitting `.xlsx` by default for over a decade so this is a near-zero practical regression.
+
+**Original symptom / risk:** `xlsx` 0.18.5 (the npm version) carries CVE-2023-30533 (prototype pollution via crafted .xlsx). The maintainer moved fixes to the SheetJS CDN/commercial track at 0.20+; the npm distribution stayed vulnerable. Mitigations were in place (auth-only path, 50 MB / 50K-row caps, downstream field-registry validation prevented attacker-controlled keys reaching Prisma) but the right fix was always to swap libraries.
 
 ## 7. 🟢 D.5.5: ZIP upload — image handling, channel overrides, variants
 

@@ -2019,7 +2019,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       const buf: Buffer = await part.toBuffer()
       let parsed
       try {
-        parsed = parseUploadBuffer(filename, buf)
+        parsed = await parseUploadBuffer(filename, buf)
       } catch (e: any) {
         return reply.code(400).send({ error: e?.message ?? 'Parse failed' })
       }

@@ -19,10 +19,13 @@
  */
 
 import Papa from 'papaparse'
-import * as XLSX from 'xlsx'
-// Note: papaparse exports default; xlsx is CJS-shaped and works
-// fine via the namespace import here since we only call XLSX.read
-// and XLSX.utils, both of which sit on the namespace object.
+import ExcelJS from 'exceljs'
+// TECH_DEBT #6 — swapped from `xlsx` (npm 0.18.5, CVE-2023-30533
+// prototype-pollution; fixed only in the SheetJS-CDN 0.20+ track,
+// not on npm) to `exceljs` (MIT, actively maintained). Drops .xls
+// (legacy BIFF) support — operators on .xls files get a clear
+// error pointing them at .xlsx; .xlsx is universally supported by
+// every spreadsheet tool from the last decade.
 import type { PrismaClient } from '@prisma/client'
 import {
   getAvailableFields,
@@ -115,32 +118,89 @@ function parseUnitSuffixed(
   return { value, unit }
 }
 
+/** Coerce an exceljs cell value to a display string. exceljs surfaces
+ *  several shapes (raw scalar, Date, formula result, hyperlink, rich
+ *  text) — for our validation pipeline we only need the printable
+ *  text. Empty/null collapses to ''. */
+function cellAsString(value: unknown): string {
+  if (value == null) return ''
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number') return String(value)
+  if (typeof value === 'boolean') return value ? 'true' : 'false'
+  if (value instanceof Date) return value.toISOString()
+  if (typeof value === 'object') {
+    const o = value as Record<string, unknown>
+    // Formulas evaluate to { formula, result }.
+    if ('result' in o) return cellAsString(o.result)
+    // Hyperlinks: { text, hyperlink }.
+    if ('text' in o) return cellAsString(o.text)
+    // Rich text: { richText: [{ text }, ...] }.
+    if ('richText' in o && Array.isArray(o.richText)) {
+      return (o.richText as Array<{ text?: string }>)
+        .map((r) => r.text ?? '')
+        .join('')
+        .trim()
+    }
+  }
+  return String(value).trim()
+}
+
 /** Detect file format from the upload's filename + sniffable bytes,
  *  and return a 2D string array (header row + data rows). */
-export function parseUploadBuffer(
+export async function parseUploadBuffer(
   filename: string,
   buf: Buffer,
-): { rows: Record<string, string>[]; warnings: string[] } {
+): Promise<{ rows: Record<string, string>[]; warnings: string[] }> {
   const warnings: string[] = []
   const lower = filename.toLowerCase()
-  if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
-    const wb = XLSX.read(buf, { type: 'buffer' })
-    const sheetName = wb.SheetNames[0]
-    if (!sheetName) {
+  if (lower.endsWith('.xls')) {
+    throw new Error(
+      'Legacy .xls files are not supported. Please re-save your spreadsheet as .xlsx and try again.',
+    )
+  }
+  if (lower.endsWith('.xlsx')) {
+    const wb = new ExcelJS.Workbook()
+    // exceljs's `load` is typed against the legacy `Buffer` shape;
+    // newer @types/node parametrises Buffer with ArrayBufferLike
+    // which trips the assignability check on either side of the
+    // `as Buffer` cast. `any` here is a type-only escape — the
+    // runtime accepts any buffer-shaped input.
+    await wb.xlsx.load(buf as any)
+    const sheet = wb.worksheets[0]
+    if (!sheet) {
       throw new Error('XLSX file has no sheets')
     }
-    const sheet = wb.Sheets[sheetName]
-    // defval='' so empty cells come through as empty strings rather
-    // than being omitted (otherwise our "empty = no change" rule
-    // can't tell empty from "column missing on this row").
-    const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, {
-      defval: '',
-      raw: false,
+    // Read row 1 as headers; subsequent rows become objects keyed by
+    // header value. Mirrors xlsx's sheet_to_json{defval:'', raw:false}
+    // shape — empty cells come through as empty strings so the
+    // downstream "empty = no change" rule can distinguish an empty
+    // cell from a missing column.
+    const headerRow = sheet.getRow(1)
+    const headers: string[] = []
+    headerRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      headers[colNumber - 1] = cellAsString(cell.value)
     })
-    if (wb.SheetNames.length > 1) {
+    const rows: Record<string, string>[] = []
+    const lastRow = sheet.actualRowCount ?? sheet.rowCount
+    for (let r = 2; r <= lastRow; r++) {
+      const row = sheet.getRow(r)
+      // Skip blank rows so a trailing-empty row doesn't fail
+      // validation. exceljs flags this via row.actualCellCount.
+      if (row.actualCellCount === 0) continue
+      const obj: Record<string, string> = {}
+      for (const h of headers) {
+        if (h) obj[h] = ''
+      }
+      row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+        const h = headers[colNumber - 1]
+        if (h) obj[h] = cellAsString(cell.value)
+      })
+      rows.push(obj)
+    }
+    if (wb.worksheets.length > 1) {
       warnings.push(
-        `Only the first sheet (${sheetName}) was processed; ${
-          wb.SheetNames.length - 1
+        `Only the first sheet (${sheet.name}) was processed; ${
+          wb.worksheets.length - 1
         } other sheet(s) ignored.`,
       )
     }
