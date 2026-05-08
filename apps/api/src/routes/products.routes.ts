@@ -295,6 +295,29 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             return { totalStock: 'asc' }
           case 'stock-desc':
             return { totalStock: 'desc' }
+          // U.26 — derived-column sorting via Prisma's relation _count.
+          // The grid already shows photoCount / channelCount /
+          // variantCount per row; without server-side sort an
+          // operator click-sorted the visible 100-row page instead
+          // of the full filtered catalog, which made "show me the
+          // worst" queries impossible past the page boundary.
+          //
+          // Completeness sort isn't here — it's a CASE-expression
+          // sum over 6 fields, which Prisma's orderBy doesn't
+          // express natively. Lands in a follow-up using $queryRaw
+          // for the order then findMany for the data.
+          case 'photos-asc':
+            return { images: { _count: 'asc' } }
+          case 'photos-desc':
+            return { images: { _count: 'desc' } }
+          case 'channels-asc':
+            return { channelListings: { _count: 'asc' } }
+          case 'channels-desc':
+            return { channelListings: { _count: 'desc' } }
+          case 'variants-asc':
+            return { variations: { _count: 'asc' } }
+          case 'variants-desc':
+            return { variations: { _count: 'desc' } }
           case 'updated':
           default:
             return { updatedAt: 'desc' }
