@@ -647,11 +647,6 @@ export class BulkActionService {
    *   - Original.isRollbackable must be true
    *   - Original.rollbackJobId must be null (no double-rollback)
    *   - Rollback job is NOT itself rollbackable
-   *
-   * Like processPricingUpdate / processInventoryUpdate, we pass
-   * skipBullMQEnqueue=true so the cron worker drains the resulting
-   * sync queue rows. Same eventual-consistency property as the
-   * forward path.
    */
   async rollbackBulkActionJob(originalJobId: string): Promise<{
     rollbackJobId: string
@@ -793,7 +788,6 @@ export class BulkActionService {
               actor: 'bulk-action-rollback',
               reason: `rollback of job ${originalJobId}`,
               idempotencyKey: `rollback:${rollbackJob.id}:${item.productId}`,
-              skipBullMQEnqueue: true,
             });
             break;
           }
@@ -819,7 +813,6 @@ export class BulkActionService {
                 referenceId: rollbackJob.id,
                 actor: 'bulk-action-rollback',
                 notes: `Rollback of bulk job ${originalJobId}`,
-                skipBullMQEnqueue: true,
               });
             }
             break;
@@ -844,7 +837,6 @@ export class BulkActionService {
               {
                 actor: 'bulk-action-rollback',
                 reason: `Rollback of bulk job ${originalJobId}`,
-                skipBullMQEnqueue: true,
               },
             );
             break;
@@ -1971,13 +1963,6 @@ export class BulkActionService {
    * enqueues OutboundSyncQueue rows, and writes an AuditLog entry.
    * See DEVELOPMENT.md "Master-data cascade" for the propagation rules.
    *
-   * skipBullMQEnqueue=true — bulk-action runs detached from the HTTP
-   * request (fire-and-forget processJob). The post-commit
-   * outboundSyncQueue.add() awaited from this context hangs indefinitely
-   * (root cause TBD; tracked in TECH_DEBT #54). The DB row in
-   * OutboundSyncQueue still lands; the per-minute cron worker
-   * (sync.worker.ts) drains PENDING rows.
-   *
    * Payload:
    *   adjustmentType: 'ABSOLUTE' | 'PERCENT' | 'DELTA'
    *   value: number              (the multiplier / delta / absolute)
@@ -2038,7 +2023,6 @@ export class BulkActionService {
       actor: 'bulk-action',
       reason: 'bulk-pricing-job',
       idempotencyKey: `${jobId}:${item.id}`,
-      skipBullMQEnqueue: true,
     });
 
     return { status: 'processed' };
@@ -2052,9 +2036,6 @@ export class BulkActionService {
    * followMasterQuantity / stockBuffer contract, enqueues
    * OutboundSyncQueue rows, and writes a StockMovement audit row.
    * See DEVELOPMENT.md "Master-data cascade" for propagation rules.
-   *
-   * skipBullMQEnqueue=true — symmetric to processPricingUpdate. The
-   * cron sync worker drains PENDING rows.
    *
    * Payload:
    *   adjustmentType: 'ABSOLUTE' | 'DELTA'
@@ -2102,7 +2083,6 @@ export class BulkActionService {
       referenceType: 'BulkActionJob',
       referenceId: jobId,
       actor: 'bulk-action',
-      skipBullMQEnqueue: true,
     });
 
     return { status: 'processed' };
@@ -2141,15 +2121,9 @@ export class BulkActionService {
     // cascades to ChannelListing.listingStatus + OutboundSyncQueue +
     // AuditLog atomically. Without this, the marketplace continues to
     // show items in the old state until the next manual sync.
-    //
-    // skipBullMQEnqueue mirrors the pricing/inventory paths — the
-    // detached bulk-action context has hit a Queue.add() hang
-    // (TECH_DEBT #54), so we let the per-minute cron drain the
-    // PENDING rows. Workaround until #54 lands.
     await this.masterStatusService.update(productId, newStatus, {
       actor: 'bulk-action',
       reason: `bulk-job:${jobId}`,
-      skipBullMQEnqueue: true,
     });
 
     return { status: 'processed' };

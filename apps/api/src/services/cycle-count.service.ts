@@ -184,8 +184,9 @@ export async function reconcileItem(args: {
 
   if (change !== 0) {
     // Apply via existing primitive — gets us audit row + cascade to
-    // ChannelListing for free. skipBullMQEnqueue=true matches the
-    // bulk-action pattern: cron worker drains within 60s.
+    // ChannelListing for free. The post-commit BullMQ enqueue runs
+    // (TECH_DEBT #54 root-cause fix is in lib/queue.ts); cron drains
+    // within 60s either way.
     const movement = await applyStockMovement({
       productId: item.productId,
       variationId: item.variationId ?? undefined,
@@ -196,7 +197,6 @@ export async function reconcileItem(args: {
       referenceId: item.cycleCount.id,
       actor: args.reconciledByUserId ?? 'cycle-count',
       notes: `Cycle count variance: expected=${item.expectedQuantity} counted=${item.countedQuantity}`,
-      skipBullMQEnqueue: true,
     })
     movementId = movement?.id ?? null
   } else {

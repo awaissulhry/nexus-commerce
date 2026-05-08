@@ -74,12 +74,6 @@ export interface MasterStatusUpdateContext {
   /** Override the 5-minute push grace window. Defaults to true. */
   applyGrace?: boolean
   tx?: Prisma.TransactionClient
-  /**
-   * Skip the post-transaction BullMQ enqueue (DB row is still PENDING; the
-   * cron worker drains within ~60s). Used by callers that have hit the
-   * BullMQ enqueue hang in their detached context (TECH_DEBT #54).
-   */
-  skipBullMQEnqueue?: boolean
 }
 
 export interface MasterStatusUpdateResult {
@@ -266,7 +260,11 @@ export class MasterStatusService {
       ? await runner(ctx.tx)
       : await this.client.$transaction(runner)
 
-    if (!ctx.skipBullMQEnqueue && result.queuedSyncIds.length > 0) {
+    // Skip post-commit BullMQ enqueue when running inside a caller-supplied
+    // outer transaction — the outer tx hasn't committed yet. The cron
+    // worker drains PENDING queue rows after the outer commit. Mirrors
+    // master-price.service.ts and stock-movement.service.ts.
+    if (!ctx.tx && result.queuedSyncIds.length > 0) {
       const delay = ctx.applyGrace === false ? 0 : DEFAULT_HOLD_MS
       for (const queueId of result.queuedSyncIds) {
         try {

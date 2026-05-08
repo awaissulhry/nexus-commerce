@@ -65,7 +65,6 @@ async function applyOne(row: PickedRow): Promise<void> {
     await masterStatusService.update(row.productId, status as 'ACTIVE' | 'DRAFT' | 'INACTIVE', {
       actor: 'scheduled-changes-cron',
       reason: 'scheduled-change',
-      skipBullMQEnqueue: false,
     })
     return
   }

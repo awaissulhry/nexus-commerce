@@ -793,11 +793,11 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
    * Now: per-product call to `masterStatusService.update()` inside a
    * single outer `$transaction` so the whole batch is atomic, and
    * each call cascades to ChannelListing.listingStatus + enqueues an
-   * OutboundSyncQueue STATUS_UPDATE row + writes an AuditLog. We
-   * pass `skipBullMQEnqueue` so the BullMQ enqueue can't fire
-   * before the outer tx commits (would queue jobs against rolled-
-   * back rows otherwise) — the cron drain (~60s) picks up PENDING
-   * rows from the DB, which is the source of truth.
+   * OutboundSyncQueue STATUS_UPDATE row + writes an AuditLog. The
+   * service auto-skips the post-commit BullMQ enqueue when ctx.tx is
+   * supplied (would queue jobs against rolled-back rows otherwise) —
+   * the cron drain (~60s) picks up PENDING rows from the DB, which is
+   * the source of truth.
    *
    * Per-product errors (terminal listing states, missing rows,
    * etc.) are surfaced in errors[] so the caller's bulk-edit grid
@@ -842,7 +842,6 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
               tx,
               actor,
               reason: 'bulk-status',
-              skipBullMQEnqueue: true, // post-commit drain owns the enqueue
             })
             if (r.changed) {
               updated++
