@@ -590,6 +590,27 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // E.3 — Push an EbayMarkdown row to eBay's Marketing API. Centralized
+  // through ebay-markdown.service so every push respects the same
+  // status guards + originalPrice drift check + dry-run gating.
+  fastify.post<{ Params: { id: string } }>(
+    '/pricing/markdowns/:id/push',
+    async (request, reply) => {
+      try {
+        const { pushMarkdownToEbay } = await import(
+          '../services/ebay-markdown.service.js'
+        )
+        const result = await pushMarkdownToEbay(prisma, request.params.id)
+        return reply
+          .code(result.ok ? 200 : result.error === 'markdown not found' ? 404 : 422)
+          .send(result)
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[pricing/markdowns push] failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
   // E.1.b — Soft-delete a RetailEvent + cascade clear of any
   // ChannelListing.salePrice rows the scheduler stamped under its
   // promotion:<eventId> marker. Keeps audit trail (row preserved with
