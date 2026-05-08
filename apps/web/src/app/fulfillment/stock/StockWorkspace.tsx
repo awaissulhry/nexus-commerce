@@ -19,6 +19,7 @@ import {
   Check, Download, Sliders, Undo2, CheckCircle2,
   Lightbulb, Zap, AlertCircle,
   Columns, Maximize2, Minimize2, Keyboard,
+  ClipboardCheck,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -243,6 +244,10 @@ export default function StockWorkspace() {
   const [insights, setInsights] = useState<Insights | null>(null)
   const [insightsCollapsed, setInsightsCollapsed] = useState(false)
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null)
+  // S.6 — open cycle-count session count (DRAFT + IN_PROGRESS) so the
+  // header link can show a badge when there's work waiting. The full
+  // list lives at /fulfillment/stock/cycle-count.
+  const [cycleCountActive, setCycleCountActive] = useState<number>(0)
   // Persisted UI prefs (localStorage). Initialised lazily so SSR
   // doesn't crash on a missing window.
   const [density, setDensity] = useState<Density>('comfortable')
@@ -333,11 +338,14 @@ export default function StockWorkspace() {
 
   const fetchSidecar = useCallback(async () => {
     try {
-      const [locRes, kpiRes, insightsRes, syncRes] = await Promise.all([
+      const [locRes, kpiRes, insightsRes, syncRes, cyclesRes] = await Promise.all([
         fetch(`${getBackendUrl()}/api/stock/locations`, { cache: 'no-store' }),
         fetch(`${getBackendUrl()}/api/stock/kpis`, { cache: 'no-store' }),
         fetch(`${getBackendUrl()}/api/stock/insights`, { cache: 'no-store' }),
         fetch(`${getBackendUrl()}/api/stock/sync-status`, { cache: 'no-store' }),
+        // S.6 — pull a small page of recent cycle counts so we can
+        // surface a badge for any DRAFT or IN_PROGRESS session.
+        fetch(`${getBackendUrl()}/api/fulfillment/cycle-counts?limit=50`, { cache: 'no-store' }),
       ])
       if (locRes.ok) {
         const data = await locRes.json()
@@ -351,6 +359,13 @@ export default function StockWorkspace() {
       }
       if (syncRes.ok) {
         setSyncStatus(await syncRes.json())
+      }
+      if (cyclesRes.ok) {
+        const data = await cyclesRes.json()
+        const active = (data.counts ?? []).filter(
+          (c: { status: string }) => c.status === 'DRAFT' || c.status === 'IN_PROGRESS',
+        ).length
+        setCycleCountActive(active)
       }
     } catch {
       // Sidecar is best-effort — the table still works without it.
@@ -605,6 +620,27 @@ export default function StockWorkspace() {
                 <ColumnPicker visible={visibleColumns} onChange={setVisibleColumns} />
               </>
             )}
+            {/* S.6 — cycle-count entry point. Surfaces the
+                /fulfillment/stock/cycle-count sub-route from the main
+                workspace (previously buried — operators reached it
+                only via the sidebar or Cmd+K). Badge fires when any
+                session is DRAFT or IN_PROGRESS. */}
+            <Link
+              href="/fulfillment/stock/cycle-count"
+              className="relative h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5 text-slate-700"
+              title="Cycle counts (physical inventory)"
+            >
+              <ClipboardCheck size={12} />
+              Cycle counts
+              {cycleCountActive > 0 && (
+                <span
+                  className="ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-xs font-semibold rounded-full bg-amber-500 text-white tabular-nums"
+                  aria-label={`${cycleCountActive} open cycle count session${cycleCountActive === 1 ? '' : 's'}`}
+                >
+                  {cycleCountActive}
+                </span>
+              )}
+            </Link>
             <button
               onClick={() => setShortcutsOpen(true)}
               className="h-8 w-8 inline-flex items-center justify-center border border-slate-200 rounded-md hover:bg-slate-50 text-slate-600"
