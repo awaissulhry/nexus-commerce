@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, CheckCircle2, Copy, Loader2, RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/Button'
 import ProductTypePicker from '@/components/products/ProductTypePicker'
 import ChannelGroupsManager, {
   type ChannelGroup,
@@ -879,34 +880,31 @@ export default function ChannelFieldEditor({
                 : `Show all (${manifest.optionalFieldCount} more)`}
             </button>
           )}
-          <button
-            type="button"
+          <Button
+            size="sm"
+            variant="secondary"
             onClick={() => setReloadKey((k) => k + 1)}
             disabled={loading}
-            className="inline-flex items-center gap-1 h-7 px-2 text-sm text-slate-600 border border-slate-200 rounded hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40"
+            loading={loading}
             title="Re-fetch the schema from cache"
+            icon={<RefreshCw className="w-3 h-3" />}
           >
-            {loading ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            ) : (
-              <RefreshCw className="w-3 h-3" />
-            )}
             Refresh
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            size="sm"
             onClick={() => {
               setForceRefresh(true)
               setReloadKey((k) => k + 1)
               window.setTimeout(() => setForceRefresh(false), 100)
             }}
             disabled={loading}
-            className="inline-flex items-center gap-1 h-7 px-2 text-sm text-blue-700 border border-blue-200 rounded hover:bg-blue-50 disabled:opacity-40"
+            className="text-blue-700 border-blue-200 bg-white hover:bg-blue-50"
             title="Force-refresh from Amazon SP-API (bypasses 24h cache)"
+            icon={<RefreshCw className="w-3 h-3" />}
           >
-            <RefreshCw className="w-3 h-3" />
             Refresh schema
-          </button>
+          </Button>
         </div>
       </div>
 

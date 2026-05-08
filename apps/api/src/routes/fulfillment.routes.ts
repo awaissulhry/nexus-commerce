@@ -8939,6 +8939,20 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // CR.23 — manual metrics pre-warm. Same logic as the nightly cron
+  // but on demand. Operator hits "Refresh stats" in the Performance
+  // tab → cache is repopulated → next render reads fresh from cache.
+  fastify.post('/fulfillment/carriers/metrics/refresh', async (_request, reply) => {
+    try {
+      const { runCarrierMetricsSweep } = await import('../jobs/carrier-metrics.job.js')
+      const result = await runCarrierMetricsSweep()
+      return { ok: true, ...result }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[carriers/metrics/refresh] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // CR.16 — pickup scheduling. PickupSchedule rows; one-time SENDCLOUD
   // pickups dispatch immediately to /pickups, recurring pickups
   // persist for the dispatch cron (later commit) to fire daily.
@@ -9170,8 +9184,55 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/fulfillment/carriers/:code/metrics', async (request, reply) => {
     try {
       const { code } = request.params as { code: string }
-      const q = request.query as { windowDays?: string }
+      const q = request.query as { windowDays?: string; fresh?: string }
       const windowDays = Math.min(365, Math.max(1, Number(q.windowDays ?? 30) || 30))
+      const forceFresh = q.fresh === '1'
+
+      // CR.23: prefer the pre-warmed CarrierMetric cache when it
+      // exists for this exact (carrier, windowDays) and was computed
+      // within the last 25 hours (slightly looser than the 24h cron
+      // cadence so a slow cron run doesn't immediately invalidate).
+      // Falls through to live aggregation when cache is missing,
+      // stale, or ?fresh=1 is set. Live aggregation is unchanged
+      // from CR.15 below — this is purely an optimization layer.
+      if (!forceFresh) {
+        const carrier = await prisma.carrier.findUnique({
+          where: { code: code as any },
+          select: { id: true },
+        })
+        if (carrier) {
+          const cached = await prisma.carrierMetric.findUnique({
+            where: { carrierId_windowDays: { carrierId: carrier.id, windowDays } },
+          })
+          if (cached) {
+            const ageMs = Date.now() - cached.computedAt.getTime()
+            const FRESH_MS = 25 * 60 * 60 * 1000
+            if (ageMs < FRESH_MS) {
+              // byMarketplace isn't in the cache — return [] for now,
+              // operator can ?fresh=1 if they need the breakdown.
+              return {
+                carrierCode: code,
+                windowDays,
+                shipmentCount: cached.shipmentCount,
+                totalCostCents: cached.totalCostCents,
+                avgCostCents: cached.avgCostCents,
+                onTimeCount: cached.onTimeCount,
+                lateCount: cached.lateCount,
+                lateRate: cached.onTimeCount + cached.lateCount > 0
+                  ? cached.lateCount / (cached.onTimeCount + cached.lateCount)
+                  : null,
+                deliveredCount: 0, // not tracked in cache
+                avgDeliveryHours: cached.medianDeliveryHours
+                  ? Math.round(Number(cached.medianDeliveryHours))
+                  : null,
+                byMarketplace: [],
+                _cache: { hit: true, computedAt: cached.computedAt, ageHours: Math.round(ageMs / 3_600_000) },
+              }
+            }
+          }
+        }
+      }
+
       const since = new Date(Date.now() - windowDays * 86400000)
 
       const shipments = await prisma.shipment.findMany({

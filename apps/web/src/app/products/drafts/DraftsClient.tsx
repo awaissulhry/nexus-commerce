@@ -19,6 +19,7 @@ import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import PageHeader from '@/components/layout/PageHeader'
 import { CHANNEL_TONE } from '@/lib/theme'
 import { Button } from '@/components/ui/Button'
+import { IconButton } from '@/components/ui/IconButton'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
@@ -257,14 +258,14 @@ const DraftRow = memo(function DraftRow({
             }
             placement="top"
           >
-            <button
-              type="button"
+            <IconButton
               onClick={() => onDelete(d)}
               aria-label="Delete draft"
-              className="inline-flex items-center justify-center w-7 h-7 rounded-md text-slate-400 hover:text-rose-700 hover:bg-rose-50"
+              size="md"
+              className="text-slate-400 hover:text-rose-700 hover:bg-rose-50"
             >
               <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            </IconButton>
           </Tooltip>
           <Link
             href={resumeHref}

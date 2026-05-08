@@ -72,6 +72,8 @@ import { startForecastCron } from "./jobs/forecast.job.js";
 import { startPricingCron } from "./jobs/pricing-refresh.job.js";
 import { startCatalogRefreshCron } from "./jobs/catalog-refresh.job.js";
 import { startEbayTokenRefreshCron } from "./jobs/ebay-token-refresh.job.js";
+import { startEbayReturnsPollCron } from "./jobs/ebay-returns-poll.job.js";
+import { startAmazonReturnsPollCron } from "./jobs/amazon-returns-poll.job.js";
 import { startAmazonOrdersCron } from "./jobs/amazon-orders-sync.job.js";
 import { startAmazonInventoryCron } from "./jobs/amazon-inventory-sync.job.js";
 import { startReservationSweepCron } from "./jobs/reservation-sweep.job.js";
@@ -79,6 +81,7 @@ import { startLateShipmentFlagCron } from "./jobs/late-shipment-flag.job.js";
 import { startTrackingPushbackCron } from "./jobs/tracking-pushback.job.js";
 import { startCarrierServiceSyncCron } from "./jobs/carrier-service-sync.job.js";
 import { startPickupDispatchCron } from "./jobs/pickup-dispatch.job.js";
+import { startCarrierMetricsCron } from "./jobs/carrier-metrics.job.js";
 import { startOutboundLateRiskCron } from "./jobs/outbound-late-risk.job.js";
 import { startSavedViewAlertsCron } from "./jobs/saved-view-alerts.job.js";
 import { startSyncDriftDetectionCron } from "./jobs/sync-drift-detection.job.js";
@@ -430,6 +433,21 @@ async function start() {
       startEbayTokenRefreshCron();
     }
 
+    // R4.2 — eBay returns poller. Default-OFF because it makes a
+    // live API call against api.ebay.com per active connection
+    // and we don't want a fresh dev clone to spam someone's seller
+    // account. Operators flip NEXUS_ENABLE_EBAY_RETURNS_POLL=1 on
+    // production once they've confirmed eBay credentials work.
+    startEbayReturnsPollCron();
+
+    // R4.3 — Amazon returns report poller. Pulls FBM (merchant
+    // returns) + FBA (Amazon-managed returns mirror) reports every
+    // hour. Default-OFF for the same reason as the eBay poller:
+    // requires real SP-API credentials and we don't want a fresh
+    // dev clone burning the operator's report quota. Flip
+    // NEXUS_ENABLE_AMAZON_RETURNS_POLL=1 to enable on production.
+    startAmazonReturnsPollCron();
+
     // Incremental Amazon orders polling — runs every 15 min, picks up
     // new orders + status transitions on existing ones. Cursor derived
     // from MAX(Order.purchaseDate) per the auto-detect rule in the
@@ -489,6 +507,15 @@ async function start() {
     // already dispatched today. Runs at 04:00 (after the catalog sync
     // at 02:00). Default-ON; NEXUS_ENABLE_PICKUP_DISPATCH_CRON=0 opts out.
     startPickupDispatchCron();
+
+    // CR.23 — daily CarrierMetric pre-warm. Aggregates Shipment
+    // counts + cost + on-time/late + median delivery into the
+    // CarrierMetric cache table for 30 / 90 / 365 day windows. The
+    // Performance tab reads from cache when present, falls back to
+    // live aggregation otherwise. Runs at 03:00 (between catalog
+    // sync at 02:00 and pickup dispatch at 04:00). Default-ON;
+    // NEXUS_ENABLE_CARRIER_METRICS_CRON=0 opts out.
+    startCarrierMetricsCron();
 
     // O.19 — outbound late-shipment risk monitor. Hourly sweep that
     // logs counts of overdue / due-today / became-overdue-in-last-24h
