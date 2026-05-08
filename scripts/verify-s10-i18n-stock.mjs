@@ -47,19 +47,25 @@ if (extraInIt.length === 0) ok('no orphan it stock keys without en counterpart')
 else bad('no orphan it stock keys', `extra in it: ${extraInIt.slice(0, 5).join(', ')}`)
 
 // 4. Italian translations are non-empty and not equal to the English
-//    (smoke check that someone actually translated)
+//    (smoke check that someone actually translated). Acronyms,
+//    brand names, and universal short tokens (ok / SKU / FBA / etc.)
+//    legitimately stay identical between the two locales.
+const ACRONYMS = /^(SKU|FBA|MCF|EOQ|ROP|WAC|FIFO|LIFO|COGS|ABC|ATP|DOH|RFID|CSV|UPC|EAN|GTIN|Pan-EU FBA|Amazon MCF|Formula|ok)$/i
 let untranslated = 0
 let identical = 0
+const identicalKeys = []
 for (const k of stockKeysEn) {
   const v = it[k]
   if (!v || v.trim() === '') untranslated++
-  else if (v === en[k]) identical++
+  else if (v === en[k] && !ACRONYMS.test(en[k].trim())) {
+    identical++
+    identicalKeys.push(`${k}="${en[k]}"`)
+  }
 }
 if (untranslated === 0) ok('every it stock key has a non-empty value')
 else bad('every it stock key has a non-empty value', `${untranslated} empty`)
-// Allow some keys to be identical (e.g. brand names, abbreviations)
-if (identical < 5) ok(`stock translations differ from English (${identical} identical)`)
-else bad('stock translations differ from English', `${identical} identical (likely untranslated)`)
+if (identical === 0) ok('stock translations differ from English (acronyms exempt)')
+else bad('stock translations differ from English', `${identical} identical: ${identicalKeys.slice(0, 5).join(', ')}`)
 
 // 5. useTranslations is imported and called in the workspace
 if (/import\s*\{[^}]*\buseTranslations\b[^}]*\}\s*from\s*['"]@\/lib\/i18n\/use-translations['"]/.test(stock)) {

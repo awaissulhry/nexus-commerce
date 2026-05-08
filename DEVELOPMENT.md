@@ -260,6 +260,132 @@ for the H.1 migration + rollback as a reference pattern.
 
 ---
 
+## Stock — workspace expansion (S.1–S.30)
+
+The S-series followed H.1 and turned `/fulfillment/stock` from a
+flat list into a full inventory operations surface. The work is
+30 commits, each with a verify script under `scripts/verify-sN-*.mjs`.
+Run every gate at once with `node scripts/verify-stock-all.mjs`
+(reports passed / skipped / failed; skip = the script needs the API
+to be reachable, e.g. S.1).
+
+### Foundation (S.1–S.13)
+
+- **S.1** removed the shadow `inventory-sync.service.ts`; every write
+  now routes through `applyStockMovement`.
+- **S.2 / S.2.5** introduced reserve-then-consume for FBM (Amazon
+  channel) and Shopify orders: `reserveOpenOrder` →
+  `consumeOpenOrder` / `releaseOpenOrder`. 365-day TTL.
+- **S.4** added drawer focus trap (a11y).
+- **S.5–S.7** rebuilt the cycle-count session: structured reason
+  modal, mobile entry, barcode-ready scan with row scroll-to-focus.
+- **S.8 / S.9** mobile pass — 44×44 touch targets, sm:hidden card
+  layout for cycle-count items, bottom-nav.
+- **S.10–S.12** i18n + UX polish (en + it parity, sub-reason picker).
+- **S.13** dedicated `/fulfillment/stock/transfers` and
+  `/reservations` sub-routes.
+
+### Analytics + intelligence (S.14–S.20)
+
+- **S.14** turnover ratio + Days-of-Inventory at
+  `/fulfillment/stock/analytics`.
+- **S.15** dead-stock and slow-moving detection.
+- **S.16** ABC classification (Pareto bands 80/15/5), with
+  `Product.abcClass` and a weekly recompute cron (Mondays 04:00).
+- **S.17** auto cycle-count scheduler (daily 02:30, A/B/C cadence
+  configurable via `NEXUS_ABC_CADENCE_DAYS`).
+- **S.18** saved views (per-user filter / column / density / search
+  state, persisted server-side).
+- **S.19** EOQ + ROP (Wilson formula `√(2·D·K/h)`).
+- **S.20** cost layers — `StockCostLayer` model with FIFO / LIFO /
+  WAC. Layer hooks land inside `applyStockMovement` so consumption
+  records `cogsCents` atomically.
+
+### Bulk + integrations (S.21–S.26)
+
+- **S.21** bulk transfer + bulk CSV import.
+- **S.22 / S.23** Shopify location discovery + UI at
+  `/fulfillment/stock/shopify-locations`.
+- **S.24** Amazon MCF — multi-channel fulfillment from FBA pool.
+  Reserves at `AMAZON-EU-FBA` on create, consumes on `COMPLETE`,
+  releases on `CANCELLED`. Status sync every 15 min.
+- **S.25** FBA Pan-EU per-FC distribution view at
+  `/fulfillment/stock/fba-pan-eu` (read-only — Amazon controls
+  redistribution). Daily sync at 03:00.
+- **S.26** ATP per channel — formula:
+  `available_for_channel = max(0, onHand − reservedForChannel − stockBuffer)`
+  surfaced in the drawer with drift markers.
+
+### Polish + verification (S.27–S.30)
+
+- **S.27** dark-mode pass — Tailwind `dark:` variants across all 10
+  stock client files (StockWorkspace plus all sub-route clients).
+- **S.28** WCAG AA static a11y audit — 14 violations fixed
+  (icon-only buttons, unlabeled selects, modal `role="dialog"`).
+  Verify uses a JSX-aware static scanner (`{}` and quote-depth aware
+  so `(e) => …` arrow functions don't truncate the attr span).
+- **S.29** stockout history report at
+  `/fulfillment/stock/stockouts` — surfaces the R.12 ledger with KPI
+  strip, status / window / location filters, debounced SKU search.
+  Backed by the existing `/fulfillment/replenishment/stockouts/*`
+  endpoints (extended with `locationId`, `sku`, `sinceDays` filters).
+- **S.30** master verify harness at
+  `scripts/verify-stock-all.mjs` — discovers every
+  `verify-sN-*.mjs`, runs them sequentially, reports passed /
+  skipped / failed with per-script timing.
+
+### New endpoints surfaced beyond H.1's table
+
+| Endpoint                                                  | Origin |
+| --------------------------------------------------------- | ------ |
+| `POST /api/stock/bulk-transfer`                           | S.21   |
+| `POST /api/stock/bulk-import` (`?dryRun=1` for preview)   | S.21   |
+| `GET /api/stock/shopify-locations`                        | S.22   |
+| `GET /api/stock/mcf` + `POST /api/stock/mcf` + cancel     | S.24   |
+| `GET /api/stock/fba-pan-eu`                               | S.25   |
+| `GET /api/stock/cost-layers/:productId`                   | S.20   |
+| `GET /api/stock/analytics/turnover`                       | S.14   |
+| `GET /api/stock/analytics/dead-stock`                     | S.15   |
+| `GET /api/stock/analytics/abc`                            | S.16   |
+| `GET /api/stock/analytics/eoq`                            | S.19   |
+| `GET /api/fulfillment/replenishment/stockouts/events`     | S.29   |
+
+### New models / fields
+
+- `Product.abcClass`, `Product.abcClassUpdatedAt`,
+  `Product.costingMethod`, `Product.weightedAvgCostCents`
+- `StockMovement.cogsCents`
+- `StockLocation.externalLocationId`, `StockLocation.externalChannel`
+- `StockCostLayer` (S.20), `MCFShipment` (S.24), `FbaInventoryDetail`
+  (S.25), `StockoutEvent` (R.12, surfaced in S.29)
+
+### Crons added
+
+| Cron                              | Cadence       | Default | Env flag                              |
+| --------------------------------- | ------------- | ------- | ------------------------------------- |
+| ABC recompute                     | weekly Mon 04:00 | ON   | (always-on)                           |
+| Cycle-count auto-scheduler        | daily 02:30   | ON      | (always-on)                           |
+| MCF status sync                   | every 15 min  | OFF     | `NEXUS_ENABLE_MCF_SYNC_CRON=1`        |
+| FBA Pan-EU sync                   | daily 03:00   | OFF     | `NEXUS_ENABLE_FBA_PAN_EU_CRON=1`      |
+
+### Verification
+
+```bash
+# Full S.1–S.30 gate. Skips integration scripts when API not running.
+node scripts/verify-stock-all.mjs
+
+# A specific commit's gate
+node scripts/verify-s27-dark-mode.mjs
+node scripts/verify-s28-a11y.mjs
+node scripts/verify-s29-stockouts.mjs
+
+# Integration-grade gates need API + DB:
+API_BASE_URL=https://nexus-api.up.railway.app node scripts/verify-s1-shadow-path.mjs
+node scripts/verify-s2-fbm-reserve-consume.mjs
+```
+
+---
+
 ## Master-data cascade — Product → ChannelListing (Phase 13)
 
 Every mutation of `Product.basePrice` or `Product.totalStock` cascades

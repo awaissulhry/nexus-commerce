@@ -24,6 +24,23 @@ if (!process.env.DATABASE_URL) {
   process.exit(1)
 }
 
+// S.30 — quick reachability probe. The script is an integration test
+// that mutates+reverses through the public API; if the API isn't up
+// (common locally outside of `npm run dev`), exit 0 with a skip
+// notice so the master harness reports SKIPPED rather than failed.
+async function probeApi() {
+  try {
+    const res = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(2000) })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+if (!(await probeApi())) {
+  console.log(`[S.1 verify] SKIPPED — API at ${API_BASE} not reachable. Boot the API (npm run dev) or set API_BASE_URL=https://nexus-api.up.railway.app to run this gate.`)
+  process.exit(0)
+}
+
 let pass = 0
 let fail = 0
 const failures = []

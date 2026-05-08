@@ -57,7 +57,10 @@ if (/selected\.size === 0 &&/.test(stock) && /drawerProductId/.test(stock)) {
 if (/sm:hidden space-y-2/.test(cycle)) ok('cycle-count: mobile card layout sm:hidden block present')
 else bad('cycle-count: mobile card layout sm:hidden block present')
 
-if (/hidden sm:block bg-white border border-slate-200 rounded-lg/.test(cycle)) {
+// After S.27 dark-mode pass, classes like `bg-white` may be followed
+// by `dark:bg-slate-900` and `border-slate-200` by
+// `dark:border-slate-700`, so match the structural classes loosely.
+if (/hidden sm:block[^"]*bg-white[^"]*border[^"]*border-slate-200[^"]*rounded-lg/.test(cycle)) {
   ok('cycle-count: desktop table wrapped in hidden sm:block')
 } else {
   bad('cycle-count: desktop table wrapped in hidden sm:block')

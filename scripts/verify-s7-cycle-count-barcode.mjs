@@ -57,10 +57,20 @@ else bad('handleScan resolves input via data-cycle-count-input')
 if (/scrollIntoView/.test(src) && /el\.focus\(\)/.test(src)) ok('handleScan scrolls + focuses the matched row')
 else bad('handleScan scrolls + focuses the matched row')
 
-// 8. Toast on miss / already-resolved status
-if (/not in this count/.test(src) || /SKU.*not in/.test(src)) ok('handleScan toasts on SKU miss')
+// 8. Toast on miss / already-resolved status. After S.11 i18n, the
+// strings live behind translation keys (cycleCount.session.scan*) —
+// match either the i18n key path or the legacy English literals.
+if (
+  /not in this count/.test(src) ||
+  /SKU.*not in/.test(src) ||
+  /cycleCount\.session\.scanNotInCount/.test(src)
+) ok('handleScan toasts on SKU miss')
 else bad('handleScan toasts on SKU miss')
-if (/already \$\{item\.status\.toLowerCase/.test(src) || /already.*reconciled.*ignored/i.test(src)) {
+if (
+  /already \$\{item\.status\.toLowerCase/.test(src) ||
+  /already.*reconciled.*ignored/i.test(src) ||
+  /cycleCount\.session\.scanAlreadyResolved/.test(src)
+) {
   ok('handleScan toasts on already-resolved')
 } else {
   bad('handleScan toasts on already-resolved')
