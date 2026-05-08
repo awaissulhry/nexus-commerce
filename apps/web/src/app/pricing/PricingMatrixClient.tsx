@@ -84,16 +84,6 @@ const SOURCE_TONE: Record<string, string> = {
   FALLBACK: 'bg-amber-50 text-amber-700 border-amber-200',
 }
 
-const SOURCE_LABEL: Record<string, string> = {
-  SCHEDULED_SALE: 'Sale',
-  OFFER_OVERRIDE: 'Offer',
-  CHANNEL_OVERRIDE: 'Manual',
-  CHANNEL_RULE: 'Channel rule',
-  PRICING_RULE: 'Engine rule',
-  MASTER_INHERIT: 'Master',
-  FALLBACK: 'Fallback',
-}
-
 export default function PricingMatrixClient() {
   const { t } = useTranslations()
   const [data, setData] = useState<MatrixResponse | null>(null)
@@ -356,7 +346,10 @@ export default function PricingMatrixClient() {
       {selected.size > 0 && (
         <div className="sticky top-2 z-20 bg-slate-900 text-white rounded-lg px-4 py-3 flex items-center gap-3 flex-wrap shadow-lg">
           <span className="text-base font-semibold tabular-nums">
-            {selected.size} row{selected.size === 1 ? '' : 's'} selected
+            {t('pricing.bulk.selected', {
+              n: selected.size,
+              s: selected.size === 1 ? '' : 's',
+            })}
           </span>
           <div className="h-4 w-px bg-slate-700" />
           <select
@@ -366,9 +359,9 @@ export default function PricingMatrixClient() {
             }
             className="h-7 px-2 rounded border border-slate-600 bg-slate-800 text-white text-base"
           >
-            <option value="SET_FIXED">Set fixed price</option>
-            <option value="SET_PERCENT_DISCOUNT">Discount %</option>
-            <option value="CLEAR">Clear override</option>
+            <option value="SET_FIXED">{t('pricing.bulk.setFixed')}</option>
+            <option value="SET_PERCENT_DISCOUNT">{t('pricing.bulk.percentDiscount')}</option>
+            <option value="CLEAR">{t('pricing.bulk.clearOverride')}</option>
           </select>
           {bulkMode !== 'CLEAR' && (
             <input
@@ -389,7 +382,7 @@ export default function PricingMatrixClient() {
             disabled={bulkApplying || (bulkMode !== 'CLEAR' && !bulkValue)}
             className="bg-white text-slate-900 hover:bg-slate-100 border-white"
           >
-            Apply
+            {t('pricing.bulk.apply')}
           </Button>
           <Button
             variant="ghost"
@@ -398,7 +391,7 @@ export default function PricingMatrixClient() {
             icon={<X size={12} />}
             className="text-slate-400 hover:text-white hover:bg-slate-800"
           >
-            Deselect
+            {t('pricing.bulk.deselect')}
           </Button>
         </div>
       )}
@@ -615,6 +608,7 @@ function PricingDetailDrawer({
   onClose: () => void
   onPushed: () => void
 }) {
+  const { t } = useTranslations()
   const [pushing, setPushing] = useState(false)
   const { toast } = useToast()
 
@@ -672,7 +666,7 @@ function PricingDetailDrawer({
         {/* Resolved */}
         <div className="bg-slate-50 rounded p-3">
           <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1">
-            Resolved price
+            {t('pricing.drawer.resolvedPrice')}
           </div>
           <div className="text-[24px] font-semibold tabular-nums text-slate-900">
             {Number(row.computedPrice).toFixed(2)}{' '}
@@ -681,10 +675,10 @@ function PricingDetailDrawer({
             </span>
           </div>
           <div className="text-sm text-slate-500 mt-1">
-            Source: <span className="font-mono">{row.source}</span>
+            {t('pricing.drawer.source')}: <span className="font-mono">{row.source}</span>
             {row.isClamped && (
               <span className="ml-2 text-amber-700">
-                · clamped from {row.clampedFrom}
+                · {t('pricing.drawer.clampedFrom', { value: row.clampedFrom ?? '?' })}
               </span>
             )}
           </div>
@@ -693,26 +687,33 @@ function PricingDetailDrawer({
         {/* Breakdown */}
         <div>
           <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
-            Breakdown
+            {t('pricing.drawer.breakdown')}
           </div>
           <dl className="grid grid-cols-2 gap-y-1 text-base">
-            <Item label="Master price" value={breakdown.masterPrice} suffix="EUR" />
-            <Item label="FX rate" value={breakdown.fxRate} format="rate" />
-            <Item label="Cost (entered)" value={breakdown.costPrice} suffix="EUR" />
-            <Item label="Landed (receipts)" value={breakdown.landedCost} suffix="EUR" />
+            <Item label={t('pricing.drawer.masterPrice')} value={breakdown.masterPrice} suffix="EUR" />
+            <Item label={t('pricing.drawer.fxRate')} value={breakdown.fxRate} format="rate" />
+            <Item label={t('pricing.drawer.costEntered')} value={breakdown.costPrice} suffix="EUR" />
+            <Item label={t('pricing.drawer.landedReceipts')} value={breakdown.landedCost} suffix="EUR" />
             <Item
-              label="Floor cost basis"
+              label={t('pricing.drawer.floorCostBasis')}
               value={breakdown.effectiveCostBasis}
               suffix="EUR"
             />
-            <Item label="FBA fee" value={breakdown.fbaFee} suffix={row.currency} />
-            <Item label="Referral fee" value={breakdown.referralFee} suffix={row.currency} />
-            <Item label="VAT rate" value={breakdown.vatRate} suffix="%" />
-            <Item label="Min margin" value={breakdown.minMarginPercent} suffix="%" />
-            <Item label="Tax-inclusive" value={breakdown.taxInclusive ? 'Yes' : 'No'} />
+            <Item label={t('pricing.drawer.fbaFee')} value={breakdown.fbaFee} suffix={row.currency} />
+            <Item label={t('pricing.drawer.referralFee')} value={breakdown.referralFee} suffix={row.currency} />
+            <Item label={t('pricing.drawer.vatRate')} value={breakdown.vatRate} suffix="%" />
+            <Item label={t('pricing.drawer.minMargin')} value={breakdown.minMarginPercent} suffix="%" />
+            <Item
+              label={t('pricing.drawer.taxInclusive')}
+              value={
+                breakdown.taxInclusive
+                  ? t('pricing.drawer.taxInclusive.yes')
+                  : t('pricing.drawer.taxInclusive.no')
+              }
+            />
             {breakdown.appliedRule && (
               <Item
-                label="Applied rule"
+                label={t('pricing.drawer.appliedRule')}
                 value={`${breakdown.appliedRule.type}${breakdown.appliedRule.adjustment != null ? ` (${breakdown.appliedRule.adjustment >= 0 ? '+' : ''}${breakdown.appliedRule.adjustment}%)` : ''}`}
               />
             )}
@@ -723,7 +724,7 @@ function PricingDetailDrawer({
         {row.warnings.length > 0 && (
           <div className="border border-amber-200 bg-amber-50 rounded p-3">
             <div className="text-sm uppercase tracking-wider text-amber-800 font-semibold mb-1">
-              Warnings
+              {t('pricing.drawer.warnings')}
             </div>
             <ul className="text-base text-amber-800 space-y-0.5">
               {row.warnings.map((w, i) => (
@@ -736,12 +737,10 @@ function PricingDetailDrawer({
         {/* Push action */}
         <div className="border border-slate-200 rounded p-3">
           <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-2">
-            Push to marketplace
+            {t('pricing.drawer.pushTitle')}
           </div>
           <div className="text-base text-slate-600 mb-2">
-            Sends this resolved price to {row.channel} via the channel API.
-            Logs to ChannelListingOverride for audit; respects 5-minute
-            hold window if the channel is configured for it.
+            {t('pricing.drawer.pushDescription', { channel: row.channel })}
           </div>
           <Button
             variant="primary"
@@ -751,12 +750,16 @@ function PricingDetailDrawer({
             icon={pushing ? null : <Send size={12} />}
             className="bg-slate-900 hover:bg-slate-800 border-slate-900"
           >
-            {pushing ? 'Pushing…' : 'Push price'}
+            {pushing
+              ? t('pricing.drawer.pushing')
+              : t('pricing.drawer.pushButton')}
           </Button>
         </div>
 
         <div className="text-sm text-slate-400">
-          Last computed {new Date(row.computedAt).toLocaleString()}
+          {t('pricing.drawer.lastComputed', {
+            when: new Date(row.computedAt).toLocaleString(),
+          })}
         </div>
       </ModalBody>
     </Modal>
