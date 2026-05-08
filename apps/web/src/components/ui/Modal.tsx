@@ -50,6 +50,11 @@ import { cn } from '@/lib/utils'
 export type ModalPlacement = 'centered' | 'top' | 'drawer-right'
 export type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl'
 
+// P.2 — focusable-element selector for the Tab-cycle trap. Standard
+// a11y set; excludes [tabindex="-1"] which are programmatic-only.
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
 const SIZE_CLASS: Record<ModalSize, string> = {
   sm: 'max-w-sm',
   md: 'max-w-md',
@@ -96,24 +101,69 @@ export function Modal({
   const panelRef = useRef<HTMLDivElement>(null)
   const previouslyFocused = useRef<HTMLElement | null>(null)
 
-  // Focus management: capture the trigger element on open, restore
-  // focus on close. First focusable child gets focus when the panel
-  // mounts so keyboard users land somewhere usable.
+  // P.2 — focus management with full Tab-cycle trap. Was capture +
+  // restore only (Tab could escape to background page). Now back-
+  // ported from U.1's ProductDrawer pattern: on Tab at the last
+  // focusable, wrap to first; on Shift+Tab at first, wrap to last;
+  // on Tab from outside (focus stolen by async re-render), land on
+  // first. Filter at query time excludes disabled + display:none
+  // elements so the trap stays accurate to the currently-visible
+  // panel content (e.g. multi-step modals where steps mount on
+  // demand).
   useEffect(() => {
     if (!open) return
     previouslyFocused.current =
       (document.activeElement as HTMLElement | null) ?? null
 
-    // Defer to allow the modal to mount + render its children.
-    const handle = window.setTimeout(() => {
+    // Defer initial focus so children mount + render first.
+    const initialFocusTimer = window.setTimeout(() => {
       const first = panelRef.current?.querySelector<HTMLElement>(
-        'input, textarea, select, button, [tabindex]:not([tabindex="-1"])',
+        FOCUSABLE_SELECTOR,
       )
       first?.focus()
     }, 10)
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return
+      const root = panelRef.current
+      if (!root) return
+      const focusables = Array.from(
+        root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+      ).filter(
+        (el) =>
+          !el.hasAttribute('disabled') &&
+          // offsetParent === null catches display:none (inactive
+          // tabs, conditional sections) without forcing layout via
+          // getBoundingClientRect.
+          el.offsetParent !== null,
+      )
+      if (focusables.length === 0) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      const active = document.activeElement as HTMLElement | null
+      if (e.shiftKey) {
+        if (active === first || !root.contains(active)) {
+          e.preventDefault()
+          last.focus()
+        }
+      } else {
+        if (active === last || !root.contains(active)) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
+    }
+    document.addEventListener('keydown', onKey)
+
     return () => {
-      window.clearTimeout(handle)
-      previouslyFocused.current?.focus?.()
+      window.clearTimeout(initialFocusTimer)
+      document.removeEventListener('keydown', onKey)
+      // Restore focus only if the trigger is still in the DOM —
+      // virtualized rows / conditional renderers may have removed it.
+      const trigger = previouslyFocused.current
+      if (trigger && document.body.contains(trigger)) {
+        trigger.focus()
+      }
     }
   }, [open])
 
