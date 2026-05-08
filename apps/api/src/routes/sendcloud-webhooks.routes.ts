@@ -309,6 +309,28 @@ export async function sendcloudWebhookRoutes(app: FastifyInstance) {
           data: updateData,
         })
 
+        // O.4: project shipment terminal timestamps onto the parent
+        // Order so audit / list views aren't dependent on a Shipment
+        // join. updateMany with `shippedAt: null` in the WHERE clause
+        // makes this a no-op when an earlier shipment already
+        // populated the field — for split-package orders, Order.
+        // shippedAt = first ship-out (the SLA milestone). Same shape
+        // for delivery: first DELIVERED scan owns the timestamp.
+        if (shipment.order) {
+          if (newStatus === 'SHIPPED') {
+            await prisma.order.updateMany({
+              where: { id: shipment.order.id, shippedAt: null },
+              data: { shippedAt: occurredAt },
+            })
+          }
+          if (newStatus === 'DELIVERED') {
+            await prisma.order.updateMany({
+              where: { id: shipment.order.id, deliveredAt: null },
+              data: { deliveredAt: occurredAt },
+            })
+          }
+        }
+
         // O.30: customer email on terminal transitions for direct
         // channels (Shopify, Woo). Marketplace channels (Amazon, eBay)
         // skip — those marketplaces send their own. Fire-and-forget

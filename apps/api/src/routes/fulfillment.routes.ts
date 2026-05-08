@@ -2696,13 +2696,24 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const { id } = request.params as { id: string }
       const before = await prisma.shipment.findUnique({
         where: { id },
-        select: { status: true, trackingNumber: true },
+        select: { status: true, trackingNumber: true, orderId: true },
       })
       if (!before) return reply.code(404).send({ error: 'Shipment not found' })
+      const shippedAt = new Date()
       const updated = await prisma.shipment.update({
         where: { id },
-        data: { status: 'SHIPPED', shippedAt: new Date(), version: { increment: 1 } },
+        data: { status: 'SHIPPED', shippedAt, version: { increment: 1 } },
       })
+      // O.4: project Shipment.shippedAt onto the parent Order when
+      // Order.shippedAt is still null. Multi-shipment orders keep the
+      // first ship-out (SLA milestone) — updateMany with the null
+      // guard makes this a no-op for later shipments.
+      if (before.orderId) {
+        await prisma.order.updateMany({
+          where: { id: before.orderId, shippedAt: null },
+          data: { shippedAt },
+        })
+      }
       // O.39: audit.
       const { auditLogService } = await import('../services/audit-log.service.js')
       void auditLogService.write({
