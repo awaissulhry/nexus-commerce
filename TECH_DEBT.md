@@ -849,7 +849,16 @@ The Phase 28 recompute at `bullmq-sync.worker.ts` now skips when `followMasterPr
 
 ---
 
-## 42. 🟡 No test framework
+## 42. ✅ No test framework — resolved 2026-05-08 (M.19)
+
+**Resolution:** Vitest installed in `apps/api` with `apps/api/vitest.config.ts` + `npm run test` / `npm run test:watch` scripts. Seed test landed at `apps/api/src/services/__tests__/bulk-action-rollback.vitest.test.ts` validating the M.13 rollback route's HTTP status mapping.
+
+**Convention going forward:**
+  • Tests for new code live alongside the source: `src/services/foo.service.ts` → `src/services/__tests__/foo.service.test.ts` OR `src/services/foo.service.vitest.test.ts`.
+  • Vitest picks up patterns: `src/**/__tests__/*.test.ts` and `src/**/*.vitest.test.ts`.
+  • The 29 legacy custom-runner tests at `src/**/*.test.ts` (using `tests.push(...)` + `npx tsx`) keep working — they run by direct execution, not via vitest. Migrating them to vitest's `describe/it/expect` is a per-file follow-up; no urgency since they pass today.
+
+`npm run test --workspace=@nexus/api` exits clean with 1 file / 3 tests.
 
 **Symptom:** Repo has zero `*.test.ts` / `*.spec.ts` files and no Vitest/Jest setup. Every commit ships on the strength of manual smoke testing + the pre-push `next build` + `tsc --noEmit` gates.
 
