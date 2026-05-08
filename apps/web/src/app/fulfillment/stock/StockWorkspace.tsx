@@ -1498,6 +1498,26 @@ type DrawerBundle = {
     expiresAt: string; createdAt: string
     location: { id: string; code: string }
   }>
+  // S.20 — cost-layer surface
+  costing?: {
+    method: 'WAC' | 'FIFO' | 'LIFO' | string
+    weightedAvgCostCents: number | null
+    layers: Array<{
+      id: string
+      receivedAt: string
+      unitCostCents: number
+      unitsReceived: number
+      unitsRemaining: number
+      freightCents: number | null
+      dutyCents: number | null
+      insuranceCents: number | null
+      brokerCents: number | null
+      inboundShipmentId: string | null
+      stockMovementId: string | null
+      notes: string | null
+      locationCode: string | null
+    }>
+  }
 }
 
 type ActionMode = null | { kind: 'adjust'; stockLevelId: string; locationCode: string } | { kind: 'transfer' } | { kind: 'reserve' }
@@ -1505,6 +1525,7 @@ type ActionMode = null | { kind: 'adjust'; stockLevelId: string; locationCode: s
 function StockDrawer({ productId, onClose, onChanged }: { productId: string; onClose: () => void; onChanged: () => void }) {
   const { toast } = useToast()
   const askConfirm = useConfirm()
+  const { t } = useTranslations()
   const [bundle, setBundle] = useState<DrawerBundle | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -1897,6 +1918,72 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                       </li>
                     ))}
                   </ul>
+                </Section>
+              )}
+
+              {/* S.20 — Cost layers section. Shows method + rolling
+                  WAC + a paginated layer history for FIFO/LIFO/WAC
+                  audit. The drawer fetches up to 30 layers; older
+                  history is available via /api/stock/cost-layers/:id. */}
+              {bundle.costing && (
+                <Section title={t('stock.costLayers.section')} icon={Boxes}>
+                  <div className="text-sm text-slate-500 mb-2 inline-flex items-center gap-3 flex-wrap">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="text-xs uppercase tracking-wider font-semibold text-slate-700">
+                        {t(`stock.costLayers.method.${bundle.costing.method}` as string) ?? bundle.costing.method}
+                      </span>
+                    </span>
+                    {bundle.costing.weightedAvgCostCents != null && (
+                      <span>
+                        {t('stock.costLayers.currentWac')}:{' '}
+                        <span className="font-semibold text-slate-900 tabular-nums">
+                          €{(bundle.costing.weightedAvgCostCents / 100).toFixed(4)}
+                        </span>
+                      </span>
+                    )}
+                  </div>
+                  {bundle.costing.layers.length === 0 ? (
+                    <div className="text-base text-slate-400 italic py-2">
+                      {t('stock.costLayers.empty')}
+                    </div>
+                  ) : (
+                    <ul className="space-y-1">
+                      {bundle.costing.layers.slice(0, 10).map((l) => (
+                        <li
+                          key={l.id}
+                          className="flex items-center justify-between gap-2 py-1.5 px-2 -mx-2 border-b border-slate-100 last:border-0"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm">
+                              <span className="font-semibold tabular-nums text-slate-900">
+                                €{(l.unitCostCents / 100).toFixed(4)}
+                              </span>
+                              <span className="text-slate-500"> · {l.unitsReceived}u</span>
+                              {l.unitsRemaining < l.unitsReceived && (
+                                <span className="text-slate-400 text-xs">
+                                  {' '}({l.unitsRemaining}/{l.unitsReceived} left)
+                                </span>
+                              )}
+                              {l.locationCode && (
+                                <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 ml-1">
+                                  {l.locationCode}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-slate-400">
+                              {new Date(l.receivedAt).toLocaleString()}
+                              {l.notes && <span> · {l.notes}</span>}
+                            </div>
+                          </div>
+                          {l.unitsRemaining === 0 && (
+                            <span className="text-xs uppercase tracking-wider font-semibold text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded">
+                              depleted
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </Section>
               )}
 

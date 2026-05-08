@@ -10,6 +10,7 @@ import { amazonInventoryService } from '../services/amazon-inventory.service.js'
 import { resolveAtp } from '../services/atp.service.js'
 import { getReservationSweepStatus } from '../jobs/reservation-sweep.job.js'
 import * as abcService from '../services/abc-classification.service.js'
+import { listLayers, recomputeWac } from '../services/cost-layers.service.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // H.2 — Stock API surface for /fulfillment/stock rebuild.
@@ -568,10 +569,17 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
           lowStockThreshold: true,
           basePrice: true,
           costPrice: true,
+          // S.20 — costing method + rolling WAC for the drawer header
+          costingMethod: true,
+          weightedAvgCostCents: true,
           images: { select: { url: true }, take: 1 },
         },
       })
       if (!product) return reply.code(404).send({ error: 'Product not found' })
+
+      // S.20 — layer history (top 30 by recency) attached to the
+      // bundle so the drawer renders without a second roundtrip.
+      const costLayers = await listLayers(productId, 30)
 
       const [stockLevels, channelListings, movements, atpMap] = await Promise.all([
         prisma.stockLevel.findMany({
@@ -671,6 +679,12 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
           dailyHistory,
         },
         atp: atp ?? null,
+        // S.20 — costing surface
+        costing: {
+          method: product.costingMethod,
+          weightedAvgCostCents: product.weightedAvgCostCents,
+          layers: costLayers,
+        },
         reservations: stockLevels.flatMap((sl) =>
           sl.reservations.map((r) => ({
             ...r,
@@ -1402,6 +1416,55 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/analytics/dead-stock] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── GET /api/stock/cost-layers/:productId ───────────────────────
+  // S.20 — surface the per-product cost-layer history. FIFO depletes
+  // oldest first; LIFO newest first; WAC uses the rolling
+  // Product.weightedAvgCostCents but layers are still maintained for
+  // audit. The drawer renders this list so operators can see what
+  // each unit cost when it arrived.
+  fastify.get('/stock/cost-layers/:productId', async (request, reply) => {
+    try {
+      const { productId } = request.params as { productId: string }
+      const q = request.query as any
+      const limit = Math.min(500, Math.max(1, Math.floor(safeNum(q.limit, 100) ?? 100)))
+      const product = await prisma.product.findUnique({
+        where: { id: productId },
+        select: {
+          id: true, sku: true, name: true,
+          costingMethod: true, weightedAvgCostCents: true,
+          costPrice: true,
+        },
+      })
+      if (!product) return reply.code(404).send({ error: 'Product not found' })
+      const layers = await listLayers(productId, limit)
+      return {
+        product: {
+          ...product,
+          costPriceCents: product.costPrice == null ? null : Math.round(Number(product.costPrice) * 100),
+        },
+        layers,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/cost-layers/:id] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── POST /api/stock/cost-layers/:productId/recompute-wac ───────
+  // S.20 — admin recompute the weighted-average cost for a product.
+  // Useful after a backfill repair, a method switch, or a manual
+  // layer edit. Returns the new WAC in cents.
+  fastify.post('/stock/cost-layers/:productId/recompute-wac', async (request, reply) => {
+    try {
+      const { productId } = request.params as { productId: string }
+      const wac = await recomputeWac(productId)
+      return { productId, weightedAvgCostCents: wac }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/cost-layers/:id/recompute-wac] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })

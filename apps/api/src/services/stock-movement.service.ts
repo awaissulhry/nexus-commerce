@@ -3,6 +3,24 @@ import type { Prisma } from '@prisma/client'
 import { outboundSyncQueue } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 import { handleMovementStockoutTransition } from './stockout-detector.service.js'
+import { consumeLayersInTx, receiveLayerInTx } from './cost-layers.service.js'
+
+// S.20 — reasons that consume cost layers (decrease quantity AND
+// realise COGS). Manual-adjustment subtractions also consume; the
+// audit row carries the WRITE_OFF tag in those flows.
+const CONSUME_REASONS = new Set([
+  'ORDER_PLACED', 'ORDER_REFUNDED', 'WRITE_OFF', 'RESERVATION_CONSUMED',
+  'FBA_TRANSFER_OUT', 'TRANSFER_OUT',
+])
+// S.20 — reasons that should create a fresh cost layer (a receive
+// event of some kind). RETURN_RESTOCKED uses the original
+// orderItem unit cost — caller handles that explicitly via
+// receiveLayer; here we only flag pure receives so the post-tx
+// hook auto-layers PO inbounds without operator intervention.
+const RECEIVE_AUTO_LAYER_REASONS = new Set([
+  'INBOUND_RECEIVED', 'SUPPLIER_DELIVERY', 'MANUFACTURING_OUTPUT',
+  'TRANSFER_IN',
+])
 
 // B.1/B.2 — single entrypoint for every stock change.
 // Anyone touching Product.totalStock or ProductVariation.stock MUST go
@@ -276,6 +294,27 @@ export async function applyStockMovement(input: StockMovementInput) {
     // source of truth across all locations for the H.2 world.
     const newTotalStock = await recomputeProductTotalStock(tx, productId)
 
+    // S.20 — cost-layer hook. Subtractive movements consume layers
+    // (FIFO/LIFO/WAC per Product.costingMethod) and capture COGS on
+    // the audit row. Additive movements that represent receives
+    // create a fresh layer using Product.costPrice as the unit cost
+    // (operator can edit later via the drawer). Variant-only paths
+    // and pure ledger ops (RESERVATION_*, SYNC_RECONCILIATION,
+    // STOCKLEVEL_BACKFILL, PARENT_PRODUCT_CLEANUP) are skipped —
+    // they don't represent real receive/consume events.
+    let cogsCents: number | null = null
+    if (change < 0 && CONSUME_REASONS.has(reason as string)) {
+      try {
+        const r = await consumeLayersInTx(tx, { productId, units: -change })
+        cogsCents = r.cogsCents
+      } catch (err) {
+        logger.warn('applyStockMovement: cost-layer consume failed (continuing without COGS)', {
+          productId, change, reason,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+
     const movement = await tx.stockMovement.create({
       data: {
         productId,
@@ -294,8 +333,38 @@ export async function applyStockMovement(input: StockMovementInput) {
         shipmentId: shipmentId ?? null,
         returnId: returnId ?? null,
         reservationId: reservationId ?? null,
+        cogsCents,
       },
     })
+
+    // S.20 — receive auto-layer. Fires after the movement row
+    // exists so the layer can carry the stockMovementId backref.
+    // Cost source: Product.costPrice snapshot at receive time.
+    if (change > 0 && RECEIVE_AUTO_LAYER_REASONS.has(reason as string)) {
+      try {
+        const product = await tx.product.findUnique({
+          where: { id: productId },
+          select: { costPrice: true },
+        })
+        const unitCostCents = product?.costPrice == null
+          ? 0
+          : Math.round(Number(product.costPrice) * 100)
+        await receiveLayerInTx(tx, {
+          productId,
+          variationId: variationId ?? undefined,
+          locationId: resolvedLocationId,
+          unitsReceived: change,
+          unitCostCents,
+          stockMovementId: movement.id,
+          notes: `auto-layer: ${reason}`,
+        })
+      } catch (err) {
+        logger.warn('applyStockMovement: cost-layer receive failed (continuing)', {
+          productId, change, reason,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
 
     // Phase 13 — atomic cascade to ChannelListing.
     //
