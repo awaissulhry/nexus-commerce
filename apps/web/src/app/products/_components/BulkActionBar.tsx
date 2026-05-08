@@ -298,24 +298,39 @@ export function BulkActionBar({
       })
     })
 
+  // U.22 — permanent sticky toolbar instead of bottom-rising bar.
+  // E.4 floated this at `fixed bottom-4` and only rendered when the
+  // selection was non-empty. That hid the affordance until the
+  // operator selected rows AND pulled focus to the bottom of the
+  // viewport.
+  //
+  // Salesforce/Airtable pattern: a permanent strip above the rows
+  // it acts on. Always visible, always at the same place, count +
+  // disabled buttons when nothing selected so the operator sees
+  // what's possible before they click. Sticks to the top when the
+  // grid scrolls so the actions stay reachable on long lists.
+  const hasSelection = selectedIds.length > 0
+  const countLabel = hasSelection ? (
+    <span className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full bg-blue-600 text-white text-sm font-semibold tabular-nums">
+      <CheckCircle2 size={12} />
+      {selectedIds.length}
+      <span className="font-normal opacity-90">selected</span>
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full bg-slate-100 text-slate-500 text-sm font-medium tabular-nums dark:bg-slate-800 dark:text-slate-400">
+      <CheckCircle2 size={12} className="opacity-50" />
+      0 <span className="font-normal opacity-80">selected</span>
+      <span className="hidden sm:inline text-slate-400 dark:text-slate-500">
+        — tick rows to bulk-edit
+      </span>
+    </span>
+  )
+
   return (
-    // E.4 — bottom-rising Gmail-style bulk action bar. Was `sticky top-2`
-    // which replaced the toolbar slot when items were selected — that
-    // hid search/filters until you cleared the selection. Now it floats
-    // at the bottom of the viewport (out of the page flow), slides up
-    // on first appearance, and the toolbar stays accessible above it.
-    // pointer-events-none on the outer wrapper lets clicks behind the
-    // visible pill (e.g. on the table) go through; the Card itself
-    // re-enables them.
-    <div className="fixed bottom-4 left-0 right-0 z-40 flex justify-center px-4 pointer-events-none animate-slide-up motion-reduce:animate-none">
-      <div className="pointer-events-auto bg-white border border-slate-200 shadow-xl rounded-lg px-3 py-2 max-w-[min(900px,calc(100vw-2rem))] dark:bg-slate-900 dark:border-slate-800">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full bg-blue-600 text-white text-sm font-semibold tabular-nums">
-            <CheckCircle2 size={12} />
-            {selectedIds.length}
-            <span className="font-normal opacity-90">selected</span>
-          </span>
-          <div className="h-4 w-px bg-slate-200" />
+    <div className="sticky top-0 z-30 -mx-2 px-2 py-1.5 bg-white/95 backdrop-blur border-b border-slate-200 dark:bg-slate-900/95 dark:border-slate-800">
+      <div className="flex items-center gap-2 flex-wrap">
+        {countLabel}
+        <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
 
           {showDeleted ? (
             // F.1 — recycle-bin view. Restore is the only mutation;
@@ -326,7 +341,7 @@ export function BulkActionBar({
             <Button
               size="sm"
               onClick={restoreBulk}
-              disabled={busy}
+              disabled={busy || !hasSelection}
               className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
               icon={<RotateCcw size={12} />}
             >
@@ -337,7 +352,7 @@ export function BulkActionBar({
               <Button
                 size="sm"
                 onClick={() => setStatusBulk('ACTIVE')}
-                disabled={busy}
+                disabled={busy || !hasSelection}
                 className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
                 icon={<CheckCircle2 size={12} />}
               >
@@ -346,7 +361,7 @@ export function BulkActionBar({
               <Button
                 size="sm"
                 onClick={() => setStatusBulk('DRAFT')}
-                disabled={busy}
+                disabled={busy || !hasSelection}
                 className="bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
                 icon={<EyeOff size={12} />}
               >
@@ -355,7 +370,7 @@ export function BulkActionBar({
               <Button
                 size="sm"
                 onClick={() => setStatusBulk('INACTIVE')}
-                disabled={busy}
+                disabled={busy || !hasSelection}
                 className="bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
                 icon={<XCircle size={12} />}
               >
@@ -364,7 +379,7 @@ export function BulkActionBar({
               <Button
                 size="sm"
                 onClick={softDeleteBulk}
-                disabled={busy}
+                disabled={busy || !hasSelection}
                 className="bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
                 icon={<Trash2 size={12} />}
                 title="Move selected products to the recycle bin (restorable)"
@@ -383,7 +398,7 @@ export function BulkActionBar({
               size="sm"
               variant="secondary"
               onClick={() => setTagMenuOpen(!tagMenuOpen)}
-              disabled={busy}
+              disabled={busy || !hasSelection}
               icon={<TagIcon size={12} />}
             >
               Tag <ChevronDown size={10} />
@@ -434,7 +449,7 @@ export function BulkActionBar({
             <Button
               size="sm"
               onClick={() => setPublishMenuOpen(!publishMenuOpen)}
-              disabled={busy}
+              disabled={busy || !hasSelection}
               className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
               icon={<Eye size={12} />}
             >
@@ -495,7 +510,7 @@ export function BulkActionBar({
             size="sm"
             variant="secondary"
             onClick={duplicate}
-            disabled={busy}
+            disabled={busy || !hasSelection}
             icon={<Copy size={12} />}
           >
             Duplicate
@@ -504,7 +519,7 @@ export function BulkActionBar({
           <Button
             size="sm"
             onClick={() => setAiModalOpen(true)}
-            disabled={busy}
+            disabled={busy || !hasSelection}
             className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100"
             title="Generate descriptions / bullets / keywords with AI"
             icon={<Sparkles size={12} />}
@@ -520,19 +535,29 @@ export function BulkActionBar({
             size="sm"
             variant="secondary"
             onClick={() => setScheduleModalOpen(true)}
-            disabled={busy}
+            disabled={busy || !hasSelection}
             title="Defer a status flip or price change to a future timestamp"
             icon={<Calendar size={12} />}
           >
             Schedule
           </Button>
 
-          <Link
-            href={`/bulk-operations?productIds=${selectedIds.join(',')}`}
-            className="h-7 px-3 text-base bg-violet-50 text-violet-700 border border-violet-200 rounded hover:bg-violet-100 inline-flex items-center gap-1.5"
-          >
-            <ExternalLink size={12} /> Power edit
-          </Link>
+          {hasSelection ? (
+            <Link
+              href={`/bulk-operations?productIds=${selectedIds.join(',')}`}
+              className="h-7 px-3 text-base bg-violet-50 text-violet-700 border border-violet-200 rounded hover:bg-violet-100 inline-flex items-center gap-1.5"
+            >
+              <ExternalLink size={12} /> Power edit
+            </Link>
+          ) : (
+            <span
+              className="h-7 px-3 text-base bg-slate-50 text-slate-400 border border-slate-200 rounded inline-flex items-center gap-1.5 cursor-not-allowed"
+              aria-disabled="true"
+              title="Select rows first"
+            >
+              <ExternalLink size={12} /> Power edit
+            </span>
+          )}
             </>
           )}
 
@@ -557,14 +582,13 @@ export function BulkActionBar({
           <IconButton
             aria-label="Clear selection"
             onClick={onClear}
-            disabled={busy}
+            disabled={busy || !hasSelection}
             size="md"
             className="ml-auto min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
           >
             <X size={14} />
           </IconButton>
         </div>
-      </div>
       {aiModalOpen && (
         <AiBulkGenerateModal
           productIds={selectedIds}

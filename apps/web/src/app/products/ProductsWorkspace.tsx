@@ -1068,8 +1068,14 @@ export default function ProductsWorkspace() {
         updateUrl={updateUrl}
       />
 
-      {/* Bulk action bar */}
-      {lens === 'grid' && selected.size > 0 && (
+      {/* U.22 — bulk action toolbar. Permanent + sticky-top, rendered
+          whenever the grid lens is active (regardless of selection
+          count). When 0 rows are selected the bar shows a muted "0
+          selected — tick rows to bulk-edit" hint with disabled
+          buttons; selecting one or more rows activates the actions
+          inline. Replaces E.4's bottom-rising bar so the affordance
+          is always visible at a stable location. */}
+      {lens === 'grid' && (
         <BulkActionBar
           selectedIds={Array.from(selected)}
           allTags={tags}
@@ -1398,7 +1404,12 @@ function GridLens(props: any) {
           translucent backdrop keeps body content visible behind the
           bar; rounded corners + shadow give it a panel feel without
           claiming a full Card. */}
-      <div className="sticky top-0 z-30 -mx-2 px-2 py-1.5 flex items-center gap-2 justify-between bg-white/85 backdrop-blur border-b border-slate-200">
+      {/* U.22 — config row (count, page-size, density, columns picker)
+          is no longer sticky; the BulkActionBar above owns the
+          always-visible sticky slot. Operators set density / columns /
+          page-size once and forget; pulling the action bar to the top
+          gives the high-frequency surface the better real estate. */}
+      <div className="-mx-2 px-2 py-1.5 flex items-center gap-2 justify-between border-b border-slate-200">
         <div className="flex items-center gap-2">
           <span className="text-sm text-slate-500">
             <span className="font-semibold text-slate-700 tabular-nums">{total}</span> products · page {page} of {totalPages}
