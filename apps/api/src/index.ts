@@ -98,6 +98,7 @@ import { startLeadTimeStatsCron } from "./jobs/lead-time-stats.job.js";
 import { startStockoutDetectorCron } from "./jobs/stockout-detector.job.js";
 import { startAbcClassificationCron } from "./jobs/abc-classification.job.js";
 import { startCycleCountSchedulerCron } from "./jobs/cycle-count-scheduler.job.js";
+import { startScheduledChangesCron } from "./jobs/scheduled-changes.job.js";
 import { startAmazonMCFStatusCron } from "./jobs/amazon-mcf-status.job.js";
 import { startFbaPanEuSyncCron } from "./jobs/fba-pan-eu-sync.job.js";
 import { startFbaRestockCron } from "./jobs/fba-restock-ingestion.job.js";
@@ -655,6 +656,15 @@ async function start() {
     // NEXUS_ENABLE_CYCLE_COUNT_SCHEDULER=0.
     if (process.env.NEXUS_ENABLE_CYCLE_COUNT_SCHEDULER !== '0') {
       startCycleCountSchedulerCron();
+    }
+
+    // F.3 — scheduled product changes worker. Every minute, picks up
+    // ScheduledProductChange rows whose scheduledFor <= now() and
+    // applies the same master*Service path as a live PATCH so
+    // cascades behave identically. Default-on; opt out via
+    // NEXUS_ENABLE_SCHEDULED_CHANGES=0.
+    if (process.env.NEXUS_ENABLE_SCHEDULED_CHANGES !== '0') {
+      startScheduledChangesCron();
     }
 
     // S.24 — Amazon MCF status sync. Every 15 min, walk active

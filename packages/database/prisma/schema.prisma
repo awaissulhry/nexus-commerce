@@ -243,6 +243,7 @@ model Product {
   wizardStepEvents          WizardStepEvent[] // C.0: per-step wizard telemetry
   channelPublishAttempts    ChannelPublishAttempt[] // C.6: every publish attempt audit
   buyBoxHistory             BuyBoxHistory[] // Pricing F.1: Buy Box observation log
+  scheduledChanges          ScheduledProductChange[] // F.3: deferred mutations
 
   // H.16 — Compliance master data. HS code = customs classification,
   // mostly 6-digit (HS) or 8-10 digit (CN/HTS); stored as text since
@@ -5416,4 +5417,61 @@ model EbayMarkdown {
   @@index([channelListingId, startDate])
   // "Active markdowns right now" dashboard query
   @@index([status, endDate])
+}
+
+// F.3 — defer a Product mutation to a future timestamp.
+//
+// Use case: an operator wants to flip a SKU's status to ACTIVE at
+// 09:00 CET on Black Friday, or drop a price by 15% at midnight.
+// Today they have to set an alarm and click. With this row, they
+// queue the change; a cron worker (`scheduled-changes.cron.ts`,
+// runs every 60s) picks up rows whose scheduledFor <= now() and
+// applies the same service-level mutation that PATCH /api/products
+// uses, so cascades to ChannelListing + invalidations behave the
+// same as a manual edit.
+//
+// Status state machine:
+//   PENDING   → APPLIED (success path) | FAILED (error path) |
+//                CANCELLED (operator cancels before scheduledFor)
+//
+// Concurrency: the cron picks rows with FOR UPDATE SKIP LOCKED so
+// multiple worker replicas can't double-apply. appliedAt + error
+// land in the same UPDATE that flips PENDING → APPLIED/FAILED.
+//
+// Payload shape: kind === 'STATUS'
+//   { status: 'ACTIVE' | 'DRAFT' | 'INACTIVE' }
+// kind === 'PRICE'
+//   { basePrice: number }       — absolute new price
+//   { adjustPercent: number }   — relative to current basePrice
+//
+// Future kinds (description, tag changes, channel publish) extend
+// the JSON without a migration.
+model ScheduledProductChange {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // What to apply.
+  kind    String // 'STATUS' | 'PRICE' (extend without migration)
+  payload Json
+
+  // When.
+  scheduledFor DateTime
+
+  // Lifecycle.
+  status     String    @default("PENDING") // 'PENDING' | 'APPLIED' | 'FAILED' | 'CANCELLED'
+  appliedAt  DateTime?
+  error      String?
+
+  // Who.
+  createdBy String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Cron picker — most selective filter is (status, scheduledFor)
+  // so the worker scans PENDING in time order without a Seq Scan.
+  @@index([status, scheduledFor])
+  // Drawer / list view per product — one query for "what's queued".
+  @@index([productId, status])
 }

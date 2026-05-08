@@ -1400,6 +1400,159 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })
+
+  // ═══════════════════════════════════════════════════════════════════
+  // F.3 — SCHEDULED PRODUCT CHANGES
+  //
+  // POST /api/products/:id/scheduled-changes  body: { kind, payload, scheduledFor }
+  // GET  /api/products/:id/scheduled-changes
+  // POST /api/products/scheduled-changes/:id/cancel
+  //
+  // The cron worker (`scheduled-changes.cron.ts`, every 60s) picks
+  // up PENDING rows whose scheduledFor <= now() and applies them
+  // via the same master*Service.update path as live PATCHes.
+  //
+  // kind === 'STATUS': payload.status ∈ {ACTIVE, DRAFT, INACTIVE}
+  // kind === 'PRICE':  payload.basePrice (absolute) OR
+  //                    payload.adjustPercent (relative to current)
+  //
+  // Cancel = soft cancel: sets status=CANCELLED. The row stays in
+  // the table for audit. Already-applied rows reject the cancel
+  // with 409.
+  // ═══════════════════════════════════════════════════════════════════
+  fastify.post<{
+    Params: { id: string }
+    Body: {
+      kind?: string
+      payload?: Record<string, unknown>
+      scheduledFor?: string
+    }
+  }>('/products/:id/scheduled-changes', async (request, reply) => {
+    try {
+      const productId = request.params.id
+      const body = request.body ?? {}
+      const kind = body.kind
+      const payload = body.payload
+      const scheduledForRaw = body.scheduledFor
+
+      if (kind !== 'STATUS' && kind !== 'PRICE') {
+        return reply
+          .code(400)
+          .send({ error: 'kind must be STATUS or PRICE' })
+      }
+      if (!payload || typeof payload !== 'object') {
+        return reply.code(400).send({ error: 'payload (object) required' })
+      }
+      if (!scheduledForRaw) {
+        return reply
+          .code(400)
+          .send({ error: 'scheduledFor (ISO timestamp) required' })
+      }
+      const scheduledFor = new Date(scheduledForRaw)
+      if (Number.isNaN(scheduledFor.getTime())) {
+        return reply
+          .code(400)
+          .send({ error: `scheduledFor not a valid date: ${scheduledForRaw}` })
+      }
+      if (scheduledFor.getTime() <= Date.now()) {
+        return reply.code(400).send({
+          error:
+            'scheduledFor must be in the future (use the live PATCH endpoint to apply now)',
+        })
+      }
+
+      // Validate payload shape per kind so we surface garbage at submit
+      // time instead of cron-time.
+      if (kind === 'STATUS') {
+        const status = (payload as any).status
+        if (!['ACTIVE', 'DRAFT', 'INACTIVE'].includes(status)) {
+          return reply.code(400).send({
+            error: 'STATUS payload.status must be ACTIVE | DRAFT | INACTIVE',
+          })
+        }
+      } else if (kind === 'PRICE') {
+        const { basePrice, adjustPercent } = payload as any
+        const hasAbsolute =
+          typeof basePrice === 'number' &&
+          Number.isFinite(basePrice) &&
+          basePrice >= 0
+        const hasRelative =
+          typeof adjustPercent === 'number' && Number.isFinite(adjustPercent)
+        if (!hasAbsolute && !hasRelative) {
+          return reply.code(400).send({
+            error:
+              'PRICE payload requires basePrice (number >= 0) or adjustPercent (number)',
+          })
+        }
+      }
+
+      const product = await prisma.product.findUnique({
+        where: { id: productId },
+        select: { id: true, deletedAt: true },
+      })
+      if (!product || product.deletedAt) {
+        return reply
+          .code(404)
+          .send({ error: 'product not found or soft-deleted' })
+      }
+
+      const created = await prisma.scheduledProductChange.create({
+        data: {
+          productId,
+          kind,
+          payload: payload as any,
+          scheduledFor,
+          createdBy: userIdFor(request),
+        },
+      })
+      return reply.code(201).send({ ok: true, change: created })
+    } catch (err: any) {
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.get<{ Params: { id: string } }>(
+    '/products/:id/scheduled-changes',
+    async (request, reply) => {
+      try {
+        const productId = request.params.id
+        const rows = await prisma.scheduledProductChange.findMany({
+          where: { productId },
+          orderBy: [{ scheduledFor: 'asc' }, { createdAt: 'desc' }],
+          take: 100,
+        })
+        return { ok: true, changes: rows }
+      } catch (err: any) {
+        return reply.code(500).send({ error: err?.message ?? String(err) })
+      }
+    },
+  )
+
+  fastify.post<{ Params: { id: string } }>(
+    '/products/scheduled-changes/:id/cancel',
+    async (request, reply) => {
+      try {
+        const id = request.params.id
+        const row = await prisma.scheduledProductChange.findUnique({
+          where: { id },
+          select: { id: true, status: true },
+        })
+        if (!row) return reply.code(404).send({ error: 'not found' })
+        if (row.status !== 'PENDING') {
+          return reply.code(409).send({
+            error: `cannot cancel — current status is ${row.status}`,
+          })
+        }
+        const updated = await prisma.scheduledProductChange.update({
+          where: { id },
+          data: { status: 'CANCELLED' },
+        })
+        return { ok: true, change: updated }
+      } catch (err: any) {
+        return reply.code(500).send({ error: err?.message ?? String(err) })
+      }
+    },
+  )
 }
 
 export default productsCatalogRoutes
