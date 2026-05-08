@@ -15,6 +15,7 @@ import {
   SkipForward,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
+import { BarcodeScanInput } from '@/components/ui/BarcodeScanInput'
 import { Button } from '@/components/ui/Button'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
@@ -315,6 +316,47 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
     }
   }
 
+  // S.7 — barcode-driven workflow. USB scanners emit SKU+Enter as
+  // keystrokes; mobile cameras decode via @zxing/browser. Either way,
+  // BarcodeScanInput passes us the raw text and we route it to the
+  // matching CountItem. Match is case-insensitive on full SKU; partial
+  // matches are intentionally NOT accepted (a half-typed SKU should
+  // not race-trigger a focus jump). On match: scroll the row into
+  // view, focus its count input. On miss: toast + the scanner
+  // refocuses for the next attempt.
+  const handleScan = useCallback(
+    (raw: string) => {
+      if (!data) return
+      const target = raw.trim().toUpperCase()
+      if (!target) return
+      const item = data.items.find((it) => it.sku.toUpperCase() === target)
+      if (!item) {
+        toast.error(`SKU ${raw.trim()} not in this count`)
+        return
+      }
+      if (item.status === 'RECONCILED' || item.status === 'IGNORED') {
+        toast.success(`${item.sku} already ${item.status.toLowerCase()}`)
+        return
+      }
+      // querySelector targets the data attribute we'll set on each
+      // count input (added below). Defer one tick so a status filter
+      // change driven by the scan also has time to settle.
+      window.setTimeout(() => {
+        const el = document.querySelector<HTMLInputElement>(
+          `input[data-cycle-count-input="${item.id}"]`,
+        )
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          el.focus()
+          el.select()
+        } else {
+          toast.error(`Row hidden by current filter — clear the filter to count ${item.sku}`)
+        }
+      }, 0)
+    },
+    [data, toast],
+  )
+
   // S.5 — submit handler for the reason prompt modal. Routes to the
   // correct perform* by reasonPrompt.kind. Closes the modal after the
   // action settles. Empty input becomes null (server distinguishes
@@ -507,6 +549,25 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
             ))}
           </div>
 
+          {/* S.7 — barcode-driven workflow. Only shown while the
+              session is IN_PROGRESS (counts can actually be entered).
+              Scanner emits SKU + Enter → BarcodeScanInput calls
+              handleScan → row is scrolled into view + count input
+              focused. Camera mode (mobile) is enabled by default. */}
+          {isInProgress && (
+            <div className="bg-white border border-slate-200 rounded-lg p-3">
+              <BarcodeScanInput
+                label="Scan SKU to count"
+                placeholder="Aim scanner here or type SKU…"
+                onScan={handleScan}
+                autoFocus={false}
+              />
+              <div className="text-sm text-slate-500 mt-1.5">
+                Scan or type a SKU to jump to its count input. Camera mode (📷) works on phones.
+              </div>
+            </div>
+          )}
+
           {/* Items table */}
           <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
             <table className="w-full text-base">
@@ -559,6 +620,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                             min="0"
                             step="1"
                             value={inputValue}
+                            data-cycle-count-input={it.id}
                             onChange={(e) =>
                               setDrafts((d) => ({ ...d, [it.id]: e.target.value }))
                             }
