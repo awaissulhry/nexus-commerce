@@ -140,13 +140,50 @@ export async function purchaseBuyShippingLabel(args: {
 }): Promise<LabelPurchaseResponse> {
   const order = await prisma.order.findUnique({
     where: { id: args.orderId },
-    select: { id: true, channelOrderId: true, channel: true, fulfillmentMethod: true },
+    select: {
+      id: true,
+      channelOrderId: true,
+      channel: true,
+      fulfillmentMethod: true,
+      items: {
+        select: {
+          id: true,
+          productId: true,
+          sku: true,
+          quantity: true,
+        },
+      },
+    },
   })
   if (!order) throw new Error(`Order ${args.orderId} not found`)
   if (order.channel !== 'AMAZON' || order.fulfillmentMethod !== 'FBM') {
     throw new Error('Buy Shipping only applies to Amazon FBM orders')
   }
 
+  // AU.9 — guard against duplicate Buy Shipping shipments. If a
+  // non-cancelled Buy Shipping shipment already exists for this
+  // order, return early instead of buying a second label.
+  const existing = await prisma.shipment.findFirst({
+    where: {
+      orderId: order.id,
+      carrierCode: 'AMAZON_BUY_SHIPPING',
+      status: { notIn: ['CANCELLED'] },
+    },
+    select: { id: true, trackingNumber: true, labelUrl: true },
+  })
+  if (existing && existing.trackingNumber) {
+    return {
+      orderId: order.id,
+      shipmentId: existing.id,
+      trackingNumber: existing.trackingNumber,
+      labelUrl: existing.labelUrl ?? '',
+      totalCharge: { currencyCode: 'EUR', amount: 0 },
+      source: ENABLED ? 'real' : 'dryRun',
+      message: 'Buy Shipping label already purchased for this order — returning existing shipment.',
+    }
+  }
+
+  let response: LabelPurchaseResponse
   if (!ENABLED) {
     const mockTracking = `MOCK${Date.now()}`
     logger.info('amazon-buy-shipping: returning dryRun label', {
@@ -154,7 +191,7 @@ export async function purchaseBuyShippingLabel(args: {
       serviceId: args.serviceId,
       mockTracking,
     })
-    return {
+    response = {
       orderId: args.orderId,
       shipmentId: `mock-ship-${Date.now()}`,
       trackingNumber: mockTracking,
@@ -163,11 +200,45 @@ export async function purchaseBuyShippingLabel(args: {
       totalCharge: { currencyCode: 'EUR', amount: 0 },
       source: 'dryRun',
       message:
-        'dryRun: no real label purchased. Flip NEXUS_ENABLE_AMAZON_BUY_SHIPPING=true and ship the SP-API client wire to make this real.',
+        'dryRun: no real label purchased, but a Shipment row was created so the order flows into /fulfillment/outbound. Flip NEXUS_ENABLE_AMAZON_BUY_SHIPPING=true to wire real SP-API.',
     }
+  } else {
+    throw new Error(
+      'Real Buy Shipping label-purchase path not yet implemented; needs the SP-API client wire + Cloudinary/S3 label storage.',
+    )
   }
 
-  throw new Error(
-    'Real Buy Shipping label-purchase path not yet implemented; needs the SP-API client wire + Cloudinary/S3 label storage.',
-  )
+  // AU.9 — persist a Shipment row so the order flows into the
+  // /fulfillment/outbound pack queue. Status LABEL_PRINTED matches
+  // what fulfillment.routes.ts uses elsewhere when a carrier label
+  // exists pre-pack (e.g. Sendcloud bulk-print). The pack station
+  // can then mark PACKED + SHIPPED as the parcel goes out.
+  const shipment = await prisma.shipment.create({
+    data: {
+      orderId: order.id,
+      carrierCode: 'AMAZON_BUY_SHIPPING',
+      status: 'LABEL_PRINTED',
+      trackingNumber: response.trackingNumber,
+      labelUrl: response.labelUrl || null,
+      serviceCode: args.serviceId,
+      labelPrintedAt: new Date(),
+      costCents: Math.round(response.totalCharge.amount * 100),
+      currencyCode: response.totalCharge.currencyCode,
+      items: {
+        create: order.items.map((it) => ({
+          orderItemId: it.id,
+          productId: it.productId ?? null,
+          sku: it.sku,
+          quantity: it.quantity,
+        })),
+      },
+    },
+    select: { id: true },
+  })
+
+  // Return the real Shipment.id (not the mock one). Callers who
+  // need the carrier-side shipment id can read response.message or
+  // the future shipmentChannelId field; for now Shipment.id is the
+  // canonical handle the UI links to.
+  return { ...response, shipmentId: shipment.id }
 }
