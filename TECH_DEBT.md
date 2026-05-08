@@ -84,13 +84,9 @@ Entry stays in TECH_DEBT for tracking; not actively pursued.
 | `/monitoring/sync` | Redirects to `/dashboard/health` (canonical sync-health surface — Cron / StockDrift / Conflicts / Vitals / SystemLogs panels). |
 | `/settings` (root) | Redirects to `/settings/account` (the sidebar's "Settings" link target). |
 
-## 4. 🟢 `CategorySchema` rows with `schemaVersion: "unknown"`
+## 4. ✅ `CategorySchema` `schemaVersion='unknown'` orphans — resolved 2026-05-08
 
-**Symptom:** First D.3f deployment used the wrong path (`meta.version`) when reading the SP-API envelope. Each fetched type wrote one row with `schemaVersion = "unknown"`. After the path fix, those rows are still in the DB; they sit at the bottom of the per-`(channel, marketplace, productType)` ordering and never get returned (the real-version row always wins on `fetchedAt desc`), but they take up a unique-constraint slot.
-
-**Workaround:** None — just orphans. They expire 24h after creation and don't break anything.
-
-**Proper fix:** Either let them age out and run a one-shot `DELETE FROM "CategorySchema" WHERE "schemaVersion" = 'unknown'` at any point, or accept and ignore. Worth a single cleanup migration if we touch this area again.
+**Resolution:** Migration `20260508_p2_4_cleanup_categoryschema_unknown` purges the residual orphans (1 row at audit time). Idempotent — the WHERE clause is specific to `schemaVersion = 'unknown'` so repeat applies stay no-ops if a future regression reintroduces orphans.
 
 ## 5. ✅ Bulk-ops paste: scrolled-out cells don't show yellow tint — resolved 2026-05-08
 
@@ -775,17 +771,19 @@ Disabling the wizard's PV writes without first refactoring these readers would s
 
 ---
 
-## 46. 🟢 `Channel` table empty but `ChannelListing.channel` references it as a string
+## 46. ⏸ `Channel` + `Listing` tables empty — deferred 2026-05-08 (cleanup requires multi-step migration)
 
-**Symptom:** `ChannelListing.channel` is a `String` column with values like `"AMAZON"`, `"EBAY"`. The `Channel` table exists in the schema but has 0 rows. There's no foreign-key constraint between them — the relationship is implicit via string equality.
+**Verified 2026-05-08:** `Channel` rows = 0; `Listing` rows = 0; `ChannelListing.channel` distinct values = ['AMAZON'] only. Both legacy models are unused at runtime. The lone code reference (`apps/api/src/services/sync/batch-repair.service.ts:381` calls `prisma.channel.findFirst()`) returns null and short-circuits — confirmed dead code path.
 
-**Surfaced at:** Phase 1 audit DB queries (2026-05-06).
+**Cleanup is deferred** because dropping these models requires:
+  1. Schema: delete `model Channel` + `model Listing` from `schema.prisma`.
+  2. Migration: `DROP TABLE "Listing" CASCADE; DROP TABLE "Channel" CASCADE;` plus schema.prisma `@relation` removal on any model that points at them.
+  3. Code: delete the dead `prisma.channel.findFirst()` block in batch-repair.service.ts.
+  4. Audit: any external callers (analytics jobs, BI exports) that read these table names.
 
-**Why it matters:** Adding a new channel today requires editing UI hardcoded lists in N places (e.g., `bulk-operations/components/FilterDropdown.tsx:25` hardcodes `['AMAZON','EBAY','SHOPIFY','WOOCOMMERCE']`). With a populated `Channel` table + FK, channel options would be data-driven.
+Each step is small but the audit is non-trivial. Operator-impact is zero (both tables empty + unused), so the cleanup is opportunistic, not load-bearing.
 
-**Decision needed:** Either populate `Channel` and refactor `ChannelListing.channel` as an FK, or delete the unused `Channel` table to make the implicit-string contract explicit. The current half-state is the worst of both worlds.
-
-**Tied to multi-tenant readiness** — when Nexus serves a second seller, channel availability may differ per tenant, which is much cleaner with an FK + per-tenant `Channel` rows than with hardcoded strings everywhere.
+**Reopen criteria:** Touching batch-repair.service.ts for any other reason (drop the dead reference + the rest follows) OR multi-tenant work needs a populated Channel table (then design + populate, don't drop).
 
 ---
 
@@ -1083,23 +1081,16 @@ Either way, also requires fleshing out the channel adapters' inbound primitives 
 
 ---
 
-## 56. 🟢 OutboundSyncService.syncTo* methods are simulated stubs
+## 56. ✅ OutboundSyncService.syncTo* — resolved 2026-05-07/08 in C.8
 
-**Symptom:** `apps/api/src/services/outbound-sync.service.ts:286,328,366,406` — the `syncToAmazon`, `syncToEbay`, `syncToShopify`, `syncToWoocommerce` methods are placeholder demos using `Math.random() > 0.1` to simulate a 90% success rate. They construct payloads but never call the actual marketplace APIs.
+**Resolution:** All four methods replaced their `Math.random()` simulator with real behaviour:
 
-**Surfaced at:** Phase 1 syndication audit (2026-05-07) — discovered while planning C-3.
+  • **`syncToAmazon`** — calls `submitListingPayload` (SP-API `putListingsItem` / `patchListingsItem` via the publish gate from C.6). Live HTTP when `NEXUS_ENABLE_AMAZON_PUBLISH=true && AMAZON_PUBLISH_MODE=live`.
+  • **`syncToEbay`** — calls `createOrReplaceInventoryItem` (eBay Inventory API) gated by C.7 (`NEXUS_ENABLE_EBAY_PUBLISH` + `EBAY_PUBLISH_MODE`).
+  • **`syncToShopify`** — honest `NOT_IMPLEMENTED` gate. Returns FAILED with a clear "not yet wired — see roadmap C.18" message and writes a `gated` ChannelPublishAttempt row. No more phantom 90% success.
+  • **`syncToWoocommerce`** — same shape as Shopify; honest gate. Per memory `project_active_channels.md`, WooCommerce is explicitly out of scope, so this stays gated indefinitely.
 
-**Why it matters:** Any code path that enqueues an `OutboundSyncQueue` row (price change, quantity change) gets simulated success/failure rather than real propagation. The `Math.random()` is enough to pass smoke tests but doesn't actually push data to channels.
-
-**Proper fix:** Wire each method to its real adapter:
-- `syncToAmazon` → `amazonService.updateVariantPrice` / SP-API patchListingsItem
-- `syncToEbay` → `ebayService.updatePrice` / `updateInventory`
-- `syncToShopify` → `shopifyService.updateProduct`
-- `syncToWoocommerce` → `woocommerceService.updateProduct`
-
-Tie this to S.4 channel adapter realization. Don't ship as a standalone fix — it's coupled to inbound queue design (#55) and rate-limit persistence (currently in-memory, won't survive horizontal scaling).
-
-**Risk if left:** None today (8 listings, never synced). Becomes 🔴 the moment a real Xavia listing goes live and operator expects price/stock changes to actually propagate.
+The honest gate for Shopify / WooCommerce is the right answer for the "currently unwired but on the channel scope" case (Shopify) and the "out of scope" case (WooCommerce / Etsy). Master/channel drift can no longer be papered over by a fake green tick.
 
 ---
 
