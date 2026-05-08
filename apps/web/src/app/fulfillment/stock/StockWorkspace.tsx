@@ -698,6 +698,23 @@ export default function StockWorkspace() {
                 </span>
               )}
             </Link>
+            {/* S.13 — companion sub-routes for transfer audit and
+                reservation lifecycle. Both are read-mostly views; the
+                heavy lifting still happens in the per-product drawer. */}
+            <Link
+              href="/fulfillment/stock/transfers"
+              className="h-11 sm:h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5 text-slate-700"
+            >
+              <ArrowRightLeft size={12} />
+              {t('stock.transfers.title')}
+            </Link>
+            <Link
+              href="/fulfillment/stock/reservations"
+              className="h-11 sm:h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5 text-slate-700"
+            >
+              <LockIcon size={12} />
+              {t('stock.reservations.title')}
+            </Link>
             <button
               onClick={() => setShortcutsOpen(true)}
               className="h-11 w-11 sm:h-8 sm:w-8 inline-flex items-center justify-center border border-slate-200 rounded-md hover:bg-slate-50 text-slate-600"

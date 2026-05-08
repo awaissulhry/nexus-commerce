@@ -683,6 +683,195 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── GET /api/stock/transfers ────────────────────────────────────
+  // S.13 — surface completed inter-location transfers as a list.
+  // Each transfer shows up in StockMovement as a pair: TRANSFER_OUT
+  // at the source + TRANSFER_IN at the destination, linked via the
+  // IN row's referenceId pointing at the OUT row's id (set by
+  // stock-level.service.transferStock). We collapse the pair so each
+  // transfer renders as a single row with from/to/quantity/timestamps.
+  fastify.get('/stock/transfers', async (request, reply) => {
+    try {
+      const q = request.query as any
+      const limit = Math.min(200, Math.max(1, Math.floor(safeNum(q.limit, 100) ?? 100)))
+
+      // Pull TRANSFER_IN rows (the canonical "destination" event); each
+      // referenceId points at its paired OUT. Joining lets us return
+      // both sides in one row to the client. Ordering by createdAt DESC
+      // surfaces the most recent transfers first.
+      const inRows = await prisma.stockMovement.findMany({
+        where: { reason: 'TRANSFER_IN' as any },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        select: {
+          id: true,
+          productId: true,
+          change: true,
+          createdAt: true,
+          actor: true,
+          notes: true,
+          referenceId: true,
+          fromLocationId: true,
+          toLocationId: true,
+          fromLocation: { select: { id: true, code: true, name: true, type: true } },
+          toLocation:   { select: { id: true, code: true, name: true, type: true } },
+        },
+      })
+
+      // Resolve sibling OUT rows + product info in two batched queries.
+      const outIds = inRows.map((r) => r.referenceId).filter((v): v is string => !!v)
+      const productIds = Array.from(new Set(inRows.map((r) => r.productId)))
+      const [outRows, products] = await Promise.all([
+        outIds.length === 0
+          ? Promise.resolve([])
+          : prisma.stockMovement.findMany({
+              where: { id: { in: outIds } },
+              select: { id: true, createdAt: true, actor: true, change: true },
+            }),
+        prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, sku: true, name: true, amazonAsin: true,
+            images: { select: { url: true }, take: 1 } },
+        }),
+      ])
+      const outById = new Map(outRows.map((r) => [r.id, r]))
+      const productById = new Map(products.map((p) => [p.id, p]))
+
+      const transfers = inRows.map((r) => {
+        const sibling = r.referenceId ? outById.get(r.referenceId) : null
+        const p = productById.get(r.productId)
+        return {
+          id: r.id,
+          siblingOutId: r.referenceId ?? null,
+          quantity: r.change,
+          createdAt: r.createdAt,
+          startedAt: sibling?.createdAt ?? r.createdAt,
+          actor: r.actor ?? sibling?.actor ?? null,
+          notes: r.notes,
+          from: r.fromLocation,
+          to: r.toLocation ?? null,
+          product: p ? {
+            id: p.id, sku: p.sku, name: p.name, amazonAsin: p.amazonAsin,
+            thumbnailUrl: p.images?.[0]?.url ?? null,
+          } : null,
+          // Status today is always COMPLETED — transferStock fires both
+          // halves synchronously. A future TransferShipment table would
+          // add IN_TRANSIT state; the API shape is forward-compatible.
+          status: 'COMPLETED' as const,
+        }
+      })
+
+      return { transfers, count: transfers.length }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/transfers] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── GET /api/stock/reservations ─────────────────────────────────
+  // S.13 — surface every StockReservation row (active + settled) so
+  // operators can see the full lifecycle without drilling into a
+  // product drawer first. Status filter:
+  //   active    — releasedAt IS NULL AND consumedAt IS NULL
+  //   consumed  — consumedAt IS NOT NULL
+  //   released  — releasedAt IS NOT NULL
+  //   all       — no filter (default)
+  // Each row includes StockLevel.location + Product so the table can
+  // render SKU, location code, and stock context in one query.
+  fastify.get('/stock/reservations', async (request, reply) => {
+    try {
+      const q = request.query as any
+      const status = (q.status as string | undefined) ?? 'all'
+      const limit = Math.min(200, Math.max(1, Math.floor(safeNum(q.limit, 100) ?? 100)))
+
+      const where: any = {}
+      if (status === 'active') {
+        where.releasedAt = null
+        where.consumedAt = null
+      } else if (status === 'consumed') {
+        where.consumedAt = { not: null }
+      } else if (status === 'released') {
+        where.releasedAt = { not: null }
+      }
+
+      const [rows, productMap] = await Promise.all([
+        prisma.stockReservation.findMany({
+          where,
+          orderBy: [{ consumedAt: 'desc' }, { releasedAt: 'desc' }, { createdAt: 'desc' }],
+          take: limit,
+          include: {
+            stockLevel: {
+              select: {
+                productId: true,
+                quantity: true,
+                reserved: true,
+                available: true,
+                location: { select: { id: true, code: true, name: true, type: true } },
+              },
+            },
+          },
+        }),
+        // Product join is separate because StockReservation has no
+        // direct relation to Product — it goes via StockLevel. Doing a
+        // batched findMany keeps the per-row work cheap.
+        Promise.resolve(null),
+      ])
+
+      const productIds = Array.from(new Set(rows.map((r) => r.stockLevel.productId)))
+      const products = productIds.length === 0
+        ? []
+        : await prisma.product.findMany({
+            where: { id: { in: productIds } },
+            select: {
+              id: true, sku: true, name: true, amazonAsin: true,
+              images: { select: { url: true }, take: 1 },
+            },
+          })
+      const productById = new Map(products.map((p) => [p.id, p]))
+
+      const now = new Date()
+      const reservations = rows.map((r) => {
+        const p = productById.get(r.stockLevel.productId)
+        const live = r.releasedAt == null && r.consumedAt == null
+        const expired = live && r.expiresAt < now
+        const ttlMs = live ? r.expiresAt.getTime() - now.getTime() : null
+        return {
+          id: r.id,
+          quantity: r.quantity,
+          reason: r.reason,
+          orderId: r.orderId,
+          createdAt: r.createdAt,
+          expiresAt: r.expiresAt,
+          releasedAt: r.releasedAt,
+          consumedAt: r.consumedAt,
+          status: r.consumedAt
+            ? 'consumed' as const
+            : r.releasedAt
+              ? 'released' as const
+              : expired
+                ? 'expired' as const
+                : 'active' as const,
+          ttlMs,
+          location: r.stockLevel.location,
+          stockLevel: {
+            quantity: r.stockLevel.quantity,
+            reserved: r.stockLevel.reserved,
+            available: r.stockLevel.available,
+          },
+          product: p ? {
+            id: p.id, sku: p.sku, name: p.name, amazonAsin: p.amazonAsin,
+            thumbnailUrl: p.images?.[0]?.url ?? null,
+          } : null,
+        }
+      })
+
+      return { reservations, count: reservations.length, status }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/reservations] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // ── GET /api/stock/movements ────────────────────────────────────
   fastify.get('/stock/movements', async (request, reply) => {
     try {
