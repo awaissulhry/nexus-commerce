@@ -79,6 +79,7 @@ import { startAmazonReturnsPollCron } from "./jobs/amazon-returns-poll.job.js";
 import { startRefundRetryCron } from "./jobs/refund-retry.job.js";
 import { startRefundDeadlineTrackerCron } from "./jobs/refund-deadline-tracker.job.js";
 import { startAmazonOrdersCron } from "./jobs/amazon-orders-sync.job.js";
+import { startEbayOrdersCron } from "./jobs/ebay-orders-sync.job.js";
 import { startAmazonInventoryCron } from "./jobs/amazon-inventory-sync.job.js";
 import { startReservationSweepCron } from "./jobs/reservation-sweep.job.js";
 import { startLateShipmentFlagCron } from "./jobs/late-shipment-flag.job.js";
@@ -481,6 +482,18 @@ async function start() {
     // Gated behind NEXUS_ENABLE_AMAZON_ORDERS_CRON=1.
     if (process.env.NEXUS_ENABLE_AMAZON_ORDERS_CRON === '1') {
       startAmazonOrdersCron();
+    }
+
+    // O.2 — Incremental eBay orders polling. Mirror of the Amazon
+    // cron: enumerates active eBay ChannelConnections, fans out
+    // ebayOrdersService.syncEbayOrders per connection. 15-min cadence.
+    // Until O.2, eBay was the only revenue channel without an
+    // automated cadence (Amazon=cron, Shopify=webhook), so orders
+    // could silently age. Manual trigger remains:
+    // POST /api/sync/ebay/orders.
+    // Gated behind NEXUS_ENABLE_EBAY_ORDERS_CRON=1.
+    if (process.env.NEXUS_ENABLE_EBAY_ORDERS_CRON === '1') {
+      startEbayOrdersCron();
     }
 
     // FBA inventory polling — every 15 min, full SP-API
