@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
   TrendingDown, ArrowLeft, Package, RefreshCw, AlertCircle,
-  TrendingUp, Boxes, Activity,
+  TrendingUp, Boxes, Activity, AlertTriangle, Snowflake,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -68,6 +68,28 @@ interface TurnoverResponse {
   byChannel: ChannelRow[]
 }
 
+// S.15 — dead-stock + slow-moving rows.
+interface DeadStockRow {
+  productId: string
+  sku: string
+  name: string
+  amazonAsin: string | null
+  thumbnailUrl: string | null
+  totalStock: number
+  costPriceCents: number
+  valueAtRiskCents: number
+  unitsSoldInWindow: number
+  dailyVelocity: number
+  daysSinceLastMovement: number | null
+  lastMovementReason: string | null
+}
+interface DeadStockResponse {
+  windowDays: number
+  slowVelocityThreshold: number
+  dead: DeadStockRow[]
+  slow: DeadStockRow[]
+}
+
 const PERIOD_OPTIONS = [7, 30, 90, 180, 365] as const
 
 function formatCents(cents: number): string {
@@ -86,27 +108,36 @@ function dohTone(doh: number | null): string {
 export default function AnalyticsClient() {
   const { t } = useTranslations()
   const [data, setData] = useState<TurnoverResponse | null>(null)
+  const [deadStock, setDeadStock] = useState<DeadStockResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [days, setDays] = useState<number>(30)
   const [sortKey, setSortKey] = useState<SortKey>('turnover')
+  // S.15 — dead-stock threshold defaults to 90 days (operator standard).
+  const [deadDays, setDeadDays] = useState<number>(90)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/stock/analytics/turnover?days=${days}`,
-        { cache: 'no-store' },
-      )
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      setData(await res.json())
+      // Fire both analytics endpoints in parallel — turnover and
+      // dead-stock are independent windows but render on the same
+      // page, so users see both populated together.
+      const [turnoverRes, deadRes] = await Promise.all([
+        fetch(`${getBackendUrl()}/api/stock/analytics/turnover?days=${days}`, { cache: 'no-store' }),
+        fetch(`${getBackendUrl()}/api/stock/analytics/dead-stock?days=${deadDays}`, { cache: 'no-store' }),
+      ])
+      if (!turnoverRes.ok) throw new Error(`turnover HTTP ${turnoverRes.status}`)
+      setData(await turnoverRes.json())
+      if (deadRes.ok) {
+        setDeadStock(await deadRes.json())
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setLoading(false)
     }
-  }, [days])
+  }, [days, deadDays])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -300,6 +331,140 @@ export default function AnalyticsClient() {
                   </li>
                 ))}
               </ul>
+            </Card>
+          )}
+
+          {/* S.15 — Dead-stock + slow-moving section. Sits between
+              the channel rollup and the per-product turnover table.
+              Two columns on lg+: Dead (left, no movement >= deadDays)
+              and Slow (right, daily velocity below threshold). */}
+          {deadStock && (deadStock.dead.length > 0 || deadStock.slow.length > 0) && (
+            <Card>
+              <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                <div className="text-md font-semibold text-slate-900 inline-flex items-center gap-2">
+                  <Snowflake size={14} className="text-blue-500" />
+                  {t('stock.deadStock.title')}
+                </div>
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold mr-1">
+                    {t('stock.deadStock.threshold')}
+                  </span>
+                  {[30, 60, 90, 180].map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setDeadDays(d)}
+                      className={cn(
+                        'min-h-[44px] sm:min-h-0 px-2.5 py-1 text-sm font-medium rounded border transition-colors',
+                        deadDays === d
+                          ? 'bg-slate-900 text-white border-slate-900'
+                          : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300',
+                      )}
+                    >
+                      {d}d
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Dead stock column */}
+                <div>
+                  <div className="text-sm uppercase tracking-wider font-semibold text-rose-700 inline-flex items-center gap-1.5 mb-2">
+                    <AlertTriangle size={12} />
+                    {t('stock.deadStock.dead.title', { days: deadDays })}
+                    <span className="text-slate-500 font-normal">· {deadStock.dead.length}</span>
+                  </div>
+                  {deadStock.dead.length === 0 ? (
+                    <div className="text-sm text-slate-400 italic py-2">
+                      {t('stock.deadStock.dead.empty')}
+                    </div>
+                  ) : (
+                    <ul className="space-y-1 max-h-[420px] overflow-y-auto pr-1">
+                      {deadStock.dead.slice(0, 50).map((p) => (
+                        <li key={p.productId} className="flex items-center gap-2 py-1.5 px-2 -mx-2 border-b border-slate-100 last:border-0">
+                          {p.thumbnailUrl ? (
+                            <img src={p.thumbnailUrl} alt="" className="w-7 h-7 rounded object-cover bg-slate-100 flex-shrink-0" />
+                          ) : (
+                            <div className="w-7 h-7 rounded bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
+                              <Package size={12} />
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-medium text-slate-900 truncate">{p.name}</div>
+                            <div className="text-xs text-slate-500 font-mono truncate">
+                              {p.sku} · {p.totalStock} on hand
+                              {p.daysSinceLastMovement != null && (
+                                <span className="text-rose-600"> · {p.daysSinceLastMovement}d ago</span>
+                              )}
+                              {p.daysSinceLastMovement == null && (
+                                <span className="text-rose-600"> · {t('stock.deadStock.neverMoved')}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right text-sm tabular-nums flex-shrink-0">
+                            <div className="font-semibold text-rose-700">
+                              {formatCents(p.valueAtRiskCents)}
+                            </div>
+                            <div className="text-xs text-slate-400">{t('stock.deadStock.atRisk')}</div>
+                          </div>
+                        </li>
+                      ))}
+                      {deadStock.dead.length > 50 && (
+                        <li className="text-xs text-slate-400 italic pt-1">
+                          +{deadStock.dead.length - 50} {t('stock.analytics.byChannel.units')}
+                        </li>
+                      )}
+                    </ul>
+                  )}
+                </div>
+
+                {/* Slow-moving column */}
+                <div>
+                  <div className="text-sm uppercase tracking-wider font-semibold text-amber-700 inline-flex items-center gap-1.5 mb-2">
+                    <TrendingDown size={12} />
+                    {t('stock.deadStock.slow.title', { v: deadStock.slowVelocityThreshold })}
+                    <span className="text-slate-500 font-normal">· {deadStock.slow.length}</span>
+                  </div>
+                  {deadStock.slow.length === 0 ? (
+                    <div className="text-sm text-slate-400 italic py-2">
+                      {t('stock.deadStock.slow.empty')}
+                    </div>
+                  ) : (
+                    <ul className="space-y-1 max-h-[420px] overflow-y-auto pr-1">
+                      {deadStock.slow.slice(0, 50).map((p) => (
+                        <li key={p.productId} className="flex items-center gap-2 py-1.5 px-2 -mx-2 border-b border-slate-100 last:border-0">
+                          {p.thumbnailUrl ? (
+                            <img src={p.thumbnailUrl} alt="" className="w-7 h-7 rounded object-cover bg-slate-100 flex-shrink-0" />
+                          ) : (
+                            <div className="w-7 h-7 rounded bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
+                              <Package size={12} />
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-medium text-slate-900 truncate">{p.name}</div>
+                            <div className="text-xs text-slate-500 font-mono truncate">
+                              {p.sku} · {p.totalStock} on hand · {p.dailyVelocity}/day
+                            </div>
+                          </div>
+                          <div className="text-right text-sm tabular-nums flex-shrink-0">
+                            <div className="font-semibold text-amber-700">
+                              {formatCents(p.valueAtRiskCents)}
+                            </div>
+                            <div className="text-xs text-slate-400">{t('stock.deadStock.atRisk')}</div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+
+              {/* Recommended actions footer */}
+              <div className="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-500 leading-relaxed">
+                <span className="font-semibold text-slate-700">{t('stock.deadStock.recommended.title')}: </span>
+                {t('stock.deadStock.recommended.body')}
+              </div>
             </Card>
           )}
 

@@ -1016,6 +1016,131 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── GET /api/stock/analytics/dead-stock ─────────────────────────
+  // S.15 — dead-stock + slow-moving identification.
+  //
+  // Two thresholds:
+  //   `days`  — products with *no* operator-driven StockMovement in
+  //             the last N days qualify as dead stock. Default 90.
+  //   `slow`  — products with movements but unitsSold/day below this
+  //             velocity over the same window are slow-moving.
+  //
+  // We exclude migration-only reasons (PARENT_PRODUCT_CLEANUP,
+  // STOCKLEVEL_BACKFILL, SYNC_RECONCILIATION) when checking for
+  // "movement" — backfills don't represent operator activity, and
+  // the FBA reconciliation cron writes a row even when nothing
+  // physically moved. Counting them would mask actual deadness.
+  //
+  // Returns SKUs with totalStock > 0 only — zero-stock isn't
+  // "dead stock", it's just absent inventory.
+  fastify.get('/stock/analytics/dead-stock', async (request, reply) => {
+    try {
+      const q = request.query as any
+      const days = Math.min(365, Math.max(7, Math.floor(safeNum(q.days, 90) ?? 90)))
+      const slowVelocity = Math.max(0, safeNum(q.slow, 0.1) ?? 0.1)
+
+      const cutoff = new Date()
+      cutoff.setUTCDate(cutoff.getUTCDate() - days)
+
+      // Products with positive stock — only candidates for dead/slow.
+      const products = await prisma.product.findMany({
+        where: { isParent: false, totalStock: { gt: 0 } },
+        select: {
+          id: true, sku: true, name: true, amazonAsin: true,
+          totalStock: true, costPrice: true,
+          images: { select: { url: true }, take: 1 },
+        },
+      })
+      if (products.length === 0) {
+        return { windowDays: days, slowVelocityThreshold: slowVelocity, dead: [], slow: [] }
+      }
+      const productIds = products.map((p) => p.id)
+
+      // Last *operator-driven* movement per product. groupBy with max
+      // would be cleaner but Prisma doesn't accept WHERE on groupBy
+      // easily for the reason filter; do a findMany then reduce.
+      const movements = await prisma.stockMovement.findMany({
+        where: {
+          productId: { in: productIds },
+          reason: {
+            notIn: ['PARENT_PRODUCT_CLEANUP', 'STOCKLEVEL_BACKFILL', 'SYNC_RECONCILIATION'] as any,
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { productId: true, createdAt: true, reason: true },
+      })
+      const lastMovementByProduct = new Map<string, { createdAt: Date; reason: string }>()
+      for (const m of movements) {
+        if (!lastMovementByProduct.has(m.productId)) {
+          lastMovementByProduct.set(m.productId, { createdAt: m.createdAt, reason: m.reason })
+        }
+      }
+
+      // Sales over the window — used to label SLOW vs DEAD when
+      // movement exists but velocity is low.
+      const skus = products.map((p) => p.sku)
+      const sales = await prisma.dailySalesAggregate.findMany({
+        where: { sku: { in: skus }, day: { gte: cutoff } },
+        select: { sku: true, unitsSold: true },
+      })
+      const unitsBySku = new Map<string, number>()
+      for (const s of sales) {
+        unitsBySku.set(s.sku, (unitsBySku.get(s.sku) ?? 0) + s.unitsSold)
+      }
+
+      const dead: any[] = []
+      const slow: any[] = []
+      const now = Date.now()
+      for (const p of products) {
+        const last = lastMovementByProduct.get(p.id)
+        const lastMs = last ? last.createdAt.getTime() : 0
+        const daysSince = last ? Math.floor((now - lastMs) / 86400000) : null
+        const costCents = p.costPrice == null ? 0 : Math.round(Number(p.costPrice) * 100)
+        const valueAtRiskCents = p.totalStock * costCents
+        const unitsSoldInWindow = unitsBySku.get(p.sku) ?? 0
+        const dailyVelocity = unitsSoldInWindow / days
+        const row = {
+          productId: p.id,
+          sku: p.sku,
+          name: p.name,
+          amazonAsin: p.amazonAsin,
+          thumbnailUrl: p.images?.[0]?.url ?? null,
+          totalStock: p.totalStock,
+          costPriceCents: costCents,
+          valueAtRiskCents,
+          unitsSoldInWindow,
+          dailyVelocity: Math.round(dailyVelocity * 1000) / 1000,
+          daysSinceLastMovement: daysSince,
+          lastMovementReason: last?.reason ?? null,
+        }
+        // DEAD: no operator-driven movement in window. lastMs===0
+        // covers products that have never had a movement (e.g.
+        // initial seed). daysSince > days means past the threshold.
+        if (last == null || daysSince! >= days) {
+          dead.push(row)
+        } else if (dailyVelocity < slowVelocity) {
+          slow.push(row)
+        }
+      }
+
+      // Sort by value at risk (biggest hit first); ties by days-since.
+      dead.sort((a, b) => b.valueAtRiskCents - a.valueAtRiskCents
+        || (b.daysSinceLastMovement ?? 9999) - (a.daysSinceLastMovement ?? 9999))
+      slow.sort((a, b) => b.valueAtRiskCents - a.valueAtRiskCents
+        || a.dailyVelocity - b.dailyVelocity)
+
+      return {
+        windowDays: days,
+        slowVelocityThreshold: slowVelocity,
+        dead,
+        slow,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/analytics/dead-stock] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // ── GET /api/stock/movements ────────────────────────────────────
   fastify.get('/stock/movements', async (request, reply) => {
     try {
