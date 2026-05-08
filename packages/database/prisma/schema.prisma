@@ -262,11 +262,19 @@ model Product {
   // it advanced (someone else edited concurrently).
   version Int @default(1)
 
+  // F.1 — soft delete. Set when the operator removes a product via
+  // the bulk-soft-delete action; restorable until a separate cron /
+  // admin task hard-purges old rows. NULL means active. All default
+  // list / fetch endpoints filter `deletedAt IS NULL` unless the
+  // caller explicitly opts in via ?deleted=true.
+  deletedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([gtin])
   @@index([abcClass])
+  @@index([deletedAt])
 }
 
 model ProductVariation {
@@ -1414,8 +1422,14 @@ model Order {
   totalPrice      Decimal      @db.Decimal(12, 2)
   // D.1: per-order currency snapshot at import time. Falls back to EUR.
   currencyCode    String?      @default("EUR")
+  // O.20: customerName + customerEmail are KEPT as denormalized cache so
+  // existing read paths (OrdersWorkspace + every dashboard query that
+  // groupBy's on customerEmail) keep working unchanged. The Customer
+  // relation below is the canonical identity; new code reads through it.
   customerName    String
   customerEmail   String
+  customer        Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customerId      String?
   shippingAddress Json // { street, city, state, postalCode, country }
 
   // D.1: Phase 28 — real customer-side timestamps. createdAt is the row
@@ -1471,6 +1485,100 @@ model Order {
   // in migration.sql (Prisma doesn't model partial indexes natively).
   @@index([shipByDate])
   @@index([status, shipByDate])
+  @@index([customerId])
+}
+
+// ── O.20: Customer model ─────────────────────────────────────────────
+// Canonical customer identity, finally. Pre-O.20 customer info was
+// denormalized on Order — repeat-customer detection, LTV, and the
+// O.21 /customers page all needed a real table.
+//
+// Identity = lower(email). Backfill at migration time produces stable
+// 'cust_' + md5(lower(email))[:24] ids; future inserts can keep that
+// shape or use cuid()s — the FK is on id, not the format.
+//
+// Aggregate columns (totalOrders / totalSpentCents / firstOrderAt /
+// lastOrderAt / channelOrderCounts) are a denormalized cache. Backfill
+// snapshots them at migration time; subsequent commits wire writers
+// at order-ingestion / cancellation / refund sites.
+model Customer {
+  id    String  @id
+  email String  @unique
+  name  String?
+
+  totalOrders        Int      @default(0)
+  // Cents to avoid Decimal vs JS-number drift on the read side.
+  // BIGINT in SQL; Prisma maps to BigInt — but for a small-business-
+  // scale app totals fit in Int safely (€20M cap at €0.01 precision).
+  totalSpentCents    BigInt   @default(0)
+  firstOrderAt       DateTime?
+  lastOrderAt        DateTime?
+  channelOrderCounts Json?
+
+  // Operator surface
+  tags              String[]   @default([])
+  // O.22 risk engine populates these. NULL = unscored.
+  riskFlag          String?
+  manualReviewState String?
+
+  // Relations
+  orders    Order[]
+  addresses CustomerAddress[]
+  notes     CustomerNote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([lastOrderAt])
+  @@index([totalSpentCents])
+  @@index([riskFlag])
+}
+
+model CustomerAddress {
+  id String @id @default(cuid())
+
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId String
+
+  // 'SHIPPING' | 'BILLING' | 'BOTH'
+  type      String
+  isPrimary Boolean @default(false)
+
+  recipient  String?
+  line1      String
+  line2      String?
+  city       String
+  state      String?
+  postalCode String
+  country    String
+  phone      String?
+
+  // Source attribution: which channel/order seeded this row.
+  source         String?
+  channelOrderId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([customerId])
+  @@index([country])
+}
+
+model CustomerNote {
+  id String @id @default(cuid())
+
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId String
+
+  body         String
+  authorUserId String?
+  authorEmail  String?
+  pinned       Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([createdAt])
 }
 
 model OrderItem {
