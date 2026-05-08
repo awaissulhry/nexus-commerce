@@ -1,4 +1,5 @@
 import prisma from "../db.js";
+import { sendEmail } from "./email/transport.js";
 
 export interface SyncMetrics {
   syncId: string;
@@ -396,16 +397,30 @@ export class SyncMonitoringService {
   }
 
   /**
-   * Send email alert
+   * Send email alert via the shared transport (TECH_DEBT #51).
    */
   private async sendEmailAlert(
     recipients: string[],
     message: string,
     severity: string
   ): Promise<void> {
-    // Implementation would integrate with email service (SendGrid, AWS SES, etc.)
-    console.log(`[EMAIL] To: ${recipients.join(", ")}`);
-    console.log(`[EMAIL] ${message}`);
+    const sev = severity.toUpperCase()
+    const subject = `[Nexus Sync ${sev}] Sync alert`
+    const html = `<!doctype html>
+<html><body style="font-family:Inter,-apple-system,sans-serif;color:#0f172a;background:#f8fafc;padding:24px;">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:24px;">
+    <div style="font-size:11px;font-weight:600;color:#fff;background:#ea580c;display:inline-block;padding:3px 10px;border-radius:4px;letter-spacing:0.05em;">${sev}</div>
+    <h2 style="margin:12px 0 8px 0;font-size:18px;">Sync alert</h2>
+    <pre style="margin:0;padding:12px;background:#f1f5f9;border-radius:6px;font-size:13px;white-space:pre-wrap;">${message}</pre>
+  </div>
+</body></html>`
+    await sendEmail({
+      to: recipients,
+      subject,
+      html,
+      text: message,
+      tag: `sync-alert-${severity.toLowerCase()}`,
+    })
   }
 
   /**

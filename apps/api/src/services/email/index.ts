@@ -6,28 +6,18 @@
  * eBay) keep using the marketplace's own emails — sending duplicates
  * would degrade the customer experience.
  *
- * Provider: Resend by default (modern, simple HTTP API). The shape is
- * generic enough that swapping to Postmark / SES later is a single-
- * function rewrite.
+ * Templates live here. Provider HTTP + dryRun gate live in
+ * `transport.ts` (TECH_DEBT #51 consolidation, 2026-05-08).
  *
- * Env knobs (matching the rest of Wave 7+):
+ * Env knobs (read in transport.ts):
  *   NEXUS_ENABLE_OUTBOUND_EMAILS=true|false   default 'false'
- *   NEXUS_EMAIL_PROVIDER=resend|smtp          default 'resend'
- *   RESEND_API_KEY                             when provider=resend
+ *   RESEND_API_KEY                             when sending real
  *   NEXUS_EMAIL_FROM=Xavia <ship@xavia.it>    sender address
  *   NEXUS_BRANDED_TRACKING_BASE_URL            link template
- *
- * dryRun (default): console.logs the email + returns success without
- * any HTTP. The retry job (O.12) and Sendcloud webhook (O.7) can
- * fire emails freely while operator sets up Resend.
- *
- * Templates are inline + minimal. Future commit can extract to a
- * proper template system (MJML, react-email) when there's enough
- * variation to justify it. For v0, three plain-but-branded HTML
- * templates cover the common cases.
  */
 
 import { resolveTrackingUrl } from '../carriers.service.js'
+import { sendEmail, __test as transportTest } from './transport.js'
 
 export type EmailKind = 'shipped' | 'delivered' | 'exception'
 
@@ -47,13 +37,7 @@ export interface ShipmentEmailContext {
   locale?: 'it' | 'en'
 }
 
-export interface SendResult {
-  ok: boolean
-  provider: 'resend' | 'smtp' | 'mock'
-  messageId?: string
-  error?: string
-  dryRun: boolean
-}
+export type { SendResult } from './transport.js'
 
 export class EmailError extends Error {
   constructor(
@@ -64,10 +48,6 @@ export class EmailError extends Error {
     super(message)
     this.name = 'EmailError'
   }
-}
-
-function isReal(): boolean {
-  return process.env.NEXUS_ENABLE_OUTBOUND_EMAILS === 'true'
 }
 
 /**
@@ -157,71 +137,25 @@ function render(
 }
 
 /**
- * Send a shipment-related email. dryRun mode returns success and
- * logs to console; real mode hits Resend's API.
+ * Send a shipment-related email. dryRun (default) returns success
+ * without HTTP; real mode delegates to the shared `sendEmail()`
+ * transport.
  */
 export async function sendShipmentEmail(
   kind: EmailKind,
   ctx: ShipmentEmailContext,
-): Promise<SendResult> {
+) {
   const { subject, html, text } = render(kind, ctx)
-  const from = process.env.NEXUS_EMAIL_FROM ?? 'Xavia <ship@xavia.it>'
-
-  if (!isReal()) {
-    // eslint-disable-next-line no-console
-    console.log(`[email:dry-run] ${kind} → ${ctx.to} | "${subject}"`)
-    return { ok: true, provider: 'mock', dryRun: true, messageId: `mock-${Date.now()}` }
-  }
-
-  const provider = (process.env.NEXUS_EMAIL_PROVIDER ?? 'resend') as 'resend' | 'smtp'
-  if (provider !== 'resend') {
-    return {
-      ok: false,
-      provider,
-      dryRun: false,
-      error: `Provider "${provider}" not supported in v0. Set NEXUS_EMAIL_PROVIDER=resend.`,
-    }
-  }
-
-  const apiKey = process.env.RESEND_API_KEY
-  if (!apiKey) {
-    return {
-      ok: false,
-      provider: 'resend',
-      dryRun: false,
-      error: 'RESEND_API_KEY not set',
-    }
-  }
-
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from,
-      to: [ctx.to],
-      subject,
-      html,
-      text,
-    }),
+  return sendEmail({
+    to: ctx.to,
+    subject,
+    html,
+    text,
+    tag: `shipment-${kind}`,
   })
-  const body: any = await res.json().catch(() => null)
-  if (!res.ok) {
-    return {
-      ok: false,
-      provider: 'resend',
-      dryRun: false,
-      error: body?.message ?? `HTTP ${res.status}`,
-    }
-  }
-  return {
-    ok: true,
-    provider: 'resend',
-    dryRun: false,
-    messageId: body?.id,
-  }
 }
 
-export const __test = { isReal, render }
+export const __test = {
+  isReal: transportTest.isReal,
+  render,
+}

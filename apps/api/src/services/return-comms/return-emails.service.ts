@@ -17,11 +17,12 @@
  * Italian the safe default for compliance copy). English fallback
  * for non-IT customers.
  *
- * Send mechanism reuses the existing email service shape from O.30
- * — same Resend provider, same dryRun gate via NEXUS_ENABLE_OUT-
- * BOUND_EMAILS. Returns the same SendResult shape so the route
- * surface stays uniform.
+ * Templates live here. Provider HTTP + dryRun gate live in
+ * `services/email/transport.ts` (TECH_DEBT #51 consolidation,
+ * 2026-05-08).
  */
+
+import { sendEmail } from '../email/transport.js'
 
 export type ReturnEmailKind = 'received' | 'refunded' | 'rejected'
 
@@ -143,71 +144,25 @@ export function renderReturnEmail(
   return { subject, html, text }
 }
 
-export interface ReturnEmailSendResult {
-  ok: boolean
-  provider: 'resend' | 'mock'
-  messageId?: string
-  error?: string
-  dryRun: boolean
-}
+export type { SendResult as ReturnEmailSendResult } from '../email/transport.js'
 
 /**
- * Send a return-event email. dryRun (default) console-logs the
- * email + returns success without HTTP — same pattern O.30 set
- * for shipment emails.
+ * Send a return-event email. Delegates to the shared `sendEmail()`
+ * transport — dryRun (default) returns success without HTTP, real
+ * mode hits Resend.
  */
 export async function sendReturnEmail(
   kind: ReturnEmailKind,
   ctx: ReturnEmailContext,
-): Promise<ReturnEmailSendResult> {
+) {
   const { subject, html, text } = renderReturnEmail(kind, ctx)
-  const from = process.env.NEXUS_EMAIL_FROM ?? 'Xavia <ship@xavia.it>'
-  const isReal = process.env.NEXUS_ENABLE_OUTBOUND_EMAILS === 'true'
-
-  if (!isReal) {
-    // eslint-disable-next-line no-console
-    console.log(`[email:dry-run] return-${kind} → ${ctx.to} | "${subject}"`)
-    return { ok: true, provider: 'mock', dryRun: true, messageId: `mock-${Date.now()}` }
-  }
-
-  const apiKey = process.env.RESEND_API_KEY
-  if (!apiKey) {
-    return {
-      ok: false,
-      provider: 'resend',
-      dryRun: false,
-      error: 'RESEND_API_KEY not set',
-    }
-  }
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from,
-      to: [ctx.to],
-      subject,
-      html,
-      text,
-    }),
+  return sendEmail({
+    to: ctx.to,
+    subject,
+    html,
+    text,
+    tag: `return-${kind}`,
   })
-  const body: any = await res.json().catch(() => null)
-  if (!res.ok) {
-    return {
-      ok: false,
-      provider: 'resend',
-      dryRun: false,
-      error: body?.message ?? `HTTP ${res.status}`,
-    }
-  }
-  return {
-    ok: true,
-    provider: 'resend',
-    dryRun: false,
-    messageId: body?.id,
-  }
 }
 
 /** Exposed for unit tests. */

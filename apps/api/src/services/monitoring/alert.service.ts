@@ -6,6 +6,7 @@
  */
 
 import { prisma } from '@nexus/database'
+import { sendEmail } from '../email/transport.js'
 
 export enum AlertSeverity {
   INFO = 'INFO',
@@ -198,11 +199,27 @@ export class AlertService {
   }
 
   /**
-   * Send email alert
+   * Send email alert via the shared transport (TECH_DEBT #51).
    */
   private async sendEmailAlert(alert: Alert, email: string): Promise<void> {
-    // TODO: Implement email sending via nodemailer or similar
-    console.log(`[EMAIL] Sending alert to ${email}:`, alert.title)
+    const sevColor =
+      alert.severity === 'CRITICAL' ? '#dc2626'
+      : alert.severity === 'ERROR' ? '#ea580c'
+      : alert.severity === 'WARNING' ? '#ca8a04'
+      : '#0369a1'
+    const subject = `[Nexus ${alert.severity}] ${alert.title}`
+    const html = `<!doctype html>
+<html><body style="font-family:Inter,-apple-system,sans-serif;color:#0f172a;background:#f8fafc;padding:24px;">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:24px;">
+    <div style="display:inline-block;font-size:11px;font-weight:600;color:#fff;background:${sevColor};padding:3px 10px;border-radius:4px;letter-spacing:0.05em;">${alert.severity}</div>
+    <h2 style="margin:12px 0 8px 0;font-size:18px;">${alert.title}</h2>
+    <p style="margin:0 0 16px 0;font-size:14px;color:#334155;">${alert.message}</p>
+    <p style="margin:0;font-size:13px;color:#64748b;">Affected: ${alert.affectedCount}${alert.affectedIds?.length ? ` · IDs: ${alert.affectedIds.slice(0, 5).join(', ')}${alert.affectedIds.length > 5 ? '…' : ''}` : ''}</p>
+    <p style="margin:16px 0 0 0;font-size:11px;color:#94a3b8;">Alert ${alert.id} · ${alert.createdAt.toISOString()}</p>
+  </div>
+</body></html>`
+    const text = `[${alert.severity}] ${alert.title}\n\n${alert.message}\n\nAffected: ${alert.affectedCount}\nAlert ID: ${alert.id}`
+    await sendEmail({ to: email, subject, html, text, tag: `alert-${alert.severity.toLowerCase()}` })
   }
 
   /**
