@@ -28,6 +28,7 @@ type OperationType =
   | 'INVENTORY_UPDATE'
   | 'STATUS_UPDATE'
   | 'ATTRIBUTE_UPDATE'
+  | 'LISTING_SYNC'
   | 'SCHEMA_FIELD_UPDATE'
   | 'MARKETPLACE_OVERRIDE_UPDATE'
 
@@ -385,6 +386,64 @@ const OPERATIONS: OperationConfig[] = [
         </Field>
       </>
     ),
+  },
+  // P1 #34b — LISTING_SYNC. The handler in bulk-action.service.ts
+  // enqueues OutboundSyncQueue rows for each ChannelListing. Cron
+  // worker drains. Operator picks syncType (FULL_SYNC / PRICE_UPDATE /
+  // QUANTITY_UPDATE / ATTRIBUTE_UPDATE) and an optional channels
+  // filter — empty filter = all channels.
+  {
+    type: 'LISTING_SYNC',
+    label: 'Resync to channels',
+    description:
+      'Enqueues an outbound sync for every selected product\'s ChannelListings. Use after a master edit to push the change to Amazon / eBay / Shopify. Pick "Full sync" to push everything; "Price/Quantity/Attribute" to scope the sync to one field.',
+    initialPayload: { syncType: 'FULL_SYNC', channels: [] },
+    isPayloadValid: () => true,
+    renderParams: (p, set) => {
+      const syncType = (p.syncType as string) ?? 'FULL_SYNC'
+      const channels = Array.isArray(p.channels) ? (p.channels as string[]) : []
+      const toggleChannel = (c: string) => {
+        const next = channels.includes(c)
+          ? channels.filter((x) => x !== c)
+          : [...channels, c]
+        set({ ...p, channels: next })
+      }
+      return (
+        <>
+          <Field label="Sync type">
+            <select
+              value={syncType}
+              onChange={(e) => set({ ...p, syncType: e.target.value })}
+              className={inputCls}
+            >
+              <option value="FULL_SYNC">Full sync (every field)</option>
+              <option value="PRICE_UPDATE">Price only</option>
+              <option value="QUANTITY_UPDATE">Quantity only</option>
+              <option value="ATTRIBUTE_UPDATE">Attributes only</option>
+            </select>
+          </Field>
+          <Field label="Channels (empty = all)">
+            <div className="flex flex-wrap gap-1.5">
+              {(['AMAZON', 'EBAY', 'SHOPIFY'] as const).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => toggleChannel(c)}
+                  className={`h-7 px-2.5 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                    channels.includes(c)
+                      ? 'bg-blue-50 border-blue-300 text-blue-700'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                  aria-pressed={channels.includes(c)}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </Field>
+        </>
+      )
+    },
   },
 ]
 

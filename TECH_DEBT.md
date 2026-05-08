@@ -317,37 +317,22 @@ Verified at Phase 1 push: `/api/ebay/auth/create-connection` returns 201 (was 50
 
 **Catch:** existing eBay connections were authorized with the smaller scope set. Their refresh tokens won't get the new scope by simply rotating — eBay refresh keeps the original scope envelope. Each existing connection must re-authorize (click "Disconnect" → "Connect eBay" again). That's why this is P2 — Xavia has only one real eBay account today; one re-auth click after the scope change is fine.
 
-## 33. 🟡 ebay-orders.service.ts targets pre-Phase-26 Order schema
+## 33. ✅ ebay-orders.service.ts targets pre-Phase-26 Order schema — resolved (verified 2026-05-08)
 
-**Symptom:** Surfaced by the P0 #31 audit. `apps/api/src/services/ebay-orders.service.ts` writes orders using field names from a previous Order schema iteration (Phase < 26):
+**Resolution:** `processOrder()` in `apps/api/src/services/ebay-orders.service.ts` was rewritten to use the Phase 26 unified `Order` model. Field-by-field check (grep confirms zero remaining legacy refs in the service):
 
-| In code | Actual schema |
-|---|---|
-| `salesChannel` | `channel` (`OrderChannel` enum) |
-| `ebayOrderId` | `channelOrderId` |
-| `purchaseDate` | `createdAt` |
-| `lastUpdateDate` | `updatedAt` |
-| `fulfillmentChannel` | (does not exist — moved to per-item or to `ebayMetadata`) |
-| `buyerName` | `customerName` |
-| `buyerEmail` | `customerEmail` |
-| `buyerPhone` | (does not exist) |
-| `totalAmount` | `totalPrice` (Decimal) |
-| `currencyCode` | (does not exist on Order — needs to live in `ebayMetadata` or a new column) |
+  • eBay `orderId` → `Order.channelOrderId` (with `channel='EBAY'`)
+  • `pricingSummary.total` → `Order.totalPrice` (Decimal, coerced)
+  • `pricingSummary.currency` → `Order.currencyCode`
+  • `buyer.username` → `Order.customerName`
+  • `buyer.email` (or fabricated stub when omitted) → `Order.customerEmail`
+  • `creationDate` → `Order.purchaseDate`
+  • `orderStatus` / `fulfillmentStatus` / `lastModifiedDate` → `Order.ebayMetadata` JSON
+  • Idempotency: upsert on `(channel, channelOrderId)` compound unique. Per-item dedup keyed on `lineItemId` in `ebayMetadata`.
 
-The field divergence happened during the Phase 26 unified-Order-Command refactor (schema.prisma comment at line 1182 confirms). The eBay orders service was not updated to match.
+The file's top doc-block (line 1-29) carries the mapping table inline so future edits don't drift. tsc passes against the current schema; the only remaining `fulfillmentChannel` reference in the codebase is in `sync.routes.ts` as a *request-body type* for inbound sync data (not a Prisma write).
 
-**Affected endpoint:** `POST /api/sync/ebay/orders` (registered at `app.register(ebayOrdersRoutes)`). Hitting this triggers an `Order.create` with all the wrong field names → Prisma will reject. The user-flow that triggers it is the `/settings/channels` "Sync orders" button, which they haven't pressed yet (Amazon-IT-only so far).
-
-**Already fixed by P0 #31:** The lightweight stats endpoint `GET /api/sync/ebay/orders/stats/:connectionId` had the same `salesChannel`/`totalAmount` mismatch and got renamed inline (low scope, no schema dependency). Just rewriting `processOrder()` is the substantial part.
-
-**Proper fix:** Rewrite `processOrder()` and the surrounding shape adapters in `ebay-orders.service.ts` to match Phase 26's `Order` model:
-- Map eBay's `orderId` → `channelOrderId`, `channel: 'EBAY'`
-- Map `pricingSummary.total` → `totalPrice` (Decimal — coerce from float)
-- Move `currencyCode`, `purchaseDate`, `lastUpdateDate`, `fulfillmentStatus` into `ebayMetadata` JSON
-- Map `buyer.username` → `customerName`, `buyer.email` → `customerEmail`
-- Update OrderItem mapping similarly
-
-Estimated 1–2h. Out of P0 #31 scope; do as soon as Xavia actually wants eBay orders synced (they don't yet).
+Operator can now run `POST /api/sync/ebay/orders` without crashing Prisma — though Xavia is still Amazon-IT-only in practice, so this is unexercised in production.
 
 ## 34. 🟡 Bulk operations — Path A-Lite deferrals (rollback, LISTING_SYNC, queue infra, DELETE, "selected items" scope)
 
@@ -365,22 +350,13 @@ The original "stored rollbackData JSON on the job and a sibling rollback-job" pl
 
 See entry #25 for the full flow + guards.
 
-### 34b. `LISTING_SYNC` handler
+### 34b. ✅ `LISTING_SYNC` handler — resolved 2026-05-08 (M.15)
 
-**Symptom:** The 5th action type is still a stub. Selecting it in the
-modal would 500 at execute time (well — it would throw and the job
-would land in `FAILED` state).
+**Resolution:** The backend `processListingSync` has been live in `bulk-action.service.ts` (line 2244) for some time — it enqueues `OutboundSyncQueue` rows for each ChannelListing of the targeted Product, with the operator-chosen `syncType` (FULL_SYNC / PRICE_UPDATE / QUANTITY_UPDATE / ATTRIBUTE_UPDATE) and an optional channels filter. The cron worker drains the queue. The action type was already in the dispatcher.
 
-**Workaround:** Modal currently only exposes the 4 working action
-types. `LISTING_SYNC` is filterable in the schema but not selectable
-in the UI.
+The remaining piece was UI — M.15 added the LISTING_SYNC option to `BulkOperationModal.tsx`'s OPERATIONS array with a syncType picker + channel-toggle pills. Operator can now select "Resync to channels" alongside the existing four operation types.
 
-**Proper fix:** Implement `LISTING_SYNC` against the BullMQ outbound
-queue (`outboundSyncQueue`). For each variation, enqueue a per-channel
-sync job; mark the bulk job COMPLETED once all child jobs settle. This
-is gated on Phase 2 (Redis enabled on Railway) — until then the queue
-is Proxy-backed and `add()` would either succeed silently or fail at
-runtime depending on env.
+**Behavioural note:** The cron worker is the eventual-consistency consumer; the bulk job lands COMPLETED as soon as the queue rows are written, not when each channel push acknowledges. This matches the rest of the bulk-ops surface (jobs report queue success, not cron ack).
 
 ### 34c. Queue / worker infrastructure for >100-item jobs
 
