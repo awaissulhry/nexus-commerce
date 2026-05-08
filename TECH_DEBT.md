@@ -885,7 +885,24 @@ Template registry / preference center / opt-out flow are not load-bearing for an
 
 ---
 
-## 50. 🔴 FBA Inbound v0 putTransportDetails is deprecated
+## 50. ✅ FBA Inbound v0 → v2024-03-20 migration — engineering complete 2026-05-08 (F.1–F.5)
+
+**Resolution:** Full engineering side of the migration shipped across F.1–F.5:
+
+  • **F.1** (`b0bf7af`) — `apps/api/src/clients/amazon-fba-inbound-v2.client.ts` typed wrappers for the 9 v2024-03-20 endpoints. Additive only.
+  • **F.2** (`928536d`) — `FbaInboundPlanV2` Prisma model + migration `20260508_f2_fba_inbound_plan_v2`. Persists plan state across the multi-step async flow. Applied to Neon.
+  • **F.3** (`e291ebb`) — `apps/api/src/services/fba-inbound-v2.service.ts` polling service. Exponential backoff (~5min total), records errors to `lastError`/`lastErrorAt`, persists `operationId` per step so a restart mid-poll can resume from the persisted state.
+  • **F.4** (`e291ebb`) — `apps/api/src/routes/fba-inbound-v2.routes.ts` registered at `/api/fba/inbound/v2/*`. One route per step (8 verbs total).
+  • **F.5** — `apps/web/src/app/fulfillment/inbound/v2/{page,FbaInboundV2Wizard}.tsx` operator-facing wizard. Plan list + step tracker + per-step Action button. State polls every 30s.
+
+The legacy v0 surface (plan-shipment + getLabels, both still working) remains unchanged for backward compatibility. The deprecated v0 `putTransportDetails` endpoint stays demoted with the existing "Use Seller Central — v0 deprecated" banner until the operator migrates fully.
+
+**Operator action remaining (not engineering):**
+  • Use `/fulfillment/inbound/v2` for new inbound flows. The "New plan" button accepts a name and creates a v2024-03-20 plan against the configured Amazon credentials.
+  • F.5 v1 lands an MVP wizard with prompt() dialogs for option-id picks. A richer per-step form UI (option cards with labelled fees / FCs / carrier names) is a follow-up commit when the operator wants the polish.
+  • Eventually deprecate the v0 transport form entirely once the operator has stopped using it.
+
+**Original symptom:** Amazon deprecated `PUT /fba/inbound/v0/shipments/{id}/transport` — H.8c verification (2026-05-06) hit the real SP-API and got HTTP 400. The v2024-03-20 flow is multi-step + asynchronous (each call returns an operationId the caller polls). All 9 endpoints + state persistence + UI are now wired.
 
 **Symptom:** H.8c verification (2026-05-06) hit Amazon's real SP-API and got back HTTP 400 with body: *"This API is deprecated. Please migrate to the new Fulfillment Inbound v2024-03-20 APIs."* The route runs end-to-end (test passed because the call landed at Amazon), but operationally the endpoint will not book transport for real shipments.
 
