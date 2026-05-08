@@ -515,6 +515,10 @@ function AccountsSection({ carrierCode }: { carrierCode: string }) {
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
   const [busy, setBusy] = useState(false)
+  // CR.25: per-row test-button busy state. Tracks the account id
+  // currently being verified so the test button can show a spinner
+  // / stay disabled without freezing the rest of the table.
+  const [busyTestId, setBusyTestId] = useState<string | null>(null)
   const [draft, setDraft] = useState({
     accountLabel: '',
     publicKey: '',
@@ -569,6 +573,33 @@ function AccountsSection({ carrierCode }: { carrierCode: string }) {
     } finally { setBusy(false) }
   }
 
+  // CR.25: verify account creds without printing a label.
+  // Persists lastVerifiedAt / lastError on the account row so the
+  // status pill + verified-at line update on next refresh.
+  const testAccount = async (id: string, label: string) => {
+    setBusyTestId(id)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/carriers/${carrierCode}/accounts/${id}/test`,
+        { method: 'POST' },
+      )
+      const body = await res.json().catch(() => ({}))
+      if (body.dryRun) {
+        toast.success(`${label}: sandbox mode (mock — no real Sendcloud call)`)
+      } else if (body.ok) {
+        toast.success(`${label}: verified — connected as ${body.username ?? '?'}`)
+      } else {
+        toast.error(`${label}: ${body.error ?? body.reason ?? 'unknown'}`)
+      }
+      // Refresh so the status pill + verified-at line update.
+      await fetchAll()
+    } catch (e: any) {
+      toast.error(`${label}: ${e?.message ?? 'unknown'}`)
+    } finally {
+      setBusyTestId(null)
+    }
+  }
+
   const remove = async (id: string, label: string) => {
     const ok = await askConfirm({
       title: `Remove account "${label}"?`,
@@ -616,7 +647,19 @@ function AccountsSection({ carrierCode }: { carrierCode: string }) {
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
               {accounts.map((a) => (
                 <tr key={a.id} className="text-slate-800 dark:text-slate-100">
-                  <td className="px-3 py-2 font-medium">{a.accountLabel}</td>
+                  <td className="px-3 py-2 font-medium">
+                    {a.accountLabel}
+                    {a.lastVerifiedAt && !a.lastError && (
+                      <div className="text-xs text-slate-500 dark:text-slate-400">
+                        Verified {relTime(a.lastVerifiedAt)}
+                      </div>
+                    )}
+                    {a.lastError && (
+                      <div className="text-xs text-amber-700 dark:text-amber-300 break-words">
+                        {a.lastError}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">{a.mode}</td>
                   <td className="px-3 py-2">
                     {a.lastError
@@ -626,13 +669,26 @@ function AccountsSection({ carrierCode }: { carrierCode: string }) {
                       : <Badge variant="default" size="sm">No creds</Badge>}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <button
-                      onClick={() => remove(a.id, a.accountLabel)}
-                      className="p-1 rounded hover:bg-rose-50 dark:hover:bg-rose-900/30 text-rose-600 dark:text-rose-400"
-                      aria-label="Remove account"
-                    >
-                      <Trash2 size={12} />
-                    </button>
+                    <div className="inline-flex items-center gap-1">
+                      {/* CR.25: per-account test connection. Disabled
+                          when there are no creds to verify. */}
+                      <button
+                        onClick={() => testAccount(a.id, a.accountLabel)}
+                        disabled={!a.hasCredentials || !a.isActive || busyTestId === a.id}
+                        className="px-2 py-1 rounded text-xs hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 disabled:opacity-40 disabled:cursor-not-allowed"
+                        aria-label="Test connection"
+                        title={!a.hasCredentials ? 'Add credentials first' : 'Test connection'}
+                      >
+                        {busyTestId === a.id ? '…' : 'Test'}
+                      </button>
+                      <button
+                        onClick={() => remove(a.id, a.accountLabel)}
+                        className="p-1 rounded hover:bg-rose-50 dark:hover:bg-rose-900/30 text-rose-600 dark:text-rose-400"
+                        aria-label="Remove account"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

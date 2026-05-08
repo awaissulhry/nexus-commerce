@@ -8930,6 +8930,111 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // CR.25 — test connection on a SECONDARY carrier account.
+  //
+  // POST /carriers/:code/accounts/:id/test
+  //
+  // Mirrors the primary's CR.2 /test endpoint but reads creds from
+  // CarrierAccount instead of Carrier. Persists outcomes to the
+  // account's lastVerifiedAt / lastError / lastErrorAt so the
+  // drawer's account list reflects current health alongside the
+  // primary. Read-mostly: only writes when the verification result
+  // moves the needle.
+  //
+  // SENDCLOUD-only today; other carrier codes return a no-op shape.
+  fastify.post('/fulfillment/carriers/:code/accounts/:id/test', async (request, reply) => {
+    try {
+      const { code, id } = request.params as { code: string; id: string }
+      if (code !== 'SENDCLOUD') {
+        return { ok: true, mode: 'no-op', message: `${code} has no test endpoint` }
+      }
+      const account = await prisma.carrierAccount.findUnique({ where: { id } })
+      if (!account) return reply.code(404).send({ ok: false, error: 'Account not found' })
+      if (!account.isActive) {
+        return reply.code(400).send({ ok: false, error: 'Account is inactive' })
+      }
+      if (!account.credentialsEncrypted) {
+        const reason = 'No credentials saved on this account'
+        void prisma.carrierAccount.update({
+          where: { id },
+          data: { lastError: reason, lastErrorAt: new Date() },
+        }).catch(() => { /* */ })
+        return reply.code(400).send({ ok: false, error: reason, code: 'CREDENTIALS_MISSING' })
+      }
+
+      // Decrypt + parse — same envelope shape as the primary Carrier
+      // row, so we use the same helpers.
+      const { decryptSecret, isEncrypted } = await import('../lib/crypto.js')
+      let plaintext: string
+      try {
+        plaintext = isEncrypted(account.credentialsEncrypted)
+          ? decryptSecret(account.credentialsEncrypted)
+          : account.credentialsEncrypted
+      } catch {
+        const reason = 'Credentials failed integrity check'
+        void prisma.carrierAccount.update({
+          where: { id },
+          data: { lastError: reason, lastErrorAt: new Date() },
+        }).catch(() => { /* */ })
+        return reply.code(500).send({ ok: false, error: reason, code: 'CREDENTIAL_DECRYPT_FAILED' })
+      }
+      let parsed: { publicKey?: string; privateKey?: string; integrationId?: number }
+      try { parsed = JSON.parse(plaintext) } catch {
+        const reason = 'Credentials are unreadable'
+        return reply.code(500).send({ ok: false, error: reason })
+      }
+      if (!parsed.publicKey || !parsed.privateKey) {
+        const reason = 'Credentials missing publicKey / privateKey'
+        void prisma.carrierAccount.update({
+          where: { id },
+          data: { lastError: reason, lastErrorAt: new Date() },
+        }).catch(() => { /* */ })
+        return reply.code(400).send({ ok: false, error: reason, code: 'CREDENTIAL_INCOMPLETE' })
+      }
+
+      const sendcloud = await import('../services/sendcloud/index.js')
+      const result = await sendcloud.verifyCredentials({
+        publicKey: parsed.publicKey,
+        privateKey: parsed.privateKey,
+        integrationId: parsed.integrationId,
+      })
+      const mode = sendcloud.getSendcloudMode()
+
+      // Persist outcome.
+      if (result.ok === true) {
+        void prisma.carrierAccount.update({
+          where: { id },
+          data: { lastVerifiedAt: new Date(), lastError: null, lastErrorAt: null },
+        }).catch(() => { /* */ })
+      } else {
+        void prisma.carrierAccount.update({
+          where: { id },
+          data: { lastError: result.reason, lastErrorAt: new Date() },
+        }).catch(() => { /* */ })
+      }
+
+      // CR.19: audit-log onto the parent Carrier so the Activity tab
+      // surfaces it alongside primary-account events. metadata.accountId
+      // pins it to the specific secondary.
+      const { auditLogService } = await import('../services/audit-log.service.js')
+      void auditLogService.write({
+        entityType: 'Carrier',
+        entityId: account.carrierId,
+        action: 'test-account-connection',
+        before: null,
+        after: result.ok === true
+          ? { ok: true, username: result.username }
+          : { ok: false, reason: result.reason },
+        metadata: { code, accountId: id, accountLabel: account.accountLabel, dryRun: mode.dryRun, env: mode.env },
+      })
+
+      return { ...result, dryRun: mode.dryRun, env: mode.env, accountLabel: account.accountLabel }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[carriers/:code/accounts/:id/test] failed')
+      return reply.code(500).send({ ok: false, error: error?.message ?? String(error) })
+    }
+  })
+
   // CR.20 — rotate the per-carrier webhook signing secret.
   //
   // POST /carriers/:code/webhook-secret/rotate
