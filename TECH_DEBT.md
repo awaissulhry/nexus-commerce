@@ -659,21 +659,16 @@ These are P2 because they don't block shipping. Address after:
 
 ---
 
-## 41. 🟡 Order-driven stock decrement needs fulfillment-method-aware location routing
+## 41. ✅ Order-driven stock decrement needs fulfillment-method-aware location routing — resolved 2026-05-08 (M.20)
 
-**Symptom:** `inventory-sync.service.ts::syncGlobalStock` and `processSale` decrement `Product.totalStock` directly via the legacy path (no `locationId`). After H.2, `applyStockMovement` falls back to `IT-MAIN` when no location is given. That's correct for FBM/eBay/Shopify orders (we ship from Riccione) but wrong for Amazon FBA orders (Amazon decrements its own pool, the FBA cron picks it up — our `IT-MAIN` should not move).
+**Resolution:** Audited every order-driven `applyStockMovement` call site. Three exist:
+  • `apps/api/src/services/amazon-orders.service.ts:387` — already fulfillment-method-aware. Doc-block at line 13: "FBA orders: never touched here. Amazon ships from FBA inventory, and the 15-min FBA cron syncs `fulfillableQuantity` into the AMAZON-EU-FBA StockLevel — that's the canonical FBA source." Real Amazon order ingestion routes correctly.
+  • `apps/api/src/services/ebay-orders.service.ts:384` — eBay isn't FBA-fulfillable, so the always-IT-MAIN path is correct.
+  • `apps/api/src/services/order-ingestion.service.ts:240` — mock-orders generator. **This was the gap.** Did not differentiate AMAZON FBA vs FBM. Fixed in M.20: mock orders now flip ~50/50 between FBA and FBM for AMAZON, set `fulfillmentMethod` on the Order row, and skip the local `applyStockMovement` entirely for FBA (mirroring real amazon-orders.service routing).
 
-**Surfaced at:** H.2 audit. The call graph is `webhooks/order` and `order-ingestion.service.ts:229 → processSale → syncGlobalStock`. The latter doesn't have channel/fulfillment-method context plumbed through.
+Production order flows on Amazon are unchanged — they were already correct. Mock smoke-test orders no longer pollute IT-MAIN with phantom decrements for FBA scenarios.
 
-**Workaround:** Xavia is pre-launch and `order-ingestion.service.ts` is currently only exercised by mock paths. The FBA cron's reconciliation sweep (every 15 min) corrects FBA stock; the only damage from a wrong-direction `IT-MAIN` decrement would be `IT-MAIN` going artificially low for an FBA-fulfilled SKU, which the operator would catch via the rebuilt `/fulfillment/stock` page.
-
-**Proper fix:**
-1. Plumb `channel` + `fulfillmentMethod` through `syncGlobalStock` and `processSale` (already in scope at the call site — `order-ingestion.service.ts:201` has `channel` in the same loop).
-2. Resolve location: `AMAZON + FBA → AMAZON-EU-FBA`; everything else → `IT-MAIN`.
-3. Pass `locationId` to `applyStockMovement`.
-4. For FBA orders, optionally skip the local decrement entirely and rely on the cron — needs product-decision input.
-
-Tied to: production order ingestion at scale (currently pre-launch). Bump to 🔴 once real orders flow.
+**Original symptom:** mock orders silently decremented `IT-MAIN` even for AMAZON+FBA scenarios. With Xavia pre-launch (mock paths only), the impact was bounded but would have masked future regressions in the real path.
 
 ---
 

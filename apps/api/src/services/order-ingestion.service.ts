@@ -159,6 +159,14 @@ export async function ingestMockOrders(): Promise<IngestionStats> {
       const channel = randomElement<OrderChannel>(['AMAZON', 'EBAY', 'SHOPIFY'])
       const customer = randomElement(MOCK_CUSTOMERS)
       const channelOrderId = generateChannelOrderId(channel)
+      // P1 #41 — fulfillment-method routing. Amazon mock orders flip
+      // ~50/50 between FBA and FBM so the downstream stock-decrement
+      // path exercises both branches. eBay/Shopify are always FBM-
+      // equivalent (we ship from IT-MAIN). Real amazon-orders.service
+      // already routes correctly (line 387 skips applyStockMovement
+      // for FBA); this mock now mirrors that behaviour.
+      const fulfillmentMethod: 'FBA' | 'FBM' | null =
+        channel === 'AMAZON' ? (Math.random() < 0.5 ? 'FBA' : 'FBM') : null
 
       // Generate 2-4 items per order
       const itemCount = randomInt(2, 4)
@@ -178,7 +186,9 @@ export async function ingestMockOrders(): Promise<IngestionStats> {
         })
       }
 
-      // Create order in database
+      // Create order in database. P1 #41 — fulfillmentMethod is now
+      // populated for AMAZON orders so the stock decrement path can
+      // route correctly (FBA → skip; FBM → IT-MAIN deduct).
       const order = await prisma.order.create({
         data: {
           channel: channel as any,
@@ -188,6 +198,7 @@ export async function ingestMockOrders(): Promise<IngestionStats> {
           customerName: customer.name,
           customerEmail: customer.email,
           shippingAddress: customer.address,
+          fulfillmentMethod: fulfillmentMethod ?? undefined,
         },
       })
 
@@ -224,37 +235,50 @@ export async function ingestMockOrders(): Promise<IngestionStats> {
       // so the StockLevel ledger, totalStock cache, and ChannelListing
       // cascade all stay consistent. The audit row now also links to
       // the Order via orderId, which the legacy processSale path didn't.
-      for (const item of orderItems) {
-        try {
-          logger.info(`[ORDER INGESTION] Processing sale for SKU: ${item.sku}, Qty: ${item.quantity}`)
+      //
+      // P1 #41 — FBA orders are NOT decremented here. Amazon ships
+      // from FBA inventory; the 15-min FBA cron syncs
+      // fulfillableQuantity into the AMAZON-EU-FBA StockLevel and
+      // that's the canonical FBA source. Decrementing IT-MAIN here
+      // for an FBA order would push physical stock artificially low.
+      // Mirrors the real amazon-orders.service.ts:387 routing.
+      if (fulfillmentMethod === 'FBA') {
+        logger.info(
+          `[ORDER INGESTION] Skipping local stock decrement for FBA order ${order.id} (FBA cron syncs AMAZON-EU-FBA pool every 15min)`,
+        )
+      } else {
+        for (const item of orderItems) {
+          try {
+            logger.info(`[ORDER INGESTION] Processing sale for SKU: ${item.sku}, Qty: ${item.quantity}`)
 
-          const product = await prisma.product.findUnique({
-            where: { sku: item.sku },
-            select: { id: true },
-          })
-          if (!product) {
-            logger.warn(`[ORDER INGESTION] No product matched SKU ${item.sku} — skipping stock decrement`)
-            continue
+            const product = await prisma.product.findUnique({
+              where: { sku: item.sku },
+              select: { id: true },
+            })
+            if (!product) {
+              logger.warn(`[ORDER INGESTION] No product matched SKU ${item.sku} — skipping stock decrement`)
+              continue
+            }
+
+            await applyStockMovement({
+              productId: product.id,
+              change: -item.quantity,
+              reason: 'ORDER_PLACED',
+              referenceType: 'Order',
+              referenceId: order.id,
+              orderId: order.id,
+              actor: 'mock-order-ingestion',
+              notes: `Mock order ingestion (channel=${channel}, fulfillment=${fulfillmentMethod ?? 'n/a'})`,
+            })
+
+            logger.info(`[ORDER INGESTION] Inventory decremented for ${item.sku}`)
+          } catch (error: any) {
+            logger.warn(
+              `[ORDER INGESTION] Failed to decrement inventory for ${item.sku}:`,
+              error.message
+            )
+            // Continue with other items even if one fails
           }
-
-          await applyStockMovement({
-            productId: product.id,
-            change: -item.quantity,
-            reason: 'ORDER_PLACED',
-            referenceType: 'Order',
-            referenceId: order.id,
-            orderId: order.id,
-            actor: 'mock-order-ingestion',
-            notes: `Mock order ingestion (channel=${channel})`,
-          })
-
-          logger.info(`[ORDER INGESTION] Inventory decremented for ${item.sku}`)
-        } catch (error: any) {
-          logger.warn(
-            `[ORDER INGESTION] Failed to decrement inventory for ${item.sku}:`,
-            error.message
-          )
-          // Continue with other items even if one fails
         }
       }
     }
