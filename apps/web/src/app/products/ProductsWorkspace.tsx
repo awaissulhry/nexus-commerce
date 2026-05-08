@@ -42,7 +42,6 @@ import {
   type Density,
   DENSITY_CELL_CLASS,
   DENSITY_ROW_HEIGHT,
-  CHANNEL_TONE,
 } from '@/lib/products/theme'
 // P.1a — lens components extracted to /_lenses/* in this commit and
 // follow-ups. HierarchyLens is the first; CoverageLens, PricingLens,
@@ -50,6 +49,7 @@ import {
 import { HierarchyLens } from './_lenses/HierarchyLens'
 import { HealthLens } from './_lenses/HealthLens'
 import { DraftsLens } from './_lenses/DraftsLens'
+import { CoverageLens } from './_lenses/CoverageLens'
 
 // E.3 — lazy-load the heavy modals so they don't ship in /products'
 // initial bundle. Each is gated by a boolean state in the workspace,
@@ -5218,123 +5218,7 @@ function ColumnPickerMenu({ visible, setVisible, onClose }: { visible: string[];
 // ────────────────────────────────────────────────────────────────────
 // P.1a — HierarchyLens extracted to ./_lenses/HierarchyLens.tsx
 
-// ────────────────────────────────────────────────────────────────────
-// CoverageLens — channel matrix per product
-// ────────────────────────────────────────────────────────────────────
-function CoverageLens({ products, loading }: { products: ProductRow[]; loading: boolean }) {
-  if (loading) return <Card><div className="text-md text-slate-500 py-8 text-center">Loading coverage…</div></Card>
-  // P.6 — richer empty state. Coverage matrix needs products to
-  // visualize; explain *why* it's empty + give an action.
-  if (products.length === 0)
-    return (
-      <EmptyState
-        icon={Network}
-        title="No products to map across channels"
-        description="The Coverage matrix shows which products are listed on which channel × marketplace. Once your filter matches at least one product, the matrix renders here."
-        action={{ label: 'Clear filters', href: '/products' }}
-      />
-    )
-
-  const channels = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY']
-
-  // P.10 — top-line per-channel coverage. Counted across the visible
-  // slice (products.slice(0, 100) below) so the header's percentage
-  // matches what the operator can see + scroll. Three buckets per
-  // channel: live (any ChannelListing in ACTIVE+isPublished),
-  // listed-but-not-live (DRAFT or ERROR), and missing entirely.
-  const visible = products.slice(0, 100)
-  const channelStats = channels.map((ch) => {
-    let live = 0, listed = 0
-    for (const p of visible) {
-      const c = p.coverage?.[ch]
-      if (!c) continue
-      listed++
-      if (c.live > 0) live++
-    }
-    const missing = visible.length - listed
-    const pct = visible.length === 0 ? 0 : Math.round((live / visible.length) * 100)
-    return { channel: ch, live, listed, missing, pct }
-  })
-
-  return (
-    <div className="space-y-3">
-      <Card>
-        <div className="flex items-center gap-3 flex-wrap text-base">
-          <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
-            Coverage across {visible.length} product{visible.length === 1 ? '' : 's'}
-          </span>
-          <div className="flex items-center gap-2 flex-wrap ml-auto">
-            {channelStats.map((s) => {
-              const pctTone =
-                s.pct >= 80
-                  ? 'text-emerald-700'
-                  : s.pct >= 40
-                  ? 'text-amber-700'
-                  : 'text-rose-700'
-              return (
-                <span
-                  key={s.channel}
-                  className={`inline-flex items-center gap-1.5 px-2 py-1 border rounded ${CHANNEL_TONE[s.channel]}`}
-                  title={`${s.live} live, ${s.listed - s.live} listed but not live, ${s.missing} missing`}
-                >
-                  <span className="font-semibold text-xs">{s.channel.slice(0, 3)}</span>
-                  <span className={`tabular-nums font-semibold ${pctTone}`}>
-                    {s.pct}%
-                  </span>
-                  <span className="text-xs opacity-70 tabular-nums">
-                    {s.live}/{visible.length}
-                  </span>
-                </span>
-              )
-            })}
-          </div>
-        </div>
-      </Card>
-      <Card noPadding>
-      <div className="overflow-x-auto">
-        <table className="w-full text-base">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr>
-              <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700 sticky left-0 bg-slate-50 z-10 min-w-[260px]">Product</th>
-              {channels.map((c) => (
-                <th key={c} className="px-3 py-2 text-center text-xs font-semibold uppercase text-slate-500">
-                  <span className={`inline-block px-1.5 py-0.5 rounded border ${CHANNEL_TONE[c]}`}>{c}</span>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {products.slice(0, 100).map((p) => (
-              <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50/50">
-                <td className="px-3 py-2 sticky left-0 bg-white border-r border-slate-100">
-                  <Link href={`/products/${p.id}/edit`} className="block hover:text-blue-600">
-                    <div className="text-md font-medium text-slate-900 truncate max-w-xs">{p.name}</div>
-                    <div className="text-sm text-slate-500 font-mono">{p.sku}</div>
-                  </Link>
-                </td>
-                {channels.map((ch) => {
-                  const c = p.coverage?.[ch]
-                  if (!c) return <td key={ch} className="px-3 py-2 text-center text-slate-300">—</td>
-                  const tone = c.error > 0 ? 'bg-rose-50 text-rose-700 border-rose-200' : c.live > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : c.draft > 0 ? 'bg-slate-50 text-slate-600 border-slate-200' : 'bg-white text-slate-400 border-slate-200'
-                  return (
-                    <td key={ch} className="px-2 py-2 text-center">
-                      <Link href={`/listings/${ch.toLowerCase()}?search=${encodeURIComponent(p.sku)}`} className={`inline-flex items-center px-2 py-1 border rounded text-sm hover:opacity-80 ${tone}`}>
-                        <span className="font-semibold tabular-nums">{c.live}</span>
-                        <span className="opacity-60 mx-0.5">/</span>
-                        <span className="opacity-70 tabular-nums">{c.total}</span>
-                      </Link>
-                    </td>
-                  )
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Card>
-    </div>
-  )
-}
+// P.1d — CoverageLens extracted to ./_lenses/CoverageLens.tsx
 
 // ────────────────────────────────────────────────────────────────────
 // PricingLens (P.5) — products × marketplaces matrix of resolved prices
