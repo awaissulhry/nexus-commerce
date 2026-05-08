@@ -60,6 +60,7 @@ import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { InlineEditTrigger } from '@/components/ui/InlineEditTrigger'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
+import { StatusBadge } from '@/components/ui/StatusBadge'
 
 // U.1 — focusable-element selector for the drawer's a11y focus trap.
 // Standard set of natively-tabbable elements. We additionally filter
@@ -676,24 +677,11 @@ function HealthCard({
   )
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const tone =
-    status === 'ACTIVE'
-      ? 'bg-emerald-50 text-emerald-700'
-      : status === 'DRAFT'
-      ? 'bg-slate-100 text-slate-600'
-      : 'bg-rose-50 text-rose-700'
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center h-5 px-1.5 rounded text-xs font-medium',
-        tone,
-      )}
-    >
-      {status}
-    </span>
-  )
-}
+// U.5 — local StatusBadge replaced by the shared primitive (imported
+// at module top). The local impl mapped INACTIVE → rose; the
+// primitive uses STATUS_VARIANT (lib/theme) which renders INACTIVE
+// as default-slate to match the grid's badge. Net result: one
+// status→color source of truth across /products surfaces.
 
 /* ─────────────────────────── tabs ─────────────────────────── */
 

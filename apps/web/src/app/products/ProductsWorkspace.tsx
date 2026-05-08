@@ -22,6 +22,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Button } from '@/components/ui/Button'
@@ -41,7 +42,6 @@ import {
   type Density,
   DENSITY_CELL_CLASS,
   DENSITY_ROW_HEIGHT,
-  STATUS_VARIANT,
   CHANNEL_TONE,
 } from '@/lib/products/theme'
 // E.3 — lazy-load the heavy modals so they don't ship in /products'
@@ -4633,7 +4633,7 @@ const ProductCell = memo(function ProductCell({ col, product, onTagEdit, onChang
               hideIcon
               className="w-auto"
             >
-              <Badge variant={STATUS_VARIANT[p.status] ?? 'default'} size="sm">{p.status}</Badge>
+              <StatusBadge status={p.status} size="sm" />
             </InlineEditTrigger>
           )}
           {errorBanner}
