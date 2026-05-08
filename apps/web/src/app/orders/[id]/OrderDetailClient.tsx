@@ -218,6 +218,11 @@ export default function OrderDetailClient({ id }: { id: string }) {
             )}
           </Card>
 
+          {/* O.18 — Shopify discounts + gift cards */}
+          {order.channel === 'SHOPIFY' && order.shopifyMetadata && (
+            <ShopifyDiscountsCard meta={order.shopifyMetadata} />
+          )}
+
           {/* Shipments */}
           {order.shipments && order.shipments.length > 0 && (
             <Card title="Shipments" description={`${order.shipments.length} shipment${order.shipments.length === 1 ? '' : 's'}`}>
@@ -369,5 +374,113 @@ function FinTile({ label, value, tone }: { label: string; value: number; tone: '
       <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">{label}</div>
       <div className={`text-2xl font-semibold tabular-nums ${cls}`}>€{value.toFixed(2)}</div>
     </div>
+  )
+}
+
+// ── O.18: Shopify discount codes + gift-card display ───────────────────
+// Read-only render of the discount info Shopify ships in the
+// orders/create webhook payload (which we cache verbatim on
+// Order.shopifyMetadata). No new fetch — everything we need is
+// already on the row.
+//
+// Surfaces:
+//   - discount_codes[]:    [{ code, amount, type }] applied at checkout
+//   - total_discounts:     gross discount in shop currency
+//   - gift_cards:          payment_details / payment_gateway_names
+//                          mention of gift_card; not always granular
+//   - applied_discounts:   automatic discounts (Buy X Get Y, etc.)
+//
+// Renders nothing when no discount/gift-card markers are present —
+// most Shopify orders go through cleanly without promo, no need to
+// show an empty card.
+function ShopifyDiscountsCard({ meta }: { meta: any }) {
+  const discountCodes: Array<{ code: string; amount: string; type: string }> =
+    Array.isArray(meta?.discount_codes) ? meta.discount_codes : []
+  const totalDiscounts = Number(meta?.total_discounts ?? 0)
+  const giftCardAmount = Number(meta?.total_tip_received ?? 0) // Shopify sometimes folds gift-card credit here
+  const gateways: string[] = Array.isArray(meta?.payment_gateway_names)
+    ? meta.payment_gateway_names
+    : []
+  const usedGiftCard = gateways.some((g) => /gift_card|giftcard/i.test(g))
+  const appliedDiscounts: Array<{ title?: string; description?: string; value?: string; value_type?: string }> =
+    Array.isArray(meta?.discount_applications) ? meta.discount_applications : []
+
+  // Nothing to show? bail.
+  const hasContent =
+    discountCodes.length > 0 ||
+    totalDiscounts > 0 ||
+    usedGiftCard ||
+    appliedDiscounts.length > 0
+  if (!hasContent) return null
+
+  return (
+    <Card>
+      <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 mb-2 inline-flex items-center gap-1.5">
+        <DollarSign size={12} /> Shopify promotions
+      </div>
+      <div className="space-y-2 text-sm">
+        {discountCodes.length > 0 && (
+          <div>
+            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">
+              Discount codes
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {discountCodes.map((d, i) => (
+                <span
+                  key={`${d.code}-${i}`}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 text-sm font-mono rounded bg-emerald-50 text-emerald-700 border border-emerald-200"
+                >
+                  {d.code}
+                  {d.amount && (
+                    <span className="text-xs text-emerald-600">
+                      −{d.type === 'percentage' ? `${d.amount}%` : `€${Number(d.amount).toFixed(2)}`}
+                    </span>
+                  )}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        {appliedDiscounts.length > 0 && (
+          <div>
+            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">
+              Automatic discounts
+            </div>
+            <ul className="space-y-1">
+              {appliedDiscounts.map((a, i) => (
+                <li key={i} className="text-slate-700">
+                  {a.title || a.description || 'Automatic discount'}
+                  {a.value && (
+                    <span className="text-slate-500 ml-1">
+                      ({a.value_type === 'percentage' ? `${a.value}%` : `€${Number(a.value).toFixed(2)}`})
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {totalDiscounts > 0 && (
+          <div className="text-slate-700">
+            Total discount:{' '}
+            <span className="font-semibold tabular-nums">
+              €{totalDiscounts.toFixed(2)}
+            </span>
+          </div>
+        )}
+        {usedGiftCard && (
+          <div className="inline-flex items-center gap-1.5 text-slate-700">
+            <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold uppercase rounded bg-amber-50 text-amber-700 border border-amber-200">
+              Gift card used
+            </span>
+            {giftCardAmount > 0 && (
+              <span className="tabular-nums">
+                €{giftCardAmount.toFixed(2)}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    </Card>
   )
 }
