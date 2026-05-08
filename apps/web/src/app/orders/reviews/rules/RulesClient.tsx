@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
-  Plus, Trash2, Sparkles, RefreshCw, Play, Eye, X, CheckCircle2,
+  Plus, Trash2, Sparkles, RefreshCw, Play, Eye, CheckCircle2, X,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
