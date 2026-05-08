@@ -61,6 +61,14 @@ type Note = {
   updatedAt: string
 }
 
+type RiskScore = {
+  score: number
+  flag: 'LOW' | 'MEDIUM' | 'HIGH'
+  signals: Record<string, number | boolean>
+  reasons: string[]
+  computedAt: string
+}
+
 type Order = {
   id: string
   channel: string
@@ -71,6 +79,7 @@ type Order = {
   currencyCode: string | null
   purchaseDate: string | null
   createdAt: string
+  riskScore: RiskScore | null
 }
 
 type CustomerDetail = {
@@ -260,6 +269,38 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
     }
   }
 
+  const recomputeRisk = async () => {
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/customers/${customerId}/recompute-risk`,
+        { method: 'POST' },
+      )
+      if (!res.ok) throw new Error(await res.text())
+      toast.success(t('customers.risk.recomputed'))
+      refresh()
+    } catch (e: any) {
+      toast.error(e.message)
+    }
+  }
+
+  const setManualReview = async (state: 'PENDING' | 'APPROVED' | 'REJECTED') => {
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/customers/${customerId}/manual-review`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state }),
+        },
+      )
+      if (!res.ok) throw new Error(await res.text())
+      toast.success(t('customers.risk.reviewSaved'))
+      refresh()
+    } catch (e: any) {
+      toast.error(e.message)
+    }
+  }
+
   if (loading && !customer) {
     return (
       <div className="p-5 space-y-3">
@@ -349,7 +390,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
         </div>
 
         {(customer.riskFlag || customer.manualReviewState) && (
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2">
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2 flex-wrap">
             {customer.riskFlag && (
               <Badge
                 variant={
@@ -369,6 +410,26 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                 {customer.manualReviewState.replace(/_/g, ' ')}
               </Badge>
             )}
+            <div className="flex items-center gap-1 ml-auto">
+              <button
+                onClick={() => setManualReview('APPROVED')}
+                className="h-7 px-2 text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100"
+              >
+                {t('customers.risk.markApproved')}
+              </button>
+              <button
+                onClick={() => setManualReview('REJECTED')}
+                className="h-7 px-2 text-sm bg-rose-50 text-rose-700 border border-rose-200 rounded hover:bg-rose-100"
+              >
+                {t('customers.risk.markRejected')}
+              </button>
+              <button
+                onClick={recomputeRisk}
+                className="h-7 px-2 text-sm border border-slate-200 rounded hover:bg-slate-50"
+              >
+                {t('customers.risk.recompute')}
+              </button>
+            </div>
           </div>
         )}
 
@@ -460,12 +521,26 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                           {fmtDate(o.purchaseDate ?? o.createdAt)}
                         </td>
                         <td className="px-3 py-2">
-                          <Badge
-                            variant={STATUS_VARIANT[o.status] ?? 'default'}
-                            size="sm"
-                          >
-                            {o.status}
-                          </Badge>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <Badge
+                              variant={STATUS_VARIANT[o.status] ?? 'default'}
+                              size="sm"
+                            >
+                              {o.status}
+                            </Badge>
+                            {o.riskScore && o.riskScore.flag !== 'LOW' && (
+                              <span
+                                title={o.riskScore.reasons.join(' · ')}
+                                className={`inline-block text-xs font-semibold uppercase px-1.5 py-0.5 border rounded ${
+                                  o.riskScore.flag === 'HIGH'
+                                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                    : 'bg-amber-50 text-amber-700 border-amber-200'
+                                }`}
+                              >
+                                {o.riskScore.flag} {o.riskScore.score}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900">
                           {fmtOrderTotal(o.totalPrice, o.currencyCode)}

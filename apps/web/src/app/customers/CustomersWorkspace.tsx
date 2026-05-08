@@ -65,6 +65,10 @@ export default function CustomersWorkspace() {
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10) || 1)
   const pageSize = 50
   const search = searchParams.get('search') ?? ''
+  const riskFlagFilters = (searchParams.get('riskFlag') ?? '')
+    .split(',')
+    .filter(Boolean)
+  const needsReview = searchParams.get('manualReviewState') === 'PENDING'
 
   const [searchInput, setSearchInput] = useState(search)
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -102,6 +106,8 @@ export default function CustomersWorkspace() {
         sortDir,
       })
       if (search) qs.set('search', search)
+      if (riskFlagFilters.length > 0) qs.set('riskFlag', riskFlagFilters.join(','))
+      if (needsReview) qs.set('manualReviewState', 'PENDING')
       const res = await fetch(`${getBackendUrl()}/api/customers?${qs.toString()}`, {
         cache: 'no-store',
       })
@@ -112,7 +118,7 @@ export default function CustomersWorkspace() {
     } finally {
       setLoading(false)
     }
-  }, [page, pageSize, sortBy, sortDir, search])
+  }, [page, pageSize, sortBy, sortDir, search, riskFlagFilters.join(','), needsReview])
 
   useEffect(() => {
     fetchCustomers()
@@ -161,23 +167,89 @@ export default function CustomersWorkspace() {
       />
 
       <Card>
-        <div className="flex items-center gap-2">
-          <div className="flex-1 max-w-md relative">
-            <Search
-              size={12}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
-            />
-            <Input
-              id="customers-search"
-              placeholder={t('customers.search.placeholder')}
-              value={searchInput}
-              onChange={(e: any) => setSearchInput(e.target.value)}
-              className="pl-7"
-            />
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="flex-1 max-w-md relative">
+              <Search
+                size={12}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+              <Input
+                id="customers-search"
+                placeholder={t('customers.search.placeholder')}
+                value={searchInput}
+                onChange={(e: any) => setSearchInput(e.target.value)}
+                className="pl-7"
+              />
+            </div>
+            <span className="text-sm text-slate-500 tabular-nums ml-auto">
+              {t('customers.pagination.summary', { total, page, totalPages })}
+            </span>
           </div>
-          <span className="text-sm text-slate-500 tabular-nums">
-            {t('customers.pagination.summary', { total, page, totalPages })}
-          </span>
+          <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-slate-100">
+            <span className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+              {t('customers.filter.risk')}
+            </span>
+            {(['HIGH', 'MEDIUM', 'LOW'] as const).map((flag) => {
+              const active = riskFlagFilters.includes(flag)
+              const tone = flag === 'HIGH' ? 'rose' : flag === 'MEDIUM' ? 'amber' : 'emerald'
+              return (
+                <button
+                  key={flag}
+                  type="button"
+                  role="checkbox"
+                  aria-checked={active}
+                  onClick={() => {
+                    const next = active
+                      ? riskFlagFilters.filter((f) => f !== flag)
+                      : [...riskFlagFilters, flag]
+                    updateUrl({
+                      riskFlag: next.length > 0 ? next.join(',') : undefined,
+                      page: undefined,
+                    })
+                  }}
+                  className={`h-7 px-2 text-sm border rounded inline-flex items-center gap-1.5 ${
+                    active
+                      ? `bg-${tone}-50 text-${tone}-700 border-${tone}-300`
+                      : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  {flag}
+                </button>
+              )
+            })}
+            <button
+              type="button"
+              aria-pressed={needsReview}
+              onClick={() =>
+                updateUrl({
+                  manualReviewState: needsReview ? undefined : 'PENDING',
+                  page: undefined,
+                })
+              }
+              className={`h-7 px-3 text-sm border rounded-full font-medium ${
+                needsReview
+                  ? 'bg-amber-50 text-amber-700 border-amber-300'
+                  : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              {t('customers.filter.needsReview')}
+            </button>
+            {(riskFlagFilters.length > 0 || needsReview) && (
+              <button
+                onClick={() =>
+                  updateUrl({
+                    riskFlag: undefined,
+                    manualReviewState: undefined,
+                    page: undefined,
+                  })
+                }
+                className="h-7 px-2 text-sm text-slate-500 hover:text-slate-900"
+              >
+                {t('orders.filter.clear')}
+              </button>
+            )}
+          </div>
         </div>
       </Card>
 

@@ -1159,12 +1159,38 @@
   "customers.cache.refreshTitle": "Forza il ricalcolo della cache aggregata (totali, ultimo ordine, mix canali). Utile quando una scrittura cache lato ingestione è stata saltata.",
   "customers.cache.refreshed": "Cache aggiornata",
   "customers.riskFlag.label": "Rischio: {flag}",
+  "customers.filter.risk": "Rischio",
+  "customers.filter.needsReview": "Da revisionare",
+  "customers.risk.markApproved": "Approva",
+  "customers.risk.markRejected": "Rifiuta",
+  "customers.risk.recompute": "Ricalcola",
+  "customers.risk.recomputed": "Rischio ricalcolato",
+  "customers.risk.reviewSaved": "Stato revisione salvato",
 
   "common.previous": "Precedente",
   "common.next": "Successiva",
 
   "pricing.title": "Prezzi",
   "pricing.subtitle": "Prezzi per marketplace risolti dal motore. Clicca una cella per modificare, clicca una riga per il dettaglio completo + cronologia.",
+  "pricing.error.title": "Caricamento prezzi fallito",
+  "pricing.error.retry": "Riprova",
+  "pricing.crumb.root": "Prezzi",
+
+  "pricing.alerts.title": "Avvisi prezzi",
+  "pricing.alerts.subtitle": "Problemi di risoluzione del motore + deriva del master cascade rilevati nelle ultime 24 ore.",
+  "pricing.alerts.crumb": "Avvisi",
+
+  "pricing.rules.title": "Regole prezzi",
+  "pricing.rules.subtitle": "Regole a livello di motore — match-low, percentage-below, cost-plus margin, fixed price, dynamic margin. Valutate come sorgente PRICING_RULE nella catena del resolver.",
+  "pricing.rules.crumb": "Regole",
+
+  "pricing.promotions.title": "Promozioni",
+  "pricing.promotions.subtitle": "Eventi retail programmati + azioni prezzo. Il cron orario materializza ChannelListing.salePrice per le finestre attive; il motore legge come sorgente SCHEDULED_SALE.",
+  "pricing.promotions.crumb": "Promozioni",
+
+  "pricing.buybox.title": "Buy Box",
+  "pricing.buybox.subtitle": "Tasso di vittoria per marketplace + migliori concorrenti. Alimentato dalle righe BuyBoxHistory scritte ad ogni refresh SP-API getItemOffersBatch.",
+  "pricing.buybox.crumb": "Buy Box",
 
   "pricing.action.refresh": "Aggiorna",
   "pricing.action.recomputeAll": "Ricalcola tutto",

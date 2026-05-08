@@ -1188,12 +1188,38 @@
   "customers.cache.refreshTitle": "Force-recompute the aggregate cache (totals, last order, channel mix). Useful when an ingestion-side cache write was skipped.",
   "customers.cache.refreshed": "Cache refreshed",
   "customers.riskFlag.label": "Risk: {flag}",
+  "customers.filter.risk": "Risk",
+  "customers.filter.needsReview": "Needs review",
+  "customers.risk.markApproved": "Approve",
+  "customers.risk.markRejected": "Reject",
+  "customers.risk.recompute": "Re-score",
+  "customers.risk.recomputed": "Risk re-scored",
+  "customers.risk.reviewSaved": "Review state saved",
 
   "common.previous": "Previous",
   "common.next": "Next",
 
   "pricing.title": "Pricing",
   "pricing.subtitle": "Per-marketplace prices resolved by the engine. Click any cell to edit, click a row for full breakdown + history.",
+  "pricing.error.title": "Failed to load pricing",
+  "pricing.error.retry": "Retry",
+  "pricing.crumb.root": "Pricing",
+
+  "pricing.alerts.title": "Pricing alerts",
+  "pricing.alerts.subtitle": "Engine resolution issues + master-cascade drift detected in the last 24 hours.",
+  "pricing.alerts.crumb": "Alerts",
+
+  "pricing.rules.title": "Pricing rules",
+  "pricing.rules.subtitle": "Engine-level rules — match-low, percentage-below, cost-plus margin, fixed price, dynamic margin. Evaluated as PRICING_RULE source in the resolver chain.",
+  "pricing.rules.crumb": "Rules",
+
+  "pricing.promotions.title": "Promotions",
+  "pricing.promotions.subtitle": "Scheduled retail events + price actions. Hourly cron materializes ChannelListing.salePrice for active windows; engine reads as SCHEDULED_SALE source.",
+  "pricing.promotions.crumb": "Promotions",
+
+  "pricing.buybox.title": "Buy Box",
+  "pricing.buybox.subtitle": "Per-marketplace win rate + top competitors. Powered by BuyBoxHistory rows written on every SP-API getItemOffersBatch refresh.",
+  "pricing.buybox.crumb": "Buy Box",
 
   "pricing.action.refresh": "Refresh",
   "pricing.action.recomputeAll": "Recompute all",
