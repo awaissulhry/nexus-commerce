@@ -17,6 +17,7 @@
 import { useState } from 'react'
 import { Package, Star, Truck, X } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
+import { IconButton } from '@/components/ui/IconButton'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface BulkActionBarProps {
@@ -127,13 +128,14 @@ export function BulkActionBar({
           {status && (
             <span className="text-sm text-slate-500 ml-2">{status}</span>
           )}
-          <button
+          <IconButton
+            aria-label="Clear selection"
             onClick={onClear}
             disabled={busy}
-            className="ml-auto h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded"
+            className="ml-auto"
           >
             <X size={14} />
-          </button>
+          </IconButton>
         </div>
       </Card>
     </div>

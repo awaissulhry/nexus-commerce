@@ -8,6 +8,7 @@ import {
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { IconButton } from '@/components/ui/IconButton'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { COUNTRY_NAMES } from '@/lib/country-names'
@@ -173,9 +174,14 @@ export default function RulesClient() {
                             <Eye size={11} /> Preview
                           </button>
                           <button onClick={() => setEditing(r)} title="Edit" className="h-6 px-2 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded">Edit</button>
-                          <button onClick={() => remove(r.id)} title="Delete" className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-rose-600">
+                          <IconButton
+                            aria-label={`Delete rule ${r.name}`}
+                            tone="danger"
+                            size="sm"
+                            onClick={() => remove(r.id)}
+                          >
                             <Trash2 size={12} />
-                          </button>
+                          </IconButton>
                         </div>
                       </td>
                     </tr>
@@ -266,7 +272,9 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
           <div className="text-lg font-semibold text-slate-900 inline-flex items-center gap-2">
             <Sparkles size={16} /> {rule ? 'Edit rule' : 'New rule'}
           </div>
-          <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
+          <IconButton aria-label="Close rule editor" onClick={onClose}>
+            <X size={16} />
+          </IconButton>
         </header>
         <div className="p-5 space-y-4">
           {!rule && (
@@ -393,7 +401,9 @@ function PreviewModal({ rule, onClose, onRun }: { rule: Rule; onClose: () => voi
           <div className="text-lg font-semibold text-slate-900 inline-flex items-center gap-2">
             <Eye size={16} /> Dry run — {rule.name}
           </div>
-          <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
+          <IconButton aria-label="Close dry-run preview" onClick={onClose}>
+            <X size={16} />
+          </IconButton>
         </header>
         <div className="p-5 space-y-3">
           {loading ? <div className="text-md text-slate-500 py-4 text-center">Computing matches…</div> : !data ? (
