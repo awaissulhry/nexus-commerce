@@ -868,16 +868,20 @@ Promote to 🔴 when a regression slips past the build gates and into production
 
 ---
 
-## 51. 🟡 Transactional email infrastructure — primitive extracted, surfaces still pending
+## 51. ✅ Transactional email infrastructure — engineering complete 2026-05-08; remaining is operator-action
 
-**State as of 2026-05-08:** the shared `sendEmail()` transport now lives in `apps/api/src/services/email/transport.ts`, with `to | to[]`, `subject`, `html`, `text?`, `attachments?`, `tag?` parameters and a single Resend implementation behind the existing `NEXUS_ENABLE_OUTBOUND_EMAILS` dryRun gate. Three callsites consume it: O.30 shipment emails, R6.3 return-event emails, and the previously-stubbed `sendEmailAlert` TODOs in `monitoring/alert.service.ts` + `sync-monitoring.service.ts` (each now renders a minimal severity-tagged HTML body).
+**Engineering state (verified 2026-05-08):** Shared `sendEmail()` transport at `apps/api/src/services/email/transport.ts` — `to | to[]`, `subject`, `html`, `text?`, `attachments?`, `tag?` params; Resend backend; `NEXUS_ENABLE_OUTBOUND_EMAILS` dry-run gate (defaults to mock + console log). Already consumed by:
+  • O.30 — shipment notification emails
+  • R6.3 — return-event emails
+  • Alert routing via `monitoring/alert.service.ts:sendEmailAlert`
+  • Sync monitoring escalations via `sync-monitoring.service.ts`
 
-**Still pending (operator-action / product-decision, not engineering):**
-- H.17 "Send to supplier" button — the transport supports `attachments` already; the UI side is a 1-commit follow-up that wires the discrepancy-report PDF buffer through a new route handler.
-- Domain auth for the brand domain (SPF + DKIM + DMARC) — DNS-side, coordinate with whoever owns `xavia.it`.
-- Flip `NEXUS_ENABLE_OUTBOUND_EMAILS=true` in production once domain auth + a `RESEND_API_KEY` are in place. Until then everything stays dryRun and console-logs.
+The infrastructure entry can close. Remaining items are explicitly NOT engineering:
+  • **Operator action:** flip `NEXUS_ENABLE_OUTBOUND_EMAILS=true` in Railway env after `RESEND_API_KEY` is set.
+  • **DNS / domain auth:** SPF + DKIM + DMARC for `xavia.it` (or whatever brand domain). Coordinate with the DNS owner.
+  • **Optional follow-up:** wire H.17 "Send to supplier" button to surface the existing discrepancy-report PDF through `sendEmail()` with `attachments`. ~1 commit, blocked on product copy not engineering.
 
-**Won't be doing now without product input:** template registry, opt-out / preference center, recipient-side localization heuristics. These are surface-area concerns that aren't blocking any current flow.
+Template registry / preference center / opt-out flow are not load-bearing for any current operator flow; defer until a real surface needs them.
 
 ---
 
