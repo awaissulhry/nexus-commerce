@@ -49,6 +49,7 @@ import { MobileProductList } from './_components/MobileProductList'
 import { ColumnPickerMenu } from './_components/ColumnPickerMenu'
 import { TagEditor } from './_components/TagEditor'
 import { VirtualizedGrid } from './_components/GridView'
+import { HygieneStrip } from './_components/HygieneStrip'
 
 // E.3 — lazy-load the heavy modals so they don't ship in /products'
 // initial bundle. Each is gated by a boolean state in the workspace,
@@ -1044,6 +1045,19 @@ export default function ProductsWorkspace() {
           {/* E.6 — Bundles button moved to the page-header More menu. */}
         </div>
       </div>
+
+      {/* U.27 — catalog hygiene strip. Hidden in the recycle-bin
+          scope (deleted rows aren't actionable). */}
+      {lens === 'grid' && !showDeleted && (
+        <HygieneStrip
+          hygiene={facets?.hygiene}
+          hasPhotos={hasPhotos}
+          hasDescription={hasDescription}
+          hasBrand={hasBrand}
+          hasGtin={hasGtin}
+          updateUrl={updateUrl}
+        />
+      )}
 
       {/* Filter bar */}
       <FilterBar
