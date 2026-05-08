@@ -124,9 +124,9 @@ export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: 
     if (dirty) {
       // Mirror the confirm-before-close pattern from /products drawer.
       const ok = await askConfirm({
-        title: 'Discard unsaved changes?',
-        description: 'Your credential changes will be lost.',
-        confirmLabel: 'Discard',
+        title: t('carriers.drawer.discardTitle'),
+        description: t('carriers.drawer.discardDescription'),
+        confirmLabel: t('carriers.drawer.discardConfirm'),
         tone: 'danger',
       })
       if (!ok) return
@@ -235,27 +235,27 @@ export function CarrierConfigDrawer({ def, carrier, open, onClose, onChanged }: 
   // SP-API notifications, configured at the seller-account level
   // outside Nexus).
   const tabs: Tab[] = useMemo(() => {
-    const list: Tab[] = [{ id: 'credentials', label: 'Credentials' }]
+    const list: Tab[] = [{ id: 'credentials', label: t('carriers.tab.credentials') }]
     if (def.code === 'SENDCLOUD') {
-      list.push({ id: 'services', label: 'Services' })
-      list.push({ id: 'warehouses', label: 'Warehouses' })
+      list.push({ id: 'services', label: t('carriers.tab.services') })
+      list.push({ id: 'warehouses', label: t('carriers.tab.warehouses') })
     }
     // Rules tab is available for any carrier the rules engine can
     // target (which is any with a real CarrierCode value).
     if (def.code !== 'MANUAL') {
-      list.push({ id: 'defaults', label: 'Defaults' })
-      list.push({ id: 'rules', label: 'Rules' })
+      list.push({ id: 'defaults', label: t('carriers.tab.defaults') })
+      list.push({ id: 'rules', label: t('carriers.tab.rules') })
     }
     if (def.code === 'SENDCLOUD') {
-      list.push({ id: 'pickups', label: 'Pickups' })
+      list.push({ id: 'pickups', label: t('carriers.tab.pickups') })
     }
-    list.push({ id: 'performance', label: 'Performance' })
-    list.push({ id: 'activity', label: 'Activity' })
+    list.push({ id: 'performance', label: t('carriers.tab.performance') })
+    list.push({ id: 'activity', label: t('carriers.tab.activity') })
     if (def.code === 'SENDCLOUD') {
-      list.push({ id: 'webhooks', label: 'Webhooks' })
+      list.push({ id: 'webhooks', label: t('carriers.tab.webhooks') })
     }
     return list
-  }, [def.code])
+  }, [def.code, t])
 
   const headerStatus = isConnected ? (
     <Badge variant="success" size="sm">{t('carriers.status.connected')}</Badge>
@@ -509,6 +509,7 @@ type Account = {
 }
 
 function AccountsSection({ carrierCode }: { carrierCode: string }) {
+  const { t } = useTranslations()
   const { toast } = useToast()
   const askConfirm = useConfirm()
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -628,19 +629,19 @@ function AccountsSection({ carrierCode }: { carrierCode: string }) {
       </div>
 
       {loading ? (
-        <div className="text-base text-slate-500 dark:text-slate-400 py-1">Loading…</div>
+        <div className="text-base text-slate-500 dark:text-slate-400 py-1">{t('carriers.drawer.loading')}</div>
       ) : accounts.length === 0 ? (
         <div className="text-base text-slate-500 dark:text-slate-400 italic py-1">
-          No additional accounts yet.
+          {t('carriers.empty.noAccounts')}
         </div>
       ) : (
         <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
           <table className="w-full text-base">
             <thead className="bg-slate-50 dark:bg-slate-800 text-xs uppercase tracking-wider text-slate-600 dark:text-slate-300">
               <tr>
-                <th className="text-left px-3 py-2 font-semibold">Label</th>
-                <th className="text-left px-3 py-2 font-semibold w-24">Mode</th>
-                <th className="text-left px-3 py-2 font-semibold w-24">Status</th>
+                <th className="text-left px-3 py-2 font-semibold">{t('carriers.col.label')}</th>
+                <th className="text-left px-3 py-2 font-semibold w-24">{t('carriers.col.mode')}</th>
+                <th className="text-left px-3 py-2 font-semibold w-24">{t('carriers.col.status')}</th>
                 <th className="px-3 py-2 w-10" />
               </tr>
             </thead>
@@ -663,10 +664,10 @@ function AccountsSection({ carrierCode }: { carrierCode: string }) {
                   <td className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">{a.mode}</td>
                   <td className="px-3 py-2">
                     {a.lastError
-                      ? <Badge variant="warning" size="sm">Error</Badge>
+                      ? <Badge variant="warning" size="sm">{t('carriers.badge.error')}</Badge>
                       : a.hasCredentials
-                      ? <Badge variant="success" size="sm">Active</Badge>
-                      : <Badge variant="default" size="sm">No creds</Badge>}
+                      ? <Badge variant="success" size="sm">{t('carriers.badge.active')}</Badge>
+                      : <Badge variant="default" size="sm">{t('carriers.badge.noCreds')}</Badge>}
                   </td>
                   <td className="px-3 py-2 text-right">
                     <div className="inline-flex items-center gap-1">
@@ -677,9 +678,9 @@ function AccountsSection({ carrierCode }: { carrierCode: string }) {
                         disabled={!a.hasCredentials || !a.isActive || busyTestId === a.id}
                         className="px-2 py-1 rounded text-xs hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 disabled:opacity-40 disabled:cursor-not-allowed"
                         aria-label="Test connection"
-                        title={!a.hasCredentials ? 'Add credentials first' : 'Test connection'}
+                        title={!a.hasCredentials ? t('carriers.badge.noCreds') : t('carriers.action.testConnection')}
                       >
-                        {busyTestId === a.id ? '…' : 'Test'}
+                        {busyTestId === a.id ? '…' : t('carriers.action.test')}
                       </button>
                       <button
                         onClick={() => remove(a.id, a.accountLabel)}
@@ -799,6 +800,7 @@ const CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY'] as const
 const COMMON_MARKETPLACES = ['IT', 'DE', 'FR', 'ES', 'GB', 'US', 'GLOBAL']
 
 function ServicesTab({ carrierCode }: { carrierCode: string }) {
+  const { t } = useTranslations()
   const { toast } = useToast()
   const askConfirm = useConfirm()
 
@@ -893,7 +895,7 @@ function ServicesTab({ carrierCode }: { carrierCode: string }) {
   }
 
   if (loading) {
-    return <div className="text-base text-slate-500 dark:text-slate-400 py-2">Loading…</div>
+    return <div className="text-base text-slate-500 dark:text-slate-400 py-2">{t('carriers.drawer.loading')}</div>
   }
 
   const refreshCatalog = async () => {
@@ -924,28 +926,28 @@ function ServicesTab({ carrierCode }: { carrierCode: string }) {
           Map (channel, marketplace) → carrier service. The print-label flow uses these mappings before falling back to the carrier's automatic pick.
         </p>
         <Button variant="ghost" size="sm" onClick={refreshCatalog} disabled={busy}>
-          Refresh catalog
+          {t('carriers.action.refreshCatalog')}
         </Button>
       </div>
       {services.length === 0 && (
         <p className="text-sm text-amber-700 dark:text-amber-300">
-          No services available. Connect the carrier first or click Refresh catalog.
+          {t('carriers.empty.noServices')}
         </p>
       )}
 
       {/* Existing mappings */}
       {mappings.length === 0 ? (
         <div className="text-base text-slate-500 dark:text-slate-400 italic py-2">
-          No mappings yet. Add one below.
+          {t('carriers.empty.noMappings')}
         </div>
       ) : (
         <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
           <table className="w-full text-base">
             <thead className="bg-slate-50 dark:bg-slate-800 text-xs uppercase tracking-wider text-slate-600 dark:text-slate-300">
               <tr>
-                <th className="text-left px-3 py-2 font-semibold">Channel</th>
-                <th className="text-left px-3 py-2 font-semibold">Marketplace</th>
-                <th className="text-left px-3 py-2 font-semibold">Service</th>
+                <th className="text-left px-3 py-2 font-semibold">{t('carriers.col.channel')}</th>
+                <th className="text-left px-3 py-2 font-semibold">{t('carriers.col.marketplace')}</th>
+                <th className="text-left px-3 py-2 font-semibold">{t('carriers.col.service')}</th>
                 <th className="px-3 py-2 w-10" />
               </tr>
             </thead>
@@ -1066,6 +1068,7 @@ type SenderAddress = {
 }
 
 function WarehousesTab({ carrierCode }: { carrierCode: string }) {
+  const { t } = useTranslations()
   const { toast } = useToast()
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [senders, setSenders] = useState<SenderAddress[]>([])
@@ -1176,9 +1179,9 @@ function WarehousesTab({ carrierCode }: { carrierCode: string }) {
           <table className="w-full text-base">
             <thead className="bg-slate-50 dark:bg-slate-800 text-xs uppercase tracking-wider text-slate-600 dark:text-slate-300">
               <tr>
-                <th className="text-left px-3 py-2 font-semibold">Warehouse</th>
-                <th className="text-left px-3 py-2 font-semibold">Sendcloud sender</th>
-                <th className="text-left px-3 py-2 font-semibold">Default account</th>
+                <th className="text-left px-3 py-2 font-semibold">{t('carriers.col.warehouse')}</th>
+                <th className="text-left px-3 py-2 font-semibold">{t('carriers.col.sendcloudSender')}</th>
+                <th className="text-left px-3 py-2 font-semibold">{t('carriers.col.defaultAccount')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
@@ -1256,6 +1259,7 @@ function DefaultsTab({
   initial: Preferences | null
   onSaved: () => void
 }) {
+  const { t } = useTranslations()
   const { toast } = useToast()
   // includeInRateShop defaults to true when unset — operator opts OUT.
   const [prefs, setPrefs] = useState<Preferences>(() => ({
@@ -1293,7 +1297,7 @@ function DefaultsTab({
       if (!res.ok) throw new Error('Save failed')
       setDirty(false)
       onSaved()
-      toast.success('Preferences saved')
+      toast.success(t('carriers.action.preferencesSaved'))
     } catch (e: any) {
       toast.error(e.message)
     } finally {
@@ -1342,9 +1346,9 @@ function DefaultsTab({
 
       <div className="flex items-center gap-2">
         <Button variant="primary" size="sm" onClick={save} loading={busy} disabled={!dirty}>
-          Save preferences
+          {t('carriers.action.savePreferences')}
         </Button>
-        {dirty && <span className="text-sm text-amber-600 dark:text-amber-400">Unsaved changes</span>}
+        {dirty && <span className="text-sm text-amber-600 dark:text-amber-400">{t('carriers.drawer.unsavedChanges')}</span>}
       </div>
     </div>
   )
@@ -1404,6 +1408,7 @@ type ShippingRule = {
 }
 
 function RulesTab({ carrierCode }: { carrierCode: string }) {
+  const { t } = useTranslations()
   const [rules, setRules] = useState<ShippingRule[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -1424,7 +1429,7 @@ function RulesTab({ carrierCode }: { carrierCode: string }) {
   const matchingActive = matching.filter((r) => r.isActive)
 
   if (loading) {
-    return <div className="text-base text-slate-500 dark:text-slate-400 py-2">Loading rules…</div>
+    return <div className="text-base text-slate-500 dark:text-slate-400 py-2">{t('carriers.drawer.loadingRules')}</div>
   }
 
   return (
@@ -1438,10 +1443,10 @@ function RulesTab({ carrierCode }: { carrierCode: string }) {
           <table className="w-full text-base">
             <thead className="bg-slate-50 dark:bg-slate-800 text-xs uppercase tracking-wider text-slate-600 dark:text-slate-300">
               <tr>
-                <th className="text-left px-3 py-2 font-semibold">Name</th>
-                <th className="text-left px-3 py-2 font-semibold w-16">Priority</th>
-                <th className="text-left px-3 py-2 font-semibold w-20">Status</th>
-                <th className="text-left px-3 py-2 font-semibold w-24">Triggers</th>
+                <th className="text-left px-3 py-2 font-semibold">{t('carriers.col.name')}</th>
+                <th className="text-left px-3 py-2 font-semibold w-16">{t('carriers.col.priority')}</th>
+                <th className="text-left px-3 py-2 font-semibold w-20">{t('carriers.col.status')}</th>
+                <th className="text-left px-3 py-2 font-semibold w-24">{t('carriers.col.triggers')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
@@ -1510,6 +1515,7 @@ type Metrics = {
 const WINDOWS = [7, 30, 90, 365] as const
 
 function PerformanceTab({ carrierCode }: { carrierCode: string }) {
+  const { t } = useTranslations()
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [windowDays, setWindowDays] = useState<number>(30)
   const [loading, setLoading] = useState(true)
@@ -1549,7 +1555,7 @@ function PerformanceTab({ carrierCode }: { carrierCode: string }) {
       </div>
 
       {loading ? (
-        <div className="text-base text-slate-500 dark:text-slate-400 py-2">Loading metrics…</div>
+        <div className="text-base text-slate-500 dark:text-slate-400 py-2">{t('carriers.drawer.loadingMetrics')}</div>
       ) : !metrics ? (
         <div className="text-base text-slate-500 dark:text-slate-400 py-2">No data.</div>
       ) : metrics.shipmentCount === 0 ? (
@@ -1560,20 +1566,20 @@ function PerformanceTab({ carrierCode }: { carrierCode: string }) {
         <>
           {/* KPIs */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <Kpi label="Shipments" value={metrics.shipmentCount.toLocaleString()} />
+            <Kpi label={t('carriers.kpi.shipments')} value={metrics.shipmentCount.toLocaleString()} />
             <Kpi
-              label="Avg cost"
+              label={t('carriers.kpi.avgCost')}
               value={metrics.avgCostCents != null ? `€${(metrics.avgCostCents / 100).toFixed(2)}` : '—'}
             />
             <Kpi
-              label="On-time"
+              label={t('carriers.kpi.onTime')}
               value={metrics.lateRate != null ? `${((1 - metrics.lateRate) * 100).toFixed(0)}%` : '—'}
-              hint={metrics.onTimeCount + metrics.lateCount > 0 ? `${metrics.onTimeCount} of ${metrics.onTimeCount + metrics.lateCount}` : undefined}
+              hint={metrics.onTimeCount + metrics.lateCount > 0 ? t('carriers.kpi.onTimeHint', { onTime: metrics.onTimeCount, total: metrics.onTimeCount + metrics.lateCount }) : undefined}
             />
             <Kpi
-              label="Avg delivery"
+              label={t('carriers.kpi.avgDelivery')}
               value={metrics.avgDeliveryHours != null ? `${(metrics.avgDeliveryHours / 24).toFixed(1)}d` : '—'}
-              hint={metrics.deliveredCount > 0 ? `${metrics.deliveredCount} delivered` : undefined}
+              hint={metrics.deliveredCount > 0 ? t('carriers.kpi.deliveredHint', { n: metrics.deliveredCount }) : undefined}
             />
           </div>
 
@@ -1641,6 +1647,7 @@ type AuditEntry = {
 }
 
 function ActivityTab({ carrierId }: { carrierId: string }) {
+  const { t } = useTranslations()
   const [entries, setEntries] = useState<AuditEntry[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -1659,7 +1666,7 @@ function ActivityTab({ carrierId }: { carrierId: string }) {
   }, [carrierId])
 
   if (loading) {
-    return <div className="text-base text-slate-500 dark:text-slate-400 py-2">Loading activity…</div>
+    return <div className="text-base text-slate-500 dark:text-slate-400 py-2">{t('carriers.drawer.loadingActivity')}</div>
   }
   if (entries.length === 0) {
     return (
@@ -1750,6 +1757,7 @@ type Pickup = {
 }
 
 function PickupsTab({ carrierCode }: { carrierCode: string }) {
+  const { t } = useTranslations()
   const { toast } = useToast()
   const askConfirm = useConfirm()
 
@@ -1855,7 +1863,7 @@ function PickupsTab({ carrierCode }: { carrierCode: string }) {
   }
 
   if (loading) {
-    return <div className="text-base text-slate-500 dark:text-slate-400 py-2">Loading…</div>
+    return <div className="text-base text-slate-500 dark:text-slate-400 py-2">{t('carriers.drawer.loading')}</div>
   }
 
   const activePickups = pickups.filter((p) => p.status === 'ACTIVE')
