@@ -214,6 +214,58 @@ const LOCATION_TONE: Record<string, string> = {
   CHANNEL_RESERVED: 'bg-violet-50 text-violet-700 border-violet-200',
 }
 
+// S.12 — structured reason picker for manual adjustments. Operators
+// choose a sub-reason (DAMAGE / THEFT / SCRAP / FOUND / RECOUNT /
+// INITIAL_LOAD / OTHER) which maps to:
+//   1. The schema enum (StockMovementReason) — kept tight so reports
+//      that group by reason still work.
+//   2. A structured prefix in `notes` ("[DAMAGE] ...") so reports
+//      can split WRITE_OFFs into damage/theft/scrap via SQL LIKE.
+// The free-text notes survive as the suffix of the string the
+// operator typed (or empty if they didn't type anything).
+type AdjustSubReason =
+  | 'DAMAGE'
+  | 'THEFT'
+  | 'SCRAP'
+  | 'FOUND'
+  | 'RECOUNT'
+  | 'INITIAL_LOAD'
+  | 'OTHER'
+
+const SUB_REASON_OPTIONS: ReadonlyArray<{
+  value: AdjustSubReason
+  labelKey: string
+  schemaReason: 'WRITE_OFF' | 'INVENTORY_COUNT' | 'MANUAL_ADJUSTMENT'
+}> = [
+  { value: 'OTHER',        labelKey: 'stock.subReason.other',       schemaReason: 'MANUAL_ADJUSTMENT' },
+  { value: 'DAMAGE',       labelKey: 'stock.subReason.damage',      schemaReason: 'WRITE_OFF' },
+  { value: 'THEFT',        labelKey: 'stock.subReason.theft',       schemaReason: 'WRITE_OFF' },
+  { value: 'SCRAP',        labelKey: 'stock.subReason.scrap',       schemaReason: 'WRITE_OFF' },
+  { value: 'FOUND',        labelKey: 'stock.subReason.found',       schemaReason: 'MANUAL_ADJUSTMENT' },
+  { value: 'RECOUNT',      labelKey: 'stock.subReason.recount',     schemaReason: 'INVENTORY_COUNT' },
+  { value: 'INITIAL_LOAD', labelKey: 'stock.subReason.initialLoad', schemaReason: 'MANUAL_ADJUSTMENT' },
+]
+
+/** Translate the operator's structured pick into the (reason, notes)
+ *  pair we send to the server. The notes payload prefixes the
+ *  sub-reason in brackets so SQL queries can split WRITE_OFF into
+ *  DAMAGE/THEFT/SCRAP. OTHER + empty notes returns null notes. */
+function buildAdjustmentPayload(
+  subReason: AdjustSubReason,
+  freeNotes: string | null,
+): { reason: string; notes: string | null } {
+  const opt = SUB_REASON_OPTIONS.find((o) => o.value === subReason) ?? SUB_REASON_OPTIONS[0]
+  const trimmed = freeNotes?.trim() ?? ''
+  if (subReason === 'OTHER') {
+    return { reason: opt.schemaReason, notes: trimmed || null }
+  }
+  const prefix = `[${subReason}]`
+  return {
+    reason: opt.schemaReason,
+    notes: trimmed ? `${prefix} ${trimmed}` : prefix,
+  }
+}
+
 // S.10 — labels resolved via t() per render so they live-update when
 // the operator flips locale. The keys + tones stay declarative.
 const STATUS_OPTIONS = [
@@ -505,16 +557,17 @@ export default function StockWorkspace() {
   // Sequential is intentional: 50 parallel PATCHes would let the cron
   // race with itself and the cascade fan-out would queue duplicate
   // OutboundSyncQueue rows. One at a time is honest and observable.
-  const runBulkAdjust = useCallback(async (change: number, notes: string | null) => {
+  const runBulkAdjust = useCallback(async (change: number, subReason: AdjustSubReason, notes: string | null) => {
     const ids = Array.from(selected)
     setBulkProgress({ total: ids.length, done: 0, failed: 0 })
     const undoEntries: Array<{ stockLevelId: string; inverseChange: number }> = []
+    const payload = buildAdjustmentPayload(subReason, notes)
     for (const id of ids) {
       try {
         const res = await fetch(`${getBackendUrl()}/api/stock/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ change, notes }),
+          body: JSON.stringify({ change, ...payload }),
         })
         if (!res.ok) throw new Error(`${res.status}`)
         undoEntries.push({ stockLevelId: id, inverseChange: -change })
@@ -1726,22 +1779,25 @@ function Sparkline({ points }: { points: number[] }) {
 
 function AdjustPanel({ stockLevelId, locationCode, onCancel, onDone }: { stockLevelId: string; locationCode: string; onCancel: () => void; onDone: () => void }) {
   const { toast } = useToast()
+  const { t } = useTranslations()
   const [change, setChange] = useState('')
   const [notes, setNotes] = useState('')
+  const [subReason, setSubReason] = useState<AdjustSubReason>('OTHER')
   const [submitting, setSubmitting] = useState(false)
 
   const submit = async () => {
     const n = Number(change)
     if (!Number.isFinite(n) || n === 0) {
-      toast.error('Enter a non-zero number (positive to add, negative to remove)')
+      toast.error(t('stock.adjust.errInvalidChange'))
       return
     }
     setSubmitting(true)
     try {
+      const payload = buildAdjustmentPayload(subReason, notes)
       const res = await fetch(`${getBackendUrl()}/api/stock/${stockLevelId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ change: n, notes: notes || null }),
+        body: JSON.stringify({ change: n, ...payload }),
       })
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Adjust failed')
       onDone()
@@ -1751,23 +1807,32 @@ function AdjustPanel({ stockLevelId, locationCode, onCancel, onDone }: { stockLe
   }
 
   return (
-    <div className="border border-slate-300 rounded-md p-3 bg-slate-50">
-      <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-2 inline-flex items-center gap-1.5">
-        Adjust at <span className="text-slate-700">{locationCode}</span>
+    <div className="border border-slate-300 rounded-md p-3 bg-slate-50 space-y-2">
+      <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 inline-flex items-center gap-1.5">
+        {t('stock.drawer.adjustAt')} <span className="text-slate-700">{locationCode}</span>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <input
           type="number" value={change} onChange={(e) => setChange(e.target.value)}
           placeholder="±n" autoFocus
           className="h-11 sm:h-8 w-24 px-2 text-md border border-slate-200 rounded font-mono tabular-nums"
         />
+        <select
+          value={subReason}
+          onChange={(e) => setSubReason(e.target.value as AdjustSubReason)}
+          className="h-11 sm:h-8 px-2 text-base border border-slate-200 rounded bg-white min-w-[140px]"
+        >
+          {SUB_REASON_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
+          ))}
+        </select>
         <input
           type="text" value={notes} onChange={(e) => setNotes(e.target.value)}
-          placeholder="Reason (optional)"
-          className="flex-1 h-11 sm:h-8 px-2 text-base border border-slate-200 rounded"
+          placeholder={t('stock.adjust.notesPlaceholder')}
+          className="flex-1 min-w-[120px] h-11 sm:h-8 px-2 text-base border border-slate-200 rounded"
         />
-        <button onClick={submit} disabled={submitting} className="h-11 sm:h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">Apply</button>
-        <button onClick={onCancel} className="h-11 sm:h-8 px-2 text-base text-slate-500 hover:text-slate-900">Cancel</button>
+        <button onClick={submit} disabled={submitting} className="h-11 sm:h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">{t('stock.drawer.adjustApply')}</button>
+        <button onClick={onCancel} className="h-11 sm:h-8 px-2 text-base text-slate-500 hover:text-slate-900">{t('stock.list.cancel')}</button>
       </div>
     </div>
   )
@@ -2569,10 +2634,12 @@ function BulkAdjustModal({
 }: {
   selectedItems: StockRow[]
   onCancel: () => void
-  onConfirm: (change: number, notes: string | null) => void
+  onConfirm: (change: number, subReason: AdjustSubReason, notes: string | null) => void
 }) {
+  const { t } = useTranslations()
   const [change, setChange] = useState('')
   const [notes, setNotes] = useState('')
+  const [subReason, setSubReason] = useState<AdjustSubReason>('OTHER')
   const n = Number(change)
   const valid = Number.isFinite(n) && n !== 0
   const wouldGoNegative = valid && selectedItems.some((it) => it.quantity + n < 0)
@@ -2594,8 +2661,24 @@ function BulkAdjustModal({
             Same delta applied to every selected row. Use negative numbers to remove stock.
           </div>
         </div>
+        {/* S.12 — structured sub-reason picker. Same options as the
+            inline AdjustPanel; same buildAdjustmentPayload mapping
+            applied in runBulkAdjust so the schema-level reason +
+            structured notes prefix flow consistently. */}
         <div>
-          <label className="text-sm uppercase tracking-wider text-slate-500 font-semibold block mb-1">Reason (optional)</label>
+          <label className="text-sm uppercase tracking-wider text-slate-500 font-semibold block mb-1">Reason</label>
+          <select
+            value={subReason}
+            onChange={(e) => setSubReason(e.target.value as AdjustSubReason)}
+            className="w-full h-9 px-2 text-base border border-slate-200 rounded bg-white"
+          >
+            {SUB_REASON_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-sm uppercase tracking-wider text-slate-500 font-semibold block mb-1">Notes (optional)</label>
           <input
             type="text"
             value={notes}
@@ -2649,7 +2732,7 @@ function BulkAdjustModal({
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
           <button onClick={onCancel} className="h-11 sm:h-8 px-3 text-base text-slate-500 hover:text-slate-900">Cancel</button>
           <button
-            onClick={() => valid && onConfirm(n, notes || null)}
+            onClick={() => valid && onConfirm(n, subReason, notes || null)}
             disabled={!valid}
             className="h-11 sm:h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
           >
