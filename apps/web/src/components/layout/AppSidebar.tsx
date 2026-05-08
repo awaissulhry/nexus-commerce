@@ -500,10 +500,10 @@ export default function AppSidebar() {
 
         <NavGroup label="Marketing">
           <NavItem
-            href="/marketing/promotions"
+            href="/pricing/promotions"
             icon={Megaphone}
             label="Promotions"
-            active={pathname === '/marketing/promotions'}
+            active={pathname.startsWith('/pricing/promotions')}
           />
           <NavItem
             href="/marketing/advertising"
