@@ -84,6 +84,20 @@ const SOURCE_TONE: Record<string, string> = {
   FALLBACK: 'bg-amber-50 text-amber-700 border-amber-200',
 }
 
+// E.1.b — concise display labels for pricing source chips. The raw
+// enum keys are screamy and operator-hostile; SOURCE_LABEL maps each
+// to a friendly form. Falls back to the raw key for any new source
+// the engine adds before this map gets updated.
+const SOURCE_LABEL: Record<string, string> = {
+  SCHEDULED_SALE: 'Sale',
+  OFFER_OVERRIDE: 'Offer',
+  CHANNEL_OVERRIDE: 'Channel override',
+  CHANNEL_RULE: 'Channel rule',
+  PRICING_RULE: 'Rule',
+  MASTER_INHERIT: 'Master',
+  FALLBACK: 'Fallback',
+}
+
 export default function PricingMatrixClient() {
   const { t } = useTranslations()
   const [data, setData] = useState<MatrixResponse | null>(null)
