@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
-import { Search, Users, RefreshCw } from 'lucide-react'
+import { Search, Users, RefreshCw, Download } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
@@ -157,12 +157,21 @@ export default function CustomersWorkspace() {
             : t('customers.subtitle.empty')
         }
         actions={
-          <button
-            onClick={() => fetchCustomers()}
-            className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
-          >
-            <RefreshCw size={12} /> {t('common.refresh')}
-          </button>
+          <div className="flex items-center gap-2">
+            <a
+              href={`${getBackendUrl()}/api/customers/export.csv?${searchParams.toString()}`}
+              className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+              download
+            >
+              <Download size={12} /> {t('customers.action.exportCsv')}
+            </a>
+            <button
+              onClick={() => fetchCustomers()}
+              className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+            >
+              <RefreshCw size={12} /> {t('common.refresh')}
+            </button>
+          </div>
         }
       />
 

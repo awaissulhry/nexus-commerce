@@ -14,6 +14,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { logger } from '../utils/logger.js'
 import { ingestMockOrders, shipOrder } from '../services/order-ingestion.service.js'
 import prisma from '../db.js'
+import { csvDocument } from '../lib/csv.js'
 
 const ALL_CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY', 'MANUAL'] as const
 
@@ -583,6 +584,141 @@ export async function ordersRoutes(app: FastifyInstance) {
       }
     },
   )
+
+  // O.23b — CSV export. Mirrors the GET /api/orders filter shape so
+  // an "Export current view" frontend button can pass the same query
+  // string and get back exactly the rows the operator sees. Capped
+  // at 10,000 rows — beyond that operators should use a real BI
+  // export pipeline (BigQuery / Looker), not a one-shot CSV.
+  app.get('/api/orders/export.csv', async (request, reply) => {
+    try {
+      const q = request.query as any
+      const search = (q.search ?? '').trim()
+      const channels = csvParam(q.channel)
+      const marketplaces = csvParam(q.marketplace)
+      const statuses = csvParam(q.status)
+      const fulfillment = csvParam(q.fulfillment)
+      const reviewStatus = csvParam(q.reviewStatus)
+      const customerEmail = (q.customerEmail ?? '').trim() || null
+      const dateFrom = q.dateFrom ? new Date(q.dateFrom) : null
+      const dateTo = q.dateTo ? new Date(q.dateTo) : null
+      const reviewEligible = q.reviewEligible === 'true'
+
+      const where: any = {}
+      if (channels && channels.length) where.channel = { in: channels }
+      if (marketplaces && marketplaces.length) where.marketplace = { in: marketplaces }
+      if (statuses && statuses.length) where.status = { in: statuses }
+      if (fulfillment && fulfillment.length) where.fulfillmentMethod = { in: fulfillment }
+      if (customerEmail) where.customerEmail = { contains: customerEmail, mode: 'insensitive' }
+      if (dateFrom || dateTo) {
+        where.purchaseDate = {}
+        if (dateFrom) where.purchaseDate.gte = dateFrom
+        if (dateTo) where.purchaseDate.lte = dateTo
+      }
+      if (search) {
+        where.OR = [
+          { channelOrderId: { contains: search, mode: 'insensitive' } },
+          { customerName: { contains: search, mode: 'insensitive' } },
+          { customerEmail: { contains: search, mode: 'insensitive' } },
+          { items: { some: { sku: { contains: search, mode: 'insensitive' } } } },
+        ]
+      }
+      if (reviewStatus && reviewStatus.length) {
+        where.reviewRequests = { some: { status: { in: reviewStatus } } }
+      }
+      if (reviewEligible) {
+        where.deliveredAt = { not: null }
+      }
+
+      const orders = await prisma.order.findMany({
+        where,
+        orderBy: { purchaseDate: 'desc' },
+        take: 10_000,
+        select: {
+          id: true,
+          channel: true,
+          marketplace: true,
+          channelOrderId: true,
+          status: true,
+          fulfillmentMethod: true,
+          totalPrice: true,
+          currencyCode: true,
+          customerName: true,
+          customerEmail: true,
+          purchaseDate: true,
+          paidAt: true,
+          shippedAt: true,
+          deliveredAt: true,
+          cancelledAt: true,
+          shipByDate: true,
+          isPrime: true,
+          shippingAddress: true,
+        },
+      })
+
+      const headers = [
+        'channel',
+        'marketplace',
+        'channelOrderId',
+        'status',
+        'fulfillmentMethod',
+        'totalPrice',
+        'currencyCode',
+        'customerName',
+        'customerEmail',
+        'shipCountry',
+        'shipCity',
+        'shipPostalCode',
+        'purchaseDate',
+        'paidAt',
+        'shippedAt',
+        'deliveredAt',
+        'cancelledAt',
+        'shipByDate',
+        'isPrime',
+      ]
+
+      const rows = orders.map((o) => {
+        const addr = (o.shippingAddress ?? {}) as any
+        const country =
+          addr.CountryCode ?? addr.countryCode ?? addr.country_code ?? addr.country ?? ''
+        const city = addr.City ?? addr.city ?? ''
+        const postal = addr.PostalCode ?? addr.postal_code ?? addr.postalCode ?? ''
+        return [
+          o.channel,
+          o.marketplace ?? '',
+          o.channelOrderId,
+          o.status,
+          o.fulfillmentMethod ?? '',
+          Number(o.totalPrice).toFixed(2),
+          o.currencyCode ?? 'EUR',
+          o.customerName,
+          o.customerEmail,
+          country,
+          city,
+          postal,
+          o.purchaseDate,
+          o.paidAt,
+          o.shippedAt,
+          o.deliveredAt,
+          o.cancelledAt,
+          o.shipByDate,
+          o.isPrime ?? '',
+        ]
+      })
+
+      const body = csvDocument(headers, rows)
+      const filename = `orders-${new Date().toISOString().slice(0, 10)}.csv`
+      reply.header('Content-Type', 'text/csv; charset=utf-8')
+      reply.header('Content-Disposition', `attachment; filename="${filename}"`)
+      // Reply.send used here because returning the string would let
+      // Fastify's JSON serialiser interfere with the CSV body.
+      return reply.send(body)
+    } catch (err: any) {
+      logger.error('orders export.csv failed', { error: err?.message })
+      return reply.status(500).send({ error: err?.message ?? 'failed' })
+    }
+  })
 
   // O.6 — SSE channel for /orders. Mirrors the outbound bus pattern
   // at /api/fulfillment/outbound/events. Carries order.created /

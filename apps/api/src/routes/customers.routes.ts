@@ -26,6 +26,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { refreshCustomerCache } from '../services/customer-cache.service.js'
 import { recomputeCustomerRisk } from '../services/order-risk.service.js'
+import { csvDocument } from '../lib/csv.js'
 
 export async function customersRoutes(app: FastifyInstance) {
   // ── List ───────────────────────────────────────────────────────────
@@ -351,6 +352,88 @@ export async function customersRoutes(app: FastifyInstance) {
       })
       return fresh
     } catch (err: any) {
+      return reply.status(500).send({ error: err?.message ?? 'failed' })
+    }
+  })
+
+  // ── O.23b: CSV export ──────────────────────────────────────────────
+  // Mirrors the GET /api/customers filter shape (search + riskFlag +
+  // manualReviewState). Capped at 10,000 rows.
+  app.get('/api/customers/export.csv', async (request, reply) => {
+    try {
+      const q = request.query as Record<string, string | undefined>
+      const search = (q.search ?? '').trim()
+      const riskFlags = (q.riskFlag ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      const manualReviewState = (q.manualReviewState ?? '').trim()
+
+      const where: any = {}
+      if (search) {
+        where.OR = [
+          { email: { contains: search.toLowerCase() } },
+          { name: { contains: search, mode: 'insensitive' as const } },
+        ]
+      }
+      if (riskFlags.length > 0) where.riskFlag = { in: riskFlags }
+      if (manualReviewState) where.manualReviewState = manualReviewState
+
+      const customers = await prisma.customer.findMany({
+        where,
+        orderBy: { totalSpentCents: 'desc' },
+        take: 10_000,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          totalOrders: true,
+          totalSpentCents: true,
+          firstOrderAt: true,
+          lastOrderAt: true,
+          channelOrderCounts: true,
+          tags: true,
+          riskFlag: true,
+          manualReviewState: true,
+          lastRiskComputedAt: true,
+          createdAt: true,
+        },
+      })
+
+      const headers = [
+        'email',
+        'name',
+        'totalOrders',
+        'totalSpentEUR',
+        'firstOrderAt',
+        'lastOrderAt',
+        'channelOrderCounts',
+        'tags',
+        'riskFlag',
+        'manualReviewState',
+        'lastRiskComputedAt',
+        'createdAt',
+      ]
+
+      const rows = customers.map((c) => [
+        c.email,
+        c.name ?? '',
+        c.totalOrders,
+        (Number(c.totalSpentCents) / 100).toFixed(2),
+        c.firstOrderAt,
+        c.lastOrderAt,
+        c.channelOrderCounts ?? '',
+        (c.tags ?? []).join('|'),
+        c.riskFlag ?? '',
+        c.manualReviewState ?? '',
+        c.lastRiskComputedAt,
+        c.createdAt,
+      ])
+
+      const body = csvDocument(headers, rows)
+      const filename = `customers-${new Date().toISOString().slice(0, 10)}.csv`
+      reply.header('Content-Type', 'text/csv; charset=utf-8')
+      reply.header('Content-Disposition', `attachment; filename="${filename}"`)
+      return reply.send(body)
+    } catch (err: any) {
+      logger.error('customers export.csv failed', { error: err?.message })
       return reply.status(500).send({ error: err?.message ?? 'failed' })
     }
   })

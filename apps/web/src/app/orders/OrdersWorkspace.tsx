@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
-  ShoppingCart, RefreshCw, Star, User, DollarSign, Undo2,
+  ShoppingCart, RefreshCw, Star, User, DollarSign, Undo2, Download,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -390,6 +390,13 @@ export default function OrdersWorkspace() {
             <Link href="/orders/reviews/rules" className="h-8 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5">
               <Star size={12} /> {t('orders.action.reviewRules')}
             </Link>
+            <a
+              href={`${getBackendUrl()}/api/orders/export.csv?${searchParams.toString()}`}
+              className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+              download
+            >
+              <Download size={12} /> {t('orders.action.exportCsv')}
+            </a>
             <button onClick={() => fetchOrders()} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5">
               <RefreshCw size={12} /> {t('orders.action.refresh')}
             </button>
