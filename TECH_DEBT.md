@@ -44,7 +44,7 @@ A CI gate is the right answer; the post-deploy smoke test is the belt-and-braces
 
 The /orders rebuild (D.2) replaced `reply.status(200).send(...)` with `return { ... }` and explicitly coerces every Prisma `Decimal` to `Number` before serialization. The empty-body workaround (`Accept-Encoding: identity`) has been removed from the client. If this regresses, the symptom is the legacy Decimal-with-compress interaction — re-add the coercion.
 
-## 1.legacy 🟡 `@fastify/compress` empty-body bug on `/api/orders` list (kept for history)
+## 1.legacy ✅ `@fastify/compress` empty-body bug on `/api/orders` list — superseded by entry #1, kept for history
 
 **Symptom:** `GET /api/orders?page=...&limit=...` returns `200` with `content-encoding: gzip` and `content-length: 0` (empty body) when the client requests gzip. The same payload returns 6+ KB of JSON when `Accept-Encoding: identity` is sent.
 
@@ -59,13 +59,20 @@ The /orders rebuild (D.2) replaced `reply.status(200).send(...)` with `return { 
 - Change the orders route to `return { … }` instead of `reply.status(200).send(…)` and verify, or
 - Pin or upgrade `@fastify/compress` and add a regression test.
 
-## 2. 🟡 Prisma direct calls from Next.js server components 500 on Vercel
+## 2. ⏸ Prisma direct calls from Next.js server components — moot on Railway, deferred 2026-05-08
 
-**Symptom:** `/settings/account` returned 500 from Vercel SSR. Page component calls `prisma.accountSettings.findFirst()` directly inside `async function AccountSettingsPage()`. Same shape as several other pages.
+**Status update:** This was a Vercel SSR / edge-runtime issue. We deploy `apps/web` to Railway as a long-running Node process, where Prisma works the same way it does in `apps/api`. The Vercel 500s described in the original entry don't reproduce on Railway and we're not deploying to Vercel.
 
-**Workaround:** `apps/web/src/app/settings/account/page.tsx` wraps the call in `try/catch` and renders an empty form on failure.
+**Affected pages (verified 2026-05-08):** ~10 server components still `import { prisma } from '@nexus/database'` (settings/{account,profile,api-keys,notifications}, products/[id], catalog/{[id]/edit,drafts}). Each works fine on Railway.
 
-**Proper fix (pattern):** Web app should not import `@nexus/database` from server components. Move the query behind an API endpoint (`GET /api/settings/account`) and have the page `fetch(getBackendUrl() + '/api/settings/account')`. This is a project-wide pattern fix — sweep `apps/web/src/app` for `import { prisma } from '@nexus/database'` in `page.tsx` files and route them through the API.
+**Architectural concern still valid:** The web tier reaching into the DB skips API-level concerns (auth, rate limiting, cache headers, audit logging). When/if we need any of those uniformly, the sweep becomes load-bearing. Until then, no operator-visible impact.
+
+**Reopen criteria:**
+  • Adding Vercel as a deployment target.
+  • Adding auth that needs to gate DB access centrally.
+  • Adding cross-tenant data scoping that needs middleware.
+
+Entry stays in TECH_DEBT for tracking; not actively pursued.
 
 ## 3. ✅ Out-of-scope orphan routes — resolved 2026-05-06
 
@@ -183,13 +190,19 @@ After generation, we could score the title / bullets / description against an Am
 
 Beyond plain Amazon-safe HTML, sellers eventually want rich Amazon Brand Content — image-rich modules, comparison tables, brand storytelling sections. Ships with the publishing path in Phase 6.
 
-## 17. 🟡 /products → URL state for filters / search / sort / page
+## 17. ✅ /products → URL state for filters / search / sort / page — resolved (entry was stale)
 
-The new `/products` browse page keeps all filter / search / sort / page state in client React state. That means a filtered view can't be shared via link, browser back / forward doesn't round-trip filter changes, and opening "the same page in a new tab" loses the user's context.
+**State as of 2026-05-08 verification:** the /products workspace already has full URL state, shipped incrementally across the F1/F10 phases. The entry was kept open because the doc was never updated.
 
-**Proper fix:** mirror state to `searchParams` via `useSearchParams` + `router.replace` (or a Next App Router parallel-route URL state lib). Has to be designed carefully so the server-rendered first paint can also read the params and the client doesn't refetch immediately on hydration.
+`apps/web/src/app/products/ProductsWorkspace.tsx` reads:
+- `lens` (grid view) · `page` · `sortBy` · `pageSize`
+- canonical filter contract via `parseFilters(searchParams)` from `@/lib/filters` (search · status · channel · marketplace)
+- per-page dimensions: `productTypes`, `brands`, `tags`, `fulfillment`, `stockLevel`, `missingChannels`, `hasPhotos`, `hasDescription`
+- drawer state via `?drawer=<productId>` (F1)
 
-Deferred until at least one user asks for a shareable filtered view.
+The write side is `updateUrl(patch)` — a generic `Record<string, string | undefined>` → `router.replace(?next, { scroll: false })` patcher. Search input is debounced (~250ms) before pushing to the URL. Browser back/forward round-trips correctly because `router.replace` updates without a navigation entry.
+
+No follow-up action.
 
 ## 18. 🟡 /products → bulk edit in place
 
@@ -1085,18 +1098,19 @@ Tie this to S.4 channel adapter realization. Don't ship as a standalone fix — 
 
 ---
 
-## 57. 🟡 Syndication channels deferred (Shopify / WooCommerce / Etsy)
+## 57. ⏸ Syndication channels — scope decision finalised 2026-05-08
 
-**Symptom:** Phase 1 audit confirmed zero ChannelListings exist for Shopify, WooCommerce, or Etsy as of 2026-05-07. The `/listings/{shopify,woocommerce,etsy}` page routes are 13-line stubs around `ListingsWorkspace` with `lockChannel` set. The workspace has no channel-specific UI for any of these.
+**Active channel scope (per project memory):** Amazon + eBay + **Shopify**. WooCommerce + Etsy are out of scope for the foreseeable future.
 
-**Surfaced at:** Phase 1 syndication audit + S.0 roadmap calibration (2026-05-07).
+**Status by channel:**
+  • **AMAZON** (S.5) — shipped, used in production
+  • **EBAY** (S.6) — shipped, used in production
+  • **SHOPIFY** — partial. M.1 multi-marketplace AI generator includes it as a target channel; the `/listings/shopify` page route stub is in place. ChannelListing rows for SHOPIFY would be created via the listing wizard once an operator configures a Shopify connection. No deep view (S.7-equivalent) is planned until usage data justifies it.
+  • **WOOCOMMERCE / ETSY** — explicitly skipped (memory: project_active_channels.md). All Etsy/Woo references in the codebase are dead code; safe to delete or leave dormant.
 
-**Decision (with operator):** Defer S.7 (Shopify deep view), S.8 (WooCommerce deep view), S.9 (Etsy deep view). Don't build for hypothetical demand; revive when Awa indicates intent to publish on these channels. Each represents 3–4 weeks of dedicated work.
+**Trigger to revive WooCommerce / Etsy:** Operator says "we're going to start selling on {channel}." Until then, no work justified.
 
-**What stays (minimal viable):**
-- The stub pages keep working (workspace shell renders, just no channel-specific tools).
-- ChannelListing schema supports all five channels — no data model change needed when revived.
-- Outbound sync queue routes already include all five channels (modulo #56's stub status).
+**Trigger to deepen Shopify:** Operator creates the first SHOPIFY ChannelListing via the wizard. At that point, ship the equivalent of S.5 (Amazon deep view) for Shopify — KPI strip, order-driven inventory hooks, Shopify-specific drawer section, etc.
 
 **Trigger to revive:** Operator says "we're going to start selling on {channel}" or DB shows ChannelListings being created for the channel through any path.
 
