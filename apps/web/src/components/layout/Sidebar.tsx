@@ -69,7 +69,7 @@ const NAV_SECTIONS: NavSectionConfig[] = [
     icon: "🛒",
     items: [
       { label: "Manage Orders", href: "/orders", icon: "📋" },
-      { label: "Customers", href: "/orders?lens=customer", icon: "👥" },
+      { label: "Customers", href: "/customers", icon: "👥" },
       { label: "Reviews", href: "/orders?lens=reviews", icon: "⭐" },
       { label: "Returns", href: "/orders?lens=returns", icon: "↩️" },
       { label: "A-to-Z Claims", href: "/orders/claims", icon: "🛡️", disabled: true },
