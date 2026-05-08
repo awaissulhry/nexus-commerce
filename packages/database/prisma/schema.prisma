@@ -3576,6 +3576,10 @@ model InboundShipment {
   attachments   InboundShipmentAttachment[]
   discrepancies InboundDiscrepancy[]
 
+  // F.2 — back-relation to v2024-03-20 inbound plans. Optional on the
+  // child side (a plan can be created standalone via the wizard).
+  fbaInboundPlansV2 FbaInboundPlanV2[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -4602,6 +4606,80 @@ model FbaRestockRow {
   @@unique([sku, marketplace, reportId])
   @@index([sku, marketplace, asOf])
   @@index([reportId])
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// F.2 (TECH_DEBT #50) — FBA Inbound v2024-03-20 plan tracker.
+//
+// The v2024-03-20 SP-API flow is multi-step + asynchronous. Each
+// state-changing call returns an operationId the caller polls until
+// SUCCESS. We persist the plan's progression here so the operator can
+// drop off mid-flow and resume later.
+//
+// status state machine:
+//   DRAFT → CREATING → ACTIVE
+//     → PACKING_OPTIONS_LISTED → PACKING_CONFIRMING → PACKING_CONFIRMED
+//     → PLACEMENT_OPTIONS_LISTED → PLACEMENT_CONFIRMING → PLACEMENT_CONFIRMED
+//     → TRANSPORT_OPTIONS_LISTED → TRANSPORT_CONFIRMING → TRANSPORT_CONFIRMED
+//     → LABELS_READY (terminal-success)
+//   FAILED (terminal-failure, lastError populated)
+// ─────────────────────────────────────────────────────────────────────
+model FbaInboundPlanV2 {
+  id String @id @default(cuid())
+
+  // Optional link back to the operator-visible InboundShipment row.
+  // Set when the plan is initiated from an existing inbound flow;
+  // null when the plan is created standalone via the wizard.
+  inboundShipmentId String?
+  inboundShipment   InboundShipment? @relation(fields: [inboundShipmentId], references: [id], onDelete: SetNull)
+
+  // SP-API identifier (populated after createInboundPlan settles).
+  // Unique because each plan is created once; re-running create
+  // creates a new row.
+  planId String? @unique
+
+  // Operator-friendly name carried through to the SP-API plan.
+  name String?
+
+  // Tracks where the operator is in the multi-step flow. status is
+  // the broader machine; currentStep is the next operation the UI
+  // would invoke.
+  status      String @default("DRAFT")
+  currentStep String @default("CREATE")
+
+  // Pending operationId per step so the polling service can pick up
+  // mid-flow. Shape: { CREATE?: string, CONFIRM_PACKING?: string,
+  // CONFIRM_PLACEMENT?: string, CONFIRM_TRANSPORT?: string }.
+  operationIds Json?
+
+  // Operator's per-step selections — null until the operator picks.
+  selectedPackingOptionId   String?
+  selectedPlacementOptionId String?
+  // Multi-shipment plans pick a transportationOptionId per shipment.
+  // Shape: [{ shipmentId, transportationOptionId, contactInformation? }].
+  selectedTransportationOptions Json?
+
+  // Amazon shipmentIds emitted once placement is confirmed. Drives
+  // the labels step (one label set per shipment).
+  shipmentIds String[] @default([])
+
+  // Cached label download metadata after getShipmentLabels lands.
+  // Shape per shipmentId: { documentDownloads: [{ source, downloadType, expiration }] }.
+  labels Json?
+
+  // Audit
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  // Surface the most recent step error in the UI without walking
+  // the operations log.
+  lastError   String?
+  lastErrorAt DateTime?
+
+  @@index([planId])
+  @@index([status])
+  @@index([inboundShipmentId])
+  @@index([createdAt])
 }
 
 // ─────────────────────────────────────────────────────────────────────
