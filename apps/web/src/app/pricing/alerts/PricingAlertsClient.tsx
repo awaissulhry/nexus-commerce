@@ -15,6 +15,7 @@ import {
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Button } from '@/components/ui/Button'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -73,6 +74,7 @@ interface AlertsResponse {
 }
 
 export default function PricingAlertsClient() {
+  const { t } = useTranslations()
   const [data, setData] = useState<AlertsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -126,8 +128,8 @@ export default function PricingAlertsClient() {
     return (
       <EmptyState
         icon={CheckCircle2}
-        title="No pricing alerts"
-        description="Every snapshot resolved cleanly within its constraints."
+        title={t('pricing.alerts.empty')}
+        description={t('pricing.alerts.emptyHint')}
       />
     )
   }
@@ -138,34 +140,36 @@ export default function PricingAlertsClient() {
           (silent revenue leak), engine-resolution buckets last. */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <CountTile
-          label="Drift"
+          label={t('pricing.alerts.bucket.drift')}
           value={data.counts.drift}
           tone="rose"
-          hint="Listing price drifted from master. Sync-drift detector last 24h."
+          hint={t('pricing.alerts.bucket.driftHint')}
         />
         <CountTile
-          label={`Low margin <${data.thresholds.lowMarginPct}%`}
+          label={t('pricing.alerts.bucket.lowMargin', {
+            pct: data.thresholds.lowMarginPct,
+          })}
           value={data.counts.lowMargin}
           tone="rose"
-          hint="Post-fee net margin below threshold."
+          hint={t('pricing.alerts.bucket.lowMarginHint')}
         />
         <CountTile
-          label="No resolution"
+          label={t('pricing.alerts.bucket.fallback')}
           value={data.counts.fallback}
           tone="rose"
-          hint="Engine had no master price or rules to fall back to."
+          hint={t('pricing.alerts.bucket.fallbackHint')}
         />
         <CountTile
-          label="Clamped"
+          label={t('pricing.alerts.bucket.clamped')}
           value={data.counts.clamped}
           tone="amber"
-          hint="Engine had to floor or ceiling-cap the computed price."
+          hint={t('pricing.alerts.bucket.clampedHint')}
         />
         <CountTile
-          label="Warnings only"
+          label={t('pricing.alerts.bucket.warnings')}
           value={data.counts.warnings}
           tone="blue"
-          hint="Resolution succeeded but with caveats — review the breakdown."
+          hint={t('pricing.alerts.bucket.warningsHint')}
         />
       </div>
 
@@ -187,7 +191,9 @@ export default function PricingAlertsClient() {
       {data.driftRows.length > 0 && (
         <div className="space-y-2">
           <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
-            Master cascade drift · {data.driftRows.length}
+            {t('pricing.alerts.section.driftTable', {
+              n: data.driftRows.length,
+            })}
           </div>
           <Card noPadding>
             <div className="overflow-x-auto">
@@ -270,9 +276,13 @@ export default function PricingAlertsClient() {
       {data.lowMarginRows.length > 0 && (
         <div className="space-y-2">
           <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
-            Low margin · {data.lowMarginRows.length}
+            {t('pricing.alerts.section.lowMargin', {
+              n: data.lowMarginRows.length,
+            })}
             <span className="ml-2 normal-case font-normal text-slate-400">
-              post-fee net margin below {data.thresholds.lowMarginPct}%
+              {t('pricing.alerts.section.lowMarginSuffix', {
+                pct: data.thresholds.lowMarginPct,
+              })}
             </span>
           </div>
           <Card noPadding>
@@ -378,7 +388,7 @@ export default function PricingAlertsClient() {
         <div className="space-y-2">
           {(data.driftRows.length > 0 || data.lowMarginRows.length > 0) && (
             <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
-              Engine resolution alerts · {data.rows.length}
+              {t('pricing.alerts.section.engine', { n: data.rows.length })}
             </div>
           )}
       <Card noPadding>

@@ -1121,5 +1121,43 @@
 
   "orders.reviews.manageRules": "Gestisci regole",
   "orders.reviews.runEngine": "Esegui motore ora",
-  "orders.reviews.engineResult": "Motore eseguito: {processed} elaborati · {sent} inviati · {failed} falliti · {suppressed} soppressi"
+  "orders.reviews.engineResult": "Motore eseguito: {processed} elaborati · {sent} inviati · {failed} falliti · {suppressed} soppressi",
+
+  "pricing.title": "Prezzi",
+  "pricing.subtitle": "Prezzi per marketplace risolti dal motore. Clicca una cella per modificare, clicca una riga per il dettaglio completo + cronologia.",
+
+  "pricing.action.refresh": "Aggiorna",
+  "pricing.action.recomputeAll": "Ricalcola tutto",
+  "pricing.action.recomputing": "Ricalcolo in corso…",
+
+  "pricing.kpi.drift": "Deriva",
+  "pricing.kpi.driftHint": "Prezzo annuncio ≠ master",
+  "pricing.kpi.alerts": "Avvisi",
+  "pricing.kpi.alertsHint": "Vincolati / ripiego / avvisi",
+  "pricing.kpi.onSale": "In saldo",
+  "pricing.kpi.onSaleHint": "Eventi retail attivi",
+  "pricing.kpi.snapshotAge": "Età snapshot",
+  "pricing.kpi.snapshotAgeHint": "Cron orario previsto",
+  "pricing.kpi.noCost": "Senza costo",
+  "pricing.kpi.noCostHint": "Soglia margine non applicabile",
+  "pricing.kpi.buyBox": "Buy Box",
+  "pricing.kpi.buyBoxHintEmpty": "Nessuna osservazione SP-API",
+  "pricing.kpi.buyBoxHint": "{wins}/{obs} oss · 7g",
+
+  "pricing.alerts.empty": "Nessun avviso prezzi",
+  "pricing.alerts.emptyHint": "Ogni snapshot è stato risolto correttamente entro i suoi vincoli.",
+  "pricing.alerts.bucket.drift": "Deriva",
+  "pricing.alerts.bucket.driftHint": "Prezzo annuncio derivato dal master. Rilevatore di deriva — ultime 24h.",
+  "pricing.alerts.bucket.lowMargin": "Margine basso <{pct}%",
+  "pricing.alerts.bucket.lowMarginHint": "Margine netto post-commissioni sotto soglia.",
+  "pricing.alerts.bucket.fallback": "Nessuna risoluzione",
+  "pricing.alerts.bucket.fallbackHint": "Il motore non ha trovato master price né regole su cui ripiegare.",
+  "pricing.alerts.bucket.clamped": "Vincolato",
+  "pricing.alerts.bucket.clampedHint": "Il motore ha dovuto applicare un floor o un ceiling al prezzo calcolato.",
+  "pricing.alerts.bucket.warnings": "Solo avvisi",
+  "pricing.alerts.bucket.warningsHint": "La risoluzione è riuscita ma con riserve — controlla il dettaglio.",
+  "pricing.alerts.section.driftTable": "Deriva del cascade master · {n}",
+  "pricing.alerts.section.lowMargin": "Margine basso · {n}",
+  "pricing.alerts.section.lowMarginSuffix": "margine netto post-commissioni sotto {pct}%",
+  "pricing.alerts.section.engine": "Avvisi di risoluzione motore · {n}"
 }

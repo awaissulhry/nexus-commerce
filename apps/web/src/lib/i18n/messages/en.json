@@ -1150,5 +1150,43 @@
 
   "orders.reviews.manageRules": "Manage rules",
   "orders.reviews.runEngine": "Run engine now",
-  "orders.reviews.engineResult": "Engine ran: {processed} processed · {sent} sent · {failed} failed · {suppressed} suppressed"
+  "orders.reviews.engineResult": "Engine ran: {processed} processed · {sent} sent · {failed} failed · {suppressed} suppressed",
+
+  "pricing.title": "Pricing",
+  "pricing.subtitle": "Per-marketplace prices resolved by the engine. Click any cell to edit, click a row for full breakdown + history.",
+
+  "pricing.action.refresh": "Refresh",
+  "pricing.action.recomputeAll": "Recompute all",
+  "pricing.action.recomputing": "Recomputing…",
+
+  "pricing.kpi.drift": "Drift",
+  "pricing.kpi.driftHint": "Listing.price ≠ master",
+  "pricing.kpi.alerts": "Alerts",
+  "pricing.kpi.alertsHint": "Clamped / fallback / warnings",
+  "pricing.kpi.onSale": "On sale",
+  "pricing.kpi.onSaleHint": "Active retail events",
+  "pricing.kpi.snapshotAge": "Snapshot age",
+  "pricing.kpi.snapshotAgeHint": "Hourly cron expected",
+  "pricing.kpi.noCost": "No cost",
+  "pricing.kpi.noCostHint": "Margin floor unenforceable",
+  "pricing.kpi.buyBox": "Buy Box",
+  "pricing.kpi.buyBoxHintEmpty": "No SP-API observations yet",
+  "pricing.kpi.buyBoxHint": "{wins}/{obs} obs · 7d",
+
+  "pricing.alerts.empty": "No pricing alerts",
+  "pricing.alerts.emptyHint": "Every snapshot resolved cleanly within its constraints.",
+  "pricing.alerts.bucket.drift": "Drift",
+  "pricing.alerts.bucket.driftHint": "Listing price drifted from master. Sync-drift detector last 24h.",
+  "pricing.alerts.bucket.lowMargin": "Low margin <{pct}%",
+  "pricing.alerts.bucket.lowMarginHint": "Post-fee net margin below threshold.",
+  "pricing.alerts.bucket.fallback": "No resolution",
+  "pricing.alerts.bucket.fallbackHint": "Engine had no master price or rules to fall back to.",
+  "pricing.alerts.bucket.clamped": "Clamped",
+  "pricing.alerts.bucket.clampedHint": "Engine had to floor or ceiling-cap the computed price.",
+  "pricing.alerts.bucket.warnings": "Warnings only",
+  "pricing.alerts.bucket.warningsHint": "Resolution succeeded but with caveats — review the breakdown.",
+  "pricing.alerts.section.driftTable": "Master cascade drift · {n}",
+  "pricing.alerts.section.lowMargin": "Low margin · {n}",
+  "pricing.alerts.section.lowMarginSuffix": "post-fee net margin below {pct}%",
+  "pricing.alerts.section.engine": "Engine resolution alerts · {n}"
 }

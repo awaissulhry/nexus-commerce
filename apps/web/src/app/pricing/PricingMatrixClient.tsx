@@ -34,6 +34,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Button } from '@/components/ui/Button'
 import { Modal, ModalBody } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -94,6 +95,7 @@ const SOURCE_LABEL: Record<string, string> = {
 }
 
 export default function PricingMatrixClient() {
+  const { t } = useTranslations()
   const [data, setData] = useState<MatrixResponse | null>(null)
   const [kpis, setKpis] = useState<KpiResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -331,7 +333,7 @@ export default function PricingMatrixClient() {
               disabled={loading}
               icon={<RefreshCw size={12} />}
             >
-              Refresh
+              {t('pricing.action.refresh')}
             </Button>
             <Button
               variant="primary"
@@ -341,7 +343,9 @@ export default function PricingMatrixClient() {
               disabled={refreshing}
               icon={refreshing ? null : <Zap size={12} />}
             >
-              {refreshing ? 'Recomputing…' : 'Recompute all'}
+              {refreshing
+                ? t('pricing.action.recomputing')
+                : t('pricing.action.recomputeAll')}
             </Button>
           </div>
         </div>
@@ -788,11 +792,13 @@ function Item({
   )
 }
 
-// B.1 + F.1.b — KPI strip. Six tiles, dense Salesforce/Airtable style (per
-// the visibility-over-minimalism feedback memory). Each tile shows the
+// B.1 + F.1.b + H.1 — KPI strip. Six tiles, dense Salesforce/Airtable style
+// (per the visibility-over-minimalism feedback memory). Each tile shows the
 // count + a one-word label + a hint sentence. Drift + Alerts deep-link to
 // /pricing/alerts; On sale → /pricing/promotions; the rest are read-only.
+// Labels + hints are i18n'd; numerals stay locale-agnostic.
 function KpiStrip({ kpis }: { kpis: KpiResponse | null }) {
+  const { t } = useTranslations()
   // Snapshot age: green ≤1h (cron just ran), amber ≤4h, rose >4h.
   const stale = kpis?.snapshots.oldestAgeHours
   const staleTone =
@@ -823,8 +829,11 @@ function KpiStrip({ kpis }: { kpis: KpiResponse | null }) {
       : `${wr.toFixed(1)}%`
   const buyBoxHint =
     kpis && kpis.buyBox.observations > 0
-      ? `${kpis.buyBox.ourWins}/${kpis.buyBox.observations} obs · 7d`
-      : 'No SP-API observations yet'
+      ? t('pricing.kpi.buyBoxHint', {
+          wins: kpis.buyBox.ourWins,
+          obs: kpis.buyBox.observations,
+        })
+      : t('pricing.kpi.buyBoxHintEmpty')
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
@@ -832,44 +841,44 @@ function KpiStrip({ kpis }: { kpis: KpiResponse | null }) {
         href="/pricing/alerts"
         icon={TrendingDown}
         value={kpis?.drift ?? '—'}
-        label="Drift"
+        label={t('pricing.kpi.drift')}
         tone={kpis && kpis.drift > 0 ? 'rose' : 'slate'}
-        hint="Listing.price ≠ master"
+        hint={t('pricing.kpi.driftHint')}
       />
       <KpiTile
         href="/pricing/alerts"
         icon={AlertTriangle}
         value={kpis?.alerts ?? '—'}
-        label="Alerts"
+        label={t('pricing.kpi.alerts')}
         tone={kpis && kpis.alerts > 0 ? 'amber' : 'slate'}
-        hint="Clamped / fallback / warnings"
+        hint={t('pricing.kpi.alertsHint')}
       />
       <KpiTile
         href="/pricing/promotions"
         icon={Tag}
         value={kpis?.salesActive ?? '—'}
-        label="On sale"
+        label={t('pricing.kpi.onSale')}
         tone={kpis && kpis.salesActive > 0 ? 'pink' : 'slate'}
-        hint="Active retail events"
+        hint={t('pricing.kpi.onSaleHint')}
       />
       <KpiTile
         icon={Clock}
         value={staleLabel}
-        label="Snapshot age"
+        label={t('pricing.kpi.snapshotAge')}
         tone={staleTone}
-        hint="Hourly cron expected"
+        hint={t('pricing.kpi.snapshotAgeHint')}
       />
       <KpiTile
         icon={AlertCircle}
         value={kpis?.marginAtRisk ?? '—'}
-        label="No cost"
+        label={t('pricing.kpi.noCost')}
         tone={kpis && kpis.marginAtRisk > 0 ? 'amber' : 'slate'}
-        hint="Margin floor unenforceable"
+        hint={t('pricing.kpi.noCostHint')}
       />
       <KpiTile
         icon={Trophy}
         value={buyBoxLabel}
-        label="Buy Box"
+        label={t('pricing.kpi.buyBox')}
         tone={buyBoxTone}
         hint={buyBoxHint}
       />
