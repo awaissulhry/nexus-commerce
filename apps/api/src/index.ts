@@ -78,6 +78,7 @@ import { startReservationSweepCron } from "./jobs/reservation-sweep.job.js";
 import { startLateShipmentFlagCron } from "./jobs/late-shipment-flag.job.js";
 import { startTrackingPushbackCron } from "./jobs/tracking-pushback.job.js";
 import { startCarrierServiceSyncCron } from "./jobs/carrier-service-sync.job.js";
+import { startPickupDispatchCron } from "./jobs/pickup-dispatch.job.js";
 import { startOutboundLateRiskCron } from "./jobs/outbound-late-risk.job.js";
 import { startSavedViewAlertsCron } from "./jobs/saved-view-alerts.job.js";
 import { startSyncDriftDetectionCron } from "./jobs/sync-drift-detection.job.js";
@@ -481,6 +482,13 @@ async function start() {
     // current without firing /shipping_methods on every drawer-open.
     // Default-ON; opt out via NEXUS_ENABLE_CARRIER_SERVICE_SYNC_CRON=0.
     startCarrierServiceSyncCron();
+
+    // CR.21 — daily recurring-pickup dispatcher. Walks PickupSchedule
+    // rows where isRecurring=true + today matches the daysOfWeek
+    // bitmap, fires sendcloud.requestPickup. Idempotent: skips rows
+    // already dispatched today. Runs at 04:00 (after the catalog sync
+    // at 02:00). Default-ON; NEXUS_ENABLE_PICKUP_DISPATCH_CRON=0 opts out.
+    startPickupDispatchCron();
 
     // O.19 — outbound late-shipment risk monitor. Hourly sweep that
     // logs counts of overdue / due-today / became-overdue-in-last-24h
