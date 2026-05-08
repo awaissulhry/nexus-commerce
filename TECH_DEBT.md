@@ -769,23 +769,18 @@ Disabling the wizard's PV writes without first refactoring these readers would s
 
 ---
 
-## 45. 🟡 Local apps/api Prisma client version mismatch (`@prisma/client` v6 vs v7)
+## 45. ✅ Local apps/api Prisma client version mismatch — resolved 2026-05-08
 
-**Symptom:** Local dev API server (`apps/api`) returns 500 on every Prisma query with `Invalid prisma.X invocation in ...` (truncated error). Same Prisma client works fine when invoked from a fresh Node script using `@nexus/database`.
+**Resolution:** Aligned every Prisma dependency on v6.19.3:
+  • `apps/api/package.json`: `@prisma/client` and `prisma` both `^6.19.3`; `@prisma/adapter-pg` downgraded to `^6.19.3` (was `^7.7.0`, which dragged in `@prisma/client@7.x` as a peer dep).
+  • `packages/database/package.json`: same alignment (was already mostly v6 except for the v7 adapter).
+  • `npm dedupe` collapsed the duplicate apps/api/node_modules/@prisma/client@7.8.0 into a single hoisted v6.19.3.
 
-**Surfaced at:** Phase 2 smoke test (2026-05-06). Couldn't verify variant endpoint locally; production unaffected (Railway builds dependencies fresh and aligns versions).
+`npm ls @prisma/client` now shows a single v6.19.3 across the workspace tree. `npm run build --workspace=@nexus/api` succeeds. Runtime parity with packages/database's generated client is restored.
 
-**Root cause:** Dependency split.
-- `apps/api/package.json`: `"@prisma/client": "^7.7.0"` + `"@prisma/adapter-pg": "^7.7.0"`
-- `packages/database/package.json`: `"prisma": "^6.19.3"` + `"@prisma/client": "^6.19.3"`
+**Note:** Bumping the whole stack to v7 was attempted first (since v7 is the current series) but the v7 CLI errored on the existing `prisma.config.ts` shape during postinstall. Deferred — see entry 46 placeholder if a v6 → v7 upgrade lands later.
 
-The CLI in `packages/database` (v6) generates a client compatible with `@prisma/client` v6, but `apps/api` loads `@prisma/client` v7 from its own `node_modules`. Same package, incompatible major versions.
-
-**Workaround:** None for local dev. Verify against deployed Railway API instead, which builds dependencies fresh and ends up consistent.
-
-**Proper fix:** Align versions. Either bump `packages/database` to `prisma@^7` (preferred — v7 is the current series) or pin `apps/api` to `^6.19.3`. Then `npm install` from repo root and `prisma generate` to confirm clean.
-
-**Risk if left:** New developers can't run the API locally for any Prisma-touching path. Slows onboarding + makes integration testing impossible without a deployed environment.
+**Original symptom:** Local dev API server returned 500 on every Prisma query because apps/api's @prisma/client@7 was a different major than the v6 client the CLI generates. Production unaffected (Railway builds dependencies fresh in a single hoisted state).
 
 ---
 
