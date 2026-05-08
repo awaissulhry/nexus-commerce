@@ -59,25 +59,31 @@ const ATTRIBUTE_SCALAR_ALLOWLIST: ReadonlySet<string> = new Set([
 ])
 
 const CATEGORY_ATTRIBUTES_PREFIX = 'categoryAttributes.'
+// P1 #52 — variantAttributes path lets bulk ATTRIBUTE_UPDATE write
+// per-child-row variant values (e.g., Color, Size) on Product child
+// rows. Same shape as categoryAttributes but on a different JSON
+// column. Use `variantAttributes.Color` etc. as the attributeName.
+const VARIANT_ATTRIBUTES_PREFIX = 'variantAttributes.'
 
 type ProductLike = {
   categoryAttributes?: unknown
+  variantAttributes?: unknown
   [key: string]: unknown
 }
 
 /**
  * Read the current value of the attribute referenced by attributeName.
  * Returns kind='unsupported' for keys outside the allowlist + the
- * categoryAttributes prefix so callers can surface a clear preview
- * skip without writing.
+ * categoryAttributes / variantAttributes prefixes so callers can
+ * surface a clear preview skip without writing.
  */
 function readProductAttribute(
   product: ProductLike,
   attributeName: string,
 ): {
   currentValue: unknown
-  kind: 'scalar' | 'categoryAttribute' | 'unsupported'
-  /** When kind='categoryAttribute', the inner key (after the prefix). */
+  kind: 'scalar' | 'categoryAttribute' | 'variantAttribute' | 'unsupported'
+  /** When kind is a JSON-path variant, the inner key (after the prefix). */
   jsonKey?: string
 } {
   if (ATTRIBUTE_SCALAR_ALLOWLIST.has(attributeName)) {
@@ -97,6 +103,18 @@ function readProductAttribute(
         ? (raw as Record<string, unknown>)
         : {}
     return { currentValue: obj[jsonKey] ?? null, kind: 'categoryAttribute', jsonKey }
+  }
+  if (attributeName.startsWith(VARIANT_ATTRIBUTES_PREFIX)) {
+    const jsonKey = attributeName.slice(VARIANT_ATTRIBUTES_PREFIX.length)
+    if (jsonKey.length === 0) {
+      return { currentValue: null, kind: 'unsupported' }
+    }
+    const raw = product.variantAttributes
+    const obj =
+      raw && typeof raw === 'object' && !Array.isArray(raw)
+        ? (raw as Record<string, unknown>)
+        : {}
+    return { currentValue: obj[jsonKey] ?? null, kind: 'variantAttribute', jsonKey }
   }
   return { currentValue: null, kind: 'unsupported' }
 }
@@ -1810,6 +1828,9 @@ export class BulkActionService {
         // C.9 — Product (was ProductVariation). Re-reads the slice
         // the payload's attributeName targets so afterState mirrors
         // the captured beforeState shape.
+        // P1 #52 — variantAttributes now part of the readback so the
+        // new variantAttribute kind round-trips through the audit
+        // trail symmetrically.
         const fresh = await this.prisma.product.findUnique({
           where: { id: itemId },
           select: {
@@ -1827,6 +1848,7 @@ export class BulkActionService {
             dimHeight: true,
             dimUnit: true,
             categoryAttributes: true,
+            variantAttributes: true,
           },
         });
         return fresh ? this.extractItemState(fresh, actionType, payload) : {};
@@ -2182,7 +2204,7 @@ export class BulkActionService {
         where: { id: item.id },
         data: { [attributeName]: newValue } as any,
       })
-    } else {
+    } else if (kind === 'categoryAttribute') {
       // categoryAttributes JSON merge.
       const raw = (item as ProductLike).categoryAttributes
       const current =
@@ -2193,6 +2215,21 @@ export class BulkActionService {
       await this.prisma.product.update({
         where: { id: item.id },
         data: { categoryAttributes: merged as any },
+      })
+    } else {
+      // P1 #52 — variantAttributes JSON merge. Mirrors the
+      // categoryAttributes path but writes per-variant values on
+      // Product (used for child products that carry Color / Size /
+      // material values for Amazon variation themes).
+      const raw = (item as ProductLike).variantAttributes
+      const current =
+        raw && typeof raw === 'object' && !Array.isArray(raw)
+          ? (raw as Record<string, unknown>)
+          : {}
+      const merged = { ...current, [jsonKey!]: newValue }
+      await this.prisma.product.update({
+        where: { id: item.id },
+        data: { variantAttributes: merged as any },
       })
     }
 

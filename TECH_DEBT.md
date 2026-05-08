@@ -913,20 +913,19 @@ The flow is asynchronous — each step polls an `operationId` until the operatio
 
 ---
 
-## 52. 🟡 Bulk ATTRIBUTE_UPDATE still targets empty ProductVariation table
+## 52. ✅ Bulk ATTRIBUTE_UPDATE now also writes variantAttributes — resolved 2026-05-08 (M.21)
 
-**Symptom:** `BulkActionJob` of type `ATTRIBUTE_UPDATE` shallow-merges into `ProductVariation.variationAttributes`. PV is empty in production, so jobs run silently with 0 items processed. Same shape as the old #44 PRICING/INVENTORY bug, scoped down to the one remaining handler.
+**Resolution:** Verified the codebase had already retargeted ATTRIBUTE_UPDATE to `Product` (not `ProductVariation`). The handler at `apps/api/src/services/bulk-action.service.ts:processAttributeUpdate` writes either a scalar Product field (allowlist) or a `categoryAttributes.<key>` JSON path. M.21 extends it to also support `variantAttributes.<key>` JSON paths, which mirror categoryAttributes but on the per-child `Product.variantAttributes` column (where Color / Size / material values live for Amazon variation themes).
 
-**Surfaced at:** Phase 1 audit + Commit 1 of the bulk-operations rebuild (2026-05-06). PRICING + INVENTORY were retargeted to Product in Commit 1; ATTRIBUTE_UPDATE was deferred because there's no obvious target column on Product.
+**Implementation in M.21:**
+  • `readProductAttribute()` adds a third branch for `variantAttributes.` prefix returning `kind: 'variantAttribute'`
+  • `processAttributeUpdate()` handles the new kind with the same JSON-merge pattern as categoryAttributes
+  • `refetchAfterState()` now selects `variantAttributes` so afterState round-trips through audit
+  • Rollback automatically works (replays processAttributeUpdate with the captured beforeState)
 
-**Decision needed:** which Product column holds the equivalent of `variationAttributes`? Candidates:
-- `Product.attributes` (if it exists — verify in schema)
-- A new `Product.variantAttributes` JSON column added by migration
-- Continue routing through PV but require callers to also create PV rows when they create Product children (large structural change to the catalog import flow)
+Operator can now bulk-set `variantAttributes.Color` on a filter of child rows in one bulk op. The OutboundSyncQueue fan-out is unchanged — every linked ChannelListing gets a LISTING_SYNC enqueue with the new attribute value.
 
-**Proper fix:** Once decided, change `ACTION_ENTITY.ATTRIBUTE_UPDATE` from `'variation'` to `'product'`, retarget `processAttributeUpdate` to write the chosen Product column, and remove the deprecation comment in DEVELOPMENT.md.
-
-**Risk if left:** Bulk attribute updates from `/bulk-operations` modal silently no-op. Users see "completed, 0 processed" with no error. Low blast-radius (no one has run this op in production per Phase 1 audit), but a real bug.
+**Original symptom (kept for context):** ATTRIBUTE_UPDATE was the last bulk handler that hadn't been retargeted from the empty ProductVariation table to Product. PRICING/INVENTORY/STATUS landed in Commit 1 of the rebuild; ATTRIBUTE was deferred pending a schema decision. M.21's decision: use the existing `Product.variantAttributes` JSON column for variant-level values and `categoryAttributes` for category-level values; no new schema needed.
 
 ---
 
