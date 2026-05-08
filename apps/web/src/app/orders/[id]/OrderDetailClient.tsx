@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
+import { deepLinkForOrder } from '../_lib/deep-links'
 
 const CHANNEL_TONE: Record<string, string> = {
   AMAZON: 'bg-orange-50 text-orange-700 border-orange-200',
@@ -101,6 +102,25 @@ export default function OrderDetailClient({ id }: { id: string }) {
         breadcrumbs={[{ label: 'Orders', href: '/orders' }, { label: order.channelOrderId }]}
         actions={
           <div className="flex items-center gap-2">
+            {(() => {
+              const link = deepLinkForOrder({
+                channel: order.channel,
+                marketplace: order.marketplace,
+                channelOrderId: order.channelOrderId,
+              })
+              if (!link) return null
+              return (
+                <a
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={link.label}
+                  className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+                >
+                  <ExternalLink size={12} /> {link.label}
+                </a>
+              )
+            })()}
             <button
               onClick={requestReviewNow}
               disabled={reviewBusy || !order.deliveredAt}

@@ -18,13 +18,14 @@
 
 import { useEffect, useMemo, useRef } from 'react'
 import Link from 'next/link'
-import { ChevronRight, Settings2, ShoppingCart } from 'lucide-react'
+import { ChevronRight, ExternalLink, Settings2, ShoppingCart } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { ALL_COLUMNS, DEFAULT_VISIBLE, type OrderColumn } from '../_lib/columns'
+import { deepLinkForOrder } from '../_lib/deep-links'
 import {
   channelTone,
   REVIEW_STATUS_TONE,
@@ -343,14 +344,34 @@ function OrderCell({
           aria-label={`Select order ${o.channelOrderId}`}
         />
       )
-    case 'channel':
+    case 'channel': {
+      const link = deepLinkForOrder({
+        channel: o.channel,
+        marketplace: o.marketplace,
+        channelOrderId: o.channelOrderId,
+      })
       return (
         <div className="flex flex-col gap-0.5">
-          <span
-            className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded w-fit ${channelTone(o.channel)}`}
-          >
-            {o.channel}
-          </span>
+          <div className="flex items-center gap-1">
+            <span
+              className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded w-fit ${channelTone(o.channel)}`}
+            >
+              {o.channel}
+            </span>
+            {link && (
+              <a
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                aria-label={link.label}
+                title={link.label}
+                className="text-slate-400 hover:text-slate-700"
+              >
+                <ExternalLink size={11} aria-hidden="true" />
+              </a>
+            )}
+          </div>
           {o.marketplace && (
             <span className="text-xs text-slate-500 font-mono">
               {o.marketplace}
@@ -358,6 +379,7 @@ function OrderCell({
           )}
         </div>
       )
+    }
     case 'orderId':
       return (
         <Link
