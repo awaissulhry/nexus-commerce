@@ -40,6 +40,7 @@ import {
   X,
   Trash2,
   RotateCcw,
+  Calendar,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
@@ -57,6 +58,12 @@ const AiBulkGenerateModal = dynamic(
 )
 const CompareProductsModal = dynamic(
   () => import('../_modals/CompareProductsModal'),
+  { ssr: false },
+)
+// F.3.b — bulk-schedule modal. Lazy because the datetime picker +
+// kind/payload form is unused on a typical page load.
+const ScheduleChangeModal = dynamic(
+  () => import('../_modals/ScheduleChangeModal'),
   { ssr: false },
 )
 
@@ -104,6 +111,9 @@ export function BulkActionBar({
   // P.17 — compare-products modal state. Visible when 2-4 products
   // are in the selection; uses productLookup so no extra fetch.
   const [compareModalOpen, setCompareModalOpen] = useState(false)
+  // F.3.b — bulk-schedule modal state. Always available (any
+  // selection ≥ 1) in the active scope; hidden in the recycle bin.
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false)
   const compareEligible = selectedIds.length >= 2 && selectedIds.length <= 4
   const compareSubjects = useMemo(() => {
     if (!compareEligible) return []
@@ -502,6 +512,21 @@ export function BulkActionBar({
             AI fill
           </Button>
 
+          {/* F.3.b — schedule a status flip or price change for a
+              future moment. The cron worker applies the change at
+              the chosen time via the same master*Service path as a
+              live edit. */}
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setScheduleModalOpen(true)}
+            disabled={busy}
+            title="Defer a status flip or price change to a future timestamp"
+            icon={<Calendar size={12} />}
+          >
+            Schedule
+          </Button>
+
           <Link
             href={`/bulk-operations?productIds=${selectedIds.join(',')}`}
             className="h-7 px-3 text-base bg-violet-50 text-violet-700 border border-violet-200 rounded hover:bg-violet-100 inline-flex items-center gap-1.5"
@@ -555,6 +580,16 @@ export function BulkActionBar({
         <CompareProductsModal
           products={compareSubjects}
           onClose={() => setCompareModalOpen(false)}
+        />
+      )}
+      {scheduleModalOpen && (
+        <ScheduleChangeModal
+          productIds={selectedIds}
+          onClose={() => setScheduleModalOpen(false)}
+          onComplete={() => {
+            setScheduleModalOpen(false)
+            onComplete()
+          }}
         />
       )}
     </div>
