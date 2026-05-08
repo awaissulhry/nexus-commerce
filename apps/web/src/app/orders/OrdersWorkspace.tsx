@@ -107,6 +107,10 @@ export default function OrdersWorkspace() {
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [filtersOpen, setFiltersOpen] = useState(false)
+  // O.14 — keyboard row navigation. -1 = no row focused; J/ArrowDown
+  // sets to 0 on first press. Reset whenever the orders list itself
+  // changes underneath (page/search/filter shift).
+  const [activeRowIndex, setActiveRowIndex] = useState(-1)
   const [columnPickerOpen, setColumnPickerOpen] = useState(false)
 
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
@@ -187,6 +191,79 @@ export default function OrdersWorkspace() {
   }, [lens, fetchOrders])
 
   useEffect(() => { setSelected(new Set()) }, [page, search, channelFilters.join(','), marketplaceFilters.join(','), statusFilters.join(','), fulfillmentFilters.join(','), hasReturn, hasRefund, reviewEligible])
+
+  // O.14 — reset row focus on filter/search/page change so the cursor
+  // doesn't point at a row that just scrolled off the page.
+  useEffect(() => {
+    setActiveRowIndex(-1)
+  }, [page, search, channelFilters.join(','), marketplaceFilters.join(','), statusFilters.join(','), fulfillmentFilters.join(','), reviewStatusFilters.join(','), hasReturn, hasRefund, reviewEligible, lens])
+
+  // O.14 — keyboard shortcuts on the Grid lens. Mirrors the canonical
+  // pattern from /listings, /products, /fulfillment/returns:
+  //   /              focus search input
+  //   j / ArrowDown  next row
+  //   k / ArrowUp    previous row
+  //   Enter          open the focused row's detail page
+  //   Space          toggle row selection
+  //   Escape         clear the search → row focus → selection chain
+  // Skipped while typing in any input/textarea/select/contentEditable
+  // so the search field's own keystrokes don't get intercepted. Cmd/
+  // Ctrl combos defer to the app-wide CommandPalette.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName
+      const inEditable =
+        tag === 'INPUT' ||
+        tag === 'TEXTAREA' ||
+        tag === 'SELECT' ||
+        (e.target as HTMLElement)?.isContentEditable
+      if (inEditable) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+
+      if (e.key === '/') {
+        e.preventDefault()
+        const input = document.getElementById('orders-search') as HTMLInputElement | null
+        input?.focus()
+        input?.select()
+        return
+      }
+
+      if (e.key === 'Escape') {
+        if (searchInput) setSearchInput('')
+        else if (activeRowIndex >= 0) setActiveRowIndex(-1)
+        else if (selected.size > 0) setSelected(new Set())
+        return
+      }
+
+      if (lens !== 'grid') return
+      const rows = orders.length
+      if (e.key === 'j' || e.key === 'ArrowDown') {
+        e.preventDefault()
+        setActiveRowIndex((i) => Math.min(i + 1, rows - 1))
+      } else if (e.key === 'k' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        setActiveRowIndex((i) => Math.max(i - 1, 0))
+      } else if (e.key === 'Enter') {
+        if (activeRowIndex >= 0 && activeRowIndex < rows) {
+          e.preventDefault()
+          router.push(`/orders/${orders[activeRowIndex].id}`)
+        }
+      } else if (e.key === ' ') {
+        if (activeRowIndex >= 0 && activeRowIndex < rows) {
+          e.preventDefault()
+          const id = orders[activeRowIndex].id
+          setSelected((prev) => {
+            const next = new Set(prev)
+            if (next.has(id)) next.delete(id)
+            else next.add(id)
+            return next
+          })
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [lens, orders, activeRowIndex, searchInput, selected.size, router])
 
   const filterCount =
     channelFilters.length + marketplaceFilters.length + statusFilters.length +
@@ -270,6 +347,7 @@ export default function OrdersWorkspace() {
           })}
           selected={selected}
           setSelected={setSelected}
+          activeRowIndex={activeRowIndex}
           onPage={(p: number) => updateUrl({ page: p === 1 ? undefined : String(p) })}
           onPageSize={(s: number) => updateUrl({ pageSize: s === 50 ? undefined : String(s), page: undefined })}
         />

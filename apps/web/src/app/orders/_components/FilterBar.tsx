@@ -79,6 +79,7 @@ export function FilterBar(props: FilterBarProps) {
               className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
             />
             <Input
+              id="orders-search"
               placeholder={t('orders.search.placeholder')}
               value={searchInput}
               onChange={(e: any) => setSearchInput(e.target.value)}

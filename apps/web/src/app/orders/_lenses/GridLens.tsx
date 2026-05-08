@@ -72,6 +72,8 @@ interface GridLensProps {
   onSort: (key: string) => void
   selected: Set<string>
   setSelected: (next: Set<string>) => void
+  /** O.14 — keyboard-focused row, -1 when no row is focused. */
+  activeRowIndex?: number
   onPage: (p: number) => void
   onPageSize: (s: number) => void
 }
@@ -95,6 +97,7 @@ export function GridLens(props: GridLensProps) {
     onSort,
     selected,
     setSelected,
+    activeRowIndex = -1,
     onPage,
     onPageSize,
   } = props
@@ -242,13 +245,18 @@ export function GridLens(props: GridLensProps) {
               </tr>
             </thead>
             <tbody>
-              {orders.map((o) => {
+              {orders.map((o, idx) => {
                 const isSelected = selected.has(o.id)
+                const isFocused = idx === activeRowIndex
                 return (
                   <tr
                     key={o.id}
                     className={`border-b border-slate-100 hover:bg-slate-50 ${
                       isSelected ? 'bg-blue-50/30' : ''
+                    } ${
+                      isFocused
+                        ? 'outline outline-2 outline-blue-500 outline-offset-[-2px]'
+                        : ''
                     }`}
                   >
                     {visible.map((col) => (
