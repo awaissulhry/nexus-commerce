@@ -888,6 +888,14 @@ export default function StockWorkspace() {
               <Store size={12} />
               {t('stock.shopifyLocations.title')}
             </Link>
+            <Link
+              href="/fulfillment/stock/mcf"
+              className="h-11 sm:h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5 text-slate-700"
+              title={t('stock.mcf.title')}
+            >
+              <Truck size={12} />
+              {t('stock.mcf.title')}
+            </Link>
             {/* S.18 — saved views dropdown */}
             <SavedViewsButton
               savedViews={savedViews}

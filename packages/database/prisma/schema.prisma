@@ -1445,6 +1445,7 @@ model Order {
   returns               Return[]
   reviewRequests        ReviewRequest[]
   tags                  OrderTag[]
+  mcfShipments          MCFShipment[] // S.24
 
   // Metadata
   amazonMetadata      Json?
@@ -2838,6 +2839,39 @@ model StockCostLayer {
   @@index([productId, unitsRemaining])
   @@index([inboundShipmentId])
   @@index([stockMovementId])
+}
+
+// S.24 — Amazon Multi-Channel Fulfillment shipment tracking.
+// One row per Amazon FulfillmentOrder we create for a non-Amazon
+// order (eBay, Shopify, etc). Status lifecycle mirrors Amazon's
+// fulfillment-order states; reserve-then-consume integrates with
+// AMAZON-EU-FBA StockLevel via the S.2 helpers.
+model MCFShipment {
+  id                       String   @id @default(cuid())
+  orderId                  String
+  amazonFulfillmentOrderId String   @unique
+  sellerFulfillmentOrderId String?  // operator-owned idempotency key
+  status                   String   @default("NEW")
+  marketplaceId            String?
+  displayableOrderId       String?
+  shippingSpeedCategory    String?  // 'Standard' | 'Expedited' | 'Priority'
+  requestedAt              DateTime @default(now())
+  shippedAt                DateTime?
+  deliveredAt              DateTime?
+  cancelledAt              DateTime?
+  lastSyncedAt             DateTime?
+  trackingNumber           String?
+  carrier                  String?
+  rawResponse              Json?    // last SP-API response
+  lastError                String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([status])
+  @@index([requestedAt])
 }
 
 model Carrier {

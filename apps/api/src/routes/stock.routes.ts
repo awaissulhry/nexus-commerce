@@ -13,6 +13,25 @@ import * as abcService from '../services/abc-classification.service.js'
 import { listLayers, recomputeWac } from '../services/cost-layers.service.js'
 import * as shopifyLocations from '../services/shopify-locations.service.js'
 import { ShopifyService } from '../services/marketplaces/shopify.service.js'
+import {
+  createMCFShipment,
+  syncMCFStatus,
+  cancelMCFShipment,
+  listMCFShipments,
+  unconfiguredAdapter as mcfUnconfiguredAdapter,
+  type MCFAdapter,
+} from '../services/amazon-mcf.service.js'
+
+// S.24 — production adapter resolves to either the wired SP-API
+// client (when AMAZON_MCF_LIVE=1) or the unconfigured stub.
+function resolveMCFAdapter(): MCFAdapter {
+  if (process.env.AMAZON_MCF_LIVE === '1') {
+    // TODO: wire the real SP-API MCF adapter (pre-flight commit).
+    // Until then we return the stub so the route surfaces a clear
+    // 'not configured' error instead of crashing.
+  }
+  return mcfUnconfiguredAdapter
+}
 
 // ─────────────────────────────────────────────────────────────────────
 // H.2 — Stock API surface for /fulfillment/stock rebuild.
@@ -1419,6 +1438,76 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/analytics/dead-stock] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── GET /api/stock/mcf ──────────────────────────────────────────
+  // S.24 — list MCF shipments. ?status=active filters to non-terminal
+  // rows; ?status=COMPLETE filters to a specific Amazon status.
+  fastify.get('/stock/mcf', async (request, reply) => {
+    try {
+      const q = request.query as { status?: string; limit?: string }
+      const limit = q.limit ? Math.min(500, Math.max(1, parseInt(q.limit, 10) || 100)) : 100
+      const list = await listMCFShipments({ status: q.status, limit })
+      return { shipments: list, status: q.status ?? 'all' }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/mcf] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── POST /api/stock/mcf/create ─────────────────────────────────
+  fastify.post<{
+    Body: {
+      orderId: string
+      shippingSpeed?: 'Standard' | 'Expedited' | 'Priority' | 'ScheduledDelivery'
+      marketplaceId?: string
+      comment?: string
+      items?: Array<{ sku: string; quantity: number }>
+    }
+  }>('/stock/mcf/create', async (request, reply) => {
+    try {
+      const body = request.body ?? ({} as any)
+      if (!body.orderId) return reply.code(400).send({ error: 'orderId required' })
+      const adapter = resolveMCFAdapter()
+      const r = await createMCFShipment(adapter, body)
+      return r
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/mcf/create] failed')
+      return reply.code(400).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── POST /api/stock/mcf/:id/sync ───────────────────────────────
+  // Operator-initiated status pull (cron does the same poll every 15 min).
+  fastify.post<{ Params: { id: string } }>('/stock/mcf/:id/sync', async (request, reply) => {
+    try {
+      const { id } = request.params
+      const shipment = await prisma.mCFShipment.findUnique({ where: { id } })
+      if (!shipment) return reply.code(404).send({ error: 'shipment not found' })
+      const r = await syncMCFStatus(resolveMCFAdapter(), shipment.amazonFulfillmentOrderId)
+      return r
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/mcf/:id/sync] failed')
+      return reply.code(400).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── POST /api/stock/mcf/:id/cancel ─────────────────────────────
+  fastify.post<{
+    Params: { id: string }
+    Body: { reason?: string }
+  }>('/stock/mcf/:id/cancel', async (request, reply) => {
+    try {
+      const { id } = request.params
+      const reason = request.body?.reason
+      const shipment = await prisma.mCFShipment.findUnique({ where: { id } })
+      if (!shipment) return reply.code(404).send({ error: 'shipment not found' })
+      const r = await cancelMCFShipment(resolveMCFAdapter(), shipment.amazonFulfillmentOrderId, reason)
+      return r
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/mcf/:id/cancel] failed')
+      return reply.code(400).send({ error: error?.message ?? String(error) })
     }
   })
 

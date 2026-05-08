@@ -94,6 +94,7 @@ import { startLeadTimeStatsCron } from "./jobs/lead-time-stats.job.js";
 import { startStockoutDetectorCron } from "./jobs/stockout-detector.job.js";
 import { startAbcClassificationCron } from "./jobs/abc-classification.job.js";
 import { startCycleCountSchedulerCron } from "./jobs/cycle-count-scheduler.job.js";
+import { startAmazonMCFStatusCron } from "./jobs/amazon-mcf-status.job.js";
 import { startFbaRestockCron } from "./jobs/fba-restock-ingestion.job.js";
 import pricingRoutes from "./routes/pricing.routes.js";
 // BullMQ worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS=1.
@@ -633,6 +634,14 @@ async function start() {
     // NEXUS_ENABLE_CYCLE_COUNT_SCHEDULER=0.
     if (process.env.NEXUS_ENABLE_CYCLE_COUNT_SCHEDULER !== '0') {
       startCycleCountSchedulerCron();
+    }
+
+    // S.24 — Amazon MCF status sync. Every 15 min, walk active
+    // MCFShipment rows and pull current status from SP-API. Webhook
+    // path catches most transitions faster; this is the poll
+    // safety net. Default-on; opt out via NEXUS_ENABLE_MCF_STATUS_CRON=0.
+    if (process.env.NEXUS_ENABLE_MCF_STATUS_CRON !== '0') {
+      startAmazonMCFStatusCron();
     }
 
     logger.info('✅ API server initialized', {
