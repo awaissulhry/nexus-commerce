@@ -342,7 +342,7 @@ export function BulkActionBar({
               size="sm"
               onClick={restoreBulk}
               disabled={busy || !hasSelection}
-              className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+              className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 dark:hover:bg-emerald-900/40"
               icon={<RotateCcw size={12} />}
             >
               Restore
@@ -353,7 +353,7 @@ export function BulkActionBar({
                 size="sm"
                 onClick={() => setStatusBulk('ACTIVE')}
                 disabled={busy || !hasSelection}
-                className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 dark:hover:bg-emerald-900/40"
                 icon={<CheckCircle2 size={12} />}
               >
                 Activate
@@ -362,7 +362,7 @@ export function BulkActionBar({
                 size="sm"
                 onClick={() => setStatusBulk('DRAFT')}
                 disabled={busy || !hasSelection}
-                className="bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                className="bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-700"
                 icon={<EyeOff size={12} />}
               >
                 Draft
@@ -371,7 +371,7 @@ export function BulkActionBar({
                 size="sm"
                 onClick={() => setStatusBulk('INACTIVE')}
                 disabled={busy || !hasSelection}
-                className="bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
+                className="bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 dark:hover:bg-rose-900/40"
                 icon={<XCircle size={12} />}
               >
                 Inactive
@@ -380,7 +380,7 @@ export function BulkActionBar({
                 size="sm"
                 onClick={softDeleteBulk}
                 disabled={busy || !hasSelection}
-                className="bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
+                className="bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 dark:hover:bg-rose-900/40"
                 icon={<Trash2 size={12} />}
                 title="Move selected products to the recycle bin (restorable)"
               >
@@ -391,7 +391,7 @@ export function BulkActionBar({
 
           {!showDeleted && (
             <>
-          <div className="h-4 w-px bg-slate-200" />
+          <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
 
           <div className="relative" ref={tagMenuRef}>
             <Button
@@ -404,18 +404,18 @@ export function BulkActionBar({
               Tag <ChevronDown size={10} />
             </Button>
             {tagMenuOpen && (
-              <div className="absolute left-0 top-full mt-1 w-64 bg-white border border-slate-200 rounded-md shadow-lg z-30 p-2 max-h-72 overflow-y-auto">
+              <div className="absolute left-0 top-full mt-1 w-64 bg-white border border-slate-200 rounded-md shadow-lg z-30 p-2 max-h-72 overflow-y-auto dark:bg-slate-900 dark:border-slate-800">
                 {allTags.length === 0 ? (
-                  <div className="text-base text-slate-400 text-center py-3">
+                  <div className="text-base text-slate-400 dark:text-slate-500 text-center py-3">
                     No tags yet — create one from a product detail.
                   </div>
                 ) : (
                   allTags.map((t) => (
                     <div
                       key={t.id}
-                      className="flex items-center justify-between px-2 py-1 hover:bg-slate-50 rounded"
+                      className="flex items-center justify-between px-2 py-1 hover:bg-slate-50 rounded dark:hover:bg-slate-800"
                     >
-                      <span className="text-base text-slate-700 inline-flex items-center gap-1.5">
+                      <span className="text-base text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
                         {t.color && (
                           <span
                             className="w-2 h-2 rounded-full"
@@ -427,13 +427,13 @@ export function BulkActionBar({
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => tagBulk('add', [t.id])}
-                          className="text-xs text-emerald-600 hover:underline"
+                          className="text-xs text-emerald-600 hover:underline dark:text-emerald-400"
                         >
                           add
                         </button>
                         <button
                           onClick={() => tagBulk('remove', [t.id])}
-                          className="text-xs text-rose-600 hover:underline"
+                          className="text-xs text-rose-600 hover:underline dark:text-rose-400"
                         >
                           remove
                         </button>
@@ -450,14 +450,14 @@ export function BulkActionBar({
               size="sm"
               onClick={() => setPublishMenuOpen(!publishMenuOpen)}
               disabled={busy || !hasSelection}
-              className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+              className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-900/40"
               icon={<Eye size={12} />}
             >
               Publish <ChevronDown size={10} />
             </Button>
             {publishMenuOpen && (
-              <div className="absolute left-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-md shadow-lg z-30 p-2 max-h-96 overflow-y-auto">
-                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1">
+              <div className="absolute left-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-md shadow-lg z-30 p-2 max-h-96 overflow-y-auto dark:bg-slate-900 dark:border-slate-800">
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1">
                   Amazon EU
                 </div>
                 {['IT', 'DE', 'FR', 'ES', 'UK'].map((m) => (
@@ -467,12 +467,12 @@ export function BulkActionBar({
                       publish('AMAZON', m)
                       setPublishMenuOpen(false)
                     }}
-                    className="w-full text-left px-2 py-1 text-base text-slate-700 hover:bg-slate-50 rounded"
+                    className="w-full text-left px-2 py-1 text-base text-slate-700 hover:bg-slate-50 rounded dark:text-slate-300 dark:hover:bg-slate-800"
                   >
                     Amazon {m} ({COUNTRY_NAMES[m] ?? m})
                   </button>
                 ))}
-                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1 mt-2">
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1 mt-2">
                   eBay EU
                 </div>
                 {['IT', 'DE', 'FR', 'ES', 'UK'].map((m) => (
@@ -482,12 +482,12 @@ export function BulkActionBar({
                       publish('EBAY', m)
                       setPublishMenuOpen(false)
                     }}
-                    className="w-full text-left px-2 py-1 text-base text-slate-700 hover:bg-slate-50 rounded"
+                    className="w-full text-left px-2 py-1 text-base text-slate-700 hover:bg-slate-50 rounded dark:text-slate-300 dark:hover:bg-slate-800"
                   >
                     eBay {m} ({COUNTRY_NAMES[m] ?? m})
                   </button>
                 ))}
-                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1 mt-2">
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1 mt-2">
                   Single-store
                 </div>
                 {['SHOPIFY', 'WOOCOMMERCE', 'ETSY'].map((c) => (
@@ -497,7 +497,7 @@ export function BulkActionBar({
                       publish(c, 'GLOBAL')
                       setPublishMenuOpen(false)
                     }}
-                    className="w-full text-left px-2 py-1 text-base text-slate-700 hover:bg-slate-50 rounded"
+                    className="w-full text-left px-2 py-1 text-base text-slate-700 hover:bg-slate-50 rounded dark:text-slate-300 dark:hover:bg-slate-800"
                   >
                     {c.charAt(0) + c.slice(1).toLowerCase()}
                   </button>
@@ -520,7 +520,7 @@ export function BulkActionBar({
             size="sm"
             onClick={() => setAiModalOpen(true)}
             disabled={busy || !hasSelection}
-            className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100"
+            className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800 dark:hover:bg-purple-900/40"
             title="Generate descriptions / bullets / keywords with AI"
             icon={<Sparkles size={12} />}
           >
@@ -545,7 +545,7 @@ export function BulkActionBar({
           {hasSelection ? (
             <Link
               href={`/bulk-operations?productIds=${selectedIds.join(',')}`}
-              className="h-7 px-3 text-base bg-violet-50 text-violet-700 border border-violet-200 rounded hover:bg-violet-100 inline-flex items-center gap-1.5"
+              className="h-7 px-3 text-base bg-violet-50 text-violet-700 border border-violet-200 rounded hover:bg-violet-100 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800 dark:hover:bg-violet-900/40 inline-flex items-center gap-1.5"
             >
               <ExternalLink size={12} /> Power edit
             </Link>
@@ -579,7 +579,7 @@ export function BulkActionBar({
           )}
 
           {status && (
-            <span className="text-sm text-slate-500 ml-2">{status}</span>
+            <span className="text-sm text-slate-500 dark:text-slate-400 ml-2">{status}</span>
           )}
           <IconButton
             aria-label="Clear selection"

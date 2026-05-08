@@ -286,7 +286,7 @@ export function FilterBar(props: FilterBarProps) {
         <div className="flex-1 min-w-[240px] max-w-md relative">
           <Search
             size={12}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
           />
           <Input
             ref={searchInputRef}
@@ -301,13 +301,13 @@ export function FilterBar(props: FilterBarProps) {
         <button
           onClick={() => setFiltersOpen(!filtersOpen)}
           aria-expanded={filtersOpen}
-          className={`h-8 min-h-11 sm:min-h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 transition-colors ${filtersOpen ? 'border-slate-900 bg-slate-900 text-white' : filterCount > 0 ? 'border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+          className={`h-8 min-h-11 sm:min-h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 transition-colors ${filtersOpen ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900' : filterCount > 0 ? 'border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700' : 'border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800'}`}
         >
           <Filter size={12} />
           Filters
           {filterCount > 0 && (
             <span
-              className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${filtersOpen ? 'bg-white text-slate-900' : 'bg-slate-700 text-white'}`}
+              className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${filtersOpen ? 'bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100' : 'bg-slate-700 text-white dark:bg-slate-300 dark:text-slate-900'}`}
             >
               {filterCount}
             </span>
@@ -334,7 +334,7 @@ export function FilterBar(props: FilterBarProps) {
                 page: undefined,
               })
             }
-            className="text-slate-500 hover:text-slate-900"
+            className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
             icon={<X size={12} />}
           >
             Clear all
@@ -347,14 +347,14 @@ export function FilterBar(props: FilterBarProps) {
           {activePills.map((p) => (
             <span
               key={p.key}
-              className="inline-flex items-center gap-0.5 h-7 text-sm rounded-full bg-blue-50 text-blue-900 border border-blue-200"
+              className="inline-flex items-center gap-0.5 h-7 text-sm rounded-full bg-blue-50 text-blue-900 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-100 dark:border-blue-800"
             >
               <button
                 type="button"
                 onClick={() => setFiltersOpen(true)}
-                className="inline-flex items-center gap-1 pl-2 pr-1 h-full hover:bg-blue-100 rounded-l-full"
+                className="inline-flex items-center gap-1 pl-2 pr-1 h-full hover:bg-blue-100 rounded-l-full dark:hover:bg-blue-900/40"
               >
-                <span className="font-medium text-blue-700">{p.label}:</span>
+                <span className="font-medium text-blue-700 dark:text-blue-300">{p.label}:</span>
                 <span className="truncate max-w-[180px]">{p.value}</span>
               </button>
               <button
@@ -363,7 +363,7 @@ export function FilterBar(props: FilterBarProps) {
                 aria-label={`Remove ${p.label} filter`}
                 // U.22 — visible swatch stays w-5 h-5 via inner span;
                 // hit zone expands to 44×44 on mobile.
-                className="inline-flex items-center justify-center min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 sm:w-5 sm:h-5 rounded-full hover:bg-blue-100 text-blue-700"
+                className="inline-flex items-center justify-center min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 sm:w-5 sm:h-5 rounded-full hover:bg-blue-100 text-blue-700 dark:hover:bg-blue-900/40 dark:text-blue-300"
               >
                 <X size={11} />
               </button>
@@ -373,7 +373,7 @@ export function FilterBar(props: FilterBarProps) {
       )}
 
       {filtersOpen && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4 pt-3 mt-1 border-t border-slate-200">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4 pt-3 mt-1 border-t border-slate-200 dark:border-slate-800">
           <FilterGroup
             label="Status"
             options={['ACTIVE', 'DRAFT', 'INACTIVE']}
@@ -690,10 +690,10 @@ function FilterGroup({
   return (
     <div className="min-w-0">
       <div className="flex items-center justify-between gap-2 mb-1.5">
-        <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 truncate">
+        <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 truncate">
           {label}
           {selectedCount > 0 && (
-            <span className="ml-1.5 text-slate-700 normal-case font-medium">
+            <span className="ml-1.5 text-slate-700 dark:text-slate-300 normal-case font-medium">
               ({selectedCount})
             </span>
           )}
@@ -702,7 +702,7 @@ function FilterGroup({
           <button
             type="button"
             onClick={onClear}
-            className="text-xs text-slate-500 hover:text-slate-900"
+            className="text-xs text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
           >
             Clear
           </button>
@@ -714,7 +714,7 @@ function FilterGroup({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={`Filter ${label.toLowerCase()}…`}
-          className="w-full h-7 px-2 mb-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-400"
+          className="w-full h-7 px-2 mb-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
         />
       )}
       <div className="flex items-center gap-1.5 flex-wrap">
@@ -725,12 +725,12 @@ function FilterGroup({
             <button
               key={opt}
               onClick={() => onToggle(opt)}
-              className={`h-7 px-2.5 text-sm border rounded-md inline-flex items-center gap-1.5 transition-colors ${active ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300'}`}
+              className={`h-7 px-2.5 text-sm border rounded-md inline-flex items-center gap-1.5 transition-colors ${active ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:border-slate-700'}`}
             >
               {renderLabel ? renderLabel(opt) : opt}
               {count != null && (
                 <span
-                  className={`tabular-nums ${active ? 'text-slate-300' : 'text-slate-400'}`}
+                  className={`tabular-nums ${active ? 'text-slate-300 dark:text-slate-600' : 'text-slate-400 dark:text-slate-500'}`}
                 >
                   {count}
                 </span>
@@ -739,7 +739,7 @@ function FilterGroup({
           )
         })}
         {showSearch && visibleOptions.length === 0 && (
-          <div className="text-sm text-slate-400">No matches</div>
+          <div className="text-sm text-slate-400 dark:text-slate-500">No matches</div>
         )}
       </div>
     </div>

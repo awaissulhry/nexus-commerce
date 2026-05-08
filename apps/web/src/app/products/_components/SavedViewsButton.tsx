@@ -75,14 +75,14 @@ export function SavedViewsButton({
         Views <ChevronDown size={12} />
       </Button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-md shadow-lg z-20 p-2">
+        <div className="absolute right-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-md shadow-lg z-20 p-2 dark:bg-slate-900 dark:border-slate-800">
           {!saveMode ? (
             <>
-              <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1.5">
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1.5">
                 Saved views
               </div>
               {views.length === 0 ? (
-                <div className="px-2 py-3 text-base text-slate-400 text-center">
+                <div className="px-2 py-3 text-base text-slate-400 dark:text-slate-500 text-center">
                   No saved views yet
                 </div>
               ) : (
@@ -91,18 +91,18 @@ export function SavedViewsButton({
                     const alertCount = v.alertSummary?.total ?? 0
                     const firedRecently = (v.alertSummary?.firedRecently ?? 0) > 0
                     const bellColor = firedRecently
-                      ? 'text-amber-600 hover:text-amber-700'
+                      ? 'text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300'
                       : alertCount > 0
-                        ? 'text-purple-600 hover:text-purple-700'
-                        : 'text-slate-400 hover:text-purple-600'
+                        ? 'text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300'
+                        : 'text-slate-400 hover:text-purple-600 dark:text-slate-500 dark:hover:text-purple-400'
                     return (
                       <li
                         key={v.id}
-                        className="flex items-center justify-between gap-1 px-2 py-1.5 hover:bg-slate-50 rounded"
+                        className="flex items-center justify-between gap-1 px-2 py-1.5 hover:bg-slate-50 rounded dark:hover:bg-slate-800"
                       >
                         <button
                           onClick={() => onApply(v)}
-                          className="flex-1 min-w-0 text-left text-base text-slate-900 inline-flex items-center gap-1.5"
+                          className="flex-1 min-w-0 text-left text-base text-slate-900 dark:text-slate-100 inline-flex items-center gap-1.5"
                         >
                           {v.isDefault && (
                             <Star size={10} className="text-amber-500 fill-amber-500" />
@@ -132,7 +132,7 @@ export function SavedViewsButton({
                           title="Set as default"
                           aria-label={`Set "${v.name}" as default view`}
                           size="sm"
-                          className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 text-slate-400 hover:text-amber-500"
+                          className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 text-slate-400 hover:text-amber-500 dark:text-slate-500 dark:hover:text-amber-400"
                         >
                           <Star size={12} />
                         </IconButton>
@@ -152,7 +152,7 @@ export function SavedViewsButton({
                           title="Delete"
                           aria-label={`Delete saved view "${v.name}"`}
                           size="sm"
-                          className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 text-slate-400 hover:text-rose-600"
+                          className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 text-slate-400 hover:text-rose-600 dark:text-slate-500 dark:hover:text-rose-400"
                         >
                           <Trash2 size={12} />
                         </IconButton>
@@ -163,7 +163,7 @@ export function SavedViewsButton({
               )}
               <Button
                 onClick={() => setSaveMode(true)}
-                className="w-full mt-1 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                className="w-full mt-1 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-900/40"
                 icon={<BookmarkPlus size={12} />}
               >
                 Save current view
@@ -171,7 +171,7 @@ export function SavedViewsButton({
             </>
           ) : (
             <div className="space-y-2">
-              <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1">
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1">
                 Save current view
               </div>
               <input
@@ -180,9 +180,9 @@ export function SavedViewsButton({
                 placeholder="View name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full h-8 px-2 text-md border border-slate-200 rounded"
+                className="w-full h-8 px-2 text-md border border-slate-200 rounded dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
               />
-              <label className="flex items-center gap-2 px-2 text-base text-slate-700">
+              <label className="flex items-center gap-2 px-2 text-base text-slate-700 dark:text-slate-300">
                 <input
                   type="checkbox"
                   checked={isDefault}
@@ -202,7 +202,7 @@ export function SavedViewsButton({
                       setOpen(false)
                     }
                   }}
-                  className="flex-1 bg-slate-900 text-white border-slate-900 hover:bg-slate-800"
+                  className="flex-1 bg-slate-900 text-white border-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100 dark:hover:bg-slate-200"
                 >
                   Save
                 </Button>

@@ -76,7 +76,7 @@ export function HierarchyLens({ search }: { search: string }) {
         <div
           role="status"
           aria-live="polite"
-          className="text-md text-slate-500 py-8 text-center"
+          className="text-md text-slate-500 dark:text-slate-400 py-8 text-center"
         >
           Loading hierarchy…
         </div>
@@ -87,7 +87,7 @@ export function HierarchyLens({ search }: { search: string }) {
       <Card>
         <div
           role="alert"
-          className="text-md text-rose-600 py-8 text-center"
+          className="text-md text-rose-600 dark:text-rose-400 py-8 text-center"
         >
           Failed to load hierarchy: {error}
         </div>
@@ -101,12 +101,12 @@ export function HierarchyLens({ search }: { search: string }) {
         description="Products with at least one child variation"
       >
         {parents.length === 0 ? (
-          <div className="py-8 text-center text-base text-slate-500">
-            <FolderTree className="w-6 h-6 mx-auto text-slate-300 mb-2" />
+          <div className="py-8 text-center text-base text-slate-500 dark:text-slate-400">
+            <FolderTree className="w-6 h-6 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
             No parent products yet.
-            <div className="text-sm text-slate-400 mt-1">
+            <div className="text-sm text-slate-400 dark:text-slate-500 mt-1">
               Use{' '}
-              <Link href="/catalog/organize" className="text-blue-700 hover:underline">
+              <Link href="/catalog/organize" className="text-blue-700 hover:underline dark:text-blue-300">
                 Organize → Parents
               </Link>
               {' '}to group SKUs that share variant attributes.
@@ -118,19 +118,19 @@ export function HierarchyLens({ search }: { search: string }) {
               <li key={p.id}>
                 <Link
                   href={`/products/${p.id}/edit?tab=variations`}
-                  className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 rounded hover:bg-slate-50"
+                  className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="text-md text-slate-900 truncate">
+                    <div className="text-md text-slate-900 dark:text-slate-100 truncate">
                       {p.name}
                     </div>
-                    <div className="text-sm text-slate-500 font-mono">
+                    <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">
                       {p.sku} · {p.childCount ?? 0} children
                     </div>
                   </div>
                   <ChevronDown
                     size={14}
-                    className="text-slate-400 -rotate-90"
+                    className="text-slate-400 dark:text-slate-500 -rotate-90"
                   />
                 </Link>
               </li>
@@ -143,10 +143,10 @@ export function HierarchyLens({ search }: { search: string }) {
         description="Products that aren't parents (could be promoted, attached, or kept standalone)"
       >
         {standalones.length === 0 ? (
-          <div className="py-8 text-center text-base text-slate-500">
-            <Package className="w-6 h-6 mx-auto text-slate-300 mb-2" />
+          <div className="py-8 text-center text-base text-slate-500 dark:text-slate-400">
+            <Package className="w-6 h-6 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
             All products belong to a parent.
-            <div className="text-sm text-slate-400 mt-1">
+            <div className="text-sm text-slate-400 dark:text-slate-500 mt-1">
               Standalone products will appear here as you create new SKUs.
             </div>
           </div>
@@ -155,19 +155,19 @@ export function HierarchyLens({ search }: { search: string }) {
             {standalones.slice(0, 50).map((p) => (
               <li
                 key={p.id}
-                className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 rounded hover:bg-slate-50"
+                className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="text-md text-slate-900 truncate">
+                  <div className="text-md text-slate-900 dark:text-slate-100 truncate">
                     {p.name}
                   </div>
-                  <div className="text-sm text-slate-500 font-mono">
+                  <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">
                     {p.sku}
                   </div>
                 </div>
                 <Link
                   href="/catalog/organize"
-                  className="text-sm text-blue-600 hover:underline"
+                  className="text-sm text-blue-600 hover:underline dark:text-blue-400"
                 >
                   Group →
                 </Link>

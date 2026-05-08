@@ -49,7 +49,7 @@ export function CoverageLens({
         <div
           role="status"
           aria-live="polite"
-          className="text-md text-slate-500 py-8 text-center"
+          className="text-md text-slate-500 dark:text-slate-400 py-8 text-center"
         >
           Loading coverage…
         </div>
@@ -94,7 +94,7 @@ export function CoverageLens({
     <div className="space-y-3">
       <Card>
         <div className="flex items-center gap-3 flex-wrap text-base">
-          <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
+          <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
             Coverage across {visible.length} product
             {visible.length === 1 ? '' : 's'}
           </span>
@@ -102,10 +102,10 @@ export function CoverageLens({
             {channelStats.map((s) => {
               const pctTone =
                 s.pct >= 80
-                  ? 'text-emerald-700'
+                  ? 'text-emerald-700 dark:text-emerald-300'
                   : s.pct >= 40
-                    ? 'text-amber-700'
-                    : 'text-rose-700'
+                    ? 'text-amber-700 dark:text-amber-300'
+                    : 'text-rose-700 dark:text-rose-300'
               return (
                 <span
                   key={s.channel}
@@ -130,15 +130,15 @@ export function CoverageLens({
       <Card noPadding>
         <div className="overflow-x-auto">
           <table className="w-full text-base">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-slate-50 border-b border-slate-200 dark:bg-slate-800 dark:border-slate-800">
               <tr>
-                <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700 sticky left-0 bg-slate-50 z-10 min-w-[260px]">
+                <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700 sticky left-0 bg-slate-50 z-10 min-w-[260px] dark:text-slate-300 dark:bg-slate-800">
                   Product
                 </th>
                 {channels.map((c) => (
                   <th
                     key={c}
-                    className="px-3 py-2 text-center text-xs font-semibold uppercase text-slate-500"
+                    className="px-3 py-2 text-center text-xs font-semibold uppercase text-slate-500 dark:text-slate-400"
                   >
                     <span
                       className={`inline-block px-1.5 py-0.5 rounded border ${CHANNEL_TONE[c]}`}
@@ -153,17 +153,17 @@ export function CoverageLens({
               {products.slice(0, 100).map((p) => (
                 <tr
                   key={p.id}
-                  className="border-b border-slate-100 hover:bg-slate-50/50"
+                  className="border-b border-slate-100 hover:bg-slate-50/50 dark:border-slate-800 dark:hover:bg-slate-800/50"
                 >
-                  <td className="px-3 py-2 sticky left-0 bg-white border-r border-slate-100">
+                  <td className="px-3 py-2 sticky left-0 bg-white border-r border-slate-100 dark:bg-slate-900 dark:border-slate-800">
                     <Link
                       href={`/products/${p.id}/edit`}
-                      className="block hover:text-blue-600"
+                      className="block hover:text-blue-600 dark:hover:text-blue-400"
                     >
-                      <div className="text-md font-medium text-slate-900 truncate max-w-xs">
+                      <div className="text-md font-medium text-slate-900 dark:text-slate-100 truncate max-w-xs">
                         {p.name}
                       </div>
-                      <div className="text-sm text-slate-500 font-mono">
+                      <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">
                         {p.sku}
                       </div>
                     </Link>
@@ -174,19 +174,19 @@ export function CoverageLens({
                       return (
                         <td
                           key={ch}
-                          className="px-3 py-2 text-center text-slate-300"
+                          className="px-3 py-2 text-center text-slate-300 dark:text-slate-600"
                         >
                           —
                         </td>
                       )
                     const tone =
                       c.error > 0
-                        ? 'bg-rose-50 text-rose-700 border-rose-200'
+                        ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
                         : c.live > 0
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
                           : c.draft > 0
-                            ? 'bg-slate-50 text-slate-600 border-slate-200'
-                            : 'bg-white text-slate-400 border-slate-200'
+                            ? 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-800'
+                            : 'bg-white text-slate-400 border-slate-200 dark:bg-slate-900 dark:text-slate-500 dark:border-slate-800'
                     return (
                       <td key={ch} className="px-2 py-2 text-center">
                         <Link

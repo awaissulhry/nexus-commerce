@@ -73,7 +73,7 @@ export function DraftsLens() {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-1">
-        <span className="text-sm uppercase tracking-wider text-slate-500 mr-2">
+        <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 mr-2">
           Channel:
         </span>
         {['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY'].map((c) => (
@@ -83,7 +83,7 @@ export function DraftsLens() {
             className={`h-7 px-3 text-sm border rounded inline-flex items-center transition-colors ${
               channel === c
                 ? `${CHANNEL_TONE[c]} font-semibold`
-                : 'bg-white text-slate-600 border-slate-200'
+                : 'bg-white text-slate-600 border-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800'
             }`}
           >
             {c}
@@ -95,7 +95,7 @@ export function DraftsLens() {
           <div
             role="status"
             aria-live="polite"
-            className="text-md text-slate-500 py-8 text-center"
+            className="text-md text-slate-500 dark:text-slate-400 py-8 text-center"
           >
             Loading drafts…
           </div>
@@ -105,7 +105,7 @@ export function DraftsLens() {
         <Card>
           <div
             role="alert"
-            className="text-md text-rose-600 py-8 text-center"
+            className="text-md text-rose-600 dark:text-rose-400 py-8 text-center"
           >
             Failed to load drafts: {error}
           </div>
@@ -115,10 +115,10 @@ export function DraftsLens() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card title={`Drafts (${data.draftCount})`}>
             {data.drafts.length === 0 ? (
-              <div className="py-8 text-center text-base text-slate-500">
-                <Sparkles className="w-6 h-6 mx-auto text-slate-300 mb-2" />
+              <div className="py-8 text-center text-base text-slate-500 dark:text-slate-400">
+                <Sparkles className="w-6 h-6 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
                 No drafts on {channel}.
-                <div className="text-sm text-slate-400 mt-1">
+                <div className="text-sm text-slate-400 dark:text-slate-500 mt-1">
                   Drafts appear here when wizards leave content
                   unpublished — usually pending review or marketplace
                   validation.
@@ -129,19 +129,19 @@ export function DraftsLens() {
                 {data.drafts.slice(0, 30).map((d) => (
                   <li
                     key={d.id}
-                    className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 rounded hover:bg-slate-50"
+                    className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="text-base text-slate-900 truncate">
+                      <div className="text-base text-slate-900 dark:text-slate-100 truncate">
                         {d.product.name}
                       </div>
-                      <div className="text-sm text-slate-500 font-mono">
+                      <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">
                         {d.product.sku} · {d.marketplace}
                       </div>
                     </div>
                     <Link
                       href={`/products/${d.productId}/list-wizard?channel=${d.channel}`}
-                      className="h-7 px-3 text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100"
+                      className="h-7 px-3 text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 dark:hover:bg-emerald-900/40"
                     >
                       Publish
                     </Link>
@@ -152,10 +152,10 @@ export function DraftsLens() {
           </Card>
           <Card title={`Uncovered (${data.uncoveredCount})`}>
             {data.uncovered.length === 0 ? (
-              <div className="py-8 text-center text-base text-slate-500">
-                <CheckCircle2 className="w-6 h-6 mx-auto text-emerald-400 mb-2" />
+              <div className="py-8 text-center text-base text-slate-500 dark:text-slate-400">
+                <CheckCircle2 className="w-6 h-6 mx-auto text-emerald-400 dark:text-emerald-500 mb-2" />
                 Every product is listed on {channel}.
-                <div className="text-sm text-slate-400 mt-1">
+                <div className="text-sm text-slate-400 dark:text-slate-500 mt-1">
                   No coverage gaps to fix on this marketplace.
                 </div>
               </div>
@@ -164,19 +164,19 @@ export function DraftsLens() {
                 {data.uncovered.slice(0, 30).map((p) => (
                   <li
                     key={p.id}
-                    className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 rounded hover:bg-slate-50"
+                    className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="text-base text-slate-900 truncate">
+                      <div className="text-base text-slate-900 dark:text-slate-100 truncate">
                         {p.name}
                       </div>
-                      <div className="text-sm text-slate-500 font-mono">
+                      <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">
                         {p.sku}
                       </div>
                     </div>
                     <Link
                       href={`/products/${p.id}/list-wizard?channel=${channel}`}
-                      className="h-7 px-3 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100"
+                      className="h-7 px-3 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-900/40"
                     >
                       List
                     </Link>

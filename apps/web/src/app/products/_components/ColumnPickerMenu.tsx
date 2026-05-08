@@ -74,9 +74,9 @@ export function ColumnPickerMenu({
   return (
     <div
       ref={ref}
-      className="absolute right-0 top-full mt-1 w-64 bg-white border border-slate-200 rounded-md shadow-lg z-20 p-1.5 max-h-[480px] overflow-y-auto"
+      className="absolute right-0 top-full mt-1 w-64 bg-white border border-slate-200 rounded-md shadow-lg z-20 p-1.5 max-h-[480px] overflow-y-auto dark:bg-slate-900 dark:border-slate-800"
     >
-      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1.5 flex items-center justify-between">
+      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1.5 flex items-center justify-between">
         <span>Visible (drag to reorder)</span>
       </div>
       {visibleTogglable.map((c) => (
@@ -86,26 +86,26 @@ export function ColumnPickerMenu({
           onDragStart={onDragStart(c.key)}
           onDragOver={onDragOver}
           onDrop={onDrop(c.key)}
-          className={`flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-base cursor-move ${dragKey === c.key ? 'opacity-40' : ''}`}
+          className={`flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-base cursor-move dark:hover:bg-slate-800 ${dragKey === c.key ? 'opacity-40' : ''}`}
         >
-          <span className="text-slate-300 font-mono select-none">⠿</span>
+          <span className="text-slate-300 dark:text-slate-600 font-mono select-none">⠿</span>
           <input
             type="checkbox"
             checked
             onChange={() => setVisible(visible.filter((k) => k !== c.key))}
           />
-          <span className="text-slate-700">{c.label}</span>
+          <span className="text-slate-700 dark:text-slate-300">{c.label}</span>
         </div>
       ))}
       {hiddenTogglable.length > 0 && (
         <>
-          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1.5 mt-1">
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1.5 mt-1">
             Hidden
           </div>
           {hiddenTogglable.map((c) => (
             <label
               key={c.key}
-              className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-base cursor-pointer"
+              className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-base cursor-pointer dark:hover:bg-slate-800"
             >
               <span className="text-transparent select-none">⠿</span>
               <input
@@ -113,21 +113,21 @@ export function ColumnPickerMenu({
                 checked={false}
                 onChange={() => setVisible([...visible, c.key])}
               />
-              <span className="text-slate-700">{c.label}</span>
+              <span className="text-slate-700 dark:text-slate-300">{c.label}</span>
             </label>
           ))}
         </>
       )}
-      <div className="border-t border-slate-100 mt-1.5 pt-1.5 px-2 py-1 flex items-center justify-between">
+      <div className="border-t border-slate-100 dark:border-slate-800 mt-1.5 pt-1.5 px-2 py-1 flex items-center justify-between">
         <button
           onClick={() => setVisible(DEFAULT_VISIBLE)}
-          className="text-sm text-slate-500 hover:text-slate-900"
+          className="text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
         >
           Reset order
         </button>
         <button
           onClick={onClose}
-          className="text-sm text-slate-500 hover:text-slate-900"
+          className="text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
         >
           Close
         </button>

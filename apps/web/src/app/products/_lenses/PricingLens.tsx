@@ -119,7 +119,7 @@ export function PricingLens({
         <div
           role="status"
           aria-live="polite"
-          className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full"
+          className="text-md text-slate-500 dark:text-slate-400 py-8 text-center inline-flex items-center justify-center gap-2 w-full"
         >
           <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading pricing
           matrix…
@@ -131,13 +131,13 @@ export function PricingLens({
     return (
       <Card>
         <div role="alert" className="py-8 text-center space-y-2">
-          <div className="text-md text-rose-600">
+          <div className="text-md text-rose-600 dark:text-rose-400">
             Failed to load pricing matrix: {error}
           </div>
           <button
             type="button"
             onClick={() => void refresh()}
-            className="h-7 px-3 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5"
+            className="h-7 px-3 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 inline-flex items-center gap-1.5"
           >
             Retry
           </button>
@@ -177,32 +177,32 @@ export function PricingLens({
     <div className="space-y-3">
       <Card>
         <div className="flex items-center gap-4 text-base">
-          <span className="text-slate-700">
+          <span className="text-slate-700 dark:text-slate-300">
             <span className="font-semibold tabular-nums">{cellCount}</span>{' '}
             cells
           </span>
           {clampedCount > 0 && (
-            <span className="text-amber-700 inline-flex items-center gap-1">
+            <span className="text-amber-700 dark:text-amber-300 inline-flex items-center gap-1">
               <span className="inline-block w-2 h-2 bg-amber-500 rounded-full" />
               <span className="tabular-nums">{clampedCount}</span> clamped
             </span>
           )}
           {warningCount > 0 && (
-            <span className="text-rose-700 inline-flex items-center gap-1">
+            <span className="text-rose-700 dark:text-rose-300 inline-flex items-center gap-1">
               <span className="inline-block w-2 h-2 bg-rose-500 rounded-full" />
               <span className="tabular-nums">{warningCount}</span> with warnings
             </span>
           )}
           {missingCount > 0 && (
-            <span className="text-slate-500 inline-flex items-center gap-1">
-              <span className="inline-block w-2 h-2 bg-slate-300 rounded-full" />
+            <span className="text-slate-500 dark:text-slate-400 inline-flex items-center gap-1">
+              <span className="inline-block w-2 h-2 bg-slate-300 dark:bg-slate-600 rounded-full" />
               <span className="tabular-nums">{missingCount}</span> missing
               snapshots
             </span>
           )}
           <Link
             href="/pricing"
-            className="ml-auto text-base text-blue-700 hover:underline inline-flex items-center gap-1"
+            className="ml-auto text-base text-blue-700 hover:underline dark:text-blue-300 inline-flex items-center gap-1"
           >
             Open full pricing matrix <ChevronRight size={12} />
           </Link>
@@ -211,15 +211,15 @@ export function PricingLens({
       <Card noPadding>
         <div className="overflow-x-auto">
           <table className="w-full text-base">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-slate-50 border-b border-slate-200 dark:bg-slate-800 dark:border-slate-800">
               <tr>
-                <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700 sticky left-0 bg-slate-50 z-10 min-w-[260px]">
+                <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700 sticky left-0 bg-slate-50 z-10 min-w-[260px] dark:text-slate-300 dark:bg-slate-800">
                   Product
                 </th>
                 {MARKETPLACES.map((mp) => (
                   <th
                     key={mp}
-                    className="px-3 py-2 text-center text-xs font-semibold uppercase text-slate-500"
+                    className="px-3 py-2 text-center text-xs font-semibold uppercase text-slate-500 dark:text-slate-400"
                   >
                     {mp}
                   </th>
@@ -230,17 +230,17 @@ export function PricingLens({
               {products.slice(0, 100).map((p) => (
                 <tr
                   key={p.id}
-                  className="border-b border-slate-100 hover:bg-slate-50/50"
+                  className="border-b border-slate-100 hover:bg-slate-50/50 dark:border-slate-800 dark:hover:bg-slate-800/50"
                 >
-                  <td className="px-3 py-2 sticky left-0 bg-white border-r border-slate-100">
+                  <td className="px-3 py-2 sticky left-0 bg-white border-r border-slate-100 dark:bg-slate-900 dark:border-slate-800">
                     <Link
                       href={`/products/${p.id}/edit`}
-                      className="block hover:text-blue-600"
+                      className="block hover:text-blue-600 dark:hover:text-blue-400"
                     >
-                      <div className="text-md font-medium text-slate-900 truncate max-w-xs">
+                      <div className="text-md font-medium text-slate-900 dark:text-slate-100 truncate max-w-xs">
                         {p.name}
                       </div>
-                      <div className="text-sm text-slate-500 font-mono">
+                      <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">
                         {p.sku}
                       </div>
                     </Link>
@@ -251,7 +251,7 @@ export function PricingLens({
                       return (
                         <td
                           key={mp}
-                          className="px-2 py-2 text-center text-slate-300 text-sm"
+                          className="px-2 py-2 text-center text-slate-300 dark:text-slate-600 text-sm"
                           title="No pricing snapshot — rule may not have run yet"
                         >
                           —
@@ -260,10 +260,10 @@ export function PricingLens({
                     }
                     const tone =
                       cell.warnings.length > 0
-                        ? 'bg-rose-50 text-rose-700 border-rose-200'
+                        ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
                         : cell.isClamped
-                          ? 'bg-amber-50 text-amber-700 border-amber-200'
-                          : 'bg-white text-slate-900 border-slate-200'
+                          ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
+                          : 'bg-white text-slate-900 border-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-800'
                     const titleParts: string[] = []
                     if (cell.isClamped)
                       titleParts.push('clamped to floor/ceiling')
@@ -288,7 +288,7 @@ export function PricingLens({
         </div>
       </Card>
       {products.length > 100 && (
-        <div className="text-sm text-slate-500 text-center">
+        <div className="text-sm text-slate-500 dark:text-slate-400 text-center">
           Showing first 100 products. Open the full pricing matrix or narrow
           filters to see more.
         </div>
