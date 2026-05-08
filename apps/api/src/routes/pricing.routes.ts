@@ -496,6 +496,150 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // E.1.b — Create RetailEvent + optional RetailEventPriceAction in one
+  // shot. The scheduler picks up new events on its next hourly tick (or
+  // immediately via the manual "Run scheduler now" button on the UI).
+  fastify.post('/pricing/promotions', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as {
+        name?: string
+        startDate?: string
+        endDate?: string
+        channel?: string | null
+        marketplace?: string | null
+        productType?: string | null
+        description?: string | null
+        expectedLift?: number
+        action?: {
+          type: 'PERCENT_OFF' | 'FIXED_PRICE'
+          value: number
+        }
+      }
+      if (!body.name?.trim()) {
+        return reply.code(400).send({ error: 'name is required' })
+      }
+      if (!body.startDate || !body.endDate) {
+        return reply.code(400).send({ error: 'startDate and endDate are required (YYYY-MM-DD)' })
+      }
+      const start = new Date(body.startDate)
+      const end = new Date(body.endDate)
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+        return reply.code(400).send({ error: 'invalid date' })
+      }
+      if (end < start) {
+        return reply.code(400).send({ error: 'endDate must be ≥ startDate' })
+      }
+      if (body.action) {
+        if (!['PERCENT_OFF', 'FIXED_PRICE'].includes(body.action.type)) {
+          return reply
+            .code(400)
+            .send({ error: 'action.type must be PERCENT_OFF or FIXED_PRICE' })
+        }
+        if (
+          !Number.isFinite(body.action.value) ||
+          body.action.value <= 0 ||
+          (body.action.type === 'PERCENT_OFF' && body.action.value >= 100)
+        ) {
+          return reply.code(400).send({
+            error:
+              'action.value must be > 0 (and < 100 for PERCENT_OFF)',
+          })
+        }
+      }
+
+      const created = await prisma.$transaction(async (tx) => {
+        const event = await tx.retailEvent.create({
+          data: {
+            name: body.name!,
+            startDate: start,
+            endDate: end,
+            channel: body.channel ?? null,
+            marketplace: body.marketplace ?? null,
+            productType: body.productType ?? null,
+            description: body.description ?? null,
+            expectedLift:
+              body.expectedLift != null
+                ? new Prisma.Decimal(body.expectedLift)
+                : new Prisma.Decimal(1),
+            source: 'CUSTOM',
+            isActive: true,
+          },
+        })
+        if (body.action) {
+          await tx.retailEventPriceAction.create({
+            data: {
+              eventId: event.id,
+              channel: body.channel ?? null,
+              marketplace: body.marketplace ?? null,
+              productType: body.productType ?? null,
+              action: body.action.type,
+              value: new Prisma.Decimal(body.action.value),
+              isActive: true,
+            },
+          })
+        }
+        return tx.retailEvent.findUnique({
+          where: { id: event.id },
+          include: { priceActions: true },
+        })
+      })
+      return created
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[pricing/promotions POST] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // E.1.b — Soft-delete a RetailEvent + cascade clear of any
+  // ChannelListing.salePrice rows the scheduler stamped under its
+  // promotion:<eventId> marker. Keeps audit trail (row preserved with
+  // isActive=false) so a "what did we run last quarter" query stays
+  // honest.
+  fastify.delete<{ Params: { id: string } }>(
+    '/pricing/promotions/:id',
+    async (request, reply) => {
+      try {
+        await prisma.$transaction(async (tx) => {
+          const event = await tx.retailEvent.findUnique({
+            where: { id: request.params.id },
+            select: { id: true },
+          })
+          if (!event) {
+            throw Object.assign(new Error('not found'), { code: 'P2025' })
+          }
+          await tx.retailEvent.update({
+            where: { id: event.id },
+            data: { isActive: false },
+          })
+          await tx.retailEventPriceAction.updateMany({
+            where: { eventId: event.id },
+            data: { isActive: false },
+          })
+          // Clear any salePrice rows the scheduler stamped under this
+          // event's marker so the listings revert next snapshot refresh.
+          await tx.channelListing.updateMany({
+            where: { lastOverrideBy: `promotion:${event.id}` },
+            data: {
+              salePrice: null,
+              lastOverrideAt: new Date(),
+              lastOverrideBy: `promotion-clear:${event.id}`,
+            },
+          })
+        })
+        return { ok: true }
+      } catch (error: any) {
+        if (error?.code === 'P2025') {
+          return reply.code(404).send({ error: 'event not found' })
+        }
+        fastify.log.error(
+          { err: error },
+          '[pricing/promotions DELETE] failed',
+        )
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
   // E.1 — Promotion calendar surface. Lists RetailEvent rows with their
   // RetailEventPriceAction children so the operator can see "what's active,
   // what's queued, what just ended" without firing the scheduler manually.

@@ -19,11 +19,14 @@ import {
   Clock3,
   Loader2,
   PlayCircle,
+  Plus,
   Tag,
+  Trash2,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Button } from '@/components/ui/Button'
+import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -68,6 +71,7 @@ export default function PromotionsClient() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
   const { toast } = useToast()
 
   const fetchData = useCallback(async () => {
@@ -132,18 +136,69 @@ export default function PromotionsClient() {
     )
   }
 
+  const deleteEvent = async (eventId: string, name: string) => {
+    if (!confirm(`Delete "${name}"? This clears any active salePrice rows it stamped.`)) return
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/pricing/promotions/${eventId}`,
+        { method: 'DELETE' },
+      )
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error ?? `HTTP ${res.status}`)
+      }
+      toast.success(`Deleted "${name}"`)
+      await fetchData()
+    } catch (e) {
+      toast.error(`Delete failed: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+
   if (!data || data.counts.total === 0) {
     return (
-      <EmptyState
-        icon={CalendarRange}
-        title="No retail events yet"
-        description="Create RetailEvent + RetailEventPriceAction rows to schedule sales. The hourly G.5.2 scheduler materializes ChannelListing.salePrice when their window opens; the engine reads it as SCHEDULED_SALE source."
-      />
+      <>
+        <div className="flex items-center justify-end mb-3">
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => setCreateOpen(true)}
+            icon={<Plus size={14} />}
+          >
+            Create promotion
+          </Button>
+        </div>
+        <EmptyState
+          icon={CalendarRange}
+          title="No retail events yet"
+          description="Create RetailEvent + RetailEventPriceAction rows to schedule sales. The hourly G.5.2 scheduler materializes ChannelListing.salePrice when their window opens; the engine reads it as SCHEDULED_SALE source."
+        />
+        {createOpen && (
+          <CreatePromotionModal
+            onClose={() => setCreateOpen(false)}
+            onCreated={async () => {
+              setCreateOpen(false)
+              await fetchData()
+            }}
+          />
+        )}
+      </>
     )
   }
 
   return (
     <div className="space-y-4">
+      {/* Action row */}
+      <div className="flex items-center justify-end">
+        <Button
+          variant="primary"
+          size="md"
+          onClick={() => setCreateOpen(true)}
+          icon={<Plus size={14} />}
+        >
+          Create promotion
+        </Button>
+      </div>
+
       {/* Counts banner + manual scheduler trigger */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-stretch">
         <CountTile
@@ -195,6 +250,7 @@ export default function PromotionsClient() {
           label={`Active · ${data.active.length}`}
           tone="emerald"
           events={data.active}
+          onDelete={deleteEvent}
         />
       )}
 
@@ -204,6 +260,7 @@ export default function PromotionsClient() {
           label={`Upcoming · ${data.upcoming.length}`}
           tone="blue"
           events={data.upcoming}
+          onDelete={deleteEvent}
         />
       )}
 
@@ -213,6 +270,17 @@ export default function PromotionsClient() {
           label={`Ended · ${data.ended.length}`}
           tone="slate"
           events={data.ended}
+          onDelete={deleteEvent}
+        />
+      )}
+
+      {createOpen && (
+        <CreatePromotionModal
+          onClose={() => setCreateOpen(false)}
+          onCreated={async () => {
+            setCreateOpen(false)
+            await fetchData()
+          }}
         />
       )}
     </div>
@@ -261,10 +329,12 @@ function EventSection({
   label,
   tone,
   events,
+  onDelete,
 }: {
   label: string
   tone: 'emerald' | 'blue' | 'slate'
   events: RetailEvent[]
+  onDelete: (eventId: string, name: string) => void
 }) {
   const headerToneCls = {
     emerald: 'bg-emerald-50 text-emerald-800',
@@ -374,13 +444,20 @@ function EventSection({
                     <td className="px-3 py-2 text-right tabular-nums text-slate-700">
                       ×{Number(e.expectedLift).toFixed(1)}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 inline-flex items-center gap-1">
                       <Link
                         href={`/pricing?source=SCHEDULED_SALE`}
                         className="text-sm text-blue-600 hover:underline"
                       >
                         →
                       </Link>
+                      <button
+                        onClick={() => onDelete(e.id, e.name)}
+                        className="text-rose-600 hover:bg-rose-50 rounded p-1"
+                        title="Delete event"
+                      >
+                        <Trash2 size={12} />
+                      </button>
                     </td>
                   </tr>
                 )
@@ -411,5 +488,236 @@ function ScopeChip({
   }
   return (
     <span className="font-mono text-sm text-slate-700">{parts.join(' · ')}</span>
+  )
+}
+
+function CreatePromotionModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void
+  onCreated: () => void
+}) {
+  const today = new Date().toISOString().slice(0, 10)
+  const [form, setForm] = useState({
+    name: '',
+    startDate: today,
+    endDate: today,
+    channel: '',
+    marketplace: '',
+    productType: '',
+    description: '',
+    expectedLift: '1',
+    actionType: 'PERCENT_OFF' as 'PERCENT_OFF' | 'FIXED_PRICE',
+    actionValue: '',
+    includeAction: true,
+  })
+  const [submitting, setSubmitting] = useState(false)
+  const { toast } = useToast()
+
+  const update = (k: keyof typeof form, v: string | boolean) =>
+    setForm((prev) => ({ ...prev, [k]: v as never }))
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitting(true)
+    try {
+      const body: Record<string, unknown> = {
+        name: form.name,
+        startDate: form.startDate,
+        endDate: form.endDate,
+        channel: form.channel || null,
+        marketplace: form.marketplace || null,
+        productType: form.productType || null,
+        description: form.description || null,
+        expectedLift: Number(form.expectedLift) || 1,
+      }
+      if (form.includeAction && form.actionValue) {
+        body.action = {
+          type: form.actionType,
+          value: Number(form.actionValue),
+        }
+      }
+      const res = await fetch(
+        `${getBackendUrl()}/api/pricing/promotions`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+      )
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error ?? `HTTP ${res.status}`)
+      }
+      toast.success(`Created "${form.name}"`)
+      onCreated()
+    } catch (err) {
+      toast.error(`Create failed: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Create promotion" size="xl">
+      <form onSubmit={submit}>
+        <ModalBody className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Name
+            </label>
+            <input
+              required
+              value={form.name}
+              onChange={(e) => update('name', e.target.value)}
+              placeholder='e.g. "Black Friday — Italy 2026"'
+              className="w-full h-9 px-3 border border-slate-300 rounded-md text-base"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Start
+              </label>
+              <input
+                type="date"
+                required
+                value={form.startDate}
+                onChange={(e) => update('startDate', e.target.value)}
+                className="w-full h-9 px-3 border border-slate-300 rounded-md text-base"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                End
+              </label>
+              <input
+                type="date"
+                required
+                value={form.endDate}
+                onChange={(e) => update('endDate', e.target.value)}
+                className="w-full h-9 px-3 border border-slate-300 rounded-md text-base"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Channel
+              </label>
+              <select
+                value={form.channel}
+                onChange={(e) => update('channel', e.target.value)}
+                className="w-full h-9 px-2 border border-slate-300 rounded-md text-base bg-white"
+              >
+                <option value="">All channels</option>
+                <option value="AMAZON">Amazon</option>
+                <option value="EBAY">eBay</option>
+                <option value="SHOPIFY">Shopify</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Marketplace
+              </label>
+              <select
+                value={form.marketplace}
+                onChange={(e) => update('marketplace', e.target.value)}
+                className="w-full h-9 px-2 border border-slate-300 rounded-md text-base bg-white"
+              >
+                <option value="">All marketplaces</option>
+                <option value="IT">IT</option>
+                <option value="DE">DE</option>
+                <option value="FR">FR</option>
+                <option value="ES">ES</option>
+                <option value="UK">UK</option>
+                <option value="NL">NL</option>
+                <option value="PL">PL</option>
+                <option value="SE">SE</option>
+                <option value="US">US</option>
+                <option value="GLOBAL">GLOBAL</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Expected lift
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                min="1"
+                value={form.expectedLift}
+                onChange={(e) => update('expectedLift', e.target.value)}
+                className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Description
+            </label>
+            <textarea
+              rows={2}
+              value={form.description}
+              onChange={(e) => update('description', e.target.value)}
+              className="w-full px-3 py-2 border border-slate-300 rounded-md text-base"
+            />
+          </div>
+          <div className="border border-pink-200 bg-pink-50/40 rounded-md p-3 space-y-2">
+            <label className="inline-flex items-center gap-2 text-base font-medium text-pink-900">
+              <input
+                type="checkbox"
+                checked={form.includeAction}
+                onChange={(e) => update('includeAction', e.target.checked)}
+              />
+              Apply price action when window opens
+            </label>
+            {form.includeAction && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Action type
+                  </label>
+                  <select
+                    value={form.actionType}
+                    onChange={(e) =>
+                      update('actionType', e.target.value as typeof form.actionType)
+                    }
+                    className="w-full h-9 px-2 border border-slate-300 rounded-md text-base bg-white"
+                  >
+                    <option value="PERCENT_OFF">% off current price</option>
+                    <option value="FIXED_PRICE">Fixed price</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    {form.actionType === 'PERCENT_OFF' ? '% off' : 'Fixed price'}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    max={form.actionType === 'PERCENT_OFF' ? '99.99' : undefined}
+                    value={form.actionValue}
+                    onChange={(e) => update('actionValue', e.target.value)}
+                    placeholder={form.actionType === 'PERCENT_OFF' ? '20' : '49.99'}
+                    className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </ModalBody>
+        <ModalFooter>
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" loading={submitting} disabled={submitting}>
+            {submitting ? 'Creating…' : 'Create promotion'}
+          </Button>
+        </ModalFooter>
+      </form>
+    </Modal>
   )
 }
