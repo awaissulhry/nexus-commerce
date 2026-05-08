@@ -29,6 +29,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { cn } from '@/lib/utils'
 
 type StockRow = {
   id: string
@@ -1572,6 +1573,24 @@ type DrawerBundle = {
     expiresAt: string; createdAt: string
     location: { id: string; code: string }
   }>
+  // S.26 — per-channel ATP rollup
+  atpPerChannel?: Array<{
+    channelListingId: string
+    channel: string
+    marketplace: string
+    fulfillmentMethod: string | null
+    externalListingId: string | null
+    listingStatus: string
+    stockBuffer: number
+    followMasterQuantity: boolean
+    resolvedLocationCode: string | null
+    source: string
+    onHand: number
+    reservedForChannel: number
+    available: number
+    channelQuantity: number | null
+    drift: number | null
+  }>
   // S.20 — cost-layer surface
   costing?: {
     method: 'WAC' | 'FIFO' | 'LIFO' | string
@@ -1862,6 +1881,8 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                         rose: 'bg-rose-50 text-rose-700',
                         slate: 'bg-slate-100 text-slate-600',
                       }
+                      // S.26 — find this listing's per-channel ATP row.
+                      const atp = bundle.atpPerChannel?.find((r) => r.channelListingId === cl.id)
                       return (
                         <li key={cl.id} className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 border-b border-slate-100 last:border-0">
                           <div className="min-w-0 flex-1">
@@ -1875,6 +1896,20 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                               {cl.lastSyncedAt ? `Synced ${formatRelative(cl.lastSyncedAt)}` : 'Never synced'}
                               {cl.lastSyncError && <span className="text-rose-600"> · {cl.lastSyncError.slice(0, 60)}</span>}
                             </div>
+                            {/* S.26 — ATP breakdown: on-hand − reserved − buffer = available */}
+                            {atp && (
+                              <div className="text-xs text-slate-500 mt-0.5 tabular-nums">
+                                {t('stock.atpPerChannel.onHand')} <span className="text-slate-700 font-semibold">{atp.onHand}</span>
+                                {atp.reservedForChannel > 0 && <> · −<span className="text-violet-700">{atp.reservedForChannel}</span> {t('stock.atpPerChannel.reserved')}</>}
+                                {atp.stockBuffer > 0 && <> · −<span className="text-amber-700">{atp.stockBuffer}</span> {t('stock.atpPerChannel.buffer')}</>}
+                                <> = <span className="text-emerald-700 font-semibold">{atp.available}</span> {t('stock.atpPerChannel.available')}</>
+                                {atp.drift != null && atp.drift !== 0 && (
+                                  <span className={cn('ml-1.5', atp.drift > 0 ? 'text-emerald-600' : 'text-rose-600')}>
+                                    ({t('stock.atpPerChannel.drift')} {atp.drift > 0 ? '+' : ''}{atp.drift})
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                           <div className="text-right flex-shrink-0 text-sm text-slate-500 tabular-nums">
                             {cl.quantity == null ? <span className="text-slate-400">follows master</span> : <><span className="font-semibold text-slate-700">{cl.quantity}</span> shown</>}

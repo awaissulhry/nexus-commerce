@@ -8,6 +8,7 @@ import {
 } from '../services/stock-level.service.js'
 import { amazonInventoryService } from '../services/amazon-inventory.service.js'
 import { resolveAtp } from '../services/atp.service.js'
+import { resolveAtpAcrossChannels } from '../services/atp-channel.service.js'
 import { getReservationSweepStatus } from '../jobs/reservation-sweep.job.js'
 import * as abcService from '../services/abc-classification.service.js'
 import { listLayers, recomputeWac } from '../services/cost-layers.service.js'
@@ -705,6 +706,14 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
           dailyHistory,
         },
         atp: atp ?? null,
+        // S.26 — per-channel ATP rollup. byLocation comes from the
+        // resolveAtp call above (it computes the per-row breakdown
+        // we feed back here). Empty when the product has no
+        // ChannelListings.
+        atpPerChannel: atp ? await resolveAtpAcrossChannels({
+          productId: product.id,
+          byLocation: atp.byLocation as any,
+        }) : [],
         // S.20 — costing surface
         costing: {
           method: product.costingMethod,
