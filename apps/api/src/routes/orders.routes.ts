@@ -585,6 +585,47 @@ export async function ordersRoutes(app: FastifyInstance) {
     },
   )
 
+  // FU.1 — per-line VAT rate override (Italian compliance).
+  // Lets the operator flip a line from the default 22% to 10% or
+  // 4% when the catalog mix doesn't fit the standard rate
+  // (cycling apparel can be 10%, essentials 4%). Restricted to
+  // IT-marketplace orders — non-IT lines have no Italian VAT
+  // treatment to override.
+  app.patch('/api/orders/:id/items/:itemId/vat', async (request, reply) => {
+    try {
+      const { id, itemId } = request.params as { id: string; itemId: string }
+      const body = request.body as { rate?: number | null }
+      const allowed = [4, 10, 22, null]
+      const rate = body.rate ?? null
+      if (!allowed.includes(rate as any)) {
+        return reply.code(400).send({
+          error: 'rate must be 4, 10, 22, or null',
+        })
+      }
+      const item = await prisma.orderItem.findFirst({
+        where: { id: itemId, orderId: id },
+        select: { id: true, order: { select: { marketplace: true } } },
+      })
+      if (!item) return reply.code(404).send({ error: 'Order item not found' })
+      if (item.order?.marketplace !== 'IT') {
+        return reply.code(400).send({
+          error: 'VAT override only applies to IT-marketplace orders',
+        })
+      }
+      const updated = await prisma.orderItem.update({
+        where: { id: itemId },
+        data: { itVatRatePct: rate },
+        select: { id: true, itVatRatePct: true },
+      })
+      return {
+        id: updated.id,
+        itVatRatePct: updated.itVatRatePct == null ? null : Number(updated.itVatRatePct),
+      }
+    } catch (err: any) {
+      return reply.code(500).send({ error: err?.message ?? 'failed' })
+    }
+  })
+
   // F.3 — Italian invoice + packing slip as printable HTML.
   // Operator opens in a new tab + prints to PDF via the browser
   // dialog; saves us a 5+ MB PDF library dep. Italian fiscal

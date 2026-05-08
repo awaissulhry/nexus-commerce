@@ -129,6 +129,12 @@ export default function OrderDetailClient({ id }: { id: string }) {
             >
               <Star size={12} className={reviewBusy ? 'animate-pulse' : ''} /> Request review
             </button>
+            {/* FU.1 — Italian fiscal artifacts (IT marketplace only).
+                B2B unlocks the FatturaPA + SDI dispatch options;
+                everyone else gets a Pro Forma + packing slip. */}
+            {order.marketplace === 'IT' && (
+              <FiscalActions order={order} />
+            )}
             <button onClick={refresh} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5">
               <RefreshCw size={12} /> Refresh
             </button>
@@ -182,6 +188,38 @@ export default function OrderDetailClient({ id }: { id: string }) {
                     )}
                     <div className="text-sm text-slate-500 font-mono">{it.sku}</div>
                   </div>
+                  {/* FU.1 — per-line VAT override (IT marketplace only) */}
+                  {order.marketplace === 'IT' && (
+                    <select
+                      value={it.itVatRatePct == null ? '' : String(it.itVatRatePct)}
+                      onChange={async (e) => {
+                        const raw = e.target.value
+                        const rate = raw === '' ? null : Number(raw)
+                        try {
+                          const res = await fetch(
+                            `${getBackendUrl()}/api/orders/${order.id}/items/${it.id}/vat`,
+                            {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ rate }),
+                            },
+                          )
+                          if (!res.ok) throw new Error(await res.text())
+                          toast.success(`VAT updated to ${rate ?? 'default'}%`)
+                          refresh()
+                        } catch (err: any) {
+                          toast.error(err.message)
+                        }
+                      }}
+                      title="Italian VAT rate for this line"
+                      className="h-7 px-1.5 text-sm border border-slate-200 rounded tabular-nums"
+                    >
+                      <option value="">— %</option>
+                      <option value="22">22%</option>
+                      <option value="10">10%</option>
+                      <option value="4">4%</option>
+                    </select>
+                  )}
                   <div className="text-right">
                     <div className="text-md tabular-nums text-slate-700">×{it.quantity}</div>
                     <div className="text-sm tabular-nums text-slate-500">€{it.price.toFixed(2)}</div>
@@ -384,6 +422,82 @@ function FinTile({ label, value, tone }: { label: string; value: number; tone: '
       <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">{label}</div>
       <div className={`text-2xl font-semibold tabular-nums ${cls}`}>€{value.toFixed(2)}</div>
     </div>
+  )
+}
+
+// ── FU.1: Italian fiscal action group ─────────────────────────────────
+// Renders only on IT-marketplace orders. Three actions:
+//   • Print fattura — opens /api/orders/:id/invoice.html for browser
+//     print (Italian PRO FORMA on non-B2B; full fattura on B2B with
+//     lazy-assigned F.2 invoice number)
+//   • Download FatturaPA XML — only on B2B; SDI-format .xml for
+//     manual upload to operator's commercial provider
+//   • Dispatch SDI — only on B2B; env-gated (NEXUS_ENABLE_SDI_
+//     DISPATCH=true). Default: marks the FiscalInvoice
+//     sdiStatus='PENDING' so the operator surface shows queued
+//     state.
+//
+// Operators can find these where they think to look (order detail
+// header) without us duplicating the existing /fulfillment/outbound
+// pack-slip URL — that surface owns per-shipment pack-time printing.
+function FiscalActions({ order }: { order: any }) {
+  const isB2B = order.fiscalKind === 'B2B'
+
+  const dispatchSdi = async () => {
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/orders/${order.id}/fattura-pa/dispatch`,
+        { method: 'POST' },
+      )
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error ?? 'dispatch failed')
+      // useToast is in the parent scope; bubble via custom event
+      // since this is a pure-function component without prop drill.
+      window.dispatchEvent(
+        new CustomEvent('nexus:toast', {
+          detail: { kind: data.status === 'PENDING' ? 'success' : 'info', text: data.message },
+        }),
+      )
+    } catch (e: any) {
+      window.dispatchEvent(
+        new CustomEvent('nexus:toast', {
+          detail: { kind: 'error', text: e.message },
+        }),
+      )
+    }
+  }
+
+  return (
+    <>
+      <a
+        href={`${getBackendUrl()}/api/orders/${order.id}/invoice.html`}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Stampa fattura (apre in nuova scheda — usa Cmd+P per salvare in PDF)"
+        className="h-8 px-3 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center gap-1.5"
+      >
+        <DollarSign size={12} /> Fattura
+      </a>
+      {isB2B && (
+        <>
+          <a
+            href={`${getBackendUrl()}/api/orders/${order.id}/fattura-pa.xml`}
+            title="Download FatturaPA XML for manual SDI upload"
+            className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+            download
+          >
+            <ExternalLink size={12} /> XML SDI
+          </a>
+          <button
+            onClick={dispatchSdi}
+            title="Dispatch invoice to SDI (env-gated — set NEXUS_ENABLE_SDI_DISPATCH=true to flip from dryRun)"
+            className="h-8 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5"
+          >
+            <CheckCircle2 size={12} /> Invia SDI
+          </button>
+        </>
+      )}
+    </>
   )
 }
 
