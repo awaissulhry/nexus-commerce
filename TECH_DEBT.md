@@ -266,13 +266,16 @@ Items below come from the user's first day operating Nexus on the actual Xavia c
 
 **Original friction:** "AI title was wrong — kept saying 'Giubbotto' when should be 'Giacca'." Concrete Xavia case: "Giubbotto" implies padded/winter; for breathable mesh riding gear the correct term is "Giacca." The model picked the wrong noun even though the source used "Giacca."
 
-## 28. 🟡 Listing wizard: apply to multiple marketplaces in one pass
+## 28. ✅ Listing wizard: apply to multiple marketplaces in one pass — resolved 2026-05-08 (M.1 + M.14)
 
-**Friction:** "Wanted to apply for 5 marketplaces at once, had to do separately."
+**Resolution (split across two commits):**
 
-Already captured at high level in entry **13** (multi-marketplace translation flow). The friction log confirms it's real. Reframing the priority: P1 not P2, because the wizard ships now and users are running it 5× per product.
+  • **M.1** shipped multi-marketplace AI content fan-out at `/listings/generate` — operator picks N marketplaces, one Generate click runs N parallel LLM calls, each terminology + language tuned per marketplace.
+  • **M.14** shipped multi-marketplace GTIN-exemption fan-out at `POST /api/gtin-exemption/multi`. Same brand letter + image package + trademark info are cloned across N marketplaces in one request. Per-marketplace DRAFT semantics are preserved so each application still lifecycles independently (one might land APPROVED on IT while DE bounces with REJECTED). Returns `{ created, updated, failed, summary }` so the wizard step can render "3 created, 2 already had drafts."
 
-**Action:** when entry 13 lands, also apply to the GTIN-exemption submission — the same brand letter / image package is submittable to all five EU marketplaces in one pass.
+The wizard's Step 2 (Step2GtinExemption) still operates on a single marketplace per render today — wiring the multi endpoint to a "Submit to all 5 EU marketplaces" button on that step is a follow-up commit for whichever session picks it up. Backend is in place; frontend is the easy half.
+
+**Original friction:** "Wanted to apply for 5 marketplaces at once, had to do separately." — wizard ran 5× per product across content generation + GTIN-exemption + per-marketplace overrides. M.1 collapses content generation; M.14 collapses GTIN-exemption.
 
 ## 29. ✅ /products: catalog hygiene filters — resolved 2026-05-08 in M.2
 

@@ -58,6 +58,12 @@ interface CreateBody {
   brandWebsite?: string
 }
 
+interface CreateMultiBody extends Omit<CreateBody, 'marketplace'> {
+  /** Marketplaces to fan out to. The same brand letter / image package
+   *  / trademark info is cloned to one DRAFT per marketplace. */
+  marketplaces?: string[]
+}
+
 interface PatchBody {
   brandRegistrationType?: string
   trademarkNumber?: string | null
@@ -212,6 +218,163 @@ const gtinExemptionRoutes: FastifyPluginAsync = async (fastify) => {
         },
       })
       return { application: created }
+    },
+  )
+
+  /**
+   * POST /api/gtin-exemption/multi — fan out one application across N
+   * marketplaces. TECH_DEBT #28 entry's "while we're there" note: the
+   * brand letter, trademark info, image package, and product list are
+   * all marketplace-agnostic — submitting to AMAZON IT/DE/FR/UK/ES one
+   * at a time was forcing the operator through five wizard runs for
+   * the same package.
+   *
+   * Per-marketplace DRAFT semantics are preserved so each application
+   * still lifecycles independently (one might land APPROVED on IT
+   * while DE bounces with REJECTED). The shared brand letter is
+   * regenerated per-marketplace because the canned text references
+   * the marketplace name.
+   *
+   * Reuse rule: if a DRAFT exists for (brandName, marketplace), it's
+   * upserted (matches the single-create path's behaviour). The
+   * response carries `created` and `updated` arrays so the operator's
+   * wizard can show "3 created, 2 already had drafts."
+   */
+  fastify.post<{ Body: CreateMultiBody }>(
+    '/gtin-exemption/multi',
+    async (request, reply) => {
+      const body = request.body ?? {}
+      if (
+        !body.brandName ||
+        !Array.isArray(body.marketplaces) ||
+        body.marketplaces.length === 0 ||
+        !body.productIds?.length
+      ) {
+        return reply.code(400).send({
+          error: 'brandName, marketplaces[], productIds[] required',
+        })
+      }
+      const regType = body.brandRegistrationType ?? 'TRADEMARK'
+      if (!ALLOWED_REGISTRATION_TYPES.has(regType)) {
+        return reply.code(400).send({
+          error: `brandRegistrationType must be one of ${Array.from(
+            ALLOWED_REGISTRATION_TYPES,
+          ).join(', ')}`,
+        })
+      }
+      const products = await prisma.product.findMany({
+        where: { id: { in: body.productIds } },
+        select: { id: true, sku: true, name: true, brand: true },
+      })
+      if (products.length === 0) {
+        return reply
+          .code(404)
+          .send({ error: 'None of the productIds resolved to products' })
+      }
+      const productLines = products.map((p) => ({ sku: p.sku, name: p.name }))
+      const account = await prisma.accountSettings.findFirst().catch(() => null)
+      const ownerName =
+        (account as any)?.ownerName ??
+        (account as any)?.businessName ??
+        body.brandName
+      const companyName = (account as any)?.businessName ?? body.brandName
+      const companyAddress =
+        [
+          (account as any)?.addressLine1,
+          (account as any)?.addressLine2,
+          (account as any)?.city,
+          (account as any)?.state,
+          (account as any)?.postalCode,
+          (account as any)?.country,
+        ]
+          .filter(Boolean)
+          .join(', ') || undefined
+      const trademarkDate = body.trademarkDate
+        ? new Date(body.trademarkDate)
+        : null
+
+      const created: any[] = []
+      const updated: any[] = []
+      const failed: Array<{ marketplace: string; error: string }> = []
+
+      // De-dupe + uppercase the marketplace list. Operator might send
+      // 'IT' twice or 'it' / 'IT' mixed; we treat them all as the same.
+      const marketplaces = Array.from(
+        new Set(
+          body.marketplaces
+            .map((m) => String(m).trim().toUpperCase())
+            .filter(Boolean),
+        ),
+      )
+
+      for (const marketplace of marketplaces) {
+        try {
+          const initialLetter = generateBrandLetterText({
+            brandName: body.brandName,
+            ownerName,
+            companyName,
+            companyAddress,
+            trademarkNumber: body.trademarkNumber,
+            trademarkCountry: body.trademarkCountry,
+            productLines,
+            marketplace,
+          })
+          const existing = await prisma.gtinExemptionApplication.findFirst({
+            where: { brandName: body.brandName, marketplace, status: 'DRAFT' },
+            orderBy: { createdAt: 'desc' },
+          })
+          if (existing) {
+            const u = await prisma.gtinExemptionApplication.update({
+              where: { id: existing.id },
+              data: {
+                productIds: body.productIds,
+                brandRegistrationType: regType,
+                trademarkNumber: body.trademarkNumber ?? existing.trademarkNumber,
+                trademarkCountry: body.trademarkCountry ?? existing.trademarkCountry,
+                trademarkDate: trademarkDate ?? existing.trademarkDate,
+                brandWebsite: body.brandWebsite ?? existing.brandWebsite,
+                brandLetter: existing.brandLetterCustomised
+                  ? existing.brandLetter
+                  : initialLetter,
+              },
+            })
+            updated.push(u)
+          } else {
+            const c = await prisma.gtinExemptionApplication.create({
+              data: {
+                brandName: body.brandName,
+                productIds: body.productIds,
+                marketplace,
+                brandRegistrationType: regType,
+                trademarkNumber: body.trademarkNumber,
+                trademarkCountry: body.trademarkCountry,
+                trademarkDate,
+                brandWebsite: body.brandWebsite,
+                brandLetter: initialLetter,
+                status: 'DRAFT',
+              },
+            })
+            created.push(c)
+          }
+        } catch (err) {
+          failed.push({
+            marketplace,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      }
+
+      return {
+        created,
+        updated,
+        failed,
+        summary: {
+          createdCount: created.length,
+          updatedCount: updated.length,
+          failedCount: failed.length,
+          totalRequested: marketplaces.length,
+        },
+      }
     },
   )
 
