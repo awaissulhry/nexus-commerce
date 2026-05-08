@@ -8721,18 +8721,23 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       if (!carrier) return reply.code(404).send({ error: 'Carrier not found' })
 
       // Upsert the CarrierService row keyed on (carrierId, externalId).
+      // CR.24: classify tier from the name when the caller didn't
+      // supply one explicitly. Caller-supplied tier wins (operator
+      // override); fall back to heuristic only when omitted.
+      const { classifyServiceTier } = await import('../services/sendcloud/tier-classifier.js')
+      const tier = body.service.tier ?? classifyServiceTier(body.service.name, body.service.carrierSubName)
       const service = await prisma.carrierService.upsert({
         where: { carrierId_externalId: { carrierId: carrier.id, externalId: body.service.externalId } },
         create: {
           carrierId: carrier.id,
           externalId: body.service.externalId,
           name: body.service.name,
-          tier: body.service.tier ?? null,
+          tier,
           carrierSubName: body.service.carrierSubName ?? null,
         },
         update: {
           name: body.service.name,
-          tier: body.service.tier ?? null,
+          tier,
           carrierSubName: body.service.carrierSubName ?? null,
         },
       })

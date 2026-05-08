@@ -115,8 +115,13 @@ export async function runCarrierServiceSync(): Promise<{
         }
       }
 
-      // Upsert the survivors.
+      // Upsert the survivors. CR.24: classify tier from the name +
+      // carrier sub-name so resolveServiceMap's auto-tier fallback
+      // (CR.22) actually has typed rows to match against. Null when
+      // the name gives no signal — better than guessing.
+      const { classifyServiceTier } = await import('../services/sendcloud/tier-classifier.js')
       for (const m of found.values()) {
+        const tier = classifyServiceTier(m.name, m.carrier)
         await prisma.carrierService.upsert({
           where: {
             carrierId_externalId: { carrierId: carrier.id, externalId: m.externalId },
@@ -126,6 +131,7 @@ export async function runCarrierServiceSync(): Promise<{
             externalId: m.externalId,
             name: m.name,
             carrierSubName: m.carrier,
+            tier,
             minWeightG: Math.round(m.minWeightKg * 1000),
             maxWeightG: Math.round(m.maxWeightKg * 1000),
             basePriceCents: Math.round(m.basePriceEur * 100),
@@ -134,6 +140,7 @@ export async function runCarrierServiceSync(): Promise<{
           update: {
             name: m.name,
             carrierSubName: m.carrier,
+            tier,
             minWeightG: Math.round(m.minWeightKg * 1000),
             maxWeightG: Math.round(m.maxWeightKg * 1000),
             basePriceCents: Math.round(m.basePriceEur * 100),
