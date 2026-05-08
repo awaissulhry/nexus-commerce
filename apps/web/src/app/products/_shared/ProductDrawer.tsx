@@ -50,6 +50,7 @@ import {
   Calendar,
   XCircle,
   Clock,
+  DollarSign,
 } from 'lucide-react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -153,7 +154,16 @@ export interface ProductDrawerProps {
   onChanged?: () => void
 }
 
-type Tab = 'details' | 'listings' | 'variations' | 'translations' | 'related' | 'activity' | 'schedule'
+type Tab =
+  | 'details'
+  | 'listings'
+  | 'variations'
+  | 'images'
+  | 'translations'
+  | 'pricing'
+  | 'related'
+  | 'activity'
+  | 'schedule'
 
 export default function ProductDrawer({
   productId,
@@ -419,12 +429,35 @@ export default function ProductDrawer({
               <Layers className="w-3 h-3" /> Variations
             </DrawerTab>
           )}
+          {/* U.32 — Images tab. Shows thumbnails of the product's
+              ProductImage rows + a deep-link to the full image
+              manager at /products/[id]/images for drag-reorder + bulk
+              upload. The drawer has always claimed (in its header
+              docblock) to surface the image gallery; this tab finally
+              fulfils that promise. */}
+          <DrawerTab
+            active={tab === 'images'}
+            onClick={() => setTab('images')}
+            count={data?._count?.images}
+          >
+            <ImageIcon className="w-3 h-3" /> Images
+          </DrawerTab>
           <DrawerTab
             active={tab === 'translations'}
             onClick={() => setTab('translations')}
             count={data?._count?.translations}
           >
             <Globe className="w-3 h-3" /> Translations
+          </DrawerTab>
+          {/* U.32 — Pricing tab. Per-marketplace price summary +
+              deep-link to /pricing?search=<sku>. The drawer is the
+              per-product hub; until now operators had to leave it to
+              see the price matrix. */}
+          <DrawerTab
+            active={tab === 'pricing'}
+            onClick={() => setTab('pricing')}
+          >
+            <DollarSign className="w-3 h-3" /> Pricing
           </DrawerTab>
           <DrawerTab
             active={tab === 'related'}
@@ -493,6 +526,12 @@ export default function ProductDrawer({
               }}
             />
           )}
+          {data && tab === 'images' && (
+            <ImagesTab
+              productId={data.id}
+              images={data.images ?? []}
+            />
+          )}
           {data && tab === 'translations' && (
             <TranslationsTab
               productId={data.id}
@@ -504,6 +543,13 @@ export default function ProductDrawer({
                 fetchDetail()
                 onChanged?.()
               }}
+            />
+          )}
+          {data && tab === 'pricing' && (
+            <PricingTab
+              sku={data.sku}
+              basePrice={data.basePrice}
+              channelListings={data.channelListings ?? []}
             />
           )}
           {data && tab === 'related' && (
@@ -1999,6 +2045,220 @@ function ScheduleTab({ productId }: { productId: string }) {
           </li>
         ))}
       </ul>
+    </div>
+  )
+}
+
+/**
+ * U.32 — Images tab. Renders the product's existing image set as a
+ * clickable thumbnail grid + a deep-link to the full image manager
+ * at /products/[id]/images for drag-reorder, scope picker, and bulk
+ * upload. Operators get a one-glance check of which photos exist
+ * without leaving the drawer.
+ *
+ * "MAIN" tag pins to the first slot (the primary product photo);
+ * other types render the type label as an overlay so the operator
+ * can tell ALT vs LIFESTYLE shots at a glance.
+ */
+function ImagesTab({
+  productId,
+  images,
+}: {
+  productId: string
+  images: Array<{ url: string; type: string | null }>
+}) {
+  if (images.length === 0) {
+    return (
+      <div className="px-5 py-12 text-center text-base text-slate-500 dark:text-slate-400">
+        <ImageIcon className="w-6 h-6 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
+        No images yet for this product.
+        <div className="text-sm text-slate-400 dark:text-slate-500 mt-1">
+          Drop a folder of photos onto the bulk image-upload modal on
+          the main grid, or upload individually from the full image
+          manager below.
+        </div>
+        <div className="mt-3">
+          <Link
+            href={`/products/${productId}/images`}
+            className="h-8 px-3 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 inline-flex items-center gap-1.5"
+          >
+            <ExternalLink size={11} /> Open image manager
+          </Link>
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div className="px-5 py-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
+          {images.length} image{images.length === 1 ? '' : 's'}
+        </div>
+        <Link
+          href={`/products/${productId}/images`}
+          className="h-7 px-2.5 text-sm border border-slate-200 dark:border-slate-800 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5"
+        >
+          <ExternalLink size={11} /> Manage images
+        </Link>
+      </div>
+      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+        {images.map((img, i) => (
+          // eslint-disable-next-line @next/next/no-img-element
+          <div
+            key={`${img.url}-${i}`}
+            className="relative aspect-square rounded border border-slate-200 dark:border-slate-800 overflow-hidden bg-slate-100 dark:bg-slate-800"
+          >
+            <img
+              src={img.url}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+            {img.type && img.type !== 'ALT' && (
+              <span className="absolute top-1 left-1 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-slate-900/80 text-white rounded">
+                {img.type}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="text-sm text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
+        Drag-reorder, slot assignment (MAIN / ALT / LIFESTYLE), and
+        bulk upload happen in the full image manager.
+      </div>
+    </div>
+  )
+}
+
+/**
+ * U.32 — Pricing tab. Per-marketplace summary of the current
+ * channel listing prices vs the master basePrice + a deep-link to
+ * /pricing?search=<sku> for the full matrix (rules, overrides,
+ * clamps, history, push). Drawer is the per-product hub; this tab
+ * surfaces the read-side without making the operator navigate
+ * elsewhere first.
+ */
+function PricingTab({
+  sku,
+  basePrice,
+  channelListings,
+}: {
+  sku: string
+  basePrice: string | number | null
+  channelListings: NonNullable<ProductDetail['channelListings']>
+}) {
+  const baseNum = basePrice == null ? null : Number(basePrice)
+  const sorted = [...channelListings].sort((a, b) => {
+    if (a.channel !== b.channel) return a.channel.localeCompare(b.channel)
+    return a.marketplace.localeCompare(b.marketplace)
+  })
+
+  return (
+    <div className="px-5 py-4 space-y-3">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div>
+          <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
+            Master basePrice
+          </div>
+          <div className="text-2xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+            {baseNum == null ? '—' : `€${baseNum.toFixed(2)}`}
+          </div>
+        </div>
+        <div className="ml-auto">
+          <Link
+            href={`/pricing?search=${encodeURIComponent(sku)}`}
+            className="h-8 px-3 text-sm border border-slate-200 dark:border-slate-800 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5"
+            title="Open the full pricing matrix (rules, overrides, clamps, history)"
+          >
+            <ExternalLink size={11} /> Open pricing matrix
+          </Link>
+        </div>
+      </div>
+      {sorted.length === 0 ? (
+        <div className="border border-slate-200 dark:border-slate-800 rounded-md py-8 text-center text-base text-slate-500 dark:text-slate-400 italic">
+          No channel listings yet — once this product is published the
+          per-marketplace prices appear here.
+        </div>
+      ) : (
+        <div className="border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
+          <table className="w-full text-base">
+            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-800">
+              <tr>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                  Channel
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                  Marketplace
+                </th>
+                <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                  Listing price
+                </th>
+                <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                  Δ vs master
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                  Status
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((l) => {
+                const price = l.price == null ? null : Number(l.price)
+                const delta =
+                  baseNum == null || price == null ? null : price - baseNum
+                const tone =
+                  delta == null
+                    ? 'text-slate-400 dark:text-slate-500'
+                    : Math.abs(delta) < 0.01
+                      ? 'text-slate-500 dark:text-slate-400'
+                      : delta > 0
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-rose-600 dark:text-rose-400'
+                return (
+                  <tr
+                    key={l.id}
+                    className="border-b border-slate-100 dark:border-slate-800 last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                  >
+                    <td className="px-3 py-2 text-slate-900 dark:text-slate-100 font-medium">
+                      {l.channel}
+                    </td>
+                    <td className="px-3 py-2 text-slate-700 dark:text-slate-300 font-mono text-sm">
+                      {l.marketplace}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-900 dark:text-slate-100">
+                      {price == null ? '—' : `€${price.toFixed(2)}`}
+                    </td>
+                    <td className={`px-3 py-2 text-right tabular-nums ${tone}`}>
+                      {delta == null
+                        ? '—'
+                        : Math.abs(delta) < 0.01
+                          ? '0.00'
+                          : `${delta > 0 ? '+' : ''}${delta.toFixed(2)}`}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span
+                        className={`inline-block px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wider rounded ${
+                          l.listingStatus === 'ACTIVE' && l.isPublished
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                            : l.listingStatus === 'DRAFT'
+                              ? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800'
+                              : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+                        }`}
+                      >
+                        {l.listingStatus}
+                      </span>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className="text-sm text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
+        Δ vs master shows how each channel listing's published price
+        differs from this product's basePrice. Push / explain / clamp
+        rules live in the full pricing matrix.
+      </div>
     </div>
   )
 }
