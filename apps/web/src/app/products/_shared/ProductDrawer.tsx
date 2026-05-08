@@ -506,17 +506,30 @@ export default function ProductDrawer({
 
         {/* Footer */}
         {data && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 bg-slate-50">
-            <span className="text-sm text-slate-500">
+          <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 bg-slate-50 gap-3">
+            <span className="text-sm text-slate-500 truncate">
               Updated {new Date(data.updatedAt).toLocaleString()}
             </span>
-            <Link
-              href={`/products/${data.id}/edit`}
-              className="inline-flex items-center gap-1 text-base font-medium text-blue-700 hover:underline"
-            >
-              Open full edit
-              <ChevronRight className="w-3 h-3" />
-            </Link>
+            <div className="flex items-center gap-3 flex-shrink-0">
+              {/* F.6 — datasheet deep-link. Opens in a new tab so the
+                  drawer + grid context isn't lost when the operator
+                  prints / saves-as-PDF. */}
+              <Link
+                href={`/products/${data.id}/datasheet`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-900 hover:underline"
+              >
+                Datasheet
+              </Link>
+              <Link
+                href={`/products/${data.id}/edit`}
+                className="inline-flex items-center gap-1 text-base font-medium text-blue-700 hover:underline"
+              >
+                Open full edit
+                <ChevronRight className="w-3 h-3" />
+              </Link>
+            </div>
           </div>
         )}
       </div>
