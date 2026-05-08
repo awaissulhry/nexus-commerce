@@ -58,8 +58,8 @@ const NAV_SECTIONS: NavSectionConfig[] = [
     items: [
       { label: "Manage Pricing", href: "/pricing", icon: "💲" },
       { label: "Pricing Rules", href: "/pricing/rules", icon: "⚙️" },
+      { label: "Promotions", href: "/pricing/promotions", icon: "🏷️" },
       { label: "Fix Price Alerts", href: "/pricing/alerts", icon: "🔔" },
-      { label: "Sale Dashboard", href: "/pricing/sales", icon: "🏷️", disabled: true },
     ],
   },
   {

@@ -385,6 +385,53 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // E.1 — Promotion calendar surface. Lists RetailEvent rows with their
+  // RetailEventPriceAction children so the operator can see "what's active,
+  // what's queued, what just ended" without firing the scheduler manually.
+  // Bucket boundaries match the scheduler's own ENTER/EXIT logic
+  // (promotion-scheduler.service.ts:35-36): now ± 12h.
+  fastify.get('/pricing/promotions', async (_request, reply) => {
+    try {
+      const now = new Date()
+      const events = await prisma.retailEvent.findMany({
+        orderBy: [{ startDate: 'asc' }],
+        include: {
+          priceActions: {
+            where: { isActive: true },
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+      })
+      const buckets = {
+        active: [] as typeof events,
+        upcoming: [] as typeof events,
+        ended: [] as typeof events,
+      }
+      for (const e of events) {
+        if (e.startDate <= now && e.endDate >= now) buckets.active.push(e)
+        else if (e.startDate > now) buckets.upcoming.push(e)
+        else buckets.ended.push(e)
+      }
+      return {
+        counts: {
+          active: buckets.active.length,
+          upcoming: buckets.upcoming.length,
+          ended: buckets.ended.length,
+          total: events.length,
+        },
+        active: buckets.active,
+        // Cap upcoming at next 25 — calendar view fits ~3 months ahead
+        // without overwhelming the operator.
+        upcoming: buckets.upcoming.slice(0, 25),
+        // Last 25 ended for "did the lift land" lookback.
+        ended: buckets.ended.slice(-25).reverse(),
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[pricing/promotions] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // G.5.1 — Push the latest snapshot price to the marketplace API.
   fastify.post('/pricing/push', async (request, reply) => {
     try {
