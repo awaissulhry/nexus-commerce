@@ -18,7 +18,10 @@ export interface ColumnDef {
 }
 
 export const ALL_COLUMNS: ColumnDef[] = [
-  { key: 'thumb', label: '', width: 56, locked: true },
+  // U.35 — column width bumped from 56 → 64 to give the larger
+  // 48px thumbnail breathing room while keeping the cell's px-2
+  // padding readable.
+  { key: 'thumb', label: '', width: 64, locked: true },
   { key: 'sku', label: 'SKU', width: 140, locked: true },
   { key: 'name', label: 'Name', width: 280, locked: true },
   { key: 'status', label: 'Status', width: 110 },

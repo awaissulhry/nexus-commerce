@@ -1455,16 +1455,20 @@ const ProductCell = memo(function ProductCell({
 
   switch (col) {
     case 'thumb':
+      // U.35 — bumped from w-10/h-10 (40px) to w-12/h-12 (48px) so
+      // the product photo reads at a glance without the operator
+      // having to open the drawer. Column width raised to match in
+      // _columns.ts.
       return p.imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={p.imageUrl}
           alt=""
-          className="w-10 h-10 rounded object-cover bg-slate-100"
+          className="w-12 h-12 rounded object-cover bg-slate-100 dark:bg-slate-800"
         />
       ) : (
-        <div className="w-10 h-10 rounded bg-slate-100 flex items-center justify-center text-slate-400">
-          <ImageIcon size={14} />
+        <div className="w-12 h-12 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500">
+          <ImageIcon size={16} />
         </div>
       )
     case 'sku':
