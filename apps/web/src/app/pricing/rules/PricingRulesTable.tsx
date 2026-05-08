@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { AlertCircle, Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import {
   useReactTable,
   getCoreRowModel,
