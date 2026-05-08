@@ -410,6 +410,92 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // F.2 — Buy Box drill-down. Per-marketplace win rate + top competitors
+  // over a configurable window (default 7 days). Reads BuyBoxHistory
+  // populated by sp-api-pricing.service. The /pricing KPI strip's tile
+  // gives the headline %; this endpoint feeds the dedicated page.
+  fastify.get('/pricing/buybox-stats', async (request, reply) => {
+    try {
+      const q = request.query as Record<string, string | undefined>
+      const days = Math.min(90, Math.max(1, Number(q.days ?? '7')))
+      const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+
+      // Per-marketplace win rate. groupBy is cheap with the
+      // (channel, marketplace, observedAt) index.
+      const totals = await prisma.buyBoxHistory.groupBy({
+        by: ['channel', 'marketplace'],
+        where: { observedAt: { gte: since } },
+        _count: { _all: true },
+      })
+      const wins = await prisma.buyBoxHistory.groupBy({
+        by: ['channel', 'marketplace'],
+        where: { observedAt: { gte: since }, isOurOffer: true },
+        _count: { _all: true },
+      })
+      const winsByKey = new Map(
+        wins.map((w) => [`${w.channel}|${w.marketplace}`, w._count._all]),
+      )
+      const byMarketplace = totals
+        .map((t) => {
+          const key = `${t.channel}|${t.marketplace}`
+          const ourWins = winsByKey.get(key) ?? 0
+          const observations = t._count._all
+          return {
+            channel: t.channel,
+            marketplace: t.marketplace,
+            observations,
+            ourWins,
+            winRatePct:
+              observations > 0
+                ? Math.round((ourWins / observations) * 1000) / 10
+                : null,
+          }
+        })
+        .sort((a, b) => b.observations - a.observations)
+
+      // Top competitor sellers (where they won + we didn't).
+      const topCompetitorsRaw = await prisma.buyBoxHistory.groupBy({
+        by: ['winnerSellerId', 'fulfillmentMethod'],
+        where: {
+          observedAt: { gte: since },
+          isOurOffer: false,
+          winnerSellerId: { not: null },
+        },
+        _count: { _all: true },
+        orderBy: { _count: { winnerSellerId: 'desc' } },
+        take: 10,
+      })
+      const topCompetitors = topCompetitorsRaw.map((c) => ({
+        winnerSellerId: c.winnerSellerId,
+        fulfillmentMethod: c.fulfillmentMethod,
+        timesWon: c._count._all,
+      }))
+
+      // Headline numbers across all marketplaces.
+      const totalObservations = byMarketplace.reduce(
+        (sum, m) => sum + m.observations,
+        0,
+      )
+      const totalWins = byMarketplace.reduce((sum, m) => sum + m.ourWins, 0)
+      const overallWinRatePct =
+        totalObservations > 0
+          ? Math.round((totalWins / totalObservations) * 1000) / 10
+          : null
+
+      return {
+        windowDays: days,
+        observations: totalObservations,
+        ourWins: totalWins,
+        winRatePct: overallWinRatePct,
+        byMarketplace,
+        topCompetitors,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[pricing/buybox-stats] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // E.1 — Promotion calendar surface. Lists RetailEvent rows with their
   // RetailEventPriceAction children so the operator can see "what's active,
   // what's queued, what just ended" without firing the scheduler manually.
