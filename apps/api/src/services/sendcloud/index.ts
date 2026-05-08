@@ -169,19 +169,22 @@ export async function resolveServiceMap(
   channel: string,
   marketplace: string | null | undefined,
   warehouseId?: string | null,
+  destinationCountry?: string | null,
 ): Promise<number | null> {
-  // CR.7: prefer the normalized CarrierServiceMapping rows over the
-  // legacy defaultServiceMap JSON. Resolution order:
+  // CR.7 + CR.22: prefer normalized CarrierServiceMapping rows over
+  // the legacy defaultServiceMap JSON. Falls back to a tier-matched
+  // CarrierService when nothing maps explicitly. Resolution order:
   //   1. exact (channel, marketplace, warehouseId)        — most specific
   //   2. (channel, marketplace, warehouseId=null)         — channel+market default
   //   3. (channel, GLOBAL, warehouseId=null)              — channel default
-  //   4. defaultServiceMap[channel_marketplace]           — legacy fallback
-  //   5. defaultServiceMap[channel_GLOBAL]                — legacy fallback
-  // Returns the Sendcloud shipping_method id (CarrierService.externalId
-  // parsed as int) or null when nothing maps.
+  //   4. CarrierService whose tier matches the destination tier      ← CR.22
+  //      (DOMESTIC/EU → STANDARD; INTL → EXPRESS)
+  //   5. defaultServiceMap[channel_marketplace]           — legacy fallback
+  //   6. defaultServiceMap[channel_GLOBAL]                — legacy fallback
+  // Returns the Sendcloud shipping_method id or null when nothing maps.
   const carrier = await prisma.carrier.findUnique({
     where: { code: 'SENDCLOUD' },
-    select: { id: true, defaultServiceMap: true },
+    select: { id: true, defaultServiceMap: true, preferences: true },
   })
   if (!carrier) return null
 
@@ -209,7 +212,52 @@ export async function resolveServiceMap(
     }
   }
 
-  // (4) + (5): legacy fallback for rows that haven't been migrated yet.
+  // (4) — CR.22 auto-tier fallback. Operator opts out via
+  // Carrier.preferences.autoTierEnabled === false. When destination
+  // is unknown, skip — INTL fallback would be wrong if the dest is
+  // actually domestic.
+  const prefs = (carrier.preferences as { autoTierEnabled?: boolean } | null) ?? null
+  const autoTierEnabled = prefs?.autoTierEnabled !== false  // default ON
+  if (autoTierEnabled && destinationCountry) {
+    const { classifyDestinationTier, preferredTierFor } = await import('./destination-tier.js')
+
+    // Origin: pull from the bound Warehouse if a warehouseId was
+    // passed; default to IT (Xavia base) when no warehouse context.
+    let origin: string | null = null
+    if (warehouseId) {
+      const wh = await prisma.warehouse.findUnique({
+        where: { id: warehouseId },
+        select: { country: true },
+      })
+      origin = wh?.country ?? null
+    }
+    if (!origin) origin = 'IT'
+
+    const destTier = classifyDestinationTier(origin, destinationCountry)
+    const wantedTier = preferredTierFor(destTier)
+
+    // Pick the cheapest active service at the wanted tier. Sort by
+    // basePriceCents (nulls last) so a free service doesn't beat
+    // a real one.
+    const tierMatch = await prisma.carrierService.findFirst({
+      where: {
+        carrierId: carrier.id,
+        isActive: true,
+        tier: wantedTier,
+      },
+      orderBy: [
+        { basePriceCents: 'asc' },
+        { syncedAt: 'desc' },
+      ],
+      select: { externalId: true },
+    })
+    if (tierMatch?.externalId) {
+      const parsed = parseInt(tierMatch.externalId, 10)
+      if (Number.isFinite(parsed)) return parsed
+    }
+  }
+
+  // (5) + (6): legacy fallback for rows that haven't been migrated yet.
   const map = (carrier.defaultServiceMap as ServiceMap | null) ?? null
   if (!map) return null
   const key = `${channel}_${market}`

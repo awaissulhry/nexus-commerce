@@ -1222,7 +1222,15 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       // Service map lookup: which Sendcloud shipping_method to use for
       // this (channel, marketplace). Returns null when no rule maps —
       // Sendcloud auto-picks based on dimensions + destination.
-      const serviceId = await sendcloud.resolveServiceMap(order.channel, order.marketplace)
+      // CR.22: pass destinationCountry so resolveServiceMap can
+      // auto-fallback to a tier-matched service (DOMESTIC/EU →
+      // STANDARD, INTL → EXPRESS) when no exact mapping exists.
+      const serviceId = await sendcloud.resolveServiceMap(
+        order.channel,
+        order.marketplace,
+        shipment.warehouseId,
+        addr.country,
+      )
 
       // CR.11: sender_address from the bound Warehouse. Sendcloud
       // uses the integration default when omitted; passing an explicit

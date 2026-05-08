@@ -54,6 +54,7 @@ export interface CarrierRow {
     preferCheapest?: boolean
     preferFastest?: boolean
     requireSignature?: boolean
+    autoTierEnabled?: boolean
   } | null
 }
 
@@ -1189,6 +1190,7 @@ type Preferences = {
   preferCheapest?: boolean
   preferFastest?: boolean
   requireSignature?: boolean
+  autoTierEnabled?: boolean
 }
 
 function DefaultsTab({
@@ -1205,6 +1207,7 @@ function DefaultsTab({
     preferCheapest: initial?.preferCheapest ?? true,
     preferFastest: initial?.preferFastest ?? false,
     requireSignature: initial?.requireSignature ?? false,
+    autoTierEnabled: initial?.autoTierEnabled ?? true,
   }))
   const [busy, setBusy] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -1272,6 +1275,12 @@ function DefaultsTab({
           hint="Default-on signature for parcels routed to this carrier (rules engine can override per shipment)."
           checked={!!prefs.requireSignature}
           onChange={(v) => set('requireSignature', v)}
+        />
+        <Toggle
+          label="Auto-pick service by destination tier"
+          hint="When no exact channel/marketplace mapping exists, fall back to a Standard service for domestic + EU orders or an Express service for international. Off = let the carrier auto-select."
+          checked={!!prefs.autoTierEnabled}
+          onChange={(v) => set('autoTierEnabled', v)}
         />
       </div>
 
