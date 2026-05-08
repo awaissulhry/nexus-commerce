@@ -434,9 +434,22 @@ export default function BulkOperationsClient() {
   const [bulkOpModalOpen, setBulkOpModalOpen] = useState(false)
   const [newProductOpen, setNewProductOpen] = useState(false)
   const [replicateOpen, setReplicateOpen] = useState(false)
+  // U.41 — was `useState(() => loadCollapsedGroups())` which read
+  // localStorage during the lazy initializer. Server render produces
+  // an empty Set (window guard); client lazy init returns the
+  // localStorage value. Different first-render output between server
+  // and client → React Error #418 hydration mismatch → React aborts
+  // hydration for the subtree → event handlers don't bind → sidebar
+  // Links + Job History Link both fail to fire clicks.
+  // Fix: identical empty default on both sides; hydrate from
+  // localStorage in useEffect after mount.
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
-    () => loadCollapsedGroups(),
+    new Set(),
   )
+  useEffect(() => {
+    const fromStorage = loadCollapsedGroups()
+    if (fromStorage.size > 0) setCollapsedGroups(fromStorage)
+  }, [])
   // V.3 — column being dragged (HTML5 DnD source). Null when no drag
   // is in progress. Used by the header cells' onDragOver to draw a
   // drop-target indicator.
@@ -622,15 +635,22 @@ export default function BulkOperationsClient() {
   // ── Column resize state (Step 1.5) ─────────────────────────────
   // TanStack v8 stores user-dragged widths as a {[colId]: width} map.
   // We persist it to localStorage so widths survive reloads.
-  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(() => {
-    if (typeof window === 'undefined') return {}
+  // U.41 — same hydration-mismatch fix as collapsedGroups above.
+  // Server returns {}; client lazy init returned localStorage value;
+  // first-render diverged → hydration aborted. Empty {} on both
+  // sides; useEffect below hydrates from localStorage on mount.
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({})
+  useEffect(() => {
     try {
       const raw = window.localStorage.getItem('nexus_bulkops_column_widths')
-      return raw ? (JSON.parse(raw) as ColumnSizingState) : {}
+      if (raw) {
+        const parsed = JSON.parse(raw) as ColumnSizingState
+        if (parsed && typeof parsed === 'object') setColumnSizing(parsed)
+      }
     } catch {
-      return {}
+      /* localStorage unavailable / parse failure → keep default */
     }
-  })
+  }, [])
   useEffect(() => {
     try {
       window.localStorage.setItem(
