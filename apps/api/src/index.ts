@@ -24,6 +24,8 @@ import { catalogRoutes } from "./routes/catalog.routes.js";
 import { outboundRoutes } from "./routes/outbound.routes.js";
 import { matrixRoutes } from "./routes/matrix.routes.js";
 import { inboundRoutes } from "./routes/inbound.routes.js";
+// F.4 (P0 #50) — v2024-03-20 SP-API inbound flow.
+import fbaInboundV2Routes from "./routes/fba-inbound-v2.routes.js";
 import { webhookRoutes } from "./routes/webhooks.routes.js";
 import { sendcloudWebhookRoutes } from "./routes/sendcloud-webhooks.routes.js";
 import { ordersRoutes } from "./routes/orders.routes.js";
@@ -322,6 +324,7 @@ app.register(listingHealthRoutes);
 app.register(outboundRoutes);
 app.register(matrixRoutes);
 app.register(inboundRoutes);
+app.register(fbaInboundV2Routes, { prefix: '/api' });
 app.register(webhookRoutes);
 app.register(sendcloudWebhookRoutes);
 app.register(ordersRoutes);
