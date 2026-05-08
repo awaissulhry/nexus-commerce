@@ -19,7 +19,7 @@ import {
   Check, Download, Sliders, Undo2, CheckCircle2,
   Lightbulb, Zap, AlertCircle,
   Columns, Maximize2, Minimize2, Keyboard,
-  ClipboardCheck, Bookmark, BookmarkPlus, Trash2, Upload,
+  ClipboardCheck, Bookmark, BookmarkPlus, Trash2, Upload, Store,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -879,6 +879,14 @@ export default function StockWorkspace() {
             >
               <Upload size={12} />
               {t('stock.import.title')}
+            </Link>
+            <Link
+              href="/fulfillment/stock/shopify-locations"
+              className="h-11 sm:h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5 text-slate-700"
+              title={t('stock.shopifyLocations.title')}
+            >
+              <Store size={12} />
+              {t('stock.shopifyLocations.title')}
             </Link>
             {/* S.18 — saved views dropdown */}
             <SavedViewsButton

@@ -21,6 +21,8 @@ import {
   consumeOpenOrder,
   resolveLocationByCode,
 } from "../services/stock-level.service.js";
+import { resolveByShopifyId } from "../services/shopify-locations.service.js";
+import { applyStockMovement } from "../services/stock-movement.service.js";
 import { logger } from "../utils/logger.js";
 
 interface ShopifyWebhookPayload {
@@ -98,64 +100,120 @@ async function handleProductDelete(payload: ShopifyWebhookPayload): Promise<void
 }
 
 /**
- * Process inventory update webhook
+ * Process inventory_levels/update webhook.
+ *
+ * S.23 — Shopify is canonical for SHOPIFY_LOCATION StockLevel rows.
+ * Webhook payload:
+ *   { inventory_item_id, location_id, available, updated_at }
+ *
+ * Flow:
+ *   1. Resolve location_id → Nexus SHOPIFY_LOCATION StockLocation
+ *      via resolveByShopifyId (S.22). Skip if unmapped.
+ *   2. Resolve inventory_item_id → ChannelListing → Product (the
+ *      ChannelListing.externalListingId for Shopify carries the
+ *      inventory item id; legacy variantChannelListing path stays
+ *      for backward compatibility but Wave 4 catalogs use ChannelListing).
+ *   3. Compute the delta (available − current StockLevel.quantity)
+ *      and emit applyStockMovement(reason='SYNC_RECONCILIATION',
+ *      actor='shopify-webhook:inventory'). Goes through the canonical
+ *      ledger so totalStock stays SUM(StockLevel.quantity).
  */
 async function handleInventoryUpdate(payload: ShopifyWebhookPayload): Promise<void> {
+  const inventory = payload as any;
+  const inventoryItemId = String(inventory.inventory_item_id ?? '');
+  const shopifyLocationId = inventory.location_id != null ? String(inventory.location_id) : null;
+  const available = Number(inventory.available ?? 0);
+
+  logger.info('[ShopifyWebhooks] inventory_levels/update received', {
+    inventoryItemId, shopifyLocationId, available,
+  });
+
+  if (!inventoryItemId) {
+    logger.warn('[ShopifyWebhooks] inventory webhook missing inventory_item_id; skipping');
+    return;
+  }
+  if (!shopifyLocationId) {
+    logger.warn('[ShopifyWebhooks] inventory webhook missing location_id; skipping (pre-S.22 payload?)');
+    return;
+  }
+
   try {
-    const inventory = payload as any;
-    const inventoryItemId = String(inventory.inventory_item_id);
+    // Resolve Shopify location → Nexus StockLocation. If the location
+    // hasn't been discovered/mapped yet, drop the update — better to
+    // miss one tick than to write to the wrong StockLevel row. The
+    // operator can run /shopify-locations/discover and the next tick
+    // catches up.
+    const nexusLocation = await resolveByShopifyId(shopifyLocationId);
+    if (!nexusLocation) {
+      logger.warn('[ShopifyWebhooks] unmapped Shopify location — run discover', {
+        shopifyLocationId,
+      });
+      return;
+    }
 
-    console.log(`[ShopifyWebhooks] Processing inventory update: ${inventoryItemId}`);
-
-    // Find variant by inventory item ID
-    const variant = await (prisma as any).productVariation.findFirst({
+    // Resolve product. ChannelListing carries the inventory_item_id
+    // in externalListingId (Wave 4 catalogs); the legacy
+    // VariantChannelListing path uses channelVariantId. Try the
+    // canonical path first, fall back to legacy.
+    let productId: string | null = null;
+    const cl = await prisma.channelListing.findFirst({
       where: {
-        channelListings: {
-          some: {
-            channelId: "SHOPIFY",
-            channelVariantId: {
-              contains: inventoryItemId,
+        channel: 'SHOPIFY',
+        externalListingId: { contains: inventoryItemId },
+      },
+      select: { productId: true },
+    });
+    if (cl?.productId) productId = cl.productId;
+    if (!productId) {
+      const variant = await (prisma as any).productVariation.findFirst({
+        where: {
+          channelListings: {
+            some: {
+              channelId: 'SHOPIFY',
+              channelVariantId: { contains: inventoryItemId },
             },
           },
         },
-      },
+        select: { productId: true },
+      });
+      if (variant?.productId) productId = variant.productId;
+    }
+    if (!productId) {
+      logger.warn('[ShopifyWebhooks] inventory webhook for unknown product', {
+        inventoryItemId, shopifyLocationId,
+      });
+      return;
+    }
+
+    // Compute delta against the current Nexus StockLevel quantity at
+    // the resolved Shopify location. delta=0 short-circuits.
+    const existing = await prisma.stockLevel.findFirst({
+      where: { locationId: nexusLocation.id, productId, variationId: null },
+      select: { quantity: true },
+    });
+    const previousQty = existing?.quantity ?? 0;
+    const delta = available - previousQty;
+    if (delta === 0) {
+      logger.info('[ShopifyWebhooks] inventory webhook no-op (delta=0)', {
+        productId, shopifyLocationId,
+      });
+      return;
+    }
+
+    await applyStockMovement({
+      productId,
+      locationId: nexusLocation.id,
+      change: delta,
+      reason: 'SYNC_RECONCILIATION',
+      referenceType: 'ShopifyWebhook',
+      referenceId: inventoryItemId,
+      notes: `Shopify inventory_levels/update: ${previousQty} → ${available}`,
+      actor: 'shopify-webhook:inventory',
     });
 
-    if (variant) {
-      // Update variant stock
-      await (prisma as any).productVariation.update({
-        where: { id: variant.id },
-        data: { stock: inventory.available_quantity || 0 },
-      });
-
-      // Update channel listing
-      const listing = await (prisma as any).variantChannelListing.findFirst({
-        where: {
-          variantId: variant.id,
-          channelId: "SHOPIFY",
-        },
-      });
-
-      if (listing) {
-        await (prisma as any).variantChannelListing.update({
-          where: { id: listing.id },
-          data: {
-            channelQuantity: inventory.available_quantity || 0,
-            lastSyncedAt: new Date(),
-          },
-        });
-        // C.3 — broadcast so any open /listings tab refreshes within
-        // ~200 ms instead of waiting for the next 30 s polling tick.
-        publishListingEvent({
-          type: "listing.updated",
-          listingId: listing.id,
-          reason: "shopify-webhook:inventory",
-          ts: Date.now(),
-        });
-      }
-
-      console.log(`[ShopifyWebhooks] Inventory updated for variant ${variant.id}`);
-    }
+    logger.info('[ShopifyWebhooks] inventory_levels/update applied', {
+      productId, shopifyLocationId, delta, available,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[ShopifyWebhooks] Failed to process inventory update:", message);
