@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Warehouse as WarehouseIcon,
   X,
+  Zap,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -87,6 +88,8 @@ export default function CycleCountListClient() {
   const [creating, setCreating] = useState(false)
   const [newLocationId, setNewLocationId] = useState('')
   const [newNotes, setNewNotes] = useState('')
+  // S.17 — busy flag for the auto-schedule trigger.
+  const [autoScheduling, setAutoScheduling] = useState(false)
 
   const fetchData = useCallback(async () => {
     try {
@@ -125,6 +128,36 @@ export default function CycleCountListClient() {
   useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  // S.17 — trigger the auto-scheduler now (the daily cron already
+  // runs this at 02:30 UTC; this button lets the operator force one
+  // mid-day if they want a fresh batch). Idempotent on the server
+  // side against an existing DRAFT/IN_PROGRESS auto-scheduled session.
+  const handleAutoSchedule = async () => {
+    setAutoScheduling(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/cycle-counts/auto-schedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`)
+      const r = body.result
+      if (!r?.sessionId) {
+        toast.success(t('cycleCount.list.toast.autoScheduleNoneDue'))
+      } else {
+        toast.success(t('cycleCount.list.toast.autoScheduled', { n: r.itemCount }))
+      }
+      await fetchData()
+    } catch (err) {
+      toast.error(t('cycleCount.list.toast.autoScheduleFailed', {
+        error: err instanceof Error ? err.message : String(err),
+      }))
+    } finally {
+      setAutoScheduling(false)
+    }
+  }
 
   const handleCreate = async () => {
     if (!newLocationId) {
@@ -179,6 +212,21 @@ export default function CycleCountListClient() {
           <Button variant="secondary" size="sm" onClick={fetchData} disabled={loading}>
             <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
             {t('cycleCount.list.actionRefresh')}
+          </Button>
+          {/* S.17 — manual trigger for the ABC-driven scheduler.
+              Daily cron runs at 02:30 UTC; this button lets the
+              operator force a session immediately when desired. */}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleAutoSchedule}
+            disabled={autoScheduling}
+            title={t('cycleCount.list.actionAutoScheduleTitle')}
+          >
+            {autoScheduling
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              : <Zap className="w-3.5 h-3.5" />}
+            {t('cycleCount.list.actionAutoSchedule')}
           </Button>
           <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
             <Plus className="w-3.5 h-3.5" />

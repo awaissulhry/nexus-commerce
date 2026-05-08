@@ -14,6 +14,11 @@ import {
   completeCycleCount,
   cancelCycleCount,
 } from '../services/cycle-count.service.js'
+import {
+  scheduleAutoCount,
+  findDueForCount,
+  getCadenceConfig,
+} from '../services/cycle-count-scheduler.service.js'
 import { applyStockMovement, listStockMovements } from '../services/stock-movement.service.js'
 import { refreshSalesAggregates } from '../services/sales-aggregate.service.js'
 import { resolveAtp, DEFAULT_LEAD_TIME_DAYS } from '../services/atp.service.js'
@@ -583,6 +588,52 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ success: false, error: msg })
     }
   })
+
+  // ── S.17 — auto-scheduler endpoints ──────────────────────────────
+  // GET — preview which products are due for a count at a location.
+  // Operator can review the list before triggering a session.
+  fastify.get('/fulfillment/cycle-counts/due', async (request, reply) => {
+    try {
+      const q = request.query as { locationCode?: string; limit?: string }
+      const code = q.locationCode ?? 'IT-MAIN'
+      const limit = Math.min(500, Math.max(1, parseInt(q.limit ?? '100', 10)))
+      const location = await prisma.stockLocation.findUnique({
+        where: { code }, select: { id: true, code: true },
+      })
+      if (!location) {
+        return reply.code(404).send({ error: `Location ${code} not found` })
+      }
+      const cadence = getCadenceConfig()
+      const due = await findDueForCount({ locationId: location.id, cadence, limit })
+      return { success: true, locationCode: code, cadenceDays: cadence, due, count: due.length }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[cycle-counts/due] failed')
+      return reply.code(500).send({ success: false, error: msg })
+    }
+  })
+
+  // POST — manually trigger an auto-scheduled session right now (the
+  // cron does this daily, but operators sometimes want one on demand).
+  // Idempotent against an existing DRAFT/IN_PROGRESS auto-scheduled
+  // session at the same location.
+  fastify.post<{ Body: { locationCode?: string; limit?: number } }>(
+    '/fulfillment/cycle-counts/auto-schedule',
+    async (request, reply) => {
+      try {
+        const body = request.body ?? {}
+        const result = await scheduleAutoCount({
+          locationCode: body.locationCode,
+          limit: body.limit,
+        })
+        return { success: true, result }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        fastify.log.error({ err }, '[cycle-counts/auto-schedule] failed')
+        return reply.code(500).send({ success: false, error: msg })
+      }
+    },
+  )
 
   fastify.post<{
     Body: { locationId?: string; notes?: string; createdBy?: string }

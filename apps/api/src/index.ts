@@ -93,6 +93,7 @@ import { startAutoPoCron } from "./jobs/auto-po-replenishment.job.js";
 import { startLeadTimeStatsCron } from "./jobs/lead-time-stats.job.js";
 import { startStockoutDetectorCron } from "./jobs/stockout-detector.job.js";
 import { startAbcClassificationCron } from "./jobs/abc-classification.job.js";
+import { startCycleCountSchedulerCron } from "./jobs/cycle-count-scheduler.job.js";
 import { startFbaRestockCron } from "./jobs/fba-restock-ingestion.job.js";
 import pricingRoutes from "./routes/pricing.routes.js";
 // BullMQ worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS=1.
@@ -623,6 +624,15 @@ async function start() {
     // NEXUS_ENABLE_ABC_CRON=0.
     if (process.env.NEXUS_ENABLE_ABC_CRON !== '0') {
       startAbcClassificationCron();
+    }
+
+    // S.17 — daily ABC-driven cycle-count scheduler. 02:30 UTC.
+    // Picks up products whose cadence has elapsed (A=7d, B=30d,
+    // C=90d, D=180d) and creates a DRAFT CycleCount session at
+    // IT-MAIN with those items. Default-on; opt out via
+    // NEXUS_ENABLE_CYCLE_COUNT_SCHEDULER=0.
+    if (process.env.NEXUS_ENABLE_CYCLE_COUNT_SCHEDULER !== '0') {
+      startCycleCountSchedulerCron();
     }
 
     logger.info('✅ API server initialized', {
