@@ -28,6 +28,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 type StockRow = {
   id: string
@@ -213,17 +214,20 @@ const LOCATION_TONE: Record<string, string> = {
   CHANNEL_RESERVED: 'bg-violet-50 text-violet-700 border-violet-200',
 }
 
+// S.10 — labels resolved via t() per render so they live-update when
+// the operator flips locale. The keys + tones stay declarative.
 const STATUS_OPTIONS = [
-  { value: 'IN_STOCK', label: 'In stock', tone: 'emerald' },
-  { value: 'LOW', label: 'Low', tone: 'amber' },
-  { value: 'CRITICAL', label: 'Critical', tone: 'orange' },
-  { value: 'OUT_OF_STOCK', label: 'Out of stock', tone: 'rose' },
+  { value: 'IN_STOCK', labelKey: 'stock.status.inStock', tone: 'emerald' },
+  { value: 'LOW', labelKey: 'stock.status.low', tone: 'amber' },
+  { value: 'CRITICAL', labelKey: 'stock.status.critical', tone: 'orange' },
+  { value: 'OUT_OF_STOCK', labelKey: 'stock.status.outOfStock', tone: 'rose' },
 ] as const
 
 export default function StockWorkspace() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const { t } = useTranslations()
 
   const view = (searchParams.get('view') as ViewMode) ?? 'table'
   const locationCode = searchParams.get('location') ?? ''
@@ -607,9 +611,9 @@ export default function StockWorkspace() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Stock"
-        description="Multi-location inventory ledger across Riccione, Amazon FBA, and per-channel allocations."
-        breadcrumbs={[{ label: 'Fulfillment', href: '/fulfillment' }, { label: 'Stock' }]}
+        title={t('stock.title')}
+        description={t('stock.description')}
+        breadcrumbs={[{ label: t('nav.fulfillment'), href: '/fulfillment' }, { label: t('stock.title') }]}
         actions={
           <div className="flex items-center gap-2 flex-wrap justify-end">
             {syncStatus && <SyncIndicator status={syncStatus} />}
@@ -628,10 +632,10 @@ export default function StockWorkspace() {
             <Link
               href="/fulfillment/stock/cycle-count"
               className="relative h-11 sm:h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5 text-slate-700"
-              title="Cycle counts (physical inventory)"
+              title={t('stock.action.cycleCountsTitle')}
             >
               <ClipboardCheck size={12} />
-              Cycle counts
+              {t('stock.action.cycleCounts')}
               {cycleCountActive > 0 && (
                 <span
                   className="ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-xs font-semibold rounded-full bg-amber-500 text-white tabular-nums"
@@ -653,14 +657,14 @@ export default function StockWorkspace() {
               onClick={() => { fetchStock(); fetchSidecar() }}
               className="h-11 sm:h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
             >
-              <RefreshCw size={12} /> Refresh
+              <RefreshCw size={12} /> {t('stock.action.refresh')}
             </button>
           </div>
         }
       />
 
       {/* KPI strip */}
-      <KpiStrip kpis={kpis} />
+      <KpiStrip kpis={kpis} t={t} />
 
       {/* Insights panel — only renders when there's signal */}
       {insights && (
@@ -677,7 +681,7 @@ export default function StockWorkspace() {
         <div className="space-y-3">
           {/* Location chips */}
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold mr-1">Location</span>
+            <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold mr-1">{t('stock.filters.location')}</span>
             <button
               onClick={() => updateUrl({ location: undefined, page: undefined })}
               className={`h-11 sm:h-7 px-3 text-sm rounded-full font-medium border ${
@@ -685,7 +689,7 @@ export default function StockWorkspace() {
                   ? 'bg-slate-900 text-white border-slate-900'
                   : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
               }`}
-            >All</button>
+            >{t('stock.filters.locationAll')}</button>
             {locations.map((loc) => (
               <button
                 key={loc.id}
@@ -709,13 +713,13 @@ export default function StockWorkspace() {
             <div className="flex-1 min-w-[240px] max-w-md relative">
               <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <Input
-                placeholder="Search SKU, product name, ASIN"
+                placeholder={t('stock.filters.searchPlaceholder')}
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 className="pl-7"
               />
             </div>
-            <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold ml-1">Status</span>
+            <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold ml-1">{t('stock.filters.status')}</span>
             {STATUS_OPTIONS.map((s) => {
               const active = status === s.value
               const toneActive: Record<string, string> = {
@@ -731,7 +735,7 @@ export default function StockWorkspace() {
                   className={`h-11 sm:h-7 px-3 text-sm border rounded-full font-medium ${
                     active ? toneActive[s.tone] : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
                   }`}
-                >{s.label}</button>
+                >{t(s.labelKey)}</button>
               )
             })}
             {filterCount > 0 && (
@@ -739,11 +743,11 @@ export default function StockWorkspace() {
                 onClick={() => updateUrl({ location: undefined, status: undefined, search: undefined, page: undefined })}
                 className="h-11 sm:h-7 px-2 text-base text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
               >
-                <X size={12} /> Clear
+                <X size={12} /> {t('stock.filters.clear')}
               </button>
             )}
             <div className="ml-auto text-base text-slate-500">
-              <span className="font-semibold text-slate-700 tabular-nums">{total}</span> rows
+              <span className="font-semibold text-slate-700 tabular-nums">{total}</span> {t('stock.filters.rowsCount')}
             </div>
           </div>
         </div>
@@ -756,23 +760,23 @@ export default function StockWorkspace() {
           return (
             <Card>
               <div className="text-md text-rose-700 py-8 text-center">
-                Failed to load stock: {error}
+                {t('stock.error.loadFailed', { error: error ?? '' })}
               </div>
             </Card>
           )
         }
         if (loading && noResults) {
-          return <Card><div className="text-md text-slate-500 py-8 text-center">Loading stock…</div></Card>
+          return <Card><div className="text-md text-slate-500 py-8 text-center">{t('stock.loading')}</div></Card>
         }
         if (noResults) {
           return (
             <EmptyState
               icon={Warehouse}
-              title="No stock matches these filters"
-              description={filterCount > 0 ? 'Try clearing filters.' : 'Stock levels appear once products are imported and seeded.'}
+              title={t('stock.empty.title')}
+              description={filterCount > 0 ? t('stock.empty.descriptionFiltered') : t('stock.empty.descriptionDefault')}
               action={filterCount > 0
-                ? { label: 'Clear filters', onClick: () => updateUrl({ location: undefined, status: undefined, search: undefined, page: undefined }) }
-                : { label: 'Go to Catalog', href: '/products' }
+                ? { label: t('stock.empty.clearFilters'), onClick: () => updateUrl({ location: undefined, status: undefined, search: undefined, page: undefined }) }
+                : { label: t('stock.empty.goToCatalog'), href: '/products' }
               }
             />
           )
@@ -804,6 +808,12 @@ export default function StockWorkspace() {
           onAdjust={() => setBulkAction('adjust')}
           onThreshold={() => setBulkAction('threshold')}
           onExport={exportSelectedCsv}
+          labels={{
+            adjust: t('stock.bulk.adjust'),
+            threshold: t('stock.bulk.threshold'),
+            exportCsv: t('stock.bulk.exportCsv'),
+            selected: t('stock.bulk.selected'),
+          }}
         />
       )}
 
@@ -838,18 +848,20 @@ export default function StockWorkspace() {
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-base text-slate-500">
-          <span>Page <span className="font-semibold text-slate-700 tabular-nums">{page}</span> of <span className="tabular-nums">{totalPages}</span></span>
+          <span>
+            {t('stock.pagination.pageOf', { page, total: totalPages })}
+          </span>
           <div className="flex items-center gap-1">
             <button
               onClick={() => updateUrl({ page: page <= 2 ? undefined : String(page - 1) })}
               disabled={page === 1}
               className="h-11 sm:h-7 px-3 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
-            >Previous</button>
+            >{t('stock.pagination.previous')}</button>
             <button
               onClick={() => updateUrl({ page: String(Math.min(totalPages, page + 1)) })}
               disabled={page >= totalPages}
               className="h-11 sm:h-7 px-3 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
-            >Next</button>
+            >{t('stock.pagination.next')}</button>
           </div>
         </div>
       )}
@@ -906,7 +918,7 @@ export default function StockWorkspace() {
 // ─────────────────────────────────────────────────────────────────────
 // KPI strip
 // ─────────────────────────────────────────────────────────────────────
-function KpiStrip({ kpis }: { kpis: Kpis | null }) {
+function KpiStrip({ kpis, t }: { kpis: Kpis | null; t: (k: string, v?: Record<string, string | number>) => string }) {
   if (!kpis) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -922,30 +934,33 @@ function KpiStrip({ kpis }: { kpis: Kpis | null }) {
   const cards = [
     {
       icon: Boxes,
-      label: 'Total stock value',
+      label: t('stock.kpi.totalValue'),
       value: `€${kpis.totalStockValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      detail: `${kpis.totalStockUnits.toLocaleString()} units across ${kpis.activeLocations} location${kpis.activeLocations === 1 ? '' : 's'}`,
+      detail: t(
+        kpis.activeLocations === 1 ? 'stock.kpi.totalValueDetail' : 'stock.kpi.totalValueDetailPlural',
+        { units: kpis.totalStockUnits.toLocaleString(), n: kpis.activeLocations },
+      ),
       tone: 'bg-emerald-50 text-emerald-600',
     },
     {
       icon: AlertTriangle,
-      label: 'Stockouts',
+      label: t('stock.kpi.stockouts'),
       value: kpis.stockouts.toLocaleString(),
-      detail: `${kpis.totalSkus.toLocaleString()} SKUs total`,
+      detail: t('stock.kpi.stockoutsDetail', { n: kpis.totalSkus.toLocaleString() }),
       tone: kpis.stockouts > 0 ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 text-slate-600',
     },
     {
       icon: TrendingDown,
-      label: 'Critical stock',
+      label: t('stock.kpi.critical'),
       value: kpis.critical.toLocaleString(),
-      detail: `+ ${kpis.low.toLocaleString()} below threshold`,
+      detail: t('stock.kpi.criticalDetail', { n: kpis.low.toLocaleString() }),
       tone: kpis.critical > 0 ? 'bg-orange-50 text-orange-600' : 'bg-slate-50 text-slate-600',
     },
     {
       icon: Layers,
-      label: 'Available units',
+      label: t('stock.kpi.available'),
       value: kpis.totalAvailable.toLocaleString(),
-      detail: `${kpis.totalReserved.toLocaleString()} reserved`,
+      detail: t('stock.kpi.availableDetail', { n: kpis.totalReserved.toLocaleString() }),
       tone: 'bg-blue-50 text-blue-600',
     },
   ]
@@ -2441,37 +2456,38 @@ function CardsView({
 // Bulk operations — action bar, progress, undo, modals
 // ─────────────────────────────────────────────────────────────────────
 function BulkActionBar({
-  count, onClear, onAdjust, onThreshold, onExport,
+  count, onClear, onAdjust, onThreshold, onExport, labels,
 }: {
   count: number
   onClear: () => void
   onAdjust: () => void
   onThreshold: () => void
   onExport: () => void
+  labels: { adjust: string; threshold: string; exportCsv: string; selected: string }
 }) {
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-20 bg-slate-900 text-white rounded-lg shadow-2xl px-4 py-2 flex items-center gap-3 text-md">
       <span className="font-semibold tabular-nums">
-        {count} <span className="text-slate-300 font-normal">selected</span>
+        {count} <span className="text-slate-300 font-normal">{labels.selected}</span>
       </span>
       <div className="w-px h-5 bg-slate-700" />
       <button
         onClick={onAdjust}
         className="h-11 sm:h-7 px-2.5 inline-flex items-center gap-1.5 rounded hover:bg-slate-800 transition-colors"
       >
-        <Plus size={12} /> Adjust
+        <Plus size={12} /> {labels.adjust}
       </button>
       <button
         onClick={onThreshold}
         className="h-11 sm:h-7 px-2.5 inline-flex items-center gap-1.5 rounded hover:bg-slate-800 transition-colors"
       >
-        <Sliders size={12} /> Threshold
+        <Sliders size={12} /> {labels.threshold}
       </button>
       <button
         onClick={onExport}
         className="h-11 sm:h-7 px-2.5 inline-flex items-center gap-1.5 rounded hover:bg-slate-800 transition-colors"
       >
-        <Download size={12} /> Export CSV
+        <Download size={12} /> {labels.exportCsv}
       </button>
       <div className="w-px h-5 bg-slate-700" />
       <button
