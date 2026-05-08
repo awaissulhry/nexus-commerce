@@ -92,15 +92,13 @@ Entry stays in TECH_DEBT for tracking; not actively pursued.
 
 **Proper fix:** Either let them age out and run a one-shot `DELETE FROM "CategorySchema" WHERE "schemaVersion" = 'unknown'` at any point, or accept and ignore. Worth a single cleanup migration if we touch this area again.
 
-## 5. 🟢 Bulk-ops paste: scrolled-out cells don't show the yellow tint
+## 5. ✅ Bulk-ops paste: scrolled-out cells don't show yellow tint — resolved 2026-05-08
 
-**Symptom:** When a paste operation targets cells that are currently virtualised out of view (rowVirtualizer hasn't rendered them), only the changes Map gets the entry — the EditableCell's local `draftValue` doesn't get updated because the cell isn't mounted, so its `applyValue` handler isn't in the registry. When the user scrolls back to those cells, they re-mount with `initialValue` from the unsaved products array and `isDirty` evaluates false — no yellow tint, even though a save would still flush them.
+**Resolution:** Added `pendingValues: Map<string, unknown>` to `EditCtx`, derived from the parent's `changes` Map (same source the save flush reads). `EditableCell` accepts a new `pendingValue?` prop and seeds `draftValue` via `useState(() => pendingValue !== undefined ? pendingValue : initialValue)`. When a virtualised-out cell re-mounts on scroll-back, the lazy initialiser picks up the pending value, `isDirty = !shallowEquals(draftValue, initialValue)` evaluates true, and the yellow tint renders on first paint.
 
-**Surfaced at:** Step 4 (paste with preview).
+Memo comparator unaffected — re-renders still gated on rowId/columnId/initialValue identity; the pendingValue lookup happens inside the cell renderer at the existing module-ref read site.
 
-**Workaround:** None for now. The user sees yellow on visible cells immediately and the save still applies all changes (visible + scrolled-out). The mismatch is purely cosmetic and disappears after a save.
-
-**Proper fix:** Pass a `pendingValue` prop down to EditableCell when there's an entry in the changes Map for it. EditableCell's `useState(() => …)` initialiser seeds `draftValue` from `pendingValue ?? initialValue` so the yellow tint shows on first mount. Memo comparator already includes the relevant fields; one extra prop keyed on cellKey is enough.
+**Original symptom (kept for context):** Paste targeting virtualised-out cells wrote into the changes Map but the unmounted EditableCell couldn't seed its draftValue. On scroll-back the cell mounted with initialValue, `isDirty` evaluated false, no yellow tint — purely cosmetic since the save still flushed the change.
 
 ## 6. ✅ SheetJS (`xlsx`) CVE-2023-30533 — resolved 2026-05-08 in M.12
 
@@ -222,11 +220,9 @@ Worth designing once we have a clear "from scratch, no upload" use case (e.g. a 
 
 Filter dropdowns currently list options without counts ("Active" / "Draft" / "Inactive", not "Active (1,247)"). Real faceting needs a second aggregate query per filter axis (or one query with `groupBy` over each), and care to make sure the counts respect the *other* active filters. Not worth it until users actually ask "how many drafts do I have right now."
 
-## 21. 🟢 /products → API endpoint for products edit page
+## 21. ✅ /products → API endpoint for products edit page — resolved 2026-05-08
 
-`/products/[id]/edit/page.tsx` still fetches `${backend}/api/inventory/${id}` — the old endpoint. The browse page moved to `/api/products`, but the per-product GET was left on the legacy route to avoid cascading the migration.
-
-**Proper fix:** add `GET /api/products/:id` and switch the edit page over. Low-risk because the response shape is already well-known; just file moves and route registration.
+**Resolution:** Added `GET /api/products/:id` in `apps/api/src/routes/products.routes.ts` (mirroring the legacy `/api/inventory/:id` shape — Decimal columns coerced to number for JSON safety). Switched `apps/web/src/app/products/[id]/edit/page.tsx:18` from `/api/inventory/:id` to `/api/products/:id`. The legacy `/api/inventory/:id` route stays in place for any remaining callers; can be removed once #23 (subroute migration) lands.
 
 ## 22. 🟢 /products → server-side sorting on derived columns
 
@@ -1140,6 +1136,42 @@ Tie this to S.4 channel adapter realization. Don't ship as a standalone fix — 
 **Don't kill the schema.** It's in place and not hurting anything; deletion only after confirmed unused for 3+ months.
 
 **Risk if left:** None. Either the schema validates on use, or it's quietly unused — both are fine.
+
+---
+
+## 59. ⏸ S.24 / S.25 crons need explicit Railway opt-in
+
+The S.24 (Amazon MCF status sync, every 15 min) and S.25 (FBA Pan-EU
+distribution sync, daily 03:00) crons ship OFF by default, gated on:
+
+- `NEXUS_ENABLE_MCF_SYNC_CRON=1`
+- `NEXUS_ENABLE_FBA_PAN_EU_CRON=1`
+
+Until those are flipped on the Railway API service, the relevant
+data tables (`MCFShipment`, `FbaInventoryDetail`) won't refresh and
+the new `/fulfillment/stock/mcf` + `/fulfillment/stock/fba-pan-eu`
+surfaces will display whatever state the operator created manually
+(or empty).
+
+**Why it's gated:** SP-API rate limits + concern about quietly
+burning Amazon MWS quota during dev/staging when the data isn't
+being acted on yet.
+
+**How to apply:** flip each env var to `1` on Railway when the
+operator is ready to start observing channel state. Both adapters
+are idempotent — replays don't create duplicates.
+
+**Risk if left:** stale data, but no incorrectness. Operator-action.
+
+---
+
+## 60. ✅ Stock surface — resolved 2026-05-08 (S.30 docs commit)
+
+Stock domain (S.1–S.30) shipped fully and is documented in
+`DEVELOPMENT.md`'s "Stock — workspace expansion (S.1–S.30)"
+section. Master verify harness at `scripts/verify-stock-all.mjs`
+runs all per-commit gates (29 passed, 1 skipped — verify-s1
+needs API up).
 
 ---
 

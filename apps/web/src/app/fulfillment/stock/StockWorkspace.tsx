@@ -2243,6 +2243,7 @@ function TransferPanel({
   productId, stockLevels, onCancel, onDone,
 }: { productId: string; stockLevels: DrawerBundle['stockLevels']; onCancel: () => void; onDone: () => void }) {
   const { toast } = useToast()
+  const { t } = useTranslations()
   const [fromId, setFromId] = useState<string>(stockLevels[0]?.location.id ?? '')
   const [toId, setToId] = useState<string>(stockLevels[1]?.location.id ?? stockLevels[0]?.location.id ?? '')
   const [qty, setQty] = useState('')
@@ -2250,8 +2251,8 @@ function TransferPanel({
 
   const submit = async () => {
     const n = Number(qty)
-    if (!Number.isFinite(n) || n <= 0) { toast.error('Quantity must be > 0'); return }
-    if (fromId === toId) { toast.error('From and to locations must differ'); return }
+    if (!Number.isFinite(n) || n <= 0) { toast.error(t('stock.transfer.errorPositive')); return }
+    if (fromId === toId) { toast.error(t('stock.transfer.errorSameLocation')); return }
     setSubmitting(true)
     try {
       const res = await fetch(`${getBackendUrl()}/api/stock/transfer`, {
@@ -2259,7 +2260,7 @@ function TransferPanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ productId, fromLocationId: fromId, toLocationId: toId, quantity: n }),
       })
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Transfer failed')
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? t('stock.transfer.errorFallback'))
       onDone()
     } catch (e: any) {
       toast.error(e.message)
@@ -2269,32 +2270,33 @@ function TransferPanel({
   return (
     <div className="border border-slate-300 rounded-md p-3 bg-slate-50 dark:bg-slate-800 space-y-2">
       <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
-        <ArrowRightLeft size={11} /> Transfer between locations
+        <ArrowRightLeft size={11} aria-hidden="true" /> {t('stock.transfer.heading')}
       </div>
       <div className="flex items-center gap-2">
-        <select value={fromId} onChange={(e) => setFromId(e.target.value)} aria-label="From location" className="h-11 sm:h-8 flex-1 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
+        <select value={fromId} onChange={(e) => setFromId(e.target.value)} aria-label={t('stock.transfer.fromLabel')} className="h-11 sm:h-8 flex-1 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
           {stockLevels.map((sl) => (
-            <option key={sl.id} value={sl.location.id}>From {sl.location.code} ({sl.available} avail)</option>
+            <option key={sl.id} value={sl.location.id}>{t('stock.transfer.fromOption', { code: sl.location.code, avail: sl.available })}</option>
           ))}
         </select>
         <ArrowRightLeft size={12} className="text-slate-400" aria-hidden="true" />
-        <select value={toId} onChange={(e) => setToId(e.target.value)} aria-label="To location" className="h-11 sm:h-8 flex-1 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
+        <select value={toId} onChange={(e) => setToId(e.target.value)} aria-label={t('stock.transfer.toLabel')} className="h-11 sm:h-8 flex-1 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
           {stockLevels.map((sl) => (
-            <option key={sl.id} value={sl.location.id}>To {sl.location.code}</option>
+            <option key={sl.id} value={sl.location.id}>{t('stock.transfer.toOption', { code: sl.location.code })}</option>
           ))}
         </select>
         <input
           type="number" value={qty} onChange={(e) => setQty(e.target.value)}
-          placeholder="qty"
+          placeholder={t('stock.transfer.qtyPlaceholder')}
+          aria-label={t('stock.transfer.qtyPlaceholder')}
           className="h-11 sm:h-8 w-20 px-2 text-md border border-slate-200 dark:border-slate-700 rounded font-mono tabular-nums"
         />
       </div>
       <div className="flex items-center justify-end gap-2">
-        <button onClick={onCancel} className="h-11 sm:h-8 px-2 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">Cancel</button>
-        <button onClick={submit} disabled={submitting} className="h-11 sm:h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">Transfer</button>
+        <button onClick={onCancel} className="h-11 sm:h-8 px-2 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">{t('common.cancel')}</button>
+        <button onClick={submit} disabled={submitting} className="h-11 sm:h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">{t('stock.transfer.submit')}</button>
       </div>
       <div className="text-xs text-slate-500 dark:text-slate-400">
-        If the target location has no StockLevel row, one is created with the transferred quantity.
+        {t('stock.transfer.helpText')}
       </div>
     </div>
   )
@@ -2304,6 +2306,7 @@ function ReservePanel({
   productId, stockLevels, onCancel, onDone,
 }: { productId: string; stockLevels: DrawerBundle['stockLevels']; onCancel: () => void; onDone: () => void }) {
   const { toast } = useToast()
+  const { t } = useTranslations()
   const [locId, setLocId] = useState<string>(stockLevels[0]?.location.id ?? '')
   const [qty, setQty] = useState('')
   const [orderId, setOrderId] = useState('')
@@ -2312,7 +2315,7 @@ function ReservePanel({
 
   const submit = async () => {
     const n = Number(qty)
-    if (!Number.isFinite(n) || n <= 0) { toast.error('Quantity must be > 0'); return }
+    if (!Number.isFinite(n) || n <= 0) { toast.error(t('stock.reserve.errorPositive')); return }
     setSubmitting(true)
     try {
       const res = await fetch(`${getBackendUrl()}/api/stock/reserve`, {
@@ -2320,7 +2323,7 @@ function ReservePanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ productId, locationId: locId, quantity: n, orderId: orderId || undefined, reason }),
       })
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Reserve failed')
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? t('stock.reserve.errorFallback'))
       onDone()
     } catch (e: any) {
       toast.error(e.message)
@@ -2330,36 +2333,38 @@ function ReservePanel({
   return (
     <div className="border border-slate-300 rounded-md p-3 bg-slate-50 dark:bg-slate-800 space-y-2">
       <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
-        <LockIcon size={11} /> Reserve stock
+        <LockIcon size={11} aria-hidden="true" /> {t('stock.reserve.heading')}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        <select value={locId} onChange={(e) => setLocId(e.target.value)} aria-label="Reservation location" className="h-11 sm:h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
+        <select value={locId} onChange={(e) => setLocId(e.target.value)} aria-label={t('stock.reserve.locationLabel')} className="h-11 sm:h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
           {stockLevels.map((sl) => (
-            <option key={sl.id} value={sl.location.id}>{sl.location.code} ({sl.available} avail)</option>
+            <option key={sl.id} value={sl.location.id}>{t('stock.reserve.locationOption', { code: sl.location.code, avail: sl.available })}</option>
           ))}
         </select>
-        <select value={reason} onChange={(e) => setReason(e.target.value as any)} aria-label="Reservation reason" className="h-11 sm:h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
-          <option value="MANUAL_HOLD">Manual hold</option>
-          <option value="PENDING_ORDER">Pending order</option>
-          <option value="PROMOTION">Promotion</option>
+        <select value={reason} onChange={(e) => setReason(e.target.value as any)} aria-label={t('stock.reserve.reasonLabel')} className="h-11 sm:h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
+          <option value="MANUAL_HOLD">{t('stock.reserve.reasonOption.manualHold')}</option>
+          <option value="PENDING_ORDER">{t('stock.reserve.reasonOption.pendingOrder')}</option>
+          <option value="PROMOTION">{t('stock.reserve.reasonOption.promotion')}</option>
         </select>
         <input
           type="number" value={qty} onChange={(e) => setQty(e.target.value)}
-          placeholder="quantity"
+          placeholder={t('stock.reserve.qtyPlaceholder')}
+          aria-label={t('stock.reserve.qtyPlaceholder')}
           className="h-11 sm:h-8 px-2 text-md border border-slate-200 dark:border-slate-700 rounded font-mono tabular-nums"
         />
         <input
           type="text" value={orderId} onChange={(e) => setOrderId(e.target.value)}
-          placeholder="Order ID (optional)"
+          placeholder={t('stock.reserve.orderIdPlaceholder')}
+          aria-label={t('stock.reserve.orderIdPlaceholder')}
           className="h-11 sm:h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded"
         />
       </div>
       <div className="flex items-center justify-end gap-2">
-        <button onClick={onCancel} className="h-11 sm:h-8 px-2 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">Cancel</button>
-        <button onClick={submit} disabled={submitting} className="h-11 sm:h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">Reserve</button>
+        <button onClick={onCancel} className="h-11 sm:h-8 px-2 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">{t('common.cancel')}</button>
+        <button onClick={submit} disabled={submitting} className="h-11 sm:h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">{t('stock.reserve.submit')}</button>
       </div>
       <div className="text-xs text-slate-500 dark:text-slate-400">
-        PENDING_ORDER reservations expire after 24h. Manual holds and promotions never expire automatically.
+        {t('stock.reserve.helpText')}
       </div>
     </div>
   )
