@@ -101,6 +101,7 @@ import { startAmazonMCFStatusCron } from "./jobs/amazon-mcf-status.job.js";
 import { startFbaPanEuSyncCron } from "./jobs/fba-pan-eu-sync.job.js";
 import { startFbaRestockCron } from "./jobs/fba-restock-ingestion.job.js";
 import pricingRoutes from "./routes/pricing.routes.js";
+import pricingRulesRoutes from "./routes/pricing-rules.routes.js";
 // BullMQ worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS=1.
 // initializeQueue pings Redis and throws on failure; tryStartQueueWorkers
 // catches that so a missing/unreachable Redis can't crash the API process
@@ -338,6 +339,7 @@ app.register(returnsRoutes, { prefix: '/api' });
 app.register(stockRoutes, { prefix: '/api' });
 app.register(brandSettingsRoutes, { prefix: '/api' });
 app.register(pricingRoutes, { prefix: '/api' });
+app.register(pricingRulesRoutes, { prefix: '/api' });
 app.register(marketingRoutes, { prefix: '/api' });
 app.register(productsRoutes, { prefix: '/api' });
 app.register(categoriesRoutes, { prefix: '/api' });
