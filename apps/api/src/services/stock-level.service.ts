@@ -27,6 +27,13 @@ import prisma from '../db.js'
 import { applyStockMovement } from './stock-movement.service.js'
 
 const PENDING_ORDER_TTL_MS = 24 * 60 * 60 * 1000 // 24h
+// S.2 — open marketplace orders sit in reserved state from ingestion
+// until shipment (could be days). reservation-sweep filters by
+// reason='PENDING_ORDER' so OPEN_ORDER reservations are never
+// auto-released; we still set a far-future expiresAt to satisfy the
+// non-null DB column. 1 year is the operational ceiling — anything
+// older is a stale order that should be reconciled manually.
+const OPEN_ORDER_TTL_MS = 365 * 24 * 60 * 60 * 1000
 
 /** Resolve a StockLocation by code. Used by callers that know the
  *  semantic location ('IT-MAIN', 'AMAZON-EU-FBA') but not its cuid. */
@@ -46,7 +53,7 @@ export interface ReserveStockArgs {
   locationId: string
   quantity: number
   orderId?: string
-  reason?: 'PENDING_ORDER' | 'MANUAL_HOLD' | 'PROMOTION'
+  reason?: 'PENDING_ORDER' | 'MANUAL_HOLD' | 'PROMOTION' | 'OPEN_ORDER'
   ttlMs?: number
   actor?: string
 }
@@ -293,8 +300,130 @@ export async function transferStock(args: TransferStockArgs) {
   return { out, in: inMv }
 }
 
+/**
+ * S.2 — Reserve stock for an open marketplace order.
+ *
+ * Idempotent: if a non-released, non-consumed reservation already exists
+ * for (orderId, productId), this returns it unchanged. Used by
+ * channel order ingestion (Amazon FBM today; Shopify in S.2.5; eBay
+ * migrating later) to hold stock from the moment the order is
+ * recognised through to shipment, without altering Product.totalStock.
+ *
+ * Location resolution: caller supplies locationId. For FBM today every
+ * order ships from IT-MAIN; locationId is resolved to that.
+ *
+ * Insufficient-stock handling: re-thrown as-is. The caller decides
+ * whether to log + continue (Amazon already accepted the order — we
+ * can't refuse it, but we surface the oversell to the operator) or
+ * fail the ingestion.
+ */
+export async function reserveOpenOrder(args: {
+  orderId: string
+  productId: string
+  variationId?: string
+  locationId: string
+  quantity: number
+  actor?: string
+}) {
+  const existing = await prisma.stockReservation.findFirst({
+    where: {
+      orderId: args.orderId,
+      releasedAt: null,
+      consumedAt: null,
+      stockLevel: {
+        productId: args.productId,
+        variationId: args.variationId ?? null,
+      },
+    },
+    select: { id: true, quantity: true },
+  })
+  if (existing) return existing
+
+  return await reserveStock({
+    productId: args.productId,
+    variationId: args.variationId,
+    locationId: args.locationId,
+    quantity: args.quantity,
+    orderId: args.orderId,
+    reason: 'OPEN_ORDER',
+    ttlMs: OPEN_ORDER_TTL_MS,
+    actor: args.actor,
+  })
+}
+
+/**
+ * S.2 — Consume every open reservation tied to an order. Called when
+ * the order transitions to SHIPPED. Decrements both reserved and
+ * quantity for each reservation. Idempotent — already-consumed and
+ * already-released reservations are skipped.
+ *
+ * Returns the count of reservations consumed.
+ */
+export async function consumeOpenOrder(args: {
+  orderId: string
+  actor?: string
+}): Promise<number> {
+  const open = await prisma.stockReservation.findMany({
+    where: {
+      orderId: args.orderId,
+      releasedAt: null,
+      consumedAt: null,
+    },
+    select: { id: true },
+  })
+  let consumed = 0
+  for (const r of open) {
+    try {
+      await consumeReservation(r.id, { actor: args.actor })
+      consumed++
+    } catch {
+      // continue — best-effort. A consume failure (e.g. concurrent
+      // release) doesn't block the remainder.
+    }
+  }
+  return consumed
+}
+
+/**
+ * S.2 — Release every open reservation tied to an order. Called when
+ * the order is cancelled. Decrements `reserved` (frees the stock for
+ * other orders) without touching `quantity`. Idempotent.
+ *
+ * Returns the count of reservations released.
+ */
+export async function releaseOpenOrder(args: {
+  orderId: string
+  actor?: string
+  reason?: string
+}): Promise<number> {
+  const open = await prisma.stockReservation.findMany({
+    where: {
+      orderId: args.orderId,
+      releasedAt: null,
+      consumedAt: null,
+    },
+    select: { id: true },
+  })
+  let released = 0
+  for (const r of open) {
+    try {
+      await releaseReservation(r.id, {
+        actor: args.actor,
+        reason: args.reason ?? 'order cancelled',
+      })
+      released++
+    } catch {
+      // continue — best-effort.
+    }
+  }
+  return released
+}
+
 /** Cron-driven cleanup: release any PENDING_ORDER reservation past its
- *  expiresAt. Idempotent. Returns count of releases. */
+ *  expiresAt. Idempotent. Returns count of releases.
+ *
+ *  Note: only sweeps reason='PENDING_ORDER'. OPEN_ORDER (S.2),
+ *  MANUAL_HOLD, and PROMOTION reservations are never auto-released. */
 export async function sweepExpiredReservations(): Promise<number> {
   const expired = await prisma.stockReservation.findMany({
     where: {

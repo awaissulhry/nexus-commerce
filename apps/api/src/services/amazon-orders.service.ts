@@ -9,9 +9,18 @@
  * so re-running the same window is safe. Item upsert keys on
  * `OrderItem.@@unique([order, externalLineItemId])` (Amazon's OrderItemId).
  *
- * Does NOT decrement stock — order ingestion and inventory updates are
- * decoupled (inventory comes from `webhooks.routes.ts:order-created` or the
- * SP-API inventory summary endpoint, separately).
+ * Stock semantics (S.2):
+ *   - FBA orders: never touched here. Amazon ships from FBA inventory,
+ *     and the 15-min FBA cron syncs `fulfillableQuantity` into the
+ *     AMAZON-EU-FBA StockLevel — that's the canonical FBA source.
+ *     Decrementing here would double-count.
+ *   - FBM orders: reserve-then-consume pattern. At ingestion we hold
+ *     stock at IT-MAIN (StockLevel.reserved goes up, available goes
+ *     down, quantity unchanged). When Amazon transitions the order
+ *     to SHIPPED we consume the reservation (quantity decreases too).
+ *     If the order is cancelled, the reservation is released (no
+ *     quantity change). Idempotency: every helper checks for an
+ *     existing reservation by (orderId, productId) before acting.
  */
 
 import prisma from '../db.js'
@@ -21,6 +30,11 @@ import {
   AmazonOrderItemRaw,
 } from './marketplaces/amazon.service.js'
 import { logger } from '../utils/logger.js'
+import {
+  reserveOpenOrder,
+  consumeOpenOrder,
+  resolveLocationByCode,
+} from './stock-level.service.js'
 
 const amazonService = new AmazonService()
 
@@ -113,6 +127,10 @@ interface SyncSummary {
   ordersFailed: number
   itemsUpserted: number
   itemsFailed: number
+  // S.2 — FBM stock lifecycle counters
+  fbmReservationsCreated: number
+  fbmReservationsConsumed: number
+  fbmInsufficientStock: number
   errors: Array<{ orderId: string; error: string }>
 }
 
@@ -175,6 +193,9 @@ export class AmazonOrdersService {
       ordersFailed: 0,
       itemsUpserted: 0,
       itemsFailed: 0,
+      fbmReservationsCreated: 0,
+      fbmReservationsConsumed: 0,
+      fbmInsufficientStock: 0,
       errors: [],
     }
 
@@ -218,6 +239,9 @@ export class AmazonOrdersService {
       ordersFailed: summary.ordersFailed,
       itemsUpserted: summary.itemsUpserted,
       itemsFailed: summary.itemsFailed,
+      fbmReservationsCreated: summary.fbmReservationsCreated,
+      fbmReservationsConsumed: summary.fbmReservationsConsumed,
+      fbmInsufficientStock: summary.fbmInsufficientStock,
     })
     return summary
   }
@@ -278,6 +302,15 @@ export class AmazonOrdersService {
       && existing != null
       && existing.status !== 'CANCELLED'
 
+    // S.2: did we just transition to SHIPPED? Only the SHIPPED status
+    // (not PARTIALLY_SHIPPED) consumes reservations — partials stay
+    // reserved until the order completes, since we don't know which
+    // line items shipped from the order-level status alone. Operators
+    // can manually consume via the drawer if a partial drags.
+    const newlyShipped =
+      status === 'SHIPPED'
+      && (existing == null || existing.status !== 'SHIPPED')
+
     const order = await prisma.order.upsert({
       where: {
         channel_channelOrderId: {
@@ -332,9 +365,11 @@ export class AmazonOrdersService {
         error: err instanceof Error ? err.message : String(err),
       })
     }
+    const createdItems: Array<{ productId: string | null; quantity: number; sku: string }> = []
     for (const item of items) {
       try {
-        await this.createOrderItem(order.id, item)
+        const created = await this.createOrderItem(order.id, item)
+        createdItems.push(created)
         summary.itemsUpserted++
       } catch (err) {
         summary.itemsFailed++
@@ -345,11 +380,123 @@ export class AmazonOrdersService {
         })
       }
     }
+
+    // S.2: FBM stock lifecycle. FBA never touched here. Cancellations
+    // are handled by the existing handleOrderCancelled cascade above
+    // (which now also releases open reservations — see order-cancellation).
+    if (fulfillmentMethod === 'FBM') {
+      await this.applyFbmStockLifecycle({
+        orderId: order.id,
+        rawAmazonOrderId: raw.AmazonOrderId,
+        items: createdItems,
+        newlyShipped,
+        summary,
+      })
+    }
   }
 
-  private async createOrderItem(orderId: string, item: AmazonOrderItemRaw): Promise<void> {
+  /**
+   * S.2 — FBM reserve-then-consume lifecycle. Always tries to reserve
+   * (idempotent: skipped if a reservation already exists for this
+   * orderId+productId). If the order has just transitioned to SHIPPED,
+   * consume every open reservation for the order.
+   *
+   * Insufficient-stock errors are logged + counted but never throw —
+   * Amazon already accepted the order; we can't refuse it. Operator
+   * sees the oversell via the upcoming negative-available alert.
+   */
+  private async applyFbmStockLifecycle(args: {
+    orderId: string
+    rawAmazonOrderId: string
+    items: Array<{ productId: string | null; quantity: number; sku: string }>
+    newlyShipped: boolean
+    summary: SyncSummary
+  }): Promise<void> {
+    const itMainId = await resolveLocationByCode('IT-MAIN')
+    if (!itMainId) {
+      logger.error('amazon-orders: IT-MAIN location missing — cannot reserve FBM stock', {
+        orderId: args.orderId,
+      })
+      return
+    }
+
+    for (const it of args.items) {
+      if (!it.productId || it.quantity <= 0) continue
+      try {
+        const before = await prisma.stockReservation.count({
+          where: {
+            orderId: args.orderId,
+            releasedAt: null,
+            consumedAt: null,
+            stockLevel: { productId: it.productId },
+          },
+        })
+        await reserveOpenOrder({
+          orderId: args.orderId,
+          productId: it.productId,
+          locationId: itMainId,
+          quantity: it.quantity,
+          actor: 'amazon-orders-sync',
+        })
+        const after = await prisma.stockReservation.count({
+          where: {
+            orderId: args.orderId,
+            releasedAt: null,
+            consumedAt: null,
+            stockLevel: { productId: it.productId },
+          },
+        })
+        if (after > before) args.summary.fbmReservationsCreated++
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (msg.includes('insufficient available')) {
+          args.summary.fbmInsufficientStock++
+          logger.warn('amazon-orders: FBM oversell — order accepted but insufficient stock to reserve', {
+            orderId: args.orderId,
+            productId: it.productId,
+            sku: it.sku,
+            quantity: it.quantity,
+          })
+        } else {
+          logger.warn('amazon-orders: FBM reserve failed', {
+            orderId: args.orderId,
+            productId: it.productId,
+            sku: it.sku,
+            error: msg,
+          })
+        }
+      }
+    }
+
+    if (args.newlyShipped) {
+      try {
+        const consumed = await consumeOpenOrder({
+          orderId: args.orderId,
+          actor: 'amazon-orders-sync',
+        })
+        args.summary.fbmReservationsConsumed += consumed
+        if (consumed > 0) {
+          logger.info('amazon-orders: FBM SHIPPED transition consumed reservations', {
+            orderId: args.orderId,
+            rawAmazonOrderId: args.rawAmazonOrderId,
+            consumed,
+          })
+        }
+      } catch (err) {
+        logger.warn('amazon-orders: FBM consume on SHIPPED failed', {
+          orderId: args.orderId,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+  }
+
+  private async createOrderItem(
+    orderId: string,
+    item: AmazonOrderItemRaw,
+  ): Promise<{ productId: string | null; quantity: number; sku: string }> {
     const totalPrice = item.ItemPrice?.Amount ? Number(item.ItemPrice.Amount) : 0
-    const sku = item.SellerSKU ?? item.ASIN
+    const sku = item.SellerSKU ?? item.ASIN ?? ''
 
     // Try to link to a local Product by SKU first, then by ASIN.
     let productId: string | null = null
@@ -378,6 +525,8 @@ export class AmazonOrdersService {
         ...(productId ? { productId } : {}),
       },
     })
+
+    return { productId, quantity: item.QuantityOrdered, sku }
   }
 }
 
