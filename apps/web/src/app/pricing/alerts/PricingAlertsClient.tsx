@@ -15,7 +15,6 @@ import {
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Button } from '@/components/ui/Button'
-import PageHeader from '@/components/layout/PageHeader'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -100,39 +99,22 @@ export default function PricingAlertsClient() {
     fetchData()
   }, [fetchData])
 
-  const header = (
-    <PageHeader
-      title={t('pricing.alerts.title')}
-      subtitle={t('pricing.alerts.subtitle')}
-      breadcrumbs={[
-        { label: t('pricing.crumb.root'), href: '/pricing' },
-        { label: t('pricing.alerts.crumb') },
-      ]}
-    />
-  )
-
   if (loading && !data) {
     return (
-      <div>
-        {header}
-        <Card>
-          <div className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
-            <Loader2 className="w-4 h-4 animate-spin" />{' '}
-            {t('pricing.alerts.loading')}
-          </div>
-        </Card>
-      </div>
+      <Card>
+        <div className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
+          <Loader2 className="w-4 h-4 animate-spin" />{' '}
+          {t('pricing.alerts.loading')}
+        </div>
+      </Card>
     )
   }
 
   if (error) {
     return (
-      <div>
-        {header}
-        <div className="border border-rose-200 bg-rose-50 rounded px-3 py-2 text-base text-rose-700 inline-flex items-start gap-1.5">
-          <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
-          <span>{error}</span>
-        </div>
+      <div className="border border-rose-200 bg-rose-50 rounded px-3 py-2 text-base text-rose-700 inline-flex items-start gap-1.5">
+        <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+        <span>{error}</span>
       </div>
     )
   }
@@ -145,21 +127,16 @@ export default function PricingAlertsClient() {
 
   if (empty) {
     return (
-      <div>
-        {header}
-        <EmptyState
-          icon={CheckCircle2}
-          title={t('pricing.alerts.empty')}
-          description={t('pricing.alerts.emptyHint')}
-        />
-      </div>
+      <EmptyState
+        icon={CheckCircle2}
+        title={t('pricing.alerts.empty')}
+        description={t('pricing.alerts.emptyHint')}
+      />
     )
   }
 
   return (
-    <div>
-      {header}
-      <div className="space-y-4">
+    <div className="space-y-4">
       {/* Counts banner — drift first (customer-visible), low margin second
           (silent revenue leak), engine-resolution buckets last. */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -505,7 +482,6 @@ export default function PricingAlertsClient() {
       </Card>
         </div>
       )}
-      </div>
     </div>
   )
 }

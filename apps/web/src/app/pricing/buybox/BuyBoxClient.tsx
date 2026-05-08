@@ -22,7 +22,6 @@ import {
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Button } from '@/components/ui/Button'
-import PageHeader from '@/components/layout/PageHeader'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -83,52 +82,32 @@ export default function BuyBoxClient() {
     fetchData()
   }, [fetchData])
 
-  const header = (
-    <PageHeader
-      title={t('pricing.buybox.title')}
-      subtitle={t('pricing.buybox.subtitle')}
-      breadcrumbs={[
-        { label: t('pricing.crumb.root'), href: '/pricing' },
-        { label: t('pricing.buybox.crumb') },
-      ]}
-    />
-  )
-
   if (loading && !data) {
     return (
-      <div>
-        {header}
-        <Card>
-          <div className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
-            <Loader2 className="w-4 h-4 animate-spin" /> {t('pricing.buybox.loading')}
-          </div>
-        </Card>
-      </div>
+      <Card>
+        <div className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
+          <Loader2 className="w-4 h-4 animate-spin" /> {t('pricing.buybox.loading')}
+        </div>
+      </Card>
     )
   }
 
   if (error) {
     return (
-      <div>
-        {header}
-        <div className="border border-rose-200 bg-rose-50 rounded px-3 py-2 text-base text-rose-700 inline-flex items-start gap-1.5">
-          <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
-          <span>{error}</span>
-        </div>
+      <div className="border border-rose-200 bg-rose-50 rounded px-3 py-2 text-base text-rose-700 inline-flex items-start gap-1.5">
+        <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+        <span>{error}</span>
       </div>
     )
   }
 
   if (!data || data.observations === 0) {
     return (
-      <div>
-        {header}
-        <EmptyState
-          icon={Trophy}
-          title={t('pricing.buybox.empty')}
-          description={t('pricing.buybox.emptyHint')}
-        />
-      </div>
+      <EmptyState
+        icon={Trophy}
+        title={t('pricing.buybox.empty')}
+        description={t('pricing.buybox.emptyHint')}
+      />
     )
   }
 
@@ -142,11 +121,9 @@ export default function BuyBoxClient() {
       : 'emerald'
 
   return (
-    <div>
-      {header}
-      <div className="space-y-4">
-        {/* Window selector + refresh */}
-        <div className="flex items-center gap-2">
+    <div className="space-y-4">
+      {/* Window selector + refresh */}
+      <div className="flex items-center gap-2">
           <div className="text-base text-slate-700">{t('pricing.buybox.window')}</div>
         {WINDOWS.map((w) => (
           <button
@@ -341,7 +318,6 @@ export default function BuyBoxClient() {
           </Card>
         </div>
       )}
-      </div>
     </div>
   )
 }

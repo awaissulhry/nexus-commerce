@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { AlertCircle, Plus, RefreshCw } from 'lucide-react';
-import PageHeader from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useTranslations } from '@/lib/i18n/use-translations';
@@ -61,15 +60,6 @@ export default function PricingRulesDashboardPage() {
 
   return (
     <div>
-      <PageHeader
-        title={t('pricing.rules.title')}
-        subtitle={t('pricing.rules.subtitle')}
-        breadcrumbs={[
-          { label: t('pricing.crumb.root'), href: '/pricing' },
-          { label: t('pricing.rules.crumb') },
-        ]}
-      />
-
       {/* Error Alert */}
       {error && (
         <div className="mb-4 px-3 py-2 bg-rose-50 border border-rose-200 rounded-md inline-flex items-start gap-2 text-base text-rose-700">

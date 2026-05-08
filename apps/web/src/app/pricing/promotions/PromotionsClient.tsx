@@ -29,7 +29,6 @@ import { Button } from '@/components/ui/Button'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
-import PageHeader from '@/components/layout/PageHeader'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -135,38 +134,21 @@ export default function PromotionsClient() {
     }
   }
 
-  const header = (
-    <PageHeader
-      title={t('pricing.promotions.title')}
-      subtitle={t('pricing.promotions.subtitle')}
-      breadcrumbs={[
-        { label: t('pricing.crumb.root'), href: '/pricing' },
-        { label: t('pricing.promotions.crumb') },
-      ]}
-    />
-  )
-
   if (loading && !data) {
     return (
-      <div>
-        {header}
-        <Card>
-          <div className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
-            <Loader2 className="w-4 h-4 animate-spin" /> {t('pricing.promotions.loading')}
-          </div>
-        </Card>
-      </div>
+      <Card>
+        <div className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
+          <Loader2 className="w-4 h-4 animate-spin" /> {t('pricing.promotions.loading')}
+        </div>
+      </Card>
     )
   }
 
   if (error) {
     return (
-      <div>
-        {header}
-        <div className="border border-rose-200 bg-rose-50 rounded px-3 py-2 text-base text-rose-700 inline-flex items-start gap-1.5">
-          <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
-          <span>{error}</span>
-        </div>
+      <div className="border border-rose-200 bg-rose-50 rounded px-3 py-2 text-base text-rose-700 inline-flex items-start gap-1.5">
+        <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+        <span>{error}</span>
       </div>
     )
   }
@@ -201,8 +183,7 @@ export default function PromotionsClient() {
 
   if (!data || data.counts.total === 0) {
     return (
-      <div>
-        {header}
+      <>
         <div className="flex items-center justify-end mb-3">
           <Button
             variant="primary"
@@ -227,14 +208,12 @@ export default function PromotionsClient() {
             }}
           />
         )}
-      </div>
+      </>
     )
   }
 
   return (
-    <div>
-      {header}
-      <div className="space-y-4">
+    <div className="space-y-4">
       {/* Action row */}
       <div className="flex items-center justify-end">
         <Button
@@ -333,7 +312,6 @@ export default function PromotionsClient() {
           }}
         />
       )}
-      </div>
     </div>
   )
 }

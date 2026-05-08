@@ -1174,6 +1174,12 @@
 
   "pricing.title": "Prezzi",
   "pricing.subtitle": "Prezzi per marketplace risolti dal motore. Clicca una cella per modificare, clicca una riga per il dettaglio completo + cronologia.",
+  "pricing.shellSubtitle": "Prezzi master, regole, promozioni, monitoraggio Buy Box e avvisi del motore.",
+  "pricing.tabs.matrix": "Matrice",
+  "pricing.tabs.rules": "Regole",
+  "pricing.tabs.promotions": "Promozioni",
+  "pricing.tabs.buybox": "Buy Box",
+  "pricing.tabs.alerts": "Avvisi",
   "pricing.error.title": "Caricamento prezzi fallito",
   "pricing.error.retry": "Riprova",
   "pricing.crumb.root": "Prezzi",

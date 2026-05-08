@@ -1203,6 +1203,12 @@
 
   "pricing.title": "Pricing",
   "pricing.subtitle": "Per-marketplace prices resolved by the engine. Click any cell to edit, click a row for full breakdown + history.",
+  "pricing.shellSubtitle": "Master prices, rules, promotions, Buy Box tracking, and engine alerts.",
+  "pricing.tabs.matrix": "Matrix",
+  "pricing.tabs.rules": "Rules",
+  "pricing.tabs.promotions": "Promotions",
+  "pricing.tabs.buybox": "Buy Box",
+  "pricing.tabs.alerts": "Alerts",
   "pricing.error.title": "Failed to load pricing",
   "pricing.error.retry": "Retry",
   "pricing.crumb.root": "Pricing",
