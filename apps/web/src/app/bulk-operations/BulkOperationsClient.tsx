@@ -1005,11 +1005,35 @@ export default function BulkOperationsClient() {
           const target = direction === 'undo' ? d.before : d.after
           const handle = editHandlers.get(k)
           if (target === null) {
+            // U.39 — was setResetKeys-only, relying on the resetKey
+            // prop change to flow through TableRow → cell renderer →
+            // EditableCell's useEffect to revert draftValue. But
+            // <TableRow> is memo'd on (row.original, rowIdx, top,
+            // columnsKey) — none of which change for an undo, so
+            // the row never re-renders and EditableCell never sees
+            // the bumped resetKey. Cell stayed yellow with the new
+            // value forever.
+            // Fix: call applyValue directly with the row's canonical
+            // server value (from productsRef), the same path the
+            // non-null branch uses. resetKeys still bumps so any
+            // virtualized-out cell that re-mounts later picks up
+            // the reset.
             setResetKeys((prev) => {
               const next = new Map(prev)
               next.set(k, (next.get(k) ?? 0) + 1)
               return next
             })
+            if (handle) {
+              const product = productsRef.current.find(
+                (p) => p.id === d.rowId,
+              )
+              if (product) {
+                const canonical = (
+                  product as unknown as Record<string, unknown>
+                )[d.columnId]
+                handle.applyValue(canonical)
+              }
+            }
           } else if (handle) {
             handle.applyValue(target.newValue)
           }

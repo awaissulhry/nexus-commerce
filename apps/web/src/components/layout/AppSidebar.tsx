@@ -291,9 +291,18 @@ export default function AppSidebar() {
         />
       )}
       <aside
+        // U.39 — was `md:sticky` without `md:top-0`. CSS `position:
+        // sticky` requires an explicit positional offset; without
+        // one it formally sticks to nothing and falls back to
+        // relative-like behaviour. Worked everywhere except
+        // /bulk-operations (the only page tall enough to make
+        // <main> scroll), where the missing offset interacted with
+        // the inner scroll context to make sidebar nav links
+        // unresponsive on the first click. Adding `md:top-0`
+        // anchors the sticky stack properly.
         className={`w-60 bg-slate-900 flex flex-col h-screen border-r border-slate-800 flex-shrink-0 transition-transform duration-200 ease-out
           fixed top-0 left-0 z-40 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
-          md:sticky md:translate-x-0 md:z-auto md:flex`}
+          md:sticky md:top-0 md:translate-x-0 md:z-auto md:flex`}
       >
       {/* ── Logo + ⌘K ────────────────────────────────────────── */}
       <div className="h-14 flex items-center justify-between px-4 border-b border-slate-800 flex-shrink-0">
