@@ -212,9 +212,11 @@ No follow-up action.
 
 Worth designing once we have a clear "from scratch, no upload" use case (e.g. a brand owner adding a single SKU at a time).
 
-## 20. 🟢 /products → faceted search counts
+## 20. ✅ /products → faceted search counts — partially resolved 2026-05-08
 
-Filter dropdowns currently list options without counts ("Active" / "Draft" / "Inactive", not "Active (1,247)"). Real faceting needs a second aggregate query per filter axis (or one query with `groupBy` over each), and care to make sure the counts respect the *other* active filters. Not worth it until users actually ask "how many drafts do I have right now."
+**Resolution:** Most filter axes already had counts (Status / Product type / Brand / Marketplace / Hygiene); they just weren't called out in this entry. M.22 closes the gap by adding `channels` aggregate to the facets response (top-level Product `syncChannels[]` unnested + grouped) and wiring the Channels filter group to render "AMAZON (3,200)" inline. Now every multi-select filter on /products carries counts on its options.
+
+**Remaining (deferred):** Counts that respect *other* active filters (e.g., showing "DRAFT (47)" only counts products that also match the active brand filter). Today every count is unfiltered. This requires re-running the aggregate per filter combination. Not worth it until operators ask for it — the unfiltered counts already give "how many drafts do I have right now."
 
 ## 21. ✅ /products → API endpoint for products edit page — resolved 2026-05-08
 
@@ -813,7 +815,7 @@ The Phase 28 recompute at `bullmq-sync.worker.ts` now skips when `followMasterPr
 
 ---
 
-## 47. 🟢 Vercel auto-deploy from `main` was disconnected for ~5 days
+## 47. ✅ Vercel auto-deploy from `main` — resolved 2026-05-06, doc closed 2026-05-08
 
 **Symptom:** Vercel stopped deploying commits to `main` somewhere around 2026-05-01. Multiple H.1/H.2/H.3 stock-ledger commits + the Phase 4 catalog rename appeared on `nexus-commerce.vercel.app` as 404s; the actual production deployment lived at `nexus-commerce-three.vercel.app`.
 

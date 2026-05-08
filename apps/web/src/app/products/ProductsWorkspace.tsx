@@ -133,6 +133,10 @@ type Facets = {
     missingBrand: number
     missingGtin: number
   }
+  // P2 #20 — counts of top-level products with each channel in
+  // their syncChannels[] array. Drives "AMAZON (3,200)" inline
+  // counts on the Channels filter group.
+  channels?: Array<{ value: string; count: number }>
 }
 type SavedView = {
   id: string
@@ -1448,6 +1452,7 @@ function FilterBar(props: any) {
               label="Channels"
               options={['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY']}
               selected={channelFilters}
+              counts={facets?.channels?.reduce((m: any, c: any) => { m[c.value] = c.count; return m }, {})}
               onToggle={(v: string) => updateUrl({ channels: toggleArr(channelFilters, v).join(',') || undefined, page: undefined })}
               onClear={() => updateUrl({ channels: undefined, page: undefined })}
             />

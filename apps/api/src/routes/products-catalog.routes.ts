@@ -59,7 +59,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       if (matches(request, etag)) {
         return reply.code(304).send()
       }
-      const [productTypes, brands, fulfillment, statusCounts, marketplaceCounts, marketplaceLookup, hygieneCounts] = await Promise.all([
+      const [productTypes, brands, fulfillment, statusCounts, marketplaceCounts, marketplaceLookup, channelCounts, hygieneCounts] = await Promise.all([
         prisma.product.groupBy({
           by: ['productType'],
           where: { parentId: null, productType: { not: null } },
@@ -99,6 +99,17 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         // "234 missing description" hint. Single $queryRaw beats four
         // separate Prisma counts (the latter would each run their own
         // index scan; this one fuses them into a single FILTER pass).
+        // P2 #20 — channel counts via unnest of syncChannels[]. One
+        // row per (channel, count) so the /products Channels filter
+        // can render "AMAZON (3,200)" inline. Top-level products
+        // only — children inherit syncChannels from their parent.
+        prisma.$queryRaw<Array<{ channel: string; count: bigint }>>`
+          SELECT unnest("syncChannels") AS channel, count(*)::bigint AS count
+          FROM "Product"
+          WHERE "parentId" IS NULL
+          GROUP BY unnest("syncChannels")
+          ORDER BY count DESC
+        `,
         prisma.$queryRaw<Array<{
           total: bigint
           missing_photos: bigint
@@ -134,6 +145,12 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
           .filter((f) => f.fulfillmentMethod)
           .map((f) => ({ value: f.fulfillmentMethod!, count: f._count })),
         statuses: statusCounts.map((s) => ({ value: s.status, count: s._count })),
+        // P2 #20 — channel counts (top-level products with each
+        // value in their syncChannels[] array). One row per channel
+        // sorted by descending count.
+        channels: channelCounts
+          .filter((c) => c.channel)
+          .map((c) => ({ value: c.channel, count: Number(c.count) })),
         // E.5b — facet shape mirrors the others: { value, count } plus
         // channel + label so the frontend can group/label without a
         // second roundtrip.
