@@ -1,24 +1,27 @@
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { History as HistoryIcon } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import ActiveJobsStrip from './ActiveJobsStrip'
 import BulkOperationsClient from './BulkOperationsClient'
 
-// U.45 — reverted U.44's page-level two-pass mount. The mount-gate
-// gated PageHeader + Link behind a setMounted=true tick, which broke
-// the Link's connection to Next.js's app-router transition queue:
-// router.push() ran silently with no RSC fetch and no URL change,
-// even though the Link's __reactProps$ were attached.
+// U.45 — root cause of the /bulk-operations navigation deadlock:
+// BulkOperationsClient calls useSearchParams() (P.9, scoped IDs from
+// the URL), which requires a Suspense boundary in production. Without
+// one, Next.js silently bails the entire page out of static rendering
+// and mismanages the App Router's transition queue — the symptom was
+// router.push() running silently: no RSC fetch, no URL change, no
+// console error. Even pushState + popstate updated the URL but the
+// router never reacted.
 //
-// Verified diagnosis: window.history.pushState + popstate updates
-// the URL but Next.js's router never reacts on this page. Hard nav
-// (location.href = …) works. No console errors, no hydration warnings,
-// so U.41 (BulkOperationsClient lazy-init fix) + U.42 (use-recently-
-// viewed lazy-init fix) are sufficient on their own.
+// U.44's page-level 'use client' + mount-gate masked this by making
+// the whole page CSR — but it also severed PageHeader's Link from the
+// router. Both diagnostics pointed at the same boundary problem.
 //
-// Now: server shell renders PageHeader + Link normally. The heavy
-// client component (BulkOperationsClient) hydrates as a client island
-// and its localStorage reads happen safely in useEffect.
+// Fix: server-render the shell (PageHeader, Link, ActiveJobsStrip)
+// and wrap BulkOperationsClient in <Suspense> so useSearchParams has
+// its required boundary. Next.js's prerender step now succeeds and
+// the App Router's transitions stay healthy.
 export default function BulkOperationsPage() {
   return (
     <div className="space-y-3">
@@ -36,7 +39,19 @@ export default function BulkOperationsPage() {
         }
       />
       <ActiveJobsStrip />
-      <BulkOperationsClient />
+      <Suspense
+        fallback={
+          <div
+            role="status"
+            aria-live="polite"
+            className="text-md text-slate-500 dark:text-slate-400 py-12 text-center"
+          >
+            Loading bulk operations…
+          </div>
+        }
+      >
+        <BulkOperationsClient />
+      </Suspense>
     </div>
   )
 }
