@@ -872,6 +872,150 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── GET /api/stock/analytics/turnover ───────────────────────────
+  // S.14 — stock turnover ratio + Days-of-Inventory (DoH).
+  //
+  // Definitions (industry standard):
+  //   COGS over period   = Σ (unitsSold × costPrice) per product, summed
+  //   Avg inventory value = (current totalStock × costPrice) — single
+  //                         snapshot today (we don't yet track historical
+  //                         StockLevel snapshots; would refine to
+  //                         (begin + end) / 2 once we do)
+  //   Turnover ratio     = COGS / Avg inventory value, annualized
+  //                      = (cogsInWindow / windowDays) × 365 / avgInvValue
+  //   Days of Inventory  = 365 / turnoverRatio
+  //                      ≈ avgInvValue × windowDays / cogsInWindow
+  //
+  // Per-product rows return null for turnover/DoH when avg inventory
+  // is zero (can't divide) or COGS is zero (not selling — DoH is
+  // effectively infinite).
+  //
+  // Sales window default 30 days; supports 7/30/60/90/180/365 via
+  // `days` query param. Cap at 365 to keep DailySalesAggregate scans
+  // bounded.
+  fastify.get('/stock/analytics/turnover', async (request, reply) => {
+    try {
+      const q = request.query as any
+      const requestedDays = safeNum(q.days, 30) ?? 30
+      const days = Math.min(365, Math.max(1, Math.floor(requestedDays)))
+      const windowStart = new Date()
+      windowStart.setUTCDate(windowStart.getUTCDate() - days)
+      windowStart.setUTCHours(0, 0, 0, 0)
+
+      // Pull every buyable + their cost. Variants would inflate this
+      // count; we keep `isParent=false` matching how /api/stock works.
+      const products = await prisma.product.findMany({
+        where: { isParent: false },
+        select: {
+          id: true, sku: true, name: true, amazonAsin: true,
+          totalStock: true, costPrice: true,
+          images: { select: { url: true }, take: 1 },
+        },
+      })
+
+      const skus = products.map((p) => p.sku)
+      const sales = skus.length === 0
+        ? []
+        : await prisma.dailySalesAggregate.findMany({
+            where: {
+              sku: { in: skus },
+              day: { gte: windowStart },
+            },
+            select: { sku: true, channel: true, marketplace: true,
+              unitsSold: true, grossRevenue: true, ordersCount: true },
+          })
+
+      // Index sales by SKU for the per-product roll-up.
+      const salesBySku = new Map<string, { units: number; revenueCents: number }>()
+      const salesByChannel = new Map<string, { channel: string; marketplace: string; units: number; revenueCents: number; orders: number }>()
+      for (const s of sales) {
+        const cur = salesBySku.get(s.sku) ?? { units: 0, revenueCents: 0 }
+        cur.units += s.unitsSold
+        cur.revenueCents += Math.round(Number(s.grossRevenue) * 100)
+        salesBySku.set(s.sku, cur)
+        const channelKey = `${s.channel}_${s.marketplace}`
+        const ch = salesByChannel.get(channelKey) ?? {
+          channel: s.channel, marketplace: s.marketplace,
+          units: 0, revenueCents: 0, orders: 0,
+        }
+        ch.units += s.unitsSold
+        ch.revenueCents += Math.round(Number(s.grossRevenue) * 100)
+        ch.orders += s.ordersCount
+        salesByChannel.set(channelKey, ch)
+      }
+
+      // Per-product roll-up. cogsCents = unitsSold × costPrice (in cents).
+      // avgInventoryValueCents = current totalStock × costPrice. Single
+      // snapshot today; future commits can refine with begin/end avg.
+      let totalUnitsSold = 0
+      let totalCogsCents = 0
+      let totalCurrentInvValueCents = 0
+      const byProduct = products.map((p) => {
+        const sale = salesBySku.get(p.sku) ?? { units: 0, revenueCents: 0 }
+        const costCents = p.costPrice == null ? 0 : Math.round(Number(p.costPrice) * 100)
+        const cogsCents = sale.units * costCents
+        const currentInvValueCents = p.totalStock * costCents
+        totalUnitsSold += sale.units
+        totalCogsCents += cogsCents
+        totalCurrentInvValueCents += currentInvValueCents
+
+        const turnoverRatio = currentInvValueCents > 0
+          ? (cogsCents / days) * 365 / currentInvValueCents
+          : null
+        const daysOfInventory = (turnoverRatio != null && turnoverRatio > 0)
+          ? 365 / turnoverRatio
+          : (sale.units > 0 ? null : Infinity)
+
+        return {
+          productId: p.id,
+          sku: p.sku,
+          name: p.name,
+          amazonAsin: p.amazonAsin,
+          thumbnailUrl: p.images?.[0]?.url ?? null,
+          unitsSold: sale.units,
+          revenueCents: sale.revenueCents,
+          costPriceCents: costCents,
+          totalStock: p.totalStock,
+          currentInventoryValueCents: currentInvValueCents,
+          cogsCents,
+          turnoverRatio: turnoverRatio == null ? null : Math.round(turnoverRatio * 100) / 100,
+          // Cap reported DoH at 9999 so the UI doesn't render Infinity.
+          daysOfInventory: daysOfInventory == null
+            ? null
+            : daysOfInventory === Infinity
+              ? null
+              : Math.min(9999, Math.round(daysOfInventory)),
+        }
+      })
+
+      // Overall numbers across the catalog.
+      const overallTurnoverRatio = totalCurrentInvValueCents > 0
+        ? (totalCogsCents / days) * 365 / totalCurrentInvValueCents
+        : null
+      const overallDoh = (overallTurnoverRatio != null && overallTurnoverRatio > 0)
+        ? Math.min(9999, Math.round(365 / overallTurnoverRatio))
+        : null
+
+      return {
+        windowDays: days,
+        windowStart: windowStart.toISOString(),
+        overall: {
+          unitsSold: totalUnitsSold,
+          cogsCents: totalCogsCents,
+          currentInventoryValueCents: totalCurrentInvValueCents,
+          turnoverRatio: overallTurnoverRatio == null ? null : Math.round(overallTurnoverRatio * 100) / 100,
+          daysOfInventory: overallDoh,
+          productsTracked: products.length,
+        },
+        byProduct,
+        byChannel: Array.from(salesByChannel.values()).sort((a, b) => b.units - a.units),
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/analytics/turnover] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // ── GET /api/stock/movements ────────────────────────────────────
   fastify.get('/stock/movements', async (request, reply) => {
     try {

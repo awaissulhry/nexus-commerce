@@ -715,6 +715,13 @@ export default function StockWorkspace() {
               <LockIcon size={12} />
               {t('stock.reservations.title')}
             </Link>
+            <Link
+              href="/fulfillment/stock/analytics"
+              className="h-11 sm:h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5 text-slate-700"
+            >
+              <Activity size={12} />
+              {t('stock.analytics.title')}
+            </Link>
             <button
               onClick={() => setShortcutsOpen(true)}
               className="h-11 w-11 sm:h-8 sm:w-8 inline-flex items-center justify-center border border-slate-200 rounded-md hover:bg-slate-50 text-slate-600"
