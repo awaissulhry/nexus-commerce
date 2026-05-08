@@ -7,8 +7,7 @@ import {
   useRef,
   useState,
 } from 'react'
-// U.47 (DIAGNOSTIC) — next/navigation hooks stubbed below; see P.9 block.
-// import { useSearchParams, useRouter, usePathname } from 'next/navigation'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import {
   flexRender,
   getCoreRowModel,
@@ -435,22 +434,9 @@ export default function BulkOperationsClient() {
   const [bulkOpModalOpen, setBulkOpModalOpen] = useState(false)
   const [newProductOpen, setNewProductOpen] = useState(false)
   const [replicateOpen, setReplicateOpen] = useState(false)
-  // U.41 — was `useState(() => loadCollapsedGroups())` which read
-  // localStorage during the lazy initializer. Server render produces
-  // an empty Set (window guard); client lazy init returns the
-  // localStorage value. Different first-render output between server
-  // and client → React Error #418 hydration mismatch → React aborts
-  // hydration for the subtree → event handlers don't bind → sidebar
-  // Links + Job History Link both fail to fire clicks.
-  // Fix: identical empty default on both sides; hydrate from
-  // localStorage in useEffect after mount.
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
-    new Set(),
+    () => loadCollapsedGroups(),
   )
-  useEffect(() => {
-    const fromStorage = loadCollapsedGroups()
-    if (fromStorage.size > 0) setCollapsedGroups(fromStorage)
-  }, [])
   // V.3 — column being dragged (HTML5 DnD source). Null when no drag
   // is in progress. Used by the header cells' onDragOver to draw a
   // drop-target indicator.
@@ -636,22 +622,15 @@ export default function BulkOperationsClient() {
   // ── Column resize state (Step 1.5) ─────────────────────────────
   // TanStack v8 stores user-dragged widths as a {[colId]: width} map.
   // We persist it to localStorage so widths survive reloads.
-  // U.41 — same hydration-mismatch fix as collapsedGroups above.
-  // Server returns {}; client lazy init returned localStorage value;
-  // first-render diverged → hydration aborted. Empty {} on both
-  // sides; useEffect below hydrates from localStorage on mount.
-  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({})
-  useEffect(() => {
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(() => {
+    if (typeof window === 'undefined') return {}
     try {
       const raw = window.localStorage.getItem('nexus_bulkops_column_widths')
-      if (raw) {
-        const parsed = JSON.parse(raw) as ColumnSizingState
-        if (parsed && typeof parsed === 'object') setColumnSizing(parsed)
-      }
+      return raw ? (JSON.parse(raw) as ColumnSizingState) : {}
     } catch {
-      /* localStorage unavailable / parse failure → keep default */
+      return {}
     }
-  }, [])
+  })
   useEffect(() => {
     try {
       window.localStorage.setItem(
@@ -1523,23 +1502,30 @@ export default function BulkOperationsClient() {
     }
   }, [])
 
-  // U.47 (DIAGNOSTIC) — P.9's useSearchParams + useRouter + usePathname
-  // hooks suspected of breaking the App Router's transition queue on
-  // /bulk-operations. Temporarily stubbed: P.9 deep-link from
-  // /products → /bulk-operations is disabled; no scope reading, no
-  // clearScope effect. If clicks on sidebar Links work after this
-  // step, P.9's URL-sync was the culprit and we need a different
-  // approach (e.g. read from window.location.search once on mount).
-  // const searchParams = useSearchParams()
-  // const router = useRouter()
-  // const pathname = usePathname()
-  const scopedProductIds = useMemo<string[]>(() => [], [])
-  const scopedProductIdsKey = ''
-  const isScoped = false
+  // P.9 — read productIds from the URL so the /products page's
+  // bulk-action bar ("Power edit") can deep-link with a pre-selected
+  // scope. Empty / missing param = full catalog (existing behaviour).
+  // The list is derived during render (no useState) so a router push
+  // that changes the param re-runs the reload effect immediately.
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+  const scopedProductIds = useMemo(() => {
+    const raw = searchParams.get('productIds') ?? ''
+    return raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  }, [searchParams])
+  const scopedProductIdsKey = scopedProductIds.join(',')
+  const isScoped = scopedProductIds.length > 0
 
   const clearScope = useCallback(() => {
-    // no-op while P.9 is stubbed
-  }, [])
+    const sp = new URLSearchParams(searchParams.toString())
+    sp.delete('productIds')
+    const qs = sp.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }, [router, pathname, searchParams])
 
   // Refetch products when the primary target changes — bulk-fetch
   // hydrates _channelListing for ONE (channel, marketplace) per row,

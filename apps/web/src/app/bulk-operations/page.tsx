@@ -1,33 +1,33 @@
-import { Suspense } from 'react'
 import Link from 'next/link'
 import { History as HistoryIcon } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import ActiveJobsStrip from './ActiveJobsStrip'
 import BulkOperationsClient from './BulkOperationsClient'
 
-// U.46 — force-dynamic. Suspense alone (U.45) didn't unstick the
-// App Router's transition queue on production. Forcing the route out
-// of static-rendering attempts entirely eliminates the bailout-mode
-// edge case that was poisoning router.push().
 export const dynamic = 'force-dynamic'
 
-// U.45 — root cause of the /bulk-operations navigation deadlock:
-// BulkOperationsClient calls useSearchParams() (P.9, scoped IDs from
-// the URL), which requires a Suspense boundary in production. Without
-// one, Next.js silently bails the entire page out of static rendering
-// and mismanages the App Router's transition queue — the symptom was
-// router.push() running silently: no RSC fetch, no URL change, no
-// console error. Even pushState + popstate updated the URL but the
-// router never reacted.
+/**
+ * Server shell only — does NOT fetch data on the server.
+ *
+ * At 10k+ rows, server-fetching means Next.js inlines the entire JSON
+ * payload into the HTML response (~6 MB before gzip), which blows past
+ * the <1s page-load target. Instead the client component fetches on
+ * mount, gets a small (gzipped) JSON payload directly, and renders
+ * progressively.
+ */
+// U.38 — simplified the page wrapper. The earlier layout used
+// `-mx-6 -my-6` to escape the layout's p-6 padding plus a hardcoded
+// `h-[calc(100dvh-1.5rem)]` to anchor the grid to the viewport. That
+// combination caused weird side effects (scroll context confusion +
+// the sidebar's md:sticky context didn't compose cleanly with main's
+// own scroll) — the user reported they couldn't navigate to other
+// sidebar links from this page.
 //
-// U.44's page-level 'use client' + mount-gate masked this by making
-// the whole page CSR — but it also severed PageHeader's Link from the
-// router. Both diagnostics pointed at the same boundary problem.
-//
-// Fix: server-render the shell (PageHeader, Link, ActiveJobsStrip)
-// and wrap BulkOperationsClient in <Suspense> so useSearchParams has
-// its required boundary. Next.js's prerender step now succeeds and
-// the App Router's transitions stay healthy.
+// Now: a normal `space-y-3` page that lives inside the layout's
+// padding like every other page. The grid scroll container sets its
+// own max-height in BulkOperationsClient, so it still anchors at the
+// bottom of the viewport on desktop, but the page itself doesn't
+// fight the layout for height.
 export default function BulkOperationsPage() {
   return (
     <div className="space-y-3">
@@ -45,19 +45,7 @@ export default function BulkOperationsPage() {
         }
       />
       <ActiveJobsStrip />
-      <Suspense
-        fallback={
-          <div
-            role="status"
-            aria-live="polite"
-            className="text-md text-slate-500 dark:text-slate-400 py-12 text-center"
-          >
-            Loading bulk operations…
-          </div>
-        }
-      >
-        <BulkOperationsClient />
-      </Suspense>
+      <BulkOperationsClient />
     </div>
   )
 }
