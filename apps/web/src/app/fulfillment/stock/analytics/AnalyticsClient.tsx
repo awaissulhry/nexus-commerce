@@ -17,6 +17,7 @@ import Link from 'next/link'
 import {
   TrendingDown, ArrowLeft, Package, RefreshCw, AlertCircle,
   TrendingUp, Boxes, Activity, AlertTriangle, Snowflake,
+  BarChart3,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -90,6 +91,22 @@ interface DeadStockResponse {
   slow: DeadStockRow[]
 }
 
+// S.16 — ABC snapshot.
+interface AbcSample {
+  productId: string
+  sku: string
+  name: string
+  thumbnailUrl: string | null
+  totalStock: number
+  inventoryValueCents: number
+}
+interface AbcResponse {
+  snapshotAt: string | null
+  productsClassified: number
+  counts: { A: number; B: number; C: number; D: number }
+  samples: { A: AbcSample[]; B: AbcSample[]; C: AbcSample[]; D: AbcSample[] }
+}
+
 const PERIOD_OPTIONS = [7, 30, 90, 180, 365] as const
 
 function formatCents(cents: number): string {
@@ -109,6 +126,7 @@ export default function AnalyticsClient() {
   const { t } = useTranslations()
   const [data, setData] = useState<TurnoverResponse | null>(null)
   const [deadStock, setDeadStock] = useState<DeadStockResponse | null>(null)
+  const [abc, setAbc] = useState<AbcResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [days, setDays] = useState<number>(30)
@@ -120,17 +138,20 @@ export default function AnalyticsClient() {
     setLoading(true)
     setError(null)
     try {
-      // Fire both analytics endpoints in parallel — turnover and
-      // dead-stock are independent windows but render on the same
-      // page, so users see both populated together.
-      const [turnoverRes, deadRes] = await Promise.all([
+      // Fire all analytics endpoints in parallel — turnover, dead-
+      // stock, and ABC are independent and render on the same page.
+      const [turnoverRes, deadRes, abcRes] = await Promise.all([
         fetch(`${getBackendUrl()}/api/stock/analytics/turnover?days=${days}`, { cache: 'no-store' }),
         fetch(`${getBackendUrl()}/api/stock/analytics/dead-stock?days=${deadDays}`, { cache: 'no-store' }),
+        fetch(`${getBackendUrl()}/api/stock/analytics/abc`, { cache: 'no-store' }),
       ])
       if (!turnoverRes.ok) throw new Error(`turnover HTTP ${turnoverRes.status}`)
       setData(await turnoverRes.json())
       if (deadRes.ok) {
         setDeadStock(await deadRes.json())
+      }
+      if (abcRes.ok) {
+        setAbc(await abcRes.json())
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -331,6 +352,63 @@ export default function AnalyticsClient() {
                   </li>
                 ))}
               </ul>
+            </Card>
+          )}
+
+          {/* S.16 — ABC classification card. Pareto bands materialized
+              weekly via the abc-classification cron. Snapshot freshness
+              shown via snapshotAt. Empty state when never run. */}
+          {abc && (
+            <Card>
+              <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                <div className="text-md font-semibold text-slate-900 inline-flex items-center gap-2">
+                  <BarChart3 size={14} className="text-violet-500" />
+                  {t('stock.abc.title')}
+                </div>
+                <div className="text-xs text-slate-500">
+                  {abc.snapshotAt
+                    ? t('stock.abc.snapshotAt', { when: new Date(abc.snapshotAt).toLocaleString() })
+                    : t('stock.abc.notRun')}
+                </div>
+              </div>
+
+              {abc.productsClassified === 0 ? (
+                <div className="text-sm text-slate-500 italic py-3">
+                  {t('stock.abc.empty')}
+                </div>
+              ) : (
+                <>
+                  {/* Band counts as a row of cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {(['A', 'B', 'C', 'D'] as const).map((cls) => {
+                      const tone =
+                        cls === 'A' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                        cls === 'B' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                        cls === 'C' ? 'bg-slate-50 text-slate-600 border-slate-200' :
+                        'bg-rose-50 text-rose-700 border-rose-200'
+                      return (
+                        <div key={cls} className={`border rounded-md p-3 ${tone}`}>
+                          <div className="text-xs uppercase tracking-wider font-semibold">
+                            {t(`stock.abc.band.${cls}.label`)}
+                          </div>
+                          <div className="text-2xl font-bold tabular-nums mt-1">
+                            {(abc.counts[cls] ?? 0).toLocaleString()}
+                          </div>
+                          <div className="text-xs mt-0.5 opacity-80">
+                            {t(`stock.abc.band.${cls}.description`)}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {/* Top samples per band — collapsed by default to one
+                      row per band; the full per-band drill-down lives
+                      in S.18 saved-views (filter by abcClass). */}
+                  <div className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-500">
+                    {t('stock.abc.totalClassified', { n: abc.productsClassified })}
+                  </div>
+                </>
+              )}
             </Card>
           )}
 

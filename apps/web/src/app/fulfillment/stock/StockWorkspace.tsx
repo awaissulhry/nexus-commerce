@@ -49,6 +49,8 @@ type StockRow = {
     costPrice: number | null
     basePrice: number | null
     thumbnailUrl: string | null
+    /** S.16 — Pareto band materialized weekly. */
+    abcClass: 'A' | 'B' | 'C' | 'D' | null
   }
   variation: { id: string; sku: string; variationAttributes: any } | null
 }
@@ -264,6 +266,26 @@ function buildAdjustmentPayload(
     reason: opt.schemaReason,
     notes: trimmed ? `${prefix} ${trimmed}` : prefix,
   }
+}
+
+// S.16 — small Pareto-band chip rendered next to the product name on
+// stock list rows. Tone follows the band: A=emerald (top contributors),
+// B=blue (mid), C=slate (tail), D=rose (zero sales — flag).
+function AbcBadge({ cls }: { cls: 'A' | 'B' | 'C' | 'D' }) {
+  const tone =
+    cls === 'A' ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' :
+    cls === 'B' ? 'bg-blue-50 text-blue-700 ring-blue-200' :
+    cls === 'C' ? 'bg-slate-100 text-slate-600 ring-slate-200' :
+    'bg-rose-50 text-rose-700 ring-rose-200'
+  return (
+    <span
+      className={`inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded ring-1 ${tone}`}
+      title={`Pareto class ${cls}`}
+      aria-label={`ABC class ${cls}`}
+    >
+      {cls}
+    </span>
+  )
 }
 
 // S.10 — labels resolved via t() per render so they live-update when
@@ -2321,7 +2343,10 @@ function TableView({
                   )}
                   {visible('product') && (
                     <td className={`px-3 ${padY}`}>
-                      <div className="text-md font-medium text-slate-900 truncate max-w-md">{it.product.name}</div>
+                      <div className="text-md font-medium text-slate-900 truncate max-w-md inline-flex items-center gap-1.5">
+                        {it.product.name}
+                        {it.product.abcClass && <AbcBadge cls={it.product.abcClass} />}
+                      </div>
                       <div className="text-sm text-slate-500 font-mono">
                         {it.product.sku}
                         {it.variation && <span> · {it.variation.sku}</span>}

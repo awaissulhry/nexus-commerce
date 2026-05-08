@@ -9,6 +9,7 @@ import {
 import { amazonInventoryService } from '../services/amazon-inventory.service.js'
 import { resolveAtp } from '../services/atp.service.js'
 import { getReservationSweepStatus } from '../jobs/reservation-sweep.job.js'
+import * as abcService from '../services/abc-classification.service.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // H.2 — Stock API surface for /fulfillment/stock rebuild.
@@ -86,6 +87,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
               select: {
                 id: true, sku: true, name: true, amazonAsin: true,
                 lowStockThreshold: true, costPrice: true, basePrice: true,
+                abcClass: true,
                 images: { select: { url: true }, take: 1 },
               },
             },
@@ -1013,6 +1015,40 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/analytics/turnover] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── GET /api/stock/analytics/abc ─────────────────────────────────
+  // S.16 — read the materialized ABC snapshot. Cheap because the
+  // recompute happens weekly via the abc-classification cron; this
+  // endpoint just reads Product.abcClass for the band counts +
+  // returns top-N samples per band for the analytics card.
+  fastify.get('/stock/analytics/abc', async (_request, reply) => {
+    try {
+      const snapshot = await abcService.getSnapshot({ perBandLimit: 10 })
+      return snapshot
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/analytics/abc] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── POST /api/stock/analytics/abc/recompute ──────────────────────
+  // S.16 — force a full recompute. Useful in development and during
+  // catalog migrations; production normally relies on the weekly cron.
+  fastify.post('/stock/analytics/abc/recompute', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as {
+        windowDays?: number
+        metric?: 'revenue' | 'units' | 'margin'
+        bandA?: number
+        bandB?: number
+      }
+      const result = await abcService.recompute(body)
+      return result
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/analytics/abc/recompute] failed')
+      return reply.code(400).send({ error: error?.message ?? String(error) })
     }
   })
 

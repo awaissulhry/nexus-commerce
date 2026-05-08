@@ -74,6 +74,8 @@ import { startCatalogRefreshCron } from "./jobs/catalog-refresh.job.js";
 import { startEbayTokenRefreshCron } from "./jobs/ebay-token-refresh.job.js";
 import { startEbayReturnsPollCron } from "./jobs/ebay-returns-poll.job.js";
 import { startAmazonReturnsPollCron } from "./jobs/amazon-returns-poll.job.js";
+import { startRefundRetryCron } from "./jobs/refund-retry.job.js";
+import { startRefundDeadlineTrackerCron } from "./jobs/refund-deadline-tracker.job.js";
 import { startAmazonOrdersCron } from "./jobs/amazon-orders-sync.job.js";
 import { startAmazonInventoryCron } from "./jobs/amazon-inventory-sync.job.js";
 import { startReservationSweepCron } from "./jobs/reservation-sweep.job.js";
@@ -90,6 +92,7 @@ import { startForecastAccuracyCron } from "./jobs/forecast-accuracy.job.js";
 import { startAutoPoCron } from "./jobs/auto-po-replenishment.job.js";
 import { startLeadTimeStatsCron } from "./jobs/lead-time-stats.job.js";
 import { startStockoutDetectorCron } from "./jobs/stockout-detector.job.js";
+import { startAbcClassificationCron } from "./jobs/abc-classification.job.js";
 import { startFbaRestockCron } from "./jobs/fba-restock-ingestion.job.js";
 import pricingRoutes from "./routes/pricing.routes.js";
 // BullMQ worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS=1.
@@ -448,6 +451,23 @@ async function start() {
     // NEXUS_ENABLE_AMAZON_RETURNS_POLL=1 to enable on production.
     startAmazonReturnsPollCron();
 
+    // R5.3 — failed-refund retry queue. Hourly sweep that re-runs
+    // the channel publisher against Returns stuck in CHANNEL_FAILED.
+    // Default-OFF — operators flip NEXUS_ENABLE_REFUND_RETRY=1 once
+    // the live channel adapters are confirmed (eBay OAuth alive,
+    // Shopify NEXUS_ENABLE_SHOPIFY_REFUND=true). Running with stub
+    // adapters would silently clear CHANNEL_FAILED via NOT_IMPLEMEN-
+    // TED responses — masking real issues.
+    startRefundRetryCron();
+
+    // R6.2 — refund-deadline tracker. Scans Returns approaching
+    // their channel-specific 14-day refund deadline (Italian
+    // consumer law); fires Notifications for the configured ops
+    // user. Default-OFF; flip NEXUS_ENABLE_REFUND_DEADLINE_TRACKER=1
+    // and set NEXUS_REFUND_DEADLINE_NOTIFY_USER_ID once we have an
+    // ops account.
+    startRefundDeadlineTrackerCron();
+
     // Incremental Amazon orders polling — runs every 15 min, picks up
     // new orders + status transitions on existing ones. Cursor derived
     // from MAX(Order.purchaseDate) per the auto-detect rule in the
@@ -595,6 +615,14 @@ async function start() {
     // Default-on; opt out via NEXUS_ENABLE_FBA_RESTOCK_CRON=0.
     if (process.env.NEXUS_ENABLE_FBA_RESTOCK_CRON !== '0') {
       startFbaRestockCron();
+    }
+
+    // S.16 — weekly ABC classification recompute. Mondays 04:00 UTC.
+    // Materializes Product.abcClass so the analytics page + the
+    // /products list reads are O(1). Default-on; opt out via
+    // NEXUS_ENABLE_ABC_CRON=0.
+    if (process.env.NEXUS_ENABLE_ABC_CRON !== '0') {
+      startAbcClassificationCron();
     }
 
     logger.info('✅ API server initialized', {

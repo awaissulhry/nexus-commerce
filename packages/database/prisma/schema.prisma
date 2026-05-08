@@ -119,6 +119,14 @@ model Product {
   // Inventory intelligence
   firstInventoryDate DateTime? // For aging calculations
 
+  // S.16 — ABC classification (materialized weekly via abc-classification.job).
+  // 'A' = top 80% cumulative metric (revenue by default), 'B' = next 15%,
+  // 'C' = remaining sales-active, 'D' = zero sales in window, NULL =
+  // never classified yet. TEXT (not enum) so per-channel splits can land
+  // without a migration.
+  abcClass          String?   // 'A' | 'B' | 'C' | 'D' | null
+  abcClassUpdatedAt DateTime?
+
   // B2B pricing
   b2bPrice  Decimal? @db.Decimal(10, 2) // Business pricing
   b2bMinQty Int? // Minimum B2B quantity
@@ -243,6 +251,7 @@ model Product {
   updatedAt DateTime @updatedAt
 
   @@index([gtin])
+  @@index([abcClass])
 }
 
 model ProductVariation {
