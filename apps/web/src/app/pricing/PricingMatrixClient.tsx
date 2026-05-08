@@ -24,6 +24,7 @@ import {
   Send,
   Tag,
   TrendingDown,
+  Trophy,
   X,
   Zap,
 } from 'lucide-react'
@@ -65,6 +66,11 @@ interface KpiResponse {
   salesActive: number
   snapshots: { total: number; oldestAgeHours: number | null }
   marginAtRisk: number
+  buyBox: {
+    winRatePct: number | null
+    observations: number
+    ourWins: number
+  }
 }
 
 const SOURCE_TONE: Record<string, string> = {
@@ -782,10 +788,10 @@ function Item({
   )
 }
 
-// B.1 — KPI strip. Five tiles, dense Salesforce/Airtable style (per the
-// visibility-over-minimalism feedback memory). Each tile shows the count
-// + a one-word label + a hint sentence. Drift + Alerts deep-link to
-// /pricing/alerts; the rest are read-only signals for now.
+// B.1 + F.1.b — KPI strip. Six tiles, dense Salesforce/Airtable style (per
+// the visibility-over-minimalism feedback memory). Each tile shows the
+// count + a one-word label + a hint sentence. Drift + Alerts deep-link to
+// /pricing/alerts; On sale → /pricing/promotions; the rest are read-only.
 function KpiStrip({ kpis }: { kpis: KpiResponse | null }) {
   // Snapshot age: green ≤1h (cron just ran), amber ≤4h, rose >4h.
   const stale = kpis?.snapshots.oldestAgeHours
@@ -800,8 +806,28 @@ function KpiStrip({ kpis }: { kpis: KpiResponse | null }) {
   const staleLabel =
     stale == null ? '—' : stale < 1 ? '<1h' : `${Math.round(stale)}h`
 
+  // Buy Box: rose <50%, amber <80%, emerald ≥80%. Slate when no observations
+  // yet (sp-api creds missing OR cron hasn't run since F.1 deploy).
+  const wr = kpis?.buyBox.winRatePct
+  const buyBoxTone =
+    wr == null
+      ? 'slate'
+      : wr < 50
+      ? 'rose'
+      : wr < 80
+      ? 'amber'
+      : 'emerald'
+  const buyBoxLabel =
+    wr == null
+      ? '—'
+      : `${wr.toFixed(1)}%`
+  const buyBoxHint =
+    kpis && kpis.buyBox.observations > 0
+      ? `${kpis.buyBox.ourWins}/${kpis.buyBox.observations} obs · 7d`
+      : 'No SP-API observations yet'
+
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
       <KpiTile
         href="/pricing/alerts"
         icon={TrendingDown}
@@ -819,6 +845,7 @@ function KpiStrip({ kpis }: { kpis: KpiResponse | null }) {
         hint="Clamped / fallback / warnings"
       />
       <KpiTile
+        href="/pricing/promotions"
         icon={Tag}
         value={kpis?.salesActive ?? '—'}
         label="On sale"
@@ -838,6 +865,13 @@ function KpiStrip({ kpis }: { kpis: KpiResponse | null }) {
         label="No cost"
         tone={kpis && kpis.marginAtRisk > 0 ? 'amber' : 'slate'}
         hint="Margin floor unenforceable"
+      />
+      <KpiTile
+        icon={Trophy}
+        value={buyBoxLabel}
+        label="Buy Box"
+        tone={buyBoxTone}
+        hint={buyBoxHint}
       />
     </div>
   )

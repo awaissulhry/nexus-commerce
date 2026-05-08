@@ -34,18 +34,21 @@ import { runPromotionScheduler } from '../services/promotion-scheduler.service.j
 import { Prisma } from '@prisma/client'
 
 const pricingRoutes: FastifyPluginAsync = async (fastify) => {
-  // B.1 — KPI strip on /pricing index. Single endpoint serves four counts so
-  // the matrix UI can render the strip without firing four parallel requests.
-  // Each count is independent + cheap (indexed COUNTs / single-row aggregates),
-  // so the endpoint stays under ~50ms even on the full Xavia catalog.
+  // B.1 + F.1.b — KPI strip on /pricing index. Single endpoint serves the
+  // counts so the matrix UI can render the strip without firing parallel
+  // requests. Each count is independent + cheap (indexed COUNTs /
+  // single-row aggregates / one BuyBoxHistory aggregate over the last 7
+  // days), so the endpoint stays well under p95 budget.
   fastify.get('/pricing/kpis', async (_request, reply) => {
     try {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
       const [
         driftCount,
         alertCount,
         salesCount,
         snapshotAgg,
         marginAtRiskCount,
+        buyBoxAgg,
       ] = await Promise.all([
         // Drift: master cascade gone wrong (sync-drift-detection.job.ts logs
         // these as PRICE_MISMATCH SyncHealthLog rows).
@@ -87,12 +90,29 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
         prisma.product.count({
           where: { isParent: false, costPrice: null, basePrice: { gt: 0 } },
         }),
+        // F.1.b — Buy Box win rate over the last 7 days. count(*) FILTER
+        // (WHERE isOurOffer=true) / count(*) — two parallel counts so the
+        // ratio falls out at the API layer without a streaming aggregate.
+        // Returns { observations, ourWins } so the frontend can render
+        // the rate as text + the denominator as a hover hint.
+        Promise.all([
+          prisma.buyBoxHistory.count({
+            where: { observedAt: { gte: sevenDaysAgo } },
+          }),
+          prisma.buyBoxHistory.count({
+            where: { observedAt: { gte: sevenDaysAgo }, isOurOffer: true },
+          }),
+        ]).then(([observations, ourWins]) => ({ observations, ourWins })),
       ])
 
       const oldest = snapshotAgg._min.computedAt
       const snapshotAgeHours = oldest
         ? Math.max(0, (Date.now() - oldest.getTime()) / (60 * 60 * 1000))
         : null
+      const buyBoxWinRatePct =
+        buyBoxAgg.observations > 0
+          ? Math.round((buyBoxAgg.ourWins / buyBoxAgg.observations) * 1000) / 10
+          : null
 
       return {
         drift: driftCount,
@@ -103,6 +123,11 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
           oldestAgeHours: snapshotAgeHours,
         },
         marginAtRisk: marginAtRiskCount,
+        buyBox: {
+          winRatePct: buyBoxWinRatePct,
+          observations: buyBoxAgg.observations,
+          ourWins: buyBoxAgg.ourWins,
+        },
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[pricing/kpis] failed')
