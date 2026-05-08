@@ -45,6 +45,7 @@ import {
 import Link from 'next/link'
 import {
   AlertCircle,
+  Check,
   ChevronRight,
   CheckCircle2,
   Copy,
@@ -241,8 +242,7 @@ export function VirtualizedGrid({
   // overflow works correctly inside the scroll container.
   const totalWidth = useMemo(
     () =>
-      // U.33 — checkbox cell is now 36 (was 32); chevron stays 24.
-      36 +
+      32 +
       24 +
       visible.reduce((acc, c) => acc + colWidth(c.key, c.width), 0),
     [visible, colWidth],
@@ -348,24 +348,33 @@ export function VirtualizedGrid({
                 role="row"
               >
                 <div
-                  // U.33 — was `px-3 py-2 flex items-center` with
-                  // width:32. 12px padding each side left only 8px
-                  // for the native checkbox; the tick was clipped /
-                  // visually invisible. Centered the checkbox in the
-                  // cell instead and dropped horizontal padding.
-                  className="py-2 flex items-center justify-center"
-                  style={{ width: 36, minWidth: 36 }}
+                  className="px-3 py-2 flex items-center"
+                  style={{ width: 32, minWidth: 32 }}
                   role="columnheader"
                 >
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={toggleSelectAll}
+                  {/* U.34 — custom-rendered checkbox. Native input
+                      tick was rendering hollow under Tailwind preflight
+                      (operator could select rows but the box never
+                      visually filled in). Now: a button with an inner
+                      filled-blue + Check icon for checked, slate
+                      outline for unchecked. Same pattern the mobile
+                      card list uses. */}
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={allSelected}
                     aria-label={
                       allSelected ? 'Deselect all rows' : 'Select all rows'
                     }
-                    className="w-4 h-4 cursor-pointer accent-blue-600"
-                  />
+                    onClick={toggleSelectAll}
+                    className={`w-4 h-4 rounded border-2 flex-shrink-0 inline-flex items-center justify-center cursor-pointer transition-colors ${
+                      allSelected
+                        ? 'bg-blue-600 border-blue-600 text-white'
+                        : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 hover:border-slate-400 dark:hover:border-slate-500'
+                    }`}
+                  >
+                    {allSelected && <Check className="w-3 h-3" strokeWidth={3} />}
+                  </button>
                 </div>
                 <div
                   className="px-1 py-2"
@@ -878,25 +887,21 @@ const ProductRow = memo(function ProductRow({
   return (
     <>
       <div
-        // U.33 — center-aligned 36px cell instead of 32px with
-        // px-3, so the native checkbox renders at full size with
-        // its tick visible.
-        className={`py-2 flex items-center justify-center ${rowBg}`}
-        style={{ width: 36, minWidth: 36 }}
+        className={`px-3 py-2 flex items-center ${rowBg}`}
+        style={{ width: 32, minWidth: 32 }}
         role="cell"
       >
-        <input
-          type="checkbox"
-          checked={isSelected}
+        {/* U.34 — custom-rendered checkbox. The native input rendered
+            hollow under preflight; rows could be selected but the box
+            never visually filled. Button-with-inner-icon makes the
+            checked state unmistakable in light + dark.
+            E.7 — onClick captures shiftKey for range-select; Space
+            toggles via keyboard. */}
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={isSelected}
           aria-label={isSelected ? 'Deselect row' : 'Select row'}
-          className="w-4 h-4 cursor-pointer accent-blue-600"
-          // E.7 — onClick (not onChange) so we can capture shiftKey
-          // from the mouse event for range-select. preventDefault
-          // stops the native toggle; the parent's setSelected runs
-          // through onToggleSelect and the next render reflects.
-          // onChange is no-op'd to satisfy React's controlled-input
-          // contract without firing a redundant toggle.
-          onChange={() => {}}
           onClick={(e) => {
             e.preventDefault()
             onToggleSelect(product.id, e.shiftKey)
@@ -907,7 +912,14 @@ const ProductRow = memo(function ProductRow({
               onToggleSelect(product.id, e.shiftKey)
             }
           }}
-        />
+          className={`w-4 h-4 rounded border-2 flex-shrink-0 inline-flex items-center justify-center cursor-pointer transition-colors ${
+            isSelected
+              ? 'bg-blue-600 border-blue-600 text-white'
+              : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 hover:border-slate-400 dark:hover:border-slate-500'
+          }`}
+        >
+          {isSelected && <Check className="w-3 h-3" strokeWidth={3} />}
+        </button>
       </div>
       <div
         className={`px-1 py-2 flex items-center ${rowBg}`}
@@ -1724,6 +1736,13 @@ const ProductCell = memo(function ProductCell({
         </span>
       )
     case 'actions':
+      // U.34 — View + List buttons were `<button h-6 px-2>` and
+      // `<Link h-6 px-2>` without inline-flex/justify, so the text
+      // baseline floated at the top of the 24px box and the two
+      // chips visually mismatched (button vs anchor have different
+      // baseline rendering). Now both are inline-flex with the
+      // same spec — fixed width, vertically + horizontally
+      // centered, identical hover tones in light and dark.
       return (
         <div className="flex items-center gap-1 justify-end">
           {/* F1 — "View" opens the drawer. */}
@@ -1736,14 +1755,15 @@ const ProductCell = memo(function ProductCell({
                 }),
               )
             }}
-            className="h-6 px-2 text-sm text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded"
+            className="h-6 w-12 text-sm text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded inline-flex items-center justify-center transition-colors"
             title="Quick view (Esc closes)"
           >
             View
           </button>
           <Link
             href={`/products/${p.id}/list-wizard`}
-            className="h-6 px-2 text-sm text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded"
+            className="h-6 w-12 text-sm text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded inline-flex items-center justify-center transition-colors"
+            title="Open the listing wizard for this product"
           >
             List
           </Link>
