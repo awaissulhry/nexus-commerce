@@ -17,8 +17,9 @@ import Link from 'next/link'
 import {
   TrendingDown, ArrowLeft, Package, RefreshCw, AlertCircle,
   TrendingUp, Boxes, Activity, AlertTriangle, Snowflake,
-  BarChart3,
+  BarChart3, Calculator, Check,
 } from 'lucide-react'
+import { useToast } from '@/components/ui/Toast'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -107,6 +108,43 @@ interface AbcResponse {
   samples: { A: AbcSample[]; B: AbcSample[]; C: AbcSample[]; D: AbcSample[] }
 }
 
+// S.19 — EOQ + ROP recommendation row
+interface EoqRecommendation {
+  stockLevelId: string
+  productId: string
+  sku: string
+  name: string
+  amazonAsin: string | null
+  thumbnailUrl: string | null
+  location: { id: string; code: string; name: string; type: string }
+  currentQuantity: number
+  currentReorderThreshold: number | null
+  currentReorderQuantity: number | null
+  inputs: {
+    unitsSoldInWindow: number
+    annualDemand: number
+    dailyDemand: number
+    costCents: number
+    orderCostCents: number
+    carryingPct: number
+    annualHoldingCostCents: number
+    leadTimeDays: number
+    serviceLevel: number
+    z: number
+    stddev: number
+  }
+  recommendation: {
+    eoq: number | null
+    rop: number | null
+    safetyStock: number
+  }
+}
+interface EoqResponse {
+  windowDays: number
+  generatedAt: string
+  recommendations: EoqRecommendation[]
+}
+
 const PERIOD_OPTIONS = [7, 30, 90, 180, 365] as const
 
 function formatCents(cents: number): string {
@@ -124,9 +162,12 @@ function dohTone(doh: number | null): string {
 
 export default function AnalyticsClient() {
   const { t } = useTranslations()
+  const { toast } = useToast()
   const [data, setData] = useState<TurnoverResponse | null>(null)
   const [deadStock, setDeadStock] = useState<DeadStockResponse | null>(null)
   const [abc, setAbc] = useState<AbcResponse | null>(null)
+  const [eoq, setEoq] = useState<EoqResponse | null>(null)
+  const [applyingId, setApplyingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [days, setDays] = useState<number>(30)
@@ -139,11 +180,12 @@ export default function AnalyticsClient() {
     setError(null)
     try {
       // Fire all analytics endpoints in parallel — turnover, dead-
-      // stock, and ABC are independent and render on the same page.
-      const [turnoverRes, deadRes, abcRes] = await Promise.all([
+      // stock, ABC, and EOQ are independent and render on the same page.
+      const [turnoverRes, deadRes, abcRes, eoqRes] = await Promise.all([
         fetch(`${getBackendUrl()}/api/stock/analytics/turnover?days=${days}`, { cache: 'no-store' }),
         fetch(`${getBackendUrl()}/api/stock/analytics/dead-stock?days=${deadDays}`, { cache: 'no-store' }),
         fetch(`${getBackendUrl()}/api/stock/analytics/abc`, { cache: 'no-store' }),
+        fetch(`${getBackendUrl()}/api/stock/analytics/eoq?days=${days}`, { cache: 'no-store' }),
       ])
       if (!turnoverRes.ok) throw new Error(`turnover HTTP ${turnoverRes.status}`)
       setData(await turnoverRes.json())
@@ -153,6 +195,9 @@ export default function AnalyticsClient() {
       if (abcRes.ok) {
         setAbc(await abcRes.json())
       }
+      if (eoqRes.ok) {
+        setEoq(await eoqRes.json())
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -161,6 +206,34 @@ export default function AnalyticsClient() {
   }, [days, deadDays])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // S.19 — apply a single recommendation to the StockLevel row.
+  // Optimistic-friendly: refetch on success so the row's "current"
+  // values update.
+  const applyRecommendation = useCallback(async (rec: EoqRecommendation) => {
+    if (rec.recommendation.rop == null && rec.recommendation.eoq == null) return
+    setApplyingId(rec.stockLevelId)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/stock/analytics/eoq/apply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: [{
+            stockLevelId: rec.stockLevelId,
+            reorderThreshold: rec.recommendation.rop,
+            reorderQuantity: rec.recommendation.eoq,
+          }],
+        }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      toast.success(t('stock.eoq.appliedToast', { sku: rec.sku }))
+      await fetchData()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    } finally {
+      setApplyingId(null)
+    }
+  }, [fetchData, toast, t])
 
   // Sort the per-product list according to the active column. We
   // always show products with sales first; products with zero sales
@@ -352,6 +425,105 @@ export default function AnalyticsClient() {
                   </li>
                 ))}
               </ul>
+            </Card>
+          )}
+
+          {/* S.19 — EOQ + reorder-point recommendations. Sorted by
+              gap-from-current so the rows that need attention are at
+              the top. Click 'Apply' to write the recommended ROP +
+              EOQ back to the StockLevel. */}
+          {eoq && eoq.recommendations.some((r) => r.recommendation.rop != null) && (
+            <Card>
+              <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                <div className="text-md font-semibold text-slate-900 inline-flex items-center gap-2">
+                  <Calculator size={14} className="text-blue-500" />
+                  {t('stock.eoq.title')}
+                </div>
+                <div className="text-xs text-slate-500">
+                  {t('stock.eoq.windowSummary', { days: eoq.windowDays })}
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-md">
+                  <thead className="border-b border-slate-200 bg-slate-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.eoq.col.product')}</th>
+                      <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.eoq.col.location')}</th>
+                      <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.eoq.col.demand')}</th>
+                      <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.eoq.col.currentRop')}</th>
+                      <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.eoq.col.recommendedRop')}</th>
+                      <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.eoq.col.recommendedEoq')}</th>
+                      <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {eoq.recommendations.slice(0, 50).map((rec) => {
+                      const ropChanged = rec.recommendation.rop != null
+                        && rec.recommendation.rop !== rec.currentReorderThreshold
+                      return (
+                        <tr key={rec.stockLevelId} className="border-b border-slate-100 hover:bg-slate-50">
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              {rec.thumbnailUrl ? (
+                                <img src={rec.thumbnailUrl} alt="" className="w-7 h-7 rounded object-cover bg-slate-100 flex-shrink-0" />
+                              ) : (
+                                <div className="w-7 h-7 rounded bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
+                                  <Package size={12} />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <div className="text-md font-medium text-slate-900 truncate max-w-md">{rec.name}</div>
+                                <div className="text-sm text-slate-500 font-mono">{rec.sku}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2">
+                            <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded bg-slate-50 text-slate-700 border-slate-200" title={rec.location.name}>
+                              {rec.location.code}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                            {rec.inputs.unitsSoldInWindow > 0
+                              ? `${rec.inputs.unitsSoldInWindow}`
+                              : <span className="text-slate-300">0</span>}
+                            <div className="text-xs text-slate-400">
+                              {rec.inputs.dailyDemand.toFixed(2)}/day
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-slate-500">
+                            {rec.currentReorderThreshold ?? <span className="text-slate-300">—</span>}
+                          </td>
+                          <td className={cn(
+                            'px-3 py-2 text-right tabular-nums font-semibold',
+                            ropChanged ? 'text-blue-700' : 'text-slate-400',
+                          )}>
+                            {rec.recommendation.rop ?? <span className="text-slate-300">—</span>}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                            {rec.recommendation.eoq ?? <span className="text-slate-300">—</span>}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {(rec.recommendation.rop != null || rec.recommendation.eoq != null) && (
+                              <button
+                                onClick={() => applyRecommendation(rec)}
+                                disabled={applyingId === rec.stockLevelId}
+                                className="inline-flex items-center gap-1 min-h-[44px] sm:min-h-0 px-2 py-1 text-sm font-medium text-white bg-blue-600 border border-blue-600 rounded hover:bg-blue-700 disabled:opacity-50"
+                              >
+                                <Check size={11} />
+                                {t('stock.eoq.apply')}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-500 leading-relaxed">
+                <span className="font-semibold text-slate-700">{t('stock.eoq.formula.title')}: </span>
+                {t('stock.eoq.formula.body')}
+              </div>
             </Card>
           )}
 

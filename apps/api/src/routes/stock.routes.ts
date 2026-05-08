@@ -1018,6 +1018,235 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── GET /api/stock/analytics/eoq ─────────────────────────────────
+  // S.19 — Economic Order Quantity (EOQ) + Reorder Point (ROP)
+  // recommendations per StockLevel. The classical Wilson formula:
+  //
+  //   EOQ = sqrt( 2 × annualDemand × orderCost / annualHoldingCost )
+  //   ROP = leadTimeDays × dailyDemand + safetyStock
+  //   safetyStock = Z × σ_demand × sqrt(leadTimeDays)
+  //
+  // Inputs sourced as follows:
+  //   annualDemand   = (unitsSold in window) × 365 / windowDays
+  //   orderCost      = Product.orderingCostCents (fallback €25)
+  //   holdingCost    = costPrice × Product.carryingCostPctYear
+  //                    (fallback 25% per year, industry common)
+  //   leadTimeDays   = Product.leadTimeDays fallback 14d (DEFAULT_LEAD_TIME_DAYS)
+  //   serviceLevel   = Product.serviceLevelPercent (fallback 95%)
+  //                    Z-score: 90%=1.28, 95%=1.65, 97.5%=1.96, 99%=2.33
+  //
+  // Returns per-product current StockLevel.reorderThreshold +
+  // StockLevel.reorderQuantity alongside the recommendation, so the
+  // operator can see what would change at a glance.
+  fastify.get('/stock/analytics/eoq', async (request, reply) => {
+    try {
+      const q = request.query as any
+      const days = Math.min(365, Math.max(7, Math.floor(safeNum(q.days, 90) ?? 90)))
+      const cutoff = new Date()
+      cutoff.setUTCDate(cutoff.getUTCDate() - days)
+
+      // Pull all StockLevel rows + their product cost / cost params.
+      const levels = await prisma.stockLevel.findMany({
+        include: {
+          product: {
+            select: {
+              id: true, sku: true, name: true, amazonAsin: true,
+              costPrice: true,
+              orderingCostCents: true,
+              carryingCostPctYear: true,
+              serviceLevelPercent: true,
+              // leadTimeDays lives on Supplier (per supplier-product
+              // relationship), not Product. The atp.service has the
+              // resolution chain; here we use a flat default and let
+              // operators tune via Product overrides later.
+              images: { select: { url: true }, take: 1 },
+            },
+          },
+          location: { select: { id: true, code: true, name: true, type: true } },
+        },
+      })
+      if (levels.length === 0) {
+        return { windowDays: days, recommendations: [], generatedAt: new Date() }
+      }
+
+      // Sales aggregate keyed by SKU for the window. Single query.
+      const skus = Array.from(new Set(levels.map((l) => l.product.sku)))
+      const sales = await prisma.dailySalesAggregate.findMany({
+        where: { sku: { in: skus }, day: { gte: cutoff } },
+        select: { sku: true, day: true, unitsSold: true },
+      })
+      // Per-SKU: total units + per-day map (for σ).
+      const totalBySku = new Map<string, number>()
+      const perDayBySku = new Map<string, Map<string, number>>()
+      for (const s of sales) {
+        totalBySku.set(s.sku, (totalBySku.get(s.sku) ?? 0) + s.unitsSold)
+        if (!perDayBySku.has(s.sku)) perDayBySku.set(s.sku, new Map())
+        const dayKey = s.day.toISOString().slice(0, 10)
+        const m = perDayBySku.get(s.sku)!
+        m.set(dayKey, (m.get(dayKey) ?? 0) + s.unitsSold)
+      }
+
+      // Z-score from service level (linear interp for the standard
+      // 90/95/97.5/99 levels; clamp outside).
+      function zFromServiceLevel(pct: number): number {
+        if (pct <= 90) return 1.28
+        if (pct <= 95) return 1.65
+        if (pct <= 97.5) return 1.96
+        return 2.33
+      }
+
+      const DEFAULT_ORDER_COST_CENTS = 2500       // €25 per PO
+      const DEFAULT_CARRYING_PCT = 0.25            // 25% per year
+      const DEFAULT_SERVICE_LEVEL = 95
+      const DEFAULT_LEAD_TIME = 14
+
+      const recommendations = levels.map((sl) => {
+        const p = sl.product
+        const totalUnits = totalBySku.get(p.sku) ?? 0
+        const annualDemand = totalUnits === 0 ? 0 : (totalUnits * 365) / days
+        const dailyDemand = totalUnits / days
+        const costCents = p.costPrice == null ? 0 : Math.round(Number(p.costPrice) * 100)
+        const orderCostCents = p.orderingCostCents ?? DEFAULT_ORDER_COST_CENTS
+        const carryingPct = p.carryingCostPctYear == null
+          ? DEFAULT_CARRYING_PCT
+          : Number(p.carryingCostPctYear) / 100
+        const annualHoldingCostCents = costCents * carryingPct
+        const leadTimeDays = DEFAULT_LEAD_TIME
+        const serviceLevel = p.serviceLevelPercent == null
+          ? DEFAULT_SERVICE_LEVEL
+          : Number(p.serviceLevelPercent)
+        const z = zFromServiceLevel(serviceLevel)
+
+        // EOQ — only meaningful when we have demand AND holding cost.
+        let recommendedEoq: number | null = null
+        if (annualDemand > 0 && annualHoldingCostCents > 0) {
+          const eoq = Math.sqrt((2 * annualDemand * orderCostCents) / annualHoldingCostCents)
+          recommendedEoq = Math.max(1, Math.round(eoq))
+        }
+
+        // σ_demand: stddev of daily units. With sparse aggregates we
+        // approximate σ via simple variance over the window. Days
+        // with no sales count as 0 (correct: no sale = no demand).
+        let stddev = 0
+        if (totalUnits > 0) {
+          const days_ = perDayBySku.get(p.sku) ?? new Map()
+          const mean = dailyDemand
+          let acc = 0
+          // Walk the entire window length, defaulting missing days to 0
+          for (let i = 0; i < days; i++) {
+            const d = new Date(cutoff)
+            d.setUTCDate(d.getUTCDate() + i)
+            const key = d.toISOString().slice(0, 10)
+            const u = days_.get(key) ?? 0
+            acc += (u - mean) ** 2
+          }
+          stddev = Math.sqrt(acc / days)
+        }
+        const safetyStock = totalUnits > 0
+          ? Math.ceil(z * stddev * Math.sqrt(leadTimeDays))
+          : 0
+        const recommendedRop = totalUnits > 0
+          ? Math.ceil(leadTimeDays * dailyDemand + safetyStock)
+          : null
+
+        return {
+          stockLevelId: sl.id,
+          productId: p.id,
+          sku: p.sku,
+          name: p.name,
+          amazonAsin: p.amazonAsin,
+          thumbnailUrl: p.images?.[0]?.url ?? null,
+          location: sl.location,
+          currentQuantity: sl.quantity,
+          currentReorderThreshold: sl.reorderThreshold,
+          currentReorderQuantity: sl.reorderQuantity,
+          inputs: {
+            unitsSoldInWindow: totalUnits,
+            annualDemand: Math.round(annualDemand * 100) / 100,
+            dailyDemand: Math.round(dailyDemand * 1000) / 1000,
+            costCents,
+            orderCostCents,
+            carryingPct,
+            annualHoldingCostCents: Math.round(annualHoldingCostCents),
+            leadTimeDays,
+            serviceLevel,
+            z,
+            stddev: Math.round(stddev * 100) / 100,
+          },
+          recommendation: {
+            eoq: recommendedEoq,
+            rop: recommendedRop,
+            safetyStock,
+          },
+        }
+      })
+
+      // Sort: gap-from-recommendation first (rows where current
+      // setting is most off get attention), with no-recommendation
+      // rows sinking to the bottom.
+      recommendations.sort((a, b) => {
+        const ag = a.recommendation.rop != null && a.currentReorderThreshold != null
+          ? Math.abs(a.recommendation.rop - a.currentReorderThreshold)
+          : -1
+        const bg = b.recommendation.rop != null && b.currentReorderThreshold != null
+          ? Math.abs(b.recommendation.rop - b.currentReorderThreshold)
+          : -1
+        return bg - ag
+      })
+
+      return { windowDays: days, generatedAt: new Date(), recommendations }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/analytics/eoq] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── POST /api/stock/analytics/eoq/apply ─────────────────────────
+  // S.19 — apply a recommendation back to the StockLevel row
+  // (reorderThreshold + reorderQuantity). Body is an array so the
+  // operator can apply multiple rows at once. No StockMovement is
+  // emitted; threshold updates aren't quantity changes.
+  fastify.post<{
+    Body: { items: Array<{ stockLevelId: string; reorderThreshold?: number | null; reorderQuantity?: number | null }> }
+  }>('/stock/analytics/eoq/apply', async (request, reply) => {
+    try {
+      const items = request.body?.items ?? []
+      if (!Array.isArray(items) || items.length === 0) {
+        return reply.code(400).send({ error: 'items required (non-empty array)' })
+      }
+      let applied = 0
+      const errors: Array<{ stockLevelId: string; error: string }> = []
+      for (const it of items) {
+        try {
+          const data: any = {}
+          if (it.reorderThreshold !== undefined) {
+            const v = it.reorderThreshold
+            if (v !== null && (!Number.isFinite(Number(v)) || Number(v) < 0)) {
+              throw new Error('reorderThreshold must be null or a non-negative integer')
+            }
+            data.reorderThreshold = v === null ? null : Math.floor(Number(v))
+          }
+          if (it.reorderQuantity !== undefined) {
+            const v = it.reorderQuantity
+            if (v !== null && (!Number.isFinite(Number(v)) || Number(v) < 0)) {
+              throw new Error('reorderQuantity must be null or a non-negative integer')
+            }
+            data.reorderQuantity = v === null ? null : Math.floor(Number(v))
+          }
+          if (Object.keys(data).length === 0) continue
+          await prisma.stockLevel.update({ where: { id: it.stockLevelId }, data })
+          applied++
+        } catch (err: any) {
+          errors.push({ stockLevelId: it.stockLevelId, error: err?.message ?? String(err) })
+        }
+      }
+      return { applied, requested: items.length, errors }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/analytics/eoq/apply] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // ── GET /api/stock/analytics/abc ─────────────────────────────────
   // S.16 — read the materialized ABC snapshot. Cheap because the
   // recompute happens weekly via the abc-classification cron; this
