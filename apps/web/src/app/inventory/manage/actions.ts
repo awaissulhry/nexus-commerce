@@ -4,41 +4,32 @@ import { prisma } from "@nexus/database";
 import { revalidatePath } from "next/cache";
 
 /**
- * Quick-save a single field (price or stock) for a product or variation.
+ * Quick-save a single field (price or stock) for a product (parent or
+ * variant child — both live in the Product table; child variants are
+ * Products with parentId set, per TECH_DEBT #43).
  *
- * @param sku      - The SKU of the product or variation to update
- * @param isParent - `true` → update the Product table; `false` → update ProductVariation
+ * @param sku      - The SKU of the product to update
+ * @param isParent - Retained for caller-API compat; the Product update path
+ *                   handles parents and children identically since SKUs are
+ *                   unique across the Product table.
  * @param field    - Which field to update: `"price"` or `"stock"`
  * @param value    - The new numeric value
  */
 export async function quickUpdateItem(
   sku: string,
-  isParent: boolean,
+  _isParent: boolean,
   field: "price" | "stock",
   value: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    if (isParent) {
-      // Update the Product record
-      const data: Record<string, any> = {};
-      if (field === "price") data.basePrice = value;
-      if (field === "stock") data.totalStock = value;
+    const data: Record<string, any> = {};
+    if (field === "price") data.basePrice = value;
+    if (field === "stock") data.totalStock = value;
 
-      await prisma.product.update({
-        where: { sku },
-        data,
-      });
-    } else {
-      // Update the ProductVariation record
-      const data: Record<string, any> = {};
-      if (field === "price") data.price = value;
-      if (field === "stock") data.stock = value;
-
-      await prisma.productVariation.update({
-        where: { sku },
-        data,
-      });
-    }
+    await prisma.product.update({
+      where: { sku },
+      data,
+    });
 
     revalidatePath("/inventory/manage");
     revalidatePath("/inventory");
@@ -71,14 +62,19 @@ export async function bulkUpdateItems(
     let affected = 0;
 
     if (action === "pause") {
-      // Set stock to 0 for all selected products (effectively pausing them)
+      // Set stock to 0 for all selected products. Variant children
+      // (parentId set) are also Product rows, so the bulk update
+      // catches them through the SKU `in` clause too if their SKUs
+      // are passed in.
       const result = await prisma.product.updateMany({
         where: { sku: { in: skus } },
         data: { totalStock: 0 },
       });
       affected = result.count;
 
-      // Also pause any variations under these products
+      // TECH_DEBT #43.5 — variants now live as Product children with
+      // parentId set. To also pause their stock, pause every Product
+      // whose parentId matches a paused product.
       const products = await prisma.product.findMany({
         where: { sku: { in: skus } },
         select: { id: true },
@@ -86,9 +82,9 @@ export async function bulkUpdateItems(
       const productIds = products.map((p: any) => p.id);
 
       if (productIds.length > 0) {
-        await prisma.productVariation.updateMany({
-          where: { productId: { in: productIds } },
-          data: { stock: 0 },
+        await prisma.product.updateMany({
+          where: { parentId: { in: productIds } },
+          data: { totalStock: 0 },
         });
       }
     } else if (action === "delete") {
@@ -100,10 +96,9 @@ export async function bulkUpdateItems(
       const productIds = products.map((p: any) => p.id);
 
       if (productIds.length > 0) {
-        // Delete related records first (variations, images, syncs, stock logs)
-        await prisma.productVariation.deleteMany({
-          where: { productId: { in: productIds } },
-        });
+        // Delete related records first. Variant children come along
+        // for free via the parentId onDelete: Cascade defined on the
+        // ProductHierarchy self-relation.
         await prisma.productImage.deleteMany({
           where: { productId: { in: productIds } },
         });
@@ -117,7 +112,7 @@ export async function bulkUpdateItems(
           where: { productId: { in: productIds } },
         });
 
-        // Delete the products themselves
+        // Delete the products themselves (cascades to children).
         const result = await prisma.product.deleteMany({
           where: { id: { in: productIds } },
         });

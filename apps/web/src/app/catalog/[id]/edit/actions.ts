@@ -48,62 +48,11 @@ export async function updateProduct(productId: string, data: ProductEditorFormDa
       })
     }
 
-    // Handle variations: delete existing and recreate with full Rithum-level data
-    // Cascade delete handles VariantImage and VariantChannelListing cleanup
-    await prisma.productVariation.deleteMany({
-      where: { productId },
-    })
-
-    if (data.variations && data.variations.length > 0) {
-      for (const variation of data.variations) {
-        await prisma.productVariation.create({
-          data: {
-            productId,
-            sku: variation.sku,
-            // Multi-axis variation attributes (Rithum pattern)
-            variationAttributes: variation.variationAttributes && Object.keys(variation.variationAttributes).length > 0
-              ? variation.variationAttributes
-              : undefined,
-            // Legacy single-axis fields (backward compat)
-            name: variation.name || null,
-            value: variation.value || null,
-            // Pricing
-            price: variation.price,
-            costPrice: variation.costPrice || null,
-            minPrice: variation.minPrice || null,
-            maxPrice: variation.maxPrice || null,
-            mapPrice: variation.mapPrice || null,
-            // Inventory
-            stock: variation.stock,
-            // Per-variant identifiers
-            upc: variation.upc || null,
-            ean: variation.ean || null,
-            gtin: variation.gtin || null,
-            // Per-variant physical attributes
-            weightValue: variation.weightValue || null,
-            weightUnit: variation.weightUnit || null,
-            dimLength: variation.dimLength || null,
-            dimWidth: variation.dimWidth || null,
-            dimHeight: variation.dimHeight || null,
-            dimUnit: variation.dimUnit || null,
-            // Per-variant fulfillment
-            fulfillmentMethod: variation.fulfillmentMethod || null,
-            // Per-variant marketplace IDs (read-only from sync, but preserve)
-            amazonAsin: variation.amazonAsin || null,
-            ebayVariationId: variation.ebayVariationId || null,
-            // Status
-            isActive: variation.isActive ?? true,
-          },
-        })
-      }
-
-      // Recompute parent totalStock from variant sum
-      const totalVariantStock = data.variations.reduce((sum, v) => sum + (v.stock || 0), 0)
-      await prisma.product.update({
-        where: { id: productId },
-        data: { totalStock: totalVariantStock },
-      })
-    }
+    // TECH_DEBT #43.5 — variation editing on this page wrote to the
+    // empty ProductVariation table (silent no-op in production). The
+    // canonical variant mechanism is Product.parentId children, edited
+    // through /products. This block is removed; product-level fields
+    // above still update.
 
     revalidatePath(`/catalog/${productId}/edit`)
     revalidatePath('/catalog')
