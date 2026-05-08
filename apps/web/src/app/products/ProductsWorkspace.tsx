@@ -5170,7 +5170,19 @@ function HierarchyLens({ search }: { search: string }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <Card title={`Parents (${parents.length})`} description="Products with at least one child variation">
-        {parents.length === 0 ? <div className="py-6 text-base text-slate-400 text-center">No parents</div> : (
+        {parents.length === 0 ? (
+          <div className="py-8 text-center text-base text-slate-500">
+            <FolderTree className="w-6 h-6 mx-auto text-slate-300 mb-2" />
+            No parent products yet.
+            <div className="text-sm text-slate-400 mt-1">
+              Use{' '}
+              <Link href="/catalog/organize" className="text-blue-700 hover:underline">
+                Organize → Parents
+              </Link>
+              {' '}to group SKUs that share variant attributes.
+            </div>
+          </div>
+        ) : (
           <ul className="space-y-1 -my-1">
             {parents.slice(0, 50).map((p) => (
               <li key={p.id}>
@@ -5187,7 +5199,15 @@ function HierarchyLens({ search }: { search: string }) {
         )}
       </Card>
       <Card title={`Standalones (${standalones.length})`} description="Products that aren't parents (could be promoted, attached, or kept standalone)">
-        {standalones.length === 0 ? <div className="py-6 text-base text-slate-400 text-center">No standalones</div> : (
+        {standalones.length === 0 ? (
+          <div className="py-8 text-center text-base text-slate-500">
+            <Package className="w-6 h-6 mx-auto text-slate-300 mb-2" />
+            All products belong to a parent.
+            <div className="text-sm text-slate-400 mt-1">
+              Standalone products will appear here as you create new SKUs.
+            </div>
+          </div>
+        ) : (
           <ul className="space-y-1 -my-1">
             {standalones.slice(0, 50).map((p) => (
               <li key={p.id} className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 rounded hover:bg-slate-50">
@@ -5210,7 +5230,17 @@ function HierarchyLens({ search }: { search: string }) {
 // ────────────────────────────────────────────────────────────────────
 function CoverageLens({ products, loading }: { products: ProductRow[]; loading: boolean }) {
   if (loading) return <Card><div className="text-md text-slate-500 py-8 text-center">Loading coverage…</div></Card>
-  if (products.length === 0) return <EmptyState icon={Network} title="Nothing to show" description="No products in current filter" />
+  // P.6 — richer empty state. Coverage matrix needs products to
+  // visualize; explain *why* it's empty + give an action.
+  if (products.length === 0)
+    return (
+      <EmptyState
+        icon={Network}
+        title="No products to map across channels"
+        description="The Coverage matrix shows which products are listed on which channel × marketplace. Once your filter matches at least one product, the matrix renders here."
+        action={{ label: 'Clear filters', href: '/products' }}
+      />
+    )
 
   const channels = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY']
 
@@ -5425,8 +5455,9 @@ function PricingLens({
     return (
       <EmptyState
         icon={DollarSign}
-        title="Nothing to price"
-        description="No products match the current filter."
+        title="No products to price"
+        description="The Pricing matrix shows base price + per-channel overrides + min/max clamps. Match at least one product with your filter to see the matrix."
+        action={{ label: 'Clear filters', href: '/products' }}
       />
     )
   }
