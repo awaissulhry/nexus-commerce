@@ -979,15 +979,35 @@ Operator can now bulk-set `variantAttributes.Color` on a filter of child rows in
 
 ---
 
-## 54. ⏸ BullMQ `Queue.add()` hang — dev-fixed 2026-05-08; production validation operator-action
+## 54. ✅ BullMQ `Queue.add()` hang — resolved 2026-05-08; workaround swept in `d64ec5a`
 
-**Resolution applied (2026-05-08, dev-verified):** Replaced the lazy
+**Resolution applied (2026-05-08):** Replaced the lazy
 `makeQueueProxy()` wrapping `outboundSyncQueue` + `channelSyncQueue` +
 their `QueueEvents` with eager `new Queue(...)` construction at module
 load — same pattern `bulk-list.service.ts` has shipped without hangs.
 The `redis.connection` getter still defers Redis dial-out until the
 property is accessed, which preserves the original Railway boot-
 failure protection.
+
+**Workaround swept 2026-05-08 (commit `d64ec5a`):** Removed
+`skipBullMQEnqueue?: boolean` from `MasterPriceUpdateContext`,
+`MasterStatusUpdateContext`, `StockMovementInput` + 7 callsites that
+passed it. Bundled correctness fix: `master-price.service.ts` and
+`master-status.service.ts` now auto-skip the post-commit BullMQ
+enqueue when `ctx.tx` is supplied (mirrors the existing `!outerTx`
+gate in `stock-movement.service.ts:414`) — the caller's outer tx
+owns the commit timing, and firing BullMQ from inside an outer tx
+that might roll back would queue work against rolled-back rows.
+
+**Production fallback if regression:** OutboundSyncQueue DB rows
+still get written inside every transaction. The per-minute cron
+worker (`sync.worker.ts → processPendingSyncs`) drains PENDING rows
+within ~60s. So even if the post-commit BullMQ enqueue ever fails
+or wedges, the data still flows to channels — eventually-consistent.
+A regression takes one revert + cron picks up the slack; no data
+loss. **Operator validation still recommended:** run a 100-item
+bulk PRICING_UPDATE on staging with `ENABLE_QUEUE_WORKERS=1` and
+real Redis to confirm no production wedge.
 
 **Why the proxy hung:** `Reflect.get(q, prop, receiver)` inside the
 proxy resolved JavaScript getter accessors with `this = receiver =
@@ -1008,20 +1028,12 @@ getter-resolution `this`.
   regression elsewhere
 - Verification script: `scripts/verify-tech-debt-54.mjs`
 
-**Remaining work (this is why the marker is 🟡 P1, not ✅):**
-1. Production validation with real Redis + a real bulk-action job.
-   The verification above doesn't exercise the failing context
-   directly — bulk-action still has `skipBullMQEnqueue: true` at
-   every callsite as a safety net. Recommended next step: on a
-   staging branch with `ENABLE_QUEUE_WORKERS=1` + Redis up, flip
-   one bulk-action callsite to `skipBullMQEnqueue: false`, run a
-   100-item bulk PRICING_UPDATE, watch logs.
-2. Once production-validated, sweep the 6 `skipBullMQEnqueue: true`
-   callsites in `bulk-action.service.ts` + the 1 in `products-
-   catalog.routes.ts` and remove the flag (it becomes dead weight).
-3. Drop the `skipBullMQEnqueue` field from the three service input
-   types (`MasterPriceUpdateContext`, `MasterStatusUpdateContext`,
-   `StockMovementInput`).
+**Remaining work:** Operator-side production validation. Run a 100-item
+bulk PRICING_UPDATE on staging with real Redis up; watch logs for the
+old ~2-min wedge symptom. If the dev-fix doesn't hold for some reason
+(different ioredis cluster behavior, etc.), one revert of `d64ec5a`
+puts the workaround back and the cron worker still drains the queue
+within 60s — no data loss.
 
 ---
 
@@ -1191,7 +1203,7 @@ needs API up).
 - **28** Listing wizard multi-marketplace apply — was P2 #13, **promoted** based on usage signal
 - **29** `/products` "needs photos" filter (and sibling hygiene filters)
 - **30** `/products` show + filter by category / productType
-- **33** Rewrite `ebay-orders.service.ts` against Phase 26 unified Order schema (orders sync flow currently broken)
+- **33** ✅ Resolved 2026-05-08 — `ebay-orders.service.ts:processOrder` rewritten for Phase 26 unified `Order` model: `channelOrderId`, `totalPrice`, `currencyCode`, `customerName`, `customerEmail`, `purchaseDate`, plus eBay-specific fields packed into `ebayMetadata` JSON. Idempotent upsert on (channel, channelOrderId). See body of #33 for the field mapping table.
 - **34** Bulk operations Path A-Lite deferrals — rollback, `LISTING_SYNC` handler, queue infra for big jobs, `DELETE` action, "selected items" scope
 - **35** Listing wizard — channel publish adapters all NOT_IMPLEMENTED (Phase J orchestrator + `/submit` + `/poll` + `/retry` are real; only `ChannelPublishService.publishToChannel()` per-platform branches need real implementations: Amazon `putListingsItem`, Shopify wiring of existing `createProduct`, WooCommerce create, eBay Phase 2A)
 - **36** Dedicated image-manager page at `/products/:id/images`
@@ -1200,7 +1212,7 @@ needs API up).
 - **44** Bulk operations target unused data shape — partially resolved 2026-05-06 in Commit 1 of bulk-ops rebuild (PRICING + INVENTORY retargeted to Product via master-cascade). ATTRIBUTE_UPDATE remaining → see #52.
 - **52** Bulk ATTRIBUTE_UPDATE still targets empty ProductVariation — silent no-op against current data; needs schema decision on where variant attributes live on Product.
 - **53** ✅ Resolved 2026-05-06 — `MasterStatusService` shipped, `bulk-action.service.ts` `processStatusUpdate` + STATUS_UPDATE rollback both delegate to it; cascade fans out to ChannelListing + OutboundSyncQueue + AuditLog.
-- **54** 🔴 BullMQ post-commit enqueue hangs from bulk-action's detached `processJob` context — workaround `skipBullMQEnqueue: true` in place; cron worker drains PENDING within 60s. Root cause investigation pending.
+- **54** ✅ Resolved 2026-05-08 in `d64ec5a` — root cause was a JS Proxy `Reflect.get`-on-getter issue that returned `undefined` from BullMQ's internal state reads, making `Queue.add()` wait forever. Replaced lazy proxy with eager `new Queue(...)` in `lib/queue.ts`; swept the `skipBullMQEnqueue` workaround flag from 7 callsites + 3 service input types. Bundled correctness fix: master-price + master-status auto-skip post-commit BullMQ enqueue when `ctx.tx` is supplied (mirrors stock-movement's existing `!outerTx` gate). Operator-side prod validation still recommended.
 - **45** Local apps/api Prisma client v6 vs v7 mismatch — local dev API can't serve Prisma queries; production unaffected. Onboarding blocker.
 - **48** ✅ Resolved 2026-05-06 in `e55ed37` — Phase 28 recompute now honours `followMasterPrice`.
 - **49** ✅ Resolved 2026-05-06 in `e55ed37` — `processPendingSyncs` now filters by `holdUntil`.
