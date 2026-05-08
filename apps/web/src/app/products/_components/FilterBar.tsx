@@ -656,7 +656,7 @@ function FilterGroup({
 }: {
   label: string
   options: string[]
-  selected: string[] | string | undefined
+  selected: string[] | string | null | undefined
   onToggle: (v: string) => void
   counts?: Record<string, number>
   renderLabel?: (v: string) => string
