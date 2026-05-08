@@ -675,8 +675,17 @@ export default function ProductsWorkspace() {
         else if (focusedRowId) setFocusedRowId(null)
         return
       }
-      // J/K nav. Lower-case match — Shift+J shouldn't trigger.
-      if (e.key === 'j' || e.key === 'k') {
+      // J/K nav (Linear-style) + ArrowUp/ArrowDown aliases for
+      // operators who reach for arrow keys before vim bindings.
+      // Lower-case match on j/k — Shift+J shouldn't trigger.
+      // P.4 — ArrowUp/ArrowDown handle the same row-level cycle.
+      // ArrowLeft/Right are reserved for future cell-column nav
+      // (P.4b, requires GridLens visible-columns integration).
+      const isPrev =
+        e.key === 'k' || e.key === 'ArrowUp'
+      const isNext =
+        e.key === 'j' || e.key === 'ArrowDown'
+      if (isPrev || isNext) {
         if (products.length === 0) return
         e.preventDefault()
         // Anchor for navigation: prefer the drawer's open product if
@@ -686,14 +695,13 @@ export default function ProductsWorkspace() {
         const idx = anchorId
           ? products.findIndex((p: ProductRow) => p.id === anchorId)
           : -1
-        const next =
-          e.key === 'j'
-            ? idx < 0
-              ? 0
-              : (idx + 1) % products.length
-            : idx <= 0
-              ? products.length - 1
-              : idx - 1
+        const next = isNext
+          ? idx < 0
+            ? 0
+            : (idx + 1) % products.length
+          : idx <= 0
+            ? products.length - 1
+            : idx - 1
         const nextId = products[next].id
         setFocusedRowId(nextId)
         // E.15 — if the drawer is open, swap its product so J/K
