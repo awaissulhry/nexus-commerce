@@ -59,25 +59,27 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       if (matches(request, etag)) {
         return reply.code(304).send()
       }
+      // F.1 — facets reflect only active (non-soft-deleted) products.
+      // The recycle-bin lens shows its own row count separately.
       const [productTypes, brands, fulfillment, statusCounts, marketplaceCounts, marketplaceLookup, channelCounts, hygieneCounts] = await Promise.all([
         prisma.product.groupBy({
           by: ['productType'],
-          where: { parentId: null, productType: { not: null } },
+          where: { parentId: null, productType: { not: null }, deletedAt: null },
           _count: true,
         }),
         prisma.product.groupBy({
           by: ['brand'],
-          where: { parentId: null, brand: { not: null } },
+          where: { parentId: null, brand: { not: null }, deletedAt: null },
           _count: true,
         }),
         prisma.product.groupBy({
           by: ['fulfillmentMethod'],
-          where: { parentId: null, fulfillmentMethod: { not: null } },
+          where: { parentId: null, fulfillmentMethod: { not: null }, deletedAt: null },
           _count: true,
         }),
         prisma.product.groupBy({
           by: ['status'],
-          where: { parentId: null },
+          where: { parentId: null, deletedAt: null },
           _count: true,
         }),
         // E.5b — distinct (channel, marketplace) pairs in actual use, with
@@ -106,7 +108,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         prisma.$queryRaw<Array<{ channel: string; count: bigint }>>`
           SELECT unnest("syncChannels") AS channel, count(*)::bigint AS count
           FROM "Product"
-          WHERE "parentId" IS NULL
+          WHERE "parentId" IS NULL AND "deletedAt" IS NULL
           GROUP BY unnest("syncChannels")
           ORDER BY count DESC
         `,
@@ -124,7 +126,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
             count(*) FILTER (WHERE p.brand IS NULL OR p.brand = '')::bigint AS missing_brand,
             count(*) FILTER (WHERE p.gtin IS NULL OR p.gtin = '')::bigint AS missing_gtin
           FROM "Product" p
-          WHERE p."parentId" IS NULL
+          WHERE p."parentId" IS NULL AND p."deletedAt" IS NULL
         `,
       ])
 
@@ -1298,6 +1300,102 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         errors: errors.length > 0 ? errors : undefined,
         reason,
       }
+    } catch (err: any) {
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // ═══════════════════════════════════════════════════════════════════
+  // F.1 — SOFT DELETE + RESTORE
+  //
+  // POST /api/products/bulk-soft-delete  body: { productIds: string[] }
+  // POST /api/products/bulk-restore      body: { productIds: string[] }
+  //
+  // Soft-delete sets Product.deletedAt = now() on each id; restore
+  // clears it back to null. Both write AuditLog rows so the recycle
+  // bin has a who-deleted-when trail. Cascading channel teardown is
+  // intentionally NOT triggered here — operators may restore within
+  // minutes; we keep ChannelListings dormant rather than tearing
+  // them down + needing to recreate. A separate hard-purge job
+  // cleans up rows with deletedAt > 30 days old (TODO).
+  //
+  // Cap: 200 ids per call, mirroring bulk-status.
+  // ═══════════════════════════════════════════════════════════════════
+  const flipDeletedAt = async (
+    productIds: string[],
+    target: Date | null,
+    request: any,
+    reply: any,
+  ) => {
+    if (productIds.length === 0) {
+      return reply.code(400).send({ error: 'productIds[] required' })
+    }
+    if (productIds.length > 200) {
+      return reply.code(400).send({
+        error: `max 200 products per call (got ${productIds.length})`,
+      })
+    }
+    const actor = userIdFor(request)
+    const action = target ? 'soft-delete' : 'restore'
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Read the current state so the AuditLog before/after snapshot
+      // captures what actually flipped (skips no-op rows where the
+      // bin state already matches the target).
+      const rows = await tx.product.findMany({
+        where: { id: { in: productIds } },
+        select: { id: true, sku: true, deletedAt: true },
+      })
+      const eligible = rows.filter((r) =>
+        target ? r.deletedAt === null : r.deletedAt !== null,
+      )
+      if (eligible.length === 0) {
+        return { changed: 0, skipped: rows.length }
+      }
+      const updated = await tx.product.updateMany({
+        where: { id: { in: eligible.map((r) => r.id) } },
+        data: { deletedAt: target },
+      })
+      // AuditLog one row per product so the recycle bin can render a
+      // per-row "deleted by X at Y" footer cheaply.
+      await tx.auditLog.createMany({
+        data: eligible.map((r) => ({
+          userId: actor,
+          entityType: 'Product',
+          entityId: r.id,
+          action,
+          before: { deletedAt: r.deletedAt?.toISOString() ?? null },
+          after: { deletedAt: target?.toISOString() ?? null },
+          metadata: { sku: r.sku, source: 'products-bulk' },
+        })),
+      })
+      return { changed: updated.count, skipped: rows.length - updated.count }
+    })
+
+    return result
+  }
+
+  fastify.post('/products/bulk-soft-delete', async (request, reply) => {
+    try {
+      const body = request.body as { productIds?: string[] }
+      const productIds = Array.isArray(body.productIds) ? body.productIds : []
+      const r = await flipDeletedAt(productIds, new Date(), request, reply)
+      // The helper sends its own 400 on validation; if we got here with
+      // an undefined return, the reply is already mailed.
+      if (r === undefined) return
+      return { ok: true, ...r }
+    } catch (err: any) {
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.post('/products/bulk-restore', async (request, reply) => {
+    try {
+      const body = request.body as { productIds?: string[] }
+      const productIds = Array.isArray(body.productIds) ? body.productIds : []
+      const r = await flipDeletedAt(productIds, null, request, reply)
+      if (r === undefined) return
+      return { ok: true, ...r }
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }

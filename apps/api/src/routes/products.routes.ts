@@ -150,6 +150,12 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       // syncChannels intent rather than actual ChannelListing
       // presence.
       missingChannels?: string
+      // F.1 — soft-delete view. Default (omitted / 'false') returns
+      // only active rows (deletedAt IS NULL). 'true' flips to the
+      // recycle-bin view: only soft-deleted rows. The /products page
+      // uses the latter to render the "Deleted" lens after the
+      // operator clicks the bin icon in the page header.
+      deleted?: string
     }
   }>('/products', async (request, reply) => {
     try {
@@ -267,6 +273,11 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       } else if (stockLevel === 'out') {
         where.totalStock = 0
       }
+
+      // F.1 — soft-delete scope. Default = active only (deletedAt IS
+      // NULL); ?deleted=true = recycle bin (deletedAt NOT NULL).
+      const showDeleted = q.deleted === 'true' || q.deleted === '1'
+      where.deletedAt = showDeleted ? { not: null } : null
 
       const orderBy: any = (() => {
         switch (sort) {
@@ -510,9 +521,15 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       // 304s instead of multi-MB findMany + relation fans.
       // P.9 — id-list folded into the ETag context so the cache key
       // differentiates "all products" vs "these N products".
+      // F.1 — bulk-ops grid never shows soft-deleted rows; restore
+      // flow lives on /products. The id-list filter still scopes to
+      // the deep-link target, just intersected with deletedAt IS NULL.
+      const baseWhere: any = { deletedAt: null }
+      if (hasIdFilter) baseWhere.id = { in: productIds }
+
       const { etag } = await listEtag(prisma, {
         model: 'product',
-        ...(hasIdFilter ? { where: { id: { in: productIds } } } : {}),
+        where: baseWhere,
         filterContext: {
           channel: channelParam ?? null,
           marketplace: marketplaceParam ?? null,
@@ -528,7 +545,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const rows = await prisma.product.findMany({
-        ...(hasIdFilter ? { where: { id: { in: productIds } } } : {}),
+        where: baseWhere,
         select: {
           id: true,
           sku: true,

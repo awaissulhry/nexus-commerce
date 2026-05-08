@@ -38,6 +38,8 @@ import {
   Sparkles,
   ExternalLink,
   X,
+  Trash2,
+  RotateCcw,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
@@ -77,12 +79,21 @@ export function BulkActionBar({
   onClear,
   onComplete,
   productLookup,
+  showDeleted = false,
 }: {
   selectedIds: string[]
   allTags: Tag[]
   onClear: () => void
   onComplete: () => void
   productLookup: BulkActionProduct[]
+  /**
+   * F.1 — when the workspace is in the recycle-bin lens (?deleted=true),
+   * the bar renders a Restore action instead of the Activate/Draft/
+   * Inactive/Tag/Publish/AI fill row. Compare stays available so
+   * operators can verify which row to restore. Soft-delete is hidden
+   * because the rows are already deleted.
+   */
+  showDeleted?: boolean
 }) {
   const { toast } = useToast()
   const [busy, setBusy] = useState(false)
@@ -152,6 +163,44 @@ export function BulkActionBar({
       emitInvalidation({
         type: 'product.updated',
         meta: { productIds: selectedIds, source: 'bulk-status', status: s },
+      })
+    })
+
+  // F.1 — soft-delete + restore. Both hit AuditLog server-side so the
+  // recycle bin has a who-deleted-when trail. We emit product.updated
+  // (not deleted) so the grid simply refetches with its current
+  // ?deleted= scope and the rows naturally migrate between views.
+  const softDeleteBulk = async () =>
+    run('Moving to recycle bin…', async () => {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/bulk-soft-delete`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productIds: selectedIds }),
+        },
+      )
+      if (!res.ok) throw new Error((await res.json()).error)
+      emitInvalidation({
+        type: 'product.updated',
+        meta: { productIds: selectedIds, source: 'bulk-soft-delete' },
+      })
+    })
+
+  const restoreBulk = async () =>
+    run('Restoring…', async () => {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/bulk-restore`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productIds: selectedIds }),
+        },
+      )
+      if (!res.ok) throw new Error((await res.json()).error)
+      emitInvalidation({
+        type: 'product.updated',
+        meta: { productIds: selectedIds, source: 'bulk-restore' },
       })
     })
 
@@ -258,34 +307,65 @@ export function BulkActionBar({
           </span>
           <div className="h-4 w-px bg-slate-200" />
 
-          <Button
-            size="sm"
-            onClick={() => setStatusBulk('ACTIVE')}
-            disabled={busy}
-            className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-            icon={<CheckCircle2 size={12} />}
-          >
-            Activate
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => setStatusBulk('DRAFT')}
-            disabled={busy}
-            className="bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
-            icon={<EyeOff size={12} />}
-          >
-            Draft
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => setStatusBulk('INACTIVE')}
-            disabled={busy}
-            className="bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
-            icon={<XCircle size={12} />}
-          >
-            Inactive
-          </Button>
+          {showDeleted ? (
+            // F.1 — recycle-bin view. Restore is the only mutation;
+            // Compare stays so operators can verify which row to
+            // restore. Soft-delete + status flips + tag + publish +
+            // AI fill are hidden because they don't make sense for
+            // already-deleted rows.
+            <Button
+              size="sm"
+              onClick={restoreBulk}
+              disabled={busy}
+              className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+              icon={<RotateCcw size={12} />}
+            >
+              Restore
+            </Button>
+          ) : (
+            <>
+              <Button
+                size="sm"
+                onClick={() => setStatusBulk('ACTIVE')}
+                disabled={busy}
+                className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                icon={<CheckCircle2 size={12} />}
+              >
+                Activate
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setStatusBulk('DRAFT')}
+                disabled={busy}
+                className="bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                icon={<EyeOff size={12} />}
+              >
+                Draft
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setStatusBulk('INACTIVE')}
+                disabled={busy}
+                className="bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
+                icon={<XCircle size={12} />}
+              >
+                Inactive
+              </Button>
+              <Button
+                size="sm"
+                onClick={softDeleteBulk}
+                disabled={busy}
+                className="bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
+                icon={<Trash2 size={12} />}
+                title="Move selected products to the recycle bin (restorable)"
+              >
+                Delete
+              </Button>
+            </>
+          )}
 
+          {!showDeleted && (
+            <>
           <div className="h-4 w-px bg-slate-200" />
 
           <div className="relative" ref={tagMenuRef}>
@@ -411,19 +491,6 @@ export function BulkActionBar({
             Duplicate
           </Button>
 
-          {compareEligible && (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => setCompareModalOpen(true)}
-              disabled={busy || compareSubjects.length < 2}
-              title="Side-by-side comparison of selected products"
-              icon={<GitCompare size={12} />}
-            >
-              Compare
-            </Button>
-          )}
-
           <Button
             size="sm"
             onClick={() => setAiModalOpen(true)}
@@ -441,6 +508,23 @@ export function BulkActionBar({
           >
             <ExternalLink size={12} /> Power edit
           </Link>
+            </>
+          )}
+
+          {/* F.1 — Compare stays visible in both views so operators
+              can verify which row to delete or restore. */}
+          {compareEligible && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setCompareModalOpen(true)}
+              disabled={busy || compareSubjects.length < 2}
+              title="Side-by-side comparison of selected products"
+              icon={<GitCompare size={12} />}
+            >
+              Compare
+            </Button>
+          )}
 
           {status && (
             <span className="text-sm text-slate-500 ml-2">{status}</span>

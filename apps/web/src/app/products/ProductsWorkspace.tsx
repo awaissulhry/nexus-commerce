@@ -15,6 +15,7 @@ import {
   Upload,
   DollarSign, Download,
   AlignJustify, Menu as MenuIcon, Equal,
+  Trash2,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -185,6 +186,12 @@ export default function ProductsWorkspace() {
   const hasDescription = searchParams.get('hasDescription')
   const hasBrand = searchParams.get('hasBrand')
   const hasGtin = searchParams.get('hasGtin')
+  // F.1 — recycle-bin lens. ?deleted=true flips the workspace into
+  // soft-deleted-rows-only mode: the grid filters to deletedAt NOT
+  // NULL, the bulk-action bar swaps Activate/Draft/Inactive/Tag/
+  // Publish/AI fill for a single Restore action, and the page
+  // header surfaces a back-to-active toggle.
+  const showDeleted = searchParams.get('deleted') === 'true'
 
   const [searchInput, setSearchInput] = useState(search)
   const [products, setProducts] = useState<ProductRow[]>([])
@@ -326,11 +333,12 @@ export default function ProductsWorkspace() {
     if (hasDescription) qs.set('hasDescription', hasDescription)
     if (hasBrand) qs.set('hasBrand', hasBrand)
     if (hasGtin) qs.set('hasGtin', hasGtin)
+    if (showDeleted) qs.set('deleted', 'true')
     qs.set('sort', sortBy)
     qs.set('includeCoverage', 'true')
     qs.set('includeTags', 'true')
     return `/api/products?${qs.toString()}`
-  }, [lens, page, pageSize, search, statusFilters, channelFilters, marketplaceFilters, productTypeFilters, brandFilters, tagFilters, fulfillmentFilters, missingChannelFilters, stockLevel, hasPhotos, hasDescription, hasBrand, hasGtin, sortBy])
+  }, [lens, page, pageSize, search, statusFilters, channelFilters, marketplaceFilters, productTypeFilters, brandFilters, tagFilters, fulfillmentFilters, missingChannelFilters, stockLevel, hasPhotos, hasDescription, hasBrand, hasGtin, showDeleted, sortBy])
 
   const {
     data: productsData,
@@ -825,6 +833,33 @@ export default function ProductsWorkspace() {
             >
               Bundles
             </Button>
+            {/* F.1 — recycle-bin toggle. Subdued styling so it doesn't
+                steal attention from the primary actions; flips active
+                when the operator is inside the bin so it's obvious how
+                to get back. Uses the same updateUrl path as every other
+                URL-state change so back/forward survives the toggle. */}
+            <Button
+              variant="secondary"
+              onClick={() =>
+                updateUrl({
+                  deleted: showDeleted ? undefined : 'true',
+                  page: undefined,
+                })
+              }
+              title={
+                showDeleted
+                  ? 'Back to active products'
+                  : 'View soft-deleted products'
+              }
+              className={
+                showDeleted
+                  ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                  : ''
+              }
+              icon={<Trash2 size={12} />}
+            >
+              {showDeleted ? 'Recycle bin' : ''}
+            </Button>
             <Link
               href="/products/new"
               className="h-8 px-3 text-md font-medium bg-slate-900 text-white border border-slate-900 rounded-md hover:bg-slate-800 inline-flex items-center justify-center gap-1.5 transition-colors"
@@ -1041,6 +1076,7 @@ export default function ProductsWorkspace() {
           onClear={() => setSelected(new Set())}
           onComplete={() => { setSelected(new Set()); fetchProducts(); fetchTags() }}
           productLookup={products}
+          showDeleted={showDeleted}
         />
       )}
 
