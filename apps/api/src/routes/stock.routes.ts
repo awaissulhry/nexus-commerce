@@ -21,6 +21,11 @@ import {
   unconfiguredAdapter as mcfUnconfiguredAdapter,
   type MCFAdapter,
 } from '../services/amazon-mcf.service.js'
+import {
+  getPanEuSnapshot,
+  getAgedInventory,
+  getUnfulfillable,
+} from '../services/fba-pan-eu.service.js'
 
 // S.24 — production adapter resolves to either the wired SP-API
 // client (when AMAZON_MCF_LIVE=1) or the unconfigured stub.
@@ -1437,6 +1442,49 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/analytics/dead-stock] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── GET /api/stock/fba-pan-eu ────────────────────────────────────
+  // S.25 — single-shot dashboard read. Returns per-FC totals + top
+  // aged sellable + top unfulfillable so the page renders with one
+  // fetch.
+  fastify.get('/stock/fba-pan-eu', async (_request, reply) => {
+    try {
+      const snapshot = await getPanEuSnapshot()
+      return snapshot
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/fba-pan-eu] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── GET /api/stock/fba-pan-eu/aged ───────────────────────────────
+  // S.25 — drill into aged-inventory rows past a configurable
+  // threshold. UI default 180 days (LTSF warning band); 365 critical.
+  fastify.get('/stock/fba-pan-eu/aged', async (request, reply) => {
+    try {
+      const q = request.query as any
+      const thresholdDays = safeNum(q.days, 180) ?? 180
+      const limit = safeNum(q.limit, 100) ?? 100
+      const rows = await getAgedInventory({ thresholdDays, limit })
+      return { thresholdDays, rows }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/fba-pan-eu/aged] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── GET /api/stock/fba-pan-eu/unfulfillable ─────────────────────
+  fastify.get('/stock/fba-pan-eu/unfulfillable', async (request, reply) => {
+    try {
+      const q = request.query as any
+      const limit = safeNum(q.limit, 100) ?? 100
+      const rows = await getUnfulfillable({ limit })
+      return { rows }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/fba-pan-eu/unfulfillable] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })

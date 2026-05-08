@@ -232,6 +232,7 @@ model Product {
   orderItems                OrderItem[] // Phase 2: Orders & Financials
   outboundSyncQueue         OutboundSyncQueue[] // Phase 8: Outbound Sync Engine
   stockLevels               StockLevel[] // H.1: per-location stock ledger
+  fbaInventoryDetails       FbaInventoryDetail[] // S.25: per-FC FBA snapshot
   translations              ProductTranslation[] // H.10: per-language master content
   relationsFrom             ProductRelation[]             @relation("ProductRelationFrom") // H.11
   relationsTo               ProductRelation[]             @relation("ProductRelationTo") // H.11
@@ -2839,6 +2840,40 @@ model StockCostLayer {
   @@index([productId, unitsRemaining])
   @@index([inboundShipmentId])
   @@index([stockMovementId])
+}
+
+// S.25 — Pan-EU FBA per-FC inventory detail. Read-only snapshot
+// populated by the daily fba-pan-eu-sync cron from SP-API
+// getInventoryDetails. NOT a StockLocation: Amazon owns Pan-EU
+// redistribution; operator observes only. Aggregated AMAZON-EU-FBA
+// StockLevel stays the operator-facing ledger; this table adds the
+// per-FC dimensionality for distribution visibility, aged-inventory
+// tracking, and unfulfillable surfacing.
+model FbaInventoryDetail {
+  id                    String   @id @default(cuid())
+  productId             String?
+  sku                   String
+  asin                  String?
+  marketplaceId         String   // 'A1PA6795UKMFR9' (DE), 'APJ6JRA9NG5V4' (IT), etc
+  fulfillmentCenterId   String   // 'FRA5', 'MAD4', 'MXP6', etc
+  condition             String   // 'SELLABLE'|'UNFULFILLABLE'|'INBOUND'|'RESERVED'|'RESEARCHING'
+  quantity              Int      @default(0)
+  // Earliest receipt at this FC × condition; preserved across updates
+  // so age-based long-term-storage-fee tracking stays honest.
+  firstReceivedAt       DateTime?
+  lastSyncedAt          DateTime @default(now())
+  rawData               Json?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@unique([sku, marketplaceId, fulfillmentCenterId, condition])
+  @@index([productId])
+  @@index([marketplaceId])
+  @@index([fulfillmentCenterId])
+  @@index([condition])
+  @@index([firstReceivedAt])
 }
 
 // S.24 — Amazon Multi-Channel Fulfillment shipment tracking.

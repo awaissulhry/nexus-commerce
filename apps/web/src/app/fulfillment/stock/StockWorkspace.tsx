@@ -896,6 +896,14 @@ export default function StockWorkspace() {
               <Truck size={12} />
               {t('stock.mcf.title')}
             </Link>
+            <Link
+              href="/fulfillment/stock/fba-pan-eu"
+              className="h-11 sm:h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5 text-slate-700"
+              title={t('stock.fbaPanEu.title')}
+            >
+              <Activity size={12} />
+              {t('stock.fbaPanEu.title')}
+            </Link>
             {/* S.18 — saved views dropdown */}
             <SavedViewsButton
               savedViews={savedViews}

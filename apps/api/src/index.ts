@@ -95,6 +95,7 @@ import { startStockoutDetectorCron } from "./jobs/stockout-detector.job.js";
 import { startAbcClassificationCron } from "./jobs/abc-classification.job.js";
 import { startCycleCountSchedulerCron } from "./jobs/cycle-count-scheduler.job.js";
 import { startAmazonMCFStatusCron } from "./jobs/amazon-mcf-status.job.js";
+import { startFbaPanEuSyncCron } from "./jobs/fba-pan-eu-sync.job.js";
 import { startFbaRestockCron } from "./jobs/fba-restock-ingestion.job.js";
 import pricingRoutes from "./routes/pricing.routes.js";
 // BullMQ worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS=1.
@@ -642,6 +643,15 @@ async function start() {
     // safety net. Default-on; opt out via NEXUS_ENABLE_MCF_STATUS_CRON=0.
     if (process.env.NEXUS_ENABLE_MCF_STATUS_CRON !== '0') {
       startAmazonMCFStatusCron();
+    }
+
+    // S.25 — Pan-EU FBA distribution sync. Daily 03:00 UTC. Pulls
+    // per-FC inventory detail from SP-API and upserts into
+    // FbaInventoryDetail. Read-only snapshot for distribution
+    // visibility / aged inventory / unfulfillable triage.
+    // Default-on; opt out via NEXUS_ENABLE_FBA_PAN_EU_CRON=0.
+    if (process.env.NEXUS_ENABLE_FBA_PAN_EU_CRON !== '0') {
+      startFbaPanEuSyncCron();
     }
 
     logger.info('✅ API server initialized', {
