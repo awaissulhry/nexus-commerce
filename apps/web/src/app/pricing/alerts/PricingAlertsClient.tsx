@@ -32,14 +32,28 @@ interface AlertRow {
   computedAt: string
 }
 
+interface DriftRow {
+  id: string
+  kind: 'DRIFT'
+  sku: string
+  channel: string
+  marketplace: string
+  masterPrice: string | null
+  listingPrice: string | null
+  message: string
+  createdAt: string
+}
+
 interface AlertsResponse {
   total: number
   counts: {
     fallback: number
     clamped: number
     warnings: number
+    drift: number
   }
   rows: AlertRow[]
+  driftRows: DriftRow[]
 }
 
 export default function PricingAlertsClient() {
@@ -86,7 +100,7 @@ export default function PricingAlertsClient() {
     )
   }
 
-  if (!data || data.rows.length === 0) {
+  if (!data || (data.rows.length === 0 && data.driftRows.length === 0)) {
     return (
       <EmptyState
         icon={CheckCircle2}
@@ -99,7 +113,13 @@ export default function PricingAlertsClient() {
   return (
     <div className="space-y-4">
       {/* Counts banner */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <CountTile
+          label="Drift"
+          value={data.counts.drift}
+          tone="rose"
+          hint="Listing price drifted from master. Sync-drift detector last 24h."
+        />
         <CountTile
           label="No resolution"
           value={data.counts.fallback}
@@ -130,7 +150,97 @@ export default function PricingAlertsClient() {
         </button>
       </div>
 
-      {/* Table */}
+      {/* B.2 — Drift table. Shown above engine alerts because drift means
+          actual customer-visible prices are wrong, while engine alerts are
+          materialization-time warnings only. */}
+      {data.driftRows.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
+            Master cascade drift · {data.driftRows.length}
+          </div>
+          <Card noPadding>
+            <div className="overflow-x-auto">
+              <table className="w-full text-md">
+                <thead className="border-b border-slate-200 bg-rose-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      Severity
+                    </th>
+                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      SKU
+                    </th>
+                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      Where
+                    </th>
+                    <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      Master
+                    </th>
+                    <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      Listing
+                    </th>
+                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      Detected
+                    </th>
+                    <th className="px-3 py-2 w-24"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.driftRows.map((d) => (
+                    <tr
+                      key={d.id}
+                      className="border-b border-slate-100 hover:bg-slate-50"
+                    >
+                      <td className="px-3 py-2">
+                        <SeverityChip tone="rose" label="Drift" />
+                      </td>
+                      <td className="px-3 py-2 font-mono text-base text-slate-800">
+                        {d.sku}
+                      </td>
+                      <td className="px-3 py-2 text-slate-700">
+                        {d.channel}{' '}
+                        <span className="text-slate-400">·</span>{' '}
+                        <span className="font-mono text-sm">
+                          {d.marketplace}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-800">
+                        {d.masterPrice
+                          ? Number(d.masterPrice).toFixed(2)
+                          : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-rose-700 font-semibold">
+                        {d.listingPrice
+                          ? Number(d.listingPrice).toFixed(2)
+                          : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-sm text-slate-500">
+                        {new Date(d.createdAt).toLocaleString()}
+                      </td>
+                      <td className="px-3 py-2">
+                        <Link
+                          href={`/pricing?search=${encodeURIComponent(d.sku)}`}
+                          className="text-sm text-blue-600 hover:underline"
+                        >
+                          Open in pricing →
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Engine-time alerts (clamped / fallback / warnings) */}
+      {data.rows.length > 0 && (
+        <div className="space-y-2">
+          {data.driftRows.length > 0 && (
+            <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
+              Engine resolution alerts · {data.rows.length}
+            </div>
+          )}
       <Card noPadding>
         <div className="overflow-x-auto">
           <table className="w-full text-md">
@@ -211,6 +321,8 @@ export default function PricingAlertsClient() {
           </table>
         </div>
       </Card>
+        </div>
+      )}
     </div>
   )
 }

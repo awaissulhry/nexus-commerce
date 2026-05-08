@@ -135,24 +135,50 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  // G.4.2 — Outlier alerts. Surfaces SKUs that need the user's attention:
-  // clamped to a floor (margin / MAP), no master price, FX-stale, etc.
-  // Reads from PricingSnapshot.warnings + flags.
+  // G.4.2 + B.2 — Outlier alerts. Surfaces SKUs that need the user's attention:
+  // clamped to a floor (margin / MAP), no master price, FX-stale, etc. Also
+  // pulls in the SyncHealthLog price-drift rows that sync-drift-detection.job.ts
+  // writes (master cascade went sideways) — those used to live only at
+  // /dashboard/health, which orphaned them from the pricing surface.
   fastify.get('/pricing/alerts', async (_request, reply) => {
     try {
-      const where: Prisma.PricingSnapshotWhereInput = {
+      const snapshotWhere: Prisma.PricingSnapshotWhereInput = {
         OR: [
           { isClamped: true },
           { warnings: { isEmpty: false } },
           { source: 'FALLBACK' },
         ],
       }
-      const rows = await prisma.pricingSnapshot.findMany({
-        where,
-        orderBy: [{ source: 'asc' }, { sku: 'asc' }],
-        take: 500,
-      })
-      // Group by category for the UI banners.
+      const [rows, driftLogs] = await Promise.all([
+        prisma.pricingSnapshot.findMany({
+          where: snapshotWhere,
+          orderBy: [{ source: 'asc' }, { sku: 'asc' }],
+          take: 500,
+        }),
+        // B.2 — Drift rows from sync-drift-detection.job.ts. We pull the
+        // last 24h of UNRESOLVED PRICE_MISMATCH conflicts; older rows
+        // either got resolved or fell out of the dedupe window. Joining
+        // through productId → sku keeps the row shape consistent with the
+        // snapshot rows the UI already renders.
+        prisma.syncHealthLog.findMany({
+          where: {
+            conflictType: 'PRICE_MISMATCH',
+            resolutionStatus: 'UNRESOLVED',
+            createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 200,
+          select: {
+            id: true,
+            channel: true,
+            createdAt: true,
+            productId: true,
+            conflictData: true,
+            errorMessage: true,
+            product: { select: { sku: true } },
+          },
+        }),
+      ])
       const buckets = {
         fallback: rows.filter((r) => r.source === 'FALLBACK'),
         clamped: rows.filter((r) => r.isClamped),
@@ -160,14 +186,39 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
           (r) => !r.isClamped && r.source !== 'FALLBACK' && r.warnings.length > 0,
         ),
       }
+
+      // Shape drift rows so the client can render them in the same table
+      // as snapshot rows, with a distinct severity. conflictData is shaped
+      // by syncHealthService.logConflict as { local, remote } where local
+      // carries the master value and remote carries the listing value.
+      const driftRows = driftLogs.map((log) => {
+        const cd = (log.conflictData ?? {}) as {
+          local?: { value?: string }
+          remote?: { value?: string; marketplace?: string }
+        }
+        return {
+          id: `drift:${log.id}`,
+          kind: 'DRIFT' as const,
+          sku: log.product?.sku ?? '(no sku)',
+          channel: log.channel,
+          marketplace: cd.remote?.marketplace ?? '—',
+          masterPrice: cd.local?.value ?? null,
+          listingPrice: cd.remote?.value ?? null,
+          message: log.errorMessage,
+          createdAt: log.createdAt,
+        }
+      })
+
       return {
-        total: rows.length,
+        total: rows.length + driftRows.length,
         counts: {
           fallback: buckets.fallback.length,
           clamped: buckets.clamped.length,
           warnings: buckets.warningsOnly.length,
+          drift: driftRows.length,
         },
         rows,
+        driftRows,
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[pricing/alerts] failed')
