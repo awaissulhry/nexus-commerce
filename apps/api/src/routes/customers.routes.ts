@@ -27,6 +27,10 @@ import { logger } from '../utils/logger.js'
 import { refreshCustomerCache } from '../services/customer-cache.service.js'
 import { recomputeCustomerRisk } from '../services/order-risk.service.js'
 import { csvDocument } from '../lib/csv.js'
+import {
+  validateCodiceFiscale,
+  validatePartitaIva,
+} from '../services/italian-fiscal-validators.service.js'
 
 export async function customersRoutes(app: FastifyInstance) {
   // ── List ───────────────────────────────────────────────────────────
@@ -276,15 +280,14 @@ export async function customersRoutes(app: FastifyInstance) {
       if (fk != null && fk !== 'B2B' && fk !== 'B2C') {
         return reply.code(400).send({ error: "fiscalKind must be 'B2B', 'B2C', or null" })
       }
-      if (cf != null && (cf.length !== 16 || !/^[A-Z0-9]+$/.test(cf))) {
-        return reply.code(400).send({
-          error: 'codiceFiscale must be 16 alphanumeric characters',
-        })
+      // AU.8 — proper checksum validation (replaces format-only check).
+      if (cf != null) {
+        const err = validateCodiceFiscale(cf)
+        if (err) return reply.code(400).send({ error: err })
       }
-      if (piva != null && !/^[0-9]{11}$/.test(piva)) {
-        return reply.code(400).send({
-          error: 'partitaIva must be 11 digits (IT prefix is stripped automatically)',
-        })
+      if (piva != null) {
+        const err = validatePartitaIva(piva)
+        if (err) return reply.code(400).send({ error: err })
       }
       const cd = norm(body.codiceDestinatario)?.toUpperCase() ?? null
       if (cd != null && cd.length !== 7) {
