@@ -22,6 +22,7 @@ import { Mail, Search, User } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Input } from '@/components/ui/Input'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { getBackendUrl } from '@/lib/backend-url'
 
 type CustomerGroup = {
@@ -91,9 +92,7 @@ export function CustomerLens() {
       </div>
       {loading ? (
         <Card>
-          <div className="text-md text-slate-500 py-8 text-center">
-            Loading customers…
-          </div>
+          <Skeleton lines={6} />
         </Card>
       ) : groups.length === 0 ? (
         <EmptyState

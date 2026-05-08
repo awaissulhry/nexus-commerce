@@ -19,6 +19,7 @@ import { Undo2 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { getBackendUrl } from '@/lib/backend-url'
 import { channelTone } from '../_lib/tone'
 
@@ -46,9 +47,7 @@ export function ReturnsLens() {
   if (loading) {
     return (
       <Card>
-        <div className="text-md text-slate-500 py-8 text-center">
-          Loading returns…
-        </div>
+        <Skeleton lines={6} />
       </Card>
     )
   }

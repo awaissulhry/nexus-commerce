@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { IconButton } from '@/components/ui/IconButton'
 import { Modal } from '@/components/ui/Modal'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { COUNTRY_NAMES } from '@/lib/country-names'
@@ -116,7 +117,7 @@ export default function RulesClient() {
         }
       />
 
-      {loading && rules.length === 0 ? <Card><div className="text-md text-slate-500 py-8 text-center">Loading…</div></Card> :
+      {loading && rules.length === 0 ? <Card><Skeleton lines={6} /></Card> :
         rules.length === 0 ? (
           <Card>
             <div className="text-center py-6 space-y-3">

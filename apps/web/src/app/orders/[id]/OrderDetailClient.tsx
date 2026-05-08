@@ -10,6 +10,7 @@ import {
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -70,7 +71,23 @@ export default function OrderDetailClient({ id }: { id: string }) {
     } finally { setReviewBusy(false) }
   }
 
-  if (loading && !order) return <div className="p-5"><Card><div className="text-md text-slate-500 py-8 text-center">Loading order…</div></Card></div>
+  if (loading && !order) {
+    return (
+      <div className="p-5 space-y-3">
+        <Skeleton variant="card" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <div className="lg:col-span-2 space-y-3">
+            <Skeleton variant="card" />
+            <Skeleton variant="card" />
+          </div>
+          <div className="space-y-3">
+            <Skeleton variant="card" />
+            <Skeleton variant="card" />
+          </div>
+        </div>
+      </div>
+    )
+  }
   if (!order) return <div className="p-5"><Card><div className="text-md text-rose-600 py-8 text-center">Order not found.</div></Card></div>
 
   const addr = order.shippingAddress ?? {}

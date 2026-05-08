@@ -22,6 +22,7 @@ import { ChevronRight, Settings2, ShoppingCart } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { ALL_COLUMNS, DEFAULT_VISIBLE, type OrderColumn } from '../_lib/columns'
 import {
   channelTone,
@@ -120,9 +121,7 @@ export function GridLens(props: GridLensProps) {
   if (loading && orders.length === 0)
     return (
       <Card>
-        <div className="text-md text-slate-500 py-8 text-center">
-          Loading orders…
-        </div>
+        <Skeleton lines={8} />
       </Card>
     )
   if (error)

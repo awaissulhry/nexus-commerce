@@ -22,6 +22,7 @@ import Link from 'next/link'
 import { RefreshCw, Sparkles, Star } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { channelTone, REVIEW_STATUS_TONE } from '../_lib/tone'
@@ -103,9 +104,7 @@ export function ReviewsLens() {
       </div>
       {loading ? (
         <Card>
-          <div className="text-md text-slate-500 py-8 text-center">
-            Loading review requests…
-          </div>
+          <Skeleton lines={6} />
         </Card>
       ) : requests.length === 0 ? (
         <EmptyState
