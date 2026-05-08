@@ -130,7 +130,7 @@ export default function BuyBoxClient() {
             key={w.days}
             onClick={() => setDays(w.days)}
             className={cn(
-              'h-7 px-2.5 text-base border rounded-md',
+              'h-8 px-3 text-base border rounded-md',
               days === w.days
                 ? 'bg-slate-900 text-white border-slate-900'
                 : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800',
