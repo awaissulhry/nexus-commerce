@@ -28,6 +28,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Button } from '@/components/ui/Button'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -67,6 +68,7 @@ interface PromotionsResponse {
 }
 
 export default function PromotionsClient() {
+  const { t } = useTranslations()
   const [data, setData] = useState<PromotionsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -104,14 +106,27 @@ export default function PromotionsClient() {
       const json = await res.json()
       if (json.ok) {
         toast.success(
-          `Scheduler tick: ${json.enteredEvents} entered, ${json.exitedEvents} exited, ${json.listingsUpdated} listings updated, ${json.snapshotsRefreshed} snapshots refreshed.`,
+          t('pricing.promotions.schedulerSuccess', {
+            entered: json.enteredEvents,
+            exited: json.exitedEvents,
+            listings: json.listingsUpdated,
+            snapshots: json.snapshotsRefreshed,
+          }),
         )
         await fetchData()
       } else {
-        toast.error(`Scheduler failed: ${json.error ?? 'unknown error'}`)
+        toast.error(
+          t('pricing.promotions.schedulerFailed', {
+            error: json.error ?? 'unknown error',
+          }),
+        )
       }
     } catch (e) {
-      toast.error(`Scheduler failed: ${e instanceof Error ? e.message : String(e)}`)
+      toast.error(
+        t('pricing.promotions.schedulerFailed', {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      )
     } finally {
       setRunning(false)
     }
@@ -121,7 +136,7 @@ export default function PromotionsClient() {
     return (
       <Card>
         <div className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
-          <Loader2 className="w-4 h-4 animate-spin" /> Loading promotions…
+          <Loader2 className="w-4 h-4 animate-spin" /> {t('pricing.promotions.loading')}
         </div>
       </Card>
     )
@@ -137,7 +152,7 @@ export default function PromotionsClient() {
   }
 
   const deleteEvent = async (eventId: string, name: string) => {
-    if (!confirm(`Delete "${name}"? This clears any active salePrice rows it stamped.`)) return
+    if (!confirm(t('pricing.promotions.deleteConfirm', { name }))) return
     try {
       const res = await fetch(
         `${getBackendUrl()}/api/pricing/promotions/${eventId}`,
@@ -147,10 +162,14 @@ export default function PromotionsClient() {
         const j = await res.json().catch(() => ({}))
         throw new Error(j.error ?? `HTTP ${res.status}`)
       }
-      toast.success(`Deleted "${name}"`)
+      toast.success(t('pricing.promotions.deleted', { name }))
       await fetchData()
     } catch (e) {
-      toast.error(`Delete failed: ${e instanceof Error ? e.message : String(e)}`)
+      toast.error(
+        t('pricing.promotions.deleteFailed', {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      )
     }
   }
 
@@ -164,13 +183,13 @@ export default function PromotionsClient() {
             onClick={() => setCreateOpen(true)}
             icon={<Plus size={14} />}
           >
-            Create promotion
+            {t('pricing.promotions.create')}
           </Button>
         </div>
         <EmptyState
           icon={CalendarRange}
-          title="No retail events yet"
-          description="Create RetailEvent + RetailEventPriceAction rows to schedule sales. The hourly G.5.2 scheduler materializes ChannelListing.salePrice when their window opens; the engine reads it as SCHEDULED_SALE source."
+          title={t('pricing.promotions.empty')}
+          description={t('pricing.promotions.emptyHint')}
         />
         {createOpen && (
           <CreatePromotionModal
@@ -195,7 +214,7 @@ export default function PromotionsClient() {
           onClick={() => setCreateOpen(true)}
           icon={<Plus size={14} />}
         >
-          Create promotion
+          {t('pricing.promotions.create')}
         </Button>
       </div>
 
@@ -203,29 +222,29 @@ export default function PromotionsClient() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-stretch">
         <CountTile
           icon={PlayCircle}
-          label="Active"
+          label={t('pricing.promotions.bucket.active')}
           value={data.counts.active}
           tone={data.counts.active > 0 ? 'emerald' : 'slate'}
-          hint="In window now — engine sourcing as SCHEDULED_SALE"
+          hint={t('pricing.promotions.bucket.activeHint')}
         />
         <CountTile
           icon={Clock3}
-          label="Upcoming"
+          label={t('pricing.promotions.bucket.upcoming')}
           value={data.counts.upcoming}
           tone={data.counts.upcoming > 0 ? 'blue' : 'slate'}
-          hint="Window hasn't opened yet"
+          hint={t('pricing.promotions.bucket.upcomingHint')}
         />
         <CountTile
           icon={CheckCircle2}
-          label="Ended"
+          label={t('pricing.promotions.bucket.ended')}
           value={data.counts.ended}
           tone="slate"
-          hint="Last 25, for lookback on lift"
+          hint={t('pricing.promotions.bucket.endedHint')}
         />
         <Card>
           <div className="space-y-2">
             <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
-              Scheduler
+              {t('pricing.promotions.scheduler')}
             </div>
             <Button
               variant="primary"
@@ -235,10 +254,12 @@ export default function PromotionsClient() {
               disabled={running}
               icon={running ? null : <PlayCircle size={14} />}
             >
-              {running ? 'Running…' : 'Run scheduler now'}
+              {running
+                ? t('pricing.promotions.runningScheduler')
+                : t('pricing.promotions.runScheduler')}
             </Button>
             <div className="text-sm text-slate-500">
-              Hourly cron (`0 * * * *`) runs the same enter/exit logic.
+              {t('pricing.promotions.schedulerHint')}
             </div>
           </div>
         </Card>
@@ -247,7 +268,7 @@ export default function PromotionsClient() {
       {/* Active events */}
       {data.active.length > 0 && (
         <EventSection
-          label={`Active · ${data.active.length}`}
+          label={t('pricing.promotions.section.active', { n: data.active.length })}
           tone="emerald"
           events={data.active}
           onDelete={deleteEvent}
@@ -257,7 +278,7 @@ export default function PromotionsClient() {
       {/* Upcoming */}
       {data.upcoming.length > 0 && (
         <EventSection
-          label={`Upcoming · ${data.upcoming.length}`}
+          label={t('pricing.promotions.section.upcoming', { n: data.upcoming.length })}
           tone="blue"
           events={data.upcoming}
           onDelete={deleteEvent}
@@ -267,7 +288,7 @@ export default function PromotionsClient() {
       {/* Ended */}
       {data.ended.length > 0 && (
         <EventSection
-          label={`Ended · ${data.ended.length}`}
+          label={t('pricing.promotions.section.ended', { n: data.ended.length })}
           tone="slate"
           events={data.ended}
           onDelete={deleteEvent}
@@ -336,6 +357,7 @@ function EventSection({
   events: RetailEvent[]
   onDelete: (eventId: string, name: string) => void
 }) {
+  const { t } = useTranslations()
   const headerToneCls = {
     emerald: 'bg-emerald-50 text-emerald-800',
     blue: 'bg-blue-50 text-blue-800',
@@ -352,19 +374,19 @@ function EventSection({
             <thead className={cn('border-b border-slate-200', headerToneCls)}>
               <tr>
                 <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider">
-                  Event
+                  {t('pricing.promotions.table.event')}
                 </th>
                 <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider">
-                  Window
+                  {t('pricing.promotions.table.window')}
                 </th>
                 <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider">
-                  Scope
+                  {t('pricing.promotions.table.scope')}
                 </th>
                 <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider">
-                  Price action
+                  {t('pricing.promotions.table.action')}
                 </th>
                 <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider">
-                  Lift
+                  {t('pricing.promotions.table.lift')}
                 </th>
                 <th className="px-3 py-2 w-10"></th>
               </tr>
@@ -401,7 +423,10 @@ function EventSection({
                         {end.toLocaleDateString()}
                       </div>
                       <div className="text-sm text-slate-500">
-                        {days} day{days === 1 ? '' : 's'}
+                        {t('pricing.promotions.windowDays', {
+                          n: days,
+                          s: days === 1 ? '' : 's',
+                        })}
                       </div>
                     </td>
                     <td className="px-3 py-2 text-base text-slate-700">
@@ -413,7 +438,9 @@ function EventSection({
                     </td>
                     <td className="px-3 py-2">
                       {e.priceActions.length === 0 ? (
-                        <span className="text-sm text-slate-400">— none</span>
+                        <span className="text-sm text-slate-400">
+                          {t('pricing.promotions.action.none')}
+                        </span>
                       ) : (
                         <ul className="space-y-0.5">
                           {e.priceActions.map((a) => (
@@ -454,7 +481,7 @@ function EventSection({
                       <button
                         onClick={() => onDelete(e.id, e.name)}
                         className="text-rose-600 hover:bg-rose-50 rounded p-1"
-                        title="Delete event"
+                        title={t('pricing.promotions.deleteTitle')}
                       >
                         <Trash2 size={12} />
                       </button>
@@ -479,12 +506,17 @@ function ScopeChip({
   marketplace: string | null
   productType: string | null
 }) {
+  const { t } = useTranslations()
   const parts: string[] = []
   if (channel) parts.push(channel)
   if (marketplace) parts.push(marketplace)
   if (productType) parts.push(productType)
   if (parts.length === 0) {
-    return <span className="text-sm text-slate-500">All channels & products</span>
+    return (
+      <span className="text-sm text-slate-500">
+        {t('pricing.promotions.scope.all')}
+      </span>
+    )
   }
   return (
     <span className="font-mono text-sm text-slate-700">{parts.join(' · ')}</span>
@@ -498,6 +530,7 @@ function CreatePromotionModal({
   onClose: () => void
   onCreated: () => void
 }) {
+  const { t } = useTranslations()
   const today = new Date().toISOString().slice(0, 10)
   const [form, setForm] = useState({
     name: '',
@@ -550,35 +583,39 @@ function CreatePromotionModal({
         const j = await res.json().catch(() => ({}))
         throw new Error(j.error ?? `HTTP ${res.status}`)
       }
-      toast.success(`Created "${form.name}"`)
+      toast.success(t('pricing.promotions.created', { name: form.name }))
       onCreated()
     } catch (err) {
-      toast.error(`Create failed: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(
+        t('pricing.promotions.createFailed', {
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      )
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
-    <Modal open onClose={onClose} title="Create promotion" size="xl">
+    <Modal open onClose={onClose} title={t('pricing.promotions.create')} size="xl">
       <form onSubmit={submit}>
         <ModalBody className="space-y-3">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
-              Name
+              {t('pricing.promotions.form.name')}
             </label>
             <input
               required
               value={form.name}
               onChange={(e) => update('name', e.target.value)}
-              placeholder='e.g. "Black Friday — Italy 2026"'
+              placeholder={t('pricing.promotions.form.namePlaceholder')}
               className="w-full h-9 px-3 border border-slate-300 rounded-md text-base"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Start
+                {t('pricing.promotions.form.start')}
               </label>
               <input
                 type="date"
@@ -590,7 +627,7 @@ function CreatePromotionModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                End
+                {t('pricing.promotions.form.end')}
               </label>
               <input
                 type="date"
@@ -604,14 +641,14 @@ function CreatePromotionModal({
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Channel
+                {t('pricing.promotions.form.channel')}
               </label>
               <select
                 value={form.channel}
                 onChange={(e) => update('channel', e.target.value)}
                 className="w-full h-9 px-2 border border-slate-300 rounded-md text-base bg-white"
               >
-                <option value="">All channels</option>
+                <option value="">{t('pricing.filter.allChannels')}</option>
                 <option value="AMAZON">Amazon</option>
                 <option value="EBAY">eBay</option>
                 <option value="SHOPIFY">Shopify</option>
@@ -619,14 +656,14 @@ function CreatePromotionModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Marketplace
+                {t('pricing.promotions.form.marketplace')}
               </label>
               <select
                 value={form.marketplace}
                 onChange={(e) => update('marketplace', e.target.value)}
                 className="w-full h-9 px-2 border border-slate-300 rounded-md text-base bg-white"
               >
-                <option value="">All marketplaces</option>
+                <option value="">{t('pricing.filter.allMarketplaces')}</option>
                 <option value="IT">IT</option>
                 <option value="DE">DE</option>
                 <option value="FR">FR</option>
@@ -641,7 +678,7 @@ function CreatePromotionModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Expected lift
+                {t('pricing.promotions.form.expectedLift')}
               </label>
               <input
                 type="number"
@@ -655,7 +692,7 @@ function CreatePromotionModal({
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
-              Description
+              {t('pricing.promotions.form.description')}
             </label>
             <textarea
               rows={2}
@@ -671,13 +708,13 @@ function CreatePromotionModal({
                 checked={form.includeAction}
                 onChange={(e) => update('includeAction', e.target.checked)}
               />
-              Apply price action when window opens
+              {t('pricing.promotions.form.applyAction')}
             </label>
             {form.includeAction && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Action type
+                    {t('pricing.promotions.form.actionType')}
                   </label>
                   <select
                     value={form.actionType}
@@ -686,13 +723,19 @@ function CreatePromotionModal({
                     }
                     className="w-full h-9 px-2 border border-slate-300 rounded-md text-base bg-white"
                   >
-                    <option value="PERCENT_OFF">% off current price</option>
-                    <option value="FIXED_PRICE">Fixed price</option>
+                    <option value="PERCENT_OFF">
+                      {t('pricing.promotions.form.percentOffOption')}
+                    </option>
+                    <option value="FIXED_PRICE">
+                      {t('pricing.promotions.form.fixedPriceOption')}
+                    </option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">
-                    {form.actionType === 'PERCENT_OFF' ? '% off' : 'Fixed price'}
+                    {form.actionType === 'PERCENT_OFF'
+                      ? t('pricing.promotions.form.percentOffLabel')
+                      : t('pricing.promotions.form.fixedPriceLabel')}
                   </label>
                   <input
                     type="number"
@@ -711,10 +754,12 @@ function CreatePromotionModal({
         </ModalBody>
         <ModalFooter>
           <Button type="button" variant="secondary" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button type="submit" variant="primary" loading={submitting} disabled={submitting}>
-            {submitting ? 'Creating…' : 'Create promotion'}
+            {submitting
+              ? t('pricing.promotions.creating')
+              : t('pricing.promotions.create')}
           </Button>
         </ModalFooter>
       </form>

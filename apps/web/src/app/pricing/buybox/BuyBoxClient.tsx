@@ -22,6 +22,7 @@ import {
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Button } from '@/components/ui/Button'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -48,13 +49,13 @@ interface BuyBoxStats {
   topCompetitors: CompetitorStat[]
 }
 
-const WINDOWS = [
-  { days: 7, label: '7 days' },
-  { days: 14, label: '14 days' },
-  { days: 30, label: '30 days' },
-]
-
 export default function BuyBoxClient() {
+  const { t } = useTranslations()
+  const WINDOWS = [
+    { days: 7, label: t('pricing.buybox.window.7days') },
+    { days: 14, label: t('pricing.buybox.window.14days') },
+    { days: 30, label: t('pricing.buybox.window.30days') },
+  ]
   const [days, setDays] = useState(7)
   const [data, setData] = useState<BuyBoxStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -85,7 +86,7 @@ export default function BuyBoxClient() {
     return (
       <Card>
         <div className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
-          <Loader2 className="w-4 h-4 animate-spin" /> Loading Buy Box stats…
+          <Loader2 className="w-4 h-4 animate-spin" /> {t('pricing.buybox.loading')}
         </div>
       </Card>
     )
@@ -104,8 +105,8 @@ export default function BuyBoxClient() {
     return (
       <EmptyState
         icon={Trophy}
-        title="No Buy Box observations yet"
-        description="The daily SP-API competitive-pricing cron writes BuyBoxHistory rows for every Amazon listing it polls. Once SP-API creds are configured and the cron runs, win-rate trends appear here."
+        title={t('pricing.buybox.empty')}
+        description={t('pricing.buybox.emptyHint')}
       />
     )
   }
@@ -123,7 +124,7 @@ export default function BuyBoxClient() {
     <div className="space-y-4">
       {/* Window selector + refresh */}
       <div className="flex items-center gap-2">
-        <div className="text-base text-slate-700">Window:</div>
+        <div className="text-base text-slate-700">{t('pricing.buybox.window')}</div>
         {WINDOWS.map((w) => (
           <button
             key={w.days}
@@ -145,7 +146,7 @@ export default function BuyBoxClient() {
             onClick={fetchData}
             icon={<RefreshCw size={12} />}
           >
-            Refresh
+            {t('pricing.action.refresh')}
           </Button>
         </div>
       </div>
@@ -155,7 +156,7 @@ export default function BuyBoxClient() {
         <Card>
           <div className="space-y-0.5">
             <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
-              Overall win rate · {data.windowDays}d
+              {t('pricing.buybox.headline.winRate', { days: data.windowDays })}
             </div>
             <div
               className={cn(
@@ -172,33 +173,38 @@ export default function BuyBoxClient() {
               {data.winRatePct != null ? `${data.winRatePct.toFixed(1)}%` : '—'}
             </div>
             <div className="text-sm text-slate-500">
-              {data.ourWins.toLocaleString()} / {data.observations.toLocaleString()} obs
+              {t('pricing.buybox.headline.winsObs', {
+                wins: data.ourWins.toLocaleString(),
+                obs: data.observations.toLocaleString(),
+              })}
             </div>
           </div>
         </Card>
         <Card>
           <div className="space-y-0.5">
             <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
-              Markets observed
+              {t('pricing.buybox.headline.markets')}
             </div>
             <div className="text-[32px] font-semibold tabular-nums leading-none mt-1 text-slate-800">
               {data.byMarketplace.length}
             </div>
             <div className="text-sm text-slate-500">
-              channels × marketplaces with traffic
+              {t('pricing.buybox.headline.marketsHint')}
             </div>
           </div>
         </Card>
         <Card>
           <div className="space-y-0.5">
             <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
-              Distinct competitors
+              {t('pricing.buybox.headline.competitors')}
             </div>
             <div className="text-[32px] font-semibold tabular-nums leading-none mt-1 text-slate-800">
               {data.topCompetitors.length}
             </div>
             <div className="text-sm text-slate-500">
-              top {data.topCompetitors.length} shown below
+              {t('pricing.buybox.headline.competitorsHint', {
+                n: data.topCompetitors.length,
+              })}
             </div>
           </div>
         </Card>
@@ -207,7 +213,9 @@ export default function BuyBoxClient() {
       {/* Per-marketplace table */}
       <div className="space-y-2">
         <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
-          Per-marketplace · {data.byMarketplace.length}
+          {t('pricing.buybox.section.perMarketplace', {
+            n: data.byMarketplace.length,
+          })}
         </div>
         <Card noPadding>
           <div className="overflow-x-auto">
@@ -215,19 +223,19 @@ export default function BuyBoxClient() {
               <thead className="border-b border-slate-200 bg-slate-50">
                 <tr>
                   <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
-                    Channel
+                    {t('pricing.buybox.table.channel')}
                   </th>
                   <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
-                    Marketplace
+                    {t('pricing.buybox.table.marketplace')}
                   </th>
                   <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
-                    Wins
+                    {t('pricing.buybox.table.wins')}
                   </th>
                   <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
-                    Observations
+                    {t('pricing.buybox.table.observations')}
                   </th>
                   <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 min-w-[200px]">
-                    Win rate
+                    {t('pricing.buybox.table.winRate')}
                   </th>
                 </tr>
               </thead>
@@ -264,7 +272,10 @@ export default function BuyBoxClient() {
       {data.topCompetitors.length > 0 && (
         <div className="space-y-2">
           <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold inline-flex items-center gap-1.5">
-            <Users size={12} /> Top competitors · {data.topCompetitors.length}
+            <Users size={12} />{' '}
+            {t('pricing.buybox.section.topCompetitors', {
+              n: data.topCompetitors.length,
+            })}
           </div>
           <Card noPadding>
             <div className="overflow-x-auto">
@@ -272,13 +283,13 @@ export default function BuyBoxClient() {
                 <thead className="border-b border-slate-200 bg-slate-50">
                   <tr>
                     <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
-                      Seller ID
+                      {t('pricing.buybox.table.sellerId')}
                     </th>
                     <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
-                      Fulfillment
+                      {t('pricing.buybox.table.fulfillment')}
                     </th>
                     <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
-                      Times won the box
+                      {t('pricing.buybox.table.timesWon')}
                     </th>
                   </tr>
                 </thead>
@@ -289,7 +300,7 @@ export default function BuyBoxClient() {
                       className="border-b border-slate-100 hover:bg-slate-50"
                     >
                       <td className="px-3 py-2 font-mono text-sm text-slate-700">
-                        {c.winnerSellerId ?? '(unknown)'}
+                        {c.winnerSellerId ?? t('pricing.buybox.unknownSeller')}
                       </td>
                       <td className="px-3 py-2 text-base text-slate-700">
                         {c.fulfillmentMethod ?? (
