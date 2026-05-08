@@ -257,12 +257,26 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
       let updated = 0
       const skusTouched = new Set<string>()
 
+      // A.4 — Audit-trail reason describes the operation. The drawer copy
+      // claims bulk-override "Logs to ChannelListingOverride for audit"; this
+      // makes that true. The Amazon push path (pricing-outbound.service.ts:178)
+      // already writes ChannelListingOverride rows for fieldName='price'; we
+      // mirror that convention.
+      const reasonForMode =
+        body.mode === 'CLEAR'
+          ? 'bulk-override CLEAR'
+          : body.mode === 'SET_FIXED'
+          ? `bulk-override SET_FIXED ${Number(body.value).toFixed(2)}`
+          : `bulk-override SET_PERCENT_DISCOUNT ${body.value}%`
+
       for (const snap of snapshots) {
         const productId = productIdBySku.get(snap.sku)
         if (!productId) continue
+        // Read priceOverride alongside id so we can capture the before value
+        // for the audit row.
         const listing = await prisma.channelListing.findFirst({
           where: { productId, channel: snap.channel, marketplace: snap.marketplace },
-          select: { id: true },
+          select: { id: true, priceOverride: true },
         })
         if (!listing) continue
 
@@ -278,14 +292,36 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
           newOverride = (base * (1 - Number(body.value) / 100)).toFixed(2)
         }
 
-        await prisma.channelListing.update({
-          where: { id: listing.id },
-          data: {
-            priceOverride: newOverride,
-            lastOverrideAt: new Date(),
-            lastOverrideBy: 'bulk-override',
-          },
-        })
+        const previousOverride =
+          listing.priceOverride != null ? listing.priceOverride.toString() : null
+
+        // No-op short-circuit. Repeating an identical bulk apply (e.g. user
+        // double-clicked) shouldn't generate audit noise.
+        if (previousOverride === newOverride) continue
+
+        // Atomic: ChannelListing update + audit row land together. If the
+        // audit write fails the override write rolls back, keeping the two
+        // sources of truth aligned.
+        await prisma.$transaction([
+          prisma.channelListing.update({
+            where: { id: listing.id },
+            data: {
+              priceOverride: newOverride,
+              lastOverrideAt: new Date(),
+              lastOverrideBy: 'bulk-override',
+            },
+          }),
+          prisma.channelListingOverride.create({
+            data: {
+              channelListingId: listing.id,
+              fieldName: 'price',
+              previousValue: previousOverride,
+              newValue: newOverride,
+              reason: reasonForMode,
+              changedBy: 'bulk-override',
+            },
+          }),
+        ])
         updated++
         skusTouched.add(snap.sku)
       }
