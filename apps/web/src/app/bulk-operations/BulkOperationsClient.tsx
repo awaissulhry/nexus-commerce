@@ -7,7 +7,8 @@ import {
   useRef,
   useState,
 } from 'react'
-import { useSearchParams, useRouter, usePathname } from 'next/navigation'
+// U.47 (DIAGNOSTIC) — next/navigation hooks stubbed below; see P.9 block.
+// import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import {
   flexRender,
   getCoreRowModel,
@@ -1522,30 +1523,23 @@ export default function BulkOperationsClient() {
     }
   }, [])
 
-  // P.9 — read productIds from the URL so the /products page's
-  // bulk-action bar ("Power edit") can deep-link with a pre-selected
-  // scope. Empty / missing param = full catalog (existing behaviour).
-  // The list is derived during render (no useState) so a router push
-  // that changes the param re-runs the reload effect immediately.
-  const searchParams = useSearchParams()
-  const router = useRouter()
-  const pathname = usePathname()
-  const scopedProductIds = useMemo(() => {
-    const raw = searchParams.get('productIds') ?? ''
-    return raw
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
-  }, [searchParams])
-  const scopedProductIdsKey = scopedProductIds.join(',')
-  const isScoped = scopedProductIds.length > 0
+  // U.47 (DIAGNOSTIC) — P.9's useSearchParams + useRouter + usePathname
+  // hooks suspected of breaking the App Router's transition queue on
+  // /bulk-operations. Temporarily stubbed: P.9 deep-link from
+  // /products → /bulk-operations is disabled; no scope reading, no
+  // clearScope effect. If clicks on sidebar Links work after this
+  // step, P.9's URL-sync was the culprit and we need a different
+  // approach (e.g. read from window.location.search once on mount).
+  // const searchParams = useSearchParams()
+  // const router = useRouter()
+  // const pathname = usePathname()
+  const scopedProductIds = useMemo<string[]>(() => [], [])
+  const scopedProductIdsKey = ''
+  const isScoped = false
 
   const clearScope = useCallback(() => {
-    const sp = new URLSearchParams(searchParams.toString())
-    sp.delete('productIds')
-    const qs = sp.toString()
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
-  }, [router, pathname, searchParams])
+    // no-op while P.9 is stubbed
+  }, [])
 
   // Refetch products when the primary target changes — bulk-fetch
   // hydrates _channelListing for ONE (channel, marketplace) per row,
