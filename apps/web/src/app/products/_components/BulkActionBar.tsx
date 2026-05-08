@@ -1,0 +1,478 @@
+'use client'
+
+/**
+ * P.1g — extracted from ProductsWorkspace.tsx as part of the
+ * file-decomposition sweep. The bottom-rising Gmail-style bulk
+ * action bar (E.4 originally), operating across the workspace's
+ * selectedIds set.
+ *
+ * Owns its own UI state (busy / status string / dropdown opens /
+ * compare modal / AI modal) and fetches against the bulk
+ * endpoints (/api/products/bulk-status, bulk-duplicate, bulk-tag,
+ * /api/listings? + /api/listings/bulk-action). Emits
+ * product.updated / product.created / listing.updated /
+ * bulk-job.completed invalidations on success — same contract as
+ * before.
+ *
+ * Receives:
+ *   - selectedIds: which products are selected
+ *   - allTags: tag list for the bulk-tag menu
+ *   - onClear: clear selection (close the bar)
+ *   - onComplete: refetch + clear selection on the workspace
+ *   - productLookup: the workspace's current page so Compare
+ *     modal can avoid an extra fetch
+ */
+
+import { useEffect, useMemo, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
+import Link from 'next/link'
+import {
+  CheckCircle2,
+  EyeOff,
+  XCircle,
+  Tag as TagIcon,
+  ChevronDown,
+  Eye,
+  Copy,
+  GitCompare,
+  Sparkles,
+  ExternalLink,
+  X,
+} from 'lucide-react'
+import { Button } from '@/components/ui/Button'
+import { IconButton } from '@/components/ui/IconButton'
+import { useToast } from '@/components/ui/Toast'
+import { emitInvalidation } from '@/lib/sync/invalidation-channel'
+import { getBackendUrl } from '@/lib/backend-url'
+import { COUNTRY_NAMES } from '@/lib/country-names'
+
+// E.3 — lazy modals stay lazy in this file too. Initial bundle
+// for the bulk bar stays small; the heavy AI / Compare modal
+// chunks only load when the operator opens them.
+const AiBulkGenerateModal = dynamic(
+  () => import('../_modals/AiBulkGenerateModal'),
+  { ssr: false },
+)
+const CompareProductsModal = dynamic(
+  () => import('../_modals/CompareProductsModal'),
+  { ssr: false },
+)
+
+interface Tag {
+  id: string
+  name: string
+  color: string | null
+  productCount?: number
+}
+
+interface BulkActionProduct {
+  id: string
+  sku: string
+  name: string
+}
+
+export function BulkActionBar({
+  selectedIds,
+  allTags,
+  onClear,
+  onComplete,
+  productLookup,
+}: {
+  selectedIds: string[]
+  allTags: Tag[]
+  onClear: () => void
+  onComplete: () => void
+  productLookup: BulkActionProduct[]
+}) {
+  const { toast } = useToast()
+  const [busy, setBusy] = useState(false)
+  const [status, setStatus] = useState<string | null>(null)
+  const [tagMenuOpen, setTagMenuOpen] = useState(false)
+  const [publishMenuOpen, setPublishMenuOpen] = useState(false)
+  const [aiModalOpen, setAiModalOpen] = useState(false)
+  // P.17 — compare-products modal state. Visible when 2-4 products
+  // are in the selection; uses productLookup so no extra fetch.
+  const [compareModalOpen, setCompareModalOpen] = useState(false)
+  const compareEligible = selectedIds.length >= 2 && selectedIds.length <= 4
+  const compareSubjects = useMemo(() => {
+    if (!compareEligible) return []
+    const byId = new Map(productLookup.map((p) => [p.id, p]))
+    return selectedIds
+      .map((id) => byId.get(id))
+      .filter((p): p is BulkActionProduct => !!p)
+  }, [compareEligible, selectedIds, productLookup])
+  const tagMenuRef = useRef<HTMLDivElement>(null)
+  const pubMenuRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (tagMenuRef.current && !tagMenuRef.current.contains(e.target as Node))
+        setTagMenuOpen(false)
+      if (pubMenuRef.current && !pubMenuRef.current.contains(e.target as Node))
+        setPublishMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [])
+
+  // U.4 — toast feedback for bulk operations. Was a setStatus()
+  // string + inline banner that sat in the bulk action bar and
+  // auto-cleared after 1.5/3.5s. Replaced with toast() so errors
+  // stack instead of overwriting, persist beyond the bar's
+  // lifecycle (operator can clear selection + still see the toast),
+  // and get aria-live announcement for free.
+  const run = async (label: string, fn: () => Promise<unknown>) => {
+    setBusy(true)
+    setStatus(label)
+    try {
+      await fn()
+      setStatus(null)
+      toast({ tone: 'success', title: label.replace(/…$/, ' done') })
+      onComplete()
+    } catch (e: unknown) {
+      setStatus(null)
+      toast({
+        tone: 'error',
+        title: 'Action failed',
+        description: e instanceof Error ? e.message : 'failed',
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const setStatusBulk = async (s: 'ACTIVE' | 'DRAFT' | 'INACTIVE') =>
+    run(`Setting ${s}…`, async () => {
+      const res = await fetch(`${getBackendUrl()}/api/products/bulk-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productIds: selectedIds, status: s }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error)
+      // Phase 10 — broadcast so other open pages refresh.
+      emitInvalidation({
+        type: 'product.updated',
+        meta: { productIds: selectedIds, source: 'bulk-status', status: s },
+      })
+    })
+
+  const duplicate = async () =>
+    run('Duplicating…', async () => {
+      const res = await fetch(`${getBackendUrl()}/api/products/bulk-duplicate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productIds: selectedIds }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error)
+      emitInvalidation({
+        type: 'product.created',
+        meta: { sourceProductIds: selectedIds, source: 'bulk-duplicate' },
+      })
+    })
+
+  const tagBulk = async (mode: 'add' | 'remove', tagIds: string[]) =>
+    run(`${mode === 'add' ? 'Tagging' : 'Untagging'}…`, async () => {
+      const res = await fetch(`${getBackendUrl()}/api/products/bulk-tag`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productIds: selectedIds, tagIds, mode }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error)
+      emitInvalidation({
+        type: 'product.updated',
+        meta: { productIds: selectedIds, source: 'bulk-tag', mode },
+      })
+    })
+
+  // Publish: enqueue per-channel via /api/listings/bulk-action.
+  // For products without an existing ChannelListing on the target channel,
+  // user is redirected to the listing-wizard to set it up first.
+  const publish = async (channel: string, marketplace: string) =>
+    run(`Queuing publish to ${channel} ${marketplace}…`, async () => {
+      // Step 1: resolve productIds → listingIds for this channel/marketplace
+      const params = new URLSearchParams({
+        channel,
+        marketplace,
+        includeCoverage: 'false',
+      })
+      // Commit 0 — was `.then((r) => r.json())` with no res.ok check, so
+      // a 500 from /api/listings would crash here with an opaque "no
+      // existing listings" message (the API error JSON has no
+      // `.listings` key, so `(found.listings ?? []).filter(...)` ran on
+      // []). Now we surface the real error so the user knows to retry.
+      const foundRes = await fetch(
+        `${getBackendUrl()}/api/listings?${params.toString()}&pageSize=500`,
+      )
+      if (!foundRes.ok) {
+        const body = await foundRes.json().catch(() => ({}))
+        throw new Error(
+          body?.error ?? `Failed to load listings (${foundRes.status})`,
+        )
+      }
+      const found = await foundRes.json()
+      const ids = (found.listings ?? [])
+        .filter((l: { productId: string }) =>
+          selectedIds.includes(l.productId),
+        )
+        .map((l: { id: string }) => l.id)
+      if (ids.length === 0)
+        throw new Error(
+          'No existing listings on this channel — use the listing wizard to create them first',
+        )
+      const res = await fetch(`${getBackendUrl()}/api/listings/bulk-action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'publish', listingIds: ids }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error)
+      emitInvalidation({
+        type: 'listing.updated',
+        meta: {
+          listingIds: ids,
+          source: 'products-publish',
+          channel,
+          marketplace,
+        },
+      })
+      emitInvalidation({
+        type: 'bulk-job.completed',
+        meta: { action: 'publish', listingIds: ids },
+      })
+    })
+
+  return (
+    // E.4 — bottom-rising Gmail-style bulk action bar. Was `sticky top-2`
+    // which replaced the toolbar slot when items were selected — that
+    // hid search/filters until you cleared the selection. Now it floats
+    // at the bottom of the viewport (out of the page flow), slides up
+    // on first appearance, and the toolbar stays accessible above it.
+    // pointer-events-none on the outer wrapper lets clicks behind the
+    // visible pill (e.g. on the table) go through; the Card itself
+    // re-enables them.
+    <div className="fixed bottom-4 left-0 right-0 z-40 flex justify-center px-4 pointer-events-none animate-slide-up motion-reduce:animate-none">
+      <div className="pointer-events-auto bg-white border border-slate-200 shadow-xl rounded-lg px-3 py-2 max-w-[min(900px,calc(100vw-2rem))] dark:bg-slate-900 dark:border-slate-800">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full bg-blue-600 text-white text-sm font-semibold tabular-nums">
+            <CheckCircle2 size={12} />
+            {selectedIds.length}
+            <span className="font-normal opacity-90">selected</span>
+          </span>
+          <div className="h-4 w-px bg-slate-200" />
+
+          <Button
+            size="sm"
+            onClick={() => setStatusBulk('ACTIVE')}
+            disabled={busy}
+            className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+            icon={<CheckCircle2 size={12} />}
+          >
+            Activate
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => setStatusBulk('DRAFT')}
+            disabled={busy}
+            className="bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+            icon={<EyeOff size={12} />}
+          >
+            Draft
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => setStatusBulk('INACTIVE')}
+            disabled={busy}
+            className="bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
+            icon={<XCircle size={12} />}
+          >
+            Inactive
+          </Button>
+
+          <div className="h-4 w-px bg-slate-200" />
+
+          <div className="relative" ref={tagMenuRef}>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setTagMenuOpen(!tagMenuOpen)}
+              disabled={busy}
+              icon={<TagIcon size={12} />}
+            >
+              Tag <ChevronDown size={10} />
+            </Button>
+            {tagMenuOpen && (
+              <div className="absolute left-0 top-full mt-1 w-64 bg-white border border-slate-200 rounded-md shadow-lg z-30 p-2 max-h-72 overflow-y-auto">
+                {allTags.length === 0 ? (
+                  <div className="text-base text-slate-400 text-center py-3">
+                    No tags yet — create one from a product detail.
+                  </div>
+                ) : (
+                  allTags.map((t) => (
+                    <div
+                      key={t.id}
+                      className="flex items-center justify-between px-2 py-1 hover:bg-slate-50 rounded"
+                    >
+                      <span className="text-base text-slate-700 inline-flex items-center gap-1.5">
+                        {t.color && (
+                          <span
+                            className="w-2 h-2 rounded-full"
+                            style={{ background: t.color }}
+                          />
+                        )}
+                        {t.name}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => tagBulk('add', [t.id])}
+                          className="text-xs text-emerald-600 hover:underline"
+                        >
+                          add
+                        </button>
+                        <button
+                          onClick={() => tagBulk('remove', [t.id])}
+                          className="text-xs text-rose-600 hover:underline"
+                        >
+                          remove
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="relative" ref={pubMenuRef}>
+            <Button
+              size="sm"
+              onClick={() => setPublishMenuOpen(!publishMenuOpen)}
+              disabled={busy}
+              className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+              icon={<Eye size={12} />}
+            >
+              Publish <ChevronDown size={10} />
+            </Button>
+            {publishMenuOpen && (
+              <div className="absolute left-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-md shadow-lg z-30 p-2 max-h-96 overflow-y-auto">
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1">
+                  Amazon EU
+                </div>
+                {['IT', 'DE', 'FR', 'ES', 'UK'].map((m) => (
+                  <button
+                    key={`amz-${m}`}
+                    onClick={() => {
+                      publish('AMAZON', m)
+                      setPublishMenuOpen(false)
+                    }}
+                    className="w-full text-left px-2 py-1 text-base text-slate-700 hover:bg-slate-50 rounded"
+                  >
+                    Amazon {m} ({COUNTRY_NAMES[m] ?? m})
+                  </button>
+                ))}
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1 mt-2">
+                  eBay EU
+                </div>
+                {['IT', 'DE', 'FR', 'ES', 'UK'].map((m) => (
+                  <button
+                    key={`ebay-${m}`}
+                    onClick={() => {
+                      publish('EBAY', m)
+                      setPublishMenuOpen(false)
+                    }}
+                    className="w-full text-left px-2 py-1 text-base text-slate-700 hover:bg-slate-50 rounded"
+                  >
+                    eBay {m} ({COUNTRY_NAMES[m] ?? m})
+                  </button>
+                ))}
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1 mt-2">
+                  Single-store
+                </div>
+                {['SHOPIFY', 'WOOCOMMERCE', 'ETSY'].map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => {
+                      publish(c, 'GLOBAL')
+                      setPublishMenuOpen(false)
+                    }}
+                    className="w-full text-left px-2 py-1 text-base text-slate-700 hover:bg-slate-50 rounded"
+                  >
+                    {c.charAt(0) + c.slice(1).toLowerCase()}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={duplicate}
+            disabled={busy}
+            icon={<Copy size={12} />}
+          >
+            Duplicate
+          </Button>
+
+          {compareEligible && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setCompareModalOpen(true)}
+              disabled={busy || compareSubjects.length < 2}
+              title="Side-by-side comparison of selected products"
+              icon={<GitCompare size={12} />}
+            >
+              Compare
+            </Button>
+          )}
+
+          <Button
+            size="sm"
+            onClick={() => setAiModalOpen(true)}
+            disabled={busy}
+            className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100"
+            title="Generate descriptions / bullets / keywords with AI"
+            icon={<Sparkles size={12} />}
+          >
+            AI fill
+          </Button>
+
+          <Link
+            href={`/bulk-operations?productIds=${selectedIds.join(',')}`}
+            className="h-7 px-3 text-base bg-violet-50 text-violet-700 border border-violet-200 rounded hover:bg-violet-100 inline-flex items-center gap-1.5"
+          >
+            <ExternalLink size={12} /> Power edit
+          </Link>
+
+          {status && (
+            <span className="text-sm text-slate-500 ml-2">{status}</span>
+          )}
+          <IconButton
+            aria-label="Clear selection"
+            onClick={onClear}
+            disabled={busy}
+            size="md"
+            className="ml-auto min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
+          >
+            <X size={14} />
+          </IconButton>
+        </div>
+      </div>
+      {aiModalOpen && (
+        <AiBulkGenerateModal
+          productIds={selectedIds}
+          productLookup={productLookup}
+          onClose={() => setAiModalOpen(false)}
+          onComplete={() => {
+            setAiModalOpen(false)
+            onComplete()
+          }}
+        />
+      )}
+      {compareModalOpen && compareSubjects.length >= 2 && (
+        <CompareProductsModal
+          products={compareSubjects}
+          onClose={() => setCompareModalOpen(false)}
+        />
+      )}
+    </div>
+  )
+}
