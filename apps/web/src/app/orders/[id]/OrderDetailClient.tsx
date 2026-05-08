@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   Mail, MapPin, Package, Truck, Undo2, Star, RefreshCw,
   ExternalLink, Clock, CheckCircle2, XCircle, DollarSign,
-  ShoppingCart,
+  ShoppingCart, FileText, Activity, Receipt,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -33,13 +34,29 @@ const TIMELINE_ICON: Record<string, any> = {
   'review-sent': Star, 'review-scheduled': Clock,
 }
 
+type Tab = 'summary' | 'fulfillment' | 'activity' | 'fiscal'
+
 export default function OrderDetailClient({ id }: { id: string }) {
   const { toast } = useToast()
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const tabParam = (searchParams.get('tab') as Tab) || 'summary'
   const [order, setOrder] = useState<any>(null)
   const [timeline, setTimeline] = useState<any[]>([])
   const [financials, setFinancials] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [reviewBusy, setReviewBusy] = useState(false)
+
+  const setTab = useCallback(
+    (t: Tab) => {
+      const next = new URLSearchParams(searchParams.toString())
+      if (t === 'summary') next.delete('tab')
+      else next.set('tab', t)
+      router.replace(`${pathname}?${next.toString()}`, { scroll: false })
+    },
+    [router, pathname, searchParams],
+  )
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -142,10 +159,39 @@ export default function OrderDetailClient({ id }: { id: string }) {
         }
       />
 
+      {/* AU.1 — tab nav. Summary is default; others gate their
+          content blocks. URL-backed via ?tab= so deep-links work
+          (e.g. /orders/123?tab=fulfillment from a notification). */}
+      <div role="tablist" aria-label="Order detail sections" className="inline-flex items-center bg-slate-100 rounded-md p-0.5 flex-wrap gap-0.5">
+        {([
+          { key: 'summary', label: 'Summary', icon: FileText },
+          { key: 'fulfillment', label: 'Fulfillment', icon: Truck },
+          { key: 'activity', label: 'Activity', icon: Activity },
+          ...(order.marketplace === 'IT'
+            ? ([{ key: 'fiscal', label: 'Fiscal', icon: Receipt }] as const)
+            : ([] as const)),
+        ] as Array<{ key: Tab; label: string; icon: any }>).map((t) => (
+          <button
+            key={t.key}
+            role="tab"
+            aria-selected={tabParam === t.key}
+            onClick={() => setTab(t.key)}
+            className={`h-7 px-3 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${
+              tabParam === t.key
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <t.icon size={12} aria-hidden="true" />
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Main column */}
         <div className="lg:col-span-2 space-y-4">
-          {/* Header card */}
+          {/* Header card — always visible regardless of tab */}
           <Card>
             <div className="flex items-start gap-3 flex-wrap">
               <div>
@@ -166,7 +212,8 @@ export default function OrderDetailClient({ id }: { id: string }) {
             </div>
           </Card>
 
-          {/* Items */}
+          {/* AU.1 — Items live on Summary tab */}
+          {tabParam === 'summary' && (
           <Card title="Items" description={`${order.items.length} line${order.items.length === 1 ? '' : 's'}`}>
             <div className="divide-y divide-slate-100">
               {order.items.map((it: any) => (
@@ -234,8 +281,10 @@ export default function OrderDetailClient({ id }: { id: string }) {
               ))}
             </div>
           </Card>
+          )}
 
-          {/* Timeline */}
+          {/* AU.1 — Timeline lives on Activity tab */}
+          {tabParam === 'activity' && (
           <Card title="Timeline" description="Lifecycle events for this order">
             {timeline.length === 0 ? (
               <div className="text-base text-slate-400 text-center py-4">No events yet</div>
@@ -256,24 +305,23 @@ export default function OrderDetailClient({ id }: { id: string }) {
               </ol>
             )}
           </Card>
-
-          {/* O.18 — Shopify discounts + gift cards */}
-          {order.channel === 'SHOPIFY' && order.shopifyMetadata && (
-            <ShopifyDiscountsCard meta={order.shopifyMetadata} />
           )}
 
-          {/* O.17 — eBay buyer messaging */}
-          {order.channel === 'EBAY' && order.ebayMetadata && (
+          {/* AU.1 — Channel-specific cards on Activity tab */}
+          {tabParam === 'activity' && order.channel === 'SHOPIFY' && order.shopifyMetadata && (
+            <ShopifyDiscountsCard meta={order.shopifyMetadata} />
+          )}
+          {tabParam === 'activity' && order.channel === 'EBAY' && order.ebayMetadata && (
             <EbayMessagingCard meta={order.ebayMetadata} channelOrderId={order.channelOrderId} />
           )}
 
-          {/* O.16a — Amazon FBM ship-by impact (LSR/VTR) */}
-          {order.channel === 'AMAZON' && order.fulfillmentMethod === 'FBM' && (
+          {/* AU.1 — Amazon FBM ship-by impact lives on Fulfillment */}
+          {tabParam === 'fulfillment' && order.channel === 'AMAZON' && order.fulfillmentMethod === 'FBM' && (
             <AmazonShipByImpactCard order={order} />
           )}
 
-          {/* Shipments */}
-          {order.shipments && order.shipments.length > 0 && (
+          {/* AU.1 — Shipments on Fulfillment tab */}
+          {tabParam === 'fulfillment' && order.shipments && order.shipments.length > 0 && (
             <Card title="Shipments" description={`${order.shipments.length} shipment${order.shipments.length === 1 ? '' : 's'}`}>
               <div className="space-y-2">
                 {order.shipments.map((s: any) => (
@@ -313,8 +361,8 @@ export default function OrderDetailClient({ id }: { id: string }) {
             </Card>
           )}
 
-          {/* Returns */}
-          {order.returns && order.returns.length > 0 && (
+          {/* AU.1 — Returns on Fulfillment tab */}
+          {tabParam === 'fulfillment' && order.returns && order.returns.length > 0 && (
             <Card title="Returns" description={`${order.returns.length} return${order.returns.length === 1 ? '' : 's'}`}>
               <div className="space-y-2">
                 {order.returns.map((r: any) => (
@@ -334,8 +382,13 @@ export default function OrderDetailClient({ id }: { id: string }) {
             </Card>
           )}
 
-          {/* Financials */}
-          {financials && financials.transactions.length > 0 && (
+          {/* AU.1 — Financials on Fiscal tab (IT) or Summary (non-IT)
+              When marketplace is IT, fiscal-related views live on
+              the dedicated tab; otherwise financials sit at the
+              bottom of Summary so non-IT operators don't have to
+              click into a one-card tab. */}
+          {(order.marketplace === 'IT' ? tabParam === 'fiscal' : tabParam === 'summary')
+            && financials && financials.transactions.length > 0 && (
             <Card title="Financials" description="Gross / fees / net">
               <div className="grid grid-cols-3 gap-3 mb-3">
                 <FinTile label="Gross" value={financials.rollup.gross} tone="default" />
