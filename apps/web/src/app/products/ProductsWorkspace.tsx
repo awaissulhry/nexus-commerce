@@ -882,7 +882,7 @@ export default function ProductsWorkspace() {
             </Button>
             <Link
               href="/products/new"
-              className="h-8 px-3 text-md font-medium bg-slate-900 text-white border border-slate-900 rounded-md hover:bg-slate-800 inline-flex items-center justify-center gap-1.5 transition-colors"
+              className="h-8 px-3 text-md font-medium bg-slate-900 text-white border border-slate-900 rounded-md hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100 dark:hover:bg-slate-200 inline-flex items-center justify-center gap-1.5 transition-colors"
             >
               <Plus size={12} /> New product
             </Link>
@@ -1219,12 +1219,12 @@ function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) =>
     { key: 'drafts', label: 'Drafts', icon: Sparkles },
   ]
   return (
-    <div className="inline-flex items-center bg-slate-100 rounded-md p-0.5">
+    <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5">
       {tabs.map((t) => (
         <button
           key={t.key}
           onClick={() => onChange(t.key)}
-          className={`h-7 px-3 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${current === t.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+          className={`h-7 px-3 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${current === t.key ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'}`}
         >
           <t.icon size={12} />
           {t.label}
@@ -1359,18 +1359,18 @@ function GridLens(props: any) {
           {Array.from({ length: 6 }).map((_, i) => (
             <div
               key={i}
-              className="flex items-center gap-3 px-3 py-3 border-b border-slate-100 last:border-b-0"
+              className="flex items-center gap-3 px-3 py-3 border-b border-slate-100 dark:border-slate-800 last:border-b-0"
               aria-hidden="true"
             >
-              <div className="w-4 h-4 rounded bg-slate-200 animate-pulse flex-shrink-0" />
-              <div className="w-10 h-10 rounded bg-slate-200 animate-pulse flex-shrink-0" />
+              <div className="w-4 h-4 rounded bg-slate-200 dark:bg-slate-800 animate-pulse flex-shrink-0" />
+              <div className="w-10 h-10 rounded bg-slate-200 dark:bg-slate-800 animate-pulse flex-shrink-0" />
               <div className="flex-1 min-w-0 space-y-1.5">
-                <div className="h-3.5 bg-slate-200 rounded animate-pulse w-1/2" />
-                <div className="h-3 bg-slate-100 rounded animate-pulse w-3/4" />
+                <div className="h-3.5 bg-slate-200 dark:bg-slate-800 rounded animate-pulse w-1/2" />
+                <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded animate-pulse w-3/4" />
               </div>
-              <div className="w-14 h-4 bg-slate-200 rounded animate-pulse flex-shrink-0" />
-              <div className="w-10 h-4 bg-slate-200 rounded animate-pulse flex-shrink-0" />
-              <div className="w-20 h-4 bg-slate-200 rounded animate-pulse flex-shrink-0 hidden md:block" />
+              <div className="w-14 h-4 bg-slate-200 dark:bg-slate-800 rounded animate-pulse flex-shrink-0" />
+              <div className="w-10 h-4 bg-slate-200 dark:bg-slate-800 rounded animate-pulse flex-shrink-0" />
+              <div className="w-20 h-4 bg-slate-200 dark:bg-slate-800 rounded animate-pulse flex-shrink-0 hidden md:block" />
             </div>
           ))}
         </div>
@@ -1378,7 +1378,7 @@ function GridLens(props: any) {
     )
   }
   if (error) {
-    return <Card><div role="alert" aria-live="assertive" className="text-md text-rose-600 py-8 text-center">Failed to load: {error}</div></Card>
+    return <Card><div role="alert" aria-live="assertive" className="text-md text-rose-600 dark:text-rose-400 py-8 text-center">Failed to load: {error}</div></Card>
   }
   if (products.length === 0) {
     // E.13 — empty state distinguishes "filters too narrow" from
@@ -1390,7 +1390,7 @@ function GridLens(props: any) {
     return (
       <Card>
         <div className="py-12 px-6 text-center max-w-md mx-auto space-y-3">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 text-slate-400 mb-1">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 mb-1">
             <Boxes className="w-6 h-6" />
           </div>
           <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">
@@ -1406,14 +1406,14 @@ function GridLens(props: any) {
               <button
                 type="button"
                 onClick={() => (props as any).onClearFilters?.()}
-                className="h-8 px-3 text-base bg-slate-900 text-white rounded-md hover:bg-slate-800 inline-flex items-center gap-1.5"
+                className="h-8 px-3 text-base bg-slate-900 text-white rounded-md hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 inline-flex items-center gap-1.5"
               >
                 <X size={12} /> Clear all filters
               </button>
             )}
             <Link
               href="/products/new"
-              className={`h-8 px-3 text-base inline-flex items-center gap-1.5 rounded ${filtered ? 'border border-slate-200 text-slate-700 hover:bg-slate-50' : 'bg-slate-900 text-white hover:bg-slate-800'}`}
+              className={`h-8 px-3 text-base inline-flex items-center gap-1.5 rounded ${filtered ? 'border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800' : 'bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200'}`}
             >
               <Plus size={12} /> New product
             </Link>
@@ -1442,22 +1442,22 @@ function GridLens(props: any) {
           always-visible sticky slot. Operators set density / columns /
           page-size once and forget; pulling the action bar to the top
           gives the high-frequency surface the better real estate. */}
-      <div className="-mx-2 px-2 py-1.5 flex items-center gap-2 justify-between border-b border-slate-200">
+      <div className="-mx-2 px-2 py-1.5 flex items-center gap-2 justify-between border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-500">
-            <span className="font-semibold text-slate-700 tabular-nums">{total}</span> products · page {page} of {totalPages}
+          <span className="text-sm text-slate-500 dark:text-slate-400">
+            <span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">{total}</span> products · page {page} of {totalPages}
           </span>
           <select
             value={pageSize}
             onChange={(e) => onPageSize(Number(e.target.value))}
-            className="h-7 px-2 text-sm border border-slate-200 rounded"
+            className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
           >
             {[50, 100, 200, 500].map((n) => <option key={n} value={n}>{n}/page</option>)}
           </select>
         </div>
         {/* F7 — density picker. Three-segment toggle adjacent to the
             columns picker. Persisted per-user via localStorage. */}
-        <div className="inline-flex items-center border border-slate-200 rounded overflow-hidden h-7 text-sm">
+        <div className="inline-flex items-center border border-slate-200 dark:border-slate-700 rounded overflow-hidden h-7 text-sm">
           {(['compact', 'comfortable', 'spacious'] as const).map((d) => {
             // U.6 — Lucide icons replace the ASCII glyphs (≡ ☰ ☲) which
             // didn't visually align across fonts. The icon vocabulary
@@ -1475,8 +1475,8 @@ function GridLens(props: any) {
                 aria-pressed={density === d}
                 className={`px-2 h-full inline-flex items-center justify-center ${
                   density === d
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-white text-slate-600 hover:bg-slate-50'
+                    ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                    : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800'
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" aria-hidden="true" />

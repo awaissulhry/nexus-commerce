@@ -199,17 +199,17 @@ export default function ChannelListingTab({
               {marketInfo.code}
             </Badge>
             <div className="min-w-0">
-              <div className="text-md font-semibold text-slate-900 truncate">
+              <div className="text-md font-semibold text-slate-900 dark:text-slate-100 truncate">
                 {marketInfo.name}
               </div>
-              <div className="text-sm text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+              <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
                 {isNew ? (
                   <span>Not yet listed on this marketplace</span>
                 ) : (
                   <>
                     <span>
                       Status:{' '}
-                      <span className="font-medium text-slate-700">
+                      <span className="font-medium text-slate-700 dark:text-slate-300">
                         {listing!.listingStatus}
                       </span>
                     </span>
@@ -261,9 +261,9 @@ export default function ChannelListingTab({
           <div
             className={cn(
               'border-t px-4 py-2 text-base flex items-center gap-2',
-              statusMsg.kind === 'success' && 'border-green-200 bg-green-50 text-green-700',
-              statusMsg.kind === 'error' && 'border-red-200 bg-red-50 text-red-700',
-              statusMsg.kind === 'info' && 'border-slate-200 bg-slate-50 text-slate-700',
+              statusMsg.kind === 'success' && 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300',
+              statusMsg.kind === 'error' && 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300',
+              statusMsg.kind === 'info' && 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300',
             )}
           >
             {statusMsg.kind === 'error' && <AlertTriangle className="w-3.5 h-3.5" />}

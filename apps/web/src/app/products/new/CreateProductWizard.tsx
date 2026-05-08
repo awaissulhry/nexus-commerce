@@ -85,17 +85,17 @@ export default function CreateProductWizard() {
   }, [router])
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-6">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center px-6">
       <div className="max-w-md w-full text-center">
         {!error ? (
           <>
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-50 text-blue-600 mb-4">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 mb-4">
               <Loader2 className="w-6 h-6 animate-spin" />
             </div>
-            <h1 className="text-2xl font-semibold text-slate-900 mb-1">
+            <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mb-1">
               Setting up your new product…
             </h1>
-            <p className="text-md text-slate-600">
+            <p className="text-md text-slate-600 dark:text-slate-400">
               We're creating a draft and dropping you into the listing
               wizard. You'll be able to rename the SKU and master name
               later from the edit page.
@@ -103,13 +103,13 @@ export default function CreateProductWizard() {
           </>
         ) : (
           <>
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-rose-50 text-rose-600 mb-4">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 mb-4">
               <AlertCircle className="w-6 h-6" />
             </div>
-            <h1 className="text-2xl font-semibold text-slate-900 mb-1">
+            <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mb-1">
               Couldn't start a new product
             </h1>
-            <p className="text-md text-slate-600 mb-4 break-words">
+            <p className="text-md text-slate-600 dark:text-slate-400 mb-4 break-words">
               {error}
             </p>
             <div className="flex items-center justify-center gap-2">

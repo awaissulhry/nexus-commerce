@@ -203,8 +203,8 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
           className={cn(
             'border rounded-lg px-4 py-2.5 text-base flex items-start justify-between gap-3',
             statusMsg.kind === 'success'
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-              : 'bg-rose-50 border-rose-200 text-rose-800',
+              ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+              : 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300',
           )}
           role="status"
         >
@@ -239,7 +239,7 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
                   }`
                 : ''}
             </span>
-            <span className="text-slate-300">·</span>
+            <span className="text-slate-300 dark:text-slate-600">·</span>
             <RelativeTimestamp at={lastRefreshed} />
           </span>
         }
@@ -250,7 +250,7 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
               onClick={() => void refetch()}
               disabled={refreshing}
               title="Refresh prices & quantities from the database"
-              className="inline-flex items-center gap-1 h-7 px-2 text-sm font-medium text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50"
+              className="inline-flex items-center gap-1 h-7 px-2 text-sm font-medium text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
             >
               {refreshing ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -279,7 +279,7 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
             ))}
           </div>
         ) : (
-          <p className="text-sm text-slate-400 italic">
+          <p className="text-sm text-slate-400 dark:text-slate-500 italic">
             No variation axes set yet — your first variant defines them
             (e.g. add a Color/Size pair and they become this product's
             axes).
@@ -290,29 +290,29 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
       <Card noPadding>
         <div className="overflow-x-auto">
           <table className="w-full text-md">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-800">
               <tr>
-                <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wide">
+                <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
                   SKU
                 </th>
                 {variationAxes.map((axis) => (
                   <th
                     key={axis}
-                    className="px-4 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wide"
+                    className="px-4 py-2 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide"
                   >
                     {axis}
                   </th>
                 ))}
-                <th className="px-4 py-2 text-right text-sm font-semibold text-slate-700 uppercase tracking-wide">
+                <th className="px-4 py-2 text-right text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
                   Price
                 </th>
-                <th className="px-4 py-2 text-right text-sm font-semibold text-slate-700 uppercase tracking-wide">
+                <th className="px-4 py-2 text-right text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
                   Stock
                 </th>
-                <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wide">
+                <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
                   ASIN
                 </th>
-                <th className="px-4 py-2 text-right text-sm font-semibold text-slate-700 uppercase tracking-wide">
+                <th className="px-4 py-2 text-right text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
                   Actions
                 </th>
               </tr>
@@ -322,7 +322,7 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
                 <tr>
                   <td
                     colSpan={5 + variationAxes.length}
-                    className="px-4 py-6 text-center text-base text-slate-400"
+                    className="px-4 py-6 text-center text-base text-slate-400 dark:text-slate-500"
                   >
                     No variations linked to this product. Click{' '}
                     <strong>Add Variation</strong> to create one.
@@ -332,9 +332,9 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
               {rows.map((child) => (
                 <tr
                   key={child.id}
-                  className="border-b border-slate-100 hover:bg-slate-50"
+                  className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
-                  <td className="px-4 py-2 font-mono text-base text-slate-900">
+                  <td className="px-4 py-2 font-mono text-base text-slate-900 dark:text-slate-100">
                     {child.sku}
                   </td>
                   {variationAxes.map((axis) => {
@@ -342,33 +342,33 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
                     return (
                       <td
                         key={axis}
-                        className="px-4 py-2 text-base text-slate-700"
+                        className="px-4 py-2 text-base text-slate-700 dark:text-slate-300"
                       >
-                        {value ?? <span className="text-slate-400">—</span>}
+                        {value ?? <span className="text-slate-400 dark:text-slate-500">—</span>}
                       </td>
                     )
                   })}
-                  <td className="px-4 py-2 text-right tabular-nums text-slate-900">
+                  <td className="px-4 py-2 text-right tabular-nums text-slate-900 dark:text-slate-100">
                     €{Number(child.basePrice ?? 0).toFixed(2)}
                   </td>
                   <td className="px-4 py-2 text-right tabular-nums">
                     <span
                       className={
                         Number(child.totalStock ?? 0) > 0
-                          ? 'text-slate-900'
-                          : 'text-red-600'
+                          ? 'text-slate-900 dark:text-slate-100'
+                          : 'text-red-600 dark:text-red-400'
                       }
                     >
                       {child.totalStock ?? 0}
                     </span>
                   </td>
-                  <td className="px-4 py-2 font-mono text-base text-slate-700">
-                    {child.amazonAsin ?? <span className="text-slate-400">—</span>}
+                  <td className="px-4 py-2 font-mono text-base text-slate-700 dark:text-slate-300">
+                    {child.amazonAsin ?? <span className="text-slate-400 dark:text-slate-500">—</span>}
                   </td>
                   <td className="px-4 py-2 text-right">
                     <button
                       onClick={() => setEditing(child)}
-                      className="p-1 rounded hover:bg-slate-200 text-slate-600 transition-colors"
+                      className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-colors"
                       title="Edit"
                       aria-label={`Edit ${child.sku}`}
                     >
@@ -376,7 +376,7 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
                     </button>
                     <button
                       onClick={() => setDeleting(child)}
-                      className="p-1 rounded hover:bg-slate-200 text-red-600 ml-1 transition-colors"
+                      className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-red-600 dark:text-red-400 ml-1 transition-colors"
                       title="Delete variant"
                       aria-label={`Delete ${child.sku}`}
                     >
@@ -795,23 +795,23 @@ function VariantFormModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/40 backdrop-blur-sm pt-[8vh] px-4"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/40 dark:bg-slate-950/60 backdrop-blur-sm pt-[8vh] px-4"
       role="dialog"
       aria-modal="true"
       onClick={() => !submitting && onClose()}
     >
       <div
-        className="bg-white rounded-lg shadow-xl border border-slate-200 w-[600px] max-w-[92vw] flex flex-col max-h-[85vh]"
+        className="bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800 w-[600px] max-w-[92vw] flex flex-col max-h-[85vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-800">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
             {mode === 'create' ? 'Add Variation' : `Edit ${initial?.sku}`}
           </h2>
           <button
             type="button"
             onClick={() => !submitting && onClose()}
-            className="text-slate-400 hover:text-slate-700 disabled:opacity-50"
+            className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 disabled:opacity-50"
             disabled={submitting}
             aria-label="Close"
           >
@@ -829,13 +829,13 @@ function VariantFormModal({
                 placeholder="XAV-001-RED-L"
                 className={cn(
                   inputCls,
-                  isDuplicateSku && 'border-rose-300 focus:border-rose-500',
+                  isDuplicateSku && 'border-rose-300 dark:border-rose-700 focus:border-rose-500',
                 )}
                 disabled={submitting}
                 autoFocus
               />
               {isDuplicateSku && (
-                <p className="mt-0.5 text-sm text-rose-600">
+                <p className="mt-0.5 text-sm text-rose-600 dark:text-rose-400">
                   Already used by another variant in this parent.
                 </p>
               )}
@@ -881,7 +881,7 @@ function VariantFormModal({
               free-text fallback. */}
           {variationAxes.length > 0 && (
             <div>
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-2">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">
                 Variation axes
               </h3>
               <div className="grid grid-cols-2 gap-3">
@@ -943,7 +943,7 @@ function VariantFormModal({
               promoted parent goes through this path. */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 {variationAxes.length === 0
                   ? 'Define axes (first variant)'
                   : 'Add new axis'}
@@ -954,13 +954,13 @@ function VariantFormModal({
                   setNewAxes((s) => [...s, { key: '', value: '' }])
                 }
                 disabled={submitting}
-                className="text-sm text-blue-600 hover:underline disabled:opacity-50"
+                className="text-sm text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
               >
                 + Add axis
               </button>
             </div>
             {newAxes.length === 0 && variationAxes.length === 0 && (
-              <p className="text-sm text-slate-500 italic">
+              <p className="text-sm text-slate-500 dark:text-slate-400 italic">
                 You haven't defined any axes yet. Click + Add axis to set
                 them — e.g. <span className="font-mono">color: Red</span>{' '}
                 and <span className="font-mono">size: L</span>.
@@ -1004,7 +1004,7 @@ function VariantFormModal({
                         setNewAxes((s) => s.filter((_, i) => i !== idx))
                       }
                       disabled={submitting}
-                      className="text-rose-500 hover:text-rose-700 disabled:opacity-50"
+                      className="text-rose-500 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 disabled:opacity-50"
                       aria-label="Remove axis"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -1016,7 +1016,7 @@ function VariantFormModal({
           </div>
 
           {(validation.length > 0 || error) && (
-            <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-700">
+            <div className="border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 rounded-md px-3 py-2 text-base text-rose-700 dark:text-rose-300">
               <div className="font-semibold mb-1 inline-flex items-center gap-1.5">
                 <AlertCircle className="w-3.5 h-3.5" />
                 {error ? 'Save failed' : 'Fix the following:'}
@@ -1034,7 +1034,7 @@ function VariantFormModal({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200">
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-800">
           <Button
             variant="secondary"
             size="sm"
@@ -1125,28 +1125,28 @@ function DeleteConfirmModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/40 backdrop-blur-sm pt-[12vh] px-4"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/40 dark:bg-slate-950/60 backdrop-blur-sm pt-[12vh] px-4"
       role="dialog"
       aria-modal="true"
       onClick={() => !submitting && onClose()}
     >
       <div
-        className="bg-white rounded-lg shadow-xl border border-slate-200 w-[440px] max-w-[92vw]"
+        className="bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800 w-[440px] max-w-[92vw]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-5 py-4 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900">
+        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
             Delete variant?
           </h2>
         </div>
         <div className="px-5 py-4 space-y-3">
-          <p className="text-md text-slate-700">
+          <p className="text-md text-slate-700 dark:text-slate-300">
             This will permanently delete{' '}
             <span className="font-mono">{variant.sku}</span> and every
             channel listing linked to it. Cannot be undone.
           </p>
           {linkCount !== null && linkCount > 0 && (
-            <div className="border border-amber-200 bg-amber-50 rounded-md px-3 py-2 text-base text-amber-800 inline-flex items-start gap-1.5">
+            <div className="border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 rounded-md px-3 py-2 text-base text-amber-800 dark:text-amber-300 inline-flex items-start gap-1.5">
               <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
               <span>
                 <strong>{linkCount}</strong> channel listing
@@ -1156,12 +1156,12 @@ function DeleteConfirmModal({
             </div>
           )}
           {error && (
-            <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-700">
+            <div className="border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 rounded-md px-3 py-2 text-base text-rose-700 dark:text-rose-300">
               {error}
             </div>
           )}
         </div>
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200">
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-800">
           <Button
             variant="secondary"
             size="sm"
@@ -1208,10 +1208,10 @@ function RelativeTimestamp({ at }: { at: number }) {
       className={cn(
         'inline-flex items-center gap-1 text-xs tabular-nums',
         seconds < 30
-          ? 'text-emerald-600'
+          ? 'text-emerald-600 dark:text-emerald-400'
           : seconds < 120
-          ? 'text-slate-500'
-          : 'text-amber-600',
+          ? 'text-slate-500 dark:text-slate-400'
+          : 'text-amber-600 dark:text-amber-400',
       )}
       title={`Last refreshed at ${new Date(at).toLocaleTimeString()}`}
     >
@@ -1232,9 +1232,9 @@ function FormField({
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-slate-700 mb-1">
+      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
         {label}
-        {required && <span className="text-rose-600 ml-0.5">*</span>}
+        {required && <span className="text-rose-600 dark:text-rose-400 ml-0.5">*</span>}
       </label>
       {children}
     </div>
@@ -1242,4 +1242,4 @@ function FormField({
 }
 
 const inputCls =
-  'w-full h-8 px-2.5 text-base border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white disabled:bg-slate-50 disabled:text-slate-500'
+  'w-full h-8 px-2.5 text-base border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 disabled:bg-slate-50 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:disabled:text-slate-400'

@@ -326,25 +326,25 @@ export default function MatrixWorkspace({
         <div className="min-w-0">
           <Link
             href={`/products/${product.id}`}
-            className="text-sm text-slate-500 hover:text-slate-700 inline-flex items-center gap-1"
+            className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 inline-flex items-center gap-1"
           >
             <ChevronLeft className="w-3 h-3" />
             Back to product
           </Link>
-          <h1 className="text-xl font-semibold text-slate-900 mt-1 truncate">
+          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-1 truncate">
             {product.name}
           </h1>
-          <div className="text-base text-slate-500 flex items-center gap-2 flex-wrap">
+          <div className="text-base text-slate-500 dark:text-slate-400 flex items-center gap-2 flex-wrap">
             <span className="font-mono">{product.sku}</span>
-            <span className="text-slate-300">·</span>
+            <span className="text-slate-300 dark:text-slate-600">·</span>
             <span>{children.length} variants</span>
-            <span className="text-slate-300">·</span>
+            <span className="text-slate-300 dark:text-slate-600">·</span>
             <span>{totals.stockSum.toLocaleString()} units in stock</span>
-            <span className="text-slate-300">·</span>
+            <span className="text-slate-300 dark:text-slate-600">·</span>
             <span>{totals.liveCount} active</span>
             {axes.length > 0 && (
               <>
-                <span className="text-slate-300">·</span>
+                <span className="text-slate-300 dark:text-slate-600">·</span>
                 <span className="inline-flex items-center gap-1">
                   <Layers className="w-3 h-3" />
                   {axes.join(' × ')}
@@ -358,7 +358,7 @@ export default function MatrixWorkspace({
             type="button"
             onClick={() => void refetchChildren()}
             disabled={refreshing}
-            className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-50"
+            className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5 disabled:opacity-50"
           >
             {refreshing ? (
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -369,7 +369,7 @@ export default function MatrixWorkspace({
           </button>
           <Link
             href={`/products/${product.id}/edit/bulk`}
-            className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+            className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5"
           >
             <ExternalLink className="w-3 h-3" />
             Channel editor
@@ -378,14 +378,14 @@ export default function MatrixWorkspace({
       </header>
 
       {error && (
-        <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800 flex items-start gap-2">
+        <div className="border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 rounded-md px-3 py-2 text-base text-rose-800 dark:text-rose-300 flex items-start gap-2">
           <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
       {axes.length === 0 ? (
-        <div className="border border-slate-200 rounded-md px-4 py-8 text-center text-base text-slate-500">
+        <div className="border border-slate-200 dark:border-slate-800 rounded-md px-4 py-8 text-center text-base text-slate-500 dark:text-slate-400">
           No variation axes set yet. Add a variant with{' '}
           <span className="font-mono">{`{ "Size": "M" }`}</span> on the
           product detail page and they&apos;ll appear here.
@@ -417,7 +417,7 @@ export default function MatrixWorkspace({
         />
       )}
 
-      <div className="text-sm text-slate-500 pt-3 border-t border-slate-100">
+      <div className="text-sm text-slate-500 dark:text-slate-400 pt-3 border-t border-slate-100 dark:border-slate-800">
         <div className="font-medium mb-1">Tips</div>
         <ul className="list-disc pl-4 space-y-0.5">
           <li>Click a price or stock cell to edit. Enter saves, Esc cancels.</li>
@@ -462,45 +462,45 @@ function FlatTable({
   commitDragFill: () => Promise<void>
 }) {
   return (
-    <div className="border border-slate-200 rounded-md overflow-hidden">
+    <div className="border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
       <table className="w-full text-base">
-        <thead className="bg-slate-50 border-b border-slate-200">
+        <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-800">
           <tr>
-            <th className="px-3 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wide w-48">
+            <th className="px-3 py-2 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide w-48">
               SKU
             </th>
             {axes.map((axis) => (
               <th
                 key={axis}
-                className="px-3 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wide"
+                className="px-3 py-2 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide"
               >
                 {axis}
               </th>
             ))}
-            <th className="px-3 py-2 text-right text-sm font-semibold text-slate-700 uppercase tracking-wide w-28">
+            <th className="px-3 py-2 text-right text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide w-28">
               Price
             </th>
-            <th className="px-3 py-2 text-right text-sm font-semibold text-slate-700 uppercase tracking-wide w-24">
+            <th className="px-3 py-2 text-right text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide w-24">
               Stock
             </th>
-            <th className="px-3 py-2 text-right text-sm font-semibold text-slate-700 uppercase tracking-wide w-24">
+            <th className="px-3 py-2 text-right text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide w-24">
               Threshold
             </th>
-            <th className="px-3 py-2 text-right text-sm font-semibold text-slate-700 uppercase tracking-wide w-20">
+            <th className="px-3 py-2 text-right text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide w-20">
               {''}
             </th>
           </tr>
         </thead>
         <tbody>
           {rows.map((child) => (
-            <tr key={child.id} className="border-b border-slate-100">
-              <td className="px-3 py-1.5 font-mono text-slate-700">
+            <tr key={child.id} className="border-b border-slate-100 dark:border-slate-800">
+              <td className="px-3 py-1.5 font-mono text-slate-700 dark:text-slate-300">
                 {child.sku}
               </td>
               {axes.map((axis) => (
-                <td key={axis} className="px-3 py-1.5 text-slate-700">
+                <td key={axis} className="px-3 py-1.5 text-slate-700 dark:text-slate-300">
                   {getAttr(child, axis) ?? (
-                    <span className="text-slate-300">—</span>
+                    <span className="text-slate-300 dark:text-slate-600">—</span>
                   )}
                 </td>
               ))}
@@ -548,7 +548,7 @@ function FlatTable({
               <td className="px-3 py-1.5 text-right">
                 <Link
                   href={`/products?drawer=${child.id}`}
-                  className="text-sm text-slate-500 hover:text-slate-900"
+                  className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
                 >
                   Open
                 </Link>
@@ -594,17 +594,17 @@ function PivotGrid({
   const colValues = axisValues.get(axisCol) ?? []
 
   return (
-    <div className="border border-slate-200 rounded-md overflow-hidden overflow-x-auto">
+    <div className="border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden overflow-x-auto">
       <table className="text-base border-collapse">
         <thead>
-          <tr className="bg-slate-50 border-b border-slate-200">
-            <th className="px-3 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wide sticky left-0 bg-slate-50 z-10">
+          <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-800">
+            <th className="px-3 py-2 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide sticky left-0 bg-slate-50 dark:bg-slate-800 z-10">
               {axisRow} ↓ / {axisCol} →
             </th>
             {colValues.map((c) => (
               <th
                 key={c}
-                className="px-3 py-2 text-center text-sm font-semibold text-slate-700 uppercase tracking-wide min-w-[140px]"
+                className="px-3 py-2 text-center text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide min-w-[140px]"
               >
                 {c}
               </th>
@@ -613,8 +613,8 @@ function PivotGrid({
         </thead>
         <tbody>
           {rowValues.map((rv) => (
-            <tr key={rv} className="border-b border-slate-100">
-              <th className="px-3 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wide bg-slate-50 sticky left-0 z-10 align-top">
+            <tr key={rv} className="border-b border-slate-100 dark:border-slate-800">
+              <th className="px-3 py-2 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide bg-slate-50 dark:bg-slate-800 sticky left-0 z-10 align-top">
                 {rv}
               </th>
               {colValues.map((cv) => {
@@ -624,7 +624,7 @@ function PivotGrid({
                   return (
                     <td
                       key={cv}
-                      className="px-3 py-2 text-center text-slate-300 border-l border-slate-100"
+                      className="px-3 py-2 text-center text-slate-300 dark:text-slate-600 border-l border-slate-100 dark:border-slate-800"
                     >
                       —
                     </td>
@@ -637,9 +637,9 @@ function PivotGrid({
                 return (
                   <td
                     key={cv}
-                    className="px-2 py-1.5 border-l border-slate-100 align-top min-w-[140px]"
+                    className="px-2 py-1.5 border-l border-slate-100 dark:border-slate-800 align-top min-w-[140px]"
                   >
-                    <div className="text-xs font-mono text-slate-400 truncate mb-1">
+                    <div className="text-xs font-mono text-slate-400 dark:text-slate-500 truncate mb-1">
                       {child.sku}
                     </div>
                     <NumericCell
@@ -814,16 +814,16 @@ function NumericCell({
   }, [drag, commitDragFill, setDrag])
 
   const cellBg = isDragTarget
-    ? 'bg-purple-50'
+    ? 'bg-purple-50 dark:bg-purple-950/40'
     : isDragSource
-      ? 'bg-purple-100'
+      ? 'bg-purple-100 dark:bg-purple-900/40'
       : state === 'flash'
-        ? 'bg-emerald-50'
+        ? 'bg-emerald-50 dark:bg-emerald-950/40'
         : state === 'error'
-          ? 'bg-rose-50'
+          ? 'bg-rose-50 dark:bg-rose-950/40'
           : ''
 
-  const valueColor = tone === 'warn' ? 'text-amber-700' : 'text-slate-900'
+  const valueColor = tone === 'warn' ? 'text-amber-700 dark:text-amber-400' : 'text-slate-900 dark:text-slate-100'
 
   if (compact) {
     return (
@@ -850,27 +850,27 @@ function NumericCell({
                 cancel()
               }
             }}
-            className="w-full h-5 px-1 text-sm border border-purple-300 rounded bg-white tabular-nums text-right"
+            className="w-full h-5 px-1 text-sm border border-purple-300 dark:border-purple-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 tabular-nums text-right"
           />
         ) : (
           <button
             type="button"
             onClick={() => setActiveEdit(addr)}
-            className="w-full text-right cursor-text hover:bg-slate-100 rounded px-1"
+            className="w-full text-right cursor-text hover:bg-slate-100 dark:hover:bg-slate-800 rounded px-1"
           >
             {format(value)}
           </button>
         )}
         {state === 'saving' && (
-          <Loader2 className="w-2.5 h-2.5 animate-spin absolute top-0.5 right-0.5 text-purple-500" />
+          <Loader2 className="w-2.5 h-2.5 animate-spin absolute top-0.5 right-0.5 text-purple-500 dark:text-purple-400" />
         )}
         {state === 'flash' && (
-          <CheckCircle2 className="w-2.5 h-2.5 absolute top-0.5 right-0.5 text-emerald-600" />
+          <CheckCircle2 className="w-2.5 h-2.5 absolute top-0.5 right-0.5 text-emerald-600 dark:text-emerald-400" />
         )}
         {!isEditing && (
           <span
             onMouseDown={onHandleDown}
-            className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 bg-slate-400 rounded-full opacity-0 group-hover:opacity-100 cursor-crosshair hover:bg-purple-600"
+            className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 bg-slate-400 dark:bg-slate-500 rounded-full opacity-0 group-hover:opacity-100 cursor-crosshair hover:bg-purple-600 dark:hover:bg-purple-400"
             title="Drag to fill down column"
           />
         )}
@@ -901,27 +901,27 @@ function NumericCell({
               cancel()
             }
           }}
-          className="w-full h-7 px-2 text-base border border-purple-300 rounded bg-white tabular-nums text-right"
+          className="w-full h-7 px-2 text-base border border-purple-300 dark:border-purple-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 tabular-nums text-right"
         />
       ) : (
         <button
           type="button"
           onClick={() => setActiveEdit(addr)}
-          className="w-full text-right cursor-text hover:bg-slate-100 rounded px-1 py-0.5"
+          className="w-full text-right cursor-text hover:bg-slate-100 dark:hover:bg-slate-800 rounded px-1 py-0.5"
         >
           {format(value)}
         </button>
       )}
       {state === 'saving' && (
-        <Loader2 className="w-3 h-3 animate-spin absolute top-1.5 right-1 text-purple-500" />
+        <Loader2 className="w-3 h-3 animate-spin absolute top-1.5 right-1 text-purple-500 dark:text-purple-400" />
       )}
       {state === 'flash' && (
-        <CheckCircle2 className="w-3 h-3 absolute top-1.5 right-1 text-emerald-600" />
+        <CheckCircle2 className="w-3 h-3 absolute top-1.5 right-1 text-emerald-600 dark:text-emerald-400" />
       )}
       {!isEditing && (
         <span
           onMouseDown={onHandleDown}
-          className="absolute bottom-0 right-0 w-2 h-2 bg-slate-400 rounded-tl opacity-0 group-hover:opacity-100 cursor-crosshair hover:bg-purple-600"
+          className="absolute bottom-0 right-0 w-2 h-2 bg-slate-400 dark:bg-slate-500 rounded-tl opacity-0 group-hover:opacity-100 cursor-crosshair hover:bg-purple-600 dark:hover:bg-purple-400"
           title="Drag to fill down column"
         />
       )}

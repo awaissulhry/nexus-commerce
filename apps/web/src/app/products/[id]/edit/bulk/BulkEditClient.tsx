@@ -168,31 +168,31 @@ interface GroupTone {
 
 const TONE_BY_GROUP: Record<string, GroupTone> = {
   // master
-  universal: { band: 'bg-slate-100 border-slate-300', cell: 'bg-white', text: 'text-slate-900' },
-  identifiers: { band: 'bg-indigo-50 border-indigo-200', cell: 'bg-indigo-50/30', text: 'text-indigo-900' },
-  pricing: { band: 'bg-emerald-50 border-emerald-200', cell: 'bg-emerald-50/30', text: 'text-emerald-900' },
-  inventory: { band: 'bg-amber-50 border-amber-200', cell: 'bg-amber-50/30', text: 'text-amber-900' },
-  physical: { band: 'bg-sky-50 border-sky-200', cell: 'bg-sky-50/30', text: 'text-sky-900' },
-  content: { band: 'bg-violet-50 border-violet-200', cell: 'bg-violet-50/30', text: 'text-violet-900' },
-  category: { band: 'bg-rose-50 border-rose-200', cell: 'bg-rose-50/30', text: 'text-rose-900' },
-  amazon: { band: 'bg-orange-50 border-orange-200', cell: 'bg-orange-50/30', text: 'text-orange-900' },
-  ebay: { band: 'bg-teal-50 border-teal-200', cell: 'bg-teal-50/30', text: 'text-teal-900' },
+  universal: { band: 'bg-slate-100 border-slate-300 dark:bg-slate-800 dark:border-slate-700', cell: 'bg-white dark:bg-slate-900', text: 'text-slate-900 dark:text-slate-100' },
+  identifiers: { band: 'bg-indigo-50 border-indigo-200 dark:bg-indigo-950/40 dark:border-indigo-800', cell: 'bg-indigo-50/30 dark:bg-indigo-950/20', text: 'text-indigo-900 dark:text-indigo-300' },
+  pricing: { band: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800', cell: 'bg-emerald-50/30 dark:bg-emerald-950/20', text: 'text-emerald-900 dark:text-emerald-300' },
+  inventory: { band: 'bg-amber-50 border-amber-200 dark:bg-amber-950/40 dark:border-amber-800', cell: 'bg-amber-50/30 dark:bg-amber-950/20', text: 'text-amber-900 dark:text-amber-300' },
+  physical: { band: 'bg-sky-50 border-sky-200 dark:bg-sky-950/40 dark:border-sky-800', cell: 'bg-sky-50/30 dark:bg-sky-950/20', text: 'text-sky-900 dark:text-sky-300' },
+  content: { band: 'bg-violet-50 border-violet-200 dark:bg-violet-950/40 dark:border-violet-800', cell: 'bg-violet-50/30 dark:bg-violet-950/20', text: 'text-violet-900 dark:text-violet-300' },
+  category: { band: 'bg-rose-50 border-rose-200 dark:bg-rose-950/40 dark:border-rose-800', cell: 'bg-rose-50/30 dark:bg-rose-950/20', text: 'text-rose-900 dark:text-rose-300' },
+  amazon: { band: 'bg-orange-50 border-orange-200 dark:bg-orange-950/40 dark:border-orange-800', cell: 'bg-orange-50/30 dark:bg-orange-950/20', text: 'text-orange-900 dark:text-orange-300' },
+  ebay: { band: 'bg-teal-50 border-teal-200 dark:bg-teal-950/40 dark:border-teal-800', cell: 'bg-teal-50/30 dark:bg-teal-950/20', text: 'text-teal-900 dark:text-teal-300' },
   // marketplace (schema)
-  Identity: { band: 'bg-slate-100 border-slate-300', cell: 'bg-white', text: 'text-slate-900' },
-  'Marketing copy': { band: 'bg-violet-50 border-violet-200', cell: 'bg-violet-50/30', text: 'text-violet-900' },
-  'Variation attributes': { band: 'bg-fuchsia-50 border-fuchsia-200', cell: 'bg-fuchsia-50/30', text: 'text-fuchsia-900' },
-  Audience: { band: 'bg-cyan-50 border-cyan-200', cell: 'bg-cyan-50/30', text: 'text-cyan-900' },
-  Categorisation: { band: 'bg-rose-50 border-rose-200', cell: 'bg-rose-50/30', text: 'text-rose-900' },
-  'Pricing & fulfillment': { band: 'bg-emerald-50 border-emerald-200', cell: 'bg-emerald-50/30', text: 'text-emerald-900' },
-  'Physical attributes': { band: 'bg-sky-50 border-sky-200', cell: 'bg-sky-50/30', text: 'text-sky-900' },
-  'Compliance & safety': { band: 'bg-amber-50 border-amber-200', cell: 'bg-amber-50/30', text: 'text-amber-900' },
-  'Other attributes': { band: 'bg-slate-50 border-slate-200', cell: 'bg-slate-50/30', text: 'text-slate-700' },
+  Identity: { band: 'bg-slate-100 border-slate-300 dark:bg-slate-800 dark:border-slate-700', cell: 'bg-white dark:bg-slate-900', text: 'text-slate-900 dark:text-slate-100' },
+  'Marketing copy': { band: 'bg-violet-50 border-violet-200 dark:bg-violet-950/40 dark:border-violet-800', cell: 'bg-violet-50/30 dark:bg-violet-950/20', text: 'text-violet-900 dark:text-violet-300' },
+  'Variation attributes': { band: 'bg-fuchsia-50 border-fuchsia-200 dark:bg-fuchsia-950/40 dark:border-fuchsia-800', cell: 'bg-fuchsia-50/30 dark:bg-fuchsia-950/20', text: 'text-fuchsia-900 dark:text-fuchsia-300' },
+  Audience: { band: 'bg-cyan-50 border-cyan-200 dark:bg-cyan-950/40 dark:border-cyan-800', cell: 'bg-cyan-50/30 dark:bg-cyan-950/20', text: 'text-cyan-900 dark:text-cyan-300' },
+  Categorisation: { band: 'bg-rose-50 border-rose-200 dark:bg-rose-950/40 dark:border-rose-800', cell: 'bg-rose-50/30 dark:bg-rose-950/20', text: 'text-rose-900 dark:text-rose-300' },
+  'Pricing & fulfillment': { band: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800', cell: 'bg-emerald-50/30 dark:bg-emerald-950/20', text: 'text-emerald-900 dark:text-emerald-300' },
+  'Physical attributes': { band: 'bg-sky-50 border-sky-200 dark:bg-sky-950/40 dark:border-sky-800', cell: 'bg-sky-50/30 dark:bg-sky-950/20', text: 'text-sky-900 dark:text-sky-300' },
+  'Compliance & safety': { band: 'bg-amber-50 border-amber-200 dark:bg-amber-950/40 dark:border-amber-800', cell: 'bg-amber-50/30 dark:bg-amber-950/20', text: 'text-amber-900 dark:text-amber-300' },
+  'Other attributes': { band: 'bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700', cell: 'bg-slate-50/30 dark:bg-slate-800/30', text: 'text-slate-700 dark:text-slate-300' },
 }
 
 const NEUTRAL_TONE: GroupTone = {
-  band: 'bg-slate-100 border-slate-200',
-  cell: 'bg-white',
-  text: 'text-slate-900',
+  band: 'bg-slate-100 border-slate-200 dark:bg-slate-800 dark:border-slate-700',
+  cell: 'bg-white dark:bg-slate-900',
+  text: 'text-slate-900 dark:text-slate-100',
 }
 
 const DEFAULT_OPEN_MASTER: ReadonlySet<string> = new Set(['universal', 'identifiers'])
@@ -1215,21 +1215,21 @@ export default function BulkEditClient({
   const schemaErr = isMarketplaceTab ? schemaErrors.get(activeTab) : null
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
       {/* ── Header ─────────────────────────────────────────────── */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
+      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-20">
         <div className="px-6 h-14 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => router.push(`/products/${product.id}/edit`)}
-              className="p-1 -m-1 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900"
+              className="p-1 -m-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
               aria-label="Back to edit"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-lg font-semibold text-slate-900 truncate max-w-[480px]">
+                <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100 truncate max-w-[480px]">
                   Bulk edit · {product.name}
                 </h1>
                 {product.isParent && (
@@ -1237,7 +1237,7 @@ export default function BulkEditClient({
                 )}
                 <SavePill status={status} message={statusMsg} />
               </div>
-              <div className="text-sm text-slate-500 mt-0.5 font-mono">
+              <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 font-mono">
                 {product.sku}
               </div>
             </div>
@@ -1335,13 +1335,13 @@ export default function BulkEditClient({
       {/* ── Spreadsheet ───────────────────────────────────────── */}
       <main className="flex-1 overflow-auto px-2 pb-8">
         {isMarketplaceTab && schemaIsLoading && grouped.length === 0 && (
-          <div className="text-base text-slate-500 inline-flex items-center gap-1.5 px-4 py-6">
+          <div className="text-base text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5 px-4 py-6">
             <Loader2 className="w-3 h-3 animate-spin" />
             Loading schema for {activeTab}…
           </div>
         )}
         {isMarketplaceTab && schemaErr && (
-          <div className="m-4 text-base text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2 inline-flex items-start gap-2">
+          <div className="m-4 text-base text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded px-3 py-2 inline-flex items-start gap-2">
             <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
             <div>
               {schemaErr}
@@ -1358,11 +1358,11 @@ export default function BulkEditClient({
 
         {grouped.length > 0 && (
           <table className="border-separate border-spacing-0 text-base">
-            <thead className="sticky top-0 z-10 bg-white">
+            <thead className="sticky top-0 z-10 bg-white dark:bg-slate-900">
               {/* Group band row */}
               <tr>
                 <th
-                  className="sticky left-0 z-20 bg-white border-b border-r border-slate-200 px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"
+                  className="sticky left-0 z-20 bg-white dark:bg-slate-900 border-b border-r border-slate-200 dark:border-slate-800 px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
                   style={{ minWidth: 240 }}
                 >
                   Variant
@@ -1401,17 +1401,17 @@ export default function BulkEditClient({
                   )
                 })}
                 <th
-                  className="border-b border-l border-slate-200 px-2 py-1 bg-white"
+                  className="border-b border-l border-slate-200 dark:border-slate-800 px-2 py-1 bg-white dark:bg-slate-900"
                   style={{ width: 40 }}
                 />
               </tr>
               {/* Field name row */}
               <tr>
                 <th
-                  className="sticky left-0 z-20 bg-white border-b border-r border-slate-200 px-2 py-1 text-left text-sm font-medium text-slate-700"
+                  className="sticky left-0 z-20 bg-white dark:bg-slate-900 border-b border-r border-slate-200 dark:border-slate-800 px-2 py-1 text-left text-sm font-medium text-slate-700 dark:text-slate-300"
                   style={{ minWidth: 240 }}
                 >
-                  <span className="text-slate-400 text-xs">SKU · Name</span>
+                  <span className="text-slate-400 dark:text-slate-500 text-xs">SKU · Name</span>
                 </th>
                 {grouped.flatMap((g) => {
                   const tone = TONE_BY_GROUP[g.key] ?? NEUTRAL_TONE
@@ -1421,7 +1421,7 @@ export default function BulkEditClient({
                       <th
                         key={`${g.key}__placeholder`}
                         className={cn(
-                          'border-b border-r-2 px-2 py-1 text-left text-xs italic text-slate-500',
+                          'border-b border-r-2 px-2 py-1 text-left text-xs italic text-slate-500 dark:text-slate-400',
                           tone.band,
                         )}
                         style={{ width: 80 }}
@@ -1434,11 +1434,11 @@ export default function BulkEditClient({
                     <th
                       key={f.id}
                       className={cn(
-                        'border-b px-2 py-1 text-left text-sm font-medium text-slate-700',
+                        'border-b px-2 py-1 text-left text-sm font-medium text-slate-700 dark:text-slate-300',
                         tone.band,
                         i === g.fields.length - 1
                           ? 'border-r-2'
-                          : 'border-r border-slate-200',
+                          : 'border-r border-slate-200 dark:border-slate-800',
                       )}
                       style={{ width: f.width ?? 140 }}
                       title={f.helpText ?? f.label}
@@ -1446,14 +1446,14 @@ export default function BulkEditClient({
                       <div className="truncate">
                         {f.label}
                         {f.required && (
-                          <span className="text-rose-600 ml-0.5">*</span>
+                          <span className="text-rose-600 dark:text-rose-400 ml-0.5">*</span>
                         )}
                       </div>
                     </th>
                   ))
                 })}
                 <th
-                  className="border-b border-l border-slate-200 px-2 py-1 bg-white"
+                  className="border-b border-l border-slate-200 dark:border-slate-800 px-2 py-1 bg-white dark:bg-slate-900"
                   style={{ width: 40 }}
                 />
               </tr>
@@ -1462,20 +1462,20 @@ export default function BulkEditClient({
               {rows.map((row, rowIdx) => {
                 const isParent = row.id === product.id
                 return (
-                  <tr key={row.id} className="hover:bg-slate-50/40">
+                  <tr key={row.id} className="hover:bg-slate-50/40 dark:hover:bg-slate-800/40">
                     <td
                       className={cn(
-                        'sticky left-0 z-10 border-b border-r border-slate-200 px-2 py-1 align-top',
-                        rowIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60',
+                        'sticky left-0 z-10 border-b border-r border-slate-200 dark:border-slate-800 px-2 py-1 align-top',
+                        rowIdx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/60 dark:bg-slate-800/60',
                       )}
                       style={{ minWidth: 240 }}
                     >
                       <div className="flex items-start gap-2">
                         <div className="min-w-0">
-                          <div className="font-mono text-sm text-slate-700 truncate">
+                          <div className="font-mono text-sm text-slate-700 dark:text-slate-300 truncate">
                             {row.sku}
                           </div>
-                          <div className="text-sm text-slate-500 truncate">
+                          <div className="text-sm text-slate-500 dark:text-slate-400 truncate">
                             {row.name}
                           </div>
                         </div>
@@ -1494,7 +1494,7 @@ export default function BulkEditClient({
                           <td
                             key={`${row.id}_${g.key}__placeholder`}
                             className={cn(
-                              'border-b border-r-2 px-2 py-1 italic text-slate-400 text-xs align-top',
+                              'border-b border-r-2 px-2 py-1 italic text-slate-400 dark:text-slate-500 text-xs align-top',
                               tone.cell,
                             )}
                             style={{ width: 80 }}
@@ -1518,8 +1518,8 @@ export default function BulkEditClient({
                               tone.cell,
                               i === g.fields.length - 1
                                 ? 'border-r-2'
-                                : 'border-r border-slate-200',
-                              errMsg && 'ring-1 ring-rose-400',
+                                : 'border-r border-slate-200 dark:border-slate-800',
+                              errMsg && 'ring-1 ring-rose-400 dark:ring-rose-500',
                             )}
                             style={{ width: f.width ?? 140 }}
                             title={errMsg ?? undefined}
@@ -1535,14 +1535,14 @@ export default function BulkEditClient({
                       })
                     })}
                     <td
-                      className="border-b border-l border-slate-200 px-1 py-0.5 align-top bg-white"
+                      className="border-b border-l border-slate-200 dark:border-slate-800 px-1 py-0.5 align-top bg-white dark:bg-slate-900"
                       style={{ width: 40 }}
                     >
                       {!isParent && (
                         <button
                           type="button"
                           onClick={() => handleDeleteVariant(row.id)}
-                          className="text-slate-400 hover:text-rose-600 p-1"
+                          className="text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 p-1"
                           aria-label="Delete variant"
                           title="Delete this variant"
                         >
@@ -1555,7 +1555,7 @@ export default function BulkEditClient({
               })}
               {/* Add-variant row */}
               {product.isParent && (
-                <tr className="bg-emerald-50/40">
+                <tr className="bg-emerald-50/40 dark:bg-emerald-950/20">
                   <td
                     colSpan={
                       1 +
@@ -1566,7 +1566,7 @@ export default function BulkEditClient({
                       ) +
                       1
                     }
-                    className="border-b border-slate-200 px-2 py-2"
+                    className="border-b border-slate-200 dark:border-slate-800 px-2 py-2"
                   >
                     {addingVariant ? (
                       <div className="flex items-center gap-2 flex-wrap">
@@ -1577,7 +1577,7 @@ export default function BulkEditClient({
                           onChange={(e) =>
                             setDraftVariant({ ...draftVariant, sku: e.target.value })
                           }
-                          className="h-7 px-2 text-base font-mono border border-slate-300 rounded w-40"
+                          className="h-7 px-2 text-base font-mono border border-slate-300 dark:border-slate-700 rounded w-40 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                         />
                         <input
                           type="text"
@@ -1586,7 +1586,7 @@ export default function BulkEditClient({
                           onChange={(e) =>
                             setDraftVariant({ ...draftVariant, name: e.target.value })
                           }
-                          className="h-7 px-2 text-base border border-slate-300 rounded w-64"
+                          className="h-7 px-2 text-base border border-slate-300 dark:border-slate-700 rounded w-64 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                         />
                         <input
                           type="number"
@@ -1595,7 +1595,7 @@ export default function BulkEditClient({
                           onChange={(e) =>
                             setDraftVariant({ ...draftVariant, basePrice: e.target.value })
                           }
-                          className="h-7 px-2 text-base border border-slate-300 rounded w-24"
+                          className="h-7 px-2 text-base border border-slate-300 dark:border-slate-700 rounded w-24 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                         />
                         <input
                           type="number"
@@ -1604,7 +1604,7 @@ export default function BulkEditClient({
                           onChange={(e) =>
                             setDraftVariant({ ...draftVariant, totalStock: e.target.value })
                           }
-                          className="h-7 px-2 text-base border border-slate-300 rounded w-24"
+                          className="h-7 px-2 text-base border border-slate-300 dark:border-slate-700 rounded w-24 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                         />
                         <Button variant="primary" size="sm" onClick={handleAddVariant}>
                           Create
@@ -1624,7 +1624,7 @@ export default function BulkEditClient({
                       <button
                         type="button"
                         onClick={() => setAddingVariant(true)}
-                        className="inline-flex items-center gap-1.5 text-base font-medium text-emerald-700 hover:text-emerald-900"
+                        className="inline-flex items-center gap-1.5 text-base font-medium text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-300"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         Add variant
@@ -1663,7 +1663,7 @@ function Cell({
 
   if (disabled || field.type === 'unsupported') {
     return (
-      <div className="px-1.5 py-1 text-base text-slate-500 truncate" title={display}>
+      <div className="px-1.5 py-1 text-base text-slate-500 dark:text-slate-400 truncate" title={display}>
         {display || '—'}
       </div>
     )
@@ -1674,7 +1674,7 @@ function Cell({
       <select
         value={display}
         onChange={(e) => onCommit(e.target.value || null)}
-        className="w-full h-6 px-1 text-base border border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent rounded"
+        className="w-full h-6 px-1 text-base border border-transparent hover:border-slate-300 dark:hover:border-slate-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent text-slate-900 dark:text-slate-100 rounded"
       >
         <option value="">—</option>
         {(field.options ?? []).map((opt) => (
@@ -1701,7 +1701,7 @@ function Cell({
             else onCommit(raw)
           }
         }}
-        className="w-full h-6 px-1 text-base tabular-nums border border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent rounded"
+        className="w-full h-6 px-1 text-base tabular-nums border border-transparent hover:border-slate-300 dark:hover:border-slate-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent text-slate-900 dark:text-slate-100 rounded"
       />
     )
   }
@@ -1724,7 +1724,7 @@ function Cell({
         defaultValue={display}
         rows={2}
         onBlur={(e) => onCommit(e.target.value === '' ? null : e.target.value)}
-        className="w-full px-1 py-0.5 text-base border border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent rounded resize-y"
+        className="w-full px-1 py-0.5 text-base border border-transparent hover:border-slate-300 dark:hover:border-slate-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent text-slate-900 dark:text-slate-100 rounded resize-y"
         maxLength={field.maxLength}
       />
     )
@@ -1757,7 +1757,7 @@ function Cell({
             ? `Edit cell shows entry 1; ${arr.length - 1} more entries — open this product's edit page for full bullet editor`
             : undefined
         }
-        className="w-full h-6 px-1 text-base border border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent rounded"
+        className="w-full h-6 px-1 text-base border border-transparent hover:border-slate-300 dark:hover:border-slate-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent text-slate-900 dark:text-slate-100 rounded"
       />
     )
   }
@@ -1769,7 +1769,7 @@ function Cell({
       defaultValue={display}
       onBlur={(e) => onCommit(e.target.value === '' ? null : e.target.value)}
       maxLength={field.maxLength}
-      className="w-full h-6 px-1 text-base border border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent rounded"
+      className="w-full h-6 px-1 text-base border border-transparent hover:border-slate-300 dark:hover:border-slate-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent text-slate-900 dark:text-slate-100 rounded"
     />
   )
 }
@@ -1794,13 +1794,13 @@ function TabBtn({
       className={cn(
         'px-3 py-2 text-base font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 flex-shrink-0',
         active
-          ? 'border-blue-600 text-blue-700'
-          : 'border-transparent text-slate-600 hover:text-slate-900',
+          ? 'border-blue-600 text-blue-700 dark:border-blue-400 dark:text-blue-300'
+          : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100',
       )}
     >
       {children}
       {typeof count === 'number' && count > 0 && (
-        <span className="text-xs font-mono px-1 rounded bg-slate-100 text-slate-600">
+        <span className="text-xs font-mono px-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
           {count}
         </span>
       )}
@@ -1822,9 +1822,9 @@ function SavePill({
     <span
       className={cn(
         'inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded border',
-        status === 'saving' && 'border-slate-200 text-slate-600 bg-slate-50',
-        status === 'saved' && 'border-emerald-200 text-emerald-700 bg-emerald-50',
-        status === 'error' && 'border-rose-200 text-rose-700 bg-rose-50',
+        status === 'saving' && 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800',
+        status === 'saved' && 'border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40',
+        status === 'error' && 'border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40',
       )}
     >
       {status === 'saving' && <Loader2 className="w-3 h-3 animate-spin" />}
@@ -1882,8 +1882,8 @@ function CopyFromMarketplaceMenu({
         className={cn(
           'inline-flex items-center gap-1 h-7 px-2 text-sm font-medium border rounded transition-colors',
           flash
-            ? 'border-emerald-300 text-emerald-700 bg-emerald-50'
-            : 'border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+            ? 'border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40'
+            : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100',
         )}
       >
         <Copy className="w-3 h-3" />
@@ -1896,8 +1896,8 @@ function CopyFromMarketplaceMenu({
             onClick={() => setOpen(false)}
             aria-hidden="true"
           />
-          <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded shadow-md py-1 min-w-[260px] text-base">
-            <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-slate-400">
+          <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded shadow-md py-1 min-w-[260px] text-base">
+            <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">
               Replicate values from
             </div>
             {others.map((t) => {
@@ -1916,14 +1916,14 @@ function CopyFromMarketplaceMenu({
                     }
                   }}
                   className={cn(
-                    'w-full text-left px-3 py-1.5 hover:bg-slate-50 inline-flex items-center justify-between gap-2',
+                    'w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center justify-between gap-2',
                     n === 0
-                      ? 'text-slate-400 cursor-not-allowed'
-                      : 'text-slate-700',
+                      ? 'text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                      : 'text-slate-700 dark:text-slate-300',
                   )}
                 >
                   <span className="font-mono text-sm">{t.channelKey}</span>
-                  <span className="text-xs text-slate-500 tabular-nums">
+                  <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
                     {n === 0
                       ? 'no listings'
                       : `${n} variant${n === 1 ? '' : 's'}`}
@@ -1988,8 +1988,8 @@ function ApplyToMarketplacesMenu({
         className={cn(
           'inline-flex items-center gap-1 h-7 px-2 text-sm font-medium border rounded transition-colors',
           flash
-            ? 'border-emerald-300 text-emerald-700 bg-emerald-50'
-            : 'border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+            ? 'border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40'
+            : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100',
         )}
       >
         <Send className="w-3 h-3" />
@@ -2005,20 +2005,20 @@ function ApplyToMarketplacesMenu({
             }}
             aria-hidden="true"
           />
-          <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded shadow-md py-1 min-w-[280px] text-base">
-            <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-slate-400">
+          <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded shadow-md py-1 min-w-[280px] text-base">
+            <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">
               Apply this marketplace's values to
             </div>
             <button
               type="button"
               onClick={() => void submit(others.map((t) => t.channelKey))}
-              className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700 inline-flex items-center justify-between gap-2"
+              className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center justify-between gap-2"
             >
               <span className="inline-flex items-center gap-1.5">
                 <Globe className="w-3 h-3" />
                 All other marketplaces
               </span>
-              <span className="text-xs text-slate-500 tabular-nums">
+              <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
                 {others.length}
               </span>
             </button>
@@ -2027,18 +2027,18 @@ function ApplyToMarketplacesMenu({
                 <button
                   type="button"
                   onClick={() => void submit(sameChannel.map((t) => t.channelKey))}
-                  className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700 inline-flex items-center justify-between gap-2"
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center justify-between gap-2"
                 >
                   <span>
                     Other {activeChannelKey.split(':')[0]} marketplaces
                   </span>
-                  <span className="text-xs text-slate-500 tabular-nums">
+                  <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
                     {sameChannel.length}
                   </span>
                 </button>
               )}
-            <div className="border-t border-slate-100 my-1" />
-            <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-slate-400">
+            <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
+            <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">
               Or pick targets
             </div>
             {others.map((t) => {
@@ -2048,14 +2048,14 @@ function ApplyToMarketplacesMenu({
                   key={t.channelKey}
                   type="button"
                   onClick={() => togglePick(t.channelKey)}
-                  className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700 inline-flex items-center gap-2"
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center gap-2"
                 >
                   <span
                     className={cn(
                       'w-3.5 h-3.5 flex-shrink-0 border rounded inline-flex items-center justify-center',
                       checked
                         ? 'border-blue-500 bg-blue-500 text-white'
-                        : 'border-slate-300 bg-white',
+                        : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800',
                     )}
                   >
                     {checked && <CheckCircle2 className="w-2.5 h-2.5" />}
@@ -2064,14 +2064,14 @@ function ApplyToMarketplacesMenu({
                 </button>
               )
             })}
-            <div className="px-3 py-2 border-t border-slate-100 flex items-center justify-end gap-2">
+            <div className="px-3 py-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => {
                   setOpen(false)
                   setPicked(new Set())
                 }}
-                className="text-sm text-slate-500 hover:text-slate-900"
+                className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
               >
                 Cancel
               </button>
@@ -2082,7 +2082,7 @@ function ApplyToMarketplacesMenu({
                 className={cn(
                   'h-6 px-2 rounded text-sm font-medium',
                   picked.size === 0
-                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed'
                     : 'bg-blue-600 text-white hover:bg-blue-700',
                 )}
               >

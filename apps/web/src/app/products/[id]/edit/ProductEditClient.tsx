@@ -142,22 +142,22 @@ export default function ProductEditClient({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       {/* ── Header ─────────────────────────────────────────────── */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
+      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <IconButton
               onClick={() => router.push('/products')}
               aria-label="Back"
               size="md"
-              className="-m-1 text-slate-500 hover:text-slate-900"
+              className="-m-1 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
             >
               <ChevronLeft className="w-4 h-4" />
             </IconButton>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-lg font-semibold text-slate-900 truncate max-w-[480px]">
+                <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100 truncate max-w-[480px]">
                   {product.name}
                 </h1>
                 {product.isParent && (
@@ -170,7 +170,7 @@ export default function ProductEditClient({
                   </Badge>
                 )}
               </div>
-              <div className="flex items-center gap-3 text-sm text-slate-500 mt-0.5 font-mono">
+              <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400 mt-0.5 font-mono">
                 <span>{product.sku}</span>
                 {product.amazonAsin && <span>{product.amazonAsin}</span>}
               </div>
@@ -246,14 +246,14 @@ export default function ProductEditClient({
             the create wizard redirects here so the user can hop into
             the listing wizard without hunting for the dropdown. */}
         {showCreatedBanner && (
-          <div className="mb-4 border border-emerald-200 bg-emerald-50 rounded-lg px-4 py-3 flex items-start justify-between gap-3">
+          <div className="mb-4 border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 rounded-lg px-4 py-3 flex items-start justify-between gap-3">
             <div className="flex items-start gap-2 min-w-0">
-              <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-600 flex-shrink-0" />
+              <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
               <div className="min-w-0">
-                <div className="text-md font-semibold text-emerald-900">
+                <div className="text-md font-semibold text-emerald-900 dark:text-emerald-200">
                   {product.sku} created
                 </div>
-                <div className="text-sm text-emerald-800 mt-0.5">
+                <div className="text-sm text-emerald-800 dark:text-emerald-300 mt-0.5">
                   Master data is saved. Use the <strong>List on Channel</strong>{' '}
                   dropdown above to publish to Amazon, eBay, Shopify or
                   WooCommerce — the wizard handles per-channel attributes,
@@ -265,7 +265,7 @@ export default function ProductEditClient({
               onClick={() => setShowCreatedBanner(false)}
               aria-label="Dismiss"
               size="sm"
-              className="text-emerald-600 hover:text-emerald-900 flex-shrink-0"
+              className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-200 flex-shrink-0"
             >
               <X className="w-3.5 h-3.5" />
             </IconButton>
@@ -293,7 +293,7 @@ export default function ProductEditClient({
 
           if (!marketInfo) {
             return (
-              <div className="text-md text-slate-500">
+              <div className="text-md text-slate-500 dark:text-slate-400">
                 No marketplaces configured for {channel}.
               </div>
             )
@@ -357,8 +357,8 @@ function TopTabButton({
       className={cn(
         'flex items-center gap-1.5 h-10 px-4 text-md font-medium border-b-2 transition-colors whitespace-nowrap',
         active
-          ? 'border-blue-600 text-blue-600'
-          : 'border-transparent text-slate-600 hover:text-slate-900'
+          ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+          : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
       )}
     >
       {children}
@@ -366,7 +366,9 @@ function TopTabButton({
         <span
           className={cn(
             'inline-flex items-center justify-center rounded text-xs tabular-nums px-1.5 py-0.5 min-w-[18px]',
-            active ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'
+            active
+              ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
+              : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
           )}
         >
           {count}
@@ -390,9 +392,9 @@ function MarketplaceSidebar({
   onSelect: (code: string) => void
 }) {
   return (
-    <aside className="bg-white border border-slate-200 rounded-lg overflow-hidden h-fit sticky top-[7.5rem]">
-      <div className="px-3 py-2 border-b border-slate-200">
-        <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">
+    <aside className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden h-fit sticky top-[7.5rem]">
+      <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800">
+        <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
           Markets
         </h3>
       </div>
@@ -407,8 +409,8 @@ function MarketplaceSidebar({
                 className={cn(
                   'w-full flex items-center justify-between gap-2 px-3 py-1.5 text-md text-left transition-colors',
                   active
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-slate-700 hover:bg-slate-50'
+                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
                 )}
               >
                 <span className="flex items-center gap-2 min-w-0">
@@ -416,8 +418,8 @@ function MarketplaceSidebar({
                     className={cn(
                       'font-mono text-xs tabular-nums px-1.5 py-0.5 rounded border',
                       active
-                        ? 'bg-white border-blue-200 text-blue-700'
-                        : 'bg-slate-100 border-slate-200 text-slate-600'
+                        ? 'bg-white dark:bg-slate-900 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'
+                        : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
                     )}
                   >
                     {m.code}
@@ -427,7 +429,7 @@ function MarketplaceSidebar({
                 <span
                   className={cn(
                     'flex-shrink-0 w-1.5 h-1.5 rounded-full',
-                    listed ? 'bg-green-500' : 'bg-slate-300'
+                    listed ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
                   )}
                   title={listed ? 'Listing exists' : 'Not listed'}
                 />

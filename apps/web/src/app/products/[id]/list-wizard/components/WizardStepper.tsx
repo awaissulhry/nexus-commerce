@@ -138,7 +138,7 @@ export default function WizardStepper({
                   aria-hidden="true"
                   className={cn(
                     'h-0.5 w-8 flex-shrink-0',
-                    lineActive ? 'bg-blue-600' : 'bg-slate-200',
+                    lineActive ? 'bg-blue-600 dark:bg-blue-500' : 'bg-slate-200 dark:bg-slate-800',
                   )}
                 />
               )}
