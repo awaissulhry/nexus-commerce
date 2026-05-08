@@ -527,6 +527,33 @@ export default function ProductsWorkspace() {
     fetchProducts()
   }, [onTopLevelRefresh, fetchProducts])
 
+  // U.33 — these were inline arrows in JSX (recreated every render),
+  // which busted child memo on GridLens + ProductDrawer. The
+  // onClearFilters payload is a static object literal so we memoize
+  // once; the drawer onClose just maps to one updateUrl call.
+  const onClearFilters = useCallback(() => {
+    updateUrl({
+      status: '',
+      channels: '',
+      marketplaces: '',
+      productTypes: '',
+      brands: '',
+      tags: '',
+      fulfillment: '',
+      missingChannels: '',
+      stockLevel: undefined,
+      hasPhotos: undefined,
+      hasDescription: undefined,
+      hasBrand: undefined,
+      hasGtin: undefined,
+      page: undefined,
+    })
+  }, [updateUrl])
+  const onCloseDrawer = useCallback(
+    () => updateUrl({ drawer: undefined }),
+    [updateUrl],
+  )
+
   // E.7 — anchor for shift-click range selection. Tracks the most
   // recent row the user clicked (NOT shift+clicked). Subsequent
   // shift+clicks select every row between the anchor and the clicked
@@ -1140,7 +1167,7 @@ export default function ProductsWorkspace() {
           onRowToggle={handleRowToggle}
           focusedRowId={focusedRowId}
           filterCount={filterCount}
-          onClearFilters={() => updateUrl({ status: '', channels: '', marketplaces: '', productTypes: '', brands: '', tags: '', fulfillment: '', missingChannels: '', stockLevel: undefined, hasPhotos: undefined, hasDescription: undefined, hasBrand: undefined, hasGtin: undefined, page: undefined })}
+          onClearFilters={onClearFilters}
           onPage={onPage}
           onPageSize={onPageSize}
           onTagEdit={onTagEdit}
@@ -1199,7 +1226,7 @@ export default function ProductsWorkspace() {
           above all lenses. URL-driven open state (?drawer=<id>). */}
       <ProductDrawer
         productId={drawerProductId}
-        onClose={() => updateUrl({ drawer: undefined })}
+        onClose={onCloseDrawer}
         onChanged={fetchProducts}
       />
     </div>

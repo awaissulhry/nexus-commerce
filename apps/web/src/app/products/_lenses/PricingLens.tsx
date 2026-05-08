@@ -43,6 +43,10 @@ interface SnapshotCell {
   warnings: string[]
 }
 
+// U.33 — hoisted out of the component so a parent re-render doesn't
+// recreate the array (and bust any downstream useMemo).
+const MARKETPLACES = ['IT', 'DE', 'UK', 'FR', 'ES'] as const
+
 export function PricingLens({
   products,
   loading,
@@ -50,7 +54,6 @@ export function PricingLens({
   products: PricingProduct[]
   loading: boolean
 }) {
-  const MARKETPLACES = ['IT', 'DE', 'UK', 'FR', 'ES'] as const
   const [snapshots, setSnapshots] = useState<
     Record<string, Record<string, SnapshotCell>>
   >({})

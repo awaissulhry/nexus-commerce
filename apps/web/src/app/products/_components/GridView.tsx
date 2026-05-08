@@ -241,7 +241,8 @@ export function VirtualizedGrid({
   // overflow works correctly inside the scroll container.
   const totalWidth = useMemo(
     () =>
-      32 +
+      // U.33 — checkbox cell is now 36 (was 32); chevron stays 24.
+      36 +
       24 +
       visible.reduce((acc, c) => acc + colWidth(c.key, c.width), 0),
     [visible, colWidth],
@@ -347,14 +348,23 @@ export function VirtualizedGrid({
                 role="row"
               >
                 <div
-                  className="px-3 py-2 flex items-center"
-                  style={{ width: 32, minWidth: 32 }}
+                  // U.33 — was `px-3 py-2 flex items-center` with
+                  // width:32. 12px padding each side left only 8px
+                  // for the native checkbox; the tick was clipped /
+                  // visually invisible. Centered the checkbox in the
+                  // cell instead and dropped horizontal padding.
+                  className="py-2 flex items-center justify-center"
+                  style={{ width: 36, minWidth: 36 }}
                   role="columnheader"
                 >
                   <input
                     type="checkbox"
                     checked={allSelected}
                     onChange={toggleSelectAll}
+                    aria-label={
+                      allSelected ? 'Deselect all rows' : 'Select all rows'
+                    }
+                    className="w-4 h-4 cursor-pointer accent-blue-600"
                   />
                 </div>
                 <div
@@ -868,13 +878,18 @@ const ProductRow = memo(function ProductRow({
   return (
     <>
       <div
-        className={`px-3 py-2 flex items-center ${rowBg}`}
-        style={{ width: 32, minWidth: 32 }}
+        // U.33 — center-aligned 36px cell instead of 32px with
+        // px-3, so the native checkbox renders at full size with
+        // its tick visible.
+        className={`py-2 flex items-center justify-center ${rowBg}`}
+        style={{ width: 36, minWidth: 36 }}
         role="cell"
       >
         <input
           type="checkbox"
           checked={isSelected}
+          aria-label={isSelected ? 'Deselect row' : 'Select row'}
+          className="w-4 h-4 cursor-pointer accent-blue-600"
           // E.7 — onClick (not onChange) so we can capture shiftKey
           // from the mouse event for range-select. preventDefault
           // stops the native toggle; the parent's setSelected runs

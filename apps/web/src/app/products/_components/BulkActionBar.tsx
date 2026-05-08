@@ -568,7 +568,11 @@ export function BulkActionBar({
           {hasSelection ? (
             <Link
               href={`/bulk-operations?productIds=${selectedIds.join(',')}`}
-              className="h-7 px-3 text-base bg-violet-50 text-violet-700 border border-violet-200 rounded hover:bg-violet-100 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800 dark:hover:bg-violet-900/40 inline-flex items-center gap-1.5"
+              // U.33 — match Button primitive's size="sm" exactly so
+              // the Link sits flush with the surrounding action
+              // buttons. Was px-3 + gap-1.5; primitive uses px-2.5 +
+              // gap-1.
+              className="h-7 px-2.5 text-base bg-violet-50 text-violet-700 border border-violet-200 rounded hover:bg-violet-100 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800 dark:hover:bg-violet-900/40 inline-flex items-center gap-1"
             >
               <ExternalLink size={12} /> Power edit
             </Link>

@@ -26,6 +26,8 @@ import { CHANNEL_TONE } from '@/lib/products/theme'
 // full ProductRow type from ProductsWorkspace.tsx during the
 // decomposition sweep. A shared _types.ts file consolidates these
 // in a follow-up commit.
+const CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY']
+
 interface CoverageProduct {
   id: string
   sku: string
@@ -70,7 +72,8 @@ export function CoverageLens({
   // U.30 — Active channel scope is Amazon + eBay + Shopify only
   // (per project decision; WooCommerce + Etsy intentionally skipped).
   // Was rendering 5 columns; the last two were always empty.
-  const channels = ['AMAZON', 'EBAY', 'SHOPIFY']
+  // U.33 — hoisted outside component to avoid recreating each render.
+  const channels = CHANNELS
 
   // P.10 — top-line per-channel coverage. Counted across the visible
   // slice (products.slice(0, 100) below) so the header's percentage
