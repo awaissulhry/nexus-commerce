@@ -3178,6 +3178,135 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
         </div>
       )}
 
+      {/* M.11 — drift inspector. Renders when the matrix is drilled
+          into the drift pip; for every visible drifted cell, lays out
+          master vs channel values per field so the operator sees
+          exactly what differs without opening N drawers. Uses the
+          same payload the matrix already renders, no extra fetch. */}
+      {pipFilter?.endsWith(':drift') && (() => {
+        const sep = pipFilter.lastIndexOf(':')
+        const col = pipFilter.slice(0, sep)
+        const cards: Array<{
+          listingId: string
+          sku: string
+          name: string
+          fields: Array<{ field: string; master: any; channel: any; delta?: string }>
+        }> = []
+        for (const p of visibleProducts as any[]) {
+          const cell = p.cells.find(
+            (c: any) => `${c.channel}:${c.marketplace}` === col,
+          )
+          if (!cell) continue
+          const masterPrice = p.masterPriceForCompare
+          const masterQty = p.masterQuantityForCompare
+          const masterTitle = p.masterTitleForCompare ?? p.name
+          const fields: Array<{ field: string; master: any; channel: any; delta?: string }> = []
+          if (masterPrice != null && cell.price != null && Number(masterPrice) !== Number(cell.price)) {
+            const d = Number(cell.price) - Number(masterPrice)
+            fields.push({
+              field: 'price',
+              master: Number(masterPrice).toFixed(2),
+              channel: Number(cell.price).toFixed(2),
+              delta: `${d >= 0 ? '+' : ''}${d.toFixed(2)}`,
+            })
+          }
+          if (masterQty != null && cell.quantity != null && Number(masterQty) !== Number(cell.quantity)) {
+            const d = Number(cell.quantity) - Number(masterQty)
+            fields.push({
+              field: 'qty',
+              master: masterQty,
+              channel: cell.quantity,
+              delta: `${d >= 0 ? '+' : ''}${d}`,
+            })
+          }
+          if (masterTitle != null && cell.title != null && masterTitle !== cell.title) {
+            fields.push({ field: 'title', master: masterTitle, channel: cell.title })
+          }
+          if (fields.length > 0) {
+            cards.push({ listingId: cell.id, sku: p.sku, name: p.name, fields })
+          }
+        }
+        if (cards.length === 0) return null
+        return (
+          <div className="border border-amber-200 bg-white rounded-md">
+            <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-amber-100 bg-amber-50">
+              <div className="text-xs uppercase tracking-wider font-semibold text-amber-700 inline-flex items-center gap-1.5">
+                <AlertTriangle size={11} />
+                Drift inspector — master vs <span className="font-mono">{col}</span>
+                <span className="ml-1 text-slate-500 normal-case font-normal">
+                  ({cards.length})
+                </span>
+              </div>
+              <span className="text-xs text-slate-600">
+                Resync re-pushes master values to the channel for any cell with{' '}
+                <code className="font-mono text-[11px]">followMaster*=true</code>.
+              </span>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {cards.map((c) => (
+                <div key={c.listingId} className="px-3 py-2 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      onClick={() => setDrawerOpen(c.listingId)}
+                      className="text-sm font-mono text-slate-900 hover:text-blue-700 hover:underline"
+                      title="Open drawer for this listing"
+                    >
+                      {c.sku}
+                    </button>
+                    <span className="text-xs text-slate-500 truncate max-w-md" title={c.name}>
+                      {c.name}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 text-sm">
+                    {c.fields.map((f) => (
+                      <div
+                        key={f.field}
+                        className="border border-slate-200 rounded px-2 py-1"
+                      >
+                        <div className="text-[10px] uppercase tracking-wider text-slate-500">
+                          {f.field}
+                          {f.delta && (
+                            <span className="ml-1 text-amber-700 font-semibold">{f.delta}</span>
+                          )}
+                        </div>
+                        <div className="text-xs grid grid-cols-2 gap-1.5 mt-0.5">
+                          <div>
+                            <div className="text-[10px] text-slate-400">master</div>
+                            <div
+                              className="text-slate-900 truncate"
+                              title={String(f.master)}
+                            >
+                              {f.field === 'title' ? (
+                                <span className="font-normal">{String(f.master)}</span>
+                              ) : (
+                                <span className="font-mono tabular-nums">{String(f.master)}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-[10px] text-slate-400">channel</div>
+                            <div
+                              className="text-amber-800 truncate"
+                              title={String(f.channel)}
+                            >
+                              {f.field === 'title' ? (
+                                <span className="font-normal">{String(f.channel)}</span>
+                              ) : (
+                                <span className="font-mono tabular-nums">{String(f.channel)}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+
       {data.products.length === 0 ? (
         <EmptyState
           icon={LayoutGrid}
