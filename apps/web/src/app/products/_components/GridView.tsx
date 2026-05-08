@@ -317,7 +317,6 @@ export function VirtualizedGrid({
     stock: 'stock-asc',
     updated: 'updated',
   }
-  const totalCols = 2 + visible.length
 
   return (
     <SearchContext.Provider value={searchTerm}>
@@ -533,19 +532,20 @@ export function VirtualizedGrid({
                         />
                       )}
                       {row.kind === 'loading' && (
+                        // U.25 — `aria-colspan` is not a valid ARIA
+                        // attribute (only aria-colindex exists);
+                        // browsers silently drop it. Removed.
                         <div
-                          className="bg-slate-50/60 px-3 py-2 text-base text-slate-500 italic flex-1"
+                          className="bg-slate-50/60 dark:bg-slate-800/40 px-3 py-2 text-base text-slate-500 dark:text-slate-400 italic flex-1"
                           role="cell"
-                          aria-colspan={totalCols}
                         >
                           Loading variants…
                         </div>
                       )}
                       {row.kind === 'empty' && (
                         <div
-                          className="bg-slate-50/60 px-3 py-2 text-base text-slate-500 italic flex-1"
+                          className="bg-slate-50/60 dark:bg-slate-800/40 px-3 py-2 text-base text-slate-500 dark:text-slate-400 italic flex-1"
                           role="cell"
-                          aria-colspan={totalCols}
                         >
                           No variants found
                           {row.childCount > 0
@@ -1117,16 +1117,19 @@ const EDITABLE_FIELDS: Record<string, FieldMeta> = {
     // deferred — the filter sidebar already shows the existing brand
     // list so operators have visibility when they want to stay
     // consistent.
+    // U.25 — brand was text-base while name/stock/price/threshold use
+    // text-md; aligned so adjacent editable cells in the same row read
+    // as one type scale.
     apiField: 'brand',
     editor: 'text',
     inputClassName:
-      'w-full h-7 px-1.5 text-base border border-blue-300 rounded',
+      'w-full h-7 px-1.5 text-md border border-blue-300 rounded',
     triggerLabel: 'brand',
     triggerAlign: 'left',
     isEmpty: (p) => !p.brand,
     draftOf: (p) => p.brand ?? '',
     display: (p) => (
-      <span className="text-base text-slate-700">
+      <span className="text-md text-slate-700 dark:text-slate-300">
         {p.brand ?? 'Add brand'}
       </span>
     ),
@@ -1136,17 +1139,20 @@ const EDITABLE_FIELDS: Record<string, FieldMeta> = {
     // the IT_TERMS glossary lookup; the input edits the raw English/
     // canonical key so saves go to the right value regardless of the
     // displayed translation.
+    // U.25 — productType was text-sm; aligned to text-md so the row
+    // reads consistently. triggerSize stayed 'sm' (it controls the
+    // pencil-icon affordance, not the cell text).
     apiField: 'productType',
     editor: 'text',
     inputClassName:
-      'w-full h-7 px-1.5 text-sm border border-blue-300 rounded',
+      'w-full h-7 px-1.5 text-md border border-blue-300 rounded',
     triggerLabel: 'product type',
     triggerAlign: 'left',
     triggerSize: 'sm',
     isEmpty: (p) => !p.productType,
     draftOf: (p) => p.productType ?? '',
     display: (p) => (
-      <span className="text-sm text-slate-700">
+      <span className="text-md text-slate-700 dark:text-slate-300">
         {p.productType
           ? (IT_TERMS[p.productType] ?? p.productType)
           : 'Add type'}
@@ -1542,14 +1548,24 @@ const ProductCell = memo(function ProductCell({
       return (
         <div className="flex items-center gap-1 flex-wrap">
           {visibleTags.map((t) => (
+            // U.25 — was `color: t.color` which rendered light tags
+            // (yellow / pale blue / lime) as unreadable text on a
+            // near-white background. The chip now uses theme text
+            // (slate-700 / slate-300) regardless; the tag's identity
+            // shows through the bg-tint + the colored dot below.
             <span
               key={t.id}
-              className="group/tag inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs rounded"
+              className="group/tag inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded text-slate-700 dark:text-slate-200"
               style={{
                 background: t.color ? `${t.color}20` : '#f1f5f9',
-                color: t.color ?? '#64748b',
               }}
             >
+              {t.color && (
+                <span
+                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                  style={{ background: t.color }}
+                />
+              )}
               {t.name}
               <button
                 type="button"

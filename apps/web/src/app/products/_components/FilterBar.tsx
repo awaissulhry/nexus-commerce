@@ -373,7 +373,11 @@ export function FilterBar(props: FilterBarProps) {
       )}
 
       {filtersOpen && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4 pt-3 mt-1 border-t border-slate-200 dark:border-slate-800">
+        // U.25 — was xl:grid-cols-4 which made columns narrow enough at
+        // ~1280px laptops to break long brand / productType pill rows.
+        // Stop at xl:grid-cols-3; 2xl gets 4 columns where there's
+        // actual horizontal headroom.
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-x-6 gap-y-4 pt-3 mt-1 border-t border-slate-200 dark:border-slate-800">
           <FilterGroup
             label="Status"
             options={['ACTIVE', 'DRAFT', 'INACTIVE']}

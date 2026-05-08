@@ -66,7 +66,13 @@ export function MobileProductList({
   }
   if (products.length === 0) {
     return (
-      <div className="border border-slate-200 dark:border-slate-800 rounded-md py-12 text-center text-md text-slate-400 dark:text-slate-500">
+      <div
+        // U.25 — was `text-md text-slate-400` while in-card variant
+        // empty/loading states used `text-base text-slate-500 italic`.
+        // Aligned the two scales so empty messaging reads
+        // consistently across the component.
+        className="border border-slate-200 dark:border-slate-800 rounded-md py-12 text-center text-base text-slate-500 dark:text-slate-400 italic"
+      >
         No products match these filters
       </div>
     )

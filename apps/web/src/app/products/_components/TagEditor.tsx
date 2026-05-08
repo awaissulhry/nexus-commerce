@@ -127,7 +127,9 @@ export function TagEditor({
         onClick={(e) => e.stopPropagation()}
         className="relative h-full w-full max-w-md bg-white shadow-2xl overflow-y-auto dark:bg-slate-900"
       >
-        <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white dark:border-slate-800 dark:bg-slate-900">
+        {/* U.25 — sticky header gains z-10 so the body content
+            doesn't bleed through during scroll. */}
+        <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 z-10 bg-white dark:border-slate-800 dark:bg-slate-900">
           <div className="text-md font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-1.5">
             <TagIcon size={14} /> Tags
           </div>
@@ -154,14 +156,17 @@ export function TagEditor({
                     <button
                       key={t.id}
                       onClick={() => toggle(t)}
-                      className={`inline-flex items-center gap-1 px-2 py-1 text-sm border rounded transition-colors ${active ? 'border-slate-900 dark:border-slate-100' : 'border-slate-200 hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700'}`}
+                      // U.25 — drop tag color from text; theme text
+                      // (slate-700/300) guarantees contrast across any
+                      // operator-picked color. Identity shows through
+                      // the dot + tinted background.
+                      className={`inline-flex items-center gap-1 px-2 py-1 text-sm border rounded transition-colors text-slate-700 dark:text-slate-200 ${active ? 'border-slate-900 dark:border-slate-100' : 'border-slate-200 hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700'}`}
                       style={
                         active
                           ? {
                               background: t.color
                                 ? `${t.color}20`
                                 : '#f1f5f9',
-                              color: t.color ?? '#64748b',
                             }
                           : undefined
                       }

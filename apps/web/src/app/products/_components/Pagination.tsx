@@ -33,9 +33,12 @@ export function Pagination({ page, totalPages, onPage }: PaginationProps) {
   return (
     <nav
       aria-label="Pagination"
-      className="flex items-center justify-between text-base text-slate-500 dark:text-slate-400"
+      // U.25 — wrapper used `text-base` while the inner `<span>` used
+      // `text-sm`; the wrapper text leaked through hover states. Drop
+      // both to `text-sm` so the strip reads as one consistent scale.
+      className="flex items-center justify-between text-sm text-slate-500 dark:text-slate-400"
     >
-      <span className="text-sm">
+      <span>
         Page{' '}
         <span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">
           {page}

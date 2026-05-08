@@ -1466,9 +1466,13 @@ function GridLens(props: any) {
         </div>
       </div>
 
-      {/* Desktop grid — virtualized table. Hidden below md where the
-          card list takes over. */}
-      <div className="hidden md:block">
+      {/* U.25 — was `hidden md:block` which forced tablet portrait
+          (768-1023px) to render the 9-column virtualized grid →
+          horizontal overflow past the viewport. Bumped to `lg:` so
+          tablets get the card list (better one-handed flow + no
+          h-scroll); the desktop grid kicks in at 1024px+ where the
+          full column set actually fits. */}
+      <div className="hidden lg:block">
         <VirtualizedGrid
           products={products}
           visible={visible}
@@ -1491,11 +1495,12 @@ function GridLens(props: any) {
           riskFlaggedSkus={riskFlaggedSkus}
         />
       </div>
-      {/* Mobile card list — md:hidden. Shows the same product set
-          but as tap-friendly cards. Selection works (long-press on
-          the checkbox region in the corner) but the daily-driver
+      {/* Mobile + tablet card list — lg:hidden. Shows the same product
+          set but as tap-friendly cards (U.25 — extended to tablet so
+          the 9-column virtualized grid doesn't h-overflow at 768-1023px).
+          Selection works via the corner checkbox; the daily-driver
           mobile flow is browse + open-drawer. */}
-      <div className="md:hidden">
+      <div className="lg:hidden">
         <MobileProductList
           products={products}
           selected={selected}
