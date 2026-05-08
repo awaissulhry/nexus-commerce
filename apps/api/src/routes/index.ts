@@ -19,7 +19,12 @@ import { errorHandler, notFoundHandler } from '../middleware/error-handler.js';
 // Import route modules
 // bulk-actions Express router removed 2026-05-03 — ported to Fastify
 // in /routes/bulk-operations.routes.ts (Phase B-5).
-import pricingRulesRouter from './pricing-rules.routes.js';
+// pricing-rules Express router removed 2026-05-08 — was never wired into
+// the Fastify server (only `pricingRoutes` is registered in index.ts:340)
+// and the underlying PricingRulesService had a broken `Decimal` mock that
+// returned 0 from every math operation. Rule evaluation lives in the
+// pricing engine's PRICING_RULE source path (pricing-engine.service.ts).
+// CRUD will return as a Fastify route during Phase D rule-builder work.
 import syncHealthRouter from './sync-health.routes.js';
 import { matrixRoutes } from './matrix.routes.js';
 import { ordersRoutes } from './orders.routes.js';
@@ -42,17 +47,8 @@ export async function setupRoutes(app: Express): Promise<void> {
   // — this whole routes/index.ts file is unused dead code; leaving
   // it as-is rather than performing a separate cleanup here.)
 
-  /**
-   * Pricing Rules Routes
-   * POST   /api/pricing-rules              - Create rule
-   * GET    /api/pricing-rules              - List all rules
-   * GET    /api/pricing-rules/variation/:variationId - Get rules for variation
-   * POST   /api/pricing-rules/evaluate     - Evaluate price
-   * PUT    /api/pricing-rules/:id          - Update rule
-   * DELETE /api/pricing-rules/:id          - Deactivate rule
-   */
-  app.use('/api/pricing-rules', pricingRulesRouter);
-  logger.info('Registered pricing-rules routes');
+  // Pricing Rules block removed 2026-05-08 alongside the dead Express
+  // router/service it depended on. See header note above.
 
   /**
    * Sync Health Routes
