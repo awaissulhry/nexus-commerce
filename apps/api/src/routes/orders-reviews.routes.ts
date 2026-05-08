@@ -79,61 +79,52 @@ async function sendAmazonSolicitation({
     }
   }
 
+  // FU.6 — routed through amazonSpApiClient.request() which folds
+  // auth + rate-limit + retry into one call. Replaces the inline
+  // fetch O.16c shipped.
   try {
     const { amazonSpApiClient } = await import('../clients/amazon-sp-api.client.js')
-    const token = await amazonSpApiClient.getAccessToken()
-    const region = process.env.AMAZON_REGION ?? 'eu-west-1'
-    const host = `sellingpartnerapi-${region}.amazon.com`
-    const url =
-      `https://${host}/solicitations/v1/orders/${encodeURIComponent(amazonOrderId)}` +
-      `/solicitations/productReviewAndSellerFeedback` +
-      `?marketplaceIds=${encodeURIComponent(marketplaceId)}`
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'x-amz-access-token': token,
-        'content-type': 'application/json',
+    await amazonSpApiClient.request(
+      'POST',
+      `/solicitations/v1/orders/${encodeURIComponent(amazonOrderId)}/solicitations/productReviewAndSellerFeedback`,
+      {
+        query: { marketplaceIds: marketplaceId },
+        label: 'sendAmazonSolicitation',
       },
+    )
+    logger.info('[REVIEW ENGINE] sendAmazonSolicitation OK', {
+      amazonOrderId,
+      marketplaceId,
     })
-    if (res.status === 201 || res.status === 200) {
-      // Some SP-API responses include a request-id header for
-      // tracing; capture it when present.
-      const requestId =
-        res.headers.get('x-amzn-requestid') ??
-        res.headers.get('x-amz-rid') ??
-        undefined
-      logger.info('[REVIEW ENGINE] sendAmazonSolicitation OK', {
-        amazonOrderId,
-        marketplaceId,
-        requestId,
-      })
-      return { ok: true, providerRequestId: requestId }
-    }
-    const body = await res.text().catch(() => '')
+    return { ok: true }
+  } catch (err: any) {
+    const msg: string = err?.message ?? String(err)
     // 400 on re-send (Amazon's "already solicited") is a benign no-op
     // from the engine's POV — record it as SKIPPED, not FAILED.
-    if (res.status === 400 && /already/i.test(body)) {
+    if (/HTTP 400/.test(msg) && /already/i.test(msg)) {
       return {
         ok: false,
         errorCode: 'ALREADY_SOLICITED',
-        errorMessage: body.slice(0, 500),
+        errorMessage: msg.slice(0, 500),
       }
     }
-    return {
-      ok: false,
-      errorCode: `HTTP_${res.status}`,
-      errorMessage: body.slice(0, 500),
+    const httpMatch = msg.match(/HTTP (\d+)/)
+    if (httpMatch) {
+      return {
+        ok: false,
+        errorCode: `HTTP_${httpMatch[1]}`,
+        errorMessage: msg.slice(0, 500),
+      }
     }
-  } catch (err: any) {
     logger.warn('[REVIEW ENGINE] sendAmazonSolicitation threw', {
       amazonOrderId,
       marketplaceId,
-      error: err?.message ?? String(err),
+      error: msg,
     })
     return {
       ok: false,
       errorCode: 'EXCEPTION',
-      errorMessage: err?.message ?? 'unknown error',
+      errorMessage: msg,
     }
   }
 }

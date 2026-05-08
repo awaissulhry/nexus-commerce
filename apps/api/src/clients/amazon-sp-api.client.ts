@@ -155,6 +155,83 @@ export class AmazonSpApiClient {
   }
 
   /**
+   * FU.6 — generic SP-API request helper.
+   *
+   * Routes any caller (orders-reviews/Solicitations, future Buy
+   * Shipping wire, future MFN cancel) through the same auth +
+   * rate-limit + retry shell that the rest of this client's
+   * methods use. Avoids the previous "inline fetch with
+   * getAccessToken()" pattern in routes/services that duplicated
+   * the rate-limit + 429 backoff logic.
+   *
+   * Path is relative to the SP-API host (e.g. '/solicitations/v1
+   * /orders/{id}/...'). The host is computed from
+   * process.env.AMAZON_REGION + the sandbox flag.
+   *
+   * Returns the parsed JSON body on 2xx; throws Error(`HTTP {n}
+   * — {body}`) on non-2xx after retry. Caller handles known
+   * 4xx semantics (e.g. 400 "already solicited") by inspecting
+   * the thrown message.
+   *
+   * Examples:
+   *   await client.request('POST',
+   *     `/solicitations/v1/orders/${id}/solicitations/productReviewAndSellerFeedback`,
+   *     { query: { marketplaceIds: mp } })
+   *
+   *   await client.request('POST',
+   *     '/mfn/v0/eligibleShippingServices',
+   *     { body: shipmentRequestDetails })
+   */
+  async request<T = unknown>(
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
+    path: string,
+    opts: {
+      query?: Record<string, string | number | undefined>
+      body?: unknown
+      sandbox?: boolean
+      label?: string
+    } = {},
+  ): Promise<T> {
+    const token = await this.getAccessToken()
+    const host = opts.sandbox
+      ? `sandbox.sellingpartnerapi-${this.region}.amazon.com`
+      : `sellingpartnerapi-${this.region}.amazon.com`
+    const qs = opts.query
+      ? '?' +
+        new URLSearchParams(
+          Object.fromEntries(
+            Object.entries(opts.query)
+              .filter(([, v]) => v != null)
+              .map(([k, v]) => [k, String(v)]),
+          ),
+        ).toString()
+      : ''
+    const url = `https://${host}${path}${qs}`
+    const init: RequestInit = {
+      method,
+      headers: {
+        'x-amz-access-token': token,
+        ...(opts.body !== undefined ? { 'content-type': 'application/json' } : {}),
+      },
+      ...(opts.body !== undefined
+        ? { body: typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body) }
+        : {}),
+    }
+    const res = await this.fetchWithRetry(url, init, opts.label ?? `${method} ${path}`)
+    if (res.status === 204) return undefined as T
+    const text = await res.text().catch(() => '')
+    if (res.status >= 200 && res.status < 300) {
+      if (!text) return undefined as T
+      try {
+        return JSON.parse(text) as T
+      } catch {
+        return text as unknown as T
+      }
+    }
+    throw new Error(`HTTP ${res.status} — ${text.slice(0, 500)}`)
+  }
+
+  /**
    * Apply rate limiting (200ms delay between requests)
    * Ensures we respect Amazon's 5 requests/second limit
    */
