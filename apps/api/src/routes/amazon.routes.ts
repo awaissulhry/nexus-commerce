@@ -9,6 +9,7 @@ import {
   applyGroupings,
   type ApprovedGroup,
 } from '../services/pim/auto-detect.service.js'
+import { computeAmazonAccountHealth } from '../services/amazon-account-health.service.js'
 
 const amazonService = new AmazonService()
 
@@ -1681,6 +1682,19 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
       }
     },
   )
+
+  // O.16a — Account Health: rolling-30d LSR + VTR computed from
+  // local FBM Order data. SP-API GetAccountHealth integration is
+  // a separate commit (env-flag-gated for compliance proof when
+  // numbers must match the official dashboard exactly).
+  fastify.get('/account-health', async (_request, reply) => {
+    try {
+      const health = await computeAmazonAccountHealth()
+      return health
+    } catch (err: any) {
+      return reply.code(500).send({ error: err?.message ?? 'failed' })
+    }
+  })
 }
 
 export default amazonRoutes

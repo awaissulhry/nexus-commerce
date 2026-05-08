@@ -228,6 +228,11 @@ export default function OrderDetailClient({ id }: { id: string }) {
             <EbayMessagingCard meta={order.ebayMetadata} channelOrderId={order.channelOrderId} />
           )}
 
+          {/* O.16a — Amazon FBM ship-by impact (LSR/VTR) */}
+          {order.channel === 'AMAZON' && order.fulfillmentMethod === 'FBM' && (
+            <AmazonShipByImpactCard order={order} />
+          )}
+
           {/* Shipments */}
           {order.shipments && order.shipments.length > 0 && (
             <Card title="Shipments" description={`${order.shipments.length} shipment${order.shipments.length === 1 ? '' : 's'}`}>
@@ -379,6 +384,103 @@ function FinTile({ label, value, tone }: { label: string; value: number; tone: '
       <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">{label}</div>
       <div className={`text-2xl font-semibold tabular-nums ${cls}`}>€{value.toFixed(2)}</div>
     </div>
+  )
+}
+
+// ── O.16a: Amazon FBM ship-by impact (LSR/VTR per-order) ──────────────
+// Per-order at-a-glance for the two metrics Amazon's Seller
+// Performance dashboard tracks for FBM:
+//   LSR (Late Shipment Rate)  — late = shippedAt > shipByDate
+//   VTR (Valid Tracking Rate) — needs trackingNumber on a shipment
+//
+// Tier mapping mirrors the perOrderShipByTier server helper:
+//   on-time  green   — shipped before shipByDate w/ tracking
+//   at-risk  amber   — not shipped, < 24h to shipByDate
+//   overdue  red     — past shipByDate, not shipped (LSR risk)
+//   late     red     — shipped after shipByDate (counts toward LSR)
+//   no-track red     — shipped on time but no tracking (VTR hit)
+//
+// Computed entirely client-side from the order data we already
+// have — same logic as amazon-account-health.service.ts on the
+// backend, kept inline here so the card renders without a fetch.
+function AmazonShipByImpactCard({ order }: { order: any }) {
+  const shipBy = order.shipByDate ? new Date(order.shipByDate) : null
+  const shippedAt = order.shippedAt ? new Date(order.shippedAt) : null
+  const hasTracking = (order.shipments ?? []).some(
+    (s: any) => s.trackingNumber && String(s.trackingNumber).trim() !== '',
+  )
+  let tier: 'on-time' | 'at-risk' | 'overdue' | 'late' | 'no-track'
+  let reason: string
+
+  if (shippedAt) {
+    const lateBy = shipBy ? shippedAt.getTime() - shipBy.getTime() : 0
+    if (shipBy && lateBy > 0) {
+      const hours = Math.round(lateBy / (60 * 60 * 1000))
+      tier = 'late'
+      reason = `Shipped ${hours}h past ship-by — counts toward LSR`
+    } else if (!hasTracking) {
+      tier = 'no-track'
+      reason = 'Shipped without tracking — counts against VTR'
+    } else {
+      tier = 'on-time'
+      reason = 'Shipped on time with tracking'
+    }
+  } else if (shipBy) {
+    const msToShipBy = shipBy.getTime() - Date.now()
+    if (msToShipBy < 0) {
+      const hours = Math.round(-msToShipBy / (60 * 60 * 1000))
+      tier = 'overdue'
+      reason = `Past ship-by by ${hours}h — LSR risk`
+    } else if (msToShipBy < 24 * 60 * 60 * 1000) {
+      const hours = Math.round(msToShipBy / (60 * 60 * 1000))
+      tier = 'at-risk'
+      reason = `${hours}h until ship-by`
+    } else {
+      tier = 'on-time'
+      reason = 'On track'
+    }
+  } else {
+    return null
+  }
+
+  const tone = {
+    'on-time': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    'at-risk': 'bg-amber-50 text-amber-700 border-amber-200',
+    overdue: 'bg-rose-50 text-rose-700 border-rose-200',
+    late: 'bg-rose-50 text-rose-700 border-rose-200',
+    'no-track': 'bg-rose-50 text-rose-700 border-rose-200',
+  }[tier]
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 inline-flex items-center gap-1.5">
+          <Clock size={12} /> Amazon ship-by impact
+        </div>
+        <span
+          className={`inline-block text-xs font-semibold uppercase px-1.5 py-0.5 border rounded ${tone}`}
+        >
+          {tier.replace('-', ' ')}
+        </span>
+      </div>
+      <div className="text-base text-slate-700">{reason}</div>
+      <div className="mt-2 pt-2 border-t border-slate-100 text-xs text-slate-500 grid grid-cols-2 gap-x-4 gap-y-1">
+        <div>
+          ship-by:{' '}
+          {shipBy ? shipBy.toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+        </div>
+        <div>
+          shipped:{' '}
+          {shippedAt
+            ? shippedAt.toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })
+            : '—'}
+        </div>
+        <div>tracking: {hasTracking ? 'yes' : 'no'}</div>
+        <div>
+          fulfillment: <span className="font-mono">FBM</span>
+        </div>
+      </div>
+    </Card>
   )
 }
 
