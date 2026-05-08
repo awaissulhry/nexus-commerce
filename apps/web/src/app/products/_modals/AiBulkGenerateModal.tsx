@@ -32,6 +32,8 @@ import { useMemo, useState } from 'react'
 import { Sparkles, X, Loader2, AlertCircle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
+import { Button } from '@/components/ui/Button'
+import { IconButton } from '@/components/ui/IconButton'
 
 type AiPhase = 'configure' | 'preview' | 'applying' | 'done'
 
@@ -264,13 +266,14 @@ export default function AiBulkGenerateModal({
               {productIds.length} product{productIds.length === 1 ? '' : 's'}
             </span>
           </div>
-          <button
-            type="button"
+          <IconButton
             onClick={onClose}
-            className="p-1 text-slate-400 hover:text-slate-600"
+            aria-label="Close"
+            size="md"
+            className="text-slate-400 hover:text-slate-600"
           >
             <X className="w-4 h-4" />
-          </button>
+          </IconButton>
         </div>
 
         {phase === 'configure' && (
@@ -346,17 +349,13 @@ export default function AiBulkGenerateModal({
                   ? `Will generate previews for ${productIds.length} product${productIds.length === 1 ? '' : 's'} — no writes yet.`
                   : 'Writes immediately — overwrites any existing content in the selected fields.'}
               </span>
-              <button
-                type="button"
+              <Button
                 onClick={run}
                 disabled={busy || fields.size === 0 || !marketplace}
-                className="h-8 px-3 text-base bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+                loading={busy}
+                className="bg-purple-600 text-white border-purple-600 hover:bg-purple-700"
+                icon={<Sparkles className="w-3 h-3" />}
               >
-                {busy ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <Sparkles className="w-3 h-3" />
-                )}
                 {busy
                   ? previewFirst
                     ? 'Generating preview…'
@@ -364,7 +363,7 @@ export default function AiBulkGenerateModal({
                   : previewFirst
                     ? 'Generate preview'
                     : 'Generate & apply'}
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -389,28 +388,26 @@ export default function AiBulkGenerateModal({
                 . Pick what to apply.
               </div>
               <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
+                <Button
+                  size="sm"
+                  variant="ghost"
                   onClick={() =>
                     setAcceptedIds(
                       new Set(
-                        previewResults
-                          .filter((r) => r.ok)
-                          .map((r) => r.productId),
+                        previewResults.filter((r) => r.ok).map((r) => r.productId),
                       ),
                     )
                   }
-                  className="h-7 px-2 text-sm text-slate-700 hover:bg-slate-100 rounded-md"
                 >
                   Select all
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
                   onClick={() => setAcceptedIds(new Set())}
-                  className="h-7 px-2 text-sm text-slate-700 hover:bg-slate-100 rounded-md"
                 >
                   Clear
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -522,27 +519,25 @@ export default function AiBulkGenerateModal({
             )}
 
             <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
-              <button
-                type="button"
+              <Button
+                variant="ghost"
                 onClick={() => {
                   setPhase('configure')
                   setPreviewResults([])
                   setAcceptedIds(new Set())
                   setError(null)
                 }}
-                className="h-8 px-3 text-base text-slate-700 hover:bg-slate-100 rounded-md"
               >
                 Back
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
                 onClick={apply}
                 disabled={busy || acceptedIds.size === 0}
-                className="h-8 px-3 text-base bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+                className="bg-purple-600 text-white border-purple-600 hover:bg-purple-700"
+                icon={<Sparkles className="w-3 h-3" />}
               >
-                <Sparkles className="w-3 h-3" />
                 Apply {acceptedIds.size} selected
-              </button>
+              </Button>
             </div>
           </div>
         )}

@@ -23,6 +23,7 @@
 import { useMemo } from 'react'
 import { X, ExternalLink, ChevronRight } from 'lucide-react'
 import { CHANNEL_TONE } from '@/lib/products/theme'
+import { IconButton } from '@/components/ui/IconButton'
 
 export interface CompareProduct {
   id: string
@@ -119,14 +120,14 @@ export default function CompareProductsModal({
           <div className="text-lg font-semibold text-slate-900">
             Compare {products.length} products
           </div>
-          <button
-            type="button"
+          <IconButton
             onClick={onClose}
-            className="p-1 text-slate-400 hover:text-slate-600"
             aria-label="Close"
+            size="md"
+            className="text-slate-400 hover:text-slate-600"
           >
             <X className="w-4 h-4" />
-          </button>
+          </IconButton>
         </header>
 
         <div className="flex-1 overflow-auto">

@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Bell, X, Plus, Trash2, RefreshCw } from 'lucide-react'
+import { IconButton } from '@/components/ui/IconButton'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import {
@@ -254,13 +255,14 @@ export default function ManageAlertsModal({
               the condition trips.
             </div>
           </div>
-          <button
-            type="button"
+          <IconButton
             onClick={onClose}
-            className="p-1 text-slate-400 hover:text-slate-600"
+            aria-label="Close"
+            size="md"
+            className="text-slate-400 hover:text-slate-600"
           >
             <X className="w-4 h-4" />
-          </button>
+          </IconButton>
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-3">

@@ -16,6 +16,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Package, Plus, Trash2, X } from 'lucide-react'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Button } from '@/components/ui/Button'
+import { IconButton } from '@/components/ui/IconButton'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -123,14 +125,21 @@ export default function BundleEditor({
       <div onClick={(e) => e.stopPropagation()} className="relative bg-white rounded-lg shadow-2xl w-full max-w-3xl max-h-[80vh] overflow-y-auto">
         <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
           <div className="text-lg font-semibold text-slate-900 inline-flex items-center gap-2"><Package size={16} /> Bundles</div>
-          <button onClick={onClose} aria-label="Close" className="h-7 w-7 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
+          <IconButton onClick={onClose} aria-label="Close" size="md" className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"><X size={16} /></IconButton>
         </header>
         <div className="p-5 space-y-4">
           {!creating ? (
             <>
-              <button onClick={() => { setCreating(true); setDraft({ wrapperProductId: '', wrapperName: '', name: '', components: [] }) }} className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
-                <Plus size={12} /> New bundle
-              </button>
+              <Button
+                onClick={() => {
+                  setCreating(true)
+                  setDraft({ wrapperProductId: '', wrapperName: '', name: '', components: [] })
+                }}
+                className="bg-slate-900 text-white border-slate-900 hover:bg-slate-800"
+                icon={<Plus size={12} />}
+              >
+                New bundle
+              </Button>
               {loading ? <div className="text-md text-slate-500 py-6 text-center">Loading…</div> : bundles.length === 0 ? (
                 <EmptyState icon={Package} title="No bundles yet" description="Create a bundle to group multiple products into one purchasable unit." />
               ) : (
@@ -151,9 +160,14 @@ export default function BundleEditor({
                             ))}
                           </div>
                         </div>
-                        <button onClick={() => deleteBundle(b.id)} aria-label={`Delete bundle ${b.name}`} className="h-7 w-7 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 text-slate-400 hover:text-rose-600 inline-flex items-center justify-center rounded">
+                        <IconButton
+                          onClick={() => deleteBundle(b.id)}
+                          aria-label={`Delete bundle ${b.name}`}
+                          size="md"
+                          className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 text-slate-400 hover:text-rose-600"
+                        >
                           <Trash2 size={14} />
-                        </button>
+                        </IconButton>
                       </div>
                     </div>
                   ))}
@@ -204,7 +218,14 @@ export default function BundleEditor({
                       <li key={i} className="flex items-center gap-2 px-2 py-1 bg-slate-50 rounded">
                         <span className="text-base font-mono flex-1 truncate">{c.sku}</span>
                         <input type="number" min="1" value={c.quantity} onChange={(e) => setDraft({ ...draft, components: draft.components.map((cc, j) => j === i ? { ...cc, quantity: Number(e.target.value) || 1 } : cc) })} className="w-16 h-7 px-1 text-right tabular-nums border border-slate-200 rounded text-base" />
-                        <button onClick={() => setDraft({ ...draft, components: draft.components.filter((_, j) => j !== i) })} aria-label={`Remove ${c.sku} from bundle`} className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-rose-600"><X size={12} /></button>
+                        <IconButton
+                          onClick={() => setDraft({ ...draft, components: draft.components.filter((_, j) => j !== i) })}
+                          aria-label={`Remove ${c.sku} from bundle`}
+                          size="sm"
+                          className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                        >
+                          <X size={12} />
+                        </IconButton>
                       </li>
                     ))}
                   </ul>
@@ -221,7 +242,13 @@ export default function BundleEditor({
                 )}
               </div>
 
-              <button onClick={createBundle} disabled={!draft.wrapperProductId || !draft.name.trim() || draft.components.length === 0} className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">Create bundle</button>
+              <Button
+                onClick={createBundle}
+                disabled={!draft.wrapperProductId || !draft.name.trim() || draft.components.length === 0}
+                className="bg-slate-900 text-white border-slate-900 hover:bg-slate-800"
+              >
+                Create bundle
+              </Button>
             </div>
           )}
         </div>
