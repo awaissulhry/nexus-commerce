@@ -72,6 +72,13 @@ interface Props {
    * commits and asks the parent to move the selection by the given
    * delta (Excel semantics). */
   onCommitNavigate?: (dRow: number, dCol: number) => void
+  /** P2 #5 — when a paste / fill targets a virtualised-out cell, the
+   * parent has the change in its changes Map but the cell's local
+   * draftValue can't be set (cell isn't mounted). On the next mount
+   * (operator scrolls back into view), pass the pending value here
+   * so the initial draftValue picks it up — yellow tint shows
+   * immediately. Undefined when no pending change. */
+  pendingValue?: unknown
 }
 
 const defaultFormat = (v: unknown): string => {
@@ -116,9 +123,15 @@ export const EditableCell = memo(
     resetKey,
     cellCascading,
     onCommitNavigate,
+    pendingValue,
   }: Props) {
     const [isEditing, setIsEditing] = useState(false)
-    const [draftValue, setDraftValue] = useState<unknown>(initialValue)
+    // P2 #5 — seed draftValue from pendingValue when the cell is
+    // mounting fresh and a paste already wrote a pending change for
+    // it. Otherwise initialValue (canonical server value).
+    const [draftValue, setDraftValue] = useState<unknown>(() =>
+      pendingValue !== undefined ? pendingValue : initialValue,
+    )
     const inputRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null)
 
     // Derived, NOT tracked as state. When the parent updates products[]

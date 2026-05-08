@@ -155,6 +155,7 @@ export function makeEditableRenderer(meta: EditableMeta) {
         cellError={editCtxRef.current.cellErrors.get(cellKey)}
         resetKey={editCtxRef.current.resetKeys.get(cellKey)}
         cellCascading={editCtxRef.current.cascadeKeys.has(cellKey)}
+        pendingValue={editCtxRef.current.pendingValues.get(cellKey)}
         onCommitNavigate={editCtxRef.current.onCommitNavigate}
       />
     )

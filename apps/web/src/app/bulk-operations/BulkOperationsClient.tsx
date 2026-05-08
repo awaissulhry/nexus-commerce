@@ -1174,6 +1174,16 @@ export default function BulkOperationsClient() {
     }
     return s
   }, [changes])
+  // P2 #5 — pendingValues derives from the same changes Map. Cells
+  // that virtualised out during a paste still get their pending
+  // value seeded into draftValue when they re-mount on scroll-back.
+  const pendingValues = useMemo(() => {
+    const m = new Map<string, unknown>()
+    for (const [k, v] of changes) {
+      m.set(k, (v as { value?: unknown }).value)
+    }
+    return m
+  }, [changes])
   // Step 3.5: stable wrapper that EditableCell receives as
   // onCommitNavigate. The actual navigation function (moveSelection)
   // is defined further down in this component, so we forward through
@@ -1191,6 +1201,7 @@ export default function BulkOperationsClient() {
     cellErrors,
     resetKeys,
     cascadeKeys,
+    pendingValues,
     onCommitNavigate,
   }
   allFieldsRef.current = allFields

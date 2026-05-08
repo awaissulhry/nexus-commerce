@@ -13,6 +13,11 @@ export interface EditCtx {
   resetKeys: Map<string, number>
   /** cellKey → true if its pending change is a cascade (orange tint) */
   cascadeKeys: Set<string>
+  /** P2 #5 — cellKey → pending value when a paste / fill targeted a
+   *  virtualised-out cell. EditableCell seeds its draftValue from
+   *  here on first mount so the yellow tint shows immediately when
+   *  the operator scrolls back into view. */
+  pendingValues: Map<string, unknown>
   /** Step 3.5: Enter / Tab inside the input commits then moves the
    *  selection by this delta (Excel semantics). */
   onCommitNavigate: (dRow: number, dCol: number) => void
@@ -24,6 +29,7 @@ export const editCtxRef: { current: EditCtx } = {
     cellErrors: new Map(),
     resetKeys: new Map(),
     cascadeKeys: new Set(),
+    pendingValues: new Map(),
     onCommitNavigate: () => {},
   },
 }

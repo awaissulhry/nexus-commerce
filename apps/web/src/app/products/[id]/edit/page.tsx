@@ -15,7 +15,9 @@ export default async function ProductEditPage({ params }: PageProps) {
 
   // Fetch all four payloads in parallel
   const [productRes, listingsRes, marketplacesRes, childrenRes] = await Promise.all([
-    fetch(`${backend}/api/inventory/${id}`, { cache: 'no-store' }),
+    // P2 #21 — moved from legacy /api/inventory/:id to canonical
+    // /api/products/:id; same response shape, no per-call change.
+    fetch(`${backend}/api/products/${id}`, { cache: 'no-store' }),
     fetch(`${backend}/api/products/${id}/all-listings`, { cache: 'no-store' }),
     fetch(`${backend}/api/marketplaces/grouped`, { cache: 'no-store' }),
     fetch(`${backend}/api/products/${id}/children`, { cache: 'no-store' }),
