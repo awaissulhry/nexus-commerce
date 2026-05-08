@@ -585,6 +585,78 @@ export async function ordersRoutes(app: FastifyInstance) {
     },
   )
 
+  // AU.5 — Order-level notes CRUD (mirrors CustomerNote pattern).
+  app.get('/api/orders/:id/notes', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const notes = await prisma.orderNote.findMany({
+        where: { orderId: id },
+        orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }],
+      })
+      return { notes }
+    } catch (err: any) {
+      return reply.code(500).send({ error: err?.message ?? 'failed' })
+    }
+  })
+
+  app.post('/api/orders/:id/notes', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = request.body as { body?: string; pinned?: boolean; authorEmail?: string }
+      if (!body.body || body.body.trim() === '') {
+        return reply.code(400).send({ error: 'body required' })
+      }
+      const order = await prisma.order.findUnique({ where: { id }, select: { id: true } })
+      if (!order) return reply.code(404).send({ error: 'Order not found' })
+      const note = await prisma.orderNote.create({
+        data: {
+          orderId: id,
+          body: body.body.trim(),
+          pinned: body.pinned ?? false,
+          authorEmail: body.authorEmail ?? null,
+        },
+      })
+      return note
+    } catch (err: any) {
+      return reply.code(500).send({ error: err?.message ?? 'failed' })
+    }
+  })
+
+  app.patch('/api/orders/:id/notes/:noteId', async (request, reply) => {
+    try {
+      const { id, noteId } = request.params as { id: string; noteId: string }
+      const body = request.body as { body?: string; pinned?: boolean }
+      const existing = await prisma.orderNote.findFirst({
+        where: { id: noteId, orderId: id },
+      })
+      if (!existing) return reply.code(404).send({ error: 'Note not found' })
+      const updated = await prisma.orderNote.update({
+        where: { id: noteId },
+        data: {
+          body: body.body !== undefined ? body.body.trim() : undefined,
+          pinned: body.pinned !== undefined ? body.pinned : undefined,
+        },
+      })
+      return updated
+    } catch (err: any) {
+      return reply.code(500).send({ error: err?.message ?? 'failed' })
+    }
+  })
+
+  app.delete('/api/orders/:id/notes/:noteId', async (request, reply) => {
+    try {
+      const { id, noteId } = request.params as { id: string; noteId: string }
+      const existing = await prisma.orderNote.findFirst({
+        where: { id: noteId, orderId: id },
+      })
+      if (!existing) return reply.code(404).send({ error: 'Note not found' })
+      await prisma.orderNote.delete({ where: { id: noteId } })
+      return { ok: true }
+    } catch (err: any) {
+      return reply.code(500).send({ error: err?.message ?? 'failed' })
+    }
+  })
+
   // FU.1 — per-line VAT rate override (Italian compliance).
   // Lets the operator flip a line from the default 22% to 10% or
   // 4% when the catalog mix doesn't fit the standard rate

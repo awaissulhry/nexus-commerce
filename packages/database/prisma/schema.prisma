@@ -1475,6 +1475,7 @@ model Order {
   mcfShipments          MCFShipment[] // S.24
   riskScore             OrderRiskScore? // O.22 — at most one per order
   fiscalInvoice         FiscalInvoice?  // F.2 — at most one IT invoice per order
+  notes                 OrderNote[]     // AU.5 — per-order operator notes
 
   // Metadata
   amazonMetadata      Json?
@@ -1646,6 +1647,28 @@ model FiscalInvoice {
   @@index([invoiceNumber])
   @@index([issuedAt])
   @@index([sdiStatus])
+}
+
+// ── AU.5: Per-order operator notes ───────────────────────────────────
+// Distinct from CustomerNote (which persists across all the customer's
+// orders). OrderNote is about THIS order: pack instructions, fraud
+// review notes, buyer-messaged-about-gift-wrap memos, etc.
+model OrderNote {
+  id String @id @default(cuid())
+
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId String
+
+  body         String
+  authorUserId String?
+  authorEmail  String?
+  pinned       Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([createdAt])
 }
 
 // ── O.22: Per-order risk audit ───────────────────────────────────────
