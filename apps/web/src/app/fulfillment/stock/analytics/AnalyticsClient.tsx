@@ -22,6 +22,7 @@ import {
 import { useToast } from '@/components/ui/Toast'
 import PageHeader from '@/components/layout/PageHeader'
 import { StockSubNav } from '@/components/inventory/StockSubNav'
+import { AbcBadge } from '@/components/inventory/AbcBadge'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -552,32 +553,73 @@ export default function AnalyticsClient() {
                 </div>
               ) : (
                 <>
-                  {/* Band counts as a row of cards */}
+                  {/* Band counts + share-of-catalog as a row of cards.
+                      S.33 — dark-mode parity on every band tone (A/B/D
+                      previously rendered light text on light bg in
+                      dark mode); share % surfaces the Pareto pattern
+                      directly on the card. */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                     {(['A', 'B', 'C', 'D'] as const).map((cls) => {
                       const tone =
-                        cls === 'A' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                        cls === 'B' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                        cls === 'C' ? 'bg-slate-50 dark:bg-slate-800 text-slate-600 border-slate-200 dark:border-slate-700' :
-                        'bg-rose-50 text-rose-700 border-rose-200'
+                        cls === 'A' ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' :
+                        cls === 'B' ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800' :
+                        cls === 'C' ? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700' :
+                        'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+                      const count = abc.counts[cls] ?? 0
+                      const sharePct = abc.productsClassified > 0
+                        ? (count / abc.productsClassified) * 100
+                        : 0
                       return (
                         <div key={cls} className={`border rounded-md p-3 ${tone}`}>
-                          <div className="text-xs uppercase tracking-wider font-semibold">
-                            {t(`stock.abc.band.${cls}.label`)}
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span className="text-xs uppercase tracking-wider font-semibold">
+                              {t(`stock.abc.band.${cls}.label`)}
+                            </span>
+                            <AbcBadge cls={cls} size="sm" />
                           </div>
                           <div className="text-2xl font-bold tabular-nums mt-1">
-                            {(abc.counts[cls] ?? 0).toLocaleString()}
+                            {count.toLocaleString()}
                           </div>
-                          <div className="text-xs mt-0.5 opacity-80">
-                            {t(`stock.abc.band.${cls}.description`)}
+                          <div className="text-xs mt-0.5 opacity-80 flex items-baseline gap-1.5">
+                            <span className="font-semibold tabular-nums">{sharePct.toFixed(1)}%</span>
+                            <span className="opacity-80">{t(`stock.abc.band.${cls}.description`)}</span>
                           </div>
                         </div>
                       )
                     })}
                   </div>
-                  {/* Top samples per band — collapsed by default to one
-                      row per band; the full per-band drill-down lives
-                      in S.18 saved-views (filter by abcClass). */}
+                  {/* S.33 — top samples per band. The /api/stock/analytics/abc
+                      endpoint already returns up to 10 per band; we
+                      surface the top 3 inline so operators see *which*
+                      SKUs anchor each band without leaving the page. */}
+                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {(['A', 'B', 'C', 'D'] as const).map((cls) => {
+                      const list = abc.samples[cls]?.slice(0, 3) ?? []
+                      if (list.length === 0) return null
+                      return (
+                        <div key={cls} className="border border-slate-200 dark:border-slate-700 rounded-md p-2.5 bg-slate-50/40 dark:bg-slate-800/40">
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <AbcBadge cls={cls} size="sm" />
+                            <span className="text-xs uppercase tracking-wider font-semibold text-slate-700 dark:text-slate-300">
+                              {t('stock.abc.topSamples')}
+                            </span>
+                          </div>
+                          <ul className="space-y-1">
+                            {list.map((s) => (
+                              <li key={s.productId} className="flex items-center justify-between gap-2 text-xs">
+                                <span className="font-mono truncate text-slate-700 dark:text-slate-300" title={`${s.sku} — ${s.name}`}>
+                                  {s.sku}
+                                </span>
+                                <span className="tabular-nums text-slate-500 dark:text-slate-400 shrink-0">
+                                  {(s.inventoryValueCents / 100).toFixed(0)}€
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )
+                    })}
+                  </div>
                   <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
                     {t('stock.abc.totalClassified', { n: abc.productsClassified })}
                   </div>

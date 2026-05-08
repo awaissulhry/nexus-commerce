@@ -287,6 +287,10 @@ export async function getAgedInventory(opts: {
   ageDays: number | null
   productName: string | null
   thumbnailUrl: string | null
+  // S.33 — surface the Pareto band per row so operators can prioritise
+  // disposal of low-value (C/D) aged inventory and investigate why
+  // high-value (A/B) is sitting > thresholdDays.
+  abcClass: 'A' | 'B' | 'C' | 'D' | null
 }>> {
   const thresholdDays = Math.max(1, opts.thresholdDays ?? 180)
   const limit = Math.min(500, Math.max(1, opts.limit ?? 100))
@@ -305,6 +309,7 @@ export async function getAgedInventory(opts: {
       product: {
         select: {
           name: true,
+          abcClass: true,
           images: { select: { url: true }, take: 1 },
         },
       },
@@ -327,6 +332,7 @@ export async function getAgedInventory(opts: {
       : null,
     productName: r.product?.name ?? null,
     thumbnailUrl: r.product?.images?.[0]?.url ?? null,
+    abcClass: (r.product?.abcClass ?? null) as 'A' | 'B' | 'C' | 'D' | null,
   }))
 }
 
@@ -348,6 +354,8 @@ export async function getUnfulfillable(opts: {
   firstReceivedAt: Date | null
   productName: string | null
   thumbnailUrl: string | null
+  // S.33 — see getAgedInventory.
+  abcClass: 'A' | 'B' | 'C' | 'D' | null
 }>> {
   const limit = Math.min(500, Math.max(1, opts.limit ?? 100))
   const rows = await prisma.fbaInventoryDetail.findMany({
@@ -358,6 +366,7 @@ export async function getUnfulfillable(opts: {
       product: {
         select: {
           name: true,
+          abcClass: true,
           images: { select: { url: true }, take: 1 },
         },
       },
@@ -374,6 +383,7 @@ export async function getUnfulfillable(opts: {
     firstReceivedAt: r.firstReceivedAt,
     productName: r.product?.name ?? null,
     thumbnailUrl: r.product?.images?.[0]?.url ?? null,
+    abcClass: (r.product?.abcClass ?? null) as 'A' | 'B' | 'C' | 'D' | null,
   }))
 }
 

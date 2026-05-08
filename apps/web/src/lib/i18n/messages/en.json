@@ -948,6 +948,7 @@
   "stock.abc.notRun": "Not yet computed",
   "stock.abc.empty": "ABC has not been computed yet. The weekly cron runs Mondays at 04:00 UTC; you can also trigger a recompute via POST /api/stock/analytics/abc/recompute.",
   "stock.abc.totalClassified": "{n} products classified",
+  "stock.abc.topSamples": "Top SKUs",
   "stock.abc.band.A.label": "Class A",
   "stock.abc.band.A.description": "Top 80% of revenue",
   "stock.abc.band.B.label": "Class B",

@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { StockSubNav } from '@/components/inventory/StockSubNav'
+import { AbcBadge } from '@/components/inventory/AbcBadge'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -316,22 +317,9 @@ function writeSavedViews(views: SavedView[]): void {
 // S.16 — small Pareto-band chip rendered next to the product name on
 // stock list rows. Tone follows the band: A=emerald (top contributors),
 // B=blue (mid), C=slate (tail), D=rose (zero sales — flag).
-function AbcBadge({ cls }: { cls: 'A' | 'B' | 'C' | 'D' }) {
-  const tone =
-    cls === 'A' ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' :
-    cls === 'B' ? 'bg-blue-50 text-blue-700 ring-blue-200' :
-    cls === 'C' ? 'bg-slate-100 text-slate-600 ring-slate-200' :
-    'bg-rose-50 text-rose-700 ring-rose-200'
-  return (
-    <span
-      className={`inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded ring-1 ${tone}`}
-      title={`Pareto class ${cls}`}
-      aria-label={`ABC class ${cls}`}
-    >
-      {cls}
-    </span>
-  )
-}
+// AbcBadge moved to @/components/inventory/AbcBadge in S.33 — shared
+// across StockWorkspace, AnalyticsClient, and FbaPanEuClient with
+// dark-mode parity.
 
 // S.10 — labels resolved via t() per render so they live-update when
 // the operator flips locale. The keys + tones stay declarative.

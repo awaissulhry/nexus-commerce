@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { StockSubNav } from '@/components/inventory/StockSubNav'
+import { AbcBadge } from '@/components/inventory/AbcBadge'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -53,6 +54,7 @@ interface AgedRow {
   ageDays: number | null
   productName: string | null
   thumbnailUrl: string | null
+  abcClass: 'A' | 'B' | 'C' | 'D' | null
 }
 
 interface UnfulfillableRow {
@@ -66,6 +68,7 @@ interface UnfulfillableRow {
   firstReceivedAt: string | null
   productName: string | null
   thumbnailUrl: string | null
+  abcClass: 'A' | 'B' | 'C' | 'D' | null
 }
 
 interface SnapshotResponse {
@@ -258,7 +261,10 @@ export default function FbaPanEuClient() {
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{r.productName ?? r.sku}</div>
+                        <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate flex items-center gap-1.5">
+                          {r.abcClass && <AbcBadge cls={r.abcClass} size="sm" />}
+                          <span className="truncate">{r.productName ?? r.sku}</span>
+                        </div>
                         <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
                           {r.sku} · {country} · {r.fulfillmentCenterId}
                         </div>
@@ -301,7 +307,10 @@ export default function FbaPanEuClient() {
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{r.productName ?? r.sku}</div>
+                        <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate flex items-center gap-1.5">
+                          {r.abcClass && <AbcBadge cls={r.abcClass} size="sm" />}
+                          <span className="truncate">{r.productName ?? r.sku}</span>
+                        </div>
                         <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
                           {r.sku} · {country} · {r.fulfillmentCenterId}
                         </div>

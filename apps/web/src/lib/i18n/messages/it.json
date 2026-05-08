@@ -919,6 +919,7 @@
   "stock.abc.notRun": "Non ancora calcolato",
   "stock.abc.empty": "La classificazione ABC non è ancora stata calcolata. Il cron settimanale gira il lunedì alle 04:00 UTC; puoi anche forzare un ricalcolo via POST /api/stock/analytics/abc/recompute.",
   "stock.abc.totalClassified": "{n} prodotti classificati",
+  "stock.abc.topSamples": "Migliori SKU",
   "stock.abc.band.A.label": "Classe A",
   "stock.abc.band.A.description": "Top 80% del fatturato",
   "stock.abc.band.B.label": "Classe B",
