@@ -18,6 +18,7 @@ import {
   Truck, ArrowLeft, RefreshCw, AlertCircle, X,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
+import { StockSubNav } from '@/components/inventory/StockSubNav'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -168,6 +169,7 @@ export default function MCFClient() {
           </div>
         }
       />
+      <StockSubNav />
 
       <div className="flex items-center gap-1 flex-wrap">
         {FILTERS.map((f) => (

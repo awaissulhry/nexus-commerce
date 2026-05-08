@@ -11,7 +11,7 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const en = JSON.parse(fs.readFileSync(path.join(here, '..', 'apps/web/src/lib/i18n/messages/en.json'), 'utf8'))
 const it = JSON.parse(fs.readFileSync(path.join(here, '..', 'apps/web/src/lib/i18n/messages/it.json'), 'utf8'))
 const stockRoutes = fs.readFileSync(path.join(here, '..', 'apps/api/src/routes/stock.routes.ts'), 'utf8')
-const stockWorkspace = fs.readFileSync(path.join(here, '..', 'apps/web/src/app/fulfillment/stock/StockWorkspace.tsx'), 'utf8')
+const stockWorkspace = fs.readFileSync(path.join(here, '..', 'apps/web/src/app/fulfillment/stock/StockWorkspace.tsx'), 'utf8') + '\n' + fs.readFileSync(path.join(here, '..', 'apps/web/src/components/inventory/StockSubNav.tsx'), 'utf8')
 const analyticsClient = fs.readFileSync(path.join(here, '..', 'apps/web/src/app/fulfillment/stock/analytics/AnalyticsClient.tsx'), 'utf8')
 
 let pass = 0
@@ -72,7 +72,7 @@ if (/dohTone/.test(analyticsClient)) ok('DoH tone helper for colour coding')
 else bad('DoH tone helper for colour coding')
 
 // 9. Workspace links to analytics
-if (/href="\/fulfillment\/stock\/analytics"/.test(stockWorkspace)) {
+if (/\/fulfillment\/stock\/analytics/.test(stockWorkspace)) {
   ok('StockWorkspace links to /analytics')
 } else {
   bad('StockWorkspace links to /analytics')

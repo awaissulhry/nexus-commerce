@@ -1,4 +1,5 @@
 import PageHeader from '@/components/layout/PageHeader'
+import { StockSubNav } from '@/components/inventory/StockSubNav'
 import CycleCountListClient from './CycleCountListClient'
 
 export const dynamic = 'force-dynamic'
@@ -20,6 +21,7 @@ export default function CycleCountPage() {
           { label: 'Cycle Counts' },
         ]}
       />
+      <StockSubNav />
       <CycleCountListClient />
     </div>
   )

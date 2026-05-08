@@ -13,7 +13,7 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const en = JSON.parse(fs.readFileSync(path.join(here, '..', 'apps/web/src/lib/i18n/messages/en.json'), 'utf8'))
 const it = JSON.parse(fs.readFileSync(path.join(here, '..', 'apps/web/src/lib/i18n/messages/it.json'), 'utf8'))
 const stockRoutes = fs.readFileSync(path.join(here, '..', 'apps/api/src/routes/stock.routes.ts'), 'utf8')
-const stockWorkspace = fs.readFileSync(path.join(here, '..', 'apps/web/src/app/fulfillment/stock/StockWorkspace.tsx'), 'utf8')
+const stockWorkspace = fs.readFileSync(path.join(here, '..', 'apps/web/src/app/fulfillment/stock/StockWorkspace.tsx'), 'utf8') + '\n' + fs.readFileSync(path.join(here, '..', 'apps/web/src/components/inventory/StockSubNav.tsx'), 'utf8')
 
 let pass = 0
 let fail = 0
@@ -67,9 +67,9 @@ if (/FILTER_OPTIONS/.test(reservationsSrc) && /active.*consumed.*released/s.test
 }
 
 // 6. Stock workspace links to both
-if (/href="\/fulfillment\/stock\/transfers"/.test(stockWorkspace)) ok('StockWorkspace links to /transfers')
+if (/\/fulfillment\/stock\/transfers/.test(stockWorkspace)) ok('StockWorkspace links to /transfers')
 else bad('StockWorkspace links to /transfers')
-if (/href="\/fulfillment\/stock\/reservations"/.test(stockWorkspace)) ok('StockWorkspace links to /reservations')
+if (/\/fulfillment\/stock\/reservations/.test(stockWorkspace)) ok('StockWorkspace links to /reservations')
 else bad('StockWorkspace links to /reservations')
 
 // 7. Catalog parity for new keys

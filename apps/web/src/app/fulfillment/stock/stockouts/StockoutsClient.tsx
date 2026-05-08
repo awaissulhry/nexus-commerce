@@ -25,6 +25,7 @@ import {
   Clock, Package, MapPin,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
+import { StockSubNav } from '@/components/inventory/StockSubNav'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -209,6 +210,7 @@ export default function StockoutsClient() {
           </div>
         }
       />
+      <StockSubNav />
 
       {/* KPI strip */}
       {kpis && (

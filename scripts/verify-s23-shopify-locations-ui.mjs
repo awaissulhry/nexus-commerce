@@ -10,7 +10,7 @@ import fs from 'fs'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const en = JSON.parse(fs.readFileSync(path.join(here, '..', 'apps/web/src/lib/i18n/messages/en.json'), 'utf8'))
 const it = JSON.parse(fs.readFileSync(path.join(here, '..', 'apps/web/src/lib/i18n/messages/it.json'), 'utf8'))
-const stockWorkspace = fs.readFileSync(path.join(here, '..', 'apps/web/src/app/fulfillment/stock/StockWorkspace.tsx'), 'utf8')
+const stockWorkspace = fs.readFileSync(path.join(here, '..', 'apps/web/src/app/fulfillment/stock/StockWorkspace.tsx'), 'utf8') + '\n' + fs.readFileSync(path.join(here, '..', 'apps/web/src/components/inventory/StockSubNav.tsx'), 'utf8')
 const shopifyWebhooks = fs.readFileSync(path.join(here, '..', 'apps/api/src/routes/shopify-webhooks.ts'), 'utf8')
 const pagePath = path.join(here, '..', 'apps/web/src/app/fulfillment/stock/shopify-locations/page.tsx')
 const clientPath = path.join(here, '..', 'apps/web/src/app/fulfillment/stock/shopify-locations/ShopifyLocationsClient.tsx')
@@ -63,7 +63,7 @@ if (/EmptyState[\s\S]*?stock\.shopifyLocations\.discover/.test(client)) {
 }
 
 // 6. Workspace links to /shopify-locations
-if (/href="\/fulfillment\/stock\/shopify-locations"/.test(stockWorkspace)) {
+if (/\/fulfillment\/stock\/shopify-locations/.test(stockWorkspace)) {
   ok('workspace links to /shopify-locations')
 } else {
   bad('workspace links to /shopify-locations')

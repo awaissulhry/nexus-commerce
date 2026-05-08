@@ -15,7 +15,7 @@ const service = fs.readFileSync(path.join(here, '..', 'apps/api/src/services/fba
 const job = fs.readFileSync(path.join(here, '..', 'apps/api/src/jobs/fba-pan-eu-sync.job.ts'), 'utf8')
 const stockRoutes = fs.readFileSync(path.join(here, '..', 'apps/api/src/routes/stock.routes.ts'), 'utf8')
 const apiIndex = fs.readFileSync(path.join(here, '..', 'apps/api/src/index.ts'), 'utf8')
-const stockWorkspace = fs.readFileSync(path.join(here, '..', 'apps/web/src/app/fulfillment/stock/StockWorkspace.tsx'), 'utf8')
+const stockWorkspace = fs.readFileSync(path.join(here, '..', 'apps/web/src/app/fulfillment/stock/StockWorkspace.tsx'), 'utf8') + '\n' + fs.readFileSync(path.join(here, '..', 'apps/web/src/components/inventory/StockSubNav.tsx'), 'utf8')
 const migrationDir = path.join(here, '..', 'packages/database/prisma/migrations/20260508_s25_fba_pan_eu')
 
 let pass = 0
@@ -119,7 +119,7 @@ if (/\/fulfillment\/inbound\?status=IN_TRANSIT&channel=AMAZON/.test(client)) {
 }
 
 // 10. Workspace link
-if (/href="\/fulfillment\/stock\/fba-pan-eu"/.test(stockWorkspace)) ok('workspace links to /fba-pan-eu')
+if (/\/fulfillment\/stock\/fba-pan-eu/.test(stockWorkspace)) ok('workspace links to /fba-pan-eu')
 else bad('workspace links to /fba-pan-eu')
 
 // 11. Catalog parity

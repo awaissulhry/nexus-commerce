@@ -11,7 +11,7 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const en = JSON.parse(fs.readFileSync(path.join(here, '..', 'apps/web/src/lib/i18n/messages/en.json'), 'utf8'))
 const it = JSON.parse(fs.readFileSync(path.join(here, '..', 'apps/web/src/lib/i18n/messages/it.json'), 'utf8'))
 const stockRoutes = fs.readFileSync(path.join(here, '..', 'apps/api/src/routes/stock.routes.ts'), 'utf8')
-const stockWorkspace = fs.readFileSync(path.join(here, '..', 'apps/web/src/app/fulfillment/stock/StockWorkspace.tsx'), 'utf8')
+const stockWorkspace = fs.readFileSync(path.join(here, '..', 'apps/web/src/app/fulfillment/stock/StockWorkspace.tsx'), 'utf8') + '\n' + fs.readFileSync(path.join(here, '..', 'apps/web/src/components/inventory/StockSubNav.tsx'), 'utf8')
 const importPagePath = path.join(here, '..', 'apps/web/src/app/fulfillment/stock/import/page.tsx')
 const importClientPath = path.join(here, '..', 'apps/web/src/app/fulfillment/stock/import/ImportClient.tsx')
 
@@ -86,7 +86,7 @@ if (/file\.size > 2_000_000/.test(importClient)) ok('ImportClient caps file size
 else bad('ImportClient caps file size at 2MB')
 
 // 6. Workspace links to /import
-if (/href="\/fulfillment\/stock\/import"/.test(stockWorkspace)) ok('Workspace header links to /import')
+if (/\/fulfillment\/stock\/import/.test(stockWorkspace)) ok('Workspace header links to /import')
 else bad('Workspace header links to /import')
 
 // 7. Catalog parity for new keys

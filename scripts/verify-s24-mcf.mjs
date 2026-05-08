@@ -15,7 +15,7 @@ const service = fs.readFileSync(path.join(here, '..', 'apps/api/src/services/ama
 const job = fs.readFileSync(path.join(here, '..', 'apps/api/src/jobs/amazon-mcf-status.job.ts'), 'utf8')
 const stockRoutes = fs.readFileSync(path.join(here, '..', 'apps/api/src/routes/stock.routes.ts'), 'utf8')
 const apiIndex = fs.readFileSync(path.join(here, '..', 'apps/api/src/index.ts'), 'utf8')
-const stockWorkspace = fs.readFileSync(path.join(here, '..', 'apps/web/src/app/fulfillment/stock/StockWorkspace.tsx'), 'utf8')
+const stockWorkspace = fs.readFileSync(path.join(here, '..', 'apps/web/src/app/fulfillment/stock/StockWorkspace.tsx'), 'utf8') + '\n' + fs.readFileSync(path.join(here, '..', 'apps/web/src/components/inventory/StockSubNav.tsx'), 'utf8')
 const migrationDir = path.join(here, '..', 'packages/database/prisma/migrations/20260508_s24_mcf_shipments')
 
 let pass = 0
@@ -126,7 +126,7 @@ if (/\/cancel/.test(client)) ok('client wires /cancel action')
 else bad('client wires /cancel action')
 
 // 10. Workspace link
-if (/href="\/fulfillment\/stock\/mcf"/.test(stockWorkspace)) ok('workspace links to /mcf')
+if (/\/fulfillment\/stock\/mcf/.test(stockWorkspace)) ok('workspace links to /mcf')
 else bad('workspace links to /mcf')
 
 // 11. Catalog parity

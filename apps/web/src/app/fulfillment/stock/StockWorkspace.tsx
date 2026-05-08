@@ -19,9 +19,10 @@ import {
   Check, Download, Sliders, Undo2, CheckCircle2,
   Lightbulb, Zap, AlertCircle,
   Columns, Maximize2, Minimize2, Keyboard,
-  ClipboardCheck, Bookmark, BookmarkPlus, Trash2, Upload, Store,
+  ClipboardCheck, Bookmark, BookmarkPlus, Trash2,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
+import { StockSubNav } from '@/components/inventory/StockSubNav'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -820,6 +821,9 @@ export default function StockWorkspace() {
         breadcrumbs={[{ label: t('nav.fulfillment'), href: '/fulfillment' }, { label: t('stock.title') }]}
         actions={
           <div className="flex items-center gap-2 flex-wrap justify-end">
+            {/* S.32 — sub-route wayfinding moved to <StockSubNav>
+                below the header. Header now scopes only to controls
+                that mutate this page's state. */}
             {syncStatus && <SyncIndicator status={syncStatus} />}
             <ViewToggle view={view} onChange={(v) => updateUrl({ view: v === 'table' ? undefined : v, page: undefined })} />
             {view === 'table' && (
@@ -828,92 +832,6 @@ export default function StockWorkspace() {
                 <ColumnPicker visible={visibleColumns} onChange={setVisibleColumns} />
               </>
             )}
-            {/* S.6 — cycle-count entry point. Surfaces the
-                /fulfillment/stock/cycle-count sub-route from the main
-                workspace (previously buried — operators reached it
-                only via the sidebar or Cmd+K). Badge fires when any
-                session is DRAFT or IN_PROGRESS. */}
-            <Link
-              href="/fulfillment/stock/cycle-count"
-              className="relative h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
-              title={t('stock.action.cycleCountsTitle')}
-            >
-              <ClipboardCheck size={12} />
-              {t('stock.action.cycleCounts')}
-              {cycleCountActive > 0 && (
-                <span
-                  className="ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-xs font-semibold rounded-full bg-amber-500 text-white tabular-nums"
-                  aria-label={`${cycleCountActive} open cycle count session${cycleCountActive === 1 ? '' : 's'}`}
-                >
-                  {cycleCountActive}
-                </span>
-              )}
-            </Link>
-            {/* S.13 — companion sub-routes for transfer audit and
-                reservation lifecycle. Both are read-mostly views; the
-                heavy lifting still happens in the per-product drawer. */}
-            <Link
-              href="/fulfillment/stock/transfers"
-              className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
-            >
-              <ArrowRightLeft size={12} />
-              {t('stock.transfers.title')}
-            </Link>
-            <Link
-              href="/fulfillment/stock/reservations"
-              className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
-            >
-              <LockIcon size={12} />
-              {t('stock.reservations.title')}
-            </Link>
-            <Link
-              href="/fulfillment/stock/analytics"
-              className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
-            >
-              <Activity size={12} />
-              {t('stock.analytics.title')}
-            </Link>
-            <Link
-              href="/fulfillment/stock/stockouts"
-              className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
-              title={t('stock.stockouts.title')}
-            >
-              <AlertTriangle size={12} />
-              {t('stock.stockouts.title')}
-            </Link>
-            <Link
-              href="/fulfillment/stock/import"
-              className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
-              title={t('stock.import.title')}
-            >
-              <Upload size={12} />
-              {t('stock.import.title')}
-            </Link>
-            <Link
-              href="/fulfillment/stock/shopify-locations"
-              className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
-              title={t('stock.shopifyLocations.title')}
-            >
-              <Store size={12} />
-              {t('stock.shopifyLocations.title')}
-            </Link>
-            <Link
-              href="/fulfillment/stock/mcf"
-              className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
-              title={t('stock.mcf.title')}
-            >
-              <Truck size={12} />
-              {t('stock.mcf.title')}
-            </Link>
-            <Link
-              href="/fulfillment/stock/fba-pan-eu"
-              className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
-              title={t('stock.fbaPanEu.title')}
-            >
-              <Activity size={12} />
-              {t('stock.fbaPanEu.title')}
-            </Link>
-            {/* S.18 — saved views dropdown */}
             <SavedViewsButton
               savedViews={savedViews}
               open={savedViewsOpen}
@@ -924,22 +842,25 @@ export default function StockWorkspace() {
               t={t}
             />
             <button
+              onClick={() => { fetchStock(); fetchSidecar() }}
+              className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
+              aria-label={t('stock.action.refresh')}
+            >
+              <RefreshCw size={12} aria-hidden="true" /> {t('stock.action.refresh')}
+            </button>
+            <button
               onClick={() => setShortcutsOpen(true)}
-              className="h-11 w-11 sm:h-8 sm:w-8 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
+              className="h-11 w-11 sm:h-8 sm:w-8 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"
               title="Keyboard shortcuts (?)"
               aria-label="Keyboard shortcuts"
             >
-              <Keyboard size={12} />
-            </button>
-            <button
-              onClick={() => { fetchStock(); fetchSidecar() }}
-              className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
-            >
-              <RefreshCw size={12} /> {t('stock.action.refresh')}
+              <Keyboard size={12} aria-hidden="true" />
             </button>
           </div>
         }
       />
+
+      <StockSubNav cycleCountActive={cycleCountActive} />
 
       {/* KPI strip */}
       <KpiStrip kpis={kpis} t={t} />

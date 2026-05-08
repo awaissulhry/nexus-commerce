@@ -12,7 +12,7 @@ import fs from 'fs'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const en = JSON.parse(fs.readFileSync(path.join(here, '..', 'apps/web/src/lib/i18n/messages/en.json'), 'utf8'))
 const it = JSON.parse(fs.readFileSync(path.join(here, '..', 'apps/web/src/lib/i18n/messages/it.json'), 'utf8'))
-const stock = fs.readFileSync(path.join(here, '..', 'apps/web/src/app/fulfillment/stock/StockWorkspace.tsx'), 'utf8')
+const stock = fs.readFileSync(path.join(here, '..', 'apps/web/src/app/fulfillment/stock/StockWorkspace.tsx'), 'utf8') + '\n' + fs.readFileSync(path.join(here, '..', 'apps/web/src/components/inventory/StockSubNav.tsx'), 'utf8')
 
 let pass = 0
 let fail = 0
@@ -98,9 +98,15 @@ const required = [
   "t('stock.pagination.previous')",
   "t('stock.pagination.next')",
 ]
+// Accept either a direct `t('key')` call OR the bare key as a
+// labelKey string in an object literal (StockSubNav uses
+// `labelKey: 'stock.action.cycleCounts'` and resolves via t() at
+// render time — same behaviour, different shape on disk).
 let missing = 0
 for (const r of required) {
-  if (!stock.includes(r)) {
+  const key = r.match(/^t\('([^']+)'\)$/)?.[1]
+  const present = stock.includes(r) || (key && stock.includes(`'${key}'`))
+  if (!present) {
     missing++
     bad(`StockWorkspace contains ${r}`)
   }

@@ -40,11 +40,13 @@ if (fs.existsSync(CLIENT)) {
   }
 }
 
-// 3. StockWorkspace links to /fulfillment/stock/stockouts
+// 3. The stock surface (workspace + S.32 sub-nav) links to
+//    /fulfillment/stock/stockouts.
 const WS = path.join(ROOT, 'apps/web/src/app/fulfillment/stock/StockWorkspace.tsx')
-const ws = fs.readFileSync(WS, 'utf8')
-if (!ws.includes('href="/fulfillment/stock/stockouts"')) {
-  failures.push('StockWorkspace has no link to /fulfillment/stock/stockouts')
+const SUBNAV = path.join(ROOT, 'apps/web/src/components/inventory/StockSubNav.tsx')
+const wsConcat = fs.readFileSync(WS, 'utf8') + '\n' + fs.readFileSync(SUBNAV, 'utf8')
+if (!wsConcat.includes('/fulfillment/stock/stockouts')) {
+  failures.push('Stock surface has no link to /fulfillment/stock/stockouts (checked StockWorkspace.tsx + StockSubNav.tsx)')
 }
 
 // 4. service accepts new filters

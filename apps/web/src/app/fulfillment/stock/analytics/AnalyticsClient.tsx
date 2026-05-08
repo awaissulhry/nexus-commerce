@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import PageHeader from '@/components/layout/PageHeader'
+import { StockSubNav } from '@/components/inventory/StockSubNav'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -285,6 +286,7 @@ export default function AnalyticsClient() {
           </div>
         }
       />
+      <StockSubNav />
 
       {/* Period selector */}
       <div className="flex items-center gap-1 flex-wrap">

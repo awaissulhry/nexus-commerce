@@ -23,6 +23,7 @@ import {
   Upload, ArrowLeft, RefreshCw, AlertCircle, CheckCircle2, X,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
+import { StockSubNav } from '@/components/inventory/StockSubNav'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -205,6 +206,7 @@ export default function ImportClient() {
           </div>
         }
       />
+      <StockSubNav />
 
       <Card>
         <div className="space-y-3">

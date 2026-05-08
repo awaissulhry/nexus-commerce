@@ -14,6 +14,7 @@ import {
   ArrowRightLeft, ArrowLeft, Package, RefreshCw, AlertCircle,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
+import { StockSubNav } from '@/components/inventory/StockSubNav'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -103,6 +104,7 @@ export default function TransfersClient() {
           </div>
         }
       />
+      <StockSubNav />
 
       {error && (
         <div className="text-base text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-center gap-2">
