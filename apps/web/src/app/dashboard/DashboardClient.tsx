@@ -282,7 +282,7 @@ function AccountHealthWidget() {
     <div className="bg-white rounded-lg shadow border border-gray-200">
       <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-900">
-          🇮🇹 Amazon Account Health (rolling 30d)
+          Amazon Account Health (rolling 30d)
         </h3>
         <Link
           href="/orders?lens=ship-by"

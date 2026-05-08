@@ -24,7 +24,9 @@ import {
   PinOff,
   Plus,
   RefreshCw,
+  Shield,
   ShoppingCart,
+  StickyNote,
   Trash2,
   User,
 } from 'lucide-react'
@@ -366,19 +368,24 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
           orientation context shouldn't disappear when an operator
           clicks a tab. Tabs gate only the main-column workspace. */}
       <div role="tablist" aria-label="Customer detail sections" className="inline-flex items-center bg-slate-100 rounded-md p-0.5 flex-wrap gap-0.5">
-        {(['orders', 'notes', 'risk'] as const).map((k) => (
+        {([
+          { key: 'orders', label: t('customers.detail.tabs.orders'), icon: ShoppingCart },
+          { key: 'notes',  label: t('customers.detail.tabs.notes'),  icon: StickyNote },
+          { key: 'risk',   label: t('customers.detail.tabs.risk'),   icon: Shield },
+        ] as const).map((tab) => (
           <button
-            key={k}
+            key={tab.key}
             role="tab"
-            aria-selected={tabParam === k}
-            onClick={() => setTab(k)}
-            className={`h-7 px-3 text-base font-medium rounded transition-colors capitalize ${
-              tabParam === k
+            aria-selected={tabParam === tab.key}
+            onClick={() => setTab(tab.key)}
+            className={`h-7 px-3 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${
+              tabParam === tab.key
                 ? 'bg-white text-slate-900 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            {k}
+            <tab.icon size={12} aria-hidden="true" />
+            {tab.label}
           </button>
         ))}
       </div>
@@ -612,7 +619,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
           {tabParam === 'risk' && (
           <Card>
             <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 mb-2 inline-flex items-center gap-1.5">
-              Risk breakdown
+              <Shield size={12} /> Risk breakdown
             </div>
             {(() => {
               const flagged = customer.orders.filter(

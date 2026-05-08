@@ -6,11 +6,12 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   Mail, MapPin, Package, Truck, Undo2, Star, RefreshCw,
   ExternalLink, Clock, CheckCircle2, XCircle, DollarSign,
-  ShoppingCart, FileText, Activity, Receipt,
+  ShoppingCart, FileText, Activity, Receipt, Pin, PinOff, Trash2,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { IconButton } from '@/components/ui/IconButton'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -606,22 +607,28 @@ function OrderNotesCard({ orderId }: { orderId: string }) {
                     {n.body}
                   </div>
                   <div className="flex items-center gap-0.5 shrink-0">
-                    <button
+                    <IconButton
                       aria-label={n.pinned ? 'Unpin note' : 'Pin note'}
                       title={n.pinned ? 'Unpin' : 'Pin'}
+                      size="sm"
+                      tone={n.pinned ? 'warning' : 'neutral'}
                       onClick={() => togglePinned(n)}
-                      className="h-6 w-6 inline-flex items-center justify-center rounded hover:bg-slate-100"
                     >
-                      {n.pinned ? '📌' : '📍'}
-                    </button>
-                    <button
+                      {n.pinned ? (
+                        <PinOff className="w-3 h-3" />
+                      ) : (
+                        <Pin className="w-3 h-3" />
+                      )}
+                    </IconButton>
+                    <IconButton
                       aria-label="Delete note"
                       title="Delete"
+                      size="sm"
+                      tone="danger"
                       onClick={() => remove(n)}
-                      className="h-6 w-6 inline-flex items-center justify-center rounded hover:bg-rose-100 text-rose-600"
                     >
-                      ×
-                    </button>
+                      <Trash2 className="w-3 h-3" />
+                    </IconButton>
                   </div>
                 </div>
                 <div className="text-xs text-slate-500 mt-1">
