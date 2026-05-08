@@ -73,6 +73,7 @@ import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
 import { startSalesReportIngestCron } from "./jobs/sales-report-ingest.job.js";
 import { startForecastCron } from "./jobs/forecast.job.js";
 import { startPricingCron } from "./jobs/pricing-refresh.job.js";
+import { startRepricerCron } from "./jobs/repricer.job.js";
 import { startCatalogRefreshCron } from "./jobs/catalog-refresh.job.js";
 import { startEbayTokenRefreshCron } from "./jobs/ebay-token-refresh.job.js";
 import { startEbayReturnsPollCron } from "./jobs/ebay-returns-poll.job.js";
@@ -427,6 +428,10 @@ async function start() {
     // before they're ready.
     if (process.env.NEXUS_ENABLE_PRICING_CRON === '1') {
       startPricingCron();
+      // G.1 — Always-on repricer. Inherits the global pricing-cron
+      // gate; its own NEXUS_REPRICER_LIVE controls dry-run vs real
+      // channel writes.
+      startRepricerCron();
     }
 
     // Nightly Amazon catalog refresh. Mirrors GET /api/amazon/products
