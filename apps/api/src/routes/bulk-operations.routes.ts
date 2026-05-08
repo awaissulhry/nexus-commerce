@@ -487,6 +487,63 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  /**
+   * POST /api/bulk-operations/:id/rollback
+   *
+   * M.13 / TECH_DEBT #25 + #34a — wires the existing
+   * `bulkActionService.rollbackBulkActionJob` service method to a
+   * route. The service walks SUCCEEDED BulkActionItem rows and
+   * applies each item's captured beforeState back via the right
+   * write-path (MasterPriceService.update for PRICING, applyStock
+   * Movement for INVENTORY, etc.). Supported actionTypes:
+   * PRICING_UPDATE / INVENTORY_UPDATE / STATUS_UPDATE / ATTRIBUTE_UPDATE.
+   *
+   * Guards (mirror the service's preconditions):
+   *   - Original must be COMPLETED or PARTIALLY_COMPLETED  (409)
+   *   - Original.isRollbackable must be true                (409)
+   *   - Original.rollbackJobId must be null (no double-undo) (409)
+   *   - Original.actionType in the supported set            (409)
+   *
+   * Response: the new rollback job's id + per-item tally
+   * (succeeded / failed / skipped).
+   */
+  fastify.post<{ Params: { id: string } }>(
+    '/bulk-operations/:id/rollback',
+    async (request, reply) => {
+      const { id } = request.params
+      if (!id) {
+        return reply
+          .code(400)
+          .send({ success: false, error: 'job id required' })
+      }
+      try {
+        const result = await bulkActionService.rollbackBulkActionJob(id)
+        return reply.send({ success: true, ...result })
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : String(error)
+        fastify.log.error(
+          { err: error, jobId: id },
+          '[bulk-operations] rollback failed',
+        )
+        // Map service-level guards to clear HTTP semantics.
+        if (message === 'Job not found' || message.startsWith('Job not found:')) {
+          return reply.code(404).send({ success: false, error: message })
+        }
+        if (
+          message.startsWith('Cannot rollback job') ||
+          message === 'Job has already been rolled back' ||
+          message === 'Job is marked non-rollbackable' ||
+          message.startsWith('Rollback not supported') ||
+          message.startsWith('No SUCCEEDED items')
+        ) {
+          return reply.code(409).send({ success: false, error: message })
+        }
+        return reply.code(500).send({ success: false, error: message })
+      }
+    },
+  )
+
   // ── T.6 — Server-side bulk-ops templates ─────────────────────────
   // CRUD for the BulkOpsTemplate table. Templates store the full grid
   // configuration (columns, filters, channel/productType filters) so

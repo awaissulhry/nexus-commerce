@@ -441,11 +441,14 @@ function ItemsPanel({ jobId }: { jobId: string }) {
 //   - status is COMPLETED or PARTIALLY_COMPLETED
 //   - isRollbackable=true (default for non-rollback jobs)
 //   - rollbackJobId is null (not yet rolled back)
-//   - actionType is a v0-supported one (PRICING/INVENTORY/STATUS)
+//   - actionType is a backend-supported one (M.13: PRICING /
+//     INVENTORY / STATUS / ATTRIBUTE — matches the SUPPORTED set
+//     in bulk-action.service.rollbackBulkActionJob)
 const ROLLBACK_SUPPORTED_TYPES = new Set([
   'PRICING_UPDATE',
   'INVENTORY_UPDATE',
   'STATUS_UPDATE',
+  'ATTRIBUTE_UPDATE',
 ])
 
 function isRollbackEligible(job: JobRow): boolean {

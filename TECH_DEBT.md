@@ -233,15 +233,26 @@ Only the top-level browse page moved. `/inventory/upload`, `/inventory/manage`, 
 
 Items below come from the user's first day operating Nexus on the actual Xavia catalog. Validated demand — these aren't speculative.
 
-## 25. 🟡 Bulk-ops: undo across saves
+## 25. ✅ Bulk-ops: undo across saves — resolved 2026-05-08 in M.13
 
-**Friction:** "Wished I could undo last save (history clears on save)."
+**Resolution:** Cross-save undo lands via the existing `BulkActionItem.beforeState` capture (already wired in `processJob`) plus the existing `bulkActionService.rollbackBulkActionJob` method (which walks SUCCEEDED items and re-applies each `beforeState` through the master cascade — `MasterPriceService.update` for PRICING, `applyStockMovement` for INVENTORY, `product.update` for STATUS, `readProductAttribute` for ATTRIBUTE). M.13 wires the route and surfaces a Rollback button on every eligible job in `/bulk-operations/history`.
 
-The undo / redo stack lives entirely in the in-memory grid; once Save flushes to the DB the stack is reset. Real users save partway through a session and then realise they want to roll back the previous batch.
+**Flow:**
+  1. Operator runs a bulk PRICING_UPDATE / INVENTORY_UPDATE / STATUS_UPDATE / ATTRIBUTE_UPDATE.
+  2. Each `BulkActionItem` row captures `beforeState` at apply time.
+  3. Job lands COMPLETED or PARTIALLY_COMPLETED.
+  4. From `/bulk-operations/history`, an amber "Rollback" button is visible on the job card. Click → confirm → `POST /api/bulk-operations/:id/rollback`.
+  5. Service walks succeeded items, applies each `beforeState` back, creates a sibling rollback job (linked via `original.rollbackJobId`), and the cron worker drains the resulting outbound-sync queue.
 
-**Proper fix:** persist the last N (3? 10?) successful `BulkOperation` rows as undo points. The grid already writes a `BulkOperation` audit row per save with the full `validated` change list and pre-existing values would need to be captured at apply time. UI: a "Recently saved → Undo last save" entry above the existing in-session undo stack. Each undo emits an inverse `PATCH /api/products/bulk` with the captured pre-values.
+**Guards:**
+  - Job must be COMPLETED / PARTIALLY_COMPLETED (else 409)
+  - `isRollbackable=true` and `rollbackJobId IS NULL` (else 409)
+  - actionType in the supported set (else 409)
+  - At least one SUCCEEDED item (else 409)
 
-Storage already exists — just need pre-value capture in the apply path and a small UI affordance.
+**Original friction:** "Wished I could undo last save (history clears on save)." — the in-grid undo stack only covered the current session. Now durable across saves and across sessions; only the rollback-job audit is consumed when an undo is run.
+
+**Resolves entry #34a (rollback infrastructure) at the same time** — the rollback feature is one and the same.
 
 ## 26. ✅ Bulk-ops: drag-fill needs an Esc / cancel mid-drag — resolved 2026-05-06 in c672ff8
 
@@ -343,25 +354,13 @@ preview, execute+poll) but explicitly deferred five pieces. Listed
 together so they get reconsidered as one batch when the next bulk-ops
 ask lands.
 
-### 34a. Rollback infrastructure
+### 34a. ✅ Rollback infrastructure — resolved 2026-05-08 in M.13
 
-**Symptom:** `BulkActionJob.rollbackData` exists in the schema and
-`bulk-action.service.ts` has a `rollback()` stub, but no per-item
-before-state is captured during processing. The "Undo" path is
-non-functional; `isRollbackable` is set to `true` for the four real
-handlers but actually pressing Undo would do nothing useful.
+**Resolution:** Per-item beforeState capture had already landed (Commit 2 / da0ac52); `bulkActionService.rollbackBulkActionJob` walks SUCCEEDED items + applies the captured beforeState back via the right write-path per actionType (PRICING / INVENTORY / STATUS / ATTRIBUTE). The only missing piece was the route + UI button — M.13 wires `POST /api/bulk-operations/:id/rollback` and surfaces an amber Rollback button on every eligible job in `/bulk-operations/history`.
 
-**Workaround:** No rollback button in the UI. If a user runs the wrong
-bulk op, they re-run it with the inverse value (proven viable in B-8
-Test 5: a STATUS_UPDATE → DRAFT was reverted with a second STATUS_UPDATE
-→ ACTIVE in seconds).
+The original "stored rollbackData JSON on the job and a sibling rollback-job" plan from this entry was abandoned in favour of per-item `BulkActionItem.beforeState`, which is finer-grained and already powers the existing audit timeline. Result: same operator-facing capability (undo a bulk op) with cleaner data shape.
 
-**Proper fix:** During `processJob`, before each `prisma.update`,
-capture `{itemId, field, oldValue}` into an array; persist as
-`rollbackData` JSON when the job completes. New endpoint `POST
-/api/bulk-operations/:id/rollback` creates a sibling job with inverted
-operations and links it via `rollbackJobId`. UI gets an "Undo this
-operation" button on completed-job cards. Estimated 1 day.
+See entry #25 for the full flow + guards.
 
 ### 34b. `LISTING_SYNC` handler
 
