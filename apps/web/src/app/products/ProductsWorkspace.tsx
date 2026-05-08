@@ -48,6 +48,7 @@ import {
 // follow-ups. HierarchyLens is the first; CoverageLens, PricingLens,
 // HealthLens, DraftsLens follow in the same sweep.
 import { HierarchyLens } from './_lenses/HierarchyLens'
+import { HealthLens } from './_lenses/HealthLens'
 
 // E.3 — lazy-load the heavy modals so they don't ship in /products'
 // initial bundle. Each is gated by a boolean state in the workspace,
@@ -5579,102 +5580,7 @@ function PricingLens({
   )
 }
 
-// ────────────────────────────────────────────────────────────────────
-// HealthLens — pulls from /api/listings/health and /api/fulfillment overview
-// ────────────────────────────────────────────────────────────────────
-function HealthLens() {
-  const [data, setData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  // P.5 — split state for the error case so the previous failure
-  // doesn't get masked by a stale `data` from the last successful
-  // load. Was: 5xx responses were parsed as JSON and stored as
-  // `data`, which then rendered as "—" everywhere instead of an
-  // honest failure banner.
-  const [error, setError] = useState<string | null>(null)
-
-  const refresh = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch(`${getBackendUrl()}/api/listings/health`, { cache: 'no-store' })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      setData(await res.json())
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { void refresh() }, [refresh])
-
-  // P.5 — refresh when listings change in any tab so the lens
-  // reflects the latest sync status without manual reload.
-  useInvalidationChannel(
-    ['listing.updated', 'listing.created', 'listing.deleted', 'bulk-job.completed'],
-    () => { void refresh() },
-  )
-
-  if (loading && !data) return <Card><div className="text-md text-slate-500 py-8 text-center">Loading health…</div></Card>
-  if (error) return <Card><div className="text-md text-rose-600 py-8 text-center">Failed to load health: {error}</div></Card>
-  if (!data) return null
-
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <HealthStat label="Errors" value={data.errorCount} tone="danger" />
-        <HealthStat label="Suppressed" value={data.suppressedCount} tone="warning" />
-        <HealthStat label="Drafts" value={data.draftCount} tone="default" />
-        <HealthStat label="Pending sync" value={data.pendingSyncCount} tone="info" />
-      </div>
-      <Card title="Recent failed listings">
-        {data.recentErrors.length === 0 ? (
-          <div className="py-6 text-base text-slate-400 text-center">No errors right now</div>
-        ) : (
-          <ul className="space-y-1 -my-1">
-            {data.recentErrors.slice(0, 30).map((e: any) => (
-              <li key={e.id}>
-                <Link href={`/listings/${e.channel.toLowerCase()}?search=${encodeURIComponent(e.productSku)}`} className="flex items-start justify-between gap-3 py-1.5 px-2 -mx-2 rounded hover:bg-slate-50">
-                  <div className="flex items-start gap-2 min-w-0 flex-1">
-                    <span className={`inline-block text-xs font-semibold uppercase px-1.5 py-0.5 border rounded ${CHANNEL_TONE[e.channel]}`}>{e.channel}</span>
-                    <span className="text-sm font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">{e.marketplace}</span>
-                    <div className="min-w-0">
-                      <div className="text-base text-slate-900 truncate">{e.productName}</div>
-                      <div className="text-xs text-slate-500 font-mono">{e.productSku}</div>
-                      {e.lastSyncError && <div className="text-xs text-rose-600 truncate mt-0.5">{e.lastSyncError}</div>}
-                    </div>
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-    </div>
-  )
-}
-
-function HealthStat({ label, value, tone }: { label: string; value: number; tone: 'danger' | 'warning' | 'info' | 'default' }) {
-  const tones = {
-    danger: 'text-rose-600 bg-rose-50',
-    warning: 'text-amber-600 bg-amber-50',
-    info: 'text-blue-600 bg-blue-50',
-    default: 'text-slate-600 bg-slate-100',
-  }[tone]
-  return (
-    <Card>
-      <div className="flex items-center gap-3">
-        <div className={`w-10 h-10 rounded inline-flex items-center justify-center ${tones}`}>
-          <AlertTriangle size={18} />
-        </div>
-        <div>
-          <div className="text-2xl font-semibold tabular-nums text-slate-900">{value}</div>
-          <div className="text-sm uppercase tracking-wider text-slate-500">{label}</div>
-        </div>
-      </div>
-    </Card>
-  )
-}
+// P.1b — HealthLens + HealthStat extracted to ./_lenses/HealthLens.tsx
 
 // ────────────────────────────────────────────────────────────────────
 // DraftsLens — folds /listings/drafts
