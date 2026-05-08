@@ -1,10 +1,11 @@
+'use client'
+
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import { History as HistoryIcon } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import ActiveJobsStrip from './ActiveJobsStrip'
-import BulkOperationsClient from './BulkOperationsClientWrapper'
-
-export const dynamic = 'force-dynamic'
+import BulkOperationsClient from './BulkOperationsClient'
 
 /**
  * Server shell only — does NOT fetch data on the server.
@@ -28,7 +29,31 @@ export const dynamic = 'force-dynamic'
 // own max-height in BulkOperationsClient, so it still anchors at the
 // bottom of the viewport on desktop, but the page itself doesn't
 // fight the layout for height.
+// U.44 — entire page client-rendered. Two-pass mount renders an
+// empty wrapper on the SSR pass + first hydration tick, then swaps
+// to the real content via useEffect. Eliminates ALL hydration
+// mismatch sources at the page level — no matter what global
+// chrome (sidebar, providers, hooks) does, this page's hydration
+// always succeeds because both server and first client render
+// produce the same empty wrapper.
 export default function BulkOperationsPage() {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="text-md text-slate-500 dark:text-slate-400 py-12 text-center"
+      >
+        Loading bulk operations…
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-3">
       <PageHeader
