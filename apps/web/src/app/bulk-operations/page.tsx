@@ -5,6 +5,12 @@ import PageHeader from '@/components/layout/PageHeader'
 import ActiveJobsStrip from './ActiveJobsStrip'
 import BulkOperationsClient from './BulkOperationsClient'
 
+// U.46 — force-dynamic. Suspense alone (U.45) didn't unstick the
+// App Router's transition queue on production. Forcing the route out
+// of static-rendering attempts entirely eliminates the bailout-mode
+// edge case that was poisoning router.push().
+export const dynamic = 'force-dynamic'
+
 // U.45 — root cause of the /bulk-operations navigation deadlock:
 // BulkOperationsClient calls useSearchParams() (P.9, scoped IDs from
 // the URL), which requires a Suspense boundary in production. Without
