@@ -590,6 +590,39 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // E.2 — Prepare an Amazon Coupon spec. SP-API doesn't expose
+  // createCoupon publicly; this validates the spec, normalizes the
+  // payload, and returns a Seller Central deep-link the operator
+  // clicks to finalize the coupon. When Amazon eventually exposes
+  // the API (or the operator adopts a partner integration), the
+  // dispatch step swaps in here.
+  fastify.post('/pricing/coupons/prepare', async (request, reply) => {
+    try {
+      const { prepareAmazonCoupon } = await import(
+        '../services/amazon-coupon.service.js'
+      )
+      const body = (request.body ?? {}) as Record<string, unknown>
+      const draft = {
+        name: String(body.name ?? ''),
+        marketplace: String(body.marketplace ?? ''),
+        asins: Array.isArray(body.asins) ? (body.asins as string[]) : [],
+        discountType: body.discountType as 'PERCENTAGE' | 'AMOUNT',
+        discountValue: Number(body.discountValue),
+        startsAt: body.startsAt ? new Date(String(body.startsAt)) : new Date(NaN),
+        endsAt: body.endsAt ? new Date(String(body.endsAt)) : new Date(NaN),
+        budgetCap:
+          body.budgetCap != null ? Number(body.budgetCap) : undefined,
+        customerEligibility:
+          (body.customerEligibility as 'ALL' | 'PRIME') ?? 'ALL',
+      }
+      const result = prepareAmazonCoupon(draft)
+      return reply.code(result.ok ? 200 : 422).send(result)
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[pricing/coupons/prepare] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // E.3 — Push an EbayMarkdown row to eBay's Marketing API. Centralized
   // through ebay-markdown.service so every push respects the same
   // status guards + originalPrice drift check + dry-run gating.
