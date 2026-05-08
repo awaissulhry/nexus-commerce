@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -83,6 +84,16 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
   const [filter, setFilter] = useState<StatusFilter>('all')
   // Per-item input draft so the operator can type a number then commit on blur.
   const [drafts, setDrafts] = useState<Record<string, string>>({})
+  // S.5 — replace window.prompt() with the Modal primitive. One modal
+  // covers both flows (cancel session, ignore item variance) so we
+  // don't duplicate the textarea + buttons + a11y wiring.
+  const [reasonPrompt, setReasonPrompt] = useState<
+    | { kind: 'cancel' }
+    | { kind: 'ignore'; itemId: string; sku: string }
+    | null
+  >(null)
+  const [reasonInput, setReasonInput] = useState('')
+  const [reasonSubmitting, setReasonSubmitting] = useState(false)
 
   const fetchData = useCallback(async () => {
     try {
@@ -184,9 +195,14 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
     }
   }
 
-  const handleCancel = async () => {
-    const reason = window.prompt('Cancel this count? (Optional reason)')
-    if (reason === null) return
+  // S.5 — open the reason modal. Submission lives in submitReason
+  // below so the same flow can serve cancel + ignore.
+  const handleCancel = () => {
+    setReasonInput('')
+    setReasonPrompt({ kind: 'cancel' })
+  }
+
+  const performCancel = async (reason: string | null) => {
     setBusyTopAction('cancel')
     try {
       const res = await fetch(
@@ -194,7 +210,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reason: reason.trim() || null }),
+          body: JSON.stringify({ reason }),
         },
       )
       if (!res.ok) {
@@ -270,31 +286,53 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
     }
   }
 
-  const handleIgnore = async (item: CountItem) => {
-    const notes = window.prompt(
-      `Ignore variance on ${item.sku}? (Optional reason — leave empty to skip)`,
-    )
-    if (notes === null) return
-    setActingId(item.id)
+  const handleIgnore = (item: CountItem) => {
+    setReasonInput('')
+    setReasonPrompt({ kind: 'ignore', itemId: item.id, sku: item.sku })
+  }
+
+  const performIgnore = async (itemId: string, sku: string, notes: string | null) => {
+    setActingId(itemId)
     try {
       const res = await fetch(
-        `${getBackendUrl()}/api/fulfillment/cycle-counts/${countId}/items/${item.id}/ignore`,
+        `${getBackendUrl()}/api/fulfillment/cycle-counts/${countId}/items/${itemId}/ignore`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ notes: notes.trim() || null }),
+          body: JSON.stringify({ notes }),
         },
       )
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
         throw new Error(body.error ?? `HTTP ${res.status}`)
       }
-      toast.success(`${item.sku} marked ignored`)
+      toast.success(`${sku} marked ignored`)
       await fetchData()
     } catch (err) {
       toast.error(`Ignore failed: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setActingId(null)
+    }
+  }
+
+  // S.5 — submit handler for the reason prompt modal. Routes to the
+  // correct perform* by reasonPrompt.kind. Closes the modal after the
+  // action settles. Empty input becomes null (server distinguishes
+  // "no reason" from an empty string).
+  const submitReason = async () => {
+    if (!reasonPrompt) return
+    const reason = reasonInput.trim() ? reasonInput.trim() : null
+    setReasonSubmitting(true)
+    try {
+      if (reasonPrompt.kind === 'cancel') {
+        await performCancel(reason)
+      } else {
+        await performIgnore(reasonPrompt.itemId, reasonPrompt.sku, reason)
+      }
+      setReasonPrompt(null)
+      setReasonInput('')
+    } finally {
+      setReasonSubmitting(false)
     }
   }
 
@@ -608,6 +646,69 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
           </div>
         </>
       )}
+
+      {/* S.5 — reason prompt modal (cancel session / ignore item).
+          Replaces two window.prompt() calls. The Modal primitive handles
+          focus management, Escape, backdrop dismiss, and body scroll lock. */}
+      <Modal
+        open={reasonPrompt !== null}
+        onClose={() => {
+          if (reasonSubmitting) return
+          setReasonPrompt(null)
+          setReasonInput('')
+        }}
+        title={
+          reasonPrompt?.kind === 'cancel'
+            ? 'Cancel this count?'
+            : reasonPrompt?.kind === 'ignore'
+              ? `Ignore variance on ${reasonPrompt.sku}?`
+              : ''
+        }
+        description={
+          reasonPrompt?.kind === 'cancel'
+            ? 'The session will move to CANCELLED and stop accepting counts. Already-reconciled adjustments are kept.'
+            : 'The variance is left in the audit trail but is not applied to stock.'
+        }
+        size="md"
+      >
+        <ModalBody>
+          <label className="text-sm font-medium text-slate-700 block mb-1">
+            Reason <span className="text-slate-400 font-normal">(optional)</span>
+          </label>
+          <textarea
+            value={reasonInput}
+            onChange={(e) => setReasonInput(e.target.value)}
+            rows={3}
+            placeholder={
+              reasonPrompt?.kind === 'cancel'
+                ? 'e.g. recount tomorrow with new operator'
+                : 'e.g. damaged unit pulled separately'
+            }
+            className="w-full px-3 py-2 text-base border border-slate-200 rounded focus:border-slate-400 focus:outline-none"
+            disabled={reasonSubmitting}
+          />
+        </ModalBody>
+        <ModalFooter>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setReasonPrompt(null)
+              setReasonInput('')
+            }}
+            disabled={reasonSubmitting}
+          >
+            Back
+          </Button>
+          <Button
+            variant={reasonPrompt?.kind === 'cancel' ? 'danger' : 'primary'}
+            onClick={submitReason}
+            disabled={reasonSubmitting}
+          >
+            {reasonSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {reasonPrompt?.kind === 'cancel' ? 'Cancel count' : 'Ignore variance'}
+          </Button>
+        </ModalFooter>
+      </Modal>
     </div>
   )
 }
