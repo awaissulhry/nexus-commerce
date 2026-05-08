@@ -863,6 +863,42 @@ export default function StockWorkspace() {
       )}
 
       {shortcutsOpen && <ShortcutsHelp onClose={() => setShortcutsOpen(false)} />}
+
+      {/* S.9 — mobile bottom-nav. Below sm: a fixed bottom strip
+          surfaces the two stock surfaces — the main workspace (this
+          page) and the cycle-count list. Hidden when the bulk action
+          bar is visible (selected.size > 0) so the two don't fight for
+          the same fixed-bottom real estate. Drawer keeps its own
+          z-index above this nav. */}
+      {selected.size === 0 && !drawerProductId && (
+        <nav
+          className="sm:hidden fixed inset-x-0 bottom-0 z-20 bg-white border-t border-slate-200 shadow-lg flex items-stretch text-sm font-medium"
+          aria-label="Stock navigation"
+        >
+          <span
+            className="flex-1 inline-flex flex-col items-center justify-center gap-0.5 py-2 text-slate-900 border-t-2 border-blue-600"
+            aria-current="page"
+          >
+            <Boxes size={16} />
+            Stock
+          </span>
+          <Link
+            href="/fulfillment/stock/cycle-count"
+            className="relative flex-1 inline-flex flex-col items-center justify-center gap-0.5 py-2 text-slate-600 border-t-2 border-transparent active:bg-slate-50"
+          >
+            <ClipboardCheck size={16} />
+            Cycle counts
+            {cycleCountActive > 0 && (
+              <span
+                className="absolute top-1 right-6 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-xs font-semibold rounded-full bg-amber-500 text-white tabular-nums"
+                aria-label={`${cycleCountActive} open cycle count session${cycleCountActive === 1 ? '' : 's'}`}
+              >
+                {cycleCountActive}
+              </span>
+            )}
+          </Link>
+        </nav>
+      )}
     </div>
   )
 }

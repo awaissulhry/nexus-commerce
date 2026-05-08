@@ -568,8 +568,128 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
             </div>
           )}
 
-          {/* Items table */}
-          <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+          {/* S.9 — mobile card layout. Below sm: the items table is
+              hidden in favor of a stacked card view: each row becomes
+              a self-contained card with SKU + name on top, expected /
+              counted / variance on a row, status badge, and per-item
+              actions on the bottom. Same filteredItems source so the
+              filters above continue to work. */}
+          <div className="sm:hidden space-y-2">
+            {filteredItems.length === 0 ? (
+              <div className="bg-white border border-slate-200 rounded-lg px-4 py-6 text-center text-base text-slate-500">
+                No items match this filter.
+              </div>
+            ) : (
+              filteredItems.map((it) => {
+                const draft = drafts[it.id]
+                const showInput =
+                  isInProgress && (it.status === 'PENDING' || it.status === 'COUNTED')
+                const inputValue =
+                  draft !== undefined
+                    ? draft
+                    : it.countedQuantity != null
+                      ? String(it.countedQuantity)
+                      : ''
+                const isVarianceZero = it.variance === 0
+                return (
+                  <div
+                    key={it.id}
+                    className="bg-white border border-slate-200 rounded-lg p-3 space-y-2"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-mono text-sm text-slate-900 break-all">{it.sku}</div>
+                        {it.productName && (
+                          <div className="text-sm text-slate-500 mt-0.5">{it.productName}</div>
+                        )}
+                      </div>
+                      <Badge variant={statusVariant(it.status)} size="sm">
+                        {it.status}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm">
+                      <div>
+                        <div className="text-xs uppercase tracking-wider text-slate-500">Expected</div>
+                        <div className="tabular-nums text-slate-700 text-base">{it.expectedQuantity}</div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs uppercase tracking-wider text-slate-500">Counted</div>
+                        {showInput ? (
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={inputValue}
+                            data-cycle-count-input={it.id}
+                            onChange={(e) =>
+                              setDrafts((d) => ({ ...d, [it.id]: e.target.value }))
+                            }
+                            onBlur={() => draft !== undefined && handleRecord(it, draft)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.currentTarget.blur()
+                              }
+                            }}
+                            disabled={actingId === it.id}
+                            className="mt-0.5 w-24 h-11 px-2 text-right tabular-nums text-base border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            placeholder="—"
+                          />
+                        ) : (
+                          <div className="tabular-nums text-slate-700 text-base">{it.countedQuantity ?? '—'}</div>
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-xs uppercase tracking-wider text-slate-500">Variance</div>
+                        <div className={cn(
+                          'tabular-nums text-base font-semibold',
+                          it.variance == null
+                            ? 'text-slate-400'
+                            : isVarianceZero
+                              ? 'text-slate-400'
+                              : it.variance > 0
+                                ? 'text-amber-700'
+                                : 'text-red-700',
+                        )}>
+                          {it.variance == null ? '—' : `${it.variance > 0 ? '+' : ''}${it.variance}`}
+                        </div>
+                      </div>
+                    </div>
+                    {it.status === 'COUNTED' && isInProgress && (
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleReconcile(it)}
+                          disabled={actingId === it.id}
+                          className="flex-1 inline-flex items-center justify-center gap-1 min-h-[44px] px-3 text-sm font-medium text-white bg-green-600 border border-green-600 rounded hover:bg-green-700 disabled:opacity-50"
+                        >
+                          {actingId === it.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Check className="w-3.5 h-3.5" />
+                          )}
+                          {isVarianceZero ? 'Match' : 'Reconcile'}
+                        </button>
+                        {!isVarianceZero && (
+                          <button
+                            type="button"
+                            onClick={() => handleIgnore(it)}
+                            disabled={actingId === it.id}
+                            className="flex-1 inline-flex items-center justify-center gap-1 min-h-[44px] px-3 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
+                          >
+                            <SkipForward className="w-3.5 h-3.5" />
+                            Ignore
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })
+            )}
+          </div>
+
+          {/* Items table — hidden on mobile (cards above). */}
+          <div className="hidden sm:block bg-white border border-slate-200 rounded-lg overflow-hidden">
             <table className="w-full text-base">
               <thead className="bg-slate-50 text-sm text-slate-600 border-b border-slate-200">
                 <tr>
