@@ -231,7 +231,8 @@ export default function OrdersWorkspace() {
   useEffect(() => { if (lens === 'grid') fetchOrders() }, [lens, fetchOrders])
   useEffect(() => { fetchStats(); fetchFacets() }, [fetchStats, fetchFacets])
 
-  // 30s poll on Grid
+  // 30s poll on Grid (fallback when SSE drops or for stats/facets
+  // refresh that the SSE bus doesn't carry)
   useEffect(() => {
     if (lens !== 'grid') return
     const onVis = () => { if (document.visibilityState === 'visible') fetchOrders() }
@@ -239,6 +240,34 @@ export default function OrdersWorkspace() {
     const id = setInterval(() => { if (document.visibilityState === 'visible') fetchOrders() }, 30000)
     return () => { document.removeEventListener('visibilitychange', onVis); clearInterval(id) }
   }, [lens, fetchOrders])
+
+  // AU.3 — Order SSE subscription. Backend bus shipped in O.6 but
+  // had no consumer until this commit. EventSource auto-reconnects
+  // on transient drops; on order.created / updated / cancelled /
+  // return.created we re-fetch the visible list + stats so the
+  // operator sees the change within ~200ms instead of waiting on
+  // the 30s poll. Stats/facets refresh too so the header counters
+  // stay accurate.
+  useEffect(() => {
+    const es = new EventSource(`${getBackendUrl()}/api/orders/events`)
+    const onAny = () => {
+      if (document.visibilityState === 'visible') {
+        fetchOrders()
+        fetchStats()
+        fetchFacets()
+      }
+    }
+    const types = ['order.created', 'order.updated', 'order.cancelled', 'return.created'] as const
+    for (const t of types) es.addEventListener(t, onAny as EventListener)
+    es.onerror = () => {
+      // EventSource reconnects natively on transient drops; we
+      // only log unexpected fatal closures.
+    }
+    return () => {
+      for (const t of types) es.removeEventListener(t, onAny as EventListener)
+      es.close()
+    }
+  }, [fetchOrders, fetchStats, fetchFacets])
 
   useEffect(() => { setSelected(new Set()) }, [page, search, channelFilters.join(','), marketplaceFilters.join(','), statusFilters.join(','), fulfillmentFilters.join(','), hasReturn, hasRefund, reviewEligible])
 
