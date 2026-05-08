@@ -1,7 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { AlertCircle } from 'lucide-react';
 import { PricingRule, apiClient } from '@/lib/api-client';
+import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
+import { useTranslations } from '@/lib/i18n/use-translations';
 
 interface EditRuleModalProps {
   rule: PricingRule;
@@ -14,6 +18,7 @@ export default function EditRuleModal({
   onClose,
   onRuleUpdated,
 }: EditRuleModalProps) {
+  const { t } = useTranslations();
   const [formData, setFormData] = useState({
     name: rule.name,
     description: rule.description || '',
@@ -34,13 +39,21 @@ export default function EditRuleModal({
         name: formData.name,
         description: formData.description || undefined,
         priority: formData.priority,
-        minMarginPercent: formData.minMarginPercent ? parseFloat(formData.minMarginPercent as string) : undefined,
-        maxMarginPercent: formData.maxMarginPercent ? parseFloat(formData.maxMarginPercent as string) : undefined,
+        minMarginPercent: formData.minMarginPercent
+          ? parseFloat(formData.minMarginPercent as string)
+          : undefined,
+        maxMarginPercent: formData.maxMarginPercent
+          ? parseFloat(formData.maxMarginPercent as string)
+          : undefined,
       });
 
       onRuleUpdated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update rule');
+      setError(
+        err instanceof Error
+          ? err.message
+          : t('pricing.rules.modal.errors.updateFailed'),
+      );
       console.error('Error updating rule:', err);
     } finally {
       setLoading(false);
@@ -48,22 +61,19 @@ export default function EditRuleModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-lg max-w-md w-full mx-4">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-bold text-gray-900">Edit Pricing Rule</h2>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+    <Modal open onClose={onClose} title={t('pricing.rules.modal.editTitle')} size="md">
+      <form onSubmit={handleSubmit}>
+        <ModalBody className="space-y-3">
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded">
-              <p className="text-red-800 text-sm">{error}</p>
+            <div className="px-3 py-2 bg-rose-50 border border-rose-200 rounded-md inline-flex items-start gap-2 text-base text-rose-700">
+              <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+              <span>{error}</span>
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Rule Name
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              {t('pricing.rules.modal.name')}
             </label>
             <input
               type="text"
@@ -71,28 +81,28 @@ export default function EditRuleModal({
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full h-9 px-3 border border-slate-300 rounded-md text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              {t('pricing.rules.modal.description')}
             </label>
             <textarea
               value={formData.description}
               onChange={(e) =>
                 setFormData({ ...formData, description: e.target.value })
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-slate-300 rounded-md text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
               rows={3}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Priority
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              {t('pricing.rules.modal.priority')}
             </label>
             <input
               type="number"
@@ -100,16 +110,18 @@ export default function EditRuleModal({
               onChange={(e) =>
                 setFormData({ ...formData, priority: parseInt(e.target.value) })
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
               required
             />
-            <p className="text-xs text-gray-500 mt-1">Lower numbers = higher priority</p>
+            <p className="text-sm text-slate-500 mt-1">
+              {t('pricing.rules.modal.priorityHint')}
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Min Margin %
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                {t('pricing.rules.modal.minMarginLabel')}
               </label>
               <input
                 type="number"
@@ -118,13 +130,13 @@ export default function EditRuleModal({
                 onChange={(e) =>
                   setFormData({ ...formData, minMarginPercent: e.target.value })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Optional"
+                className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                placeholder={t('pricing.rules.modal.optional')}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Max Margin %
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                {t('pricing.rules.modal.maxMarginLabel')}
               </label>
               <input
                 type="number"
@@ -133,30 +145,24 @@ export default function EditRuleModal({
                 onChange={(e) =>
                   setFormData({ ...formData, maxMarginPercent: e.target.value })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Optional"
+                className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                placeholder={t('pricing.rules.modal.optional')}
               />
             </div>
           </div>
+        </ModalBody>
 
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
-            >
-              {loading ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <ModalFooter>
+          <Button type="button" variant="secondary" onClick={onClose}>
+            {t('pricing.rules.modal.cancel')}
+          </Button>
+          <Button type="submit" variant="primary" loading={loading} disabled={loading}>
+            {loading
+              ? t('pricing.rules.modal.saving')
+              : t('pricing.rules.modal.save')}
+          </Button>
+        </ModalFooter>
+      </form>
+    </Modal>
   );
 }

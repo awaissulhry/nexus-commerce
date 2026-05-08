@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { AlertCircle, Pencil, Trash2 } from 'lucide-react';
 import {
   useReactTable,
   getCoreRowModel,
@@ -12,8 +13,15 @@ import {
   ColumnFiltersState,
 } from '@tanstack/react-table';
 import { PricingRule, apiClient } from '@/lib/api-client';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { useToast } from '@/components/ui/Toast';
 import { useConfirm } from '@/components/ui/ConfirmProvider';
+import { useTranslations } from '@/lib/i18n/use-translations';
 import EditRuleModal from './EditRuleModal';
+import { Sliders } from 'lucide-react';
 
 interface PricingRulesTableProps {
   rules: PricingRule[];
@@ -21,25 +29,25 @@ interface PricingRulesTableProps {
   onRuleDeleted: () => void;
 }
 
-function getRuleTypeColor(type: string): string {
+// Maps each rule type to a Badge variant. Per the audit's tone palette
+// (rose/amber/emerald/blue/pink/slate/violet/indigo), Badge supports
+// only default/success/warning/danger/info; we vary background colors
+// inline for the remaining types so the visual hierarchy is preserved.
+function ruleTypeBadgeClasses(type: string): string {
   switch (type) {
     case 'MATCH_LOW':
-      return 'bg-blue-100 text-blue-800';
+      return 'bg-blue-50 text-blue-700 border-blue-200';
     case 'PERCENTAGE_BELOW':
-      return 'bg-purple-100 text-purple-800';
+      return 'bg-violet-50 text-violet-700 border-violet-200';
     case 'COST_PLUS_MARGIN':
-      return 'bg-green-100 text-green-800';
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
     case 'FIXED_PRICE':
-      return 'bg-orange-100 text-orange-800';
+      return 'bg-amber-50 text-amber-700 border-amber-200';
     case 'DYNAMIC_MARGIN':
-      return 'bg-pink-100 text-pink-800';
+      return 'bg-pink-50 text-pink-700 border-pink-200';
     default:
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-slate-50 text-slate-700 border-slate-200';
   }
-}
-
-function getRuleTypeLabel(type: string): string {
-  return type.replace(/_/g, ' ');
 }
 
 export default function PricingRulesTable({
@@ -47,26 +55,35 @@ export default function PricingRulesTable({
   onRuleUpdated,
   onRuleDeleted,
 }: PricingRulesTableProps) {
+  const { t } = useTranslations();
   const askConfirm = useConfirm();
+  const { toast } = useToast();
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'priority', desc: false },
   ]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [editingRule, setEditingRule] = useState<PricingRule | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const handleDeleteRule = async (ruleId: string) => {
-    if (!(await askConfirm({ title: 'Deactivate this rule?', confirmLabel: 'Deactivate', tone: 'warning' }))) return;
+    const ok = await askConfirm({
+      title: t('pricing.rules.deleteConfirm.title'),
+      description: t('pricing.rules.deleteConfirm.description'),
+      confirmLabel: t('pricing.rules.deleteConfirm.confirm'),
+      tone: 'warning',
+    });
+    if (!ok) return;
 
     try {
       setDeleting(ruleId);
-      setError(null);
       await apiClient.deactivatePricingRule(ruleId);
       onRuleDeleted();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete rule');
-      console.error('Error deleting rule:', err);
+      toast.error(
+        t('pricing.rules.deleteFailed', {
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
     } finally {
       setDeleting(null);
     }
@@ -76,9 +93,9 @@ export default function PricingRulesTable({
     () => [
       {
         accessorKey: 'priority',
-        header: 'Priority',
+        header: () => t('pricing.rules.table.priority'),
         cell: (info) => (
-          <span className="font-semibold text-gray-900">
+          <span className="font-semibold tabular-nums text-slate-900">
             {info.getValue() as number}
           </span>
         ),
@@ -86,115 +103,124 @@ export default function PricingRulesTable({
       },
       {
         accessorKey: 'name',
-        header: 'Rule Name',
+        header: () => t('pricing.rules.table.name'),
         cell: (info) => (
           <div>
-            <p className="font-medium text-gray-900">{info.getValue() as string}</p>
-            <p className="text-xs text-gray-500 mt-1">
-              {(info.row.original.description || 'No description')}
+            <p className="font-medium text-slate-900">{info.getValue() as string}</p>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {info.row.original.description ||
+                t('pricing.rules.table.noDescription')}
             </p>
           </div>
         ),
       },
       {
         accessorKey: 'type',
-        header: 'Type',
+        header: () => t('pricing.rules.table.type'),
         cell: (info) => {
           const type = info.getValue() as string;
           return (
-            <span className={`px-2 py-1 rounded text-xs font-semibold ${getRuleTypeColor(type)}`}>
-              {getRuleTypeLabel(type)}
+            <span
+              className={`inline-flex items-center text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${ruleTypeBadgeClasses(type)}`}
+            >
+              {t(`pricing.rules.type.${type}`) || type.replace(/_/g, ' ')}
             </span>
           );
         },
       },
       {
         accessorKey: 'minMarginPercent',
-        header: 'Min Margin',
+        header: () => t('pricing.rules.table.minMargin'),
         cell: (info) => {
           const value = info.getValue() as number | null;
-          return value !== null ? (
-            <span className="text-sm text-gray-700">{value.toFixed(1)}%</span>
+          return value !== null && value !== undefined ? (
+            <span className="text-base tabular-nums text-slate-700">
+              {Number(value).toFixed(1)}%
+            </span>
           ) : (
-            <span className="text-sm text-gray-400">-</span>
+            <span className="text-sm text-slate-400">—</span>
           );
         },
       },
       {
         accessorKey: 'maxMarginPercent',
-        header: 'Max Margin',
+        header: () => t('pricing.rules.table.maxMargin'),
         cell: (info) => {
           const value = info.getValue() as number | null;
-          return value !== null ? (
-            <span className="text-sm text-gray-700">{value.toFixed(1)}%</span>
+          return value !== null && value !== undefined ? (
+            <span className="text-base tabular-nums text-slate-700">
+              {Number(value).toFixed(1)}%
+            </span>
           ) : (
-            <span className="text-sm text-gray-400">-</span>
+            <span className="text-sm text-slate-400">—</span>
           );
         },
       },
       {
         accessorKey: 'isActive',
-        header: 'Status',
+        header: () => t('pricing.rules.table.status'),
         cell: (info) => {
           const isActive = info.getValue() as boolean;
           return (
-            <span
-              className={`px-2 py-1 rounded text-xs font-semibold ${
-                isActive
-                  ? 'bg-green-100 text-green-800'
-                  : 'bg-gray-100 text-gray-800'
-              }`}
-            >
-              {isActive ? '✓ Active' : 'Inactive'}
-            </span>
+            <Badge variant={isActive ? 'success' : 'default'}>
+              {isActive
+                ? t('pricing.rules.status.active')
+                : t('pricing.rules.status.inactive')}
+            </Badge>
           );
         },
       },
       {
         accessorKey: 'createdAt',
-        header: 'Created',
+        header: () => t('pricing.rules.table.created'),
         cell: (info) => (
-          <span className="text-sm text-gray-600">
+          <span className="text-base text-slate-600 tabular-nums">
             {new Date(info.getValue() as string).toLocaleDateString()}
           </span>
         ),
       },
       {
         id: 'actions',
-        header: 'Actions',
+        header: () => t('pricing.rules.table.actions'),
         cell: (info) => {
           const rule = info.row.original;
           const isDeletingThis = deleting === rule.id;
           return (
-            <div className="flex gap-2">
-              <button
+            <div className="flex gap-1.5">
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => setEditingRule(rule)}
-                className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors"
+                icon={<Pencil size={11} />}
+                aria-label={t('pricing.rules.action.edit')}
               >
-                Edit
-              </button>
-              <button
+                {t('pricing.rules.action.edit')}
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
                 onClick={() => handleDeleteRule(rule.id)}
                 disabled={isDeletingThis}
-                className="px-3 py-1.5 bg-red-600 text-white text-sm font-medium rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                loading={isDeletingThis}
+                icon={isDeletingThis ? null : <Trash2 size={11} />}
+                aria-label={t('pricing.rules.action.delete')}
               >
-                {isDeletingThis ? 'Deleting...' : 'Delete'}
-              </button>
+                {isDeletingThis
+                  ? t('pricing.rules.action.deleting')
+                  : t('pricing.rules.action.delete')}
+              </Button>
             </div>
           );
         },
       },
     ],
-    [deleting]
+    [deleting, t],
   );
 
   const table = useReactTable({
     data: rules,
     columns,
-    state: {
-      sorting,
-      columnFilters,
-    },
+    state: { sorting, columnFilters },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
@@ -203,108 +229,113 @@ export default function PricingRulesTable({
     getPaginationRowModel: getPaginationRowModel(),
   });
 
+  if (rules.length === 0) {
+    return (
+      <EmptyState
+        icon={Sliders}
+        title={t('pricing.rules.table.empty')}
+        description={t('pricing.rules.table.emptyHint')}
+      />
+    );
+  }
+
+  const pageIndex = table.getState().pagination.pageIndex;
+  const pageSize = table.getState().pagination.pageSize;
+  const total = table.getFilteredRowModel().rows.length;
+  const fromIdx = pageIndex * pageSize + 1;
+  const toIdx = Math.min((pageIndex + 1) * pageSize, total);
+
   return (
     <>
-      {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded">
-          <p className="text-red-800 text-sm">{error}</p>
-        </div>
-      )}
-
-      {rules.length === 0 ? (
-        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-          <p className="text-gray-500 text-lg">No pricing rules yet</p>
-          <p className="text-gray-400 text-sm mt-1">
-            Create your first pricing rule to get started
-          </p>
-        </div>
-      ) : (
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200 bg-gray-50">
-                  {table.getHeaderGroups().map((headerGroup) =>
-                    headerGroup.headers.map((header) => (
-                      <th
-                        key={header.id}
-                        className="px-4 py-3 text-left text-sm font-semibold text-gray-900"
-                        style={{ width: header.getSize() }}
-                      >
-                        {header.isPlaceholder ? null : (
-                          <div
-                            {...{
-                              className: header.column.getCanSort()
-                                ? 'cursor-pointer select-none flex items-center gap-2'
-                                : '',
-                              onClick: header.column.getToggleSortingHandler(),
-                            }}
-                          >
-                            {header.column.columnDef.header &&
-                              typeof header.column.columnDef.header === 'string'
-                              ? header.column.columnDef.header
-                              : null}
-                            {header.column.getCanSort() && (
-                              <span className="text-xs">
-                                {header.column.getIsSorted() === 'desc'
-                                  ? '↓'
-                                  : header.column.getIsSorted() === 'asc'
-                                    ? '↑'
-                                    : '⇅'}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </th>
-                    ))
-                  )}
+      <Card noPadding>
+        <div className="overflow-x-auto">
+          <table className="w-full text-md">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50">
+                {table.getHeaderGroups().map((headerGroup) =>
+                  headerGroup.headers.map((header) => (
+                    <th
+                      key={header.id}
+                      scope="col"
+                      className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700"
+                      style={{ width: header.getSize() }}
+                    >
+                      {header.isPlaceholder ? null : (
+                        <div
+                          className={
+                            header.column.getCanSort()
+                              ? 'cursor-pointer select-none inline-flex items-center gap-1'
+                              : ''
+                          }
+                          onClick={header.column.getToggleSortingHandler()}
+                        >
+                          {typeof header.column.columnDef.header === 'function'
+                            ? (header.column.columnDef.header as () => string)()
+                            : (header.column.columnDef.header as string)}
+                          {header.column.getCanSort() && (
+                            <span className="text-xs text-slate-400">
+                              {header.column.getIsSorted() === 'desc'
+                                ? '↓'
+                                : header.column.getIsSorted() === 'asc'
+                                  ? '↑'
+                                  : '⇅'}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </th>
+                  )),
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {table.getRowModel().rows.map((row) => (
+                <tr
+                  key={row.id}
+                  className="border-b border-slate-100 hover:bg-slate-50"
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <td key={cell.id} className="px-3 py-2 align-top">
+                      {typeof cell.column.columnDef.cell === 'function'
+                        ? cell.column.columnDef.cell(cell.getContext())
+                        : null}
+                    </td>
+                  ))}
                 </tr>
-              </thead>
-              <tbody>
-                {table.getRowModel().rows.map((row) => (
-                  <tr key={row.id} className="border-b border-gray-200 hover:bg-gray-50">
-                    {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-4 py-3">
-                        {typeof cell.column.columnDef.cell === 'function'
-                          ? cell.column.columnDef.cell(cell.getContext())
-                          : null}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
-          {/* Pagination */}
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
-            <div className="text-sm text-gray-600">
-              Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{' '}
-              {Math.min(
-                (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-                table.getFilteredRowModel().rows.length
-              )}{' '}
-              of {table.getFilteredRowModel().rows.length} rules
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-                className="px-3 py-1.5 border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-                className="px-3 py-1.5 border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-              </button>
-            </div>
+        {/* Pagination */}
+        <div className="flex items-center justify-between px-3 py-2 border-t border-slate-200 text-base text-slate-600">
+          <span className="tabular-nums">
+            {t('pricing.rules.pagination.summary', {
+              from: fromIdx,
+              to: toIdx,
+              total,
+            })}
+          </span>
+          <div className="flex gap-1">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+            >
+              {t('pricing.rules.pagination.previous')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+            >
+              {t('pricing.rules.pagination.next')}
+            </Button>
           </div>
         </div>
-      )}
+      </Card>
 
       {/* Edit Rule Modal */}
       {editingRule && (

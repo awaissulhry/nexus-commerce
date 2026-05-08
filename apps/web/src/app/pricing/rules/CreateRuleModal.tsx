@@ -1,8 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { AlertCircle } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { getBackendUrl } from '@/lib/backend-url';
+import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
+import { useTranslations } from '@/lib/i18n/use-translations';
 
 interface CreateRuleModalProps {
   onClose: () => void;
@@ -10,20 +14,21 @@ interface CreateRuleModalProps {
 }
 
 const RULE_TYPES = [
-  { value: 'MATCH_LOW', label: 'Match Lowest Price' },
-  { value: 'PERCENTAGE_BELOW', label: 'Percentage Below Competitor' },
-  { value: 'COST_PLUS_MARGIN', label: 'Cost Plus Margin' },
-  { value: 'FIXED_PRICE', label: 'Fixed Price' },
-  { value: 'DYNAMIC_MARGIN', label: 'Dynamic Margin' },
-];
+  'MATCH_LOW',
+  'PERCENTAGE_BELOW',
+  'COST_PLUS_MARGIN',
+  'FIXED_PRICE',
+  'DYNAMIC_MARGIN',
+] as const;
 
 export default function CreateRuleModal({
   onClose,
   onRuleCreated,
 }: CreateRuleModalProps) {
+  const { t } = useTranslations();
   const [formData, setFormData] = useState({
     name: '',
-    type: 'COST_PLUS_MARGIN',
+    type: 'COST_PLUS_MARGIN' as (typeof RULE_TYPES)[number],
     description: '',
     priority: 1,
     minMarginPercent: '',
@@ -69,41 +74,43 @@ export default function CreateRuleModal({
         [key]: value,
       },
     });
-    // Invalidate simulation when params change so the operator can't read
-    // a stale preview against the new form values.
     setSimulation(null);
   };
 
-  // Build the parameters payload the same way handleSubmit does, then call
-  // the simulator endpoint. Doesn't touch the DB.
+  const buildParameters = (): Record<string, any> => {
+    switch (formData.type) {
+      case 'PERCENTAGE_BELOW':
+        return {
+          percentageBelow: parseFloat(formData.parameters.percentageBelow || '5'),
+        };
+      case 'COST_PLUS_MARGIN':
+        return {
+          marginPercent: parseFloat(formData.parameters.marginPercent || '20'),
+        };
+      case 'FIXED_PRICE':
+        return {
+          fixedPrice: parseFloat(formData.parameters.fixedPrice || '0'),
+        };
+      case 'DYNAMIC_MARGIN':
+        return {
+          baseMargin: parseFloat(formData.parameters.baseMargin || '15'),
+          adjustmentFactor: parseFloat(formData.parameters.adjustmentFactor || '1'),
+        };
+      default:
+        return {};
+    }
+  };
+
   const handleSimulate = async () => {
     setSimulating(true);
     setError(null);
     try {
-      let parameters: Record<string, any> = {};
-      switch (formData.type) {
-        case 'PERCENTAGE_BELOW':
-          parameters = { percentageBelow: parseFloat(formData.parameters.percentageBelow || '5') };
-          break;
-        case 'COST_PLUS_MARGIN':
-          parameters = { marginPercent: parseFloat(formData.parameters.marginPercent || '20') };
-          break;
-        case 'FIXED_PRICE':
-          parameters = { fixedPrice: parseFloat(formData.parameters.fixedPrice || '0') };
-          break;
-        case 'DYNAMIC_MARGIN':
-          parameters = {
-            baseMargin: parseFloat(formData.parameters.baseMargin || '15'),
-            adjustmentFactor: parseFloat(formData.parameters.adjustmentFactor || '1'),
-          };
-          break;
-      }
       const res = await fetch(`${getBackendUrl()}/api/pricing-rules/simulate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: formData.type,
-          parameters,
+          parameters: buildParameters(),
           minMarginPercent: formData.minMarginPercent
             ? parseFloat(formData.minMarginPercent)
             : null,
@@ -116,7 +123,11 @@ export default function CreateRuleModal({
       }
       setSimulation(await res.json());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to simulate rule');
+      setError(
+        err instanceof Error
+          ? err.message
+          : t('pricing.rules.modal.errors.simulateFailed'),
+      );
     } finally {
       setSimulating(false);
     }
@@ -129,52 +140,32 @@ export default function CreateRuleModal({
       setError(null);
 
       if (!formData.name.trim()) {
-        setError('Rule name is required');
+        setError(t('pricing.rules.modal.errors.nameRequired'));
         setLoading(false);
         return;
       }
 
-      // Build parameters based on rule type
-      let parameters: Record<string, any> = {};
-      switch (formData.type) {
-        case 'PERCENTAGE_BELOW':
-          parameters = {
-            percentageBelow: parseFloat(formData.parameters.percentageBelow || '5'),
-          };
-          break;
-        case 'COST_PLUS_MARGIN':
-          parameters = {
-            marginPercent: parseFloat(formData.parameters.marginPercent || '20'),
-          };
-          break;
-        case 'FIXED_PRICE':
-          parameters = {
-            fixedPrice: parseFloat(formData.parameters.fixedPrice || '0'),
-          };
-          break;
-        case 'DYNAMIC_MARGIN':
-          parameters = {
-            baseMargin: parseFloat(formData.parameters.baseMargin || '15'),
-            adjustmentFactor: parseFloat(formData.parameters.adjustmentFactor || '1'),
-          };
-          break;
-        default:
-          parameters = {};
-      }
-
       await apiClient.createPricingRule({
         name: formData.name,
-        type: formData.type as any,
+        type: formData.type,
         description: formData.description || undefined,
         priority: formData.priority,
-        minMarginPercent: formData.minMarginPercent ? parseFloat(formData.minMarginPercent) : undefined,
-        maxMarginPercent: formData.maxMarginPercent ? parseFloat(formData.maxMarginPercent) : undefined,
-        parameters,
+        minMarginPercent: formData.minMarginPercent
+          ? parseFloat(formData.minMarginPercent)
+          : undefined,
+        maxMarginPercent: formData.maxMarginPercent
+          ? parseFloat(formData.maxMarginPercent)
+          : undefined,
+        parameters: buildParameters(),
       });
 
       onRuleCreated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create rule');
+      setError(
+        err instanceof Error
+          ? err.message
+          : t('pricing.rules.modal.errors.createFailed'),
+      );
       console.error('Error creating rule:', err);
     } finally {
       setLoading(false);
@@ -182,22 +173,24 @@ export default function CreateRuleModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-gray-200 sticky top-0 bg-white">
-          <h2 className="text-lg font-bold text-gray-900">Create New Pricing Rule</h2>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+    <Modal
+      open
+      onClose={onClose}
+      title={t('pricing.rules.modal.createTitle')}
+      size="2xl"
+    >
+      <form onSubmit={handleSubmit}>
+        <ModalBody className="space-y-3">
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded">
-              <p className="text-red-800 text-sm">{error}</p>
+            <div className="px-3 py-2 bg-rose-50 border border-rose-200 rounded-md inline-flex items-start gap-2 text-base text-rose-700">
+              <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+              <span>{error}</span>
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Rule Name *
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              {t('pricing.rules.modal.name')}
             </label>
             <input
               type="text"
@@ -205,49 +198,53 @@ export default function CreateRuleModal({
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="e.g., Amazon Competitive Pricing"
+              className="w-full h-9 px-3 border border-slate-300 rounded-md text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+              placeholder={t('pricing.rules.modal.namePlaceholder')}
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Rule Type *
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              {t('pricing.rules.modal.type')}
             </label>
             <select
               value={formData.type}
-              onChange={(e) =>
-                setFormData({ ...formData, type: e.target.value })
-              }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onChange={(e) => {
+                setFormData({
+                  ...formData,
+                  type: e.target.value as (typeof RULE_TYPES)[number],
+                });
+                setSimulation(null);
+              }}
+              className="w-full h-9 px-2 border border-slate-300 rounded-md text-base bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
             >
-              {RULE_TYPES.map((type) => (
-                <option key={type.value} value={type.value}>
-                  {type.label}
+              {RULE_TYPES.map((tp) => (
+                <option key={tp} value={tp}>
+                  {t(`pricing.rules.type.${tp}`)}
                 </option>
               ))}
             </select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              {t('pricing.rules.modal.description')}
             </label>
             <textarea
               value={formData.description}
               onChange={(e) =>
                 setFormData({ ...formData, description: e.target.value })
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-slate-300 rounded-md text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
               rows={2}
-              placeholder="Optional description of this rule"
+              placeholder={t('pricing.rules.modal.descriptionPlaceholder')}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Priority
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              {t('pricing.rules.modal.priority')}
             </label>
             <input
               type="number"
@@ -255,21 +252,25 @@ export default function CreateRuleModal({
               onChange={(e) =>
                 setFormData({ ...formData, priority: parseInt(e.target.value) })
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
               min="1"
               required
             />
-            <p className="text-xs text-gray-500 mt-1">Lower numbers = higher priority (applied first)</p>
+            <p className="text-sm text-slate-500 mt-1">
+              {t('pricing.rules.modal.priorityHint')}
+            </p>
           </div>
 
           {/* Rule Type Specific Parameters */}
-          <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-            <p className="text-sm font-medium text-gray-700">Rule Parameters</p>
+          <div className="bg-slate-50 border border-slate-200 rounded-md p-3 space-y-2">
+            <p className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
+              {t('pricing.rules.modal.parameters')}
+            </p>
 
             {formData.type === 'PERCENTAGE_BELOW' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Percentage Below Competitor (%)
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  {t('pricing.rules.modal.percentBelow')}
                 </label>
                 <input
                   type="number"
@@ -278,15 +279,15 @@ export default function CreateRuleModal({
                   onChange={(e) =>
                     handleParameterChange('percentageBelow', e.target.value)
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                 />
               </div>
             )}
 
             {formData.type === 'COST_PLUS_MARGIN' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Margin Percentage (%)
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  {t('pricing.rules.modal.marginPercent')}
                 </label>
                 <input
                   type="number"
@@ -295,15 +296,15 @@ export default function CreateRuleModal({
                   onChange={(e) =>
                     handleParameterChange('marginPercent', e.target.value)
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                 />
               </div>
             )}
 
             {formData.type === 'FIXED_PRICE' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Fixed Price ($)
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  {t('pricing.rules.modal.fixedPrice')}
                 </label>
                 <input
                   type="number"
@@ -312,16 +313,16 @@ export default function CreateRuleModal({
                   onChange={(e) =>
                     handleParameterChange('fixedPrice', e.target.value)
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                 />
               </div>
             )}
 
             {formData.type === 'DYNAMIC_MARGIN' && (
-              <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Base Margin (%)
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    {t('pricing.rules.modal.baseMargin')}
                   </label>
                   <input
                     type="number"
@@ -330,12 +331,12 @@ export default function CreateRuleModal({
                     onChange={(e) =>
                       handleParameterChange('baseMargin', e.target.value)
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Adjustment Factor
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    {t('pricing.rules.modal.adjustmentFactor')}
                   </label>
                   <input
                     type="number"
@@ -344,7 +345,7 @@ export default function CreateRuleModal({
                     onChange={(e) =>
                       handleParameterChange('adjustmentFactor', e.target.value)
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                   />
                 </div>
               </div>
@@ -353,8 +354,8 @@ export default function CreateRuleModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Min Margin %
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                {t('pricing.rules.modal.minMarginLabel')}
               </label>
               <input
                 type="number"
@@ -363,13 +364,13 @@ export default function CreateRuleModal({
                 onChange={(e) =>
                   setFormData({ ...formData, minMarginPercent: e.target.value })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Optional"
+                className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                placeholder={t('pricing.rules.modal.optional')}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Max Margin %
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                {t('pricing.rules.modal.maxMarginLabel')}
               </label>
               <input
                 type="number"
@@ -378,25 +379,43 @@ export default function CreateRuleModal({
                 onChange={(e) =>
                   setFormData({ ...formData, maxMarginPercent: e.target.value })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Optional"
+                className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                placeholder={t('pricing.rules.modal.optional')}
               />
             </div>
           </div>
 
           {/* D.2 — Preview impact before commit */}
           {simulation && (
-            <div className="border border-blue-200 bg-blue-50/40 rounded-lg p-3 space-y-2">
+            <div className="border border-blue-200 bg-blue-50/40 rounded-md p-3 space-y-2">
               <div className="text-sm uppercase tracking-wider text-blue-800 font-semibold">
-                Dry-run preview · {simulation.summary.scoped} snapshot rows
+                {t('pricing.rules.modal.preview.title', {
+                  n: simulation.summary.scoped,
+                })}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-sm">
-                <Stat label="Evaluated" value={simulation.summary.evaluated} tone="slate" />
-                <Stat label="Price ↑" value={simulation.summary.priceUp} tone="emerald" />
-                <Stat label="Price ↓" value={simulation.summary.priceDown} tone="rose" />
-                <Stat label="Would clamp" value={simulation.summary.wouldClamp} tone="amber" />
                 <Stat
-                  label="Avg Δ"
+                  label={t('pricing.rules.modal.preview.evaluated')}
+                  value={simulation.summary.evaluated}
+                  tone="slate"
+                />
+                <Stat
+                  label={t('pricing.rules.modal.preview.priceUp')}
+                  value={simulation.summary.priceUp}
+                  tone="emerald"
+                />
+                <Stat
+                  label={t('pricing.rules.modal.preview.priceDown')}
+                  value={simulation.summary.priceDown}
+                  tone="rose"
+                />
+                <Stat
+                  label={t('pricing.rules.modal.preview.wouldClamp')}
+                  value={simulation.summary.wouldClamp}
+                  tone="amber"
+                />
+                <Stat
+                  label={t('pricing.rules.modal.preview.avgDelta')}
                   value={`${simulation.summary.avgDelta >= 0 ? '+' : ''}${simulation.summary.avgDelta.toFixed(2)}`}
                   tone="slate"
                 />
@@ -406,11 +425,36 @@ export default function CreateRuleModal({
                   <table className="w-full text-sm">
                     <thead className="bg-blue-100/40 text-blue-900 sticky top-0">
                       <tr>
-                        <th className="px-2 py-1 text-left">SKU</th>
-                        <th className="px-2 py-1 text-left">Where</th>
-                        <th className="px-2 py-1 text-right">Current</th>
-                        <th className="px-2 py-1 text-right">Projected</th>
-                        <th className="px-2 py-1 text-right">Δ</th>
+                        <th
+                          scope="col"
+                          className="px-2 py-1 text-left font-semibold"
+                        >
+                          {t('pricing.rules.modal.preview.colSku')}
+                        </th>
+                        <th
+                          scope="col"
+                          className="px-2 py-1 text-left font-semibold"
+                        >
+                          {t('pricing.rules.modal.preview.colWhere')}
+                        </th>
+                        <th
+                          scope="col"
+                          className="px-2 py-1 text-right font-semibold"
+                        >
+                          {t('pricing.rules.modal.preview.colCurrent')}
+                        </th>
+                        <th
+                          scope="col"
+                          className="px-2 py-1 text-right font-semibold"
+                        >
+                          {t('pricing.rules.modal.preview.colProjected')}
+                        </th>
+                        <th
+                          scope="col"
+                          className="px-2 py-1 text-right font-semibold"
+                        >
+                          {t('pricing.rules.modal.preview.colDelta')}
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -431,12 +475,12 @@ export default function CreateRuleModal({
                           <td
                             className={`px-2 py-1 text-right tabular-nums ${
                               r.delta == null
-                                ? 'text-gray-400'
+                                ? 'text-slate-400'
                                 : r.delta > 0
-                                ? 'text-emerald-700'
-                                : r.delta < 0
-                                ? 'text-rose-700'
-                                : 'text-gray-500'
+                                  ? 'text-emerald-700'
+                                  : r.delta < 0
+                                    ? 'text-rose-700'
+                                    : 'text-slate-500'
                             }`}
                           >
                             {r.delta == null
@@ -456,34 +500,32 @@ export default function CreateRuleModal({
               )}
             </div>
           )}
+        </ModalBody>
 
-          <div className="flex gap-3 pt-4 border-t border-gray-200">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSimulate}
-              disabled={simulating || !formData.name.trim()}
-              className="flex-1 px-4 py-2 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
-            >
-              {simulating ? 'Simulating…' : 'Preview impact'}
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
-            >
-              {loading ? 'Creating...' : 'Create Rule'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <ModalFooter>
+          <Button type="button" variant="secondary" onClick={onClose}>
+            {t('pricing.rules.modal.cancel')}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={handleSimulate}
+            loading={simulating}
+            disabled={simulating || !formData.name.trim()}
+            className="border border-blue-300 text-blue-700 hover:bg-blue-50"
+          >
+            {simulating
+              ? t('pricing.rules.modal.previewing')
+              : t('pricing.rules.modal.preview')}
+          </Button>
+          <Button type="submit" variant="primary" loading={loading} disabled={loading}>
+            {loading
+              ? t('pricing.rules.modal.creating')
+              : t('pricing.rules.modal.create')}
+          </Button>
+        </ModalFooter>
+      </form>
+    </Modal>
   );
 }
 
