@@ -75,13 +75,13 @@ interface KpiResponse {
 }
 
 const SOURCE_TONE: Record<string, string> = {
-  SCHEDULED_SALE: 'bg-pink-50 text-pink-700 border-pink-200',
-  OFFER_OVERRIDE: 'bg-blue-50 text-blue-700 border-blue-200',
-  CHANNEL_OVERRIDE: 'bg-violet-50 text-violet-700 border-violet-200',
-  CHANNEL_RULE: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-  PRICING_RULE: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  MASTER_INHERIT: 'bg-slate-50 text-slate-600 border-slate-200',
-  FALLBACK: 'bg-amber-50 text-amber-700 border-amber-200',
+  SCHEDULED_SALE: 'bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-300 border-pink-200 dark:border-pink-900',
+  OFFER_OVERRIDE: 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900',
+  CHANNEL_OVERRIDE: 'bg-violet-50 dark:bg-violet-950 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-900',
+  CHANNEL_RULE: 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-900',
+  PRICING_RULE: 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
+  MASTER_INHERIT: 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800',
+  FALLBACK: 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900',
 }
 
 // E.1.b — concise display labels for pricing source chips. The raw
@@ -257,7 +257,7 @@ export default function PricingMatrixClient() {
           <div className="relative flex-1 min-w-[240px] max-w-sm">
             <Search
               size={12}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 dark:text-slate-400"
             />
             <Input
               placeholder="Search SKU…"
@@ -275,7 +275,7 @@ export default function PricingMatrixClient() {
               setChannel(e.target.value)
               setPage(0)
             }}
-            className="h-8 px-2 border border-slate-200 rounded-md text-base bg-white"
+            className="h-8 px-2 border border-slate-200 dark:border-slate-800 rounded-md text-base bg-white dark:bg-slate-900"
           >
             <option value="">All channels</option>
             <option value="AMAZON">Amazon</option>
@@ -290,7 +290,7 @@ export default function PricingMatrixClient() {
               setMarketplace(e.target.value)
               setPage(0)
             }}
-            className="h-8 px-2 border border-slate-200 rounded-md text-base bg-white"
+            className="h-8 px-2 border border-slate-200 dark:border-slate-800 rounded-md text-base bg-white dark:bg-slate-900"
           >
             <option value="">All marketplaces</option>
             <option value="IT">IT</option>
@@ -307,7 +307,7 @@ export default function PricingMatrixClient() {
               setSourceFilter(e.target.value)
               setPage(0)
             }}
-            className="h-8 px-2 border border-slate-200 rounded-md text-base bg-white"
+            className="h-8 px-2 border border-slate-200 dark:border-slate-800 rounded-md text-base bg-white dark:bg-slate-900"
           >
             <option value="">All sources</option>
             <option value="SCHEDULED_SALE">Sale</option>
@@ -318,7 +318,7 @@ export default function PricingMatrixClient() {
             <option value="MASTER_INHERIT">Master</option>
             <option value="FALLBACK">Fallback</option>
           </select>
-          <label className="inline-flex items-center gap-1.5 text-base text-slate-700 ml-2">
+          <label className="inline-flex items-center gap-1.5 text-base text-slate-700 dark:text-slate-300 ml-2">
             <input
               type="checkbox"
               checked={clampedOnly}
@@ -394,7 +394,7 @@ export default function PricingMatrixClient() {
             onClick={applyBulkOverride}
             loading={bulkApplying}
             disabled={bulkApplying || (bulkMode !== 'CLEAR' && !bulkValue)}
-            className="bg-white text-slate-900 hover:bg-slate-100 border-white"
+            className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 border-white"
           >
             {t('pricing.bulk.apply')}
           </Button>
@@ -403,7 +403,7 @@ export default function PricingMatrixClient() {
             size="sm"
             onClick={() => setSelected(new Set())}
             icon={<X size={12} />}
-            className="text-slate-400 hover:text-white hover:bg-slate-800"
+            className="text-slate-400 dark:text-slate-500 dark:text-slate-400 hover:text-white hover:bg-slate-800"
           >
             {t('pricing.bulk.deselect')}
           </Button>
@@ -413,12 +413,12 @@ export default function PricingMatrixClient() {
       {/* Table */}
       {loading && !data ? (
         <Card>
-          <div className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
+          <div className="text-md text-slate-500 dark:text-slate-400 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
             <Loader2 className="w-4 h-4 animate-spin" /> Loading snapshots…
           </div>
         </Card>
       ) : error ? (
-        <div className="border border-rose-200 bg-rose-50 rounded px-3 py-2 text-base text-rose-700 inline-flex items-start gap-1.5">
+        <div className="border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950 rounded px-3 py-2 text-base text-rose-700 dark:text-rose-300 inline-flex items-start gap-1.5">
           <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
           <span>{error}</span>
         </div>
@@ -432,7 +432,7 @@ export default function PricingMatrixClient() {
         <Card noPadding>
           <div className="overflow-x-auto">
             <table className="w-full text-md">
-              <thead className="border-b border-slate-200 bg-slate-50">
+              <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800">
                 <tr>
                   <th scope="col" className="px-3 py-2 w-8">
                     <input
@@ -445,22 +445,22 @@ export default function PricingMatrixClient() {
                       className="rounded"
                     />
                   </th>
-                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     SKU
                   </th>
-                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     Channel · Marketplace
                   </th>
-                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     FM
                   </th>
-                  <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     Price
                   </th>
-                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     Source
                   </th>
-                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     Warnings
                   </th>
                   <th scope="col" className="px-3 py-2 w-10"></th>
@@ -473,8 +473,8 @@ export default function PricingMatrixClient() {
                     <tr
                       key={r.id}
                       className={cn(
-                        'border-b border-slate-100 hover:bg-slate-50',
-                        isSelected && 'bg-blue-50 hover:bg-blue-50',
+                        'border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800',
+                        isSelected && 'bg-blue-50 dark:bg-blue-950 hover:bg-blue-50 dark:hover:bg-blue-950',
                       )}
                     >
                       <td
@@ -492,21 +492,21 @@ export default function PricingMatrixClient() {
                         />
                       </td>
                       <td
-                        className="px-3 py-2 font-mono text-base text-slate-800 cursor-pointer"
+                        className="px-3 py-2 font-mono text-base text-slate-800 dark:text-slate-200 cursor-pointer"
                         onClick={() => setDrawerKey(r.id)}
                       >
                         {r.sku}
                       </td>
                       <td
-                        className="px-3 py-2 text-slate-700 cursor-pointer"
+                        className="px-3 py-2 text-slate-700 dark:text-slate-300 cursor-pointer"
                         onClick={() => setDrawerKey(r.id)}
                       >
                         <span className="font-medium">{r.channel}</span>
-                        <span className="text-slate-400"> · </span>
+                        <span className="text-slate-400 dark:text-slate-500 dark:text-slate-400"> · </span>
                         <span className="font-mono text-sm">{r.marketplace}</span>
                       </td>
                       <td
-                        className="px-3 py-2 text-sm text-slate-500 cursor-pointer"
+                        className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400 cursor-pointer"
                         onClick={() => setDrawerKey(r.id)}
                       >
                         {r.fulfillmentMethod ?? '—'}
@@ -514,7 +514,7 @@ export default function PricingMatrixClient() {
                       <td
                         className={cn(
                           'px-3 py-2 text-right tabular-nums font-semibold cursor-pointer',
-                          r.isClamped ? 'text-amber-700' : 'text-slate-900',
+                          r.isClamped ? 'text-amber-700 dark:text-amber-300' : 'text-slate-900 dark:text-slate-100',
                         )}
                         title={
                           r.isClamped
@@ -524,7 +524,7 @@ export default function PricingMatrixClient() {
                         onClick={() => setDrawerKey(r.id)}
                       >
                         {Number(r.computedPrice).toFixed(2)}{' '}
-                        <span className="text-sm text-slate-500 font-normal">
+                        <span className="text-sm text-slate-500 dark:text-slate-400 font-normal">
                           {r.currency}
                         </span>
                       </td>
@@ -547,17 +547,17 @@ export default function PricingMatrixClient() {
                       >
                         {r.warnings.length > 0 ? (
                           <span
-                            className="text-sm text-amber-700 inline-flex items-center gap-1"
+                            className="text-sm text-amber-700 dark:text-amber-300 inline-flex items-center gap-1"
                             title={r.warnings.join('; ')}
                           >
                             <AlertCircle size={11} /> {r.warnings.length}
                           </span>
                         ) : (
-                          <span className="text-sm text-slate-400">—</span>
+                          <span className="text-sm text-slate-400 dark:text-slate-500 dark:text-slate-400">—</span>
                         )}
                       </td>
                       <td
-                        className="px-3 py-2 text-slate-400 cursor-pointer"
+                        className="px-3 py-2 text-slate-400 dark:text-slate-500 dark:text-slate-400 cursor-pointer"
                         onClick={() => setDrawerKey(r.id)}
                       >
                         <ChevronRight size={14} />
@@ -570,7 +570,7 @@ export default function PricingMatrixClient() {
           </div>
 
           {/* Pagination */}
-          <div className="px-4 py-2.5 border-t border-slate-200 flex items-center justify-between text-base text-slate-600">
+          <div className="px-4 py-2.5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-base text-slate-600 dark:text-slate-400">
             <span>
               {data.total} snapshot{data.total === 1 ? '' : 's'} · page {data.page + 1} / {Math.max(1, totalPages)}
               {selected.size > 0 && (
@@ -658,10 +658,10 @@ function PricingDetailDrawer({
   const breakdown = (row.breakdown ?? {}) as any
   const headerTitle = (
     <div className="min-w-0">
-      <div className="text-md font-semibold text-slate-900 truncate font-mono">
+      <div className="text-md font-semibold text-slate-900 dark:text-slate-100 truncate font-mono">
         {row.sku}
       </div>
-      <div className="text-sm text-slate-500 mt-0.5">
+      <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
         {row.channel} · {row.marketplace}
         {row.fulfillmentMethod ? ` · ${row.fulfillmentMethod}` : ''}
       </div>
@@ -678,20 +678,20 @@ function PricingDetailDrawer({
     >
       <ModalBody className="space-y-4">
         {/* Resolved */}
-        <div className="bg-slate-50 rounded p-3">
-          <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1">
+        <div className="bg-slate-50 dark:bg-slate-800 rounded p-3">
+          <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
             {t('pricing.drawer.resolvedPrice')}
           </div>
-          <div className="text-[24px] font-semibold tabular-nums text-slate-900">
+          <div className="text-[24px] font-semibold tabular-nums text-slate-900 dark:text-slate-100">
             {Number(row.computedPrice).toFixed(2)}{' '}
-            <span className="text-lg font-normal text-slate-500">
+            <span className="text-lg font-normal text-slate-500 dark:text-slate-400">
               {row.currency}
             </span>
           </div>
-          <div className="text-sm text-slate-500 mt-1">
+          <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             {t('pricing.drawer.source')}: <span className="font-mono">{row.source}</span>
             {row.isClamped && (
-              <span className="ml-2 text-amber-700">
+              <span className="ml-2 text-amber-700 dark:text-amber-300">
                 · {t('pricing.drawer.clampedFrom', { value: row.clampedFrom ?? '?' })}
               </span>
             )}
@@ -700,7 +700,7 @@ function PricingDetailDrawer({
 
         {/* Breakdown */}
         <div>
-          <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
+          <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5">
             {t('pricing.drawer.breakdown')}
           </div>
           <dl className="grid grid-cols-2 gap-y-1 text-base">
@@ -736,11 +736,11 @@ function PricingDetailDrawer({
 
         {/* Warnings */}
         {row.warnings.length > 0 && (
-          <div className="border border-amber-200 bg-amber-50 rounded p-3">
-            <div className="text-sm uppercase tracking-wider text-amber-800 font-semibold mb-1">
+          <div className="border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950 rounded p-3">
+            <div className="text-sm uppercase tracking-wider text-amber-800 dark:text-amber-200 font-semibold mb-1">
               {t('pricing.drawer.warnings')}
             </div>
-            <ul className="text-base text-amber-800 space-y-0.5">
+            <ul className="text-base text-amber-800 dark:text-amber-200 space-y-0.5">
               {row.warnings.map((w, i) => (
                 <li key={i}>• {w}</li>
               ))}
@@ -749,11 +749,11 @@ function PricingDetailDrawer({
         )}
 
         {/* Push action */}
-        <div className="border border-slate-200 rounded p-3">
-          <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-2">
+        <div className="border border-slate-200 dark:border-slate-800 rounded p-3">
+          <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2">
             {t('pricing.drawer.pushTitle')}
           </div>
-          <div className="text-base text-slate-600 mb-2">
+          <div className="text-base text-slate-600 dark:text-slate-400 mb-2">
             {t('pricing.drawer.pushDescription', { channel: row.channel })}
           </div>
           <Button
@@ -770,7 +770,7 @@ function PricingDetailDrawer({
           </Button>
         </div>
 
-        <div className="text-sm text-slate-400">
+        <div className="text-sm text-slate-400 dark:text-slate-500 dark:text-slate-400">
           {t('pricing.drawer.lastComputed', {
             when: new Date(row.computedAt).toLocaleString(),
           })}
@@ -800,10 +800,10 @@ function Item({
       : String(value)
   return (
     <>
-      <dt className="text-slate-500">{label}</dt>
-      <dd className="font-mono text-slate-800 text-right tabular-nums">
+      <dt className="text-slate-500 dark:text-slate-400">{label}</dt>
+      <dd className="font-mono text-slate-800 dark:text-slate-200 text-right tabular-nums">
         {display}
-        {suffix ? <span className="text-slate-400 ml-1">{suffix}</span> : null}
+        {suffix ? <span className="text-slate-400 dark:text-slate-500 dark:text-slate-400 ml-1">{suffix}</span> : null}
       </dd>
     </>
   )
@@ -919,11 +919,11 @@ function KpiTile({
   hint: string
 }) {
   const toneClasses: Record<typeof tone, string> = {
-    rose: 'border-rose-200 bg-rose-50 text-rose-700',
-    amber: 'border-amber-200 bg-amber-50 text-amber-700',
-    pink: 'border-pink-200 bg-pink-50 text-pink-700',
-    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-    slate: 'border-slate-200 bg-white text-slate-500',
+    rose: 'border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300',
+    amber: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300',
+    pink: 'border-pink-200 dark:border-pink-900 bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-300',
+    emerald: 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300',
+    slate: 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400',
   }
   const inner = (
     <div
@@ -938,10 +938,10 @@ function KpiTile({
         <div className="text-[20px] leading-tight font-semibold tabular-nums">
           {value}
         </div>
-        <div className="text-base font-medium text-slate-700 leading-tight">
+        <div className="text-base font-medium text-slate-700 dark:text-slate-300 leading-tight">
           {label}
         </div>
-        <div className="text-sm text-slate-500 leading-tight mt-0.5 truncate">
+        <div className="text-sm text-slate-500 dark:text-slate-400 leading-tight mt-0.5 truncate">
           {hint}
         </div>
       </div>

@@ -102,7 +102,7 @@ export default function PricingAlertsClient() {
   if (loading && !data) {
     return (
       <Card>
-        <div className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
+        <div className="text-md text-slate-500 dark:text-slate-400 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
           <Loader2 className="w-4 h-4 animate-spin" />{' '}
           {t('pricing.alerts.loading')}
         </div>
@@ -112,7 +112,7 @@ export default function PricingAlertsClient() {
 
   if (error) {
     return (
-      <div className="border border-rose-200 bg-rose-50 rounded px-3 py-2 text-base text-rose-700 inline-flex items-start gap-1.5">
+      <div className="border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950 rounded px-3 py-2 text-base text-rose-700 dark:text-rose-300 inline-flex items-start gap-1.5">
         <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
         <span>{error}</span>
       </div>
@@ -191,7 +191,7 @@ export default function PricingAlertsClient() {
           materialization-time warnings only. */}
       {data.driftRows.length > 0 && (
         <div className="space-y-2">
-          <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
+          <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
             {t('pricing.alerts.section.driftTable', {
               n: data.driftRows.length,
             })}
@@ -199,24 +199,24 @@ export default function PricingAlertsClient() {
           <Card noPadding>
             <div className="overflow-x-auto">
               <table className="w-full text-md">
-                <thead className="border-b border-slate-200 bg-rose-50">
+                <thead className="border-b border-slate-200 dark:border-slate-800 bg-rose-50 dark:bg-rose-950">
                   <tr>
-                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
+                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800 dark:text-rose-200">
                       {t('pricing.alerts.col.severity')}
                     </th>
-                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
+                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800 dark:text-rose-200">
                       {t('pricing.alerts.col.sku')}
                     </th>
-                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
+                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800 dark:text-rose-200">
                       {t('pricing.alerts.col.where')}
                     </th>
-                    <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800">
+                    <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800 dark:text-rose-200">
                       {t('pricing.alerts.col.master')}
                     </th>
-                    <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800">
+                    <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800 dark:text-rose-200">
                       {t('pricing.alerts.col.listing')}
                     </th>
-                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
+                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800 dark:text-rose-200">
                       {t('pricing.alerts.col.detected')}
                     </th>
                     <th scope="col" className="px-3 py-2 w-24"></th>
@@ -226,32 +226,32 @@ export default function PricingAlertsClient() {
                   {data.driftRows.map((d) => (
                     <tr
                       key={d.id}
-                      className="border-b border-slate-100 hover:bg-slate-50"
+                      className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
                     >
                       <td className="px-3 py-2">
                         <SeverityChip tone="rose" label={t('pricing.alerts.severity.drift')} />
                       </td>
-                      <td className="px-3 py-2 font-mono text-base text-slate-800">
+                      <td className="px-3 py-2 font-mono text-base text-slate-800 dark:text-slate-200">
                         {d.sku}
                       </td>
-                      <td className="px-3 py-2 text-slate-700">
+                      <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
                         {d.channel}{' '}
-                        <span className="text-slate-400">·</span>{' '}
+                        <span className="text-slate-400 dark:text-slate-500 dark:text-slate-400">·</span>{' '}
                         <span className="font-mono text-sm">
                           {d.marketplace}
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-slate-800">
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-800 dark:text-slate-200">
                         {d.masterPrice
                           ? Number(d.masterPrice).toFixed(2)
                           : '—'}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-rose-700 font-semibold">
+                      <td className="px-3 py-2 text-right tabular-nums text-rose-700 dark:text-rose-300 font-semibold">
                         {d.listingPrice
                           ? Number(d.listingPrice).toFixed(2)
                           : '—'}
                       </td>
-                      <td className="px-3 py-2 text-sm text-slate-500">
+                      <td className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">
                         {new Date(d.createdAt).toLocaleString()}
                       </td>
                       <td className="px-3 py-2">
@@ -276,11 +276,11 @@ export default function PricingAlertsClient() {
           marginPct ascending so the worst SKUs are at the top. */}
       {data.lowMarginRows.length > 0 && (
         <div className="space-y-2">
-          <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
+          <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
             {t('pricing.alerts.section.lowMargin', {
               n: data.lowMarginRows.length,
             })}
-            <span className="ml-2 normal-case font-normal text-slate-400">
+            <span className="ml-2 normal-case font-normal text-slate-400 dark:text-slate-500 dark:text-slate-400">
               {t('pricing.alerts.section.lowMarginSuffix', {
                 pct: data.thresholds.lowMarginPct,
               })}
@@ -289,24 +289,24 @@ export default function PricingAlertsClient() {
           <Card noPadding>
             <div className="overflow-x-auto">
               <table className="w-full text-md">
-                <thead className="border-b border-slate-200 bg-rose-50">
+                <thead className="border-b border-slate-200 dark:border-slate-800 bg-rose-50 dark:bg-rose-950">
                   <tr>
-                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
+                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800 dark:text-rose-200">
                       {t('pricing.alerts.col.severity')}
                     </th>
-                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
+                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800 dark:text-rose-200">
                       {t('pricing.alerts.col.sku')}
                     </th>
-                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
+                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800 dark:text-rose-200">
                       {t('pricing.alerts.col.where')}
                     </th>
-                    <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800">
+                    <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800 dark:text-rose-200">
                       {t('pricing.alerts.col.price')}
                     </th>
-                    <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800">
+                    <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800 dark:text-rose-200">
                       {t('pricing.alerts.col.netProfit')}
                     </th>
-                    <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800">
+                    <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800 dark:text-rose-200">
                       {t('pricing.alerts.col.margin')}
                     </th>
                     <th scope="col" className="px-3 py-2 w-24"></th>
@@ -318,7 +318,7 @@ export default function PricingAlertsClient() {
                     return (
                       <tr
                         key={m.id}
-                        className="border-b border-slate-100 hover:bg-slate-50"
+                        className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
                       >
                         <td className="px-3 py-2">
                           <SeverityChip
@@ -330,42 +330,42 @@ export default function PricingAlertsClient() {
                             }
                           />
                         </td>
-                        <td className="px-3 py-2 font-mono text-base text-slate-800">
+                        <td className="px-3 py-2 font-mono text-base text-slate-800 dark:text-slate-200">
                           {m.sku}
                         </td>
-                        <td className="px-3 py-2 text-slate-700">
+                        <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
                           {m.channel}{' '}
-                          <span className="text-slate-400">·</span>{' '}
+                          <span className="text-slate-400 dark:text-slate-500 dark:text-slate-400">·</span>{' '}
                           <span className="font-mono text-sm">
                             {m.marketplace}
                           </span>
                           {m.fulfillmentMethod && (
-                            <span className="ml-1 text-xs text-slate-500">
+                            <span className="ml-1 text-xs text-slate-500 dark:text-slate-400">
                               {m.fulfillmentMethod}
                             </span>
                           )}
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-slate-800">
+                        <td className="px-3 py-2 text-right tabular-nums text-slate-800 dark:text-slate-200">
                           {Number(m.computedPrice).toFixed(2)}{' '}
-                          <span className="text-sm text-slate-500">
+                          <span className="text-sm text-slate-500 dark:text-slate-400">
                             {m.currency}
                           </span>
                         </td>
                         <td
                           className={cn(
                             'px-3 py-2 text-right tabular-nums',
-                            negative ? 'text-rose-700 font-semibold' : 'text-slate-700',
+                            negative ? 'text-rose-700 dark:text-rose-300 font-semibold' : 'text-slate-700 dark:text-slate-300',
                           )}
                         >
                           {m.netProfit.toFixed(2)}{' '}
-                          <span className="text-sm text-slate-500">
+                          <span className="text-sm text-slate-500 dark:text-slate-400">
                             {m.currency}
                           </span>
                         </td>
                         <td
                           className={cn(
                             'px-3 py-2 text-right tabular-nums font-semibold',
-                            negative ? 'text-rose-700' : 'text-amber-700',
+                            negative ? 'text-rose-700 dark:text-rose-300' : 'text-amber-700 dark:text-amber-300',
                           )}
                         >
                           {m.marginPct.toFixed(1)}%
@@ -392,28 +392,28 @@ export default function PricingAlertsClient() {
       {data.rows.length > 0 && (
         <div className="space-y-2">
           {(data.driftRows.length > 0 || data.lowMarginRows.length > 0) && (
-            <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
+            <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
               {t('pricing.alerts.section.engine', { n: data.rows.length })}
             </div>
           )}
       <Card noPadding>
         <div className="overflow-x-auto">
           <table className="w-full text-md">
-            <thead className="border-b border-slate-200 bg-slate-50">
+            <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800">
               <tr>
-                <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                   {t('pricing.alerts.col.severity')}
                 </th>
-                <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                   {t('pricing.alerts.col.sku')}
                 </th>
-                <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                   {t('pricing.alerts.col.where')}
                 </th>
-                <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
+                <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                   {t('pricing.alerts.col.price')}
                 </th>
-                <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                   {t('pricing.alerts.col.reason')}
                 </th>
                 <th scope="col" className="px-3 py-2 w-24"></th>
@@ -440,29 +440,29 @@ export default function PricingAlertsClient() {
                 return (
                   <tr
                     key={r.id}
-                    className="border-b border-slate-100 hover:bg-slate-50"
+                    className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
                   >
                     <td className="px-3 py-2">
                       <SeverityChip tone={severity.tone} label={severity.label} />
                     </td>
-                    <td className="px-3 py-2 font-mono text-base text-slate-800">
+                    <td className="px-3 py-2 font-mono text-base text-slate-800 dark:text-slate-200">
                       {r.sku}
                     </td>
-                    <td className="px-3 py-2 text-slate-700">
+                    <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
                       {r.channel}{' '}
-                      <span className="text-slate-400">·</span>{' '}
+                      <span className="text-slate-400 dark:text-slate-500 dark:text-slate-400">·</span>{' '}
                       <span className="font-mono text-sm">{r.marketplace}</span>
                       {r.fulfillmentMethod && (
-                        <span className="ml-1 text-xs text-slate-500">
+                        <span className="ml-1 text-xs text-slate-500 dark:text-slate-400">
                           {r.fulfillmentMethod}
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-800">
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-800 dark:text-slate-200">
                       {Number(r.computedPrice).toFixed(2)}{' '}
-                      <span className="text-sm text-slate-500">{r.currency}</span>
+                      <span className="text-sm text-slate-500 dark:text-slate-400">{r.currency}</span>
                     </td>
-                    <td className="px-3 py-2 text-base text-slate-700">
+                    <td className="px-3 py-2 text-base text-slate-700 dark:text-slate-300">
                       {reason}
                     </td>
                     <td className="px-3 py-2">
@@ -498,14 +498,14 @@ function CountTile({
   hint: string
 }) {
   const toneClasses = {
-    rose: 'border-rose-200 bg-rose-50',
-    amber: 'border-amber-200 bg-amber-50',
-    blue: 'border-blue-200 bg-blue-50',
+    rose: 'border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950',
+    amber: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950',
+    blue: 'border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950',
   }[tone]
   const textTone = {
-    rose: 'text-rose-700',
-    amber: 'text-amber-700',
-    blue: 'text-blue-700',
+    rose: 'text-rose-700 dark:text-rose-300',
+    amber: 'text-amber-700 dark:text-amber-300',
+    blue: 'text-blue-700 dark:text-blue-300',
   }[tone]
   return (
     <Card noPadding className={toneClasses}>
@@ -515,8 +515,8 @@ function CountTile({
           <div className={cn('text-[24px] font-semibold tabular-nums', textTone)}>
             {value}
           </div>
-          <div className="text-base text-slate-700 font-medium">{label}</div>
-          <div className="text-sm text-slate-500 mt-0.5">{hint}</div>
+          <div className="text-base text-slate-700 dark:text-slate-300 font-medium">{label}</div>
+          <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{hint}</div>
         </div>
       </div>
     </Card>
@@ -526,10 +526,10 @@ function CountTile({
 function SeverityChip({ tone, label }: { tone: string; label: string }) {
   const cls =
     tone === 'rose'
-      ? 'bg-rose-50 text-rose-700 border-rose-200'
+      ? 'bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900'
       : tone === 'amber'
-      ? 'bg-amber-50 text-amber-700 border-amber-200'
-      : 'bg-blue-50 text-blue-700 border-blue-200'
+      ? 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900'
+      : 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900'
   return (
     <span
       className={cn(

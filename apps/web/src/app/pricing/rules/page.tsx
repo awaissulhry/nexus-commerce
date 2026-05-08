@@ -62,7 +62,7 @@ export default function PricingRulesDashboardPage() {
     <div>
       {/* Error Alert */}
       {error && (
-        <div className="mb-4 px-3 py-2 bg-rose-50 border border-rose-200 rounded-md inline-flex items-start gap-2 text-base text-rose-700">
+        <div className="mb-4 px-3 py-2 bg-rose-50 dark:bg-rose-950 border border-rose-200 dark:border-rose-900 rounded-md inline-flex items-start gap-2 text-base text-rose-700 dark:text-rose-300">
           <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
           <div>
             <p className="font-medium">{t('pricing.rules.errorTitle')}</p>
@@ -73,7 +73,7 @@ export default function PricingRulesDashboardPage() {
 
       {/* Header Actions */}
       <div className="mb-4 flex justify-between items-center">
-        <div className="text-base text-slate-600 tabular-nums">{countLabel}</div>
+        <div className="text-base text-slate-600 dark:text-slate-400 tabular-nums">{countLabel}</div>
         <div className="flex gap-2">
           <Button
             variant="secondary"

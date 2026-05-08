@@ -65,14 +65,14 @@ export default function EditRuleModal({
       <form onSubmit={handleSubmit}>
         <ModalBody className="space-y-3">
           {error && (
-            <div className="px-3 py-2 bg-rose-50 border border-rose-200 rounded-md inline-flex items-start gap-2 text-base text-rose-700">
+            <div className="px-3 py-2 bg-rose-50 dark:bg-rose-950 border border-rose-200 dark:border-rose-900 rounded-md inline-flex items-start gap-2 text-base text-rose-700 dark:text-rose-300">
               <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
               {t('pricing.rules.modal.name')}
             </label>
             <input
@@ -81,13 +81,13 @@ export default function EditRuleModal({
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
               }
-              className="w-full h-9 px-3 border border-slate-300 rounded-md text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+              className="w-full h-9 px-3 border border-slate-300 dark:border-slate-700 rounded-md text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
               {t('pricing.rules.modal.description')}
             </label>
             <textarea
@@ -95,13 +95,13 @@ export default function EditRuleModal({
               onChange={(e) =>
                 setFormData({ ...formData, description: e.target.value })
               }
-              className="w-full px-3 py-2 border border-slate-300 rounded-md text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
               rows={3}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
               {t('pricing.rules.modal.priority')}
             </label>
             <input
@@ -110,17 +110,17 @@ export default function EditRuleModal({
               onChange={(e) =>
                 setFormData({ ...formData, priority: parseInt(e.target.value) })
               }
-              className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+              className="w-full h-9 px-3 border border-slate-300 dark:border-slate-700 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
               required
             />
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
               {t('pricing.rules.modal.priorityHint')}
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 {t('pricing.rules.modal.minMarginLabel')}
               </label>
               <input
@@ -130,12 +130,12 @@ export default function EditRuleModal({
                 onChange={(e) =>
                   setFormData({ ...formData, minMarginPercent: e.target.value })
                 }
-                className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                className="w-full h-9 px-3 border border-slate-300 dark:border-slate-700 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                 placeholder={t('pricing.rules.modal.optional')}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 {t('pricing.rules.modal.maxMarginLabel')}
               </label>
               <input
@@ -145,7 +145,7 @@ export default function EditRuleModal({
                 onChange={(e) =>
                   setFormData({ ...formData, maxMarginPercent: e.target.value })
                 }
-                className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                className="w-full h-9 px-3 border border-slate-300 dark:border-slate-700 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                 placeholder={t('pricing.rules.modal.optional')}
               />
             </div>

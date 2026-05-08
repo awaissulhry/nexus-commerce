@@ -85,7 +85,7 @@ export default function BuyBoxClient() {
   if (loading && !data) {
     return (
       <Card>
-        <div className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
+        <div className="text-md text-slate-500 dark:text-slate-400 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
           <Loader2 className="w-4 h-4 animate-spin" /> {t('pricing.buybox.loading')}
         </div>
       </Card>
@@ -94,7 +94,7 @@ export default function BuyBoxClient() {
 
   if (error) {
     return (
-      <div className="border border-rose-200 bg-rose-50 rounded px-3 py-2 text-base text-rose-700 inline-flex items-start gap-1.5">
+      <div className="border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950 rounded px-3 py-2 text-base text-rose-700 dark:text-rose-300 inline-flex items-start gap-1.5">
         <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
         <span>{error}</span>
       </div>
@@ -124,7 +124,7 @@ export default function BuyBoxClient() {
     <div className="space-y-4">
       {/* Window selector + refresh */}
       <div className="flex items-center gap-2">
-          <div className="text-base text-slate-700">{t('pricing.buybox.window')}</div>
+          <div className="text-base text-slate-700 dark:text-slate-300">{t('pricing.buybox.window')}</div>
         {WINDOWS.map((w) => (
           <button
             key={w.days}
@@ -133,7 +133,7 @@ export default function BuyBoxClient() {
               'h-7 px-2.5 text-base border rounded-md',
               days === w.days
                 ? 'bg-slate-900 text-white border-slate-900'
-                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50',
+                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800',
             )}
           >
             {w.label}
@@ -155,24 +155,24 @@ export default function BuyBoxClient() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Card>
           <div className="space-y-0.5">
-            <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
+            <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
               {t('pricing.buybox.headline.winRate', { days: data.windowDays })}
             </div>
             <div
               className={cn(
                 'text-[32px] font-semibold tabular-nums leading-none mt-1',
                 overallTone === 'rose'
-                  ? 'text-rose-700'
+                  ? 'text-rose-700 dark:text-rose-300'
                   : overallTone === 'amber'
-                  ? 'text-amber-700'
+                  ? 'text-amber-700 dark:text-amber-300'
                   : overallTone === 'emerald'
-                  ? 'text-emerald-700'
-                  : 'text-slate-700',
+                  ? 'text-emerald-700 dark:text-emerald-300'
+                  : 'text-slate-700 dark:text-slate-300',
               )}
             >
               {data.winRatePct != null ? `${data.winRatePct.toFixed(1)}%` : '—'}
             </div>
-            <div className="text-sm text-slate-500">
+            <div className="text-sm text-slate-500 dark:text-slate-400">
               {t('pricing.buybox.headline.winsObs', {
                 wins: data.ourWins.toLocaleString(),
                 obs: data.observations.toLocaleString(),
@@ -182,26 +182,26 @@ export default function BuyBoxClient() {
         </Card>
         <Card>
           <div className="space-y-0.5">
-            <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
+            <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
               {t('pricing.buybox.headline.markets')}
             </div>
-            <div className="text-[32px] font-semibold tabular-nums leading-none mt-1 text-slate-800">
+            <div className="text-[32px] font-semibold tabular-nums leading-none mt-1 text-slate-800 dark:text-slate-200">
               {data.byMarketplace.length}
             </div>
-            <div className="text-sm text-slate-500">
+            <div className="text-sm text-slate-500 dark:text-slate-400">
               {t('pricing.buybox.headline.marketsHint')}
             </div>
           </div>
         </Card>
         <Card>
           <div className="space-y-0.5">
-            <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
+            <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
               {t('pricing.buybox.headline.competitors')}
             </div>
-            <div className="text-[32px] font-semibold tabular-nums leading-none mt-1 text-slate-800">
+            <div className="text-[32px] font-semibold tabular-nums leading-none mt-1 text-slate-800 dark:text-slate-200">
               {data.topCompetitors.length}
             </div>
-            <div className="text-sm text-slate-500">
+            <div className="text-sm text-slate-500 dark:text-slate-400">
               {t('pricing.buybox.headline.competitorsHint', {
                 n: data.topCompetitors.length,
               })}
@@ -212,7 +212,7 @@ export default function BuyBoxClient() {
 
       {/* Per-marketplace table */}
       <div className="space-y-2">
-        <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
+        <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
           {t('pricing.buybox.section.perMarketplace', {
             n: data.byMarketplace.length,
           })}
@@ -220,21 +220,21 @@ export default function BuyBoxClient() {
         <Card noPadding>
           <div className="overflow-x-auto">
             <table className="w-full text-md">
-              <thead className="border-b border-slate-200 bg-slate-50">
+              <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800">
                 <tr>
-                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     {t('pricing.buybox.table.channel')}
                   </th>
-                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     {t('pricing.buybox.table.marketplace')}
                   </th>
-                  <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     {t('pricing.buybox.table.wins')}
                   </th>
-                  <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     {t('pricing.buybox.table.observations')}
                   </th>
-                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 min-w-[200px]">
+                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 min-w-[200px]">
                     {t('pricing.buybox.table.winRate')}
                   </th>
                 </tr>
@@ -243,18 +243,18 @@ export default function BuyBoxClient() {
                 {data.byMarketplace.map((m) => (
                   <tr
                     key={`${m.channel}|${m.marketplace}`}
-                    className="border-b border-slate-100 hover:bg-slate-50"
+                    className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
                   >
-                    <td className="px-3 py-2 text-slate-700 font-medium">
+                    <td className="px-3 py-2 text-slate-700 dark:text-slate-300 font-medium">
                       {m.channel}
                     </td>
-                    <td className="px-3 py-2 font-mono text-sm text-slate-700">
+                    <td className="px-3 py-2 font-mono text-sm text-slate-700 dark:text-slate-300">
                       {m.marketplace}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-800">
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-800 dark:text-slate-200">
                       {m.ourWins.toLocaleString()}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-500">
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400">
                       {m.observations.toLocaleString()}
                     </td>
                     <td className="px-3 py-2">
@@ -271,7 +271,7 @@ export default function BuyBoxClient() {
       {/* Top competitors */}
       {data.topCompetitors.length > 0 && (
         <div className="space-y-2">
-          <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold inline-flex items-center gap-1.5">
+          <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold inline-flex items-center gap-1.5">
             <Users size={12} />{' '}
             {t('pricing.buybox.section.topCompetitors', {
               n: data.topCompetitors.length,
@@ -280,15 +280,15 @@ export default function BuyBoxClient() {
           <Card noPadding>
             <div className="overflow-x-auto">
               <table className="w-full text-md">
-                <thead className="border-b border-slate-200 bg-slate-50">
+                <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800">
                   <tr>
-                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                       {t('pricing.buybox.table.sellerId')}
                     </th>
-                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                       {t('pricing.buybox.table.fulfillment')}
                     </th>
-                    <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
+                    <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                       {t('pricing.buybox.table.timesWon')}
                     </th>
                   </tr>
@@ -297,17 +297,17 @@ export default function BuyBoxClient() {
                   {data.topCompetitors.map((c, i) => (
                     <tr
                       key={`${c.winnerSellerId}|${c.fulfillmentMethod}|${i}`}
-                      className="border-b border-slate-100 hover:bg-slate-50"
+                      className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
                     >
-                      <td className="px-3 py-2 font-mono text-sm text-slate-700">
+                      <td className="px-3 py-2 font-mono text-sm text-slate-700 dark:text-slate-300">
                         {c.winnerSellerId ?? t('pricing.buybox.unknownSeller')}
                       </td>
-                      <td className="px-3 py-2 text-base text-slate-700">
+                      <td className="px-3 py-2 text-base text-slate-700 dark:text-slate-300">
                         {c.fulfillmentMethod ?? (
-                          <span className="text-slate-400">—</span>
+                          <span className="text-slate-400 dark:text-slate-500 dark:text-slate-400">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-slate-800">
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-800 dark:text-slate-200">
                         {c.timesWon.toLocaleString()}
                       </td>
                     </tr>
@@ -324,7 +324,7 @@ export default function BuyBoxClient() {
 
 function WinRateBar({ pct }: { pct: number | null }) {
   if (pct == null) {
-    return <span className="text-sm text-slate-400">—</span>
+    return <span className="text-sm text-slate-400 dark:text-slate-500 dark:text-slate-400">—</span>
   }
   const tone =
     pct < 50 ? 'rose' : pct < 80 ? 'amber' : 'emerald'
@@ -334,13 +334,13 @@ function WinRateBar({ pct }: { pct: number | null }) {
     emerald: 'bg-emerald-400',
   }[tone]
   const textCls = {
-    rose: 'text-rose-700',
-    amber: 'text-amber-700',
-    emerald: 'text-emerald-700',
+    rose: 'text-rose-700 dark:text-rose-300',
+    amber: 'text-amber-700 dark:text-amber-300',
+    emerald: 'text-emerald-700 dark:text-emerald-300',
   }[tone]
   return (
     <div className="flex items-center gap-2">
-      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+      <div className="flex-1 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
         <div
           className={cn('h-full rounded-full transition-all', barCls)}
           style={{ width: `${Math.min(100, pct)}%` }}

@@ -137,7 +137,7 @@ export default function PromotionsClient() {
   if (loading && !data) {
     return (
       <Card>
-        <div className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
+        <div className="text-md text-slate-500 dark:text-slate-400 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
           <Loader2 className="w-4 h-4 animate-spin" /> {t('pricing.promotions.loading')}
         </div>
       </Card>
@@ -146,7 +146,7 @@ export default function PromotionsClient() {
 
   if (error) {
     return (
-      <div className="border border-rose-200 bg-rose-50 rounded px-3 py-2 text-base text-rose-700 inline-flex items-start gap-1.5">
+      <div className="border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950 rounded px-3 py-2 text-base text-rose-700 dark:text-rose-300 inline-flex items-start gap-1.5">
         <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
         <span>{error}</span>
       </div>
@@ -251,7 +251,7 @@ export default function PromotionsClient() {
         />
         <Card>
           <div className="space-y-2">
-            <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
+            <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
               {t('pricing.promotions.scheduler')}
             </div>
             <Button
@@ -266,7 +266,7 @@ export default function PromotionsClient() {
                 ? t('pricing.promotions.runningScheduler')
                 : t('pricing.promotions.runScheduler')}
             </Button>
-            <div className="text-sm text-slate-500">
+            <div className="text-sm text-slate-500 dark:text-slate-400">
               {t('pricing.promotions.schedulerHint')}
             </div>
           </div>
@@ -330,9 +330,9 @@ function CountTile({
   hint: string
 }) {
   const toneClasses = {
-    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-    blue: 'border-blue-200 bg-blue-50 text-blue-700',
-    slate: 'border-slate-200 bg-white text-slate-500',
+    emerald: 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300',
+    blue: 'border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300',
+    slate: 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400',
   }[tone]
   return (
     <Card noPadding className={toneClasses}>
@@ -342,10 +342,10 @@ function CountTile({
           <div className="text-[20px] leading-tight font-semibold tabular-nums">
             {value}
           </div>
-          <div className="text-base font-medium text-slate-700 leading-tight">
+          <div className="text-base font-medium text-slate-700 dark:text-slate-300 leading-tight">
             {label}
           </div>
-          <div className="text-sm text-slate-500 leading-tight mt-0.5">
+          <div className="text-sm text-slate-500 dark:text-slate-400 leading-tight mt-0.5">
             {hint}
           </div>
         </div>
@@ -367,19 +367,19 @@ function EventSection({
 }) {
   const { t } = useTranslations()
   const headerToneCls = {
-    emerald: 'bg-emerald-50 text-emerald-800',
-    blue: 'bg-blue-50 text-blue-800',
-    slate: 'bg-slate-50 text-slate-700',
+    emerald: 'bg-emerald-50 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200',
+    blue: 'bg-blue-50 dark:bg-blue-950 text-blue-800 dark:text-blue-200',
+    slate: 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300',
   }[tone]
   return (
     <div className="space-y-2">
-      <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
+      <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
         {label}
       </div>
       <Card noPadding>
         <div className="overflow-x-auto">
           <table className="w-full text-md">
-            <thead className={cn('border-b border-slate-200', headerToneCls)}>
+            <thead className={cn('border-b border-slate-200 dark:border-slate-800', headerToneCls)}>
               <tr>
                 <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider">
                   {t('pricing.promotions.table.event')}
@@ -410,34 +410,34 @@ function EventSection({
                 return (
                   <tr
                     key={e.id}
-                    className="border-b border-slate-100 hover:bg-slate-50"
+                    className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
                   >
                     <td className="px-3 py-2">
-                      <div className="font-medium text-slate-800">{e.name}</div>
+                      <div className="font-medium text-slate-800 dark:text-slate-200">{e.name}</div>
                       {e.description && (
-                        <div className="text-sm text-slate-500 truncate max-w-md">
+                        <div className="text-sm text-slate-500 dark:text-slate-400 truncate max-w-md">
                           {e.description}
                         </div>
                       )}
                       {e.source && (
-                        <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 mt-0.5 border rounded bg-slate-50 text-slate-600 border-slate-200">
+                        <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 mt-0.5 border rounded bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800">
                           {e.source}
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-base text-slate-700">
+                    <td className="px-3 py-2 text-base text-slate-700 dark:text-slate-300">
                       <div>
                         {start.toLocaleDateString()} →{' '}
                         {end.toLocaleDateString()}
                       </div>
-                      <div className="text-sm text-slate-500">
+                      <div className="text-sm text-slate-500 dark:text-slate-400">
                         {t('pricing.promotions.windowDays', {
                           n: days,
                           s: days === 1 ? '' : 's',
                         })}
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-base text-slate-700">
+                    <td className="px-3 py-2 text-base text-slate-700 dark:text-slate-300">
                       <ScopeChip
                         channel={e.channel}
                         marketplace={e.marketplace}
@@ -446,7 +446,7 @@ function EventSection({
                     </td>
                     <td className="px-3 py-2">
                       {e.priceActions.length === 0 ? (
-                        <span className="text-sm text-slate-400">
+                        <span className="text-sm text-slate-400 dark:text-slate-500 dark:text-slate-400">
                           {t('pricing.promotions.action.none')}
                         </span>
                       ) : (
@@ -454,7 +454,7 @@ function EventSection({
                           {e.priceActions.map((a) => (
                             <li
                               key={a.id}
-                              className="text-base text-slate-700 inline-flex items-center gap-1.5"
+                              className="text-base text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5"
                             >
                               <Tag
                                 size={11}
@@ -466,7 +466,7 @@ function EventSection({
                                   : `${a.value} fixed`}
                               </span>
                               {a.channel && (
-                                <span className="text-xs text-slate-500">
+                                <span className="text-xs text-slate-500 dark:text-slate-400">
                                   {a.channel}
                                   {a.marketplace ? `:${a.marketplace}` : ''}
                                 </span>
@@ -476,7 +476,7 @@ function EventSection({
                         </ul>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">
                       ×{Number(e.expectedLift).toFixed(1)}
                     </td>
                     <td className="px-3 py-2 inline-flex items-center gap-1">
@@ -488,7 +488,7 @@ function EventSection({
                       </Link>
                       <button
                         onClick={() => onDelete(e.id, e.name)}
-                        className="text-rose-600 hover:bg-rose-50 rounded p-1"
+                        className="text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950 rounded p-1"
                         title={t('pricing.promotions.deleteTitle')}
                       >
                         <Trash2 size={12} />
@@ -521,13 +521,13 @@ function ScopeChip({
   if (productType) parts.push(productType)
   if (parts.length === 0) {
     return (
-      <span className="text-sm text-slate-500">
+      <span className="text-sm text-slate-500 dark:text-slate-400">
         {t('pricing.promotions.scope.all')}
       </span>
     )
   }
   return (
-    <span className="font-mono text-sm text-slate-700">{parts.join(' · ')}</span>
+    <span className="font-mono text-sm text-slate-700 dark:text-slate-300">{parts.join(' · ')}</span>
   )
 }
 
@@ -609,7 +609,7 @@ function CreatePromotionModal({
       <form onSubmit={submit}>
         <ModalBody className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
               {t('pricing.promotions.form.name')}
             </label>
             <input
@@ -617,12 +617,12 @@ function CreatePromotionModal({
               value={form.name}
               onChange={(e) => update('name', e.target.value)}
               placeholder={t('pricing.promotions.form.namePlaceholder')}
-              className="w-full h-9 px-3 border border-slate-300 rounded-md text-base"
+              className="w-full h-9 px-3 border border-slate-300 dark:border-slate-700 rounded-md text-base"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 {t('pricing.promotions.form.start')}
               </label>
               <input
@@ -630,11 +630,11 @@ function CreatePromotionModal({
                 required
                 value={form.startDate}
                 onChange={(e) => update('startDate', e.target.value)}
-                className="w-full h-9 px-3 border border-slate-300 rounded-md text-base"
+                className="w-full h-9 px-3 border border-slate-300 dark:border-slate-700 rounded-md text-base"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 {t('pricing.promotions.form.end')}
               </label>
               <input
@@ -642,19 +642,19 @@ function CreatePromotionModal({
                 required
                 value={form.endDate}
                 onChange={(e) => update('endDate', e.target.value)}
-                className="w-full h-9 px-3 border border-slate-300 rounded-md text-base"
+                className="w-full h-9 px-3 border border-slate-300 dark:border-slate-700 rounded-md text-base"
               />
             </div>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 {t('pricing.promotions.form.channel')}
               </label>
               <select
                 value={form.channel}
                 onChange={(e) => update('channel', e.target.value)}
-                className="w-full h-9 px-2 border border-slate-300 rounded-md text-base bg-white"
+                className="w-full h-9 px-2 border border-slate-300 dark:border-slate-700 rounded-md text-base bg-white dark:bg-slate-900"
               >
                 <option value="">{t('pricing.filter.allChannels')}</option>
                 <option value="AMAZON">Amazon</option>
@@ -663,13 +663,13 @@ function CreatePromotionModal({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 {t('pricing.promotions.form.marketplace')}
               </label>
               <select
                 value={form.marketplace}
                 onChange={(e) => update('marketplace', e.target.value)}
-                className="w-full h-9 px-2 border border-slate-300 rounded-md text-base bg-white"
+                className="w-full h-9 px-2 border border-slate-300 dark:border-slate-700 rounded-md text-base bg-white dark:bg-slate-900"
               >
                 <option value="">{t('pricing.filter.allMarketplaces')}</option>
                 <option value="IT">IT</option>
@@ -685,7 +685,7 @@ function CreatePromotionModal({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 {t('pricing.promotions.form.expectedLift')}
               </label>
               <input
@@ -694,22 +694,22 @@ function CreatePromotionModal({
                 min="1"
                 value={form.expectedLift}
                 onChange={(e) => update('expectedLift', e.target.value)}
-                className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums"
+                className="w-full h-9 px-3 border border-slate-300 dark:border-slate-700 rounded-md text-base tabular-nums"
               />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
               {t('pricing.promotions.form.description')}
             </label>
             <textarea
               rows={2}
               value={form.description}
               onChange={(e) => update('description', e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-md text-base"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md text-base"
             />
           </div>
-          <div className="border border-pink-200 bg-pink-50/40 rounded-md p-3 space-y-2">
+          <div className="border border-pink-200 dark:border-pink-900 bg-pink-50/40 rounded-md p-3 space-y-2">
             <label className="inline-flex items-center gap-2 text-base font-medium text-pink-900">
               <input
                 type="checkbox"
@@ -721,7 +721,7 @@ function CreatePromotionModal({
             {form.includeAction && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                     {t('pricing.promotions.form.actionType')}
                   </label>
                   <select
@@ -729,7 +729,7 @@ function CreatePromotionModal({
                     onChange={(e) =>
                       update('actionType', e.target.value as typeof form.actionType)
                     }
-                    className="w-full h-9 px-2 border border-slate-300 rounded-md text-base bg-white"
+                    className="w-full h-9 px-2 border border-slate-300 dark:border-slate-700 rounded-md text-base bg-white dark:bg-slate-900"
                   >
                     <option value="PERCENT_OFF">
                       {t('pricing.promotions.form.percentOffOption')}
@@ -740,7 +740,7 @@ function CreatePromotionModal({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                     {form.actionType === 'PERCENT_OFF'
                       ? t('pricing.promotions.form.percentOffLabel')
                       : t('pricing.promotions.form.fixedPriceLabel')}
@@ -753,7 +753,7 @@ function CreatePromotionModal({
                     value={form.actionValue}
                     onChange={(e) => update('actionValue', e.target.value)}
                     placeholder={form.actionType === 'PERCENT_OFF' ? '20' : '49.99'}
-                    className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums"
+                    className="w-full h-9 px-3 border border-slate-300 dark:border-slate-700 rounded-md text-base tabular-nums"
                   />
                 </div>
               </div>

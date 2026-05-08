@@ -36,17 +36,17 @@ interface PricingRulesTableProps {
 function ruleTypeBadgeClasses(type: string): string {
   switch (type) {
     case 'MATCH_LOW':
-      return 'bg-blue-50 text-blue-700 border-blue-200';
+      return 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900';
     case 'PERCENTAGE_BELOW':
-      return 'bg-violet-50 text-violet-700 border-violet-200';
+      return 'bg-violet-50 dark:bg-violet-950 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-900';
     case 'COST_PLUS_MARGIN':
-      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      return 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900';
     case 'FIXED_PRICE':
-      return 'bg-amber-50 text-amber-700 border-amber-200';
+      return 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900';
     case 'DYNAMIC_MARGIN':
-      return 'bg-pink-50 text-pink-700 border-pink-200';
+      return 'bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-300 border-pink-200 dark:border-pink-900';
     default:
-      return 'bg-slate-50 text-slate-700 border-slate-200';
+      return 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800';
   }
 }
 
@@ -95,7 +95,7 @@ export default function PricingRulesTable({
         accessorKey: 'priority',
         header: () => t('pricing.rules.table.priority'),
         cell: (info) => (
-          <span className="font-semibold tabular-nums text-slate-900">
+          <span className="font-semibold tabular-nums text-slate-900 dark:text-slate-100">
             {info.getValue() as number}
           </span>
         ),
@@ -106,8 +106,8 @@ export default function PricingRulesTable({
         header: () => t('pricing.rules.table.name'),
         cell: (info) => (
           <div>
-            <p className="font-medium text-slate-900">{info.getValue() as string}</p>
-            <p className="text-sm text-slate-500 mt-0.5">
+            <p className="font-medium text-slate-900 dark:text-slate-100">{info.getValue() as string}</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
               {info.row.original.description ||
                 t('pricing.rules.table.noDescription')}
             </p>
@@ -134,11 +134,11 @@ export default function PricingRulesTable({
         cell: (info) => {
           const value = info.getValue() as number | null;
           return value !== null && value !== undefined ? (
-            <span className="text-base tabular-nums text-slate-700">
+            <span className="text-base tabular-nums text-slate-700 dark:text-slate-300">
               {Number(value).toFixed(1)}%
             </span>
           ) : (
-            <span className="text-sm text-slate-400">—</span>
+            <span className="text-sm text-slate-400 dark:text-slate-500 dark:text-slate-400">—</span>
           );
         },
       },
@@ -148,11 +148,11 @@ export default function PricingRulesTable({
         cell: (info) => {
           const value = info.getValue() as number | null;
           return value !== null && value !== undefined ? (
-            <span className="text-base tabular-nums text-slate-700">
+            <span className="text-base tabular-nums text-slate-700 dark:text-slate-300">
               {Number(value).toFixed(1)}%
             </span>
           ) : (
-            <span className="text-sm text-slate-400">—</span>
+            <span className="text-sm text-slate-400 dark:text-slate-500 dark:text-slate-400">—</span>
           );
         },
       },
@@ -174,7 +174,7 @@ export default function PricingRulesTable({
         accessorKey: 'createdAt',
         header: () => t('pricing.rules.table.created'),
         cell: (info) => (
-          <span className="text-base text-slate-600 tabular-nums">
+          <span className="text-base text-slate-600 dark:text-slate-400 tabular-nums">
             {new Date(info.getValue() as string).toLocaleDateString()}
           </span>
         ),
@@ -251,13 +251,13 @@ export default function PricingRulesTable({
         <div className="overflow-x-auto">
           <table className="w-full text-md">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50">
+              <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800">
                 {table.getHeaderGroups().map((headerGroup) =>
                   headerGroup.headers.map((header) => (
                     <th
                       key={header.id}
                       scope="col"
-                      className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700"
+                      className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300"
                       style={{ width: header.getSize() }}
                     >
                       {header.isPlaceholder ? null : (
@@ -273,7 +273,7 @@ export default function PricingRulesTable({
                             ? (header.column.columnDef.header as () => string)()
                             : (header.column.columnDef.header as string)}
                           {header.column.getCanSort() && (
-                            <span className="text-xs text-slate-400">
+                            <span className="text-xs text-slate-400 dark:text-slate-500 dark:text-slate-400">
                               {header.column.getIsSorted() === 'desc'
                                 ? '↓'
                                 : header.column.getIsSorted() === 'asc'
@@ -292,7 +292,7 @@ export default function PricingRulesTable({
               {table.getRowModel().rows.map((row) => (
                 <tr
                   key={row.id}
-                  className="border-b border-slate-100 hover:bg-slate-50"
+                  className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id} className="px-3 py-2 align-top">
@@ -308,7 +308,7 @@ export default function PricingRulesTable({
         </div>
 
         {/* Pagination */}
-        <div className="flex items-center justify-between px-3 py-2 border-t border-slate-200 text-base text-slate-600">
+        <div className="flex items-center justify-between px-3 py-2 border-t border-slate-200 dark:border-slate-800 text-base text-slate-600 dark:text-slate-400">
           <span className="tabular-nums">
             {t('pricing.rules.pagination.summary', {
               from: fromIdx,

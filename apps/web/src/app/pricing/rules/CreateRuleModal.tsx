@@ -182,14 +182,14 @@ export default function CreateRuleModal({
       <form onSubmit={handleSubmit}>
         <ModalBody className="space-y-3">
           {error && (
-            <div className="px-3 py-2 bg-rose-50 border border-rose-200 rounded-md inline-flex items-start gap-2 text-base text-rose-700">
+            <div className="px-3 py-2 bg-rose-50 dark:bg-rose-950 border border-rose-200 dark:border-rose-900 rounded-md inline-flex items-start gap-2 text-base text-rose-700 dark:text-rose-300">
               <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
               {t('pricing.rules.modal.name')}
             </label>
             <input
@@ -198,14 +198,14 @@ export default function CreateRuleModal({
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
               }
-              className="w-full h-9 px-3 border border-slate-300 rounded-md text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+              className="w-full h-9 px-3 border border-slate-300 dark:border-slate-700 rounded-md text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
               placeholder={t('pricing.rules.modal.namePlaceholder')}
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
               {t('pricing.rules.modal.type')}
             </label>
             <select
@@ -217,7 +217,7 @@ export default function CreateRuleModal({
                 });
                 setSimulation(null);
               }}
-              className="w-full h-9 px-2 border border-slate-300 rounded-md text-base bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+              className="w-full h-9 px-2 border border-slate-300 dark:border-slate-700 rounded-md text-base bg-white dark:bg-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
             >
               {RULE_TYPES.map((tp) => (
                 <option key={tp} value={tp}>
@@ -228,7 +228,7 @@ export default function CreateRuleModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
               {t('pricing.rules.modal.description')}
             </label>
             <textarea
@@ -236,14 +236,14 @@ export default function CreateRuleModal({
               onChange={(e) =>
                 setFormData({ ...formData, description: e.target.value })
               }
-              className="w-full px-3 py-2 border border-slate-300 rounded-md text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
               rows={2}
               placeholder={t('pricing.rules.modal.descriptionPlaceholder')}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
               {t('pricing.rules.modal.priority')}
             </label>
             <input
@@ -252,24 +252,24 @@ export default function CreateRuleModal({
               onChange={(e) =>
                 setFormData({ ...formData, priority: parseInt(e.target.value) })
               }
-              className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+              className="w-full h-9 px-3 border border-slate-300 dark:border-slate-700 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
               min="1"
               required
             />
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
               {t('pricing.rules.modal.priorityHint')}
             </p>
           </div>
 
           {/* Rule Type Specific Parameters */}
-          <div className="bg-slate-50 border border-slate-200 rounded-md p-3 space-y-2">
-            <p className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
+          <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-md p-3 space-y-2">
+            <p className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
               {t('pricing.rules.modal.parameters')}
             </p>
 
             {formData.type === 'PERCENTAGE_BELOW' && (
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                   {t('pricing.rules.modal.percentBelow')}
                 </label>
                 <input
@@ -279,14 +279,14 @@ export default function CreateRuleModal({
                   onChange={(e) =>
                     handleParameterChange('percentageBelow', e.target.value)
                   }
-                  className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                  className="w-full h-9 px-3 border border-slate-300 dark:border-slate-700 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                 />
               </div>
             )}
 
             {formData.type === 'COST_PLUS_MARGIN' && (
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                   {t('pricing.rules.modal.marginPercent')}
                 </label>
                 <input
@@ -296,14 +296,14 @@ export default function CreateRuleModal({
                   onChange={(e) =>
                     handleParameterChange('marginPercent', e.target.value)
                   }
-                  className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                  className="w-full h-9 px-3 border border-slate-300 dark:border-slate-700 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                 />
               </div>
             )}
 
             {formData.type === 'FIXED_PRICE' && (
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                   {t('pricing.rules.modal.fixedPrice')}
                 </label>
                 <input
@@ -313,7 +313,7 @@ export default function CreateRuleModal({
                   onChange={(e) =>
                     handleParameterChange('fixedPrice', e.target.value)
                   }
-                  className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                  className="w-full h-9 px-3 border border-slate-300 dark:border-slate-700 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                 />
               </div>
             )}
@@ -321,7 +321,7 @@ export default function CreateRuleModal({
             {formData.type === 'DYNAMIC_MARGIN' && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                     {t('pricing.rules.modal.baseMargin')}
                   </label>
                   <input
@@ -331,11 +331,11 @@ export default function CreateRuleModal({
                     onChange={(e) =>
                       handleParameterChange('baseMargin', e.target.value)
                     }
-                    className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                    className="w-full h-9 px-3 border border-slate-300 dark:border-slate-700 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                     {t('pricing.rules.modal.adjustmentFactor')}
                   </label>
                   <input
@@ -345,7 +345,7 @@ export default function CreateRuleModal({
                     onChange={(e) =>
                       handleParameterChange('adjustmentFactor', e.target.value)
                     }
-                    className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                    className="w-full h-9 px-3 border border-slate-300 dark:border-slate-700 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                   />
                 </div>
               </div>
@@ -354,7 +354,7 @@ export default function CreateRuleModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 {t('pricing.rules.modal.minMarginLabel')}
               </label>
               <input
@@ -364,12 +364,12 @@ export default function CreateRuleModal({
                 onChange={(e) =>
                   setFormData({ ...formData, minMarginPercent: e.target.value })
                 }
-                className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                className="w-full h-9 px-3 border border-slate-300 dark:border-slate-700 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                 placeholder={t('pricing.rules.modal.optional')}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 {t('pricing.rules.modal.maxMarginLabel')}
               </label>
               <input
@@ -379,7 +379,7 @@ export default function CreateRuleModal({
                 onChange={(e) =>
                   setFormData({ ...formData, maxMarginPercent: e.target.value })
                 }
-                className="w-full h-9 px-3 border border-slate-300 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                className="w-full h-9 px-3 border border-slate-300 dark:border-slate-700 rounded-md text-base tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                 placeholder={t('pricing.rules.modal.optional')}
               />
             </div>
@@ -387,8 +387,8 @@ export default function CreateRuleModal({
 
           {/* D.2 — Preview impact before commit */}
           {simulation && (
-            <div className="border border-blue-200 bg-blue-50/40 rounded-md p-3 space-y-2">
-              <div className="text-sm uppercase tracking-wider text-blue-800 font-semibold">
+            <div className="border border-blue-200 dark:border-blue-900 bg-blue-50/40 rounded-md p-3 space-y-2">
+              <div className="text-sm uppercase tracking-wider text-blue-800 dark:text-blue-200 font-semibold">
                 {t('pricing.rules.modal.preview.title', {
                   n: simulation.summary.scoped,
                 })}
@@ -475,19 +475,19 @@ export default function CreateRuleModal({
                           <td
                             className={`px-2 py-1 text-right tabular-nums ${
                               r.delta == null
-                                ? 'text-slate-400'
+                                ? 'text-slate-400 dark:text-slate-500 dark:text-slate-400'
                                 : r.delta > 0
-                                  ? 'text-emerald-700'
+                                  ? 'text-emerald-700 dark:text-emerald-300'
                                   : r.delta < 0
-                                    ? 'text-rose-700'
-                                    : 'text-slate-500'
+                                    ? 'text-rose-700 dark:text-rose-300'
+                                    : 'text-slate-500 dark:text-slate-400'
                             }`}
                           >
                             {r.delta == null
                               ? '—'
                               : `${r.delta >= 0 ? '+' : ''}${r.delta.toFixed(2)}`}
                             {r.wouldClamp && (
-                              <span className="ml-1 text-amber-700" title={r.reason}>
+                              <span className="ml-1 text-amber-700 dark:text-amber-300" title={r.reason}>
                                 ⚠
                               </span>
                             )}
@@ -512,7 +512,7 @@ export default function CreateRuleModal({
             onClick={handleSimulate}
             loading={simulating}
             disabled={simulating || !formData.name.trim()}
-            className="border border-blue-300 text-blue-700 hover:bg-blue-50"
+            className="border border-blue-300 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950"
           >
             {simulating
               ? t('pricing.rules.modal.previewing')
@@ -539,10 +539,10 @@ function Stat({
   tone: 'slate' | 'emerald' | 'rose' | 'amber';
 }) {
   const toneClasses = {
-    slate: 'border-slate-200 bg-white text-slate-700',
-    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-    rose: 'border-rose-200 bg-rose-50 text-rose-800',
-    amber: 'border-amber-200 bg-amber-50 text-amber-800',
+    slate: 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300',
+    emerald: 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200',
+    rose: 'border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950 text-rose-800 dark:text-rose-200',
+    amber: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950 text-amber-800 dark:text-amber-200',
   }[tone];
   return (
     <div className={`border rounded px-2 py-1.5 ${toneClasses}`}>
