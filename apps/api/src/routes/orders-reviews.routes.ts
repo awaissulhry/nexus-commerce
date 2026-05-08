@@ -38,11 +38,27 @@ type RuleScope =
 
 const ACTIVE_RETURN_STATUSES = ['REQUESTED', 'AUTHORIZED', 'IN_TRANSIT', 'RECEIVED', 'INSPECTING'] as const
 
-// Amazon Solicitations API wrapper. Real SP-API integration would call
-// `getSolicitationActionsForOrder` then `createProductReviewAndSellerFeedbackSolicitation`.
-// For now we return a structured SKIPPED outcome so the engine + UI work
-// end-to-end without live credentials. The TODO comments mark exactly
-// where the SP-API client plugs in.
+// O.16c — Amazon Solicitations API wrapper.
+//
+// SP-API endpoint:
+//   POST /solicitations/v1/orders/{orderId}/solicitations/
+//        productReviewAndSellerFeedback?marketplaceIds={mp}
+// Sends Amazon's standard "Request a review" email to the buyer.
+// Window: 4–30 days post-delivery, max 1 per order.
+//
+// Gated behind NEXUS_ENABLE_AMAZON_SOLICITATIONS=true. dryRun
+// (default) returns the same structured "SKIPPED" outcome the
+// engine + UI have always handled, so flipping the env flag is
+// a no-op for review-rule logic — only the actual upstream call
+// activates.
+//
+// Real path uses amazonSpApiClient.getAccessToken() + fetch. The
+// SP-API client's internal SigV4 + retry loop is bypassed here
+// because the Solicitations endpoint is small + idempotent (one
+// solicitation per order, the API returns 400 on a re-send) and
+// the engine already records the outcome in ReviewRequest. A
+// follow-up commit can fold this into the client class once a
+// shared `request()` helper exists.
 async function sendAmazonSolicitation({
   amazonOrderId,
   marketplaceId,
@@ -50,11 +66,76 @@ async function sendAmazonSolicitation({
   amazonOrderId: string
   marketplaceId: string
 }): Promise<{ ok: boolean; providerRequestId?: string; errorCode?: string; errorMessage?: string }> {
-  // TODO: call SP-API
-  //   await spApi.solicitations.getSolicitationActionsForOrder({ amazonOrderId, marketplaceIds: [marketplaceId] })
-  //   await spApi.solicitations.createProductReviewAndSellerFeedbackSolicitation({ amazonOrderId, marketplaceIds: [marketplaceId] })
-  logger.info('[REVIEW ENGINE] sendAmazonSolicitation stub — SP-API not wired', { amazonOrderId, marketplaceId })
-  return { ok: false, errorCode: 'NOT_IMPLEMENTED', errorMessage: 'SP-API Solicitations client not wired (D.7 stub)' }
+  if (process.env.NEXUS_ENABLE_AMAZON_SOLICITATIONS !== 'true') {
+    logger.info('[REVIEW ENGINE] sendAmazonSolicitation dryRun — set NEXUS_ENABLE_AMAZON_SOLICITATIONS=true to flip', {
+      amazonOrderId,
+      marketplaceId,
+    })
+    return {
+      ok: false,
+      errorCode: 'NOT_IMPLEMENTED',
+      errorMessage:
+        'SP-API Solicitations gated by env (NEXUS_ENABLE_AMAZON_SOLICITATIONS=true)',
+    }
+  }
+
+  try {
+    const { amazonSpApiClient } = await import('../clients/amazon-sp-api.client.js')
+    const token = await amazonSpApiClient.getAccessToken()
+    const region = process.env.AMAZON_REGION ?? 'eu-west-1'
+    const host = `sellingpartnerapi-${region}.amazon.com`
+    const url =
+      `https://${host}/solicitations/v1/orders/${encodeURIComponent(amazonOrderId)}` +
+      `/solicitations/productReviewAndSellerFeedback` +
+      `?marketplaceIds=${encodeURIComponent(marketplaceId)}`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'x-amz-access-token': token,
+        'content-type': 'application/json',
+      },
+    })
+    if (res.status === 201 || res.status === 200) {
+      // Some SP-API responses include a request-id header for
+      // tracing; capture it when present.
+      const requestId =
+        res.headers.get('x-amzn-requestid') ??
+        res.headers.get('x-amz-rid') ??
+        undefined
+      logger.info('[REVIEW ENGINE] sendAmazonSolicitation OK', {
+        amazonOrderId,
+        marketplaceId,
+        requestId,
+      })
+      return { ok: true, providerRequestId: requestId }
+    }
+    const body = await res.text().catch(() => '')
+    // 400 on re-send (Amazon's "already solicited") is a benign no-op
+    // from the engine's POV — record it as SKIPPED, not FAILED.
+    if (res.status === 400 && /already/i.test(body)) {
+      return {
+        ok: false,
+        errorCode: 'ALREADY_SOLICITED',
+        errorMessage: body.slice(0, 500),
+      }
+    }
+    return {
+      ok: false,
+      errorCode: `HTTP_${res.status}`,
+      errorMessage: body.slice(0, 500),
+    }
+  } catch (err: any) {
+    logger.warn('[REVIEW ENGINE] sendAmazonSolicitation threw', {
+      amazonOrderId,
+      marketplaceId,
+      error: err?.message ?? String(err),
+    })
+    return {
+      ok: false,
+      errorCode: 'EXCEPTION',
+      errorMessage: err?.message ?? 'unknown error',
+    }
+  }
 }
 
 // Extract the channel order id Amazon expects (Amazon Order ID).
