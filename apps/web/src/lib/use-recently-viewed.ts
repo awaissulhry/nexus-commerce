@@ -40,9 +40,20 @@ function writeStorage(items: RecentItem[]) {
  * something in this tab pushes a new entry.
  */
 export function useRecentlyViewed(): RecentItem[] {
-  const [items, setItems] = useState<RecentItem[]>(() => readStorage())
+  // U.42 — was `useState(() => readStorage())` which read
+  // localStorage in the lazy initializer. On the server the readStorage
+  // window-guard returns []; on the client it returns the persisted
+  // recent-views list. Different first render between the two →
+  // React Error #418 hydration mismatch → React aborts hydration
+  // for the whole tree → no event handlers bind → ALL clicks dead.
+  // Same root cause as U.41's BulkOperationsClient fix, but this
+  // hook is consumed by AppSidebar on every page. Worth treating
+  // separately because it affected the entire app, not just
+  // /bulk-operations.
+  const [items, setItems] = useState<RecentItem[]>([])
 
   useEffect(() => {
+    setItems(readStorage())
     const refresh = () => setItems(readStorage())
     window.addEventListener('storage', refresh)
     window.addEventListener('nexus:recent-changed', refresh)
