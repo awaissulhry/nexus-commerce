@@ -50,6 +50,7 @@ import { ColumnPickerMenu } from './_components/ColumnPickerMenu'
 import { TagEditor } from './_components/TagEditor'
 import { VirtualizedGrid } from './_components/GridView'
 import { HygieneStrip } from './_components/HygieneStrip'
+import { QuickFilters } from './_components/QuickFilters'
 
 // E.3 — lazy-load the heavy modals so they don't ship in /products'
 // initial bundle. Each is gated by a boolean state in the workspace,
@@ -1101,6 +1102,22 @@ export default function ProductsWorkspace() {
           hasDescription={hasDescription}
           hasBrand={hasBrand}
           hasGtin={hasGtin}
+          updateUrl={updateUrl}
+        />
+      )}
+
+      {/* U.36 — quick-filters row. Surfaces Status / Stock /
+          Marketplace / Channels permanently so daily-driver
+          filtering is zero-click. The accordion below stays for
+          advanced filters (Product type / Brand / Tags / Fulfillment
+          / Missing on…). Hidden in recycle-bin and on non-grid
+          lenses. */}
+      {lens === 'grid' && !showDeleted && (
+        <QuickFilters
+          statusFilters={statusFilters}
+          stockLevel={stockLevel}
+          marketplaceFilters={marketplaceFilters}
+          channelFilters={channelFilters}
           updateUrl={updateUrl}
         />
       )}

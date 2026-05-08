@@ -88,33 +88,11 @@ const IT_TERMS: Record<string, string> = {
   BAG: 'Borsa',
 }
 
-const MARKETPLACE_DISPLAY_NAMES: Record<string, string> = {
-  IT: 'Italy',
-  DE: 'Germany',
-  FR: 'France',
-  ES: 'Spain',
-  NL: 'Netherlands',
-  SE: 'Sweden',
-  PL: 'Poland',
-  UK: 'United Kingdom',
-  GB: 'United Kingdom',
-  US: 'United States',
-  CA: 'Canada',
-  MX: 'Mexico',
-  AU: 'Australia',
-  JP: 'Japan',
-  GLOBAL: 'Global',
-}
-
-// U.35 — active channel + marketplace scope. Memo says Amazon +
-// eBay + Shopify only (WooCommerce + Etsy intentionally skipped).
-// Xavia's EU presence covers IT (primary) + DE + FR + ES + UK; we
-// expose those as the static fallback when the facets endpoint
-// hasn't returned per-marketplace counts yet (e.g. catalog with
-// no live listings — the operator should still be able to filter
-// by intended marketplace via syncChannels).
+// U.36 — Status / Stock / Marketplace / Channels lifted to the
+// QuickFilters row above the FilterBar; their constants and labels
+// live there now. The accordion only references ACTIVE_CHANNELS
+// for the Missing-on filter.
 const ACTIVE_CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY']
-const FALLBACK_MARKETPLACES = ['IT', 'DE', 'FR', 'ES', 'UK']
 
 export function FilterBar(props: FilterBarProps) {
   const {
@@ -382,357 +360,152 @@ export function FilterBar(props: FilterBarProps) {
         </div>
       )}
 
-      {filtersOpen && (() => {
-        // U.35 — accordion rebuild. Filters now organized into three
-        // labeled sections so operators don't have to scan a
-        // 13-card grid to find the dimension they want:
-        //   Catalog       — what the row IS (status / type / brand /
-        //                   tags / stock / fulfillment)
-        //   Distribution  — where it sells (channels intent /
-        //                   missing on / actual marketplace listings)
-        //   Hygiene       — quality gates (photos / description /
-        //                   brand set / GTIN), counts coming from
-        //                   the facets.hygiene rollup.
+      {filtersOpen && (
+        // U.36 — accordion now scoped to advanced filters only.
+        // Status / Stock / Marketplace / Channels moved to the
+        // QuickFilters row above (always visible). Hygiene 4
+        // removed entirely — HygieneStrip is the canonical surface
+        // for those (and was duplicating the chips here).
         //
-        // Marketplace filter NOW always renders. Was conditional on
-        // facets.marketplaces — which is only populated once
-        // ChannelListing rows exist. With Xavia's 6/279 listings
-        // ratio that filter was effectively hidden. Static fallback
-        // (IT/DE/FR/ES/UK) kicks in until per-listing data lands.
-        const channelCounts = facets?.channels?.reduce<Record<string, number>>(
-          (m, c) => {
-            m[c.value] = c.count
-            return m
-          },
-          {},
-        )
-        const statusCounts = facets?.statuses.reduce<Record<string, number>>(
-          (m, s) => {
-            m[s.value] = s.count
-            return m
-          },
-          {},
-        )
-        const fulfillmentCounts = facets?.fulfillment.reduce<
-          Record<string, number>
-        >((m, s) => {
-          m[s.value] = s.count
-          return m
-        }, {})
-        // Marketplace counts: merge from facets if present, else
-        // empty (the static fallback list still renders).
-        let marketplaceOptions: string[] = FALLBACK_MARKETPLACES
-        let marketplaceCounts: Record<string, number> | undefined
-        if (facets?.marketplaces && facets.marketplaces.length > 0) {
-          const merged = new Map<string, number>()
-          for (const m of facets.marketplaces) {
-            merged.set(m.value, (merged.get(m.value) ?? 0) + m.count)
-          }
-          // Keep the static fallback codes that have no count too,
-          // so the operator can still pick them; sort by count desc.
-          const all = Array.from(
-            new Set([...merged.keys(), ...FALLBACK_MARKETPLACES]),
-          )
-          marketplaceOptions = all.sort(
-            (a, b) => (merged.get(b) ?? 0) - (merged.get(a) ?? 0),
-          )
-          marketplaceCounts = Object.fromEntries(merged)
-        }
-        return (
-          <div className="pt-3 mt-1 border-t border-slate-200 dark:border-slate-800 space-y-5">
-            {/* ── Catalog ─────────────────────────────────────── */}
-            <div>
-              <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2">
-                Catalog
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-x-6 gap-y-4">
+        // What remains: Product type / Brand / Tags / Fulfillment /
+        // Missing on… — long-tail dimensions used a few times per
+        // session, organized into Catalog + Distribution sub-
+        // sections.
+        <div className="pt-3 mt-1 border-t border-slate-200 dark:border-slate-800 space-y-5">
+          <div>
+            <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2">
+              Catalog
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-x-6 gap-y-4">
+              <FilterGroup
+                label="Fulfillment"
+                options={['FBA', 'FBM']}
+                selected={fulfillmentFilters}
+                counts={facets?.fulfillment.reduce<Record<string, number>>(
+                  (m, s) => {
+                    m[s.value] = s.count
+                    return m
+                  },
+                  {},
+                )}
+                onToggle={(v) =>
+                  updateUrl({
+                    fulfillment:
+                      toggleArr(fulfillmentFilters, v).join(',') || undefined,
+                    page: undefined,
+                  })
+                }
+                onClear={() =>
+                  updateUrl({ fulfillment: undefined, page: undefined })
+                }
+              />
+              {facets && facets.productTypes.length > 0 && (
                 <FilterGroup
-                  label="Status"
-                  options={['ACTIVE', 'DRAFT', 'INACTIVE']}
-                  selected={statusFilters}
-                  counts={statusCounts}
-                  onToggle={(v) =>
-                    updateUrl({
-                      status:
-                        toggleArr(statusFilters, v).join(',') || undefined,
-                      page: undefined,
-                    })
-                  }
-                  onClear={() =>
-                    updateUrl({ status: undefined, page: undefined })
-                  }
-                />
-                <FilterGroup
-                  label="Stock"
-                  mode="single"
-                  options={['in', 'low', 'out']}
-                  selected={stockLevel}
-                  renderLabel={(v) =>
-                    v === 'in'
-                      ? 'In stock'
-                      : v === 'low'
-                        ? 'Low stock'
-                        : 'Out of stock'
-                  }
-                  onToggle={(v) =>
-                    updateUrl({
-                      stockLevel: stockLevel === v ? undefined : v,
-                      page: undefined,
-                    })
-                  }
-                  onClear={() =>
-                    updateUrl({ stockLevel: undefined, page: undefined })
-                  }
-                />
-                <FilterGroup
-                  label="Fulfillment"
-                  options={['FBA', 'FBM']}
-                  selected={fulfillmentFilters}
-                  counts={fulfillmentCounts}
-                  onToggle={(v) =>
-                    updateUrl({
-                      fulfillment:
-                        toggleArr(fulfillmentFilters, v).join(',') ||
-                        undefined,
-                      page: undefined,
-                    })
-                  }
-                  onClear={() =>
-                    updateUrl({ fulfillment: undefined, page: undefined })
-                  }
-                />
-                {facets && facets.productTypes.length > 0 && (
-                  <FilterGroup
-                    label="Product type"
-                    options={facets.productTypes
-                      .slice(0, 24)
-                      .map((p) => p.value)}
-                    selected={productTypeFilters}
-                    counts={facets.productTypes.reduce<
-                      Record<string, number>
-                    >((m, s) => {
+                  label="Product type"
+                  options={facets.productTypes
+                    .slice(0, 24)
+                    .map((p) => p.value)}
+                  selected={productTypeFilters}
+                  counts={facets.productTypes.reduce<Record<string, number>>(
+                    (m, s) => {
                       m[s.value] = s.count
                       return m
-                    }, {})}
-                    renderLabel={(v) =>
-                      IT_TERMS[v] ? `${IT_TERMS[v]} (${v})` : v
-                    }
-                    onToggle={(v) =>
-                      updateUrl({
-                        productTypes:
-                          toggleArr(productTypeFilters, v).join(',') ||
-                          undefined,
-                        page: undefined,
-                      })
-                    }
-                    onClear={() =>
-                      updateUrl({ productTypes: undefined, page: undefined })
-                    }
-                    searchable
-                  />
-                )}
-                {facets && facets.brands.length > 0 && (
-                  <FilterGroup
-                    label="Brand"
-                    options={facets.brands.slice(0, 24).map((p) => p.value)}
-                    selected={brandFilters}
-                    counts={facets.brands.reduce<Record<string, number>>(
-                      (m, s) => {
-                        m[s.value] = s.count
-                        return m
-                      },
-                      {},
-                    )}
-                    onToggle={(v) =>
-                      updateUrl({
-                        brands:
-                          toggleArr(brandFilters, v).join(',') || undefined,
-                        page: undefined,
-                      })
-                    }
-                    onClear={() =>
-                      updateUrl({ brands: undefined, page: undefined })
-                    }
-                    searchable
-                  />
-                )}
-                {tags.length > 0 && (
-                  <FilterGroup
-                    label="Tags"
-                    options={tags.map((t) => t.id)}
-                    selected={tagFilters}
-                    renderLabel={(id) =>
-                      tags.find((t) => t.id === id)?.name ?? id
-                    }
-                    onToggle={(v) =>
-                      updateUrl({
-                        tags:
-                          toggleArr(tagFilters, v).join(',') || undefined,
-                        page: undefined,
-                      })
-                    }
-                    onClear={() =>
-                      updateUrl({ tags: undefined, page: undefined })
-                    }
-                    searchable
-                  />
-                )}
-              </div>
-            </div>
-
-            {/* ── Distribution ────────────────────────────────── */}
-            <div>
-              <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2">
-                Distribution
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-x-6 gap-y-4">
-                <FilterGroup
-                  label="Channels"
-                  options={ACTIVE_CHANNELS}
-                  selected={channelFilters}
-                  counts={channelCounts}
-                  onToggle={(v) =>
-                    updateUrl({
-                      channels:
-                        toggleArr(channelFilters, v).join(',') || undefined,
-                      page: undefined,
-                    })
-                  }
-                  onClear={() =>
-                    updateUrl({ channels: undefined, page: undefined })
-                  }
-                />
-                <FilterGroup
-                  label="Marketplace"
-                  options={marketplaceOptions}
-                  selected={marketplaceFilters}
-                  counts={marketplaceCounts}
+                    },
+                    {},
+                  )}
                   renderLabel={(v) =>
-                    MARKETPLACE_DISPLAY_NAMES[v]
-                      ? `${MARKETPLACE_DISPLAY_NAMES[v]} (${v})`
-                      : v
+                    IT_TERMS[v] ? `${IT_TERMS[v]} (${v})` : v
                   }
                   onToggle={(v) =>
                     updateUrl({
-                      marketplaces:
-                        toggleArr(marketplaceFilters, v).join(',') ||
+                      productTypes:
+                        toggleArr(productTypeFilters, v).join(',') ||
                         undefined,
                       page: undefined,
                     })
                   }
                   onClear={() =>
-                    updateUrl({ marketplaces: undefined, page: undefined })
+                    updateUrl({ productTypes: undefined, page: undefined })
                   }
+                  searchable
                 />
+              )}
+              {facets && facets.brands.length > 0 && (
                 <FilterGroup
-                  label="Missing on…"
-                  options={ACTIVE_CHANNELS}
-                  selected={missingChannelFilters}
+                  label="Brand"
+                  options={facets.brands.slice(0, 24).map((p) => p.value)}
+                  selected={brandFilters}
+                  counts={facets.brands.reduce<Record<string, number>>(
+                    (m, s) => {
+                      m[s.value] = s.count
+                      return m
+                    },
+                    {},
+                  )}
                   onToggle={(v) =>
                     updateUrl({
-                      missingChannels:
-                        toggleArr(missingChannelFilters, v).join(',') ||
-                        undefined,
+                      brands:
+                        toggleArr(brandFilters, v).join(',') || undefined,
                       page: undefined,
                     })
                   }
                   onClear={() =>
-                    updateUrl({
-                      missingChannels: undefined,
-                      page: undefined,
-                    })
+                    updateUrl({ brands: undefined, page: undefined })
                   }
+                  searchable
                 />
-              </div>
-            </div>
-
-            {/* ── Hygiene ─────────────────────────────────────── */}
-            <div>
-              <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2">
-                Hygiene
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-x-6 gap-y-4">
+              )}
+              {tags.length > 0 && (
                 <FilterGroup
-                  label={`Photos${facets?.hygiene ? ` · ${facets.hygiene.missingPhotos} missing` : ''}`}
-                  mode="single"
-                  options={['true', 'false']}
-                  selected={hasPhotos}
-                  renderLabel={(v) =>
-                    v === 'true' ? 'Has photos' : 'No photos'
+                  label="Tags"
+                  options={tags.map((t) => t.id)}
+                  selected={tagFilters}
+                  renderLabel={(id) =>
+                    tags.find((t) => t.id === id)?.name ?? id
                   }
                   onToggle={(v) =>
                     updateUrl({
-                      hasPhotos: hasPhotos === v ? undefined : v,
+                      tags: toggleArr(tagFilters, v).join(',') || undefined,
                       page: undefined,
                     })
                   }
                   onClear={() =>
-                    updateUrl({ hasPhotos: undefined, page: undefined })
+                    updateUrl({ tags: undefined, page: undefined })
                   }
+                  searchable
                 />
-                <FilterGroup
-                  label={`Description${facets?.hygiene ? ` · ${facets.hygiene.missingDescription} missing` : ''}`}
-                  mode="single"
-                  options={['true', 'false']}
-                  selected={hasDescription}
-                  renderLabel={(v) =>
-                    v === 'true' ? 'Has description' : 'No description'
-                  }
-                  onToggle={(v) =>
-                    updateUrl({
-                      hasDescription:
-                        hasDescription === v ? undefined : v,
-                      page: undefined,
-                    })
-                  }
-                  onClear={() =>
-                    updateUrl({
-                      hasDescription: undefined,
-                      page: undefined,
-                    })
-                  }
-                />
-                <FilterGroup
-                  label={`Brand set${facets?.hygiene ? ` · ${facets.hygiene.missingBrand} missing` : ''}`}
-                  mode="single"
-                  options={['true', 'false']}
-                  selected={hasBrand}
-                  renderLabel={(v) =>
-                    v === 'true' ? 'Brand set' : 'No brand'
-                  }
-                  onToggle={(v) =>
-                    updateUrl({
-                      hasBrand: hasBrand === v ? undefined : v,
-                      page: undefined,
-                    })
-                  }
-                  onClear={() =>
-                    updateUrl({ hasBrand: undefined, page: undefined })
-                  }
-                />
-                <FilterGroup
-                  label={`GTIN${facets?.hygiene ? ` · ${facets.hygiene.missingGtin} missing` : ''}`}
-                  mode="single"
-                  options={['true', 'false']}
-                  selected={hasGtin}
-                  renderLabel={(v) =>
-                    v === 'true' ? 'Has GTIN' : 'No GTIN'
-                  }
-                  onToggle={(v) =>
-                    updateUrl({
-                      hasGtin: hasGtin === v ? undefined : v,
-                      page: undefined,
-                    })
-                  }
-                  onClear={() =>
-                    updateUrl({ hasGtin: undefined, page: undefined })
-                  }
-                />
-              </div>
+              )}
             </div>
           </div>
-        )
-      })()}
+
+          <div>
+            <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2">
+              Distribution
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-x-6 gap-y-4">
+              <FilterGroup
+                label="Missing on…"
+                options={ACTIVE_CHANNELS}
+                selected={missingChannelFilters}
+                onToggle={(v) =>
+                  updateUrl({
+                    missingChannels:
+                      toggleArr(missingChannelFilters, v).join(',') ||
+                      undefined,
+                    page: undefined,
+                  })
+                }
+                onClear={() =>
+                  updateUrl({
+                    missingChannels: undefined,
+                    page: undefined,
+                  })
+                }
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
