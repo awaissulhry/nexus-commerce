@@ -242,6 +242,7 @@ model Product {
   substitutionsAsSubstitute ProductSubstitution[]         @relation("SubstitutionSubstitute") // R.17
   wizardStepEvents          WizardStepEvent[] // C.0: per-step wizard telemetry
   channelPublishAttempts    ChannelPublishAttempt[] // C.6: every publish attempt audit
+  buyBoxHistory             BuyBoxHistory[] // Pricing F.1: Buy Box observation log
 
   // H.16 — Compliance master data. HS code = customs classification,
   // mostly 6-digit (HS) or 8-10 digit (CN/HTS); stored as text since
@@ -1860,6 +1861,43 @@ model PricingSnapshot {
   @@index([channel, marketplace])
   @@index([source])
   @@index([computedAt])
+}
+
+// ── Pricing F.1: Buy Box observation log ─────────────────────────────────
+// Per-marketplace, per-product timeseries written by sp-api-pricing.service
+// on each daily competitive-pricing refresh. One row = one
+// getItemOffersBatch observation for one ASIN. Powers win-rate trends,
+// repricer feedback ("did we win the box after that price cut?"), and
+// competitor-identity tracking.
+//
+// Product.buyBoxPrice continues to hold the most-recent snapshot for fast
+// "current state" reads (no aggregate scan); this table is additive
+// history. We don't truncate aggressively — observations are one row per
+// ASIN per day per marketplace, ~3.2K × 9 markets × 1/day ≈ 28K rows/day,
+// 10M/year. Size is fine for Postgres; future trim policy can drop rows
+// >12 months once the win-rate-trend window stabilizes.
+model BuyBoxHistory {
+  id          String   @id @default(cuid())
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId   String
+  channel     String // 'AMAZON' (only channel with a Buy Box concept today)
+  marketplace String // 'IT' | 'DE' | 'UK' | ...
+  observedAt  DateTime @default(now())
+
+  // Capture both the Buy Box price (the offer Amazon featured) and the
+  // lowest price across all offers — they often diverge.
+  buyBoxPrice           Decimal? @db.Decimal(10, 2)
+  lowestCompetitorPrice Decimal? @db.Decimal(10, 2)
+
+  // True when this observation showed our seller account holding the box.
+  // Win-rate = count(*) FILTER (WHERE isOurOffer = true) / count(*).
+  isOurOffer        Boolean @default(false)
+  winnerSellerId    String? // SP-API SellerId; null when un-exposed
+  fulfillmentMethod String? // 'FBA' | 'FBM' from the winning offer
+
+  @@index([productId, observedAt])
+  @@index([channel, marketplace, observedAt])
+  @@index([isOurOffer, observedAt])
 }
 
 // ── G.2: FX rate cache ─────────────────────────────────────────────────────

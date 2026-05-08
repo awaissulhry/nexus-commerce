@@ -279,13 +279,27 @@ export async function refreshCompetitivePricing(
           continue
         }
         const offers = r?.body?.payload?.Offers ?? []
+        const ourSellerId =
+          process.env.AMAZON_SELLER_ID ??
+          process.env.AMAZON_MERCHANT_ID ??
+          null
         let lowest: number | null = null
         let buyBox: number | null = null
+        let buyBoxSellerId: string | null = null
+        let buyBoxFulfillment: string | null = null
+        let isOurOffer = false
         for (const o of offers) {
           const price = o?.ListingPrice?.Amount
           if (typeof price !== 'number') continue
           if (lowest == null || price < lowest) lowest = price
-          if (o?.IsBuyBoxWinner === true) buyBox = price
+          if (o?.IsBuyBoxWinner === true) {
+            buyBox = price
+            buyBoxSellerId = o?.SellerId ?? null
+            buyBoxFulfillment = o?.IsFulfilledByAmazon === true ? 'FBA' : 'FBM'
+            if (ourSellerId && buyBoxSellerId === ourSellerId) {
+              isOurOffer = true
+            }
+          }
         }
         if (lowest != null || buyBox != null) {
           await prisma.channelListing.update({
@@ -299,6 +313,25 @@ export async function refreshCompetitivePricing(
             await prisma.product.update({
               where: { id: listing.productId },
               data: { buyBoxPrice: buyBox.toFixed(2) },
+            })
+          }
+          // F.1 — Append a BuyBoxHistory row per observation. We log even
+          // when only `lowest` is present (no winner exposed) so the
+          // trend chart shows continuity. winnerSellerId / fulfillment
+          // are null in that case; isOurOffer stays false.
+          if (listing.productId) {
+            await prisma.buyBoxHistory.create({
+              data: {
+                productId: listing.productId,
+                channel: 'AMAZON',
+                marketplace: code,
+                buyBoxPrice: buyBox != null ? buyBox.toFixed(2) : null,
+                lowestCompetitorPrice:
+                  lowest != null ? lowest.toFixed(2) : null,
+                isOurOffer,
+                winnerSellerId: buyBoxSellerId,
+                fulfillmentMethod: buyBoxFulfillment,
+              },
             })
           }
           pricesWritten++
