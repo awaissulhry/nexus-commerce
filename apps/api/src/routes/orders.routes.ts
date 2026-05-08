@@ -607,6 +607,37 @@ export async function ordersRoutes(app: FastifyInstance) {
     return reply.send(html)
   })
 
+  // F.4 — FatturaPA XML download (B2B only). Operator manually
+  // uploads to whichever commercial SDI intermediary they use
+  // (Aruba / Fatture in Cloud / TeamSystem). Real auto-dispatch is
+  // env-flag-gated; see dispatchToSdi below.
+  app.get('/api/orders/:id/fattura-pa.xml', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const { generateFatturaPaXml } = await import('../services/fattura-pa.service.js')
+      const result = await generateFatturaPaXml(id)
+      reply.header('Content-Type', 'application/xml; charset=utf-8')
+      reply.header(
+        'Content-Disposition',
+        `attachment; filename="${result.filename}"`,
+      )
+      return reply.send(result.xml)
+    } catch (err: any) {
+      return reply.code(400).send({ error: err?.message ?? 'failed' })
+    }
+  })
+
+  app.post('/api/orders/:id/fattura-pa/dispatch', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const { dispatchToSdi } = await import('../services/fattura-pa.service.js')
+      const result = await dispatchToSdi(id)
+      return result
+    } catch (err: any) {
+      return reply.code(400).send({ error: err?.message ?? 'failed' })
+    }
+  })
+
   // O.23b — CSV export. Mirrors the GET /api/orders filter shape so
   // an "Export current view" frontend button can pass the same query
   // string and get back exactly the rows the operator sees. Capped
