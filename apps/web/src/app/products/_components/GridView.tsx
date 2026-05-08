@@ -977,72 +977,287 @@ function Highlight({ text, query }: { text: string; query: string }) {
   )
 }
 
-// E.1 — memo'd so a row that didn't change skips its 9-column
-// re-render. onTagEdit + onChanged come from useCallback'd refs in
-// the workspace, so they're stable across renders.
-const ProductCell = memo(function ProductCell({
-  col,
+// F.5 — type-aware inline editor. Eight cells (name, status, price,
+// stock, threshold, brand, productType, fulfillment) used to each
+// own a ~25-line switch branch with the same editing/draft/blur/
+// keyboard pattern. EDITABLE_FIELDS centralises the per-field
+// metadata; <EditableCell> renders editor + display from that meta.
+//
+// Adding a new editable column = one entry in EDITABLE_FIELDS plus a
+// case <name> in the ProductCell switch. No more copy-pasted input
+// blocks per field.
+
+interface FieldMeta {
+  /** PATCH /api/products/:id field name in the request body. */
+  apiField:
+    | 'name'
+    | 'status'
+    | 'basePrice'
+    | 'totalStock'
+    | 'lowStockThreshold'
+    | 'brand'
+    | 'productType'
+    | 'fulfillmentMethod'
+  editor: 'text' | 'number' | 'select'
+  /** Number-editor step + min. */
+  step?: number
+  min?: number
+  /** Select-editor options (rendered as <option value="">label</option>). */
+  options?: Array<{ value: string; label: string }>
+  /**
+   * Selects commit on change (operator picks one and the value writes
+   * immediately). Text + number editors commit on blur or Enter.
+   */
+  commitOnChange?: boolean
+  /** Tailwind classes for the <input>/<select>. Drives width + size + alignment. */
+  inputClassName: string
+  /** InlineEditTrigger label (read aloud by screen readers). */
+  triggerLabel: string
+  triggerAlign?: 'left' | 'right'
+  triggerSize?: 'sm' | 'md'
+  triggerHideIcon?: ((product: ProductRowType) => boolean) | boolean
+  triggerWrapClass?: string
+  /** Marks the cell as empty so InlineEditTrigger renders the dotted hint. */
+  isEmpty?: (product: ProductRowType) => boolean
+  /** Initial draft string when entering edit mode. */
+  draftOf: (product: ProductRowType) => string
+  /** Display rendered when not editing — receives the product + active search query. */
+  display: (product: ProductRowType, searchQuery: string) => React.ReactNode
+}
+
+const EDITABLE_FIELDS: Record<string, FieldMeta> = {
+  name: {
+    apiField: 'name',
+    editor: 'text',
+    inputClassName:
+      'w-full h-7 px-1.5 text-md border border-blue-300 rounded',
+    triggerLabel: 'name',
+    triggerAlign: 'left',
+    draftOf: (p) => p.name ?? '',
+    display: (p, q) => (
+      <span className="text-md text-slate-900">
+        <Highlight text={p.name} query={q} />
+        {p.isParent && (
+          <Layers size={10} className="inline ml-1 text-slate-400" />
+        )}
+      </span>
+    ),
+  },
+  status: {
+    apiField: 'status',
+    editor: 'select',
+    options: [
+      { value: 'ACTIVE', label: 'ACTIVE' },
+      { value: 'DRAFT', label: 'DRAFT' },
+      { value: 'INACTIVE', label: 'INACTIVE' },
+    ],
+    commitOnChange: true,
+    inputClassName: 'h-6 px-1 text-sm border border-blue-300 rounded',
+    triggerLabel: 'status',
+    triggerSize: 'sm',
+    triggerHideIcon: true,
+    triggerWrapClass: 'w-auto',
+    draftOf: (p) => p.status,
+    display: (p) => <StatusBadge status={p.status} size="sm" />,
+  },
+  price: {
+    apiField: 'basePrice',
+    editor: 'number',
+    step: 0.01,
+    inputClassName:
+      'w-20 h-7 px-1.5 text-md text-right tabular-nums border border-blue-300 rounded',
+    triggerLabel: 'base price',
+    triggerAlign: 'right',
+    draftOf: (p) => String(p.basePrice ?? ''),
+    display: (p) => (
+      <span className="tabular-nums">€{p.basePrice.toFixed(2)}</span>
+    ),
+  },
+  stock: {
+    apiField: 'totalStock',
+    editor: 'number',
+    min: 0,
+    inputClassName:
+      'w-16 h-7 px-1.5 text-md text-right tabular-nums border border-blue-300 rounded',
+    triggerLabel: 'total stock',
+    triggerAlign: 'right',
+    draftOf: (p) => String(p.totalStock ?? ''),
+    display: (p) => {
+      const tone =
+        p.totalStock === 0
+          ? 'text-rose-600'
+          : p.totalStock <= p.lowStockThreshold
+            ? 'text-amber-600'
+            : 'text-slate-900'
+      return (
+        <span className={`tabular-nums font-semibold ${tone}`}>
+          {p.totalStock}
+        </span>
+      )
+    },
+  },
+  threshold: {
+    apiField: 'lowStockThreshold',
+    editor: 'number',
+    min: 0,
+    inputClassName:
+      'w-16 h-7 px-1.5 text-md text-right tabular-nums border border-blue-300 rounded',
+    triggerLabel: 'low-stock threshold',
+    triggerAlign: 'right',
+    draftOf: (p) => String(p.lowStockThreshold ?? ''),
+    display: (p) => (
+      <span className="tabular-nums text-slate-500">
+        {p.lowStockThreshold}
+      </span>
+    ),
+  },
+  brand: {
+    // P.7 — brand is inline-editable. Free-text; datalist suggestions
+    // deferred — the filter sidebar already shows the existing brand
+    // list so operators have visibility when they want to stay
+    // consistent.
+    apiField: 'brand',
+    editor: 'text',
+    inputClassName:
+      'w-full h-7 px-1.5 text-base border border-blue-300 rounded',
+    triggerLabel: 'brand',
+    triggerAlign: 'left',
+    isEmpty: (p) => !p.brand,
+    draftOf: (p) => p.brand ?? '',
+    display: (p) => (
+      <span className="text-base text-slate-700">
+        {p.brand ?? 'Add brand'}
+      </span>
+    ),
+  },
+  productType: {
+    // P.7 — productType is inline-editable. The displayed label uses
+    // the IT_TERMS glossary lookup; the input edits the raw English/
+    // canonical key so saves go to the right value regardless of the
+    // displayed translation.
+    apiField: 'productType',
+    editor: 'text',
+    inputClassName:
+      'w-full h-7 px-1.5 text-sm border border-blue-300 rounded',
+    triggerLabel: 'product type',
+    triggerAlign: 'left',
+    triggerSize: 'sm',
+    isEmpty: (p) => !p.productType,
+    draftOf: (p) => p.productType ?? '',
+    display: (p) => (
+      <span className="text-sm text-slate-700">
+        {p.productType
+          ? (IT_TERMS[p.productType] ?? p.productType)
+          : 'Add type'}
+      </span>
+    ),
+  },
+  fulfillment: {
+    apiField: 'fulfillmentMethod',
+    editor: 'select',
+    options: [
+      { value: '', label: '—' },
+      { value: 'FBA', label: 'FBA' },
+      { value: 'FBM', label: 'FBM' },
+    ],
+    commitOnChange: true,
+    inputClassName: 'h-6 px-1 text-sm border border-blue-300 rounded',
+    triggerLabel: 'fulfillment method',
+    triggerSize: 'sm',
+    triggerHideIcon: (p) => !!p.fulfillmentMethod,
+    triggerWrapClass: 'w-auto',
+    isEmpty: (p) => !p.fulfillmentMethod,
+    draftOf: (p) => p.fulfillmentMethod ?? '',
+    display: (p) =>
+      p.fulfillmentMethod ? (
+        <Badge
+          variant={p.fulfillmentMethod === 'FBA' ? 'warning' : 'info'}
+          size="sm"
+        >
+          {p.fulfillmentMethod}
+        </Badge>
+      ) : (
+        <span className="text-sm">Set FBA/FBM</span>
+      ),
+  },
+}
+
+/**
+ * One unified inline-edit cell. Renders the editor (input or select)
+ * when in edit mode, an InlineEditTrigger wrapping the display
+ * otherwise. Owns its own editing/draft/cellError state so per-cell
+ * edits don't leak across rows or columns.
+ *
+ * The PATCH itself goes through P.7's If-Match optimistic-concurrency
+ * flow — version conflicts surface as an inline rose banner under the
+ * cell + a refresh trigger; transport / 5xx errors surface the same
+ * way without auto-refresh.
+ */
+function EditableCell({
+  field,
   product,
-  onTagEdit,
   onChanged,
 }: {
-  col: string
+  field: string
   product: ProductRowType
-  onTagEdit: (id: string) => void
   onChanged: () => void
 }) {
-  // E.14 — pull the active search query so SKU + name cells can wrap
-  // matches in <mark>. Other cells ignore it.
+  const meta = EDITABLE_FIELDS[field]
   const searchQuery = useContext(SearchContext)
-  const p = product
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<string>('')
-  // P.7 — inline error string. Replaces the previous alert() flow so
-  // a failed save shows up under the cell instead of a modal popup.
-  // null = no error; non-null = banner visible. Cleared on next edit
-  // attempt or when the user clicks the dismiss x.
   const [cellError, setCellError] = useState<string | null>(null)
 
-  const startEdit = (initial: any) => {
-    setDraft(String(initial ?? ''))
+  if (!meta) return null
+
+  const startEdit = () => {
+    setDraft(meta.draftOf(product))
     setEditing(true)
     setCellError(null)
   }
 
-  const commit = async (field: string) => {
-    const value = draft.trim()
+  const commit = async (rawValue?: string) => {
+    const value = (rawValue ?? draft).trim()
     setEditing(false)
-    if (
-      value === '' &&
-      field !== 'name' &&
-      field !== 'brand' &&
-      field !== 'productType'
-    )
-      return
-    const body: any = {}
-    if (field === 'price') body.basePrice = Number(value)
-    else if (field === 'stock') body.totalStock = Number(value)
-    else if (field === 'threshold') body.lowStockThreshold = Number(value)
-    else if (field === 'name') body.name = value
-    else if (field === 'status') body.status = value
-    else if (field === 'fulfillment') body.fulfillmentMethod = value || null
-    else if (field === 'brand') body.brand = value || null
-    else if (field === 'productType') body.productType = value || null
+    // Empty values are dropped for required fields; for optional
+    // (brand, productType, fulfillmentMethod, name) we send null /
+    // empty string so clears go through.
+    const isOptionalText =
+      meta.apiField === 'brand' ||
+      meta.apiField === 'productType' ||
+      meta.apiField === 'fulfillmentMethod' ||
+      meta.apiField === 'name'
+    if (value === '' && !isOptionalText) return
+
+    const body: Record<string, any> = {}
+    if (meta.editor === 'number') {
+      body[meta.apiField] = Number(value)
+    } else if (
+      meta.apiField === 'brand' ||
+      meta.apiField === 'productType' ||
+      meta.apiField === 'fulfillmentMethod'
+    ) {
+      // Optional string — empty becomes null so the cell can be cleared.
+      body[meta.apiField] = value || null
+    } else {
+      body[meta.apiField] = value
+    }
+
     try {
-      // P.7 — If-Match optimistic-concurrency. Commit 0 added the
-      // server-side CAS check on PATCH /api/products/:id. We send
-      // version as the matcher; on 409 the server tells us the
-      // current version and we surface it inline + refresh the row.
+      // P.7 — If-Match optimistic-concurrency.
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       }
-      if (typeof p.version === 'number')
-        headers['If-Match'] = String(p.version)
-      const res = await fetch(`${getBackendUrl()}/api/products/${p.id}`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify(body),
-      })
+      if (typeof product.version === 'number')
+        headers['If-Match'] = String(product.version)
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${product.id}`,
+        {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify(body),
+        },
+      )
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}))
         if (res.status === 409 && errJson?.code === 'VERSION_CONFLICT') {
@@ -1054,12 +1269,13 @@ const ProductCell = memo(function ProductCell({
         }
         throw new Error(errJson?.error ?? `Update failed (${res.status})`)
       }
-      // Phase 10 — broadcast so /listings, /bulk-operations,
-      // /catalog/organize all refresh within ~200ms.
-      const cascadesToListings = field === 'price' || field === 'stock'
+      // basePrice + totalStock cascade to ChannelListing — broadcast
+      // both invalidations so /listings + /bulk-operations refresh.
+      const cascadesToListings =
+        meta.apiField === 'basePrice' || meta.apiField === 'totalStock'
       emitInvalidation({
         type: 'product.updated',
-        id: p.id,
+        id: product.id,
         fields: [field],
         meta: { source: 'products-inline-edit' },
       })
@@ -1067,7 +1283,7 @@ const ProductCell = memo(function ProductCell({
         emitInvalidation({
           type: 'listing.updated',
           meta: {
-            productIds: [p.id],
+            productIds: [product.id],
             source: 'products-inline-edit',
             field,
           },
@@ -1080,10 +1296,6 @@ const ProductCell = memo(function ProductCell({
     }
   }
 
-  // P.7 — small inline banner shown beneath the editable cell when
-  // the most recent commit failed. Click x to dismiss; opening any
-  // edit clears it automatically. Kept tiny so it doesn't push the
-  // row height meaningfully; long messages truncate.
   const errorBanner = cellError ? (
     <div className="mt-0.5 inline-flex items-start gap-1 px-1.5 py-0.5 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded max-w-full">
       <AlertCircle size={10} className="mt-0.5 flex-shrink-0" />
@@ -1099,6 +1311,94 @@ const ProductCell = memo(function ProductCell({
       </button>
     </div>
   ) : null
+
+  if (editing) {
+    if (meta.editor === 'select') {
+      return (
+        <>
+          <select
+            autoFocus
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value)
+              if (meta.commitOnChange) commit(e.target.value)
+            }}
+            onBlur={() => setEditing(false)}
+            className={meta.inputClassName}
+          >
+            {meta.options?.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          {errorBanner}
+        </>
+      )
+    }
+    return (
+      <>
+        <input
+          autoFocus
+          type={meta.editor === 'number' ? 'number' : 'text'}
+          step={meta.step}
+          min={meta.min}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => commit()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commit()
+            if (e.key === 'Escape') setEditing(false)
+          }}
+          className={meta.inputClassName}
+        />
+        {errorBanner}
+      </>
+    )
+  }
+
+  const hideIcon =
+    typeof meta.triggerHideIcon === 'function'
+      ? meta.triggerHideIcon(product)
+      : meta.triggerHideIcon
+  return (
+    <>
+      <InlineEditTrigger
+        onClick={startEdit}
+        label={meta.triggerLabel}
+        align={meta.triggerAlign}
+        size={meta.triggerSize}
+        hideIcon={hideIcon}
+        empty={meta.isEmpty?.(product)}
+        className={meta.triggerWrapClass}
+      >
+        {meta.display(product, searchQuery)}
+      </InlineEditTrigger>
+      {errorBanner}
+    </>
+  )
+}
+
+// E.1 — memo'd so a row that didn't change skips its 9-column
+// re-render. onTagEdit + onChanged come from useCallback'd refs in
+// the workspace, so they're stable across renders.
+const ProductCell = memo(function ProductCell({
+  col,
+  product,
+  onTagEdit,
+  onChanged,
+}: {
+  col: string
+  product: ProductRowType
+  onTagEdit: (id: string) => void
+  onChanged: () => void
+}) {
+  // F.5 — inline-edit state + the PATCH commit logic now live inside
+  // <EditableCell>. ProductCell only routes the col key + product into
+  // the right cell. The 8 editable columns share a single multi-case
+  // dispatch; read-only cells keep their bespoke renderers.
+  const searchQuery = useContext(SearchContext)
+  const p = product
 
   switch (col) {
     case 'thumb':
@@ -1127,284 +1427,17 @@ const ProductCell = memo(function ProductCell({
           <RiskBadge sku={p.sku} />
         </div>
       )
+    // F.5 — eight editable columns share one EditableCell. Per-field
+    // editor type, options, and display logic live in EDITABLE_FIELDS.
     case 'name':
-      return (
-        <>
-          {editing ? (
-            <input
-              autoFocus
-              type="text"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={() => commit('name')}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') commit('name')
-                if (e.key === 'Escape') setEditing(false)
-              }}
-              className="w-full h-7 px-1.5 text-md border border-blue-300 rounded"
-            />
-          ) : (
-            <InlineEditTrigger
-              onClick={() => startEdit(p.name)}
-              label="name"
-              align="left"
-            >
-              <span className="text-md text-slate-900">
-                <Highlight text={p.name} query={searchQuery} />
-                {p.isParent && (
-                  <Layers size={10} className="inline ml-1 text-slate-400" />
-                )}
-              </span>
-            </InlineEditTrigger>
-          )}
-          {errorBanner}
-        </>
-      )
     case 'status':
-      return (
-        <>
-          {editing ? (
-            <select
-              autoFocus
-              value={draft}
-              onChange={(e) => {
-                setDraft(e.target.value)
-                commit('status')
-              }}
-              onBlur={() => setEditing(false)}
-              className="h-6 px-1 text-sm border border-blue-300 rounded"
-            >
-              <option value="ACTIVE">ACTIVE</option>
-              <option value="DRAFT">DRAFT</option>
-              <option value="INACTIVE">INACTIVE</option>
-            </select>
-          ) : (
-            <InlineEditTrigger
-              onClick={() => startEdit(p.status)}
-              label="status"
-              size="sm"
-              hideIcon
-              className="w-auto"
-            >
-              <StatusBadge status={p.status} size="sm" />
-            </InlineEditTrigger>
-          )}
-          {errorBanner}
-        </>
-      )
     case 'price':
-      return (
-        <>
-          {editing ? (
-            <input
-              autoFocus
-              type="number"
-              step="0.01"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={() => commit('price')}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') commit('price')
-                if (e.key === 'Escape') setEditing(false)
-              }}
-              className="w-20 h-7 px-1.5 text-md text-right tabular-nums border border-blue-300 rounded"
-            />
-          ) : (
-            <InlineEditTrigger
-              onClick={() => startEdit(p.basePrice)}
-              label="base price"
-              align="right"
-            >
-              <span className="tabular-nums">€{p.basePrice.toFixed(2)}</span>
-            </InlineEditTrigger>
-          )}
-          {errorBanner}
-        </>
-      )
-    case 'stock': {
-      const tone =
-        p.totalStock === 0
-          ? 'text-rose-600'
-          : p.totalStock <= p.lowStockThreshold
-            ? 'text-amber-600'
-            : 'text-slate-900'
-      return (
-        <>
-          {editing ? (
-            <input
-              autoFocus
-              type="number"
-              min="0"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={() => commit('stock')}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') commit('stock')
-                if (e.key === 'Escape') setEditing(false)
-              }}
-              className="w-16 h-7 px-1.5 text-md text-right tabular-nums border border-blue-300 rounded"
-            />
-          ) : (
-            <InlineEditTrigger
-              onClick={() => startEdit(p.totalStock)}
-              label="total stock"
-              align="right"
-            >
-              <span className={`tabular-nums font-semibold ${tone}`}>
-                {p.totalStock}
-              </span>
-            </InlineEditTrigger>
-          )}
-          {errorBanner}
-        </>
-      )
-    }
+    case 'stock':
     case 'threshold':
-      return (
-        <>
-          {editing ? (
-            <input
-              autoFocus
-              type="number"
-              min="0"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={() => commit('threshold')}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') commit('threshold')
-                if (e.key === 'Escape') setEditing(false)
-              }}
-              className="w-16 h-7 px-1.5 text-md text-right tabular-nums border border-blue-300 rounded"
-            />
-          ) : (
-            <InlineEditTrigger
-              onClick={() => startEdit(p.lowStockThreshold)}
-              label="low-stock threshold"
-              align="right"
-            >
-              <span className="tabular-nums text-slate-500">
-                {p.lowStockThreshold}
-              </span>
-            </InlineEditTrigger>
-          )}
-          {errorBanner}
-        </>
-      )
     case 'brand':
-      // P.7 — brand is now inline-editable (was read-only). Free-text;
-      // datalist suggestions deferred — the filter sidebar already
-      // shows the existing brand list so operators have visibility
-      // when they want to stay consistent.
-      return (
-        <>
-          {editing ? (
-            <input
-              autoFocus
-              type="text"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={() => commit('brand')}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') commit('brand')
-                if (e.key === 'Escape') setEditing(false)
-              }}
-              className="w-full h-7 px-1.5 text-base border border-blue-300 rounded"
-            />
-          ) : (
-            <InlineEditTrigger
-              onClick={() => startEdit(p.brand ?? '')}
-              label="brand"
-              align="left"
-              empty={!p.brand}
-            >
-              <span className="text-base text-slate-700">
-                {p.brand ?? 'Add brand'}
-              </span>
-            </InlineEditTrigger>
-          )}
-          {errorBanner}
-        </>
-      )
     case 'productType':
-      // P.7 — productType is now inline-editable. The displayed label
-      // uses the IT_TERMS glossary lookup; the input edits the raw
-      // English/canonical key so saves go to the right value
-      // regardless of the displayed translation.
-      return (
-        <>
-          {editing ? (
-            <input
-              autoFocus
-              type="text"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={() => commit('productType')}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') commit('productType')
-                if (e.key === 'Escape') setEditing(false)
-              }}
-              className="w-full h-7 px-1.5 text-sm border border-blue-300 rounded"
-            />
-          ) : (
-            <InlineEditTrigger
-              onClick={() => startEdit(p.productType ?? '')}
-              label="product type"
-              align="left"
-              size="sm"
-              empty={!p.productType}
-            >
-              <span className="text-sm text-slate-700">
-                {p.productType
-                  ? (IT_TERMS[p.productType] ?? p.productType)
-                  : 'Add type'}
-              </span>
-            </InlineEditTrigger>
-          )}
-          {errorBanner}
-        </>
-      )
     case 'fulfillment':
-      return (
-        <>
-          {editing ? (
-            <select
-              autoFocus
-              value={draft}
-              onChange={(e) => {
-                setDraft(e.target.value)
-                commit('fulfillment')
-              }}
-              onBlur={() => setEditing(false)}
-              className="h-6 px-1 text-sm border border-blue-300 rounded"
-            >
-              <option value="">—</option>
-              <option value="FBA">FBA</option>
-              <option value="FBM">FBM</option>
-            </select>
-          ) : (
-            <InlineEditTrigger
-              onClick={() => startEdit(p.fulfillmentMethod ?? '')}
-              label="fulfillment method"
-              size="sm"
-              hideIcon={!!p.fulfillmentMethod}
-              empty={!p.fulfillmentMethod}
-              className="w-auto"
-            >
-              {p.fulfillmentMethod ? (
-                <Badge
-                  variant={p.fulfillmentMethod === 'FBA' ? 'warning' : 'info'}
-                  size="sm"
-                >
-                  {p.fulfillmentMethod}
-                </Badge>
-              ) : (
-                <span className="text-sm">Set FBA/FBM</span>
-              )}
-            </InlineEditTrigger>
-          )}
-          {errorBanner}
-        </>
-      )
+      return <EditableCell field={col} product={p} onChanged={onChanged} />
     case 'coverage': {
       // F8 — surface ALL canonical channels per row, not just the ones
       // already listed. Missing channels render as a gray "+"
