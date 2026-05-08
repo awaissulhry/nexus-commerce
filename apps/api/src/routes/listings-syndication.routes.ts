@@ -2433,6 +2433,71 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
   })
 
   // ─────────────────────────────────────────────────────────────────
+  // GET /api/listings/:id/publish-attempts — per-listing audit feed.
+  //
+  // M.8 — pulls from ChannelPublishAttempt scoped to the listing's
+  // (channel, marketplace, sku) tuple. Drives the drawer's
+  // "Publishes" tab so the operator can see exactly what the gate
+  // did to this listing during Phase B + ongoing rollout.
+  //
+  // Sync history (S.4) covers READ pulls; this covers WRITE pushes.
+  // Different shape (publishes have submissionId + payloadDigest;
+  // syncs don't) and different cadence so a separate endpoint.
+  // ─────────────────────────────────────────────────────────────────
+  fastify.get('/listings/:id/publish-attempts', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const q = request.query as Record<string, string | undefined>
+      const limit = Math.min(200, Math.max(1, Math.floor(safeNum(q.limit) ?? 50)))
+
+      const listing = await prisma.channelListing.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          channel: true,
+          marketplace: true,
+          product: { select: { sku: true } },
+        },
+      })
+      if (!listing) return reply.code(404).send({ error: 'Listing not found' })
+
+      const sku = listing.product?.sku
+      if (!sku) {
+        return { attempts: [], count: 0 }
+      }
+
+      const attempts = await prisma.channelPublishAttempt.findMany({
+        where: {
+          channel: listing.channel,
+          marketplace: listing.marketplace,
+          sku,
+        },
+        orderBy: { attemptedAt: 'desc' },
+        take: limit,
+        select: {
+          id: true,
+          attemptedAt: true,
+          mode: true,
+          outcome: true,
+          submissionId: true,
+          payloadDigest: true,
+          errorMessage: true,
+          errorCode: true,
+          durationMs: true,
+        },
+      })
+
+      return {
+        attempts,
+        count: attempts.length,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[listings/:id/publish-attempts] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ─────────────────────────────────────────────────────────────────
   // GET /api/listings/:id/sync-history — paginated sync timeline
   //
   // S.4 — backed by the SyncAttempt audit table. Drawer's Sync tab

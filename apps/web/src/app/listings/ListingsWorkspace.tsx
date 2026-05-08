@@ -4263,7 +4263,7 @@ function DraftsLens({ lockChannel, lockMarketplace, search }: { lockChannel?: st
 // state, where else this product is live, and what's happening with
 // sync — without leaving the matrix view.
 // ────────────────────────────────────────────────────────────────────
-type DrawerTab = 'detail' | 'channels' | 'sync' | 'activity'
+type DrawerTab = 'detail' | 'channels' | 'sync' | 'publishes' | 'activity'
 
 function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
   // Internal id state lets the Per-channel tab switch context without
@@ -4359,6 +4359,7 @@ function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onCl
         count: listing?.companions?.length,
       },
       { id: 'sync', label: 'Sync', count: errorCount > 0 ? errorCount : undefined },
+      { id: 'publishes', label: 'Publishes' },
       { id: 'activity', label: 'Activity' },
     ]
   }, [listing])
@@ -4495,6 +4496,7 @@ function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onCl
             {activeTab === 'sync' && (
               <SyncTab listing={listing} resyncing={actionPending === 'resync'} onResync={resync} />
             )}
+            {activeTab === 'publishes' && <PublishesTab listing={listing} />}
             {activeTab === 'activity' && <ActivityTab listing={listing} />}
           </ModalBody>
         </>
@@ -5754,6 +5756,141 @@ function TimelineEntry({
         {new Date(when).toLocaleString()}
       </div>
     </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────
+// PublishesTab — per-listing slice of ChannelPublishAttempt.
+//
+// M.8 — surfaces every channel-write attempt the publish gate has
+// recorded for this (channel, marketplace, sku) tuple. Each row
+// shows mode (gated / dry-run / sandbox / live), outcome, submission
+// id when present, payload digest (so the operator can spot
+// duplicates / drift), and the wall-clock duration.
+// ────────────────────────────────────────────────────────────────────
+function PublishesTab({ listing }: { listing: any }) {
+  const url = useMemo(
+    () => `/api/listings/${listing.id}/publish-attempts?limit=50`,
+    [listing.id],
+  )
+  const { data, loading } = usePolledList<{
+    attempts: Array<{
+      id: string
+      attemptedAt: string
+      mode: string
+      outcome: string
+      submissionId: string | null
+      payloadDigest: string
+      errorMessage: string | null
+      errorCode: string | null
+      durationMs: number | null
+    }>
+    count: number
+  }>({
+    url,
+    intervalMs: 30_000,
+    invalidationTypes: ['listing.updated'],
+  })
+
+  const attempts = data?.attempts ?? []
+  const lastDigest = attempts[0]?.payloadDigest
+
+  return (
+    <div className="space-y-4">
+      <div className="text-sm text-slate-600">
+        Channel-write attempts the publish gate has recorded for this
+        listing. Use this to confirm dry-run / sandbox / live mode is
+        what you expect, spot repeated failures on the same payload,
+        or trace a submission ID back to an Amazon / eBay listing.
+      </div>
+
+      {loading && attempts.length === 0 ? (
+        <Skeleton variant="text" lines={4} />
+      ) : attempts.length === 0 ? (
+        <div className="border border-slate-200 rounded p-3 text-sm text-slate-500">
+          No publish attempts recorded yet for this (channel, marketplace,
+          sku). Either no wizard run or outbound-sync push has touched
+          this listing, or the master flag has been off the whole time
+          (which would log <code className="font-mono">outcome=gated</code>{' '}
+          rows but nothing else).
+        </div>
+      ) : (
+        <div>
+          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2 inline-flex items-center gap-2">
+            Publish history
+            <span className="normal-case font-normal text-slate-400">
+              {data?.count} attempt{data?.count === 1 ? '' : 's'}
+            </span>
+          </div>
+          <div className="space-y-1.5">
+            {attempts.map((a) => {
+              const tone =
+                a.outcome === 'success' ? 'border-emerald-200 bg-emerald-50/50'
+                : a.outcome === 'gated' ? 'border-slate-200 bg-slate-50'
+                : 'border-rose-200 bg-rose-50/50'
+              const isStuckOnSameDigest =
+                lastDigest && a.payloadDigest === lastDigest && a.id !== attempts[0]?.id && a.outcome !== 'success'
+              return (
+                <div key={a.id} className={`border rounded p-2.5 text-sm ${tone}`}>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="inline-flex items-center gap-2 flex-wrap">
+                      <span className="text-xs text-slate-600 tabular-nums whitespace-nowrap">
+                        {new Date(a.attemptedAt).toLocaleString()}
+                      </span>
+                      <span className="text-xs font-mono px-1.5 py-0.5 rounded border border-slate-300 bg-white text-slate-700">
+                        {a.mode}
+                      </span>
+                      <PublishOutcomeBadge outcome={a.outcome} />
+                      {a.durationMs != null && (
+                        <span className="text-xs text-slate-500 tabular-nums">
+                          {a.durationMs}ms
+                        </span>
+                      )}
+                    </div>
+                    {a.submissionId && (
+                      <span className="text-xs text-slate-500 font-mono" title={`Submission ID: ${a.submissionId}`}>
+                        sub: {a.submissionId.slice(0, 12)}{a.submissionId.length > 12 ? '…' : ''}
+                      </span>
+                    )}
+                  </div>
+                  {a.errorMessage && (
+                    <div className="text-xs text-rose-700 mt-1.5 whitespace-pre-wrap">
+                      {a.errorCode && (
+                        <span className="font-mono mr-1">[{a.errorCode}]</span>
+                      )}
+                      {a.errorMessage}
+                    </div>
+                  )}
+                  <div className="text-[10px] text-slate-400 font-mono mt-1 inline-flex items-center gap-2">
+                    <span title="sha256 of canonicalised payload — same digest on repeated attempts means the same payload didn't change">
+                      digest {a.payloadDigest.slice(0, 12)}…
+                    </span>
+                    {isStuckOnSameDigest && (
+                      <span className="text-amber-700 normal-case font-semibold">
+                        ⚠ same payload as latest — consider editing before retrying
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PublishOutcomeBadge({ outcome }: { outcome: string }) {
+  const tone =
+    outcome === 'success' ? 'bg-emerald-100 text-emerald-700' :
+    outcome === 'gated' ? 'bg-slate-100 text-slate-600' :
+    outcome === 'rate-limited' ? 'bg-amber-100 text-amber-700' :
+    'bg-rose-100 text-rose-700'
+  return (
+    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${tone}`}>
+      {outcome}
+    </span>
   )
 }
 
