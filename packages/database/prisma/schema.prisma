@@ -1433,6 +1433,16 @@ model Order {
   customerId      String?
   shippingAddress Json // { street, city, state, postalCode, country }
 
+  // F.1 — Italian fiscal snapshot at sale time. Italian fiscal law
+  // (DPR 633/72) cares about the values as of the order date, not
+  // whatever the customer's profile happens to say later. Mirror of
+  // the Customer.* fields below, snapshotted on order ingest.
+  codiceFiscale       String? // 16 chars (individuals)
+  partitaIva          String? // 11 digits (businesses)
+  fiscalKind          String? // 'B2B' | 'B2C' | NULL = unknown
+  pecEmail            String? // SDI fallback delivery
+  codiceDestinatario  String? // 7-char SDI routing code
+
   // D.1: Phase 28 — real customer-side timestamps. createdAt is the row
   // insert time (ingestion); these track the order's own lifecycle.
   purchaseDate DateTime?
@@ -1488,6 +1498,7 @@ model Order {
   @@index([shipByDate])
   @@index([status, shipByDate])
   @@index([customerId])
+  @@index([fiscalKind]) // F.1 — batch SDI submission filters by B2B
 }
 
 // ── O.20: Customer model ─────────────────────────────────────────────
@@ -1507,6 +1518,15 @@ model Customer {
   id    String  @id
   email String  @unique
   name  String?
+
+  // F.1 — Italian fiscal identity. Codice fiscale for individuals
+  // (16 alphanumeric) or partita IVA for businesses (11 digits).
+  // fiscalKind drives invoice-vs-receipt rendering + SDI submission.
+  codiceFiscale       String?
+  partitaIva          String?
+  fiscalKind          String? // 'B2B' | 'B2C' | NULL
+  pecEmail            String? // SDI fallback delivery
+  codiceDestinatario  String? // 7-char SDI routing code
 
   totalOrders        Int      @default(0)
   // Cents to avoid Decimal vs JS-number drift on the read side.
@@ -1538,6 +1558,7 @@ model Customer {
   @@index([lastOrderAt])
   @@index([totalSpentCents])
   @@index([riskFlag])
+  @@index([fiscalKind]) // F.1 — drives B2B/B2C filtering on /customers
 }
 
 model CustomerAddress {
@@ -1644,6 +1665,11 @@ model OrderItem {
   // Standard Postgres NULL-distinct unique semantics let those rows
   // coexist without a partial index.
   externalLineItemId String?
+
+  // F.1 — per-line Italian VAT rate (22 / 10 / 4). NULL = not
+  // applicable (non-IT marketplace) or legacy. F.3 PDF + F.4 SDI
+  // XML default to 22 on Italian orders when NULL.
+  itVatRatePct Decimal? @db.Decimal(5, 2)
 
   // Metadata
   amazonMetadata Json?
