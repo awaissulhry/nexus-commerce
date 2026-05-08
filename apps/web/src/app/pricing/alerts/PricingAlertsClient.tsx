@@ -45,6 +45,18 @@ interface DriftRow {
   createdAt: string
 }
 
+interface LowMarginRow {
+  id: string
+  sku: string
+  channel: string
+  marketplace: string
+  fulfillmentMethod: string | null
+  computedPrice: string
+  currency: string
+  marginPct: number
+  netProfit: number
+}
+
 interface AlertsResponse {
   total: number
   counts: {
@@ -52,9 +64,12 @@ interface AlertsResponse {
     clamped: number
     warnings: number
     drift: number
+    lowMargin: number
   }
+  thresholds: { lowMarginPct: number }
   rows: AlertRow[]
   driftRows: DriftRow[]
+  lowMarginRows: LowMarginRow[]
 }
 
 export default function PricingAlertsClient() {
@@ -101,7 +116,13 @@ export default function PricingAlertsClient() {
     )
   }
 
-  if (!data || (data.rows.length === 0 && data.driftRows.length === 0)) {
+  const empty =
+    !data ||
+    (data.rows.length === 0 &&
+      data.driftRows.length === 0 &&
+      data.lowMarginRows.length === 0)
+
+  if (empty) {
     return (
       <EmptyState
         icon={CheckCircle2}
@@ -113,13 +134,20 @@ export default function PricingAlertsClient() {
 
   return (
     <div className="space-y-4">
-      {/* Counts banner */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* Counts banner — drift first (customer-visible), low margin second
+          (silent revenue leak), engine-resolution buckets last. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <CountTile
           label="Drift"
           value={data.counts.drift}
           tone="rose"
           hint="Listing price drifted from master. Sync-drift detector last 24h."
+        />
+        <CountTile
+          label={`Low margin <${data.thresholds.lowMarginPct}%`}
+          value={data.counts.lowMargin}
+          tone="rose"
+          hint="Post-fee net margin below threshold."
         />
         <CountTile
           label="No resolution"
@@ -236,10 +264,119 @@ export default function PricingAlertsClient() {
         </div>
       )}
 
+      {/* C.2 — Low-margin table. Below drift (customer-facing) but above
+          engine-resolution alerts (materialization-time only). Ordered by
+          marginPct ascending so the worst SKUs are at the top. */}
+      {data.lowMarginRows.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
+            Low margin · {data.lowMarginRows.length}
+            <span className="ml-2 normal-case font-normal text-slate-400">
+              post-fee net margin below {data.thresholds.lowMarginPct}%
+            </span>
+          </div>
+          <Card noPadding>
+            <div className="overflow-x-auto">
+              <table className="w-full text-md">
+                <thead className="border-b border-slate-200 bg-rose-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      Severity
+                    </th>
+                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      SKU
+                    </th>
+                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      Where
+                    </th>
+                    <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      Price
+                    </th>
+                    <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      Net profit
+                    </th>
+                    <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      Margin
+                    </th>
+                    <th className="px-3 py-2 w-24"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.lowMarginRows.map((m) => {
+                    const negative = m.netProfit < 0
+                    return (
+                      <tr
+                        key={m.id}
+                        className="border-b border-slate-100 hover:bg-slate-50"
+                      >
+                        <td className="px-3 py-2">
+                          <SeverityChip
+                            tone="rose"
+                            label={negative ? 'Loss' : 'Thin'}
+                          />
+                        </td>
+                        <td className="px-3 py-2 font-mono text-base text-slate-800">
+                          {m.sku}
+                        </td>
+                        <td className="px-3 py-2 text-slate-700">
+                          {m.channel}{' '}
+                          <span className="text-slate-400">·</span>{' '}
+                          <span className="font-mono text-sm">
+                            {m.marketplace}
+                          </span>
+                          {m.fulfillmentMethod && (
+                            <span className="ml-1 text-xs text-slate-500">
+                              {m.fulfillmentMethod}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-slate-800">
+                          {Number(m.computedPrice).toFixed(2)}{' '}
+                          <span className="text-sm text-slate-500">
+                            {m.currency}
+                          </span>
+                        </td>
+                        <td
+                          className={cn(
+                            'px-3 py-2 text-right tabular-nums',
+                            negative ? 'text-rose-700 font-semibold' : 'text-slate-700',
+                          )}
+                        >
+                          {m.netProfit.toFixed(2)}{' '}
+                          <span className="text-sm text-slate-500">
+                            {m.currency}
+                          </span>
+                        </td>
+                        <td
+                          className={cn(
+                            'px-3 py-2 text-right tabular-nums font-semibold',
+                            negative ? 'text-rose-700' : 'text-amber-700',
+                          )}
+                        >
+                          {m.marginPct.toFixed(1)}%
+                        </td>
+                        <td className="px-3 py-2">
+                          <Link
+                            href={`/pricing?search=${encodeURIComponent(m.sku)}`}
+                            className="text-sm text-blue-600 hover:underline"
+                          >
+                            Open in pricing →
+                          </Link>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
       {/* Engine-time alerts (clamped / fallback / warnings) */}
       {data.rows.length > 0 && (
         <div className="space-y-2">
-          {data.driftRows.length > 0 && (
+          {(data.driftRows.length > 0 || data.lowMarginRows.length > 0) && (
             <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
               Engine resolution alerts · {data.rows.length}
             </div>

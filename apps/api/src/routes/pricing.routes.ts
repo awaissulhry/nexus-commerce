@@ -135,25 +135,31 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  // G.4.2 + B.2 — Outlier alerts. Surfaces SKUs that need the user's attention:
-  // clamped to a floor (margin / MAP), no master price, FX-stale, etc. Also
-  // pulls in the SyncHealthLog price-drift rows that sync-drift-detection.job.ts
-  // writes (master cascade went sideways) — those used to live only at
-  // /dashboard/health, which orphaned them from the pricing surface.
-  fastify.get('/pricing/alerts', async (_request, reply) => {
+  // G.4.2 + B.2 + C.2 — Outlier alerts. Surfaces SKUs that need the user's
+  // attention: clamped to a floor (margin / MAP), no master price, FX-stale,
+  // master cascade drift (from SyncHealthLog), and low-margin rows (computed
+  // post-fees + tax-adjusted from PricingSnapshot.breakdown).
+  fastify.get('/pricing/alerts', async (request, reply) => {
     try {
-      const snapshotWhere: Prisma.PricingSnapshotWhereInput = {
-        OR: [
-          { isClamped: true },
-          { warnings: { isEmpty: false } },
-          { source: 'FALLBACK' },
-        ],
-      }
+      const q = request.query as Record<string, string | undefined>
+      // Configurable margin threshold. Default 10% — matches engine's
+      // DEFAULT_MIN_MARGIN_PERCENT but here it's a SOFT alert (the engine
+      // already enforces a HARD floor via clamping). Operator can ratchet
+      // up to flag thinning margins before they hit the floor.
+      const lowMarginThreshold = Math.max(
+        0,
+        Math.min(100, Number(q.lowMarginThreshold ?? '10')),
+      )
+      // Read all materialized snapshots — we need the breakdown JSON to
+      // compute marginPct, not just the rows already failing other checks.
+      // Cap at 5K to keep p95 latency bounded; expected catalog × markets
+      // ≈ 19K eventually, so chunked aggregation will follow once needed.
+      const snapshotWhere: Prisma.PricingSnapshotWhereInput = {}
       const [rows, driftLogs] = await Promise.all([
         prisma.pricingSnapshot.findMany({
           where: snapshotWhere,
           orderBy: [{ source: 'asc' }, { sku: 'asc' }],
-          take: 500,
+          take: 5000,
         }),
         // B.2 — Drift rows from sync-drift-detection.job.ts. We pull the
         // last 24h of UNRESOLVED PRICE_MISMATCH conflicts; older rows
@@ -187,6 +193,70 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
         ),
       }
 
+      // C.2 — Compute post-fee, tax-adjusted margin per snapshot. Skip
+      // rows that have no cost basis (engine couldn't enforce the floor
+      // anyway — they're caught by the warningsOnly bucket already).
+      // marginPct = (taxNet - cost - fbaFee - referralFee) / taxNet × 100
+      // where taxNet = grossPrice when tax-exclusive, else grossPrice / (1+vatRate/100).
+      const lowMarginRows: Array<{
+        id: string
+        sku: string
+        channel: string
+        marketplace: string
+        fulfillmentMethod: string | null
+        computedPrice: string
+        currency: string
+        marginPct: number
+        netProfit: number
+      }> = []
+      for (const r of rows) {
+        const b = (r.breakdown ?? {}) as {
+          effectiveCostBasis?: number | null
+          fxRate?: number
+          fbaFee?: number
+          referralFee?: number
+          vatRate?: number
+          taxInclusive?: boolean
+        }
+        const cost = b.effectiveCostBasis ?? null
+        const fxRate = b.fxRate ?? 1
+        if (cost == null || cost <= 0) continue
+        const grossPrice = Number(r.computedPrice)
+        if (!Number.isFinite(grossPrice) || grossPrice <= 0) continue
+        const vatRate = b.vatRate ?? 0
+        const taxNet = b.taxInclusive
+          ? grossPrice / (1 + vatRate / 100)
+          : grossPrice
+        const costInMp = cost * fxRate
+        const fbaFee = b.fbaFee ?? 0
+        const referralFee = b.referralFee ?? 0
+        const netProfit = taxNet - costInMp - fbaFee - referralFee
+        const marginPct = (netProfit / taxNet) * 100
+        if (marginPct < lowMarginThreshold) {
+          lowMarginRows.push({
+            id: r.id,
+            sku: r.sku,
+            channel: r.channel,
+            marketplace: r.marketplace,
+            fulfillmentMethod: r.fulfillmentMethod,
+            computedPrice: r.computedPrice.toString(),
+            currency: r.currency,
+            marginPct: Math.round(marginPct * 100) / 100,
+            netProfit: Math.round(netProfit * 100) / 100,
+          })
+        }
+      }
+      // Sort lowest margin first — most urgent at the top.
+      lowMarginRows.sort((a, b) => a.marginPct - b.marginPct)
+
+      // The existing rows array previously was filtered server-side. With C.2
+      // we read all snapshots so the margin compute can run; restrict the
+      // returned `rows` array back to the original filter so the existing
+      // table doesn't suddenly show every snapshot.
+      const filteredRows = rows.filter(
+        (r) => r.isClamped || r.source === 'FALLBACK' || r.warnings.length > 0,
+      )
+
       // Shape drift rows so the client can render them in the same table
       // as snapshot rows, with a distinct severity. conflictData is shaped
       // by syncHealthService.logConflict as { local, remote } where local
@@ -210,15 +280,20 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
       })
 
       return {
-        total: rows.length + driftRows.length,
+        total: filteredRows.length + driftRows.length + lowMarginRows.length,
         counts: {
           fallback: buckets.fallback.length,
           clamped: buckets.clamped.length,
           warnings: buckets.warningsOnly.length,
           drift: driftRows.length,
+          lowMargin: lowMarginRows.length,
         },
-        rows,
+        thresholds: {
+          lowMarginPct: lowMarginThreshold,
+        },
+        rows: filteredRows,
         driftRows,
+        lowMarginRows,
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[pricing/alerts] failed')
