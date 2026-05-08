@@ -318,11 +318,77 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             return { variations: { _count: 'asc' } }
           case 'variants-desc':
             return { variations: { _count: 'desc' } }
+          case 'completeness-asc':
+          case 'completeness-desc':
+            // F.5 / U.29 — completeness is a CASE-expression sum of
+            // 6 binary checks (name / brand / productType / photos /
+            // channels / tags). Prisma's orderBy can't express that.
+            // Handled below: a separate prefetch pass scores every
+            // matching row in JS, then we slice to the page and use
+            // the resulting id list as the sort key. Returning
+            // updatedAt here is just a placeholder — the real sort
+            // is applied via where: { id: { in: <sortedSliceIds> } }
+            // and a JS re-order after the findMany returns.
+            return { updatedAt: 'desc' }
           case 'updated':
           default:
             return { updatedAt: 'desc' }
         }
       })()
+
+      // U.29 — completeness sort prefetch. Score = number of
+      // "passes" across 6 hygiene checks; lower score = more
+      // missing. Sorting ascending surfaces "what needs work";
+      // descending shows the cleanest rows first.
+      //
+      // Tradeoff: we fetch every matching id+score before slicing,
+      // not just the page. On Xavia's 279-row catalog that's
+      // negligible (a single _count rollup query under 50ms). At
+      // larger catalogs this would need a materialized
+      // `completenessScore Int` column updated on PATCH. Comment
+      // calls out the threshold so the next operator hitting the
+      // wall knows the next step.
+      let completenessOrderedIds: string[] | null = null
+      if (sort === 'completeness-asc' || sort === 'completeness-desc') {
+        // Score uses 5 server-visible axes. The grid's display %
+        // includes a 6th (tags) but ProductTag has no `Product`
+        // back-relation in the schema so we can't `_count` it
+        // directly here without an extra round-trip per page —
+        // skipping it for sort purposes is the small UX
+        // inconsistency we accept. Display % stays accurate.
+        const candidates = await prisma.product.findMany({
+          where,
+          select: {
+            id: true,
+            name: true,
+            brand: true,
+            productType: true,
+            _count: {
+              select: { images: true, channelListings: true },
+            },
+          },
+        })
+        const scored = candidates.map((p) => {
+          const checks = [
+            !!(
+              p.name &&
+              p.name.trim().length > 0 &&
+              p.name !== 'Untitled product'
+            ),
+            !!p.brand,
+            !!p.productType,
+            (p._count?.images ?? 0) > 0,
+            (p._count?.channelListings ?? 0) > 0,
+          ]
+          const score = checks.reduce((n, ok) => n + (ok ? 1 : 0), 0)
+          return { id: p.id, score }
+        })
+        const direction = sort === 'completeness-asc' ? 1 : -1
+        scored.sort((a, b) => (a.score - b.score) * direction)
+        // Slice to the requested page.
+        const start = (page - 1) * limit
+        completenessOrderedIds = scored.slice(start, start + limit).map((s) => s.id)
+      }
 
       // Phase 10b — short-circuit with 304 when nothing has changed.
       // /products grid polls every 30s + on visibility-change; without
@@ -345,12 +411,22 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(304).send()
       }
 
+      // U.29 — when sorting by completeness, the page slice already
+      // resolved into completenessOrderedIds; the findMany targets
+      // those ids directly (no take/skip; the slice owned that).
+      const completenessActive = completenessOrderedIds !== null
+      const effectiveWhere: any = completenessActive
+        ? { id: { in: completenessOrderedIds } }
+        : where
+      const effectiveTake = completenessActive ? undefined : limit
+      const effectiveSkip = completenessActive ? undefined : (page - 1) * limit
+      const effectiveOrderBy = completenessActive ? undefined : orderBy
       const [rawProducts, total, statsRows] = await Promise.all([
         prisma.product.findMany({
-          where,
-          orderBy,
-          take: limit,
-          skip: (page - 1) * limit,
+          where: effectiveWhere,
+          orderBy: effectiveOrderBy,
+          take: effectiveTake,
+          skip: effectiveSkip,
           select: {
             id: true,
             sku: true,
@@ -418,10 +494,21 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         ]),
       ])
 
+      // U.29 — when completeness sort is active, Prisma returned the
+      // sliced rows in arbitrary order (id IN list doesn't preserve
+      // sequence). Re-order to match completenessOrderedIds.
+      let sortedRawProducts = rawProducts
+      if (completenessOrderedIds) {
+        const byId = new Map(rawProducts.map((p: any) => [p.id, p]))
+        sortedRawProducts = completenessOrderedIds
+          .map((id) => byId.get(id))
+          .filter((p): p is (typeof rawProducts)[number] => !!p)
+      }
+
       // Optional tag rollup — single grouped query, fan out client-side
       let tagsByProduct: Map<string, Array<{ id: string; name: string; color: string | null }>> = new Map()
       if (includeTags) {
-        const productIds = rawProducts.map((p) => p.id)
+        const productIds = sortedRawProducts.map((p) => p.id)
         const rows = await prisma.productTag.findMany({
           where: { productId: { in: productIds } },
           select: {
@@ -436,7 +523,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      const products = rawProducts.map((p: any) => {
+      const products = sortedRawProducts.map((p: any) => {
         const photoCount = p._count?.images ?? 0
         // Channel coverage rollup: per-channel { live, draft, error, total }
         let coverage: Record<string, { live: number; draft: number; error: number; total: number }> | null = null

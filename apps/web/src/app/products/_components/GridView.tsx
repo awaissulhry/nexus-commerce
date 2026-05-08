@@ -310,11 +310,11 @@ export function VirtualizedGrid({
     }
   }, [focusedRowId, flatRows, rowVirtualizer])
 
-  // U.26 — sortKey per column. Coverage sorts on channelCount;
-  // photos on photoCount; variants on variantCount — all
-  // _count-of-relation server-side now. Ascending defaults so a
-  // single click surfaces the rows that need attention (zero photos,
-  // zero channels) first; flip to -desc via URL if needed.
+  // U.26 / U.29 — sortKey per column. Coverage sorts on channelCount;
+  // photos on photoCount; variants on variantCount; completeness on
+  // the F.2 6-axis hygiene score. Ascending defaults surface the
+  // rows that need attention (zero photos, zero channels, lowest
+  // completeness) first; flip to -desc via URL if needed.
   const sortKeys: Record<string, string> = {
     sku: 'sku',
     name: 'name',
@@ -323,6 +323,7 @@ export function VirtualizedGrid({
     photos: 'photos-asc',
     coverage: 'channels-asc',
     variants: 'variants-asc',
+    completeness: 'completeness-asc',
     updated: 'updated',
   }
 
@@ -383,6 +384,8 @@ export function VirtualizedGrid({
                     (col.key === 'coverage' && sortBy.startsWith('channels')) ||
                     (col.key === 'variants' &&
                       sortBy.startsWith('variants')) ||
+                    (col.key === 'completeness' &&
+                      sortBy.startsWith('completeness')) ||
                     (col.key === 'updated' && sortBy === 'updated')
                   const sortDir: 'ascending' | 'descending' | 'none' =
                     !sortable
