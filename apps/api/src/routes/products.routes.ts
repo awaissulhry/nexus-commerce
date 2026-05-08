@@ -2087,19 +2087,14 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         const product = await tx.product.create({ data: masterData as any })
 
         if (isParent && body.variations) {
-          // Each variation also gets a Product row with parentId set
-          // (the canonical "child product" pattern in this codebase),
-          // plus a ProductVariation row with the attribute map. This
-          // matches what catalog.routes.ts does for child creation.
-          //
-          // P.1 NOTE — the PV mirror is load-bearing for the listing
-          // wizard's variations.service + submission.service, which
-          // read children via the PV relation (not parentId). Until
-          // those services are refactored to read Product.parentId
-          // children, the PV mirror has to stay; disabling it would
-          // make the wizard see children: [] for new variants.
+          // Each variation gets a Product row with parentId set + the
+          // variation's attribute map written to variantAttributes. This
+          // is the canonical "child product" pattern (244 active rows in
+          // prod under parentId; the PV mirror that used to live here was
+          // removed in TECH_DEBT #43.4 once the listing-wizard reader
+          // services migrated to parentId in #43.1-#43.3).
           for (const v of body.variations) {
-            const child = await tx.product.create({
+            await tx.product.create({
               data: {
                 sku: v.sku.trim(),
                 name: v.name?.trim() || `${body.name} — ${v.sku.trim()}`,
@@ -2113,18 +2108,9 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
                 validationStatus: 'VALID',
                 validationErrors: [],
                 hasChannelOverrides: false,
+                variantAttributes: (v.variationAttributes ?? {}) as any,
               } as any,
             })
-            await tx.productVariation.create({
-              data: {
-                productId: product.id,
-                sku: v.sku.trim(),
-                variationAttributes: (v.variationAttributes ?? {}) as any,
-                price: v.price ?? body.basePrice,
-                stock: v.stock ?? 0,
-              } as any,
-            })
-            void child
           }
         }
 

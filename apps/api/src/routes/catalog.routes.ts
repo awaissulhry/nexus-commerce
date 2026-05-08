@@ -1258,36 +1258,10 @@ export async function catalogRoutes(app: FastifyInstance) {
         },
       });
 
-      // XX — also create a ProductVariation row keyed by the same
-      // attrs. This is what the listing wizard's variations service
-      // queries for theme picking + missing-attribute annotations.
-      // Without this, /api/listing-wizard/:id/variations sees
-      // children: [] even when child Products with parentId exist.
-      //
-      // P.1 NOTE — kept alive because variations.service.ts reads
-      // children via the PV relation (Product → variations), not
-      // Product.parentId. Refactoring that service to use parentId
-      // is a prerequisite for dropping PV; tracked in TECH_DEBT.
-      if (hasVariantAttrs) {
-        await prisma.productVariation
-          .create({
-            data: {
-              productId: parentId,
-              sku,
-              variationAttributes: cleanedVariantAttrs as any,
-              price: parsedBasePrice,
-              stock: parsedTotalStock,
-            },
-          })
-          .catch((err: unknown) => {
-            // Soft-fail: child Product is already created. The
-            // ProductVariation row can be backfilled later.
-            logger.warn(
-              '[catalog/children] ProductVariation create failed',
-              { err: err instanceof Error ? err.message : String(err) },
-            )
-          })
-      }
+      // TECH_DEBT #43.4 — the PV mirror that used to live here was removed
+      // once the listing-wizard reader services migrated to parentId
+      // children (#43.1-#43.3). The child Product above already carries
+      // variantAttributes, which is what the wizard now reads.
 
       return reply.status(201).send({
         success: true,
