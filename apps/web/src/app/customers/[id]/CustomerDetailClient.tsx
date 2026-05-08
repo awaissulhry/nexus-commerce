@@ -19,7 +19,6 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  Mail,
   MapPin,
   Pin,
   PinOff,
@@ -282,11 +281,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
     <div className="space-y-5">
       <PageHeader
         title={customer.name || customer.email}
-        description={
-          <span className="inline-flex items-center gap-2 text-base text-slate-500">
-            <Mail size={12} /> {customer.email}
-          </span>
-        }
+        description={customer.email}
         breadcrumbs={[
           { label: t('customers.title'), href: '/customers' },
           { label: customer.name || customer.email },
