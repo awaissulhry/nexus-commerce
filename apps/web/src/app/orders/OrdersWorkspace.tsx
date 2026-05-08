@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { CustomerLens } from './_lenses/CustomerLens'
 import { FinancialsLens } from './_lenses/FinancialsLens'
 import { ReturnsLens } from './_lenses/ReturnsLens'
@@ -74,6 +75,7 @@ type Stats = { total: number; pending: number; shipped: number; cancelled: numbe
 // constants moved to ./_lib/columns and ./_lib/tone.
 
 export default function OrdersWorkspace() {
+  const { t } = useTranslations()
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -194,19 +196,19 @@ export default function OrdersWorkspace() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Orders"
+        title={t('orders.title')}
         description={
           stats
             ? `${stats.total.toLocaleString()} total · ${stats.pending} pending · ${stats.shipped} shipped · ${stats.delivered} delivered`
-            : 'Multi-channel order command center'
+            : t('orders.subtitle')
         }
         actions={
           <div className="flex items-center gap-2">
             <Link href="/orders/reviews/rules" className="h-8 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5">
-              <Star size={12} /> Review rules
+              <Star size={12} /> {t('orders.action.reviewRules')}
             </Link>
             <button onClick={() => fetchOrders()} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5">
-              <RefreshCw size={12} /> Refresh
+              <RefreshCw size={12} /> {t('orders.action.refresh')}
             </button>
           </div>
         }
@@ -282,12 +284,13 @@ export default function OrdersWorkspace() {
 }
 
 function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) => void }) {
+  const { t } = useTranslations()
   const tabs: Array<{ key: Lens; label: string; icon: any }> = [
-    { key: 'grid', label: 'Grid', icon: ShoppingCart },
-    { key: 'customer', label: 'Customers', icon: User },
-    { key: 'financials', label: 'Financials', icon: DollarSign },
-    { key: 'returns', label: 'Returns', icon: Undo2 },
-    { key: 'reviews', label: 'Reviews', icon: Star },
+    { key: 'grid', label: t('orders.lens.grid'), icon: ShoppingCart },
+    { key: 'customer', label: t('orders.lens.customer'), icon: User },
+    { key: 'financials', label: t('orders.lens.financials'), icon: DollarSign },
+    { key: 'returns', label: t('orders.lens.returns'), icon: Undo2 },
+    { key: 'reviews', label: t('orders.lens.reviews'), icon: Star },
   ]
   return (
     <div className="inline-flex items-center bg-slate-100 rounded-md p-0.5">

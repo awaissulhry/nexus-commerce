@@ -1074,5 +1074,81 @@
   "cycleCount.session.reasonModal.ignorePlaceholder": "e.g. damaged unit pulled separately",
   "cycleCount.session.reasonModal.back": "Back",
   "cycleCount.session.reasonModal.cancelConfirm": "Cancel count",
-  "cycleCount.session.reasonModal.ignoreConfirm": "Ignore variance"
+  "cycleCount.session.reasonModal.ignoreConfirm": "Ignore variance",
+
+  "orders.title": "Orders",
+  "orders.subtitle": "Multi-channel order command center",
+  "orders.action.reviewRules": "Review rules",
+  "orders.action.refresh": "Refresh",
+
+  "orders.lens.grid": "Grid",
+  "orders.lens.customer": "Customers",
+  "orders.lens.financials": "Financials",
+  "orders.lens.returns": "Returns",
+  "orders.lens.reviews": "Reviews",
+
+  "orders.search.placeholder": "Search order ID, customer, email, SKU…",
+  "orders.search.customerEmail": "Search customer email…",
+  "orders.filter.label": "Filters",
+  "orders.filter.clear": "Clear",
+  "orders.filter.group.channel": "Channel",
+  "orders.filter.group.marketplace": "Marketplace",
+  "orders.filter.group.status": "Status",
+  "orders.filter.group.fulfillment": "Fulfillment",
+  "orders.filter.group.reviewStatus": "Review status",
+  "orders.filter.toggle.hasReturn": "Has return",
+  "orders.filter.toggle.hasRefund": "Has refund",
+  "orders.filter.toggle.reviewEligible": "Review-eligible (delivered, no return/refund, no prior request)",
+
+  "orders.empty.grid.title": "No orders match these filters",
+  "orders.empty.grid.description": "Adjust filters or wait for new orders to ingest.",
+  "orders.empty.customers.title": "No customers",
+  "orders.empty.customers.description": "No orders found yet.",
+  "orders.empty.returns.title": "No returns",
+  "orders.empty.returns.description": "Returns mirrored from channels show up here.",
+  "orders.empty.reviews.title": "No review requests yet",
+  "orders.empty.reviews.description": "Create a rule, run it, or send manually from an order detail.",
+  "orders.empty.reviews.action": "Manage rules",
+
+  "orders.table.header.customer": "Customer",
+  "orders.table.header.orders": "Orders",
+  "orders.table.header.ltv": "LTV",
+  "orders.table.header.lastOrder": "Last order",
+  "orders.table.header.rma": "RMA",
+  "orders.table.header.channel": "Channel",
+  "orders.table.header.status": "Status",
+  "orders.table.header.order": "Order",
+  "orders.table.header.refund": "Refund",
+  "orders.table.header.gross": "Gross",
+  "orders.table.header.txCount": "Tx count",
+  "orders.table.header.rule": "Rule",
+  "orders.table.header.sentScheduled": "Sent / Scheduled",
+  "orders.table.header.reason": "Reason",
+
+  "orders.table.viewOrder": "View order",
+  "orders.table.manage": "Manage",
+
+  "orders.bulk.selected": "{n} selected",
+  "orders.bulk.createShipments": "Create shipments",
+  "orders.bulk.markShipped": "Mark shipped",
+  "orders.bulk.requestReviews": "Request reviews",
+
+  "orders.bulk.creatingShipments": "Creating shipments…",
+  "orders.bulk.markingShipped": "Marking shipped…",
+  "orders.bulk.requestingReviews": "Requesting reviews…",
+
+  "orders.pagination.summary": "{total} orders · page {page} of {totalPages}",
+  "orders.pagination.pageSize": "{n}/page",
+  "orders.pagination.previous": "Previous",
+  "orders.pagination.next": "Next",
+  "orders.pagination.pageOf": "Page {page} of {totalPages}",
+
+  "orders.columns.button": "Columns ({n})",
+
+  "orders.financials.pageTotal": "Page total",
+  "orders.financials.note": "Gross only — fees + net are computed per order on the detail page. Channel-level fee aggregation will land on the dashboard once FinancialTransaction rows are seeded by the SP-API + eBay sync.",
+
+  "orders.reviews.manageRules": "Manage rules",
+  "orders.reviews.runEngine": "Run engine now",
+  "orders.reviews.engineResult": "Engine ran: {processed} processed · {sent} sent · {failed} failed · {suppressed} suppressed"
 }

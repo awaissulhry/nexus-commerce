@@ -25,6 +25,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { channelTone, REVIEW_STATUS_TONE } from '../_lib/tone'
 
 type ReviewRequestRow = {
@@ -41,6 +42,7 @@ type ReviewRequestRow = {
 }
 
 export function ReviewsLens() {
+  const { t } = useTranslations()
   const { toast } = useToast()
   const [requests, setRequests] = useState<ReviewRequestRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -68,7 +70,12 @@ export function ReviewsLens() {
       })
       const data = await res.json()
       toast.success(
-        `Engine ran: ${data.processed} processed · ${data.sent} sent · ${data.failed} failed · ${data.suppressed} suppressed`,
+        t('orders.reviews.engineResult', {
+          processed: data.processed,
+          sent: data.sent,
+          failed: data.failed,
+          suppressed: data.suppressed,
+        }),
       )
       refresh()
     } catch (e: any) {
@@ -85,21 +92,21 @@ export function ReviewsLens() {
           href="/orders/reviews/rules"
           className="h-8 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5"
         >
-          <Sparkles size={12} /> Manage rules
+          <Sparkles size={12} /> {t('orders.reviews.manageRules')}
         </Link>
         <button
           onClick={tickEngine}
           disabled={running}
           className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
         >
-          <RefreshCw size={12} className={running ? 'animate-spin' : ''} /> Run
-          engine now
+          <RefreshCw size={12} className={running ? 'animate-spin' : ''} />{' '}
+          {t('orders.reviews.runEngine')}
         </button>
         <button
           onClick={refresh}
           className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
         >
-          <RefreshCw size={12} /> Refresh
+          <RefreshCw size={12} /> {t('orders.action.refresh')}
         </button>
       </div>
       {loading ? (
@@ -109,9 +116,9 @@ export function ReviewsLens() {
       ) : requests.length === 0 ? (
         <EmptyState
           icon={Star}
-          title="No review requests yet"
-          description="Create a rule, run it, or send manually from an order detail."
-          action={{ label: 'Manage rules', href: '/orders/reviews/rules' }}
+          title={t('orders.empty.reviews.title')}
+          description={t('orders.empty.reviews.description')}
+          action={{ label: t('orders.empty.reviews.action'), href: '/orders/reviews/rules' }}
         />
       ) : (
         <Card noPadding>
@@ -120,22 +127,22 @@ export function ReviewsLens() {
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">
-                    Order
+                    {t('orders.table.header.order')}
                   </th>
                   <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">
-                    Channel
+                    {t('orders.table.header.channel')}
                   </th>
                   <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">
-                    Status
+                    {t('orders.table.header.status')}
                   </th>
                   <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">
-                    Rule
+                    {t('orders.table.header.rule')}
                   </th>
                   <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">
-                    Sent / Scheduled
+                    {t('orders.table.header.sentScheduled')}
                   </th>
                   <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">
-                    Reason
+                    {t('orders.table.header.reason')}
                   </th>
                 </tr>
               </thead>

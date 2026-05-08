@@ -18,6 +18,7 @@ import { ChevronDown, Filter, Search, X } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { COUNTRY_NAMES } from '@/lib/country-names'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 type Facet = { value: string; count: number }
 type Facets = {
@@ -45,6 +46,7 @@ interface FilterBarProps {
 }
 
 export function FilterBar(props: FilterBarProps) {
+  const { t } = useTranslations()
   const {
     searchInput,
     setSearchInput,
@@ -77,7 +79,7 @@ export function FilterBar(props: FilterBarProps) {
               className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
             />
             <Input
-              placeholder="Search order ID, customer, email, SKU…"
+              placeholder={t('orders.search.placeholder')}
               value={searchInput}
               onChange={(e: any) => setSearchInput(e.target.value)}
               className="pl-7"
@@ -92,7 +94,7 @@ export function FilterBar(props: FilterBarProps) {
             }`}
           >
             <Filter size={12} />
-            Filters
+            {t('orders.filter.label')}
             {filterCount > 0 && (
               <span className="bg-slate-700 text-white text-xs px-1.5 py-0.5 rounded-full font-semibold">
                 {filterCount}
@@ -125,14 +127,14 @@ export function FilterBar(props: FilterBarProps) {
               }
               className="h-8 px-2 text-base text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
             >
-              <X size={12} /> Clear
+              <X size={12} /> {t('orders.filter.clear')}
             </button>
           )}
         </div>
         {filtersOpen && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-2 border-t border-slate-100">
             <FilterGroup
-              label="Channel"
+              label={t('orders.filter.group.channel')}
               options={['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY', 'MANUAL']}
               selected={channelFilters}
               counts={facets?.channels.reduce((m: any, s: Facet) => {
@@ -148,7 +150,7 @@ export function FilterBar(props: FilterBarProps) {
             />
             {facets && facets.marketplaces.length > 0 && (
               <FilterGroup
-                label="Marketplace"
+                label={t('orders.filter.group.marketplace')}
                 options={facets.marketplaces.map((m: Facet) => m.value)}
                 selected={marketplaceFilters}
                 counts={facets.marketplaces.reduce((m: any, s: Facet) => {
@@ -165,7 +167,7 @@ export function FilterBar(props: FilterBarProps) {
               />
             )}
             <FilterGroup
-              label="Status"
+              label={t('orders.filter.group.status')}
               options={['PENDING', 'SHIPPED', 'DELIVERED', 'CANCELLED']}
               selected={statusFilters}
               onToggle={(v: string) =>
@@ -176,7 +178,7 @@ export function FilterBar(props: FilterBarProps) {
               }
             />
             <FilterGroup
-              label="Fulfillment"
+              label={t('orders.filter.group.fulfillment')}
               options={['FBA', 'FBM']}
               selected={fulfillmentFilters}
               counts={facets?.fulfillment.reduce((m: any, s: Facet) => {
@@ -191,7 +193,7 @@ export function FilterBar(props: FilterBarProps) {
               }
             />
             <FilterGroup
-              label="Review status"
+              label={t('orders.filter.group.reviewStatus')}
               options={['ELIGIBLE', 'SCHEDULED', 'SENT', 'SUPPRESSED', 'FAILED', 'SKIPPED']}
               selected={reviewStatusFilters}
               onToggle={(v: string) =>
@@ -204,7 +206,7 @@ export function FilterBar(props: FilterBarProps) {
             <div className="md:col-span-2 lg:col-span-3 flex items-center gap-2 flex-wrap pt-2 border-t border-slate-100">
               <ToggleChip
                 active={hasReturn === 'true'}
-                label="Has return"
+                label={t('orders.filter.toggle.hasReturn')}
                 tone="warning"
                 onClick={() =>
                   updateUrl({
@@ -215,7 +217,7 @@ export function FilterBar(props: FilterBarProps) {
               />
               <ToggleChip
                 active={hasRefund === 'true'}
-                label="Has refund"
+                label={t('orders.filter.toggle.hasRefund')}
                 tone="danger"
                 onClick={() =>
                   updateUrl({
@@ -226,7 +228,7 @@ export function FilterBar(props: FilterBarProps) {
               />
               <ToggleChip
                 active={reviewEligible}
-                label="Review-eligible (delivered, no return/refund, no prior request)"
+                label={t('orders.filter.toggle.reviewEligible')}
                 tone="success"
                 onClick={() =>
                   updateUrl({

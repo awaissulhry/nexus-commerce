@@ -1045,5 +1045,81 @@
   "cycleCount.session.reasonModal.ignorePlaceholder": "es. unità danneggiata rimossa separatamente",
   "cycleCount.session.reasonModal.back": "Indietro",
   "cycleCount.session.reasonModal.cancelConfirm": "Annulla conteggio",
-  "cycleCount.session.reasonModal.ignoreConfirm": "Ignora varianza"
+  "cycleCount.session.reasonModal.ignoreConfirm": "Ignora varianza",
+
+  "orders.title": "Ordini",
+  "orders.subtitle": "Centro di comando ordini multi-canale",
+  "orders.action.reviewRules": "Regole recensioni",
+  "orders.action.refresh": "Aggiorna",
+
+  "orders.lens.grid": "Griglia",
+  "orders.lens.customer": "Clienti",
+  "orders.lens.financials": "Finanze",
+  "orders.lens.returns": "Resi",
+  "orders.lens.reviews": "Recensioni",
+
+  "orders.search.placeholder": "Cerca ID ordine, cliente, email, SKU…",
+  "orders.search.customerEmail": "Cerca email cliente…",
+  "orders.filter.label": "Filtri",
+  "orders.filter.clear": "Pulisci",
+  "orders.filter.group.channel": "Canale",
+  "orders.filter.group.marketplace": "Marketplace",
+  "orders.filter.group.status": "Stato",
+  "orders.filter.group.fulfillment": "Spedizione",
+  "orders.filter.group.reviewStatus": "Stato recensione",
+  "orders.filter.toggle.hasReturn": "Ha reso",
+  "orders.filter.toggle.hasRefund": "Ha rimborso",
+  "orders.filter.toggle.reviewEligible": "Eleggibile per recensione (consegnato, nessun reso/rimborso, nessuna richiesta precedente)",
+
+  "orders.empty.grid.title": "Nessun ordine corrisponde a questi filtri",
+  "orders.empty.grid.description": "Modifica i filtri o attendi nuovi ordini in ingestione.",
+  "orders.empty.customers.title": "Nessun cliente",
+  "orders.empty.customers.description": "Ancora nessun ordine.",
+  "orders.empty.returns.title": "Nessun reso",
+  "orders.empty.returns.description": "I resi sincronizzati dai canali compaiono qui.",
+  "orders.empty.reviews.title": "Ancora nessuna richiesta di recensione",
+  "orders.empty.reviews.description": "Crea una regola, eseguila o inviala manualmente dal dettaglio di un ordine.",
+  "orders.empty.reviews.action": "Gestisci regole",
+
+  "orders.table.header.customer": "Cliente",
+  "orders.table.header.orders": "Ordini",
+  "orders.table.header.ltv": "LTV",
+  "orders.table.header.lastOrder": "Ultimo ordine",
+  "orders.table.header.rma": "RMA",
+  "orders.table.header.channel": "Canale",
+  "orders.table.header.status": "Stato",
+  "orders.table.header.order": "Ordine",
+  "orders.table.header.refund": "Rimborso",
+  "orders.table.header.gross": "Lordo",
+  "orders.table.header.txCount": "N. tx",
+  "orders.table.header.rule": "Regola",
+  "orders.table.header.sentScheduled": "Inviato / Programmato",
+  "orders.table.header.reason": "Motivo",
+
+  "orders.table.viewOrder": "Vedi ordine",
+  "orders.table.manage": "Gestisci",
+
+  "orders.bulk.selected": "{n} selezionati",
+  "orders.bulk.createShipments": "Crea spedizioni",
+  "orders.bulk.markShipped": "Segna come spedito",
+  "orders.bulk.requestReviews": "Richiedi recensioni",
+
+  "orders.bulk.creatingShipments": "Creazione spedizioni…",
+  "orders.bulk.markingShipped": "Aggiornamento stato…",
+  "orders.bulk.requestingReviews": "Invio richieste recensione…",
+
+  "orders.pagination.summary": "{total} ordini · pagina {page} di {totalPages}",
+  "orders.pagination.pageSize": "{n}/pagina",
+  "orders.pagination.previous": "Precedente",
+  "orders.pagination.next": "Successiva",
+  "orders.pagination.pageOf": "Pagina {page} di {totalPages}",
+
+  "orders.columns.button": "Colonne ({n})",
+
+  "orders.financials.pageTotal": "Totale pagina",
+  "orders.financials.note": "Solo lordo — commissioni e netto sono calcolati per ordine nella pagina di dettaglio. L'aggregazione delle commissioni a livello canale sarà disponibile nella dashboard una volta che le righe FinancialTransaction saranno popolate dal sync SP-API + eBay.",
+
+  "orders.reviews.manageRules": "Gestisci regole",
+  "orders.reviews.runEngine": "Esegui motore ora",
+  "orders.reviews.engineResult": "Motore eseguito: {processed} elaborati · {sent} inviati · {failed} falliti · {suppressed} soppressi"
 }

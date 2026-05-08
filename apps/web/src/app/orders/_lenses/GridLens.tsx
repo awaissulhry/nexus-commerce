@@ -23,6 +23,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { ALL_COLUMNS, DEFAULT_VISIBLE, type OrderColumn } from '../_lib/columns'
 import {
   channelTone,
@@ -76,6 +77,7 @@ interface GridLensProps {
 }
 
 export function GridLens(props: GridLensProps) {
+  const { t } = useTranslations()
   const {
     orders,
     loading,
@@ -136,8 +138,8 @@ export function GridLens(props: GridLensProps) {
     return (
       <EmptyState
         icon={ShoppingCart}
-        title="No orders match these filters"
-        description="Adjust filters or wait for new orders to ingest."
+        title={t('orders.empty.grid.title')}
+        description={t('orders.empty.grid.description')}
       />
     )
 
@@ -146,10 +148,7 @@ export function GridLens(props: GridLensProps) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-sm text-slate-500">
-            <span className="font-semibold text-slate-700 tabular-nums">
-              {total}
-            </span>{' '}
-            orders · page {page} of {totalPages}
+            {t('orders.pagination.summary', { total, page, totalPages })}
           </span>
           <select
             value={pageSize}
@@ -158,7 +157,7 @@ export function GridLens(props: GridLensProps) {
           >
             {[25, 50, 100, 200, 500].map((n) => (
               <option key={n} value={n}>
-                {n}/page
+                {t('orders.pagination.pageSize', { n })}
               </option>
             ))}
           </select>
@@ -168,7 +167,8 @@ export function GridLens(props: GridLensProps) {
             onClick={() => setColumnPickerOpen(!columnPickerOpen)}
             className="h-7 px-2 text-base border border-slate-200 rounded inline-flex items-center gap-1.5 hover:bg-slate-50"
           >
-            <Settings2 size={12} /> Columns ({visibleColumns.length})
+            <Settings2 size={12} />{' '}
+            {t('orders.columns.button', { n: visibleColumns.length })}
           </button>
           {columnPickerOpen && (
             <ColumnPickerMenu
@@ -275,12 +275,8 @@ export function GridLens(props: GridLensProps) {
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-base text-slate-500">
-          <span>
-            Page{' '}
-            <span className="font-semibold text-slate-700 tabular-nums">
-              {page}
-            </span>{' '}
-            of <span className="tabular-nums">{totalPages}</span>
+          <span className="tabular-nums">
+            {t('orders.pagination.pageOf', { page, totalPages })}
           </span>
           <div className="flex items-center gap-1">
             <button
@@ -288,14 +284,14 @@ export function GridLens(props: GridLensProps) {
               disabled={page === 1}
               className="h-7 px-3 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Previous
+              {t('orders.pagination.previous')}
             </button>
             <button
               onClick={() => onPage(Math.min(totalPages, page + 1))}
               disabled={page >= totalPages}
               className="h-7 px-3 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Next
+              {t('orders.pagination.next')}
             </button>
           </div>
         </div>
@@ -315,6 +311,7 @@ function OrderCell({
   isSelected: boolean
   onToggle: () => void
 }) {
+  const { locale } = useTranslations()
   const o = order
   switch (col) {
     case 'select':
@@ -345,22 +342,24 @@ function OrderCell({
           {o.channelOrderId}
         </Link>
       )
-    case 'date':
+    case 'date': {
+      const dateLocale = locale === 'it' ? 'it-IT' : 'en-GB'
       return (
         <span className="text-base text-slate-700">
           {o.purchaseDate
-            ? new Date(o.purchaseDate).toLocaleDateString('en-GB', {
+            ? new Date(o.purchaseDate).toLocaleDateString(dateLocale, {
                 day: 'numeric',
                 month: 'short',
                 year: '2-digit',
               })
-            : new Date(o.createdAt).toLocaleDateString('en-GB', {
+            : new Date(o.createdAt).toLocaleDateString(dateLocale, {
                 day: 'numeric',
                 month: 'short',
                 year: '2-digit',
               })}
         </span>
       )
+    }
     case 'customer':
       return (
         <div className="min-w-0">

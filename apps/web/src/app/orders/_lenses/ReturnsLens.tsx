@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { channelTone } from '../_lib/tone'
 
 type ReturnRow = {
@@ -33,6 +34,7 @@ type ReturnRow = {
 }
 
 export function ReturnsLens() {
+  const { t } = useTranslations()
   const [items, setItems] = useState<ReturnRow[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -55,8 +57,8 @@ export function ReturnsLens() {
     return (
       <EmptyState
         icon={Undo2}
-        title="No returns"
-        description="Returns mirrored from channels show up here."
+        title={t('orders.empty.returns.title')}
+        description={t('orders.empty.returns.description')}
       />
     )
   }
@@ -68,19 +70,19 @@ export function ReturnsLens() {
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
               <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">
-                RMA
+                {t('orders.table.header.rma')}
               </th>
               <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">
-                Channel
+                {t('orders.table.header.channel')}
               </th>
               <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">
-                Status
+                {t('orders.table.header.status')}
               </th>
               <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">
-                Order
+                {t('orders.table.header.order')}
               </th>
               <th className="px-3 py-2 text-right text-sm font-semibold uppercase text-slate-700">
-                Refund
+                {t('orders.table.header.refund')}
               </th>
               <th className="px-3 py-2 text-right text-sm font-semibold uppercase text-slate-700"></th>
             </tr>
@@ -112,7 +114,7 @@ export function ReturnsLens() {
                       href={`/orders/${r.orderId}`}
                       className="text-base text-blue-600 hover:underline"
                     >
-                      View order
+                      {t('orders.table.viewOrder')}
                     </Link>
                   ) : (
                     <span className="text-slate-400 text-sm">—</span>
@@ -128,7 +130,7 @@ export function ReturnsLens() {
                     href={`/fulfillment/returns?id=${r.id}`}
                     className="text-sm text-blue-600 hover:underline"
                   >
-                    Manage
+                    {t('orders.table.manage')}
                   </Link>
                 </td>
               </tr>

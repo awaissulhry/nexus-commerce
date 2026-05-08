@@ -24,6 +24,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Input } from '@/components/ui/Input'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 type CustomerGroup = {
   email: string
@@ -33,6 +34,7 @@ type CustomerGroup = {
 }
 
 export function CustomerLens() {
+  const { t, locale } = useTranslations()
   const [search, setSearch] = useState('')
   const [groups, setGroups] = useState<CustomerGroup[]>([])
   const [loading, setLoading] = useState(true)
@@ -83,7 +85,7 @@ export function CustomerLens() {
             className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
           />
           <Input
-            placeholder="Search customer email…"
+            placeholder={t('orders.search.customerEmail')}
             value={search}
             onChange={(e: any) => setSearch(e.target.value)}
             className="pl-7"
@@ -97,8 +99,8 @@ export function CustomerLens() {
       ) : groups.length === 0 ? (
         <EmptyState
           icon={User}
-          title="No customers"
-          description="No orders found yet."
+          title={t('orders.empty.customers.title')}
+          description={t('orders.empty.customers.description')}
         />
       ) : (
         <Card noPadding>
@@ -107,16 +109,16 @@ export function CustomerLens() {
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">
-                    Customer
+                    {t('orders.table.header.customer')}
                   </th>
                   <th className="px-3 py-2 text-right text-sm font-semibold uppercase text-slate-700">
-                    Orders
+                    {t('orders.table.header.orders')}
                   </th>
                   <th className="px-3 py-2 text-right text-sm font-semibold uppercase text-slate-700">
-                    LTV
+                    {t('orders.table.header.ltv')}
                   </th>
                   <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">
-                    Last order
+                    {t('orders.table.header.lastOrder')}
                   </th>
                 </tr>
               </thead>
@@ -148,11 +150,14 @@ export function CustomerLens() {
                     </td>
                     <td className="px-3 py-2 text-sm text-slate-500">
                       {g.lastOrderAt
-                        ? new Date(g.lastOrderAt).toLocaleDateString('en-GB', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: '2-digit',
-                          })
+                        ? new Date(g.lastOrderAt).toLocaleDateString(
+                            locale === 'it' ? 'it-IT' : 'en-GB',
+                            {
+                              day: 'numeric',
+                              month: 'short',
+                              year: '2-digit',
+                            },
+                          )
                         : '—'}
                     </td>
                   </tr>

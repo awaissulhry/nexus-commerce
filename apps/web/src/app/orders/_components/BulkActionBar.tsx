@@ -19,6 +19,7 @@ import { Package, Star, Truck, X } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { IconButton } from '@/components/ui/IconButton'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 interface BulkActionBarProps {
   selectedIds: string[]
@@ -31,6 +32,7 @@ export function BulkActionBar({
   onClear,
   onComplete,
 }: BulkActionBarProps) {
+  const { t } = useTranslations()
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
 
@@ -52,7 +54,7 @@ export function BulkActionBar({
   }
 
   const createShipments = () =>
-    run('Creating shipments…', async () => {
+    run(t('orders.bulk.creatingShipments'), async () => {
       const res = await fetch(
         `${getBackendUrl()}/api/fulfillment/shipments/bulk-create`,
         {
@@ -67,7 +69,7 @@ export function BulkActionBar({
     })
 
   const markShipped = () =>
-    run('Marking shipped…', async () => {
+    run(t('orders.bulk.markingShipped'), async () => {
       const res = await fetch(
         `${getBackendUrl()}/api/orders/bulk-mark-shipped`,
         {
@@ -82,7 +84,7 @@ export function BulkActionBar({
     })
 
   const requestReviews = () =>
-    run('Requesting reviews…', async () => {
+    run(t('orders.bulk.requestingReviews'), async () => {
       const res = await fetch(
         `${getBackendUrl()}/api/orders/bulk-request-reviews`,
         {
@@ -101,7 +103,7 @@ export function BulkActionBar({
       <Card>
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-base font-semibold text-slate-700">
-            {selectedIds.length} selected
+            {t('orders.bulk.selected', { n: selectedIds.length })}
           </span>
           <div className="h-4 w-px bg-slate-200" />
           <button
@@ -109,21 +111,21 @@ export function BulkActionBar({
             disabled={busy}
             className="h-7 px-3 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 disabled:opacity-50 inline-flex items-center gap-1.5"
           >
-            <Truck size={12} /> Create shipments
+            <Truck size={12} /> {t('orders.bulk.createShipments')}
           </button>
           <button
             onClick={markShipped}
             disabled={busy}
             className="h-7 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 disabled:opacity-50 inline-flex items-center gap-1.5"
           >
-            <Package size={12} /> Mark shipped
+            <Package size={12} /> {t('orders.bulk.markShipped')}
           </button>
           <button
             onClick={requestReviews}
             disabled={busy}
             className="h-7 px-3 text-base bg-amber-50 text-amber-700 border border-amber-200 rounded hover:bg-amber-100 disabled:opacity-50 inline-flex items-center gap-1.5"
           >
-            <Star size={12} /> Request reviews
+            <Star size={12} /> {t('orders.bulk.requestReviews')}
           </button>
           {status && (
             <span className="text-sm text-slate-500 ml-2">{status}</span>

@@ -15,6 +15,7 @@
 
 import Link from 'next/link'
 import { Card } from '@/components/ui/Card'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { channelTone } from '../_lib/tone'
 
 type FinancialsOrder = {
@@ -26,6 +27,7 @@ type FinancialsOrder = {
 }
 
 export function FinancialsLens({ orders }: { orders: FinancialsOrder[] }) {
+  const { t } = useTranslations()
   const totals = orders.reduce(
     (acc, o) => {
       acc.gross += o.totalPrice
@@ -40,19 +42,14 @@ export function FinancialsLens({ orders }: { orders: FinancialsOrder[] }) {
         <div className="flex items-center gap-6">
           <div>
             <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
-              Page total
+              {t('orders.financials.pageTotal')}
             </div>
             <div className="text-[24px] font-semibold tabular-nums text-slate-900">
               €{totals.gross.toFixed(2)}
             </div>
           </div>
           <div className="text-base text-slate-500">
-            Gross only — fees + net are computed per order on the detail
-            page (
-            <code className="font-mono text-sm">/orders/[id]/financials</code>
-            ). Channel-level fee aggregation will land on the dashboard
-            once <code className="font-mono text-sm">FinancialTransaction</code>{' '}
-            rows are seeded by the SP-API + eBay sync.
+            {t('orders.financials.note')}
           </div>
         </div>
       </Card>
@@ -62,16 +59,16 @@ export function FinancialsLens({ orders }: { orders: FinancialsOrder[] }) {
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">
-                  Order
+                  {t('orders.table.header.order')}
                 </th>
                 <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">
-                  Channel
+                  {t('orders.table.header.channel')}
                 </th>
                 <th className="px-3 py-2 text-right text-sm font-semibold uppercase text-slate-700">
-                  Gross
+                  {t('orders.table.header.gross')}
                 </th>
                 <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">
-                  Tx count
+                  {t('orders.table.header.txCount')}
                 </th>
               </tr>
             </thead>
