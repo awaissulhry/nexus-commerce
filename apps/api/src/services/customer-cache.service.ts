@@ -145,11 +145,28 @@ export async function refreshCustomerCache(customerId: string): Promise<void> {
 }
 
 /**
- * Convenience wrapper: ensure the FK exists, then refresh the
- * cache. Used by ingestion paths that just upserted an Order and
- * want both side effects in one call.
+ * Convenience wrapper: ensure the FK exists, refresh the cache,
+ * AND compute the risk score (O.22) in one call. Used by ingestion
+ * paths that just upserted an Order and want all customer-side
+ * side effects in one call.
+ *
+ * Risk scoring runs after FK + cache refresh because applyOrderRisk
+ * Score reads Customer aggregates (totalOrders, etc.) for its
+ * "first order" / "anomalous LTV" signals.
  */
 export async function linkAndRefreshCustomerForOrder(orderId: string): Promise<void> {
   const customerId = await ensureCustomerForOrder(orderId)
   if (customerId) await refreshCustomerCache(customerId)
+  // O.22: per-order risk score + customer rollup. Imported lazily
+  // because some consumers of this service may not have the risk
+  // engine wired yet (e.g. tests that stub Customer only).
+  try {
+    const { applyOrderRiskScore } = await import('./order-risk.service.js')
+    await applyOrderRiskScore(orderId)
+  } catch (err) {
+    logger.warn('linkAndRefreshCustomerForOrder: risk scoring failed', {
+      orderId,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
 }

@@ -25,6 +25,7 @@ import { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { refreshCustomerCache } from '../services/customer-cache.service.js'
+import { recomputeCustomerRisk } from '../services/order-risk.service.js'
 
 export async function customersRoutes(app: FastifyInstance) {
   // ── List ───────────────────────────────────────────────────────────
@@ -47,14 +48,24 @@ export async function customersRoutes(app: FastifyInstance) {
               ? { name: sortDir }
               : { totalSpentCents: sortDir }
 
-      const where = search
-        ? {
-            OR: [
-              { email: { contains: search.toLowerCase() } },
-              { name: { contains: search, mode: 'insensitive' as const } },
-            ],
-          }
-        : {}
+      // O.22: optional risk filters. `riskFlag=HIGH` filters to a
+      // single flag; comma-separated list is OR'd. `manualReviewState
+      // =PENDING` is the operator's "needs my attention" queue.
+      const riskFlags = (q.riskFlag ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+      const manualReviewState = (q.manualReviewState ?? '').trim()
+
+      const where: any = {}
+      if (search) {
+        where.OR = [
+          { email: { contains: search.toLowerCase() } },
+          { name: { contains: search, mode: 'insensitive' as const } },
+        ]
+      }
+      if (riskFlags.length > 0) where.riskFlag = { in: riskFlags }
+      if (manualReviewState) where.manualReviewState = manualReviewState
 
       const [rows, total] = await Promise.all([
         prisma.customer.findMany({
@@ -74,6 +85,7 @@ export async function customersRoutes(app: FastifyInstance) {
             tags: true,
             riskFlag: true,
             manualReviewState: true,
+            lastRiskComputedAt: true,
             createdAt: true,
           },
         }),
@@ -114,6 +126,8 @@ export async function customersRoutes(app: FastifyInstance) {
       // Recent orders (last 50) — full join would be heavy on big
       // customers; the detail page doesn't need every order, just
       // the timeline header + a "View all N orders" deep-link.
+      // Includes the per-order risk score so the detail UI can show
+      // the breakdown without a second roundtrip.
       const orders = await prisma.order.findMany({
         where: { customerId: id },
         orderBy: { createdAt: 'desc' },
@@ -128,6 +142,15 @@ export async function customersRoutes(app: FastifyInstance) {
           currencyCode: true,
           purchaseDate: true,
           createdAt: true,
+          riskScore: {
+            select: {
+              score: true,
+              flag: true,
+              signals: true,
+              reasons: true,
+              computedAt: true,
+            },
+          },
         },
       })
 
@@ -238,6 +261,95 @@ export async function customersRoutes(app: FastifyInstance) {
         data: { tags: body.tags },
       })
       return { id: updated.id, tags: updated.tags }
+    } catch (err: any) {
+      return reply.status(500).send({ error: err?.message ?? 'failed' })
+    }
+  })
+
+  // ── O.22: risk queue — flagged customers awaiting operator review ─
+  app.get('/api/customers/risk-queue', async (request, reply) => {
+    try {
+      const q = request.query as Record<string, string | undefined>
+      const flags = (q.flag ?? 'HIGH,MEDIUM')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+      const limit = Math.min(500, parseInt(q.limit ?? '100', 10) || 100)
+
+      const customers = await prisma.customer.findMany({
+        where: {
+          OR: [
+            { riskFlag: { in: flags } },
+            { manualReviewState: 'PENDING' },
+          ],
+        },
+        orderBy: [
+          // PENDING reviews first, then by score severity by proxy of
+          // lastOrderAt freshness.
+          { manualReviewState: 'desc' },
+          { lastOrderAt: 'desc' },
+        ],
+        take: limit,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          totalOrders: true,
+          totalSpentCents: true,
+          lastOrderAt: true,
+          riskFlag: true,
+          manualReviewState: true,
+          lastRiskComputedAt: true,
+        },
+      })
+      return {
+        customers: customers.map((c) => ({
+          ...c,
+          totalSpentCents: Number(c.totalSpentCents),
+        })),
+      }
+    } catch (err: any) {
+      return reply.status(500).send({ error: err?.message ?? 'failed' })
+    }
+  })
+
+  // ── O.22: set manual-review state (PENDING / APPROVED / REJECTED) ──
+  app.patch('/api/customers/:id/manual-review', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = request.body as { state?: string }
+      const allowed = ['PENDING', 'APPROVED', 'REJECTED']
+      if (!body.state || !allowed.includes(body.state)) {
+        return reply.status(400).send({ error: `state must be one of ${allowed.join(', ')}` })
+      }
+      const updated = await prisma.customer.update({
+        where: { id },
+        data: { manualReviewState: body.state },
+        select: { id: true, manualReviewState: true },
+      })
+      return updated
+    } catch (err: any) {
+      return reply.status(500).send({ error: err?.message ?? 'failed' })
+    }
+  })
+
+  // ── O.22: manual recompute (recomputes every order + rolls up) ─────
+  app.post('/api/customers/:id/recompute-risk', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const customer = await prisma.customer.findUnique({ where: { id }, select: { id: true } })
+      if (!customer) return reply.status(404).send({ error: 'Customer not found' })
+      await recomputeCustomerRisk(id)
+      const fresh = await prisma.customer.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          riskFlag: true,
+          manualReviewState: true,
+          lastRiskComputedAt: true,
+        },
+      })
+      return fresh
     } catch (err: any) {
       return reply.status(500).send({ error: err?.message ?? 'failed' })
     }

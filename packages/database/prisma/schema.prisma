@@ -1463,6 +1463,7 @@ model Order {
   reviewRequests        ReviewRequest[]
   tags                  OrderTag[]
   mcfShipments          MCFShipment[] // S.24
+  riskScore             OrderRiskScore? // O.22 — at most one per order
 
   // Metadata
   amazonMetadata      Json?
@@ -1521,6 +1522,10 @@ model Customer {
   // O.22 risk engine populates these. NULL = unscored.
   riskFlag          String?
   manualReviewState String?
+  // O.22: timestamp of the last rollup. Drives "stale risk" affordances
+  // on /customers (operator can see a customer scored hours ago vs
+  // re-scored on every recent order).
+  lastRiskComputedAt DateTime?
 
   // Relations
   orders    Order[]
@@ -1580,6 +1585,37 @@ model CustomerNote {
 
   @@index([customerId])
   @@index([createdAt])
+}
+
+// ── O.22: Per-order risk audit ───────────────────────────────────────
+// One score per Order. Customer.riskFlag is the rolled-up worst flag
+// across the customer's orders; this table is the breakdown an
+// operator drills into when they want to know WHY a customer was
+// flagged. Recompute = upsert on the (orderId) unique.
+model OrderRiskScore {
+  id String @id @default(cuid())
+
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId String @unique
+
+  // 0–100 cumulative
+  score Int
+  // Bucketed: LOW | MEDIUM | HIGH (LOW renders as no-badge in the UI;
+  // MEDIUM amber, HIGH red).
+  flag  String
+
+  // Per-signal flags / counts. JSONB so adding a new signal in a
+  // follow-up commit doesn't require a schema migration.
+  signals Json
+
+  // Operator-readable explanation, one entry per fired signal.
+  reasons String[] @default([])
+
+  computedAt DateTime @default(now())
+
+  @@index([flag])
+  @@index([score])
+  @@index([computedAt])
 }
 
 model OrderItem {
