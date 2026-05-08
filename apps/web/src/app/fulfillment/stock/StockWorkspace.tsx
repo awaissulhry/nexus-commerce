@@ -627,7 +627,7 @@ export default function StockWorkspace() {
                 session is DRAFT or IN_PROGRESS. */}
             <Link
               href="/fulfillment/stock/cycle-count"
-              className="relative h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5 text-slate-700"
+              className="relative h-11 sm:h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5 text-slate-700"
               title="Cycle counts (physical inventory)"
             >
               <ClipboardCheck size={12} />
@@ -643,7 +643,7 @@ export default function StockWorkspace() {
             </Link>
             <button
               onClick={() => setShortcutsOpen(true)}
-              className="h-8 w-8 inline-flex items-center justify-center border border-slate-200 rounded-md hover:bg-slate-50 text-slate-600"
+              className="h-11 w-11 sm:h-8 sm:w-8 inline-flex items-center justify-center border border-slate-200 rounded-md hover:bg-slate-50 text-slate-600"
               title="Keyboard shortcuts (?)"
               aria-label="Keyboard shortcuts"
             >
@@ -651,7 +651,7 @@ export default function StockWorkspace() {
             </button>
             <button
               onClick={() => { fetchStock(); fetchSidecar() }}
-              className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+              className="h-11 sm:h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
             >
               <RefreshCw size={12} /> Refresh
             </button>
@@ -680,7 +680,7 @@ export default function StockWorkspace() {
             <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold mr-1">Location</span>
             <button
               onClick={() => updateUrl({ location: undefined, page: undefined })}
-              className={`h-7 px-3 text-sm rounded-full font-medium border ${
+              className={`h-11 sm:h-7 px-3 text-sm rounded-full font-medium border ${
                 !locationCode
                   ? 'bg-slate-900 text-white border-slate-900'
                   : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
@@ -690,7 +690,7 @@ export default function StockWorkspace() {
               <button
                 key={loc.id}
                 onClick={() => updateUrl({ location: loc.code, page: undefined })}
-                className={`h-7 px-3 text-sm rounded-full font-medium border inline-flex items-center gap-1.5 ${
+                className={`h-11 sm:h-7 px-3 text-sm rounded-full font-medium border inline-flex items-center gap-1.5 ${
                   locationCode === loc.code
                     ? 'bg-slate-900 text-white border-slate-900'
                     : `bg-white text-slate-600 border-slate-200 hover:border-slate-300`
@@ -728,7 +728,7 @@ export default function StockWorkspace() {
                 <button
                   key={s.value}
                   onClick={() => updateUrl({ status: active ? undefined : s.value, page: undefined })}
-                  className={`h-7 px-3 text-sm border rounded-full font-medium ${
+                  className={`h-11 sm:h-7 px-3 text-sm border rounded-full font-medium ${
                     active ? toneActive[s.tone] : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
                   }`}
                 >{s.label}</button>
@@ -737,7 +737,7 @@ export default function StockWorkspace() {
             {filterCount > 0 && (
               <button
                 onClick={() => updateUrl({ location: undefined, status: undefined, search: undefined, page: undefined })}
-                className="h-7 px-2 text-base text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
+                className="h-11 sm:h-7 px-2 text-base text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
               >
                 <X size={12} /> Clear
               </button>
@@ -843,12 +843,12 @@ export default function StockWorkspace() {
             <button
               onClick={() => updateUrl({ page: page <= 2 ? undefined : String(page - 1) })}
               disabled={page === 1}
-              className="h-7 px-3 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="h-11 sm:h-7 px-3 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
             >Previous</button>
             <button
               onClick={() => updateUrl({ page: String(Math.min(totalPages, page + 1)) })}
               disabled={page >= totalPages}
-              className="h-7 px-3 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="h-11 sm:h-7 px-3 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
             >Next</button>
           </div>
         </div>
@@ -978,7 +978,7 @@ function InsightsPanel({
         </div>
         <button
           onClick={onToggle}
-          className="h-7 px-2 text-sm text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
+          className="h-11 sm:h-7 px-2 text-sm text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
         >
           {collapsed ? 'Show' : 'Hide'}
           <ChevronRight
@@ -1321,10 +1321,10 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
             <Boxes size={14} /> Stock detail
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={fetchBundle} className="h-7 px-2 text-sm text-slate-500 hover:text-slate-900 inline-flex items-center gap-1">
+            <button onClick={fetchBundle} className="h-11 sm:h-7 px-2 text-sm text-slate-500 hover:text-slate-900 inline-flex items-center gap-1">
               <RefreshCw size={11} /> Refresh
             </button>
-            <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100">
+            <button onClick={onClose} className="h-11 w-11 sm:h-7 sm:w-7 inline-flex items-center justify-center rounded hover:bg-slate-100">
               <X size={16} />
             </button>
           </div>
@@ -1374,16 +1374,16 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                 <button
                   onClick={() => setAction({ kind: 'transfer' })}
                   disabled={bundle.stockLevels.length < 1}
-                  className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-40"
+                  className="h-11 sm:h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-40"
                 ><ArrowRightLeft size={12} /> Transfer</button>
                 <button
                   onClick={() => setAction({ kind: 'reserve' })}
                   disabled={bundle.stockLevels.length < 1}
-                  className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-40"
+                  className="h-11 sm:h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-40"
                 ><LockIcon size={12} /> Reserve</button>
                 <Link
                   href={`/products/${productId}/edit`}
-                  className="h-8 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+                  className="h-11 sm:h-8 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
                 ><ExternalLink size={12} /> Open in editor</Link>
               </div>
 
@@ -1442,7 +1442,7 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                         </div>
                         <button
                           onClick={() => setAction({ kind: 'adjust', stockLevelId: sl.id, locationCode: sl.location.code })}
-                          className="h-7 px-2 text-sm border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1"
+                          className="h-11 sm:h-7 px-2 text-sm border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1"
                         >
                           <Plus size={11} className="-mr-0.5" /><Minus size={11} /> Adjust
                         </button>
@@ -1708,15 +1708,15 @@ function AdjustPanel({ stockLevelId, locationCode, onCancel, onDone }: { stockLe
         <input
           type="number" value={change} onChange={(e) => setChange(e.target.value)}
           placeholder="±n" autoFocus
-          className="h-8 w-24 px-2 text-md border border-slate-200 rounded font-mono tabular-nums"
+          className="h-11 sm:h-8 w-24 px-2 text-md border border-slate-200 rounded font-mono tabular-nums"
         />
         <input
           type="text" value={notes} onChange={(e) => setNotes(e.target.value)}
           placeholder="Reason (optional)"
-          className="flex-1 h-8 px-2 text-base border border-slate-200 rounded"
+          className="flex-1 h-11 sm:h-8 px-2 text-base border border-slate-200 rounded"
         />
-        <button onClick={submit} disabled={submitting} className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">Apply</button>
-        <button onClick={onCancel} className="h-8 px-2 text-base text-slate-500 hover:text-slate-900">Cancel</button>
+        <button onClick={submit} disabled={submitting} className="h-11 sm:h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">Apply</button>
+        <button onClick={onCancel} className="h-11 sm:h-8 px-2 text-base text-slate-500 hover:text-slate-900">Cancel</button>
       </div>
     </div>
   )
@@ -1755,13 +1755,13 @@ function TransferPanel({
         <ArrowRightLeft size={11} /> Transfer between locations
       </div>
       <div className="flex items-center gap-2">
-        <select value={fromId} onChange={(e) => setFromId(e.target.value)} className="h-8 flex-1 px-2 text-base border border-slate-200 rounded">
+        <select value={fromId} onChange={(e) => setFromId(e.target.value)} className="h-11 sm:h-8 flex-1 px-2 text-base border border-slate-200 rounded">
           {stockLevels.map((sl) => (
             <option key={sl.id} value={sl.location.id}>From {sl.location.code} ({sl.available} avail)</option>
           ))}
         </select>
         <ArrowRightLeft size={12} className="text-slate-400" />
-        <select value={toId} onChange={(e) => setToId(e.target.value)} className="h-8 flex-1 px-2 text-base border border-slate-200 rounded">
+        <select value={toId} onChange={(e) => setToId(e.target.value)} className="h-11 sm:h-8 flex-1 px-2 text-base border border-slate-200 rounded">
           {stockLevels.map((sl) => (
             <option key={sl.id} value={sl.location.id}>To {sl.location.code}</option>
           ))}
@@ -1769,12 +1769,12 @@ function TransferPanel({
         <input
           type="number" value={qty} onChange={(e) => setQty(e.target.value)}
           placeholder="qty"
-          className="h-8 w-20 px-2 text-md border border-slate-200 rounded font-mono tabular-nums"
+          className="h-11 sm:h-8 w-20 px-2 text-md border border-slate-200 rounded font-mono tabular-nums"
         />
       </div>
       <div className="flex items-center justify-end gap-2">
-        <button onClick={onCancel} className="h-8 px-2 text-base text-slate-500 hover:text-slate-900">Cancel</button>
-        <button onClick={submit} disabled={submitting} className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">Transfer</button>
+        <button onClick={onCancel} className="h-11 sm:h-8 px-2 text-base text-slate-500 hover:text-slate-900">Cancel</button>
+        <button onClick={submit} disabled={submitting} className="h-11 sm:h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">Transfer</button>
       </div>
       <div className="text-xs text-slate-500">
         If the target location has no StockLevel row, one is created with the transferred quantity.
@@ -1816,12 +1816,12 @@ function ReservePanel({
         <LockIcon size={11} /> Reserve stock
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        <select value={locId} onChange={(e) => setLocId(e.target.value)} className="h-8 px-2 text-base border border-slate-200 rounded">
+        <select value={locId} onChange={(e) => setLocId(e.target.value)} className="h-11 sm:h-8 px-2 text-base border border-slate-200 rounded">
           {stockLevels.map((sl) => (
             <option key={sl.id} value={sl.location.id}>{sl.location.code} ({sl.available} avail)</option>
           ))}
         </select>
-        <select value={reason} onChange={(e) => setReason(e.target.value as any)} className="h-8 px-2 text-base border border-slate-200 rounded">
+        <select value={reason} onChange={(e) => setReason(e.target.value as any)} className="h-11 sm:h-8 px-2 text-base border border-slate-200 rounded">
           <option value="MANUAL_HOLD">Manual hold</option>
           <option value="PENDING_ORDER">Pending order</option>
           <option value="PROMOTION">Promotion</option>
@@ -1829,17 +1829,17 @@ function ReservePanel({
         <input
           type="number" value={qty} onChange={(e) => setQty(e.target.value)}
           placeholder="quantity"
-          className="h-8 px-2 text-md border border-slate-200 rounded font-mono tabular-nums"
+          className="h-11 sm:h-8 px-2 text-md border border-slate-200 rounded font-mono tabular-nums"
         />
         <input
           type="text" value={orderId} onChange={(e) => setOrderId(e.target.value)}
           placeholder="Order ID (optional)"
-          className="h-8 px-2 text-base border border-slate-200 rounded"
+          className="h-11 sm:h-8 px-2 text-base border border-slate-200 rounded"
         />
       </div>
       <div className="flex items-center justify-end gap-2">
-        <button onClick={onCancel} className="h-8 px-2 text-base text-slate-500 hover:text-slate-900">Cancel</button>
-        <button onClick={submit} disabled={submitting} className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">Reserve</button>
+        <button onClick={onCancel} className="h-11 sm:h-8 px-2 text-base text-slate-500 hover:text-slate-900">Cancel</button>
+        <button onClick={submit} disabled={submitting} className="h-11 sm:h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">Reserve</button>
       </div>
       <div className="text-xs text-slate-500">
         PENDING_ORDER reservations expire after 24h. Manual holds and promotions never expire automatically.
@@ -1862,7 +1862,7 @@ function DensityToggle({ density, onChange }: { density: Density; onChange: (d: 
   return (
     <button
       onClick={next}
-      className="h-8 w-8 inline-flex items-center justify-center border border-slate-200 rounded-md hover:bg-slate-50 text-slate-600"
+      className="h-11 w-11 sm:h-8 sm:w-8 inline-flex items-center justify-center border border-slate-200 rounded-md hover:bg-slate-50 text-slate-600"
       title={`Density: ${density}`}
       aria-label={`Density: ${density}`}
     >
@@ -1877,7 +1877,7 @@ function ColumnPicker({ visible, onChange }: { visible: ColumnKey[]; onChange: (
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="h-8 px-2.5 text-base inline-flex items-center gap-1.5 border border-slate-200 rounded-md hover:bg-slate-50 text-slate-600"
+        className="h-11 sm:h-8 px-2.5 text-base inline-flex items-center gap-1.5 border border-slate-200 rounded-md hover:bg-slate-50 text-slate-600"
         title="Show / hide columns"
       >
         <Columns size={12} /> Columns
@@ -1989,7 +1989,7 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className={`h-8 px-2.5 text-sm border rounded inline-flex items-center gap-1.5 font-medium ${tone}`}
+        className={`h-11 sm:h-8 px-2.5 text-sm border rounded inline-flex items-center gap-1.5 font-medium ${tone}`}
         title="Sync engine status"
       >
         <span className={`w-1.5 h-1.5 rounded-full ${
@@ -2088,7 +2088,7 @@ function ViewToggle({ view, onChange }: { view: ViewMode; onChange: (v: ViewMode
         <button
           key={t.key}
           onClick={() => onChange(t.key)}
-          className={`h-7 px-2.5 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${
+          className={`h-11 sm:h-7 px-2.5 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${
             view === t.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
@@ -2421,26 +2421,26 @@ function BulkActionBar({
       <div className="w-px h-5 bg-slate-700" />
       <button
         onClick={onAdjust}
-        className="h-7 px-2.5 inline-flex items-center gap-1.5 rounded hover:bg-slate-800 transition-colors"
+        className="h-11 sm:h-7 px-2.5 inline-flex items-center gap-1.5 rounded hover:bg-slate-800 transition-colors"
       >
         <Plus size={12} /> Adjust
       </button>
       <button
         onClick={onThreshold}
-        className="h-7 px-2.5 inline-flex items-center gap-1.5 rounded hover:bg-slate-800 transition-colors"
+        className="h-11 sm:h-7 px-2.5 inline-flex items-center gap-1.5 rounded hover:bg-slate-800 transition-colors"
       >
         <Sliders size={12} /> Threshold
       </button>
       <button
         onClick={onExport}
-        className="h-7 px-2.5 inline-flex items-center gap-1.5 rounded hover:bg-slate-800 transition-colors"
+        className="h-11 sm:h-7 px-2.5 inline-flex items-center gap-1.5 rounded hover:bg-slate-800 transition-colors"
       >
         <Download size={12} /> Export CSV
       </button>
       <div className="w-px h-5 bg-slate-700" />
       <button
         onClick={onClear}
-        className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-800"
+        className="h-11 w-11 sm:h-7 sm:w-7 inline-flex items-center justify-center rounded hover:bg-slate-800"
         aria-label="Clear selection"
       >
         <X size={14} />
@@ -2497,13 +2497,13 @@ function UndoToast({
       <span>Adjusted {count} row{count === 1 ? '' : 's'}</span>
       <button
         onClick={onUndo}
-        className="h-7 px-2.5 inline-flex items-center gap-1.5 rounded bg-emerald-700 hover:bg-emerald-800 transition-colors font-semibold"
+        className="h-11 sm:h-7 px-2.5 inline-flex items-center gap-1.5 rounded bg-emerald-700 hover:bg-emerald-800 transition-colors font-semibold"
       >
         <Undo2 size={12} /> Undo ({secondsLeft}s)
       </button>
       <button
         onClick={onDismiss}
-        className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-emerald-700"
+        className="h-11 w-11 sm:h-7 sm:w-7 inline-flex items-center justify-center rounded hover:bg-emerald-700"
         aria-label="Dismiss"
       >
         <X size={14} />
@@ -2595,11 +2595,11 @@ function BulkAdjustModal({
         )}
 
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-          <button onClick={onCancel} className="h-8 px-3 text-base text-slate-500 hover:text-slate-900">Cancel</button>
+          <button onClick={onCancel} className="h-11 sm:h-8 px-3 text-base text-slate-500 hover:text-slate-900">Cancel</button>
           <button
             onClick={() => valid && onConfirm(n, notes || null)}
             disabled={!valid}
-            className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
+            className="h-11 sm:h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
           >
             <Check size={12} /> Apply to {selectedItems.length}
           </button>
@@ -2648,11 +2648,11 @@ function BulkThresholdModal({
           Will update <span className="font-semibold tabular-nums">{selectedItems.length}</span> row{selectedItems.length === 1 ? '' : 's'}.
         </div>
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-          <button onClick={onCancel} className="h-8 px-3 text-base text-slate-500 hover:text-slate-900">Cancel</button>
+          <button onClick={onCancel} className="h-11 sm:h-8 px-3 text-base text-slate-500 hover:text-slate-900">Cancel</button>
           <button
             onClick={() => valid && onConfirm(clearMode ? null : Math.floor(n))}
             disabled={!valid}
-            className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
+            className="h-11 sm:h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
           >
             <Check size={12} /> Apply
           </button>
@@ -2669,7 +2669,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
       <div onClick={(e) => e.stopPropagation()} className="relative bg-white rounded-lg shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
         <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
           <div className="text-lg font-semibold text-slate-900">{title}</div>
-          <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100">
+          <button onClick={onClose} className="h-11 w-11 sm:h-7 sm:w-7 inline-flex items-center justify-center rounded hover:bg-slate-100">
             <X size={16} />
           </button>
         </header>

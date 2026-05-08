@@ -457,7 +457,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                       type="button"
                       onClick={handleCancel}
                       disabled={busyTopAction !== null}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 text-sm font-medium text-red-700 bg-white border border-red-200 rounded hover:bg-red-50 disabled:opacity-50"
+                      className="inline-flex items-center gap-1 min-h-[44px] sm:min-h-0 px-2.5 py-1 text-sm font-medium text-red-700 bg-white border border-red-200 rounded hover:bg-red-50 disabled:opacity-50"
                     >
                       <Ban className="w-3 h-3" />
                       Cancel
@@ -488,7 +488,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                       type="button"
                       onClick={handleCancel}
                       disabled={busyTopAction !== null}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 text-sm font-medium text-red-700 bg-white border border-red-200 rounded hover:bg-red-50 disabled:opacity-50"
+                      className="inline-flex items-center gap-1 min-h-[44px] sm:min-h-0 px-2.5 py-1 text-sm font-medium text-red-700 bg-white border border-red-200 rounded hover:bg-red-50 disabled:opacity-50"
                     >
                       <Ban className="w-3 h-3" />
                       Cancel
@@ -537,7 +537,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                 type="button"
                 onClick={() => setFilter(f.key)}
                 className={cn(
-                  'px-2.5 py-1 text-sm font-medium rounded border transition-colors',
+                  'min-h-[44px] sm:min-h-0 px-2.5 py-1 text-sm font-medium rounded border transition-colors',
                   filter === f.key
                     ? 'bg-slate-900 text-white border-slate-900'
                     : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300',
@@ -631,7 +631,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                               }
                             }}
                             disabled={actingId === it.id}
-                            className="w-24 h-8 px-2 text-right tabular-nums text-base border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            className="w-24 h-11 sm:h-8 px-2 text-right tabular-nums text-base border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-300"
                             placeholder="—"
                           />
                         ) : (
@@ -671,7 +671,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                               type="button"
                               onClick={() => handleReconcile(it)}
                               disabled={actingId === it.id}
-                              className="inline-flex items-center gap-1 px-2 py-1 text-sm font-medium text-white bg-green-600 border border-green-600 rounded hover:bg-green-700 disabled:opacity-50"
+                              className="inline-flex items-center gap-1 min-h-[44px] sm:min-h-0 px-2 py-1 text-sm font-medium text-white bg-green-600 border border-green-600 rounded hover:bg-green-700 disabled:opacity-50"
                               title={
                                 isVarianceZero
                                   ? 'Mark reconciled (no variance)'
@@ -690,7 +690,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                                 type="button"
                                 onClick={() => handleIgnore(it)}
                                 disabled={actingId === it.id}
-                                className="inline-flex items-center gap-1 px-2 py-1 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
+                                className="inline-flex items-center gap-1 min-h-[44px] sm:min-h-0 px-2 py-1 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
                                 title="Don't apply this variance"
                               >
                                 <SkipForward className="w-3 h-3" />
