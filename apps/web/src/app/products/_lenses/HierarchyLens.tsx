@@ -13,7 +13,7 @@
  * /catalog/organize.
  */
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ChevronDown, FolderTree, Package } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
@@ -32,43 +32,36 @@ export function HierarchyLens({ search }: { search: string }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
+  const refresh = useCallback(async () => {
     setLoading(true)
     setError(null)
-    // U.22 — explicit .ok check + catch. Was a fire-and-forget chain
-    // that swallowed 5xx responses into empty `parents`/`standalones`
-    // — operators saw "no products" instead of an error.
-    Promise.all([
-      fetch(
-        `${getBackendUrl()}/api/pim/parents-overview?search=${encodeURIComponent(search)}&limit=100`,
-      ).then(async (r) => {
-        if (!r.ok) throw new Error(`parents HTTP ${r.status}`)
-        return r.json()
-      }),
-      fetch(
-        `${getBackendUrl()}/api/pim/standalones?search=${encodeURIComponent(search)}&limit=100`,
-      ).then(async (r) => {
-        if (!r.ok) throw new Error(`standalones HTTP ${r.status}`)
-        return r.json()
-      }),
-    ])
-      .then(([p, s]) => {
-        if (cancelled) return
-        setParents(p.items ?? [])
-        setStandalones(s.items ?? [])
-      })
-      .catch((e) => {
-        if (cancelled) return
-        setError(e instanceof Error ? e.message : String(e))
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
+    try {
+      const [p, s] = await Promise.all([
+        fetch(
+          `${getBackendUrl()}/api/pim/parents-overview?search=${encodeURIComponent(search)}&limit=100`,
+        ).then(async (r) => {
+          if (!r.ok) throw new Error(`parents HTTP ${r.status}`)
+          return r.json()
+        }),
+        fetch(
+          `${getBackendUrl()}/api/pim/standalones?search=${encodeURIComponent(search)}&limit=100`,
+        ).then(async (r) => {
+          if (!r.ok) throw new Error(`standalones HTTP ${r.status}`)
+          return r.json()
+        }),
+      ])
+      setParents(p.items ?? [])
+      setStandalones(s.items ?? [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
     }
   }, [search])
+
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
 
   if (loading)
     return (
@@ -85,11 +78,17 @@ export function HierarchyLens({ search }: { search: string }) {
   if (error)
     return (
       <Card>
-        <div
-          role="alert"
-          className="text-md text-rose-600 dark:text-rose-400 py-8 text-center"
-        >
-          Failed to load hierarchy: {error}
+        <div role="alert" className="py-8 text-center space-y-2">
+          <div className="text-md text-rose-600 dark:text-rose-400">
+            Failed to load hierarchy: {error}
+          </div>
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            className="h-7 px-3 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 inline-flex items-center gap-1.5"
+          >
+            Retry
+          </button>
         </div>
       </Card>
     )

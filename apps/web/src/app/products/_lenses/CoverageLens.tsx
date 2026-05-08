@@ -67,7 +67,10 @@ export function CoverageLens({
       />
     )
 
-  const channels = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY']
+  // U.30 — Active channel scope is Amazon + eBay + Shopify only
+  // (per project decision; WooCommerce + Etsy intentionally skipped).
+  // Was rendering 5 columns; the last two were always empty.
+  const channels = ['AMAZON', 'EBAY', 'SHOPIFY']
 
   // P.10 — top-line per-channel coverage. Counted across the visible
   // slice (products.slice(0, 100) below) so the header's percentage

@@ -120,8 +120,24 @@ export function TagEditor({
     }
   }
 
+  // U.30 — escape closes the drawer; outside-click already does via
+  // the wrapper onClick. Modal a11y attributes added below.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   return (
-    <div className="fixed inset-0 z-30 flex justify-end" onClick={onClose}>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="tag-editor-title"
+      className="fixed inset-0 z-30 flex justify-end"
+      onClick={onClose}
+    >
       <div className="absolute inset-0 bg-slate-900/30 dark:bg-slate-950/60" />
       <aside
         onClick={(e) => e.stopPropagation()}
@@ -130,7 +146,10 @@ export function TagEditor({
         {/* U.25 — sticky header gains z-10 so the body content
             doesn't bleed through during scroll. */}
         <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 z-10 bg-white dark:border-slate-800 dark:bg-slate-900">
-          <div className="text-md font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-1.5">
+          <div
+            id="tag-editor-title"
+            className="text-md font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-1.5"
+          >
             <TagIcon size={14} /> Tags
           </div>
           <button

@@ -163,9 +163,22 @@ function MobileProductCard({
     INACTIVE: 'bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-800',
   }
   return (
+    // U.30 — was a plain <div onClick>; keyboard / screen-reader users
+    // couldn't open the drawer. Promoted to role=button + tabIndex with
+    // Enter/Space handler so card-level activation matches the visual
+    // affordance.
     <div
+      role="button"
+      tabIndex={0}
       onClick={onOpen}
-      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border bg-white cursor-pointer active:bg-slate-50 dark:bg-slate-900 dark:active:bg-slate-800 ${
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onOpen()
+        }
+      }}
+      aria-label={`Open ${p.sku} ${p.name ?? ''}`}
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border bg-white cursor-pointer active:bg-slate-50 dark:bg-slate-900 dark:active:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-700 ${
         isChild
           ? 'border-slate-100 bg-slate-50/40 dark:border-slate-800 dark:bg-slate-800/40'
           : selected

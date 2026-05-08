@@ -153,7 +153,7 @@ export interface ProductDrawerProps {
   onChanged?: () => void
 }
 
-type Tab = 'details' | 'listings' | 'variations' | 'translations' | 'related' | 'schedule' | 'activity'
+type Tab = 'details' | 'listings' | 'variations' | 'translations' | 'related' | 'activity' | 'schedule'
 
 export default function ProductDrawer({
   productId,
@@ -433,18 +433,22 @@ export default function ProductDrawer({
           >
             <Network className="w-3 h-3" /> Related
           </DrawerTab>
+          {/* U.30 — Activity is higher-traffic ("what changed?"); the
+              Schedule tab is rare, only used after a bulk-schedule
+              ran. Swapped so the daily tab sits closer to the
+              center of the row. */}
+          <DrawerTab
+            active={tab === 'activity'}
+            onClick={() => setTab('activity')}
+          >
+            <Activity className="w-3 h-3" /> Activity
+          </DrawerTab>
           {/* F.3.c — pending scheduled changes for this product. */}
           <DrawerTab
             active={tab === 'schedule'}
             onClick={() => setTab('schedule')}
           >
             <Calendar className="w-3 h-3" /> Schedule
-          </DrawerTab>
-          <DrawerTab
-            active={tab === 'activity'}
-            onClick={() => setTab('activity')}
-          >
-            <Activity className="w-3 h-3" /> Activity
           </DrawerTab>
         </div>
 

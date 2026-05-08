@@ -75,7 +75,15 @@ export default function ProductEditClient({
 }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [topTab, setTopTab] = useState<TopTab>('master')
+  // U.30 — read initial tab from `?tab=<x>`. HierarchyLens deep-links
+  // to /products/${id}/edit?tab=variations; pre-fix the link silently
+  // landed on master. Accepts master / variations / channel keys
+  // (AMAZON / EBAY / SHOPIFY_GLOBAL etc.); anything else falls back
+  // to master.
+  const [topTab, setTopTab] = useState<TopTab>(() => {
+    const initial = searchParams?.get('tab')
+    return (initial as TopTab) || 'master'
+  })
   // Per-channel selected marketplace (key by channel)
   const [marketSelection, setMarketSelection] = useState<Record<string, string>>({})
   const [unsavedChanges, setUnsavedChanges] = useState(false)

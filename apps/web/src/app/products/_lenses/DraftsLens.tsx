@@ -7,10 +7,11 @@
  *
  * Two cards per channel: drafts ready to publish + products
  * uncovered on that channel. Channel tabs (AMAZON / EBAY /
- * SHOPIFY / WOOCOMMERCE / ETSY) gate the fetch.
+ * SHOPIFY) gate the fetch. WooCommerce + Etsy intentionally
+ * excluded — active channel scope is Amazon + eBay + Shopify only.
  */
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Sparkles, CheckCircle2 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
@@ -44,31 +45,27 @@ export function DraftsLens() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
+  const refresh = useCallback(async () => {
     setLoading(true)
     setError(null)
-    fetch(`${getBackendUrl()}/api/listings/drafts?channel=${channel}`, {
-      cache: 'no-store',
-    })
-      .then(async (r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json()
-      })
-      .then((d) => {
-        if (!cancelled) setData(d)
-      })
-      .catch((e) => {
-        if (!cancelled)
-          setError(e instanceof Error ? e.message : String(e))
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
+    try {
+      const r = await fetch(
+        `${getBackendUrl()}/api/listings/drafts?channel=${channel}`,
+        { cache: 'no-store' },
+      )
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const d = await r.json()
+      setData(d)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
     }
   }, [channel])
+
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
 
   return (
     <div className="space-y-3">
@@ -76,7 +73,7 @@ export function DraftsLens() {
         <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 mr-2">
           Channel:
         </span>
-        {['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY'].map((c) => (
+        {['AMAZON', 'EBAY', 'SHOPIFY'].map((c) => (
           <button
             key={c}
             onClick={() => setChannel(c)}
@@ -103,11 +100,17 @@ export function DraftsLens() {
       )}
       {!loading && error && (
         <Card>
-          <div
-            role="alert"
-            className="text-md text-rose-600 dark:text-rose-400 py-8 text-center"
-          >
-            Failed to load drafts: {error}
+          <div role="alert" className="py-8 text-center space-y-2">
+            <div className="text-md text-rose-600 dark:text-rose-400">
+              Failed to load drafts: {error}
+            </div>
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              className="h-7 px-3 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 inline-flex items-center gap-1.5"
+            >
+              Retry
+            </button>
           </div>
         </Card>
       )}

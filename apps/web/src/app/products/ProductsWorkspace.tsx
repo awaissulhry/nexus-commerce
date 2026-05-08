@@ -316,7 +316,17 @@ export default function ProductsWorkspace() {
   // now uses repeated keys, which 10a's parseFilters auto-translates
   // for any external link that arrives in the legacy form.
   const productsUrl = useMemo(() => {
-    if (lens !== 'grid') return null
+    // U.30 — was `if (lens !== 'grid') return null` which meant
+    // CoverageLens + PricingLens got empty `products` on direct
+    // navigation: workspace skipped the fetch and both lenses
+    // rendered "No products to map / price" against a 279-row
+    // catalog. Coverage + Pricing both consume `products` from the
+    // workspace; they need the data fetched whichever lens lands
+    // first. (Hierarchy / Health / Drafts have their own fetches
+    // and don't read `products`.)
+    if (lens !== 'grid' && lens !== 'coverage' && lens !== 'pricing') {
+      return null
+    }
     const qs = new URLSearchParams()
     qs.set('page', String(page))
     qs.set('limit', String(pageSize))
@@ -854,12 +864,21 @@ export default function ProductsWorkspace() {
               }
               className={
                 showDeleted
-                  ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                  ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 dark:hover:bg-rose-900/40'
                   : ''
               }
               icon={<Trash2 size={12} />}
             >
-              {showDeleted ? 'Recycle bin' : ''}
+              {/* U.30 — was empty when !showDeleted, leaving the button
+                  with only an icon and no accessible name. Always
+                  render a label; on desktop, hide it via sr-only when
+                  inactive so the icon-only chrome stays compact but
+                  screen readers still announce a button. */}
+              {showDeleted ? (
+                'Recycle bin'
+              ) : (
+                <span className="sr-only">Open recycle bin</span>
+              )}
             </Button>
             <Link
               href="/products/new"

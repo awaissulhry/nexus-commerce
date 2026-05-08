@@ -1469,13 +1469,9 @@ const ProductCell = memo(function ProductCell({
       // already listed. Missing channels render as a gray "+"
       // placeholder that deep-links into the listing wizard with that
       // channel pre-selected.
-      const ALL_CHANNELS = [
-        'AMAZON',
-        'EBAY',
-        'SHOPIFY',
-        'WOOCOMMERCE',
-        'ETSY',
-      ] as const
+      // U.30 — active scope: Amazon + eBay + Shopify only.
+      // WooCommerce + Etsy intentionally excluded.
+      const ALL_CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY'] as const
       const covered = p.coverage ?? {}
       const coveredCount = Object.keys(covered).length
       return (

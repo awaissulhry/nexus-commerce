@@ -50,7 +50,10 @@ export function HygieneStrip({
   hasGtin,
   updateUrl,
 }: HygieneStripProps) {
-  if (!hygiene) return null
+  // U.30 — bail out when there are no products at all (catalog is
+  // empty / heavily filtered); the strip would otherwise render
+  // "Catalog hygiene complete across 0 products" which is misleading.
+  if (!hygiene || hygiene.total === 0) return null
 
   const chips: Array<{
     key: string
