@@ -8,7 +8,7 @@
 // opens by productId and aggregates across locations; full multi-location
 // breakdown lives in Commit 4.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
@@ -175,6 +175,13 @@ type Movement = {
   actor: string | null
   createdAt: string
 }
+
+// S.4 — focusable-element selector for the StockDrawer's a11y focus trap.
+// Same set ProductDrawer uses (U.1 pattern). The [tabindex="-1"] exclusion
+// keeps programmatically-focusable-but-not-tabbable elements out of the
+// cycle.
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 const REASON_TONE: Record<string, string> = {
   ORDER_PLACED: 'text-rose-600 bg-rose-50',
@@ -1167,6 +1174,12 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
   const [error, setError] = useState<string | null>(null)
   const [action, setAction] = useState<ActionMode>(null)
 
+  // S.4 — U.1 focus-trap a11y refs.
+  // containerRef wraps the panel; previouslyFocused captures the
+  // element that opened the drawer so focus returns there on close.
+  const containerRef = useRef<HTMLElement | null>(null)
+  const previouslyFocused = useRef<HTMLElement | null>(null)
+
   const fetchBundle = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -1189,10 +1202,81 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
     onChanged()
   }, [fetchBundle, onChanged])
 
+  // S.4 — full a11y focus trap (port of U.1 from ProductDrawer).
+  // On open: capture the element that triggered the drawer (so focus
+  // returns there on close), focus the first focusable inside the
+  // panel after a 10ms defer (lets children mount). On Tab: cycle
+  // within the panel; Shift+Tab on the first wraps to last; plain
+  // Tab on the last wraps to first; Tab from outside the panel
+  // (focus stolen by async re-render) lands on first. On Escape:
+  // close. On unmount: return focus to the trigger if it's still
+  // in the DOM (virtualized rows may have scrolled out).
+  useEffect(() => {
+    previouslyFocused.current = (document.activeElement as HTMLElement | null) ?? null
+
+    const initialFocusTimer = window.setTimeout(() => {
+      const first = containerRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
+      first?.focus()
+    }, 10)
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (e.key !== 'Tab') return
+      const root = containerRef.current
+      if (!root) return
+      const focusables = Array.from(
+        root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+      ).filter(
+        (el) =>
+          !el.hasAttribute('disabled') &&
+          // offsetParent === null catches display:none without forcing a layout pass.
+          el.offsetParent !== null,
+      )
+      if (focusables.length === 0) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      const active = document.activeElement as HTMLElement | null
+      if (e.shiftKey) {
+        if (active === first || !root.contains(active)) {
+          e.preventDefault()
+          last.focus()
+        }
+      } else {
+        if (active === last || !root.contains(active)) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+
+    return () => {
+      window.clearTimeout(initialFocusTimer)
+      window.removeEventListener('keydown', onKey)
+      const trigger = previouslyFocused.current
+      // Guard: trigger may have been removed (virtualized table row
+      // scrolled out, page navigation). Skipping the focus call lets
+      // the browser fall back to body — better than throwing.
+      if (trigger && document.body.contains(trigger)) {
+        trigger.focus()
+      }
+    }
+  }, [onClose])
+
   return (
-    <div className="fixed inset-0 z-30 flex justify-end" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-30 flex justify-end"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Stock detail"
+    >
       <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px]" />
       <aside
+        ref={containerRef}
         onClick={(e) => e.stopPropagation()}
         className="relative h-full w-full max-w-2xl bg-white shadow-2xl overflow-y-auto"
       >
