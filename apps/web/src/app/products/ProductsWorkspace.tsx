@@ -1894,6 +1894,7 @@ function SavedViewsButton({ open, setOpen, views, onApply, onSaveCurrent, onDele
 // BulkActionBar — actions across selected products
 // ────────────────────────────────────────────────────────────────────
 function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLookup }: { selectedIds: string[]; allTags: Tag[]; onClear: () => void; onComplete: () => void; productLookup: ProductRow[] }) {
+  const { toast } = useToast()
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [tagMenuOpen, setTagMenuOpen] = useState(false)
@@ -1922,18 +1923,30 @@ function BulkActionBar({ selectedIds, allTags, onClear, onComplete, productLooku
     return () => document.removeEventListener('mousedown', onClick)
   }, [])
 
+  // U.4 — toast feedback for bulk operations. Was a setStatus()
+  // string + inline banner that sat in the bulk action bar and
+  // auto-cleared after 1.5/3.5s. Replaced with toast() so errors
+  // stack instead of overwriting, persist beyond the bar's
+  // lifecycle (operator can clear selection + still see the toast),
+  // and get aria-live announcement for free.
   const run = async (label: string, fn: () => Promise<any>) => {
     setBusy(true)
     setStatus(label)
     try {
       await fn()
-      setStatus('Done')
+      setStatus(null)
+      toast({ tone: 'success', title: label.replace(/…$/, ' done') })
       onComplete()
-      setTimeout(() => setStatus(null), 1500)
     } catch (e: any) {
-      setStatus(`Error: ${e.message ?? 'failed'}`)
-      setTimeout(() => setStatus(null), 3500)
-    } finally { setBusy(false) }
+      setStatus(null)
+      toast({
+        tone: 'error',
+        title: 'Action failed',
+        description: e?.message ?? 'failed',
+      })
+    } finally {
+      setBusy(false)
+    }
   }
 
   const setStatusBulk = async (s: 'ACTIVE' | 'DRAFT' | 'INACTIVE') => run(
