@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
-  Plus, Trash2, Sparkles, RefreshCw, Play, Eye, CheckCircle2, X,
+  Plus, Trash2, Sparkles, RefreshCw, Play, Eye, CheckCircle2,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { IconButton } from '@/components/ui/IconButton'
+import { Modal } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { COUNTRY_NAMES } from '@/lib/country-names'
@@ -265,18 +266,17 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
   const scopeHelp = SCOPES.find((s) => s.value === scope)?.helpText
 
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center p-6" onClick={onClose}>
-      <div className="absolute inset-0 bg-slate-900/40" />
-      <div onClick={(e) => e.stopPropagation()} className="relative bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white">
-          <div className="text-lg font-semibold text-slate-900 inline-flex items-center gap-2">
-            <Sparkles size={16} /> {rule ? 'Edit rule' : 'New rule'}
-          </div>
-          <IconButton aria-label="Close rule editor" onClick={onClose}>
-            <X size={16} />
-          </IconButton>
-        </header>
-        <div className="p-5 space-y-4">
+    <Modal
+      open
+      onClose={onClose}
+      size="2xl"
+      title={
+        <span className="inline-flex items-center gap-2">
+          <Sparkles size={16} /> {rule ? 'Edit rule' : 'New rule'}
+        </span>
+      }
+    >
+      <div className="space-y-4">
           {!rule && (
             <div className="bg-blue-50 border border-blue-200 rounded p-3">
               <div className="text-sm font-semibold uppercase tracking-wider text-blue-700 mb-2">Start from a preset</div>
@@ -354,13 +354,12 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
             <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
             Rule is active (the engine includes inactive rules in dry-runs but never sends from them)
           </label>
-        </div>
-        <footer className="px-5 py-3 border-t border-slate-200 flex items-center gap-2 justify-end sticky bottom-0 bg-white">
-          <button onClick={onClose} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50">Cancel</button>
-          <button onClick={save} disabled={busy} className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">{rule ? 'Save changes' : 'Create rule'}</button>
-        </footer>
       </div>
-    </div>
+      <footer className="-mx-5 -mb-5 mt-4 px-5 py-3 border-t border-slate-200 flex items-center gap-2 justify-end sticky bottom-0 bg-white">
+        <button onClick={onClose} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50">Cancel</button>
+        <button onClick={save} disabled={busy} className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">{rule ? 'Save changes' : 'Create rule'}</button>
+      </footer>
+    </Modal>
   )
 }
 
@@ -394,52 +393,50 @@ function PreviewModal({ rule, onClose, onRun }: { rule: Rule; onClose: () => voi
   }
 
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center p-6" onClick={onClose}>
-      <div className="absolute inset-0 bg-slate-900/40" />
-      <div onClick={(e) => e.stopPropagation()} className="relative bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-y-auto">
-        <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white">
-          <div className="text-lg font-semibold text-slate-900 inline-flex items-center gap-2">
-            <Eye size={16} /> Dry run — {rule.name}
-          </div>
-          <IconButton aria-label="Close dry-run preview" onClick={onClose}>
-            <X size={16} />
-          </IconButton>
-        </header>
-        <div className="p-5 space-y-3">
-          {loading ? <div className="text-md text-slate-500 py-4 text-center">Computing matches…</div> : !data ? (
-            <div className="text-md text-rose-600">Failed to load dry-run.</div>
-          ) : (
-            <>
-              <div className="bg-blue-50 border border-blue-200 rounded p-3">
-                <div className="text-[24px] font-semibold text-blue-700 tabular-nums">{data.matchCount}</div>
-                <div className="text-sm uppercase tracking-wider text-blue-700 font-semibold">orders match this rule today</div>
+    <Modal
+      open
+      onClose={onClose}
+      size="2xl"
+      title={
+        <span className="inline-flex items-center gap-2">
+          <Eye size={16} /> Dry run — {rule.name}
+        </span>
+      }
+    >
+      <div className="space-y-3">
+        {loading ? <div className="text-md text-slate-500 py-4 text-center">Computing matches…</div> : !data ? (
+          <div className="text-md text-rose-600">Failed to load dry-run.</div>
+        ) : (
+          <>
+            <div className="bg-blue-50 border border-blue-200 rounded p-3">
+              <div className="text-[24px] font-semibold text-blue-700 tabular-nums">{data.matchCount}</div>
+              <div className="text-sm uppercase tracking-wider text-blue-700 font-semibold">orders match this rule today</div>
+            </div>
+            {data.sample.length === 0 ? (
+              <div className="text-base text-slate-500 text-center py-4">No matches.</div>
+            ) : (
+              <div>
+                <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-2">Sample (first 25)</div>
+                <ul className="space-y-1 -my-1">
+                  {data.sample.map((s: any) => (
+                    <li key={s.orderId} className="flex items-center justify-between gap-2 py-1.5 px-2 -mx-2 rounded hover:bg-slate-50">
+                      <Link href={`/orders/${s.orderId}`} className="text-base font-mono text-blue-600 hover:underline">{s.channelOrderId}</Link>
+                      <span className="text-sm text-slate-500">{s.customerEmail}</span>
+                      <span className="text-sm tabular-nums text-slate-700">€{Number(s.totalPrice).toFixed(2)}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              {data.sample.length === 0 ? (
-                <div className="text-base text-slate-500 text-center py-4">No matches.</div>
-              ) : (
-                <div>
-                  <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-2">Sample (first 25)</div>
-                  <ul className="space-y-1 -my-1">
-                    {data.sample.map((s: any) => (
-                      <li key={s.orderId} className="flex items-center justify-between gap-2 py-1.5 px-2 -mx-2 rounded hover:bg-slate-50">
-                        <Link href={`/orders/${s.orderId}`} className="text-base font-mono text-blue-600 hover:underline">{s.channelOrderId}</Link>
-                        <span className="text-sm text-slate-500">{s.customerEmail}</span>
-                        <span className="text-sm tabular-nums text-slate-700">€{Number(s.totalPrice).toFixed(2)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              <div className="pt-3 border-t border-slate-100 flex items-center gap-2 justify-end">
-                <button onClick={onClose} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50">Close</button>
-                <button onClick={runIt} disabled={running || data.matchCount === 0} className="h-8 px-3 text-base bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1.5">
-                  <Play size={12} /> Enqueue all {data.matchCount}
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+            )}
+            <div className="pt-3 border-t border-slate-100 flex items-center gap-2 justify-end">
+              <button onClick={onClose} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50">Close</button>
+              <button onClick={runIt} disabled={running || data.matchCount === 0} className="h-8 px-3 text-base bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1.5">
+                <Play size={12} /> Enqueue all {data.matchCount}
+              </button>
+            </div>
+          </>
+        )}
       </div>
-    </div>
+    </Modal>
   )
 }
