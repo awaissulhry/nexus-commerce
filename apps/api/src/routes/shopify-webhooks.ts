@@ -278,19 +278,38 @@ async function handleOrderCreate(payload: ShopifyWebhookPayload): Promise<void> 
       },
     });
 
-    // Replace order items idempotently. Same delete-then-create pattern
-    // amazon-orders.service uses (no per-line external id to upsert on).
-    await prisma.orderItem.deleteMany({ where: { orderId: dbOrder.id } });
+    // O.5: upsert per line by (orderId, externalLineItemId=Shopify
+    // line_items[].id). Replaces the earlier delete-then-create
+    // pattern so OrderItem.id stays stable across the orders/create →
+    // orders/updated → refunds/create webhook sequence (Shopify
+    // retries on 5xx and the same line keeps its id, so any
+    // ReturnItem.orderItemId reference survives). Same SKU on
+    // multiple lines stays valid because the unique key is the line
+    // id, not the SKU.
     const createdItems: Array<{ productId: string | null; quantity: number; sku: string }> = [];
     if (order.line_items && Array.isArray(order.line_items)) {
       for (const item of order.line_items) {
         const sku = item.sku || item.title || `shopify-line-${item.id}`;
+        const externalLineItemId = String(item.id);
         const product = sku
           ? await prisma.product.findUnique({ where: { sku }, select: { id: true } })
           : null;
-        await prisma.orderItem.create({
-          data: {
+        await prisma.orderItem.upsert({
+          where: {
+            orderId_externalLineItemId: {
+              orderId: dbOrder.id,
+              externalLineItemId,
+            },
+          },
+          create: {
             orderId: dbOrder.id,
+            externalLineItemId,
+            sku,
+            quantity: item.quantity,
+            price: parseFloat(item.price) || 0,
+            ...(product?.id ? { productId: product.id } : {}),
+          },
+          update: {
             sku,
             quantity: item.quantity,
             price: parseFloat(item.price) || 0,

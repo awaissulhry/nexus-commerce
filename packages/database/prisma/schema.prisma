@@ -1488,15 +1488,28 @@ model OrderItem {
   quantity Int
   price    Decimal @db.Decimal(10, 2)
 
+  // ── O.5: per-line idempotency key ──────────────────────────────────
+  // Channel-side immutable line id (Amazon OrderItemId / eBay
+  // lineItemId / Shopify line_items[].id). Lets channel ingestion
+  // upsert by (orderId, externalLineItemId) on webhook redelivery
+  // instead of delete-then-create, so OrderItem.id stays stable for
+  // ReturnItem.orderItemId and any future FK reference. Nullable for
+  // legacy rows + channels without a per-line id (WooCommerce today).
+  // Standard Postgres NULL-distinct unique semantics let those rows
+  // coexist without a partial index.
+  externalLineItemId String?
+
   // Metadata
   amazonMetadata Json?
   ebayMetadata   Json?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  @@unique([orderId, externalLineItemId])
   @@index([orderId])
   @@index([productId])
   @@index([sku])
+  @@index([externalLineItemId])
 }
 
 // ── F.1: Daily Sales Aggregate ─────────────────────────────────────────────

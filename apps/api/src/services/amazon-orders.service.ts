@@ -348,32 +348,23 @@ export class AmazonOrdersService {
       })()
     }
 
-    // Items — the schema doesn't carry a per-line external id, and
-    // there's no composite-unique on (orderId, sku) to upsert against
-    // (a given order CAN have two lines for the same SKU at different
-    // prices). Cleanest idempotent pattern is delete-then-create per
-    // order. Cheap: orders carry 1-5 lines typically, and we're inside
-    // the per-order loop where the cost is dominated by the SP-API
-    // round-trip anyway. Amazon's OrderItemId is preserved in
-    // amazonMetadata for downstream traceability.
+    // O.5: upsert by (orderId, externalLineItemId=Amazon OrderItemId)
+    // instead of delete-then-create. OrderItem.id stays stable across
+    // SP-API re-polls so ReturnItem.orderItemId joins keep working
+    // when the same order is touched twice (e.g. shipping update +
+    // refund-on-return both arrive within a 15-min cron window).
+    // Same-SKU-on-multiple-lines is still allowed because the unique
+    // key is the line id, not the SKU.
     const items = await amazonService.fetchOrderItems(raw.AmazonOrderId)
-    try {
-      await prisma.orderItem.deleteMany({ where: { orderId: order.id } })
-    } catch (err) {
-      logger.warn('amazon-orders: stale-item purge failed (continuing)', {
-        orderId: raw.AmazonOrderId,
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
     const createdItems: Array<{ productId: string | null; quantity: number; sku: string }> = []
     for (const item of items) {
       try {
-        const created = await this.createOrderItem(order.id, item)
+        const created = await this.upsertOrderItem(order.id, item)
         createdItems.push(created)
         summary.itemsUpserted++
       } catch (err) {
         summary.itemsFailed++
-        logger.warn('amazon-orders: item create failed', {
+        logger.warn('amazon-orders: item upsert failed', {
           orderId: raw.AmazonOrderId,
           orderItemId: item.OrderItemId,
           error: err instanceof Error ? err.message : String(err),
@@ -491,12 +482,13 @@ export class AmazonOrdersService {
     }
   }
 
-  private async createOrderItem(
+  private async upsertOrderItem(
     orderId: string,
     item: AmazonOrderItemRaw,
   ): Promise<{ productId: string | null; quantity: number; sku: string }> {
     const totalPrice = item.ItemPrice?.Amount ? Number(item.ItemPrice.Amount) : 0
     const sku = item.SellerSKU ?? item.ASIN ?? ''
+    const externalLineItemId = item.OrderItemId
 
     // Try to link to a local Product by SKU first, then by ASIN.
     let productId: string | null = null
@@ -515,9 +507,20 @@ export class AmazonOrdersService {
       productId = prod?.id ?? null
     }
 
-    await prisma.orderItem.create({
-      data: {
+    await prisma.orderItem.upsert({
+      where: {
+        orderId_externalLineItemId: { orderId, externalLineItemId },
+      },
+      create: {
         orderId,
+        externalLineItemId,
+        sku,
+        quantity: item.QuantityOrdered,
+        price: totalPrice,
+        amazonMetadata: item as object,
+        ...(productId ? { productId } : {}),
+      },
+      update: {
         sku,
         quantity: item.QuantityOrdered,
         price: totalPrice,

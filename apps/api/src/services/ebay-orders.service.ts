@@ -351,10 +351,16 @@ export class EbayOrdersService {
           )
         : 0
 
+      // O.5: persist externalLineItemId top-level so the (orderId,
+      // externalLineItemId) compound unique enforces dedup at the DB
+      // level, not just via this service's in-memory `seenLineItemIds`
+      // Set. Belt-and-braces: the Set short-circuits the work + the
+      // constraint backstops re-runs from a different process.
       await prisma.orderItem.create({
         data: {
           orderId: dbOrder.id,
           productId: product?.id ?? null,
+          externalLineItemId: lineItem.lineItemId,
           sku: lineItem.sku,
           quantity: lineItem.quantity,
           price: itemPrice,
