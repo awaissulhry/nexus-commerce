@@ -812,6 +812,7 @@
   "stock.drawer.adjustApply": "Apply",
   "stock.adjust.errInvalidChange": "Enter a non-zero number (positive to add, negative to remove)",
   "stock.adjust.notesPlaceholder": "Notes (optional)",
+  "stock.adjust.reasonAriaLabel": "Adjustment reason",
   "stock.subReason.other": "Other",
   "stock.subReason.damage": "Damage",
   "stock.subReason.theft": "Theft",

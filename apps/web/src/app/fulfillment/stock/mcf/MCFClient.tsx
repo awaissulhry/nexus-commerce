@@ -271,17 +271,19 @@ export default function MCFClient() {
                           disabled={actingId === s.id}
                           className="min-h-[44px] sm:min-h-0 px-2 py-1 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
                           title={t('stock.mcf.syncTitle')}
+                          aria-label={t('stock.mcf.syncTitle')}
                         >
-                          <RefreshCw size={11} className={actingId === s.id ? 'animate-spin' : ''} />
+                          <RefreshCw size={11} aria-hidden="true" className={actingId === s.id ? 'animate-spin' : ''} />
                         </button>
                         {!['COMPLETE', 'COMPLETE_PARTIALLED', 'CANCELLED', 'UNFULFILLABLE', 'INVALID'].includes(s.status) && (
                           <button
                             type="button"
                             onClick={() => handleCancel(s)}
                             disabled={actingId === s.id}
+                            aria-label={t('stock.mcf.cancel')}
                             className="min-h-[44px] sm:min-h-0 px-2 py-1 text-sm font-medium text-rose-700 bg-white dark:bg-slate-900 border border-rose-200 rounded hover:bg-rose-50 disabled:opacity-50"
                           >
-                            <X size={11} />
+                            <X size={11} aria-hidden="true" />
                           </button>
                         )}
                       </div>

@@ -1738,7 +1738,7 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
             <button onClick={fetchBundle} className="h-11 sm:h-7 px-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 inline-flex items-center gap-1">
               <RefreshCw size={11} /> Refresh
             </button>
-            <button onClick={onClose} className="h-11 w-11 sm:h-7 sm:w-7 inline-flex items-center justify-center rounded hover:bg-slate-100">
+            <button onClick={onClose} aria-label={t('common.close')} className="h-11 w-11 sm:h-7 sm:w-7 inline-flex items-center justify-center rounded hover:bg-slate-100">
               <X size={16} />
             </button>
           </div>
@@ -2212,6 +2212,7 @@ function AdjustPanel({ stockLevelId, locationCode, onCancel, onDone }: { stockLe
         <select
           value={subReason}
           onChange={(e) => setSubReason(e.target.value as AdjustSubReason)}
+          aria-label={t('stock.adjust.reasonAriaLabel')}
           className="h-11 sm:h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 min-w-[140px]"
         >
           {SUB_REASON_OPTIONS.map((o) => (
@@ -2263,13 +2264,13 @@ function TransferPanel({
         <ArrowRightLeft size={11} /> Transfer between locations
       </div>
       <div className="flex items-center gap-2">
-        <select value={fromId} onChange={(e) => setFromId(e.target.value)} className="h-11 sm:h-8 flex-1 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
+        <select value={fromId} onChange={(e) => setFromId(e.target.value)} aria-label="From location" className="h-11 sm:h-8 flex-1 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
           {stockLevels.map((sl) => (
             <option key={sl.id} value={sl.location.id}>From {sl.location.code} ({sl.available} avail)</option>
           ))}
         </select>
-        <ArrowRightLeft size={12} className="text-slate-400" />
-        <select value={toId} onChange={(e) => setToId(e.target.value)} className="h-11 sm:h-8 flex-1 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
+        <ArrowRightLeft size={12} className="text-slate-400" aria-hidden="true" />
+        <select value={toId} onChange={(e) => setToId(e.target.value)} aria-label="To location" className="h-11 sm:h-8 flex-1 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
           {stockLevels.map((sl) => (
             <option key={sl.id} value={sl.location.id}>To {sl.location.code}</option>
           ))}
@@ -2324,12 +2325,12 @@ function ReservePanel({
         <LockIcon size={11} /> Reserve stock
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        <select value={locId} onChange={(e) => setLocId(e.target.value)} className="h-11 sm:h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
+        <select value={locId} onChange={(e) => setLocId(e.target.value)} aria-label="Reservation location" className="h-11 sm:h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
           {stockLevels.map((sl) => (
             <option key={sl.id} value={sl.location.id}>{sl.location.code} ({sl.available} avail)</option>
           ))}
         </select>
-        <select value={reason} onChange={(e) => setReason(e.target.value as any)} className="h-11 sm:h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
+        <select value={reason} onChange={(e) => setReason(e.target.value as any)} aria-label="Reservation reason" className="h-11 sm:h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
           <option value="MANUAL_HOLD">Manual hold</option>
           <option value="PENDING_ORDER">Pending order</option>
           <option value="PROMOTION">Promotion</option>
@@ -3148,8 +3149,9 @@ function BulkAdjustModal({
             applied in runBulkAdjust so the schema-level reason +
             structured notes prefix flow consistently. */}
         <div>
-          <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1">Reason</label>
+          <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1" htmlFor="bulk-adjust-reason">Reason</label>
           <select
+            id="bulk-adjust-reason"
             value={subReason}
             onChange={(e) => setSubReason(e.target.value as AdjustSubReason)}
             className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
@@ -3247,10 +3249,11 @@ function BulkTransferModal({
     <Modal title={t('stock.bulk.transferTitle')} onClose={onCancel}>
       <div className="space-y-3">
         <div>
-          <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1">
+          <label htmlFor="bulk-transfer-destination" className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1">
             {t('stock.bulk.transferDest')}
           </label>
           <select
+            id="bulk-transfer-destination"
             value={toLocationId}
             onChange={(e) => setToLocationId(e.target.value)}
             className="w-full h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
@@ -3370,14 +3373,15 @@ function BulkThresholdModal({
 }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  const { t } = useTranslations()
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={title} onClick={onClose}>
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" />
       <div onClick={(e) => e.stopPropagation()} className="relative bg-white dark:bg-slate-900 rounded-lg shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
         <header className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
           <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{title}</div>
-          <button onClick={onClose} className="h-11 w-11 sm:h-7 sm:w-7 inline-flex items-center justify-center rounded hover:bg-slate-100">
-            <X size={16} />
+          <button onClick={onClose} aria-label={t('common.close')} className="h-11 w-11 sm:h-7 sm:w-7 inline-flex items-center justify-center rounded hover:bg-slate-100">
+            <X size={16} aria-hidden="true" />
           </button>
         </header>
         <div className="p-5">{children}</div>

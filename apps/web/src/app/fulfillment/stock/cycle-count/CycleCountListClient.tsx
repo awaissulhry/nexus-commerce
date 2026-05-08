@@ -364,10 +364,11 @@ export default function CycleCountListClient() {
             </div>
             <div className="p-5 space-y-3">
               <div>
-                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+                <label htmlFor="cycle-count-location" className="text-sm font-medium text-slate-700 dark:text-slate-300 uppercase tracking-wide">
                   {t('cycleCount.list.modal.locationLabel')} <span className="text-red-600">*</span>
                 </label>
                 <select
+                  id="cycle-count-location"
                   value={newLocationId}
                   onChange={(e) => setNewLocationId(e.target.value)}
                   className="mt-1 w-full px-3 py-1.5 text-md border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-300"

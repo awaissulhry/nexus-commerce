@@ -209,10 +209,11 @@ export default function ImportClient() {
       <Card>
         <div className="space-y-3">
           <div>
-            <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1">
+            <label htmlFor="import-location" className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1">
               {t('stock.import.location')}
             </label>
             <select
+              id="import-location"
               value={locationCode}
               onChange={(e) => setLocationCode(e.target.value)}
               className="h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
@@ -223,10 +224,11 @@ export default function ImportClient() {
             </select>
           </div>
           <div>
-            <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1">
+            <label htmlFor="import-file" className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1">
               {t('stock.import.uploadLabel')}
             </label>
             <input
+              id="import-file"
               type="file"
               accept=".csv,text/csv"
               onChange={(e) => {

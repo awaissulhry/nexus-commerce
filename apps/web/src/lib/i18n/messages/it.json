@@ -783,6 +783,7 @@
   "stock.drawer.adjustApply": "Applica",
   "stock.adjust.errInvalidChange": "Inserisci un numero diverso da zero (positivo per aggiungere, negativo per rimuovere)",
   "stock.adjust.notesPlaceholder": "Note (facoltative)",
+  "stock.adjust.reasonAriaLabel": "Motivo della rettifica",
   "stock.subReason.other": "Altro",
   "stock.subReason.damage": "Danneggiato",
   "stock.subReason.theft": "Furto",
