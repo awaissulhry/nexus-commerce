@@ -320,6 +320,11 @@ export default function OrderDetailClient({ id }: { id: string }) {
             <AmazonShipByImpactCard order={order} />
           )}
 
+          {/* AU.4 — Buy Shipping rate quote (FBM Amazon only) */}
+          {tabParam === 'fulfillment' && order.channel === 'AMAZON' && order.fulfillmentMethod === 'FBM' && (
+            <BuyShippingCard orderId={order.id} />
+          )}
+
           {/* AU.1 — Shipments on Fulfillment tab */}
           {tabParam === 'fulfillment' && order.shipments && order.shipments.length > 0 && (
             <Card title="Shipments" description={`${order.shipments.length} shipment${order.shipments.length === 1 ? '' : 's'}`}>
@@ -491,6 +496,227 @@ function FinTile({ label, value, tone }: { label: string; value: number; tone: '
       <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">{label}</div>
       <div className={`text-2xl font-semibold tabular-nums ${cls}`}>€{value.toFixed(2)}</div>
     </div>
+  )
+}
+
+// ── AU.4: Amazon Buy Shipping rate quote + label purchase ─────────────
+// Wires the O.16b backend (currently env-gated dryRun returning 3
+// mock rates by default) to an operator-facing modal. On real-path
+// flip (NEXUS_ENABLE_AMAZON_BUY_SHIPPING=true + the SP-API client
+// wire from the follow-up commit) the same UI shows real SP-API
+// quotes without any frontend change.
+//
+// State machine:
+//   idle    — "Get rates" button
+//   quoting — fetching, button shows spinner
+//   rates   — modal open with quote list
+//   buying  — selected rate, label-purchase in flight
+//   bought  — confirmation w/ tracking + label URL
+type BuyRate = {
+  serviceId: string
+  carrierName: string
+  serviceName: string
+  totalCharge: { currencyCode: string; amount: number }
+  estimatedTransitDays: number
+  guaranteedDelivery: boolean
+}
+function BuyShippingCard({ orderId }: { orderId: string }) {
+  const { toast } = useToast()
+  const [phase, setPhase] = useState<'idle' | 'quoting' | 'rates' | 'buying' | 'bought'>('idle')
+  const [rates, setRates] = useState<BuyRate[]>([])
+  const [source, setSource] = useState<'real' | 'dryRun' | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
+  const [purchase, setPurchase] = useState<{
+    trackingNumber: string
+    labelUrl: string
+    totalCharge: { currencyCode: string; amount: number }
+  } | null>(null)
+
+  const getQuotes = async () => {
+    setPhase('quoting')
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/amazon/orders/${orderId}/buy-shipping/quote`,
+        { method: 'POST' },
+      )
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error ?? 'Quote failed')
+      setRates(data.rates ?? [])
+      setSource(data.source ?? null)
+      setMessage(data.message ?? null)
+      setPhase('rates')
+    } catch (e: any) {
+      toast.error(e.message)
+      setPhase('idle')
+    }
+  }
+
+  const buyRate = async (serviceId: string) => {
+    setPhase('buying')
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/amazon/orders/${orderId}/buy-shipping/purchase`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ serviceId }),
+        },
+      )
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error ?? 'Purchase failed')
+      setPurchase({
+        trackingNumber: data.trackingNumber,
+        labelUrl: data.labelUrl,
+        totalCharge: data.totalCharge,
+      })
+      setSource(data.source ?? null)
+      setMessage(data.message ?? null)
+      setPhase('bought')
+      toast.success(
+        data.source === 'dryRun'
+          ? 'dryRun: mock label generated'
+          : `Label purchased: ${data.trackingNumber}`,
+      )
+    } catch (e: any) {
+      toast.error(e.message)
+      setPhase('rates')
+    }
+  }
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 inline-flex items-center gap-1.5">
+          <Truck size={12} /> Amazon Buy Shipping
+        </div>
+        {source === 'dryRun' && (
+          <span className="text-xs font-semibold uppercase px-1.5 py-0.5 border rounded bg-amber-50 text-amber-700 border-amber-200">
+            dryRun
+          </span>
+        )}
+      </div>
+
+      {phase === 'idle' && (
+        <div className="space-y-2">
+          <p className="text-base text-slate-600">
+            Quote SP-API Merchant Fulfillment rates for this order.
+            Buy Shipping rates are usually 5–15% cheaper than retail
+            and auto-credit VTR.
+          </p>
+          <button
+            onClick={getQuotes}
+            className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5"
+          >
+            <RefreshCw size={12} /> Get rates
+          </button>
+        </div>
+      )}
+
+      {phase === 'quoting' && (
+        <div className="text-md text-slate-500 py-3 text-center">
+          Fetching rates…
+        </div>
+      )}
+
+      {phase === 'rates' && (
+        <div className="space-y-2">
+          {message && (
+            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+              {message}
+            </div>
+          )}
+          {rates.length === 0 ? (
+            <div className="text-md text-slate-500 py-2">
+              No eligible rates returned for this order.
+            </div>
+          ) : (
+            <ul className="space-y-1.5">
+              {rates.map((r) => (
+                <li
+                  key={r.serviceId}
+                  className="flex items-center justify-between gap-2 border border-slate-200 rounded p-2"
+                >
+                  <div className="min-w-0">
+                    <div className="text-md text-slate-900">
+                      {r.carrierName} — {r.serviceName}
+                      {r.guaranteedDelivery && (
+                        <span className="ml-1.5 text-xs font-semibold uppercase px-1.5 py-0.5 border rounded bg-emerald-50 text-emerald-700 border-emerald-200">
+                          guaranteed
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm text-slate-500">
+                      {r.estimatedTransitDays}d transit · {r.totalCharge.currencyCode}{' '}
+                      {r.totalCharge.amount.toFixed(2)}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => buyRate(r.serviceId)}
+                    className="h-7 px-3 text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100"
+                  >
+                    Buy
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <button
+            onClick={() => setPhase('idle')}
+            className="text-sm text-slate-500 hover:text-slate-900"
+          >
+            ← Back
+          </button>
+        </div>
+      )}
+
+      {phase === 'buying' && (
+        <div className="text-md text-slate-500 py-3 text-center">
+          Purchasing label…
+        </div>
+      )}
+
+      {phase === 'bought' && purchase && (
+        <div className="space-y-2">
+          {message && (
+            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+              {message}
+            </div>
+          )}
+          <div className="border border-emerald-200 bg-emerald-50 rounded p-3 space-y-1">
+            <div className="text-md font-semibold text-emerald-900">
+              Label ready
+            </div>
+            <div className="text-sm text-slate-700">
+              Tracking:{' '}
+              <span className="font-mono">{purchase.trackingNumber}</span>
+            </div>
+            <div className="text-sm text-slate-700">
+              Charged: {purchase.totalCharge.currencyCode}{' '}
+              {purchase.totalCharge.amount.toFixed(2)}
+            </div>
+            {purchase.labelUrl && (
+              <a
+                href={purchase.labelUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1"
+              >
+                Download label PDF <ExternalLink size={11} />
+              </a>
+            )}
+          </div>
+          <button
+            onClick={() => {
+              setPhase('idle')
+              setPurchase(null)
+            }}
+            className="text-sm text-slate-500 hover:text-slate-900"
+          >
+            ← Back
+          </button>
+        </div>
+      )}
+    </Card>
   )
 }
 
