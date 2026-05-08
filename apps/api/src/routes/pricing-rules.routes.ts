@@ -207,6 +207,191 @@ const pricingRulesRoutes: FastifyPluginAsync = async (fastify) => {
       }
     },
   )
+
+  // D.2 — Dry-run simulator. Caller passes a rule definition (no DB write)
+  // + an optional scope (productIds / variationIds). Returns the projected
+  // price delta against the current PricingSnapshot for each in-scope row.
+  // Mirrors the math at pricing-engine.service.ts:326-384 + the margin-floor
+  // clamp at line 425-437 so previews match the engine's actual behaviour.
+  //
+  // No scope ⇒ sample of the first 100 snapshot rows (gives the operator
+  // a "what would this look like across the catalog" gut check).
+  fastify.post('/pricing-rules/simulate', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as {
+        type?: string
+        parameters?: Record<string, unknown>
+        minMarginPercent?: number | null
+        productIds?: string[]
+        variationIds?: string[]
+        limit?: number
+      }
+      if (!body.type || !VALID_TYPES.has(body.type)) {
+        return reply.code(400).send({
+          error: `type must be one of ${[...VALID_TYPES].join(', ')}`,
+        })
+      }
+      const params = body.parameters ?? {}
+      const minMargin =
+        body.minMarginPercent != null ? Number(body.minMarginPercent) : null
+
+      // Resolve the SKU set we'll preview against.
+      let snapshotWhere: Prisma.PricingSnapshotWhereInput | undefined
+      if (body.variationIds?.length) {
+        const variants = await prisma.productVariation.findMany({
+          where: { id: { in: body.variationIds } },
+          select: { sku: true },
+        })
+        snapshotWhere = { sku: { in: variants.map((v) => v.sku) } }
+      } else if (body.productIds?.length) {
+        const variants = await prisma.productVariation.findMany({
+          where: { productId: { in: body.productIds } },
+          select: { sku: true },
+        })
+        const products = await prisma.product.findMany({
+          where: { id: { in: body.productIds } },
+          select: { sku: true },
+        })
+        const skus = [
+          ...new Set([
+            ...variants.map((v) => v.sku),
+            ...products.map((p) => p.sku),
+          ]),
+        ]
+        snapshotWhere = { sku: { in: skus } }
+      }
+
+      const limit = Math.min(500, Math.max(1, body.limit ?? 100))
+      const snapshots = await prisma.pricingSnapshot.findMany({
+        where: snapshotWhere,
+        orderBy: [{ sku: 'asc' }, { channel: 'asc' }, { marketplace: 'asc' }],
+        take: limit,
+      })
+
+      const rows = snapshots.map((snap) => {
+        const b = (snap.breakdown ?? {}) as {
+          effectiveCostBasis?: number | null
+          costPrice?: number | null
+          fxRate?: number
+          fbaFee?: number
+          referralFee?: number
+          taxInclusive?: boolean
+          vatRate?: number
+        }
+        const costBasis = b.effectiveCostBasis ?? b.costPrice ?? null
+        const fxRate = b.fxRate ?? 1
+        const competitorPriceMp = null as number | null // breakdown doesn't carry it; competitor rules need ChannelListing
+        let projected: number | null = null
+        let reason = ''
+
+        switch (body.type) {
+          case 'COST_PLUS_MARGIN': {
+            const marginPercent = Number(params.marginPercent)
+            if (Number.isFinite(marginPercent) && costBasis != null) {
+              projected = costBasis * (1 + marginPercent / 100) * fxRate
+              reason = `cost ${costBasis.toFixed(2)} × (1 + ${marginPercent}%) × fx ${fxRate.toFixed(4)}`
+            } else {
+              reason = costBasis == null ? 'no cost basis' : 'invalid marginPercent'
+            }
+            break
+          }
+          case 'DYNAMIC_MARGIN': {
+            const targetMargin = Number(params.targetMargin ?? params.baseMargin)
+            if (Number.isFinite(targetMargin) && costBasis != null) {
+              projected = costBasis * (1 + targetMargin / 100) * fxRate
+              reason = `cost ${costBasis.toFixed(2)} × (1 + ${targetMargin}%) × fx ${fxRate.toFixed(4)}`
+            } else {
+              reason = costBasis == null ? 'no cost basis' : 'invalid targetMargin'
+            }
+            break
+          }
+          case 'FIXED_PRICE': {
+            const fixed = Number(params.fixedPrice)
+            if (Number.isFinite(fixed) && fixed > 0) {
+              projected = fixed
+              reason = `fixed ${fixed.toFixed(2)} ${snap.currency}`
+            } else {
+              reason = 'invalid fixedPrice'
+            }
+            break
+          }
+          case 'MATCH_LOW':
+          case 'PERCENTAGE_BELOW': {
+            // Both rules need lowestCompetitorPrice from ChannelListing; the
+            // breakdown JSON doesn't carry it, so per-row preview would
+            // require an extra join. For simulator scope, surface this as
+            // "needs competitor data" — the engine still applies the rule
+            // at materialization time when the competitor cron has populated
+            // ChannelListing.lowestCompetitorPrice.
+            reason = 'rule needs competitor price (live at materialize time)'
+            break
+          }
+        }
+
+        // Apply margin floor if both minMargin and costBasis are present.
+        let wouldClamp = false
+        if (
+          projected != null &&
+          minMargin != null &&
+          costBasis != null &&
+          costBasis > 0
+        ) {
+          // Margin against the projected price (in master currency, before
+          // tax-inclusive markup since clamp is on net economics).
+          const projectedNet = b.taxInclusive
+            ? projected / (1 + (b.vatRate ?? 0) / 100)
+            : projected
+          const projectedNetInMaster = projectedNet / fxRate
+          const margin =
+            ((projectedNetInMaster - costBasis) / projectedNetInMaster) * 100
+          if (margin < minMargin) {
+            const floor = costBasis * (1 + minMargin / 100) * fxRate
+            wouldClamp = true
+            reason += ` → clamped to margin floor ${floor.toFixed(2)} (would be ${margin.toFixed(1)}%)`
+            projected = floor
+          }
+        }
+
+        const current = Number(snap.computedPrice)
+        const delta = projected != null ? projected - current : null
+        return {
+          sku: snap.sku,
+          channel: snap.channel,
+          marketplace: snap.marketplace,
+          fulfillmentMethod: snap.fulfillmentMethod,
+          currency: snap.currency,
+          currentPrice: current,
+          currentSource: snap.source,
+          projectedPrice: projected != null ? Math.round(projected * 100) / 100 : null,
+          delta: delta != null ? Math.round(delta * 100) / 100 : null,
+          wouldClamp,
+          reason,
+        }
+      })
+
+      // Summary stats so the UI can render headline numbers without
+      // re-aggregating client-side.
+      const evaluable = rows.filter((r) => r.projectedPrice != null)
+      const avgDelta =
+        evaluable.length > 0
+          ? evaluable.reduce((sum, r) => sum + (r.delta ?? 0), 0) /
+            evaluable.length
+          : 0
+      const summary = {
+        scoped: rows.length,
+        evaluated: evaluable.length,
+        wouldClamp: rows.filter((r) => r.wouldClamp).length,
+        priceUp: evaluable.filter((r) => (r.delta ?? 0) > 0).length,
+        priceDown: evaluable.filter((r) => (r.delta ?? 0) < 0).length,
+        avgDelta: Math.round(avgDelta * 100) / 100,
+      }
+
+      return { summary, rows }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[pricing-rules/simulate] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
 }
 
 export default pricingRulesRoutes
