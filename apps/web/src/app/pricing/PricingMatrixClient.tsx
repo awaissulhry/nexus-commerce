@@ -688,7 +688,13 @@ function PricingDetailDrawer({
           <dl className="grid grid-cols-2 gap-y-1 text-base">
             <Item label="Master price" value={breakdown.masterPrice} suffix="EUR" />
             <Item label="FX rate" value={breakdown.fxRate} format="rate" />
-            <Item label="Cost" value={breakdown.costPrice} suffix="EUR" />
+            <Item label="Cost (entered)" value={breakdown.costPrice} suffix="EUR" />
+            <Item label="Landed (receipts)" value={breakdown.landedCost} suffix="EUR" />
+            <Item
+              label="Floor cost basis"
+              value={breakdown.effectiveCostBasis}
+              suffix="EUR"
+            />
             <Item label="FBA fee" value={breakdown.fbaFee} suffix={row.currency} />
             <Item label="Referral fee" value={breakdown.referralFee} suffix={row.currency} />
             <Item label="VAT rate" value={breakdown.vatRate} suffix="%" />

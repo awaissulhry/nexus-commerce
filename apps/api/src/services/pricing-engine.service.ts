@@ -57,6 +57,18 @@ export interface PriceBreakdown {
   vatRate: number
   taxInclusive: boolean
   costPrice: number | null
+  /**
+   * C.1 — landed cost = unitCost + freight + duty + insurance + broker
+   * (per unit, EUR). Read from the latest StockCostLayer row for the
+   * product. Null when no receipts exist; the engine falls back to
+   * costPrice for the floor calc.
+   */
+  landedCost: number | null
+  /**
+   * The cost basis the floor calculation actually used. Equal to
+   * landedCost when present, otherwise costPrice.
+   */
+  effectiveCostBasis: number | null
   minMarginPercent: number | null
   salePriceWindow?: { startsAt: Date | null; endsAt: Date | null }
 }
@@ -78,6 +90,46 @@ export interface PriceResolution {
 }
 
 const DEFAULT_MIN_MARGIN_PERCENT = 10
+
+/**
+ * C.1 — Resolve the most recent landed cost from StockCostLayer (S.20).
+ *
+ *   landedCost = unitCost + (freightCents + dutyCents + insuranceCents +
+ *                brokerCents) / 100
+ *
+ * All per unit, in EUR. Returns null when no receipts exist — caller
+ * falls back to costPrice (the operator-entered planning estimate).
+ *
+ * Receipts trump estimates because they reflect what the seller actually
+ * paid; we want the floor to enforce profitability against reality, not
+ * an aging guess. Picks the most recent receipt regardless of
+ * unitsRemaining: even when the layer is depleted, it's the most accurate
+ * replacement-cost signal we have until the next inbound shipment.
+ */
+async function getLatestLandedCost(
+  prisma: PrismaClient,
+  productId: string,
+): Promise<number | null> {
+  const layer = await prisma.stockCostLayer.findFirst({
+    where: { productId },
+    orderBy: { receivedAt: 'desc' },
+    select: {
+      unitCost: true,
+      freightCents: true,
+      dutyCents: true,
+      insuranceCents: true,
+      brokerCents: true,
+    },
+  })
+  if (!layer) return null
+  const feeCents =
+    (layer.freightCents ?? 0) +
+    (layer.dutyCents ?? 0) +
+    (layer.insuranceCents ?? 0) +
+    (layer.brokerCents ?? 0)
+  const landed = Number(layer.unitCost) + feeCents / 100
+  return Number.isFinite(landed) && landed > 0 ? landed : null
+}
 
 /**
  * Resolve a price for a single (sku, channel, marketplace, fm) tuple.
@@ -206,9 +258,28 @@ export async function resolvePrice(
     warnings.push(`No FX rate for EUR→${currency}; treating 1:1`)
   }
 
+  // ── Resolve landed cost (C.1) ───────────────────────────────────
+  // Receipts via StockCostLayer (S.20) carry per-unit unitCost + freight
+  // + duty + insurance + broker. When present, landed cost is the truth
+  // the floor calc enforces against; fall back to operator-entered
+  // costPrice when no receipts exist yet (catalog SKU not yet inbound).
+  const landedCost = productId
+    ? await getLatestLandedCost(prisma, productId)
+    : null
+  const effectiveCostBasis = landedCost ?? costPrice
+  if (landedCost != null && costPrice != null && landedCost > costPrice * 1.01) {
+    // Soft warning when receipts diverge from the operator estimate by
+    // more than 1% — the cost spreadsheet is stale and margin is being
+    // squeezed silently.
+    warnings.push(
+      `Landed cost ${landedCost.toFixed(2)} > entered cost ${costPrice.toFixed(2)} — review supplier estimate`,
+    )
+  }
+
   // ── Compute floor + ceiling for clamping ────────────────────────
   // Convert master-currency cost into marketplace currency for the floor.
-  const costInMpCurrency = costPrice != null ? costPrice * fxRate : null
+  const costInMpCurrency =
+    effectiveCostBasis != null ? effectiveCostBasis * fxRate : null
   // Per-unit referral fee at the moment of pricing — referralFeePercent is
   // applied to the proposed price; we approximate at masterPrice * fxRate
   // for floor calculation (real referral on actual sale price; this is a
@@ -463,6 +534,8 @@ export async function resolvePrice(
       vatRate,
       taxInclusive,
       costPrice,
+      landedCost,
+      effectiveCostBasis,
       minMarginPercent,
       salePriceWindow: resolved.salePriceWindow,
     },
