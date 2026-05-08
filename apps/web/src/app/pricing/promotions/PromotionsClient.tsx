@@ -357,8 +357,8 @@ function CountTile({
     slate: 'border-slate-200 bg-white text-slate-500',
   }[tone]
   return (
-    <Card>
-      <div className={cn('flex items-start gap-2', toneClasses, 'p-1 -m-1 rounded')}>
+    <Card noPadding className={toneClasses}>
+      <div className="flex items-start gap-2 px-4 py-3">
         <Icon size={14} className="mt-0.5 flex-shrink-0" />
         <div>
           <div className="text-[20px] leading-tight font-semibold tabular-nums">

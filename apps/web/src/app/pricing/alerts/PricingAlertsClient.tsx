@@ -118,7 +118,7 @@ export default function PricingAlertsClient() {
         <Card>
           <div className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
             <Loader2 className="w-4 h-4 animate-spin" />{' '}
-            {t('pricing.alerts.loading') || 'Loading alerts…'}
+            {t('pricing.alerts.loading')}
           </div>
         </Card>
       </div>
@@ -224,25 +224,25 @@ export default function PricingAlertsClient() {
               <table className="w-full text-md">
                 <thead className="border-b border-slate-200 bg-rose-50">
                   <tr>
-                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
-                      Severity
+                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      {t('pricing.alerts.col.severity')}
                     </th>
-                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
-                      SKU
+                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      {t('pricing.alerts.col.sku')}
                     </th>
-                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
-                      Where
+                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      {t('pricing.alerts.col.where')}
                     </th>
-                    <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800">
-                      Master
+                    <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      {t('pricing.alerts.col.master')}
                     </th>
-                    <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800">
-                      Listing
+                    <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      {t('pricing.alerts.col.listing')}
                     </th>
-                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
-                      Detected
+                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      {t('pricing.alerts.col.detected')}
                     </th>
-                    <th className="px-3 py-2 w-24"></th>
+                    <th scope="col" className="px-3 py-2 w-24"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -252,7 +252,7 @@ export default function PricingAlertsClient() {
                       className="border-b border-slate-100 hover:bg-slate-50"
                     >
                       <td className="px-3 py-2">
-                        <SeverityChip tone="rose" label="Drift" />
+                        <SeverityChip tone="rose" label={t('pricing.alerts.severity.drift')} />
                       </td>
                       <td className="px-3 py-2 font-mono text-base text-slate-800">
                         {d.sku}
@@ -282,7 +282,7 @@ export default function PricingAlertsClient() {
                           href={`/pricing?search=${encodeURIComponent(d.sku)}`}
                           className="text-sm text-blue-600 hover:underline"
                         >
-                          Open in pricing →
+                          {t('pricing.alerts.openInPricing')}
                         </Link>
                       </td>
                     </tr>
@@ -314,25 +314,25 @@ export default function PricingAlertsClient() {
               <table className="w-full text-md">
                 <thead className="border-b border-slate-200 bg-rose-50">
                   <tr>
-                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
-                      Severity
+                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      {t('pricing.alerts.col.severity')}
                     </th>
-                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
-                      SKU
+                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      {t('pricing.alerts.col.sku')}
                     </th>
-                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
-                      Where
+                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      {t('pricing.alerts.col.where')}
                     </th>
-                    <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800">
-                      Price
+                    <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      {t('pricing.alerts.col.price')}
                     </th>
-                    <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800">
-                      Net profit
+                    <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      {t('pricing.alerts.col.netProfit')}
                     </th>
-                    <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800">
-                      Margin
+                    <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-rose-800">
+                      {t('pricing.alerts.col.margin')}
                     </th>
-                    <th className="px-3 py-2 w-24"></th>
+                    <th scope="col" className="px-3 py-2 w-24"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -346,7 +346,11 @@ export default function PricingAlertsClient() {
                         <td className="px-3 py-2">
                           <SeverityChip
                             tone="rose"
-                            label={negative ? 'Loss' : 'Thin'}
+                            label={
+                              negative
+                                ? t('pricing.alerts.severity.loss')
+                                : t('pricing.alerts.severity.thin')
+                            }
                           />
                         </td>
                         <td className="px-3 py-2 font-mono text-base text-slate-800">
@@ -394,7 +398,7 @@ export default function PricingAlertsClient() {
                             href={`/pricing?search=${encodeURIComponent(m.sku)}`}
                             className="text-sm text-blue-600 hover:underline"
                           >
-                            Open in pricing →
+                            {t('pricing.alerts.openInPricing')}
                           </Link>
                         </td>
                       </tr>
@@ -420,37 +424,41 @@ export default function PricingAlertsClient() {
           <table className="w-full text-md">
             <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
-                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
-                  Severity
+                <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  {t('pricing.alerts.col.severity')}
                 </th>
-                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
-                  SKU
+                <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  {t('pricing.alerts.col.sku')}
                 </th>
-                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
-                  Where
+                <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  {t('pricing.alerts.col.where')}
                 </th>
-                <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
-                  Price
+                <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  {t('pricing.alerts.col.price')}
                 </th>
-                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
-                  Reason
+                <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  {t('pricing.alerts.col.reason')}
                 </th>
-                <th className="px-3 py-2 w-24"></th>
+                <th scope="col" className="px-3 py-2 w-24"></th>
               </tr>
             </thead>
             <tbody>
               {data.rows.map((r) => {
                 const severity =
                   r.source === 'FALLBACK'
-                    ? { tone: 'rose', label: 'No resolution' }
+                    ? { tone: 'rose', label: t('pricing.alerts.severity.fallback') }
                     : r.isClamped
-                    ? { tone: 'amber', label: 'Clamped' }
-                    : { tone: 'blue', label: 'Warning' }
+                    ? { tone: 'amber', label: t('pricing.alerts.severity.clamped') }
+                    : { tone: 'blue', label: t('pricing.alerts.severity.warning') }
                 const reason =
                   r.source === 'FALLBACK'
-                    ? 'Engine returned 0 — no master / variant / rule found'
+                    ? t('pricing.alerts.fallbackReason')
                     : r.isClamped
-                    ? `Clamped from ${r.clampedFrom} to ${r.computedPrice} ${r.currency}`
+                    ? t('pricing.alerts.clampedReason', {
+                        from: r.clampedFrom ?? '?',
+                        to: r.computedPrice,
+                        currency: r.currency,
+                      })
                     : r.warnings.join('; ') || '—'
                 return (
                   <tr
@@ -485,7 +493,7 @@ export default function PricingAlertsClient() {
                         href={`/pricing?search=${encodeURIComponent(r.sku)}`}
                         className="text-sm text-blue-600 hover:underline"
                       >
-                        Open in pricing →
+                        {t('pricing.alerts.openInPricing')}
                       </Link>
                     </td>
                   </tr>
@@ -524,8 +532,8 @@ function CountTile({
     blue: 'text-blue-700',
   }[tone]
   return (
-    <Card>
-      <div className={cn('flex items-start gap-3', toneClasses, 'p-1 -m-1 rounded')}>
+    <Card noPadding className={toneClasses}>
+      <div className="flex items-start gap-3 px-4 py-3">
         <AlertTriangle size={16} className={textTone} />
         <div>
           <div className={cn('text-[24px] font-semibold tabular-nums', textTone)}>

@@ -245,19 +245,19 @@ export default function BuyBoxClient() {
             <table className="w-full text-md">
               <thead className="border-b border-slate-200 bg-slate-50">
                 <tr>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
                     {t('pricing.buybox.table.channel')}
                   </th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
                     {t('pricing.buybox.table.marketplace')}
                   </th>
-                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
                     {t('pricing.buybox.table.wins')}
                   </th>
-                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
                     {t('pricing.buybox.table.observations')}
                   </th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 min-w-[200px]">
+                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 min-w-[200px]">
                     {t('pricing.buybox.table.winRate')}
                   </th>
                 </tr>
@@ -305,13 +305,13 @@ export default function BuyBoxClient() {
               <table className="w-full text-md">
                 <thead className="border-b border-slate-200 bg-slate-50">
                   <tr>
-                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
                       {t('pricing.buybox.table.sellerId')}
                     </th>
-                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                    <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
                       {t('pricing.buybox.table.fulfillment')}
                     </th>
-                    <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
+                    <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
                       {t('pricing.buybox.table.timesWon')}
                     </th>
                   </tr>
