@@ -2647,6 +2647,7 @@ const SORT_OPTIONS: Array<{ value: MatrixSort; labelKey: string }> = [
 
 function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marketplace[] }) {
   const { t } = useTranslations()
+  const confirm = useConfirm()
   const [coverage, setCoverage] = useState<Coverage | ''>('')
   const [sortBy, setSortBy] = useState<MatrixSort>('updated')
   const [drawerOpen, setDrawerOpen] = useState<string | null>(null)
@@ -2656,18 +2657,37 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
   // Stored as `${columnKey}:${kind}` so a single click toggles, and a
   // second click on the same pip clears.
   const [pipFilter, setPipFilter] = useState<string | null>(null)
-  // M.5 — bulk-resync from the pipFilter banner. busy disables the
+  // M.5/M.6 — bulk action from the pipFilter banner. busy disables the
   // button + progresses; lastBulk is the post-fan-out summary so the
   // operator sees what landed (cleared on next pip click or unmount).
+  // For M.6 (suppressed → AI diagnose) we also track totalCostUSD so
+  // the operator sees what the bulk LLM call cost.
   const [bulkBusy, setBulkBusy] = useState(false)
   const [lastBulk, setLastBulk] = useState<
-    { ok: number; failed: number; total: number } | null
+    { ok: number; failed: number; total: number; costUSD?: number } | null
   >(null)
+  // M.6 — diagnoses landed by the bulk-diagnose flow, keyed by
+  // listingId. V.3 doesn't cache server-side so the bulk button
+  // would spend tokens with nothing to show otherwise; storing them
+  // in component state lets the operator read all N diagnoses from
+  // the matrix without opening N drawers. Cleared on pipFilter change.
+  const [bulkDiagnoses, setBulkDiagnoses] = useState<
+    Record<string, {
+      sku: string
+      reasonText: string
+      explanation: string | null
+      rootCause: string | null
+      suggestedFix: string[]
+      confidence: string | null
+      costUSD: number
+    }>
+  >({})
   // Reset the bulk summary whenever the operator changes pip filter so
   // a stale "12 succeeded" from a prior column doesn't sit on the new
   // banner.
   useEffect(() => {
     setLastBulk(null)
+    setBulkDiagnoses({})
   }, [pipFilter])
 
   const url = useMemo(() => {
@@ -2886,11 +2906,20 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
           )
           if (cell) targetCells.push(cell)
         }
-        // Bulk-resync only makes sense for surfaces a resync can move:
-        // sync errors, drift from master. Suppressed listings need
-        // per-listing diagnosis (the drawer's V.3 button) and `live`
-        // is a read-only KPI. Hide the button in those cases.
+        // Bulk-resync makes sense for surfaces a resync can move:
+        // sync errors, drift from master. `live` is read-only.
         const canBulkResync = kind === 'errors' || kind === 'drift'
+        // M.6 — bulk AI diagnose for suppressed cells. Each call
+        // costs LLM tokens (no cache), so we estimate cost up front
+        // and confirm with the operator before fanning out.
+        const canBulkDiagnose = kind === 'suppressed'
+        // Rough estimate per call: prompt is ~400 tokens, response
+        // ~200 tokens. With Gemini 2.0 Flash @ ~$0.30 / 1M in,
+        // ~$1.20 / 1M out, that's ~$0.00012 + ~$0.00024 = ~$0.0004
+        // per call. We round up to $0.001 for the confirm prompt to
+        // avoid undershooting on operator-facing copy. Anthropic
+        // Claude is roughly 10× costlier so we hedge with "~$0.005".
+        const ESTIMATED_COST_PER_DIAGNOSE_USD = 0.005
         const runBulkResync = async () => {
           if (!canBulkResync || bulkBusy || targetCells.length === 0) return
           setBulkBusy(true)
@@ -2930,6 +2959,88 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
           }
           setBulkBusy(false)
         }
+        const runBulkDiagnose = async () => {
+          if (!canBulkDiagnose || bulkBusy || targetCells.length === 0) return
+          const estCost = (
+            targetCells.length * ESTIMATED_COST_PER_DIAGNOSE_USD
+          ).toFixed(3)
+          const ok = await confirm({
+            title: `Diagnose ${targetCells.length} suppressed listings with AI?`,
+            description:
+              `Each call sends listing context to the configured AI provider and bills for tokens used (no caching). ` +
+              `Rough upper-bound estimate for this batch: ~$${estCost}. ` +
+              `Actual cost varies by provider and reason-text length — see the per-call costUSD on each diagnosis once it lands in the listing's drawer.`,
+            confirmLabel: `Diagnose ${targetCells.length}`,
+            tone: 'info',
+          })
+          if (!ok) return
+          setBulkBusy(true)
+          setLastBulk(null)
+          // Concurrency cap so we don't fire 20 simultaneous LLM
+          // calls — providers will rate-limit and the failure mode
+          // is hard to debug from the operator side. 3-at-a-time
+          // keeps a 20-cell batch under ~30 seconds.
+          const CONCURRENCY = 3
+          let cursor = 0
+          let okCount = 0
+          let failedCount = 0
+          let totalCost = 0
+          const next = async () => {
+            while (cursor < targetCells.length) {
+              const idx = cursor++
+              const c = targetCells[idx]
+              const product = visibleProducts.find((p: any) =>
+                p.cells.some((pc: any) => pc.id === c.id),
+              )
+              const sku = product?.sku ?? c.id
+              try {
+                const r = await fetch(
+                  `${getBackendUrl()}/api/listings/${c.id}/diagnose-suppression`,
+                  {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                  },
+                )
+                const j = await r.json().catch(() => ({}))
+                if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`)
+                okCount++
+                const callCost = typeof j?.provider?.costUSD === 'number'
+                  ? j.provider.costUSD
+                  : 0
+                totalCost += callCost
+                // Store the diagnosis so the operator can read all N
+                // from the matrix without opening N drawers.
+                setBulkDiagnoses((prev) => ({
+                  ...prev,
+                  [c.id]: {
+                    sku,
+                    reasonText: c.lastSyncError ?? '(no reason text)',
+                    explanation: j?.diagnosis?.explanation ?? null,
+                    rootCause: j?.diagnosis?.rootCause ?? null,
+                    suggestedFix: Array.isArray(j?.diagnosis?.suggestedFix)
+                      ? j.diagnosis.suggestedFix
+                      : [],
+                    confidence: j?.diagnosis?.confidence ?? null,
+                    costUSD: callCost,
+                  },
+                }))
+              } catch {
+                failedCount++
+              }
+              // Update tally as we go so the operator sees progress.
+              setLastBulk({
+                ok: okCount,
+                failed: failedCount,
+                total: targetCells.length,
+                costUSD: totalCost,
+              })
+            }
+          }
+          await Promise.all(
+            Array.from({ length: Math.min(CONCURRENCY, targetCells.length) }, () => next()),
+          )
+          setBulkBusy(false)
+        }
         return (
           <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded border border-blue-200 bg-blue-50 text-sm flex-wrap">
             <span className="text-blue-900">
@@ -2941,12 +3052,20 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
               <span className="font-mono">{col}</span>
               {lastBulk && (
                 <span className="ml-2 text-xs">
-                  · last batch:{' '}
+                  · {bulkBusy ? 'progress' : 'last batch'}:{' '}
                   <span className="text-emerald-700 font-semibold">{lastBulk.ok} succeeded</span>
                   {lastBulk.failed > 0 && (
                     <>
                       ,{' '}
                       <span className="text-rose-700 font-semibold">{lastBulk.failed} failed</span>
+                    </>
+                  )}
+                  {typeof lastBulk.costUSD === 'number' && lastBulk.costUSD > 0 && (
+                    <>
+                      ,{' '}
+                      <span className="text-slate-600 tabular-nums">
+                        ${lastBulk.costUSD.toFixed(4)}
+                      </span>
                     </>
                   )}
                 </span>
@@ -2964,6 +3083,18 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
                   {bulkBusy ? `Resyncing ${targetCells.length}…` : `Resync all ${targetCells.length}`}
                 </button>
               )}
+              {canBulkDiagnose && targetCells.length > 0 && (
+                <button
+                  onClick={runBulkDiagnose}
+                  disabled={bulkBusy}
+                  className="h-6 px-2 text-xs bg-violet-600 text-white border border-violet-700 rounded hover:bg-violet-700 disabled:opacity-50 inline-flex items-center gap-1"
+                  aria-label={`Diagnose ${targetCells.length} suppressed listings with AI`}
+                  title={`Sends each listing to the configured AI provider for a plain-English explanation. Estimated upper-bound cost ~$${(targetCells.length * 0.005).toFixed(3)}.`}
+                >
+                  <Sparkles size={11} className={bulkBusy ? 'animate-pulse' : ''} />
+                  {bulkBusy ? `Diagnosing ${targetCells.length}…` : `Diagnose all ${targetCells.length} with AI`}
+                </button>
+              )}
               <button
                 onClick={() => setPipFilter(null)}
                 className="h-6 px-2 text-xs bg-white border border-blue-300 rounded text-blue-700 hover:bg-blue-100 inline-flex items-center gap-1"
@@ -2975,6 +3106,77 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
           </div>
         )
       })()}
+
+      {/* M.6 — diagnoses panel. Renders only when bulkDiagnoses has
+          entries, which only happens after the operator confirms the
+          bulk-diagnose run. Each card mirrors the AmazonContextSection
+          drawer card so the operator's eye recognises the format. */}
+      {Object.keys(bulkDiagnoses).length > 0 && (
+        <div className="border border-violet-200 bg-white rounded-md">
+          <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-violet-100 bg-violet-50">
+            <div className="text-xs uppercase tracking-wider font-semibold text-violet-700 inline-flex items-center gap-1.5">
+              <Sparkles size={11} />
+              AI suppression diagnoses
+              <span className="ml-1 text-slate-500 normal-case font-normal">
+                ({Object.keys(bulkDiagnoses).length})
+              </span>
+            </div>
+            <button
+              onClick={() => setBulkDiagnoses({})}
+              className="h-6 px-2 text-xs bg-white border border-violet-200 rounded text-violet-700 hover:bg-violet-50 inline-flex items-center gap-1"
+              aria-label="Dismiss diagnoses panel"
+            >
+              <FilterX size={11} /> Dismiss
+            </button>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {Object.entries(bulkDiagnoses).map(([listingId, d]) => (
+              <div key={listingId} className="px-3 py-2 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => setDrawerOpen(listingId)}
+                    className="text-sm font-mono text-slate-900 hover:text-blue-700 hover:underline"
+                  >
+                    {d.sku}
+                  </button>
+                  <div className="text-xs text-slate-500 tabular-nums inline-flex items-center gap-2">
+                    {d.confidence && (
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${
+                          d.confidence === 'high'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : d.confidence === 'medium'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {d.confidence}
+                      </span>
+                    )}
+                    <span>${d.costUSD.toFixed(4)}</span>
+                  </div>
+                </div>
+                {d.rootCause && (
+                  <div className="text-xs">
+                    <span className="font-semibold text-slate-600">Root cause:</span>{' '}
+                    <span className="text-slate-900">{d.rootCause}</span>
+                  </div>
+                )}
+                {d.explanation && (
+                  <div className="text-sm text-slate-700">{d.explanation}</div>
+                )}
+                {d.suggestedFix.length > 0 && (
+                  <ol className="text-sm text-slate-800 list-decimal list-inside space-y-0.5">
+                    {d.suggestedFix.map((step, i) => (
+                      <li key={i}>{step}</li>
+                    ))}
+                  </ol>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {data.products.length === 0 ? (
         <EmptyState
