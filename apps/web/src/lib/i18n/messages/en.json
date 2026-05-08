@@ -1212,6 +1212,12 @@
   "pricing.rules.title": "Pricing rules",
   "pricing.rules.subtitle": "Engine-level rules — match-low, percentage-below, cost-plus margin, fixed price, dynamic margin. Evaluated as PRICING_RULE source in the resolver chain.",
   "pricing.rules.crumb": "Rules",
+  "pricing.rules.errorTitle": "Error loading pricing rules",
+  "pricing.rules.activeCount": "{n} active rule",
+  "pricing.rules.activeCountPlural": "{n} active rules",
+  "pricing.rules.refresh": "Refresh",
+  "pricing.rules.refreshing": "Refreshing…",
+  "pricing.rules.createNew": "Create rule",
 
   "pricing.promotions.title": "Promotions",
   "pricing.promotions.subtitle": "Scheduled retail events + price actions. Hourly cron materializes ChannelListing.salePrice for active windows; engine reads as SCHEDULED_SALE source.",

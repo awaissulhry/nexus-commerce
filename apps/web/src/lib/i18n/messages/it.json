@@ -1183,6 +1183,12 @@
   "pricing.rules.title": "Regole prezzi",
   "pricing.rules.subtitle": "Regole a livello di motore — match-low, percentage-below, cost-plus margin, fixed price, dynamic margin. Valutate come sorgente PRICING_RULE nella catena del resolver.",
   "pricing.rules.crumb": "Regole",
+  "pricing.rules.errorTitle": "Errore nel caricamento delle regole",
+  "pricing.rules.activeCount": "{n} regola attiva",
+  "pricing.rules.activeCountPlural": "{n} regole attive",
+  "pricing.rules.refresh": "Aggiorna",
+  "pricing.rules.refreshing": "Aggiornamento…",
+  "pricing.rules.createNew": "Crea regola",
 
   "pricing.promotions.title": "Promozioni",
   "pricing.promotions.subtitle": "Eventi retail programmati + azioni prezzo. Il cron orario materializza ChannelListing.salePrice per le finestre attive; il motore legge come sorgente SCHEDULED_SALE.",

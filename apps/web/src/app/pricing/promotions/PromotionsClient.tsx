@@ -28,6 +28,8 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Button } from '@/components/ui/Button'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
+import PageHeader from '@/components/layout/PageHeader'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -75,6 +77,7 @@ export default function PromotionsClient() {
   const [running, setRunning] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const { toast } = useToast()
+  const confirm = useConfirm()
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -132,27 +135,50 @@ export default function PromotionsClient() {
     }
   }
 
+  const header = (
+    <PageHeader
+      title={t('pricing.promotions.title')}
+      subtitle={t('pricing.promotions.subtitle')}
+      breadcrumbs={[
+        { label: t('pricing.crumb.root'), href: '/pricing' },
+        { label: t('pricing.promotions.crumb') },
+      ]}
+    />
+  )
+
   if (loading && !data) {
     return (
-      <Card>
-        <div className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
-          <Loader2 className="w-4 h-4 animate-spin" /> {t('pricing.promotions.loading')}
-        </div>
-      </Card>
+      <div>
+        {header}
+        <Card>
+          <div className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
+            <Loader2 className="w-4 h-4 animate-spin" /> {t('pricing.promotions.loading')}
+          </div>
+        </Card>
+      </div>
     )
   }
 
   if (error) {
     return (
-      <div className="border border-rose-200 bg-rose-50 rounded px-3 py-2 text-base text-rose-700 inline-flex items-start gap-1.5">
-        <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
-        <span>{error}</span>
+      <div>
+        {header}
+        <div className="border border-rose-200 bg-rose-50 rounded px-3 py-2 text-base text-rose-700 inline-flex items-start gap-1.5">
+          <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+          <span>{error}</span>
+        </div>
       </div>
     )
   }
 
   const deleteEvent = async (eventId: string, name: string) => {
-    if (!confirm(t('pricing.promotions.deleteConfirm', { name }))) return
+    const ok = await confirm({
+      title: t('pricing.promotions.deleteTitle'),
+      description: t('pricing.promotions.deleteConfirm', { name }),
+      confirmLabel: t('common.delete'),
+      tone: 'danger',
+    })
+    if (!ok) return
     try {
       const res = await fetch(
         `${getBackendUrl()}/api/pricing/promotions/${eventId}`,
@@ -175,7 +201,8 @@ export default function PromotionsClient() {
 
   if (!data || data.counts.total === 0) {
     return (
-      <>
+      <div>
+        {header}
         <div className="flex items-center justify-end mb-3">
           <Button
             variant="primary"
@@ -200,12 +227,14 @@ export default function PromotionsClient() {
             }}
           />
         )}
-      </>
+      </div>
     )
   }
 
   return (
-    <div className="space-y-4">
+    <div>
+      {header}
+      <div className="space-y-4">
       {/* Action row */}
       <div className="flex items-center justify-end">
         <Button
@@ -304,6 +333,7 @@ export default function PromotionsClient() {
           }}
         />
       )}
+      </div>
     </div>
   )
 }

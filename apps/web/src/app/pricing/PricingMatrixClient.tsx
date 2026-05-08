@@ -34,6 +34,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Button } from '@/components/ui/Button'
 import { Modal, ModalBody } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
+import PageHeader from '@/components/layout/PageHeader'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -247,9 +248,15 @@ export default function PricingMatrixClient() {
   }
 
   return (
-    <div className="space-y-4">
-      {/* B.1 — KPI strip */}
-      <KpiStrip kpis={kpis} />
+    <div>
+      <PageHeader
+        title={t('pricing.title')}
+        subtitle={t('pricing.subtitle')}
+        breadcrumbs={[{ label: t('pricing.crumb.root') }]}
+      />
+      <div className="space-y-4">
+        {/* B.1 — KPI strip */}
+        <KpiStrip kpis={kpis} />
 
       {/* Filter bar */}
       <Card>
@@ -601,14 +608,15 @@ export default function PricingMatrixClient() {
         </Card>
       )}
 
-      {/* Detail drawer */}
-      {drawerRow && (
-        <PricingDetailDrawer
-          row={drawerRow}
-          onClose={() => setDrawerKey(null)}
-          onPushed={() => fetchData()}
-        />
-      )}
+        {/* Detail drawer */}
+        {drawerRow && (
+          <PricingDetailDrawer
+            row={drawerRow}
+            onClose={() => setDrawerKey(null)}
+            onPushed={() => fetchData()}
+          />
+        )}
+      </div>
     </div>
   )
 }
