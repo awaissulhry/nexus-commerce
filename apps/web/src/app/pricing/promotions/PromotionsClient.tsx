@@ -28,6 +28,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Button } from '@/components/ui/Button'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { IconButton } from '@/components/ui/IconButton'
+import { Tabs, type Tab } from '@/components/ui/Tabs'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useTranslations } from '@/lib/i18n/use-translations'
@@ -69,6 +70,8 @@ interface PromotionsResponse {
   ended: RetailEvent[]
 }
 
+type PromoTab = 'all' | 'active' | 'upcoming' | 'ended'
+
 export default function PromotionsClient() {
   const { t } = useTranslations()
   const [data, setData] = useState<PromotionsResponse | null>(null)
@@ -76,6 +79,7 @@ export default function PromotionsClient() {
   const [error, setError] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<PromoTab>('all')
   const { toast } = useToast()
   const confirm = useConfirm()
 
@@ -274,8 +278,37 @@ export default function PromotionsClient() {
         </Card>
       </div>
 
+      {/* UI.9 — Sub-tabs for the three lifecycle buckets */}
+      <Tabs
+        tabs={[
+          {
+            id: 'all',
+            label: t('pricing.promotions.tab.all'),
+            count:
+              data.active.length + data.upcoming.length + data.ended.length,
+          },
+          {
+            id: 'active',
+            label: t('pricing.promotions.tab.active'),
+            count: data.active.length,
+          },
+          {
+            id: 'upcoming',
+            label: t('pricing.promotions.tab.upcoming'),
+            count: data.upcoming.length,
+          },
+          {
+            id: 'ended',
+            label: t('pricing.promotions.tab.ended'),
+            count: data.ended.length,
+          },
+        ] as Tab[]}
+        activeTab={activeTab}
+        onChange={(id) => setActiveTab(id as PromoTab)}
+      />
+
       {/* Active events */}
-      {data.active.length > 0 && (
+      {(activeTab === 'all' || activeTab === 'active') && data.active.length > 0 && (
         <EventSection
           label={t('pricing.promotions.section.active', { n: data.active.length })}
           tone="emerald"
@@ -285,7 +318,7 @@ export default function PromotionsClient() {
       )}
 
       {/* Upcoming */}
-      {data.upcoming.length > 0 && (
+      {(activeTab === 'all' || activeTab === 'upcoming') && data.upcoming.length > 0 && (
         <EventSection
           label={t('pricing.promotions.section.upcoming', { n: data.upcoming.length })}
           tone="blue"
@@ -295,7 +328,7 @@ export default function PromotionsClient() {
       )}
 
       {/* Ended */}
-      {data.ended.length > 0 && (
+      {(activeTab === 'all' || activeTab === 'ended') && data.ended.length > 0 && (
         <EventSection
           label={t('pricing.promotions.section.ended', { n: data.ended.length })}
           tone="slate"

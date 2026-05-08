@@ -15,6 +15,7 @@ import {
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Button } from '@/components/ui/Button'
+import { Tabs, type Tab } from '@/components/ui/Tabs'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -73,11 +74,14 @@ interface AlertsResponse {
   lowMarginRows: LowMarginRow[]
 }
 
+type AlertTab = 'all' | 'drift' | 'lowMargin' | 'engine'
+
 export default function PricingAlertsClient() {
   const { t } = useTranslations()
   const [data, setData] = useState<AlertsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<AlertTab>('all')
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -174,22 +178,52 @@ export default function PricingAlertsClient() {
         />
       </div>
 
-      {/* Refresh */}
-      <div className="flex items-center justify-end">
-        <Button
-          variant="secondary"
-          size="md"
-          onClick={fetchData}
-          icon={<RefreshCw size={12} />}
-        >
-          {t('pricing.action.refresh')}
-        </Button>
-      </div>
+      {/* UI.9 — Sub-tabs for the three severity buckets. The count tiles
+          above always show all 5 figures; tabs filter the tables below. */}
+      <Tabs
+        tabs={[
+          {
+            id: 'all',
+            label: t('pricing.alerts.tab.all'),
+            count:
+              data.driftRows.length +
+              data.lowMarginRows.length +
+              data.rows.length,
+          },
+          {
+            id: 'drift',
+            label: t('pricing.alerts.tab.drift'),
+            count: data.driftRows.length,
+          },
+          {
+            id: 'lowMargin',
+            label: t('pricing.alerts.tab.lowMargin'),
+            count: data.lowMarginRows.length,
+          },
+          {
+            id: 'engine',
+            label: t('pricing.alerts.tab.engine'),
+            count: data.rows.length,
+          },
+        ] as Tab[]}
+        activeTab={activeTab}
+        onChange={(id) => setActiveTab(id as AlertTab)}
+        trailing={
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={fetchData}
+            icon={<RefreshCw size={12} />}
+          >
+            {t('pricing.action.refresh')}
+          </Button>
+        }
+      />
 
       {/* B.2 — Drift table. Shown above engine alerts because drift means
           actual customer-visible prices are wrong, while engine alerts are
           materialization-time warnings only. */}
-      {data.driftRows.length > 0 && (
+      {(activeTab === 'all' || activeTab === 'drift') && data.driftRows.length > 0 && (
         <div className="space-y-2">
           <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
             {t('pricing.alerts.section.driftTable', {
@@ -274,7 +308,7 @@ export default function PricingAlertsClient() {
       {/* C.2 — Low-margin table. Below drift (customer-facing) but above
           engine-resolution alerts (materialization-time only). Ordered by
           marginPct ascending so the worst SKUs are at the top. */}
-      {data.lowMarginRows.length > 0 && (
+      {(activeTab === 'all' || activeTab === 'lowMargin') && data.lowMarginRows.length > 0 && (
         <div className="space-y-2">
           <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
             {t('pricing.alerts.section.lowMargin', {
@@ -389,7 +423,7 @@ export default function PricingAlertsClient() {
       )}
 
       {/* Engine-time alerts (clamped / fallback / warnings) */}
-      {data.rows.length > 0 && (
+      {(activeTab === 'all' || activeTab === 'engine') && data.rows.length > 0 && (
         <div className="space-y-2">
           {(data.driftRows.length > 0 || data.lowMarginRows.length > 0) && (
             <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
