@@ -30,29 +30,66 @@ export function HierarchyLens({ search }: { search: string }) {
   const [parents, setParents] = useState<PimItem[]>([])
   const [standalones, setStandalones] = useState<PimItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    let cancelled = false
     setLoading(true)
+    setError(null)
+    // U.22 — explicit .ok check + catch. Was a fire-and-forget chain
+    // that swallowed 5xx responses into empty `parents`/`standalones`
+    // — operators saw "no products" instead of an error.
     Promise.all([
       fetch(
         `${getBackendUrl()}/api/pim/parents-overview?search=${encodeURIComponent(search)}&limit=100`,
-      ).then((r) => r.json()),
+      ).then(async (r) => {
+        if (!r.ok) throw new Error(`parents HTTP ${r.status}`)
+        return r.json()
+      }),
       fetch(
         `${getBackendUrl()}/api/pim/standalones?search=${encodeURIComponent(search)}&limit=100`,
-      ).then((r) => r.json()),
+      ).then(async (r) => {
+        if (!r.ok) throw new Error(`standalones HTTP ${r.status}`)
+        return r.json()
+      }),
     ])
       .then(([p, s]) => {
+        if (cancelled) return
         setParents(p.items ?? [])
         setStandalones(s.items ?? [])
       })
-      .finally(() => setLoading(false))
+      .catch((e) => {
+        if (cancelled) return
+        setError(e instanceof Error ? e.message : String(e))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [search])
 
   if (loading)
     return (
       <Card>
-        <div className="text-md text-slate-500 py-8 text-center">
+        <div
+          role="status"
+          aria-live="polite"
+          className="text-md text-slate-500 py-8 text-center"
+        >
           Loading hierarchy…
+        </div>
+      </Card>
+    )
+  if (error)
+    return (
+      <Card>
+        <div
+          role="alert"
+          className="text-md text-rose-600 py-8 text-center"
+        >
+          Failed to load hierarchy: {error}
         </div>
       </Card>
     )

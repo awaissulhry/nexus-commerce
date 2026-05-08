@@ -28,7 +28,7 @@
  * multipart limit.
  */
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
@@ -81,6 +81,17 @@ export default function BulkImageUploadModal({
   const [resolving, setResolving] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
+
+  // U.22 — a11y. Esc dismisses (matching every other modal in the
+  // app); active phase 'uploading' blocks the dismiss so a half-fired
+  // batch isn't abandoned mid-flight.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && phase !== 'uploading') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose, phase])
 
   const acceptedImages = (files: File[]) =>
     files.filter((f) => /\.(jpe?g|png|webp|gif|tiff?|avif)$/i.test(f.name))
@@ -287,8 +298,13 @@ export default function BulkImageUploadModal({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="bulk-image-upload-title"
       className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
-      onClick={onClose}
+      onClick={() => {
+        if (phase !== 'uploading') onClose()
+      }}
     >
       <div
         className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col"
@@ -296,7 +312,10 @@ export default function BulkImageUploadModal({
       >
         <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
           <div>
-            <div className="text-lg font-semibold text-slate-900">
+            <div
+              id="bulk-image-upload-title"
+              className="text-lg font-semibold text-slate-900"
+            >
               Upload product photos
             </div>
             <div className="text-sm text-slate-500">

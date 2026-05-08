@@ -301,7 +301,7 @@ export function FilterBar(props: FilterBarProps) {
         <button
           onClick={() => setFiltersOpen(!filtersOpen)}
           aria-expanded={filtersOpen}
-          className={`h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 transition-colors ${filtersOpen ? 'border-slate-900 bg-slate-900 text-white' : filterCount > 0 ? 'border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+          className={`h-8 min-h-11 sm:min-h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 transition-colors ${filtersOpen ? 'border-slate-900 bg-slate-900 text-white' : filterCount > 0 ? 'border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
         >
           <Filter size={12} />
           Filters
@@ -361,7 +361,9 @@ export function FilterBar(props: FilterBarProps) {
                 type="button"
                 onClick={p.clear}
                 aria-label={`Remove ${p.label} filter`}
-                className="inline-flex items-center justify-center w-5 h-5 rounded-full hover:bg-blue-100 text-blue-700"
+                // U.22 — visible swatch stays w-5 h-5 via inner span;
+                // hit zone expands to 44×44 on mobile.
+                className="inline-flex items-center justify-center min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 sm:w-5 sm:h-5 rounded-full hover:bg-blue-100 text-blue-700"
               >
                 <X size={11} />
               </button>

@@ -53,14 +53,19 @@ export function TagEditor({
           body: JSON.stringify({ tagIds: [] }),
         },
       )
-      if (res.ok) {
-        const data = await res.json()
-        setProductTags(data.tags ?? [])
-      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      setProductTags(data.tags ?? [])
+    } catch (e) {
+      // U.22 — surface fetch failures via toast instead of leaving the
+      // operator with a blank list and no signal.
+      toast.error(
+        `Failed to load tags: ${e instanceof Error ? e.message : String(e)}`,
+      )
     } finally {
       setLoading(false)
     }
-  }, [productId])
+  }, [productId, toast])
 
   useEffect(() => {
     refresh()
@@ -68,20 +73,28 @@ export function TagEditor({
 
   const toggle = async (tag: TagShape) => {
     const has = productTags.some((t) => t.id === tag.id)
-    if (has) {
-      await fetch(
-        `${getBackendUrl()}/api/products/${productId}/tags/${tag.id}`,
-        { method: 'DELETE' },
+    try {
+      const res = has
+        ? await fetch(
+            `${getBackendUrl()}/api/products/${productId}/tags/${tag.id}`,
+            { method: 'DELETE' },
+          )
+        : await fetch(`${getBackendUrl()}/api/products/${productId}/tags`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tagIds: [tag.id] }),
+          })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error ?? `HTTP ${res.status}`)
+      }
+      refresh()
+      onChanged()
+    } catch (e) {
+      toast.error(
+        `${has ? 'Remove' : 'Attach'} tag failed: ${e instanceof Error ? e.message : String(e)}`,
       )
-    } else {
-      await fetch(`${getBackendUrl()}/api/products/${productId}/tags`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tagIds: [tag.id] }),
-      })
     }
-    refresh()
-    onChanged()
   }
 
   const createTag = async () => {

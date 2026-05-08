@@ -76,7 +76,11 @@ export function HealthLens() {
   if (loading && !data)
     return (
       <Card>
-        <div className="text-md text-slate-500 py-8 text-center">
+        <div
+          role="status"
+          aria-live="polite"
+          className="text-md text-slate-500 py-8 text-center"
+        >
           Loading health…
         </div>
       </Card>
@@ -84,8 +88,20 @@ export function HealthLens() {
   if (error)
     return (
       <Card>
-        <div className="text-md text-rose-600 py-8 text-center">
-          Failed to load health: {error}
+        <div
+          role="alert"
+          className="py-8 text-center space-y-2"
+        >
+          <div className="text-md text-rose-600">
+            Failed to load health: {error}
+          </div>
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            className="h-7 px-3 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5"
+          >
+            Retry
+          </button>
         </div>
       </Card>
     )

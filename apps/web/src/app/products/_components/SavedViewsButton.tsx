@@ -118,7 +118,7 @@ export function SavedViewsButton({
                                 ? `${alertCount} alert${alertCount === 1 ? '' : 's'} — fired in last 24h`
                                 : `${alertCount} alert${alertCount === 1 ? '' : 's'} attached`
                           }
-                          className={`h-6 px-1 inline-flex items-center justify-center gap-0.5 ${bellColor}`}
+                          className={`min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 sm:h-6 sm:px-1 inline-flex items-center justify-center gap-0.5 ${bellColor}`}
                         >
                           <Bell size={12} />
                           {alertCount > 0 && (

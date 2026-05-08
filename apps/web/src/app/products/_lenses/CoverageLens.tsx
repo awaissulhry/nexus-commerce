@@ -46,7 +46,11 @@ export function CoverageLens({
   if (loading)
     return (
       <Card>
-        <div className="text-md text-slate-500 py-8 text-center">
+        <div
+          role="status"
+          aria-live="polite"
+          className="text-md text-slate-500 py-8 text-center"
+        >
           Loading coverage…
         </div>
       </Card>

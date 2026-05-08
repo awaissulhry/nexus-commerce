@@ -62,6 +62,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { InlineEditTrigger } from '@/components/ui/InlineEditTrigger'
+import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import {
@@ -1398,6 +1399,10 @@ const ProductCell = memo(function ProductCell({
   // the right cell. The 8 editable columns share a single multi-case
   // dispatch; read-only cells keep their bespoke renderers.
   const searchQuery = useContext(SearchContext)
+  // U.22 — inline tag-remove now surfaces failures via toast instead
+  // of swallowing the error. useToast returns a stable object so the
+  // hook call doesn't bust ProductCell's React.memo.
+  const { toast } = useToast()
   const p = product
 
   switch (col) {
@@ -1517,14 +1522,21 @@ const ProductCell = memo(function ProductCell({
               }),
             },
           )
-          if (!res.ok) throw new Error('Failed')
+          if (!res.ok) {
+            const j = await res.json().catch(() => ({}))
+            throw new Error(j.error ?? `HTTP ${res.status}`)
+          }
           emitInvalidation({
             type: 'product.updated',
             meta: { productIds: [p.id], source: 'inline-tag-remove' },
           })
           onChanged()
-        } catch {
-          /* swallow — refetch will reveal the actual state */
+        } catch (e) {
+          // U.22 — toast the failure so the operator gets a signal;
+          // the next refetch will restore the row's tag list anyway.
+          toast.error(
+            `Remove tag failed: ${e instanceof Error ? e.message : String(e)}`,
+          )
         }
       }
       return (
@@ -1546,7 +1558,13 @@ const ProductCell = memo(function ProductCell({
                   void removeTag(t.id)
                 }}
                 aria-label={`Remove tag ${t.name}`}
-                className="opacity-0 group-hover/tag:opacity-100 inline-flex items-center justify-center w-3 h-3 rounded-full hover:bg-rose-100 hover:text-rose-700 transition-opacity"
+                // U.22 — was `opacity-0 group-hover/tag:opacity-100` which
+                // hid the affordance entirely on touch devices (no hover).
+                // Always visible on mobile/tablet (where ops happens by
+                // touch); hover-reveal stays on desktop (sm: with @media
+                // hover guard would be ideal but breakpoint-based is fine
+                // for our usage where mobile + touch overlap heavily).
+                className="opacity-60 sm:opacity-0 sm:group-hover/tag:opacity-100 inline-flex items-center justify-center w-3 h-3 rounded-full hover:bg-rose-100 hover:text-rose-700 transition-opacity"
               >
                 <X size={10} />
               </button>
@@ -1569,7 +1587,11 @@ const ProductCell = memo(function ProductCell({
             onClick={() => onTagEdit(p.id)}
             aria-label="Edit tags"
             title="Edit tags"
-            className="h-4 w-4 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded text-xs"
+            // U.22 — was `h-4 w-4 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0`
+            // which collapsed the desktop hit zone to 4×4 (visible icon
+            // mismatched click area). Desktop now uses h-5/w-5; mobile
+            // expands to 44×44 via the standard pattern.
+            className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 sm:h-5 sm:w-5 inline-flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded text-xs"
           >
             +
           </button>

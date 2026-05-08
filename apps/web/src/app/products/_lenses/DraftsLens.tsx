@@ -42,15 +42,32 @@ export function DraftsLens() {
   const [channel, setChannel] = useState('AMAZON')
   const [data, setData] = useState<DraftsData | null>(null)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    let cancelled = false
     setLoading(true)
+    setError(null)
     fetch(`${getBackendUrl()}/api/listings/drafts?channel=${channel}`, {
       cache: 'no-store',
     })
-      .then((r) => r.json())
-      .then(setData)
-      .finally(() => setLoading(false))
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
+      .then((d) => {
+        if (!cancelled) setData(d)
+      })
+      .catch((e) => {
+        if (!cancelled)
+          setError(e instanceof Error ? e.message : String(e))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [channel])
 
   return (
@@ -75,12 +92,26 @@ export function DraftsLens() {
       </div>
       {loading && (
         <Card>
-          <div className="text-md text-slate-500 py-8 text-center">
+          <div
+            role="status"
+            aria-live="polite"
+            className="text-md text-slate-500 py-8 text-center"
+          >
             Loading drafts…
           </div>
         </Card>
       )}
-      {!loading && data && (
+      {!loading && error && (
+        <Card>
+          <div
+            role="alert"
+            className="text-md text-rose-600 py-8 text-center"
+          >
+            Failed to load drafts: {error}
+          </div>
+        </Card>
+      )}
+      {!loading && !error && data && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card title={`Drafts (${data.draftCount})`}>
             {data.drafts.length === 0 ? (

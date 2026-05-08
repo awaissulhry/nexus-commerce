@@ -550,13 +550,15 @@ export function BulkActionBar({
               <ExternalLink size={12} /> Power edit
             </Link>
           ) : (
-            <span
-              className="h-7 px-3 text-base bg-slate-50 text-slate-400 border border-slate-200 rounded inline-flex items-center gap-1.5 cursor-not-allowed"
-              aria-disabled="true"
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled
               title="Select rows first"
+              icon={<ExternalLink size={12} />}
             >
-              <ExternalLink size={12} /> Power edit
-            </span>
+              Power edit
+            </Button>
           )}
             </>
           )}

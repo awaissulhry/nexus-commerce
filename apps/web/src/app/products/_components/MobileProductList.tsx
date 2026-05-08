@@ -167,6 +167,8 @@ function MobileProductCard({
             : 'border-slate-200'
       }`}
     >
+      {/* U.22 — 44×44 mobile target. Visible swatch stays w-5/h-5 via
+          inner <span>; the button itself expands to satisfy WCAG 2.5.5. */}
       <button
         type="button"
         onClick={(e) => {
@@ -174,13 +176,18 @@ function MobileProductCard({
           toggleSelect()
         }}
         aria-label={selected ? 'Deselect' : 'Select'}
-        className={`w-5 h-5 rounded flex-shrink-0 border-2 inline-flex items-center justify-center ${
-          selected
-            ? 'bg-blue-600 border-blue-600 text-white'
-            : 'border-slate-300 bg-white'
-        }`}
+        aria-pressed={selected}
+        className="min-h-11 min-w-11 -m-3 p-3 flex-shrink-0 inline-flex items-center justify-center"
       >
-        {selected && <CheckCircle2 className="w-3 h-3" />}
+        <span
+          className={`w-5 h-5 rounded border-2 inline-flex items-center justify-center ${
+            selected
+              ? 'bg-blue-600 border-blue-600 text-white'
+              : 'border-slate-300 bg-white'
+          }`}
+        >
+          {selected && <CheckCircle2 className="w-3 h-3" />}
+        </span>
       </button>
       {p.imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -234,7 +241,12 @@ function MobileProductCard({
           aria-label={
             chevron.isExpanded ? 'Collapse variants' : 'Expand variants'
           }
-          className="w-7 h-7 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 flex-shrink-0"
+          aria-expanded={chevron.isExpanded}
+          // U.22 — 44×44 mobile target. The visible chevron stays w-4/h-4
+          // for the same compact look; the button itself expands so a
+          // near-miss tap doesn't hit the surrounding card and open the
+          // drawer instead.
+          className="min-h-11 min-w-11 -m-3 p-3 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 flex-shrink-0"
         >
           {/* E.22 — single ChevronRight that rotates 90° instead of
               swapping icons. Same smoothness as the desktop ProductRow. */}

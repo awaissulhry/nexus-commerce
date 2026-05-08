@@ -75,7 +75,7 @@ export function Pagination({ page, totalPages, onPage }: PaginationProps) {
               onClick={() => onPage(n)}
               aria-current={n === page ? 'page' : undefined}
               aria-label={`Page ${n}`}
-              className={`min-w-[1.75rem] h-7 px-2 text-sm tabular-nums rounded border transition-colors ${
+              className={`min-h-11 min-w-11 sm:min-h-0 sm:min-w-[1.75rem] sm:h-7 px-2 text-sm tabular-nums rounded border transition-colors inline-flex items-center justify-center ${
                 n === page
                   ? 'bg-slate-900 text-white border-slate-900'
                   : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'

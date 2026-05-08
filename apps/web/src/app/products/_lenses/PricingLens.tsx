@@ -116,7 +116,11 @@ export function PricingLens({
   if (loading || snapLoading) {
     return (
       <Card>
-        <div className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
+        <div
+          role="status"
+          aria-live="polite"
+          className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full"
+        >
           <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading pricing
           matrix…
         </div>
@@ -126,8 +130,17 @@ export function PricingLens({
   if (error) {
     return (
       <Card>
-        <div className="text-md text-rose-600 py-8 text-center">
-          Failed to load pricing matrix: {error}
+        <div role="alert" className="py-8 text-center space-y-2">
+          <div className="text-md text-rose-600">
+            Failed to load pricing matrix: {error}
+          </div>
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            className="h-7 px-3 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5"
+          >
+            Retry
+          </button>
         </div>
       </Card>
     )
