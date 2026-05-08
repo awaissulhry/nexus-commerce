@@ -351,7 +351,16 @@ The file's top doc-block (line 1-29) carries the mapping table inline so future 
 
 Operator can now run `POST /api/sync/ebay/orders` without crashing Prisma — though Xavia is still Amazon-IT-only in practice, so this is unexercised in production.
 
-## 34. 🟡 Bulk operations — Path A-Lite deferrals (rollback, LISTING_SYNC, queue infra, DELETE, "selected items" scope)
+## 34. ✅ Bulk operations — Path A-Lite deferrals — all sub-items resolved or deferred-by-design 2026-05-08
+
+Sub-items individually addressed:
+  • #34a Rollback infrastructure — ✅ resolved in M.13
+  • #34b LISTING_SYNC handler — ✅ resolved in M.15
+  • #34c Queue/worker for >100-item jobs — ⏸ deferred (gated on Phase 2 Redis + #54 + operator scale; no operator-visible impact at <1.3k items)
+  • #34d DELETE action type — ⏸ deferred-by-design (soft-delete via STATUS_UPDATE → INACTIVE covers the use case; per-row hard-delete in grid; admin endpoint for test cleanup)
+  • #34e "Selected items only" scope — ✅ resolved in M.16
+
+
 
 **Surfaced at:** Issue B closeout — Path A-Lite shipped a working
 filtered-bulk-operations stack (4 of 5 action types, scope picker UI,
@@ -738,7 +747,7 @@ Disabling the wizard's PV writes without first refactoring these readers would s
 
 ---
 
-## 44. 🟡 Bulk operations target unused data shape — partially resolved 2026-05-06
+## 44. ✅ Bulk operations target unused data shape — fully resolved 2026-05-08
 
 **Symptom (original):** Every `BulkActionJob` of type 'variation' (PRICING_UPDATE, INVENTORY_UPDATE, ATTRIBUTE_UPDATE, LISTING_SYNC) processed 0 items on real catalogs because `ProductVariation` is empty (#43).
 
@@ -974,7 +983,7 @@ Operator can now bulk-set `variantAttributes.Color` on a filter of child rows in
 
 ---
 
-## 54. 🟡 BullMQ `Queue.add()` hangs from bulk-action context — root cause fixed in dev; production validation pending
+## 54. ⏸ BullMQ `Queue.add()` hang — dev-fixed 2026-05-08; production validation operator-action
 
 **Resolution applied (2026-05-08, dev-verified):** Replaced the lazy
 `makeQueueProxy()` wrapping `outboundSyncQueue` + `channelSyncQueue` +
