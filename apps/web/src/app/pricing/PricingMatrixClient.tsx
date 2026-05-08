@@ -35,6 +35,7 @@ import { Button } from '@/components/ui/Button'
 import { Modal, ModalBody } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import RepricerStatusBanner from './_components/RepricerStatusBanner'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -250,6 +251,9 @@ export default function PricingMatrixClient() {
     <div className="space-y-4">
       {/* B.1 — KPI strip */}
       <KpiStrip kpis={kpis} />
+
+      {/* UI.7 — Repricer status banner */}
+      <RepricerStatusBanner />
 
       {/* Filter bar */}
       <Card>

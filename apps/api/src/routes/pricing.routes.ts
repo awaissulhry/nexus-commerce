@@ -590,6 +590,57 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // UI.7 — Repricer status. Reads the last AuditLog rows the
+  // G.1 scheduler wrote (entityType='RepricerRun') so /pricing can
+  // show a live banner: "last tick: dry-run · would have enqueued 47
+  // · 2 minutes ago". Operator validates dry-run behavior before
+  // flipping NEXUS_REPRICER_LIVE.
+  fastify.get('/pricing/repricer-status', async (_request, reply) => {
+    try {
+      const recent = await prisma.auditLog.findMany({
+        where: { entityType: 'RepricerRun' },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: {
+          id: true,
+          entityId: true,
+          action: true,
+          after: true,
+          createdAt: true,
+        },
+      })
+      // Server can't reliably read the env vars on the client without
+      // exposing them, but it CAN tell the client what state THIS process
+      // sees — and that's what matters for "is the cron firing?".
+      const liveMode = process.env.NEXUS_REPRICER_LIVE === '1'
+      const cronEnabled = process.env.NEXUS_ENABLE_PRICING_CRON === '1'
+      const thresholdPct = Math.max(
+        0,
+        Number(process.env.NEXUS_REPRICER_THRESHOLD_PCT ?? '1'),
+      )
+      return {
+        config: { cronEnabled, liveMode, thresholdPct },
+        ticks: recent.map((r) => {
+          const after = (r.after ?? {}) as any
+          return {
+            runId: r.entityId,
+            action: r.action,
+            occurredAt: r.createdAt,
+            liveMode: after.liveMode ?? false,
+            snapshotsScanned: after.snapshotsScanned ?? 0,
+            enqueued: after.enqueued ?? 0,
+            dryRunWouldEnqueue: after.dryRunWouldEnqueue ?? 0,
+            skippedSubThreshold: after.skippedSubThreshold ?? 0,
+            durationMs: after.durationMs ?? 0,
+          }
+        }),
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[pricing/repricer-status] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // E.2 — Prepare an Amazon Coupon spec. SP-API doesn't expose
   // createCoupon publicly; this validates the spec, normalizes the
   // payload, and returns a Seller Central deep-link the operator
