@@ -51,6 +51,9 @@ type DrawerOrder = {
   amazonMetadata: any
   ebayMetadata: any
   shopifyMetadata: any
+  // FU.2 — Italian fiscal snapshot (F.1). Drives the fiscal-actions
+  // group in this drawer when marketplace === 'IT'.
+  fiscalKind: string | null
   woocommerceMetadata: any
   createdAt: string
   items: Array<{
@@ -813,6 +816,61 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                   </dl>
                 </div>
               </Card>
+
+              {/* FU.2 — Italian fiscal artifacts (mirror of /orders
+                  /[id]'s FiscalActions). Renders only on IT-marketplace
+                  orders so the outbound operator can print fattura
+                  + dispatch SDI without bouncing to /orders. The
+                  per-shipment pack-slip link further below stays
+                  unchanged — that surface owns pack-time printing. */}
+              {data.marketplace === 'IT' && (
+                <Card>
+                  <div className="space-y-2">
+                    <div className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                      Documenti fiscali
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <a
+                        href={`${getBackendUrl()}/api/orders/${data.id}/invoice.html`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="h-7 px-3 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center gap-1.5"
+                      >
+                        <ExternalLink size={11} /> Fattura
+                      </a>
+                      {data.fiscalKind === 'B2B' && (
+                        <>
+                          <a
+                            href={`${getBackendUrl()}/api/orders/${data.id}/fattura-pa.xml`}
+                            className="h-7 px-3 text-sm border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+                            download
+                          >
+                            <ExternalLink size={11} /> XML SDI
+                          </a>
+                          <button
+                            onClick={async () => {
+                              try {
+                                const res = await fetch(
+                                  `${getBackendUrl()}/api/orders/${data.id}/fattura-pa/dispatch`,
+                                  { method: 'POST' },
+                                )
+                                const d = await res.json()
+                                if (!res.ok) throw new Error(d?.error ?? 'dispatch failed')
+                                toast.success(d.message ?? 'SDI dispatched')
+                              } catch (e: any) {
+                                toast.error(e.message)
+                              }
+                            }}
+                            className="h-7 px-3 text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5"
+                          >
+                            Invia SDI
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              )}
 
               {/* Line items */}
               <Card>

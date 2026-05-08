@@ -276,9 +276,9 @@ export default function OrderDetailClient({ id }: { id: string }) {
             <Card title="Shipments" description={`${order.shipments.length} shipment${order.shipments.length === 1 ? '' : 's'}`}>
               <div className="space-y-2">
                 {order.shipments.map((s: any) => (
-                  <Link key={s.id} href={`/fulfillment/outbound?id=${s.id}`} className="block border border-slate-200 rounded p-3 hover:bg-slate-50">
+                  <div key={s.id} className="border border-slate-200 rounded p-3 hover:bg-slate-50">
                     <div className="flex items-center justify-between">
-                      <div>
+                      <Link href={`/fulfillment/outbound?id=${s.id}`} className="flex-1 block">
                         <div className="text-base font-semibold text-slate-900 inline-flex items-center gap-1.5">
                           <Truck size={12} /> {s.carrierCode}
                           {s.trackingNumber && <span className="font-mono text-blue-600">{s.trackingNumber}</span>}
@@ -288,10 +288,25 @@ export default function OrderDetailClient({ id }: { id: string }) {
                           {s.shippedAt && ` · shipped ${new Date(s.shippedAt).toLocaleDateString('en-GB')}`}
                           {s.deliveredAt && ` · delivered ${new Date(s.deliveredAt).toLocaleDateString('en-GB')}`}
                         </div>
+                      </Link>
+                      <div className="flex items-center gap-2 ml-2">
+                        {/* FU.2 — link to existing per-shipment pack-slip
+                            (O.37 in /fulfillment/outbound) so operators
+                            can print from /orders/[id] without bouncing. */}
+                        <a
+                          href={`${getBackendUrl()}/api/fulfillment/shipments/${s.id}/pack-slip.html`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          title="Pack slip (apre in nuova scheda)"
+                          className="text-sm text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
+                        >
+                          <ExternalLink size={11} /> Pack slip
+                        </a>
+                        <Badge variant="info" size="sm">{s.status.replace(/_/g, ' ')}</Badge>
                       </div>
-                      <Badge variant="info" size="sm">{s.status.replace(/_/g, ' ')}</Badge>
                     </div>
-                  </Link>
+                  </div>
                 ))}
               </div>
             </Card>
