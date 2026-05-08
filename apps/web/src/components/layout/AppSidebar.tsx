@@ -33,6 +33,9 @@ import {
   Image as ImageIcon,
   Star,
   FileEdit,
+  Sliders,
+  Trophy,
+  Bell,
   Sun,
   Moon,
   Monitor,
@@ -540,7 +543,32 @@ export default function AppSidebar() {
             href="/pricing"
             icon={Tag}
             label="Pricing"
-            active={pathname.startsWith('/pricing')}
+            active={
+              pathname === '/pricing' ||
+              (pathname.startsWith('/pricing') &&
+                !pathname.startsWith('/pricing/rules') &&
+                !pathname.startsWith('/pricing/promotions') &&
+                !pathname.startsWith('/pricing/buybox') &&
+                !pathname.startsWith('/pricing/alerts'))
+            }
+          />
+          <NavItem
+            href="/pricing/rules"
+            icon={Sliders}
+            label="Pricing Rules"
+            active={pathname.startsWith('/pricing/rules')}
+          />
+          <NavItem
+            href="/pricing/buybox"
+            icon={Trophy}
+            label="Buy Box"
+            active={pathname.startsWith('/pricing/buybox')}
+          />
+          <NavItem
+            href="/pricing/alerts"
+            icon={Bell}
+            label="Pricing Alerts"
+            active={pathname.startsWith('/pricing/alerts')}
           />
           <NavItem
             href="/insights"
