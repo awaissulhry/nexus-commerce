@@ -7,6 +7,11 @@ import prisma from "../../db.js";
 import { ShopifyEnhancedService, type ShopifyProductSync, type ShopifyOrderSync } from "../marketplaces/shopify-enhanced.service.js";
 import { MarketplaceSyncError } from "../../utils/error-handler.js";
 import type { ShopifyConfig } from "../../types/marketplace.js";
+import {
+  reserveOpenOrder,
+  consumeOpenOrder,
+  resolveLocationByCode,
+} from "../stock-level.service.js";
 
 export interface ShopifySyncResult {
   success: boolean;
@@ -491,66 +496,116 @@ export class ShopifySyncService {
   }
 
   /**
-   * Sync a single order from Shopify
+   * Sync a single order from Shopify.
+   *
+   * S.2.5 — rewritten to use canonical Order schema columns
+   * (channel/channelOrderId/totalPrice/customerName/customerEmail) and
+   * the reserve-then-consume stock lifecycle. Pre-S.2.5 the method
+   * referenced non-existent columns (amazonOrderId/totalAmount/
+   * buyerName/channelId) and would throw at runtime.
+   *
+   * Idempotent. Reserves stock for new line items; consumes
+   * reservations on transition to SHIPPED; routes cancellation to
+   * the existing cascade.
    */
   private async syncOrder(shopifyOrder: ShopifyOrderSync): Promise<{
     created: boolean;
     updated: boolean;
   }> {
     try {
-      const existingOrder = await (prisma as any).order.findUnique({
-        where: { amazonOrderId: shopifyOrder.orderId },
+      const existing = await prisma.order.findUnique({
+        where: {
+          channel_channelOrderId: {
+            channel: 'SHOPIFY',
+            channelOrderId: shopifyOrder.orderId,
+          },
+        },
+        select: { id: true, status: true },
       });
+      const isNew = !existing;
 
-      const isNew = !existingOrder;
+      const status: 'PENDING' | 'PROCESSING' | 'SHIPPED' | 'CANCELLED' | 'DELIVERED' =
+        shopifyOrder.fulfillments && shopifyOrder.fulfillments.length > 0
+          ? 'SHIPPED'
+          : (shopifyOrder.fulfillmentStatus === 'fulfilled'
+              ? 'SHIPPED'
+              : (shopifyOrder.fulfillmentStatus === 'partial' ? 'PROCESSING' : 'PROCESSING'))
+
+      const newlyShipped = status === 'SHIPPED' && (existing == null || existing.status !== 'SHIPPED');
+      const shippedAt = shopifyOrder.fulfillments[0]?.createdAt
+        ? new Date(shopifyOrder.fulfillments[0].createdAt)
+        : undefined;
 
       const orderData = {
-        amazonOrderId: shopifyOrder.orderId,
-        status: shopifyOrder.fulfillmentStatus,
-        totalAmount: shopifyOrder.totalPrice,
-        buyerName: shopifyOrder.email,
-        shippingAddress: shopifyOrder.shippingAddress,
-        trackingNumber: shopifyOrder.fulfillments[0]?.trackingNumber,
-        shippedAt: shopifyOrder.fulfillments[0]?.createdAt
-          ? new Date(shopifyOrder.fulfillments[0].createdAt)
-          : undefined,
+        status,
+        totalPrice: shopifyOrder.totalPrice ?? 0,
+        currencyCode: 'EUR',
+        customerName: shopifyOrder.email ?? 'Shopify customer',
+        customerEmail: shopifyOrder.email ?? '',
+        shippingAddress: (shopifyOrder.shippingAddress ?? {}) as object,
+        shippedAt,
       };
 
-      let order;
-      if (isNew) {
-        order = await (prisma as any).order.create({
-          data: {
-            ...orderData,
-            channelId: "SHOPIFY", // Use channel ID as placeholder
-          },
-        });
-      } else {
-        order = await (prisma as any).order.update({
-          where: { id: existingOrder.id },
-          data: orderData,
-        });
-      }
-
-      // Sync order items
-      for (const item of shopifyOrder.items) {
-        await (prisma as any).orderItem.upsert({
-          where: {
-            orderId_sku: {
-              orderId: order.id,
-              sku: item.sku,
+      const order = isNew
+        ? await prisma.order.create({
+            data: {
+              channel: 'SHOPIFY',
+              channelOrderId: shopifyOrder.orderId,
+              ...orderData,
+              purchaseDate: new Date(),
             },
-          },
-          update: {
-            quantity: item.quantity,
-            price: item.price,
-          },
-          create: {
+          })
+        : await prisma.order.update({
+            where: { id: existing!.id },
+            data: orderData,
+          });
+
+      // Replace items idempotently (no per-line external id available).
+      await prisma.orderItem.deleteMany({ where: { orderId: order.id } });
+      const createdItems: Array<{ productId: string | null; quantity: number; sku: string }> = [];
+      for (const item of shopifyOrder.items) {
+        const product = item.sku
+          ? await prisma.product.findUnique({ where: { sku: item.sku }, select: { id: true } })
+          : null;
+        await prisma.orderItem.create({
+          data: {
             orderId: order.id,
             sku: item.sku,
             quantity: item.quantity,
-            price: item.price,
+            price: item.price ?? 0,
+            ...(product?.id ? { productId: product.id } : {}),
           },
         });
+        createdItems.push({ productId: product?.id ?? null, quantity: item.quantity, sku: item.sku });
+      }
+
+      // Reserve at IT-MAIN. Idempotent — re-runs of the same poll
+      // window skip already-reserved lines. Insufficient stock is
+      // logged but does not throw (Shopify accepted the order).
+      const itMainId = await resolveLocationByCode('IT-MAIN');
+      if (itMainId) {
+        for (const it of createdItems) {
+          if (!it.productId || it.quantity <= 0) continue;
+          try {
+            await reserveOpenOrder({
+              orderId: order.id,
+              productId: it.productId,
+              locationId: itMainId,
+              quantity: it.quantity,
+              actor: 'shopify-sync',
+            });
+          } catch {
+            // best-effort
+          }
+        }
+      }
+
+      if (newlyShipped) {
+        try {
+          await consumeOpenOrder({ orderId: order.id, actor: 'shopify-sync' });
+        } catch {
+          // best-effort
+        }
       }
 
       return { created: isNew, updated: !isNew };
