@@ -5775,7 +5775,17 @@ function DraftsLens() {
       {!loading && data && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card title={`Drafts (${data.draftCount})`}>
-            {data.drafts.length === 0 ? <div className="py-6 text-base text-slate-400 text-center">No drafts</div> : (
+            {data.drafts.length === 0 ? (
+              <div className="py-8 text-center text-base text-slate-500">
+                <Sparkles className="w-6 h-6 mx-auto text-slate-300 mb-2" />
+                No drafts on {channel}.
+                <div className="text-sm text-slate-400 mt-1">
+                  Drafts appear here when wizards leave content
+                  unpublished — usually pending review or marketplace
+                  validation.
+                </div>
+              </div>
+            ) : (
               <ul className="space-y-1 -my-1">
                 {data.drafts.slice(0, 30).map((d: any) => (
                   <li key={d.id} className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 rounded hover:bg-slate-50">
@@ -5790,7 +5800,15 @@ function DraftsLens() {
             )}
           </Card>
           <Card title={`Uncovered (${data.uncoveredCount})`}>
-            {data.uncovered.length === 0 ? <div className="py-6 text-base text-slate-400 text-center">All covered</div> : (
+            {data.uncovered.length === 0 ? (
+              <div className="py-8 text-center text-base text-slate-500">
+                <CheckCircle2 className="w-6 h-6 mx-auto text-emerald-400 mb-2" />
+                Every product is listed on {channel}.
+                <div className="text-sm text-slate-400 mt-1">
+                  No coverage gaps to fix on this marketplace.
+                </div>
+              </div>
+            ) : (
               <ul className="space-y-1 -my-1">
                 {data.uncovered.slice(0, 30).map((p: any) => (
                   <li key={p.id} className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 rounded hover:bg-slate-50">
