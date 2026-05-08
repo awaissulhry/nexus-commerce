@@ -684,6 +684,63 @@ export async function ordersRoutes(app: FastifyInstance) {
     }
   })
 
+  // FU.5 — B2C corrispettivi telematici (daily summary). Distinct
+  // from FatturaPA: B2C sales aggregate by day and submit to RT,
+  // not per-transaction to SDI.
+  app.get('/api/corrispettivi/daily/:date.xml', async (request, reply) => {
+    try {
+      const { date } = request.params as { date: string }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return reply.code(400).send({ error: 'date must be YYYY-MM-DD' })
+      }
+      const { generateCorrispettiviDaily } = await import(
+        '../services/corrispettivi.service.js'
+      )
+      const result = await generateCorrispettiviDaily(date)
+      reply.header('Content-Type', 'application/xml; charset=utf-8')
+      reply.header(
+        'Content-Disposition',
+        `attachment; filename="${result.filename}"`,
+      )
+      return reply.send(result.xml)
+    } catch (err: any) {
+      return reply.code(400).send({ error: err?.message ?? 'failed' })
+    }
+  })
+
+  app.get('/api/corrispettivi/daily/:date/preview', async (request, reply) => {
+    try {
+      const { date } = request.params as { date: string }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return reply.code(400).send({ error: 'date must be YYYY-MM-DD' })
+      }
+      const { generateCorrispettiviDaily } = await import(
+        '../services/corrispettivi.service.js'
+      )
+      const result = await generateCorrispettiviDaily(date)
+      const { xml, ...summary } = result
+      return summary
+    } catch (err: any) {
+      return reply.code(400).send({ error: err?.message ?? 'failed' })
+    }
+  })
+
+  app.post('/api/corrispettivi/daily/:date/dispatch', async (request, reply) => {
+    try {
+      const { date } = request.params as { date: string }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return reply.code(400).send({ error: 'date must be YYYY-MM-DD' })
+      }
+      const { dispatchCorrispettiviDaily } = await import(
+        '../services/corrispettivi.service.js'
+      )
+      const result = await dispatchCorrispettiviDaily(date)
+      return result
+    } catch (err: any) {
+      return reply.code(400).send({ error: err?.message ?? 'failed' })
+    }
+  })
+
   // O.23b — CSV export. Mirrors the GET /api/orders filter shape so
   // an "Export current view" frontend button can pass the same query
   // string and get back exactly the rows the operator sees. Capped
