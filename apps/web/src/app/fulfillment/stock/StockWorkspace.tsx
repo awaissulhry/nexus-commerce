@@ -874,6 +874,14 @@ export default function StockWorkspace() {
               {t('stock.analytics.title')}
             </Link>
             <Link
+              href="/fulfillment/stock/stockouts"
+              className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
+              title={t('stock.stockouts.title')}
+            >
+              <AlertTriangle size={12} />
+              {t('stock.stockouts.title')}
+            </Link>
+            <Link
               href="/fulfillment/stock/import"
               className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
               title={t('stock.import.title')}

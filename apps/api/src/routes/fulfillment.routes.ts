@@ -7722,9 +7722,22 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   fastify.get('/fulfillment/replenishment/stockouts/events', async (request) => {
-    const q = request.query as { status?: 'open' | 'closed' | 'all'; limit?: string }
+    const q = request.query as {
+      status?: 'open' | 'closed' | 'all'
+      limit?: string
+      locationId?: string
+      sku?: string
+      sinceDays?: string
+    }
     const limit = Number(q.limit) || 50
-    return await listStockoutEvents({ status: q.status ?? 'all', limit })
+    const sinceDays = q.sinceDays ? Number(q.sinceDays) : undefined
+    return await listStockoutEvents({
+      status: q.status ?? 'all',
+      limit,
+      locationId: q.locationId || undefined,
+      sku: q.sku || undefined,
+      sinceDays: sinceDays && Number.isFinite(sinceDays) ? sinceDays : undefined,
+    })
   })
 
   fastify.post('/fulfillment/replenishment/stockouts/sweep', async (_req, reply) => {

@@ -378,11 +378,20 @@ export async function getStockoutSummary(args: { windowDays?: number } = {}) {
 export async function listStockoutEvents(args: {
   status?: 'open' | 'closed' | 'all'
   limit?: number
+  // S.29 — extended filters for the stockout history report.
+  locationId?: string
+  sku?: string
+  sinceDays?: number
 }) {
   const limit = Math.max(1, Math.min(500, args.limit ?? 50))
   const where: any = {}
   if (args.status === 'open') where.endedAt = null
   else if (args.status === 'closed') where.endedAt = { not: null }
+  if (args.locationId) where.locationId = args.locationId
+  if (args.sku) where.sku = { contains: args.sku, mode: 'insensitive' }
+  if (args.sinceDays && args.sinceDays > 0) {
+    where.startedAt = { gte: new Date(Date.now() - args.sinceDays * 86400_000) }
+  }
   const rows = await prisma.stockoutEvent.findMany({
     where,
     orderBy: { startedAt: 'desc' },
