@@ -121,6 +121,8 @@ export class VariationsService {
     selectedTheme: string | null
     cachedThemes: unknown
   }): Promise<VariationsPayload> {
+    // TECH_DEBT #43.1 — read children via Product.parentId (the canonical
+    // mechanism, 244 active rows in prod) instead of the empty PV table.
     const product = await this.prisma.product.findUnique({
       where: { id: opts.productId },
       select: {
@@ -128,13 +130,13 @@ export class VariationsService {
         sku: true,
         name: true,
         isParent: true,
-        variations: {
+        children: {
           select: {
             id: true,
             sku: true,
-            variationAttributes: true,
-            price: true,
-            stock: true,
+            variantAttributes: true,
+            basePrice: true,
+            totalStock: true,
           },
         },
       },
@@ -148,9 +150,9 @@ export class VariationsService {
       ? themes.find((t) => t.id === opts.selectedTheme) ?? null
       : null
 
-    const children: VariationChild[] = (product.variations ?? []).map((v) => {
+    const children: VariationChild[] = (product.children ?? []).map((v) => {
       const rawAttrs =
-        (v.variationAttributes as Record<string, unknown> | null) ?? {}
+        (v.variantAttributes as Record<string, unknown> | null) ?? {}
       const attrs = lowerKeyMap(rawAttrs)
       const missing = selected
         ? selected.requiredAttributes.filter((k) => isEmptyValue(attrs[k]))
@@ -159,8 +161,8 @@ export class VariationsService {
         id: v.id,
         sku: v.sku,
         attributes: attrs,
-        price: Number(v.price ?? 0),
-        stock: v.stock ?? 0,
+        price: Number(v.basePrice ?? 0),
+        stock: v.totalStock ?? 0,
         missingAttributes: missing,
       }
     })
@@ -197,6 +199,8 @@ export class VariationsService {
      *  wizardState.channelStates[key].variations.theme). */
     selectedThemeByChannel: Record<string, string | null>
   }): Promise<MultiChannelVariationsPayload> {
+    // TECH_DEBT #43.1 — read children via Product.parentId (the canonical
+    // mechanism, 244 active rows in prod) instead of the empty PV table.
     const product = await this.prisma.product.findUnique({
       where: { id: opts.productId },
       select: {
@@ -204,13 +208,13 @@ export class VariationsService {
         sku: true,
         name: true,
         isParent: true,
-        variations: {
+        children: {
           select: {
             id: true,
             sku: true,
-            variationAttributes: true,
-            price: true,
-            stock: true,
+            variantAttributes: true,
+            basePrice: true,
+            totalStock: true,
           },
         },
       },
@@ -329,10 +333,10 @@ export class VariationsService {
     // selected theme, compute which required attributes the child is
     // missing.
     const children: MultiChannelVariationChild[] = (
-      product.variations ?? []
+      product.children ?? []
     ).map((v) => {
       const rawAttrs =
-        (v.variationAttributes as Record<string, unknown> | null) ?? {}
+        (v.variantAttributes as Record<string, unknown> | null) ?? {}
       const attrs = lowerKeyMap(rawAttrs)
       const missingByChannel: Record<string, string[]> = {}
       for (const [channelKey, selectedThemeId] of Object.entries(
@@ -357,8 +361,8 @@ export class VariationsService {
         id: v.id,
         sku: v.sku,
         attributes: attrs,
-        price: Number(v.price ?? 0),
-        stock: v.stock ?? 0,
+        price: Number(v.basePrice ?? 0),
+        stock: v.totalStock ?? 0,
         missingByChannel,
       }
     })
