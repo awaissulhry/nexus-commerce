@@ -99,6 +99,7 @@ import { startStockoutDetectorCron } from "./jobs/stockout-detector.job.js";
 import { startAbcClassificationCron } from "./jobs/abc-classification.job.js";
 import { startCycleCountSchedulerCron } from "./jobs/cycle-count-scheduler.job.js";
 import { startScheduledChangesCron } from "./jobs/scheduled-changes.job.js";
+import { startPurgeSoftDeletedCron } from "./jobs/purge-soft-deleted-products.job.js";
 import { startAmazonMCFStatusCron } from "./jobs/amazon-mcf-status.job.js";
 import { startFbaPanEuSyncCron } from "./jobs/fba-pan-eu-sync.job.js";
 import { startFbaRestockCron } from "./jobs/fba-restock-ingestion.job.js";
@@ -665,6 +666,15 @@ async function start() {
     // NEXUS_ENABLE_SCHEDULED_CHANGES=0.
     if (process.env.NEXUS_ENABLE_SCHEDULED_CHANGES !== '0') {
       startScheduledChangesCron();
+    }
+
+    // F.1 follow-up — hard-purge soft-deleted Product rows older than
+    // NEXUS_SOFT_DELETE_PURGE_DAYS (default 30). Daily 03:15 UTC.
+    // Cascades through the same 5 dependent tables that
+    // cascadeDeleteProducts handles. Default-on; opt out via
+    // NEXUS_ENABLE_SOFT_DELETE_PURGE=0.
+    if (process.env.NEXUS_ENABLE_SOFT_DELETE_PURGE !== '0') {
+      startPurgeSoftDeletedCron();
     }
 
     // S.24 — Amazon MCF status sync. Every 15 min, walk active
