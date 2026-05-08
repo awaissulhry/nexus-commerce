@@ -4,7 +4,7 @@
 // Lenses: Grid · Customer · Financials · Returns · Reviews.
 // Inline quick-edit, bulk action toolbar (3 priorities), URL-driven state.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
@@ -21,6 +21,11 @@ import { GridLens } from './_lenses/GridLens'
 import { FilterBar } from './_components/FilterBar'
 import { BulkActionBar } from './_components/BulkActionBar'
 import { DEFAULT_VISIBLE } from './_lib/columns'
+import {
+  SavedViewsButton,
+  type SavedView,
+} from '../products/_components/SavedViewsButton'
+import { useToast } from '@/components/ui/Toast'
 
 type Lens = 'grid' | 'customer' | 'financials' | 'returns' | 'reviews'
 
@@ -112,6 +117,51 @@ export default function OrdersWorkspace() {
   // changes underneath (page/search/filter shift).
   const [activeRowIndex, setActiveRowIndex] = useState(-1)
   const [columnPickerOpen, setColumnPickerOpen] = useState(false)
+
+  // O.23a — saved views (extends the existing SavedView infrastructure
+  // shared with /products + /listings; surface='orders' tag).
+  const [savedViews, setSavedViews] = useState<SavedView[]>([])
+  const [savedViewMenuOpen, setSavedViewMenuOpen] = useState(false)
+  const { toast } = useToast()
+  const fetchSavedViews = useCallback(async () => {
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/saved-views?surface=orders`, {
+        cache: 'no-store',
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      setSavedViews(data.items ?? [])
+    } catch {
+      /* ignore — saved views are best-effort */
+    }
+  }, [])
+  useEffect(() => {
+    fetchSavedViews()
+  }, [fetchSavedViews])
+  // Apply default view on first mount when no URL state is set.
+  const appliedDefaultRef = useRef(false)
+  useEffect(() => {
+    if (appliedDefaultRef.current) return
+    if (savedViews.length === 0) return
+    const hasAnyParam = Array.from(searchParams.entries()).length > 0
+    if (hasAnyParam) {
+      appliedDefaultRef.current = true
+      return
+    }
+    const def = savedViews.find((v) => v.isDefault)
+    if (!def) {
+      appliedDefaultRef.current = true
+      return
+    }
+    appliedDefaultRef.current = true
+    const f = (def.filters ?? {}) as Record<string, any>
+    const next = new URLSearchParams()
+    for (const [k, v] of Object.entries(f)) {
+      if (v == null || v === '') continue
+      next.set(k, Array.isArray(v) ? v.join(',') : String(v))
+    }
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false })
+  }, [savedViews, searchParams, pathname, router])
 
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
     if (typeof window === 'undefined') return DEFAULT_VISIBLE
@@ -281,6 +331,62 @@ export default function OrdersWorkspace() {
         }
         actions={
           <div className="flex items-center gap-2">
+            <SavedViewsButton
+              open={savedViewMenuOpen}
+              setOpen={setSavedViewMenuOpen}
+              views={savedViews}
+              onApply={(view) => {
+                const f = (view.filters ?? {}) as Record<string, any>
+                const next = new URLSearchParams()
+                for (const [k, v] of Object.entries(f)) {
+                  if (v == null || v === '') continue
+                  next.set(k, Array.isArray(v) ? v.join(',') : String(v))
+                }
+                router.replace(`${pathname}?${next.toString()}`, { scroll: false })
+                setSavedViewMenuOpen(false)
+              }}
+              onSaveCurrent={async (name, isDefault) => {
+                const filters: Record<string, any> = {}
+                if (search) filters.search = search
+                if (lens !== 'grid') filters.lens = lens
+                if (channelFilters.length) filters.channel = channelFilters
+                if (marketplaceFilters.length) filters.marketplace = marketplaceFilters
+                if (statusFilters.length) filters.status = statusFilters
+                if (fulfillmentFilters.length) filters.fulfillment = fulfillmentFilters
+                if (reviewStatusFilters.length) filters.reviewStatus = reviewStatusFilters
+                if (hasReturn) filters.hasReturn = hasReturn
+                if (hasRefund) filters.hasRefund = hasRefund
+                if (reviewEligible) filters.reviewEligible = 'true'
+                if (customerEmail) filters.customerEmail = customerEmail
+                if (sortBy !== 'purchaseDate') filters.sortBy = sortBy
+                if (sortDir !== 'desc') filters.sortDir = sortDir
+                if (pageSize !== 50) filters.pageSize = String(pageSize)
+                const res = await fetch(`${getBackendUrl()}/api/saved-views`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ name, surface: 'orders', filters, isDefault }),
+                })
+                if (res.ok) {
+                  fetchSavedViews()
+                  return true
+                }
+                const err = await res.json().catch(() => ({}))
+                toast.error(err.error ?? 'Save failed')
+                return false
+              }}
+              onDelete={async (id) => {
+                await fetch(`${getBackendUrl()}/api/saved-views/${id}`, { method: 'DELETE' })
+                fetchSavedViews()
+              }}
+              onSetDefault={async (id) => {
+                await fetch(`${getBackendUrl()}/api/saved-views/${id}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ isDefault: true }),
+                })
+                fetchSavedViews()
+              }}
+            />
             <Link href="/orders/reviews/rules" className="h-8 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5">
               <Star size={12} /> {t('orders.action.reviewRules')}
             </Link>
