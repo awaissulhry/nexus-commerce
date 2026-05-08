@@ -19,7 +19,7 @@ import {
   Check, Download, Sliders, Undo2, CheckCircle2,
   Lightbulb, Zap, AlertCircle,
   Columns, Maximize2, Minimize2, Keyboard,
-  ClipboardCheck,
+  ClipboardCheck, Bookmark, BookmarkPlus, Trash2,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -268,6 +268,49 @@ function buildAdjustmentPayload(
   }
 }
 
+// S.18 — saved views. Capture the operator's current configuration
+// (filters + view mode + density + visible columns) under a name so
+// it can be restored in one click. localStorage-scoped — one
+// operator per browser today; multi-user persistence becomes a
+// schema-backed table later (Wave 4+).
+type SavedView = {
+  id: string
+  name: string
+  view: ViewMode
+  location: string
+  status: string
+  search: string
+  density: Density
+  visibleColumns: ColumnKey[]
+}
+const SAVED_VIEWS_STORAGE_KEY = 'stock.savedViews'
+
+function readSavedViews(): SavedView[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(SAVED_VIEWS_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(
+      (v): v is SavedView =>
+        v && typeof v.id === 'string' && typeof v.name === 'string'
+        && typeof v.view === 'string' && Array.isArray(v.visibleColumns),
+    )
+  } catch {
+    return []
+  }
+}
+
+function writeSavedViews(views: SavedView[]): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(SAVED_VIEWS_STORAGE_KEY, JSON.stringify(views))
+  } catch {
+    // Quota / private mode — silently drop. Saved views are convenience.
+  }
+}
+
 // S.16 — small Pareto-band chip rendered next to the product name on
 // stock list rows. Tone follows the band: A=emerald (top contributors),
 // B=blue (mid), C=slate (tail), D=rose (zero sales — flag).
@@ -350,6 +393,16 @@ export default function StockWorkspace() {
   useEffect(() => {
     try { localStorage.setItem('stock.columns', JSON.stringify(visibleColumns)) } catch { /* ignore */ }
   }, [visibleColumns])
+  // S.18 — saved views. Hydrate from localStorage on mount; the
+  // operator's current filter/view/columns capture into a named view
+  // they can restore in one click. No schema change; one operator per
+  // browser today. The save modal collects the view name.
+  const [savedViews, setSavedViews] = useState<SavedView[]>([])
+  const [savedViewsOpen, setSavedViewsOpen] = useState(false)
+  const [saveViewName, setSaveViewName] = useState('')
+  const [saveViewModalOpen, setSaveViewModalOpen] = useState(false)
+  useEffect(() => { setSavedViews(readSavedViews()) }, [])
+
   // Bulk-selection state. Set of StockLevel ids. Only used in table view —
   // matrix and cards address products directly so per-row selection is
   // less natural there. `lastSelectedIdx` powers shift-click range select.
@@ -653,6 +706,49 @@ export default function StockWorkspace() {
     fetchSidecar()
   }, [undoBundle, fetchStock, fetchSidecar])
 
+  // S.18 — apply a saved view: write each captured field back to URL
+  // (keeps the view URL-shareable) and to the localStorage-backed
+  // density/columns prefs (which live outside searchParams).
+  const applySavedView = useCallback((v: SavedView) => {
+    const next = new URLSearchParams()
+    if (v.view !== 'table') next.set('view', v.view)
+    if (v.location) next.set('location', v.location)
+    if (v.status) next.set('status', v.status)
+    if (v.search) next.set('search', v.search)
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false })
+    setSearchInput(v.search)
+    setDensity(v.density)
+    setVisibleColumns(v.visibleColumns)
+    setSavedViewsOpen(false)
+  }, [pathname, router])
+
+  const saveCurrentAsView = useCallback(() => {
+    const trimmed = saveViewName.trim()
+    if (!trimmed) return
+    const v: SavedView = {
+      id: `view_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      name: trimmed,
+      view,
+      location: locationCode,
+      status,
+      search,
+      density,
+      visibleColumns,
+    }
+    const next = [...savedViews, v]
+    setSavedViews(next)
+    writeSavedViews(next)
+    setSaveViewModalOpen(false)
+    setSaveViewName('')
+    setSavedViewsOpen(false)
+  }, [saveViewName, view, locationCode, status, search, density, visibleColumns, savedViews])
+
+  const deleteSavedView = useCallback((id: string) => {
+    const next = savedViews.filter((v) => v.id !== id)
+    setSavedViews(next)
+    writeSavedViews(next)
+  }, [savedViews])
+
   const exportSelectedCsv = useCallback(() => {
     const rows = items.filter((it) => selected.has(it.id))
     if (rows.length === 0) return
@@ -744,6 +840,16 @@ export default function StockWorkspace() {
               <Activity size={12} />
               {t('stock.analytics.title')}
             </Link>
+            {/* S.18 — saved views dropdown */}
+            <SavedViewsButton
+              savedViews={savedViews}
+              open={savedViewsOpen}
+              onToggle={() => setSavedViewsOpen((o) => !o)}
+              onApply={applySavedView}
+              onDelete={deleteSavedView}
+              onOpenSaveModal={() => { setSavedViewsOpen(false); setSaveViewModalOpen(true) }}
+              t={t}
+            />
             <button
               onClick={() => setShortcutsOpen(true)}
               className="h-11 w-11 sm:h-8 sm:w-8 inline-flex items-center justify-center border border-slate-200 rounded-md hover:bg-slate-50 text-slate-600"
@@ -974,6 +1080,50 @@ export default function StockWorkspace() {
       )}
 
       {shortcutsOpen && <ShortcutsHelp onClose={() => setShortcutsOpen(false)} />}
+
+      {/* S.18 — save-current-view modal. Captures the existing
+          configuration (view, location, status, search, density,
+          visibleColumns) under an operator-supplied name. */}
+      {saveViewModalOpen && (
+        <Modal title={t('stock.savedViews.saveTitle')} onClose={() => { setSaveViewModalOpen(false); setSaveViewName('') }}>
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm uppercase tracking-wider text-slate-500 font-semibold block mb-1">
+                {t('stock.savedViews.nameLabel')}
+              </label>
+              <input
+                type="text"
+                value={saveViewName}
+                onChange={(e) => setSaveViewName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && saveViewName.trim()) saveCurrentAsView() }}
+                placeholder={t('stock.savedViews.namePlaceholder')}
+                autoFocus
+                className="w-full h-9 px-2 text-md border border-slate-200 rounded"
+              />
+            </div>
+            <div className="text-sm text-slate-500">
+              {t('stock.savedViews.willCapture')}: {view}
+              {locationCode && `, ${locationCode}`}
+              {status && `, ${status.toLowerCase()}`}
+              {search && `, "${search.slice(0, 24)}"`}
+              {`, ${density}, ${visibleColumns.length} ${t('stock.savedViews.columns')}`}
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                onClick={() => { setSaveViewModalOpen(false); setSaveViewName('') }}
+                className="h-11 sm:h-8 px-3 text-base text-slate-500 hover:text-slate-900"
+              >{t('stock.list.cancel')}</button>
+              <button
+                onClick={saveCurrentAsView}
+                disabled={!saveViewName.trim()}
+                className="h-11 sm:h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
+              >
+                <BookmarkPlus size={12} /> {t('stock.savedViews.save')}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* S.9 — mobile bottom-nav. Below sm: a fixed bottom strip
           surfaces the two stock surfaces — the main workspace (this
@@ -2030,6 +2180,86 @@ function DensityToggle({ density, onChange }: { density: Density; onChange: (d: 
     >
       <Icon size={12} />
     </button>
+  )
+}
+
+// S.18 — header dropdown showing saved views. Operator clicks the
+// bookmark to open; clicking a row applies that view; the trash icon
+// deletes; "Save current view" triggers the save modal.
+function SavedViewsButton({
+  savedViews, open, onToggle, onApply, onDelete, onOpenSaveModal, t,
+}: {
+  savedViews: SavedView[]
+  open: boolean
+  onToggle: () => void
+  onApply: (v: SavedView) => void
+  onDelete: (id: string) => void
+  onOpenSaveModal: () => void
+  t: (k: string, v?: Record<string, string | number>) => string
+}) {
+  return (
+    <div className="relative">
+      <button
+        onClick={onToggle}
+        className="h-11 sm:h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5 text-slate-700"
+        title={t('stock.savedViews.title')}
+      >
+        <Bookmark size={12} />
+        {t('stock.savedViews.title')}
+        {savedViews.length > 0 && (
+          <span className="text-xs text-slate-400 tabular-nums">· {savedViews.length}</span>
+        )}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={onToggle} />
+          <div
+            className="absolute right-0 top-full mt-1 w-72 z-20 bg-white border border-slate-200 rounded-md shadow-lg p-1 text-base"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {savedViews.length === 0 ? (
+              <div className="px-3 py-3 text-sm text-slate-500 italic">
+                {t('stock.savedViews.empty')}
+              </div>
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {savedViews.map((v) => (
+                  <li key={v.id} className="flex items-center gap-2 hover:bg-slate-50 rounded">
+                    <button
+                      onClick={() => onApply(v)}
+                      className="flex-1 text-left min-h-[44px] sm:min-h-0 px-3 py-2 text-sm"
+                    >
+                      <div className="font-medium text-slate-900 truncate">{v.name}</div>
+                      <div className="text-xs text-slate-500 truncate">
+                        {v.view}
+                        {v.location && ` · ${v.location}`}
+                        {v.status && ` · ${v.status.toLowerCase()}`}
+                        {v.search && ` · "${v.search.slice(0, 16)}"`}
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => onDelete(v.id)}
+                      className="min-h-[44px] sm:min-h-0 px-2 py-2 text-slate-400 hover:text-rose-600"
+                      aria-label={t('stock.savedViews.delete')}
+                      title={t('stock.savedViews.delete')}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button
+              onClick={onOpenSaveModal}
+              className="w-full mt-1 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 rounded inline-flex items-center gap-2 border-t border-slate-100"
+            >
+              <BookmarkPlus size={12} />
+              {t('stock.savedViews.saveCurrent')}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   )
 }
 
