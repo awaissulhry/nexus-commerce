@@ -326,6 +326,35 @@ export class AmazonOrdersService {
       },
     })
 
+    // O.6: emit lifecycle event so OrdersWorkspace auto-refreshes
+    // without polling. Created vs. updated mirrors the upsert path —
+    // existing == null means we just created, otherwise the row was
+    // touched (status / metadata refresh).
+    void (async () => {
+      try {
+        const { publishOrderEvent } = await import('./order-events.service.js')
+        publishOrderEvent(
+          existing == null
+            ? {
+                type: 'order.created',
+                orderId: order.id,
+                channel: 'AMAZON',
+                channelOrderId: raw.AmazonOrderId,
+                ts: Date.now(),
+              }
+            : {
+                type: 'order.updated',
+                orderId: order.id,
+                channel: 'AMAZON',
+                status,
+                ts: Date.now(),
+              },
+        )
+      } catch {
+        // bus failure must not break ingestion
+      }
+    })()
+
     // O.45: cascade cancellation cleanup. Best-effort + non-blocking
     // — a void failure shouldn't fail the order ingest.
     if (newlyCancelled) {

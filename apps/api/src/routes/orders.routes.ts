@@ -583,4 +583,49 @@ export async function ordersRoutes(app: FastifyInstance) {
       }
     },
   )
+
+  // O.6 — SSE channel for /orders. Mirrors the outbound bus pattern
+  // at /api/fulfillment/outbound/events. Carries order.created /
+  // updated / cancelled + return.created so OrdersWorkspace can
+  // refresh its list/facets/stats without polling. Heartbeat every
+  // 25s defeats most reverse-proxy idle timeouts; client EventSource
+  // auto-reconnects on transient drops.
+  app.get('/api/orders/events', async (request, reply) => {
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    })
+    reply.raw.write(
+      `event: ping\ndata: ${JSON.stringify({ ts: Date.now(), connected: true })}\n\n`,
+    )
+
+    const { subscribeOrderEvents } = await import(
+      '../services/order-events.service.js'
+    )
+    const send = (event: any) => {
+      try {
+        reply.raw.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+      } catch {
+        // Connection dead — cleanup runs in the close handler.
+      }
+    }
+
+    const unsubscribe = subscribeOrderEvents(send)
+    const heartbeat = setInterval(() => {
+      try {
+        reply.raw.write(`: heartbeat ${Date.now()}\n\n`)
+      } catch {
+        // ignore
+      }
+    }, 25_000)
+
+    request.raw.on('close', () => {
+      clearInterval(heartbeat)
+      unsubscribe()
+    })
+
+    await new Promise(() => {})
+  })
 }

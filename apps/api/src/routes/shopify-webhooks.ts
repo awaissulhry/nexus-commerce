@@ -365,6 +365,24 @@ async function handleOrderCreate(payload: ShopifyWebhookPayload): Promise<void> 
       }
     }
 
+    // O.6: lifecycle event for /orders SSE subscribers. orders/create
+    // is Shopify's own create webhook, so we always emit order.created
+    // (idempotent at the bus level — multiple subscribers re-fetch).
+    void (async () => {
+      try {
+        const { publishOrderEvent } = await import('../services/order-events.service.js');
+        publishOrderEvent({
+          type: 'order.created',
+          orderId: dbOrder.id,
+          channel: 'SHOPIFY',
+          channelOrderId: shopifyOrderId,
+          ts: Date.now(),
+        });
+      } catch {
+        // bus failure must not break webhook ack
+      }
+    })();
+
     logger.info('[ShopifyWebhooks] order-create processed', { shopifyOrderId, orderId: dbOrder.id });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -452,6 +470,33 @@ async function handleOrderUpdate(payload: ShopifyWebhookPayload): Promise<void> 
         }
       })();
     }
+
+    // O.6: lifecycle event for /orders SSE subscribers. Cancellation
+    // gets its own type so /orders can show the badge transition
+    // immediately + invalidate facets (PENDING count drops).
+    void (async () => {
+      try {
+        const { publishOrderEvent } = await import('../services/order-events.service.js');
+        publishOrderEvent(
+          newlyCancelled
+            ? {
+                type: 'order.cancelled',
+                orderId: dbOrder.id,
+                channel: 'SHOPIFY',
+                ts: Date.now(),
+              }
+            : {
+                type: 'order.updated',
+                orderId: dbOrder.id,
+                channel: 'SHOPIFY',
+                status: newStatus,
+                ts: Date.now(),
+              },
+        );
+      } catch {
+        // bus failure must not break webhook ack
+      }
+    })();
 
     logger.info('[ShopifyWebhooks] order-update processed', { shopifyOrderId, newStatus });
   } catch (error) {
@@ -596,6 +641,24 @@ async function handleRefundCreate(payload: ShopifyWebhookPayload): Promise<{ kin
     },
     select: { id: true, rmaNumber: true },
   });
+
+  // O.6: emit return.created so /orders Returns lens auto-refreshes
+  // when Shopify mirrors a refund. Fire-and-forget; bus failure must
+  // not affect webhook ack.
+  void (async () => {
+    try {
+      const { publishOrderEvent } = await import('../services/order-events.service.js');
+      publishOrderEvent({
+        type: 'return.created',
+        returnId: ret.id,
+        orderId: orderId,
+        channel: 'SHOPIFY',
+        ts: Date.now(),
+      });
+    } catch {
+      // ignore
+    }
+  })();
 
   // 5) AuditLog — attribute the create to Shopify, not a phantom
   //    local action. Operators reading the timeline see the real

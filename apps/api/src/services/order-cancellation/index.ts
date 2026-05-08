@@ -76,17 +76,33 @@ export async function handleOrderCancelled(
   // orders (defensive) don't pay for the modules.
   const [
     { publishOutboundEvent },
+    { publishOrderEvent },
     { auditLogService },
     sendcloud,
     { applyStockMovement },
     { releaseOpenOrder },
   ] = await Promise.all([
     import('../outbound-events.service.js'),
+    import('../order-events.service.js'),
     import('../audit-log.service.js'),
     import('../sendcloud/index.js'),
     import('../stock-movement.service.js'),
     import('../stock-level.service.js'),
   ])
+
+  // O.6: emit the order-level cancellation event up front. The
+  // shipment.deleted events fired further down handle the outbound
+  // surface; this one drives the /orders SSE channel so the badge
+  // flips and the PENDING facet count drops without operator F5.
+  try {
+    publishOrderEvent({
+      type: 'order.cancelled',
+      orderId,
+      ts: Date.now(),
+    })
+  } catch {
+    // bus failure must not abort the cascade
+  }
 
   // S.2: Stock restoration. Two patterns coexist depending on how the
   // channel ingestion path handles stock:

@@ -297,6 +297,34 @@ export class EbayOrdersService {
       this.stats.ordersCreated++
     }
 
+    // O.6: lifecycle event for /orders SSE subscribers. Same created-
+    // vs-updated split as Amazon: `existing == null` means the upsert
+    // just inserted.
+    void (async () => {
+      try {
+        const { publishOrderEvent } = await import('./order-events.service.js')
+        publishOrderEvent(
+          existing == null
+            ? {
+                type: 'order.created',
+                orderId: dbOrder.id,
+                channel: 'EBAY',
+                channelOrderId: order.orderId,
+                ts: Date.now(),
+              }
+            : {
+                type: 'order.updated',
+                orderId: dbOrder.id,
+                channel: 'EBAY',
+                status: orderData.status,
+                ts: Date.now(),
+              },
+        )
+      } catch {
+        // bus failure must not break ingestion
+      }
+    })()
+
     // O.45: cascade cancellation cleanup. Best-effort + non-blocking.
     if (newlyCancelled) {
       void (async () => {
