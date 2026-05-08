@@ -948,6 +948,13 @@ export default function ProductsWorkspace() {
                 visibleColumns: f._visibleColumns as string[] | undefined,
                 density: f._density as Density | undefined,
                 pageSize: f._pageSize as number | undefined,
+                // P.3 — view-local column widths. E.12 stores widths
+                // in localStorage globally; saving them per-view lets
+                // operators have wide-name views vs compact-overview
+                // views without manually re-resizing on switch.
+                columnWidths: f._columnWidths as
+                  | Record<string, number>
+                  | undefined,
               }
               if (Array.isArray(viewLocal.visibleColumns)) {
                 setVisibleColumns(viewLocal.visibleColumns)
@@ -958,6 +965,19 @@ export default function ProductsWorkspace() {
                 viewLocal.density === 'spacious'
               ) {
                 setDensity(viewLocal.density)
+              }
+              // P.3 — push view-local column widths into the
+              // localStorage-backed setter via a custom event so
+              // VirtualizedGrid (where the state lives) picks them up.
+              if (
+                viewLocal.columnWidths &&
+                typeof viewLocal.columnWidths === 'object'
+              ) {
+                window.dispatchEvent(
+                  new CustomEvent('nexus:apply-column-widths', {
+                    detail: { widths: viewLocal.columnWidths },
+                  }),
+                )
               }
               const next = new URLSearchParams()
               for (const [k, v] of Object.entries(f)) {
@@ -1004,6 +1024,21 @@ export default function ProductsWorkspace() {
               }
               if (pageSize !== 100) {
                 filters._pageSize = pageSize
+              }
+              // P.3 — read current column widths from localStorage
+              // (E.12 stores them there) and snapshot into the view.
+              try {
+                const raw = window.localStorage.getItem(
+                  'products.columnWidths',
+                )
+                if (raw) {
+                  const parsed = JSON.parse(raw) as Record<string, number>
+                  if (parsed && Object.keys(parsed).length > 0) {
+                    filters._columnWidths = parsed
+                  }
+                }
+              } catch {
+                /* ignore — view saves without widths if storage failed */
               }
               const res = await fetch(`${getBackendUrl()}/api/saved-views`, {
                 method: 'POST',
@@ -3282,6 +3317,21 @@ function VirtualizedGrid({
       /* ignore quota errors */
     }
   }, [columnWidths])
+  // P.3 — listen for view-applied widths and replace state. Triggered
+  // by SavedViewsButton's onApply when the view carries _columnWidths.
+  useEffect(() => {
+    const onApplyWidths = (e: Event) => {
+      const detail = (e as CustomEvent).detail as
+        | { widths?: Record<string, number> }
+        | undefined
+      if (detail?.widths && typeof detail.widths === 'object') {
+        setColumnWidths(detail.widths)
+      }
+    }
+    window.addEventListener('nexus:apply-column-widths', onApplyWidths)
+    return () =>
+      window.removeEventListener('nexus:apply-column-widths', onApplyWidths)
+  }, [])
   const colWidth = useCallback(
     (key: string, fallback?: number) =>
       columnWidths[key] ?? fallback ?? 100,
