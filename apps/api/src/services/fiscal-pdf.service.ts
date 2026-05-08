@@ -185,7 +185,16 @@ export async function invoiceHtml(orderId: string): Promise<string> {
   }
   const grandNet = lines.reduce((a, l) => a + l.netEur, 0)
   const grandVat = lines.reduce((a, l) => a + l.vatEur, 0)
-  const grandTotal = grandNet + grandVat
+
+  // FU.4 — bollo virtuale (€2 stamp duty). Italian law: when the
+  // VAT-exempt portion of an invoice exceeds €77.47, the issuer
+  // owes a €2 stamp duty paid via virtual bollo. Common for
+  // cross-border B2B (non-EU exports), intra-EU reverse charge,
+  // and Article-10 exempt sales.
+  const exemptNet = vatByRate.get(0)?.net ?? 0
+  const bolloApplies = exemptNet > 77.47
+  const bolloAmount = bolloApplies ? 2 : 0
+  const grandTotal = grandNet + grandVat + bolloAmount
 
   const ship = (order.shippingAddress ?? {}) as any
   const shipLine1 = ship.line1 ?? ship.AddressLine1 ?? ship.address1 ?? ship.street ?? ''
@@ -279,6 +288,7 @@ export async function invoiceHtml(orderId: string): Promise<string> {
 <table class="totals" style="width: 320px; margin-left: auto;">
   <tr><td>Imponibile</td><td class="num">${fmtEur(grandNet)}</td></tr>
   <tr><td>IVA totale</td><td class="num">${fmtEur(grandVat)}</td></tr>
+  ${bolloApplies ? `<tr><td>Imposta di bollo<br><span style="font-size:10px;color:#6b7280">Esente IVA &gt; €77,47 — DPR 642/72</span></td><td class="num">${fmtEur(bolloAmount)}</td></tr>` : ''}
   <tr class="grand"><td>Totale fattura</td><td class="num">${fmtEur(grandTotal)}</td></tr>
 </table>
 

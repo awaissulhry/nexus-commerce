@@ -218,6 +218,7 @@ export default function OrderDetailClient({ id }: { id: string }) {
                       <option value="22">22%</option>
                       <option value="10">10%</option>
                       <option value="4">4%</option>
+                      <option value="0">0% (esente)</option>
                     </select>
                   )}
                   <div className="text-right">

@@ -591,15 +591,20 @@ export async function ordersRoutes(app: FastifyInstance) {
   // (cycling apparel can be 10%, essentials 4%). Restricted to
   // IT-marketplace orders — non-IT lines have no Italian VAT
   // treatment to override.
+  //
+  // FU.4 — 0 added to the allowed list. Used for VAT-exempt
+  // lines (cross-border B2B to non-EU; intra-EU reverse
+  // charge). When the exempt portion of the order exceeds
+  // €77.47, F.3/F.4 add €2 bollo virtuale per Italian law.
   app.patch('/api/orders/:id/items/:itemId/vat', async (request, reply) => {
     try {
       const { id, itemId } = request.params as { id: string; itemId: string }
       const body = request.body as { rate?: number | null }
-      const allowed = [4, 10, 22, null]
+      const allowed = [0, 4, 10, 22, null]
       const rate = body.rate ?? null
       if (!allowed.includes(rate as any)) {
         return reply.code(400).send({
-          error: 'rate must be 4, 10, 22, or null',
+          error: 'rate must be 0, 4, 10, 22, or null',
         })
       }
       const item = await prisma.orderItem.findFirst({

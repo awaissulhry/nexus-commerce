@@ -151,7 +151,15 @@ export async function generateFatturaPaXml(orderId: string): Promise<FatturaPaRe
     (a, [rate, base]) => a + (base * rate) / 100,
     0,
   )
-  const grandTotal = netTotal + vatTotal
+
+  // FU.4 — bollo virtuale (€2). Italian fiscal law: VAT-exempt
+  // portion >€77.47 triggers €2 stamp duty paid via virtual bollo.
+  // Surfaces in FatturaPA as DatiBollo block under
+  // DatiGeneraliDocumento.
+  const exemptBase = vatByRate.get(0) ?? 0
+  const bolloApplies = exemptBase > 77.47
+  const bolloAmount = bolloApplies ? 2 : 0
+  const grandTotal = netTotal + vatTotal + bolloAmount
 
   const issuedAt = inv.issuedAt
   const codDest =
@@ -219,7 +227,10 @@ ${order.codiceFiscale ? `        <CodiceFiscale>${escapeXml(order.codiceFiscale)
         <Divisa>EUR</Divisa>
         <Data>${escapeXml(fmtDate(issuedAt))}</Data>
         <Numero>${escapeXml(inv.invoiceNumber)}</Numero>
-        <ImportoTotaleDocumento>${fmtDecimal(grandTotal)}</ImportoTotaleDocumento>
+${bolloApplies ? `        <DatiBollo>
+          <BolloVirtuale>SI</BolloVirtuale>
+          <ImportoBollo>${fmtDecimal(bolloAmount)}</ImportoBollo>
+        </DatiBollo>\n` : ''}        <ImportoTotaleDocumento>${fmtDecimal(grandTotal)}</ImportoTotaleDocumento>
       </DatiGeneraliDocumento>
     </DatiGenerali>
     <DatiBeniServizi>
