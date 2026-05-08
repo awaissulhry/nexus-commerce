@@ -10,6 +10,10 @@ import {
   type ApprovedGroup,
 } from '../services/pim/auto-detect.service.js'
 import { computeAmazonAccountHealth } from '../services/amazon-account-health.service.js'
+import {
+  getBuyShippingRates,
+  purchaseBuyShippingLabel,
+} from '../services/amazon-buy-shipping.service.js'
 
 const amazonService = new AmazonService()
 
@@ -1693,6 +1697,35 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
       return health
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? 'failed' })
+    }
+  })
+
+  // O.16b — Buy Shipping rate quotes (dryRun by default; real path
+  // gated behind NEXUS_ENABLE_AMAZON_BUY_SHIPPING=true).
+  fastify.post('/orders/:id/buy-shipping/quote', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const result = await getBuyShippingRates(id)
+      return result
+    } catch (err: any) {
+      return reply.code(400).send({ error: err?.message ?? 'failed' })
+    }
+  })
+
+  fastify.post('/orders/:id/buy-shipping/purchase', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = request.body as { serviceId?: string }
+      if (!body.serviceId) {
+        return reply.code(400).send({ error: 'serviceId required' })
+      }
+      const result = await purchaseBuyShippingLabel({
+        orderId: id,
+        serviceId: body.serviceId,
+      })
+      return result
+    } catch (err: any) {
+      return reply.code(400).send({ error: err?.message ?? 'failed' })
     }
   })
 }
