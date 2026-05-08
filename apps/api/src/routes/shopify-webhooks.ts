@@ -383,6 +383,22 @@ async function handleOrderCreate(payload: ShopifyWebhookPayload): Promise<void> 
       }
     })();
 
+    // O.21a: customer FK + cache refresh. Fire-and-forget per the
+    // amazon-orders / ebay-orders pattern.
+    void (async () => {
+      try {
+        const { linkAndRefreshCustomerForOrder } = await import(
+          '../services/customer-cache.service.js'
+        );
+        await linkAndRefreshCustomerForOrder(dbOrder.id);
+      } catch (err) {
+        logger.warn('[ShopifyWebhooks] customer cache refresh failed', {
+          shopifyOrderId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    })();
+
     logger.info('[ShopifyWebhooks] order-create processed', { shopifyOrderId, orderId: dbOrder.id });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -510,6 +526,24 @@ async function handleOrderUpdate(payload: ShopifyWebhookPayload): Promise<void> 
         );
       } catch {
         // bus failure must not break webhook ack
+      }
+    })();
+
+    // O.21a: customer cache refresh on every order update — covers
+    // status transitions that affect LTV (cancelled / refunded
+    // orders are excluded from totalSpentCents). FK is already set
+    // from order-create; just need the recompute.
+    void (async () => {
+      try {
+        const { linkAndRefreshCustomerForOrder } = await import(
+          '../services/customer-cache.service.js'
+        );
+        await linkAndRefreshCustomerForOrder(dbOrder.id);
+      } catch (err) {
+        logger.warn('[ShopifyWebhooks] customer cache refresh failed', {
+          shopifyOrderId,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     })();
 

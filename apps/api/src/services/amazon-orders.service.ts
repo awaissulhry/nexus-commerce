@@ -384,6 +384,23 @@ export class AmazonOrdersService {
       }
     })()
 
+    // O.21a: ensure Customer FK + refresh aggregate cache. Fire-and-
+    // forget — a customer-side failure must never abort the order
+    // ingest. Idempotent on re-runs (upsert + recompute).
+    void (async () => {
+      try {
+        const { linkAndRefreshCustomerForOrder } = await import(
+          './customer-cache.service.js'
+        )
+        await linkAndRefreshCustomerForOrder(order.id)
+      } catch (err) {
+        logger.warn('amazon-orders: customer cache refresh failed', {
+          orderId: order.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    })()
+
     // O.45: cascade cancellation cleanup. Best-effort + non-blocking
     // — a void failure shouldn't fail the order ingest.
     if (newlyCancelled) {

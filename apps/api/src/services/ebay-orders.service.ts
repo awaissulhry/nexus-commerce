@@ -342,6 +342,22 @@ export class EbayOrdersService {
       }
     })()
 
+    // O.21a: customer FK + cache refresh. Fire-and-forget per the
+    // amazon-orders pattern.
+    void (async () => {
+      try {
+        const { linkAndRefreshCustomerForOrder } = await import(
+          './customer-cache.service.js'
+        )
+        await linkAndRefreshCustomerForOrder(dbOrder.id)
+      } catch (err) {
+        logger.warn('ebay-orders: customer cache refresh failed', {
+          orderId: dbOrder.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    })()
+
     // O.45: cascade cancellation cleanup. Best-effort + non-blocking.
     if (newlyCancelled) {
       void (async () => {

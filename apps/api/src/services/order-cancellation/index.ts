@@ -104,6 +104,27 @@ export async function handleOrderCancelled(
     // bus failure must not abort the cascade
   }
 
+  // O.21a: refresh the linked Customer's aggregate cache. Cancelled
+  // orders are excluded from LTV (totalSpentCents) per the cache
+  // service, so totalOrders + totalSpentCents both step down on a
+  // cascade. Fire-and-forget; a customer-side failure must not
+  // abort the cancel.
+  void (async () => {
+    try {
+      const { linkAndRefreshCustomerForOrder } = await import(
+        '../customer-cache.service.js'
+      )
+      await linkAndRefreshCustomerForOrder(orderId)
+    } catch (err) {
+      auditLogService.write({
+        entityType: 'Order',
+        entityId: orderId,
+        action: 'customer-cache-refresh-failed',
+        metadata: { error: err instanceof Error ? err.message : String(err) },
+      }).catch(() => {})
+    }
+  })()
+
   // S.2: Stock restoration. Two patterns coexist depending on how the
   // channel ingestion path handles stock:
   //   - reserve-then-consume (Amazon FBM today; Shopify in S.2.5):
