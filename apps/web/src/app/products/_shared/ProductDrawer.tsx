@@ -47,6 +47,9 @@ import {
   Layers,
   RefreshCw,
   CheckCircle2,
+  Calendar,
+  XCircle,
+  Clock,
 } from 'lucide-react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -150,7 +153,7 @@ export interface ProductDrawerProps {
   onChanged?: () => void
 }
 
-type Tab = 'details' | 'listings' | 'variations' | 'translations' | 'related' | 'activity'
+type Tab = 'details' | 'listings' | 'variations' | 'translations' | 'related' | 'schedule' | 'activity'
 
 export default function ProductDrawer({
   productId,
@@ -430,6 +433,13 @@ export default function ProductDrawer({
           >
             <Network className="w-3 h-3" /> Related
           </DrawerTab>
+          {/* F.3.c — pending scheduled changes for this product. */}
+          <DrawerTab
+            active={tab === 'schedule'}
+            onClick={() => setTab('schedule')}
+          >
+            <Calendar className="w-3 h-3" /> Schedule
+          </DrawerTab>
           <DrawerTab
             active={tab === 'activity'}
             onClick={() => setTab('activity')}
@@ -501,6 +511,7 @@ export default function ProductDrawer({
               }}
             />
           )}
+          {data && tab === 'schedule' && <ScheduleTab productId={data.id} />}
           {data && tab === 'activity' && <ActivityTab productId={data.id} />}
         </div>
 
@@ -1754,6 +1765,240 @@ function formatValue(v: unknown): string {
 // ────────────────────────────────────────────────────────────────────
 // VariationsTab (P.8) — child Products of a parent, with quick-edit
 // ────────────────────────────────────────────────────────────────────
+/**
+ * F.3.c — pending / applied scheduled changes for this product.
+ *
+ * Reads GET /api/products/:id/scheduled-changes (returns up to 100
+ * rows, ordered by scheduledFor asc). Operator sees what's queued
+ * for this SKU and can cancel any PENDING row in one click.
+ *
+ * No "schedule a new change" form here — that flow lives on the
+ * BulkActionBar's Schedule modal where the operator can target N
+ * products at once. Coming back here from the bulk flow is the
+ * verification step.
+ */
+interface ScheduledChange {
+  id: string
+  productId: string
+  kind: string
+  payload: Record<string, unknown>
+  scheduledFor: string
+  status: string
+  appliedAt: string | null
+  error: string | null
+  createdBy: string | null
+  createdAt: string
+}
+
+function ScheduleTab({ productId }: { productId: string }) {
+  const { toast } = useToast()
+  const [rows, setRows] = useState<ScheduledChange[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [cancelling, setCancelling] = useState<string | null>(null)
+
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${productId}/scheduled-changes`,
+        { cache: 'no-store' },
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const j = await res.json()
+      setRows(j.changes ?? [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [productId])
+
+  useEffect(() => {
+    refresh()
+  }, [refresh])
+
+  const cancel = async (id: string) => {
+    setCancelling(id)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/scheduled-changes/${id}/cancel`,
+        { method: 'POST' },
+      )
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error ?? `HTTP ${res.status}`)
+      }
+      toast.success('Scheduled change cancelled')
+      refresh()
+    } catch (e) {
+      toast.error(
+        `Cancel failed: ${e instanceof Error ? e.message : String(e)}`,
+      )
+    } finally {
+      setCancelling(null)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="flex items-center justify-center py-12 text-slate-400 dark:text-slate-500 text-base"
+      >
+        <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading
+        scheduled changes…
+      </div>
+    )
+  }
+  if (error) {
+    return (
+      <div
+        role="alert"
+        className="m-5 border border-rose-200 bg-rose-50 dark:border-rose-800 dark:bg-rose-950/40 rounded-md px-3 py-2 text-base text-rose-800 dark:text-rose-300"
+      >
+        Failed to load scheduled changes: {error}
+      </div>
+    )
+  }
+  if (!rows || rows.length === 0) {
+    return (
+      <div className="px-5 py-12 text-center text-base text-slate-500 dark:text-slate-400">
+        <Calendar className="w-6 h-6 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
+        No scheduled changes for this product.
+        <div className="text-sm text-slate-400 dark:text-slate-500 mt-1">
+          Use the bulk Schedule action on the main grid to defer a
+          status flip or price change to a future time.
+        </div>
+      </div>
+    )
+  }
+
+  const renderPayload = (kind: string, payload: Record<string, unknown>) => {
+    if (kind === 'STATUS') {
+      const status = payload.status as string | undefined
+      return (
+        <span>
+          Set status →{' '}
+          <span className="font-mono font-semibold">{status ?? '—'}</span>
+        </span>
+      )
+    }
+    if (kind === 'PRICE') {
+      if (typeof payload.basePrice === 'number') {
+        return (
+          <span>
+            Set basePrice →{' '}
+            <span className="font-mono font-semibold tabular-nums">
+              €{payload.basePrice.toFixed(2)}
+            </span>
+          </span>
+        )
+      }
+      if (typeof payload.adjustPercent === 'number') {
+        const v = payload.adjustPercent
+        return (
+          <span>
+            Adjust basePrice by{' '}
+            <span className="font-mono font-semibold tabular-nums">
+              {v >= 0 ? '+' : ''}
+              {v}%
+            </span>
+          </span>
+        )
+      }
+    }
+    return <span className="font-mono text-xs">{JSON.stringify(payload)}</span>
+  }
+
+  const statusTone = (s: string) => {
+    if (s === 'PENDING')
+      return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
+    if (s === 'APPLIED')
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+    if (s === 'FAILED')
+      return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
+    if (s === 'CANCELLED')
+      return 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-800'
+    return 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-800'
+  }
+  const statusIcon = (s: string) => {
+    if (s === 'PENDING') return <Clock size={11} />
+    if (s === 'APPLIED') return <CheckCircle2 size={11} />
+    if (s === 'FAILED') return <AlertCircle size={11} />
+    if (s === 'CANCELLED') return <XCircle size={11} />
+    return null
+  }
+
+  return (
+    <div className="px-5 py-4 space-y-2">
+      <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
+        {rows.length} scheduled change{rows.length === 1 ? '' : 's'}
+      </div>
+      <ul className="space-y-1.5">
+        {rows.map((r) => (
+          <li
+            key={r.id}
+            className="border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2 text-base bg-white dark:bg-slate-900"
+          >
+            <div className="flex items-center gap-2 flex-wrap">
+              <span
+                className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wider border rounded ${statusTone(r.status)}`}
+              >
+                {statusIcon(r.status)}
+                {r.status}
+              </span>
+              <span className="text-slate-900 dark:text-slate-100">
+                {renderPayload(r.kind, r.payload)}
+              </span>
+              {r.status === 'PENDING' && (
+                <button
+                  type="button"
+                  onClick={() => cancel(r.id)}
+                  disabled={cancelling === r.id}
+                  className="ml-auto h-7 px-2 text-sm text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded inline-flex items-center gap-1 disabled:opacity-50"
+                >
+                  {cancelling === r.id ? (
+                    <Loader2 size={11} className="animate-spin" />
+                  ) : (
+                    <X size={11} />
+                  )}
+                  Cancel
+                </button>
+              )}
+            </div>
+            <div className="text-sm text-slate-500 dark:text-slate-400 mt-1 inline-flex items-center gap-2 flex-wrap">
+              <Clock size={11} />
+              <span>
+                {r.status === 'PENDING' ? 'Scheduled for' : 'Was scheduled for'}{' '}
+                <span className="text-slate-700 dark:text-slate-300 font-medium">
+                  {new Date(r.scheduledFor).toLocaleString()}
+                </span>
+              </span>
+              {r.appliedAt && (
+                <>
+                  <span className="text-slate-300 dark:text-slate-600">·</span>
+                  <span>
+                    {r.status === 'APPLIED' ? 'Applied at ' : 'Resolved at '}
+                    {new Date(r.appliedAt).toLocaleString()}
+                  </span>
+                </>
+              )}
+            </div>
+            {r.error && (
+              <div className="mt-1.5 text-xs text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded px-2 py-1">
+                {r.error}
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 /**
  * For parent products only. Reads /api/products/:parentId/children,
  * lists each child's sku, name, axis values, basePrice, totalStock,
