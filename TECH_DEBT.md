@@ -204,9 +204,13 @@ The write side is `updateUrl(patch)` — a generic `Record<string, string | unde
 
 No follow-up action.
 
-## 18. 🟡 /products → bulk edit in place
+## 18. ⏸ /products → bulk edit in place — punted to /bulk-operations 2026-05-08
 
-The selection bar exposes **Export CSV** only. Bulk-edit-in-place — select 50 rows, click "Set price", set value, save — is the obvious next feature but needs the same `PATCH /api/products/bulk` endpoint, per-cell validation, optimistic update path, and undo stack as the bulk-operations grid. Pulling that out cleanly into a reusable hook is the prerequisite work; until then v1 punts users to the existing bulk-operations grid.
+**Status:** Operator path documented and supported. The /products page selection bar exposes Export CSV only; bulk edits route to the dedicated `/bulk-operations` grid which already has per-cell validation, optimistic updates, undo stack, and the rollback flow (M.13).
+
+**Reopen criteria:** When operators say "I'm bouncing between /products and /bulk-operations and it costs me time" rather than "I want bulk edit on /products as a feature."
+
+**Symptom (kept for context):** Bulk-edit-in-place is the obvious next feature but reusing the bulk-operations grid's machinery requires a refactor. Until that ROI clears, the dedicated bulk-ops surface owns the use case.
 
 ## 19. 🟢 /products → single-product create form
 
@@ -371,21 +375,18 @@ The remaining piece was UI — M.15 added the LISTING_SYNC option to `BulkOperat
 
 **Behavioural note:** The cron worker is the eventual-consistency consumer; the bulk job lands COMPLETED as soon as the queue rows are written, not when each channel push acknowledges. This matches the rest of the bulk-ops surface (jobs report queue success, not cron ack).
 
-### 34c. Queue / worker infrastructure for >100-item jobs
+### 34c. ⏸ Queue / worker infrastructure for >100-item jobs — deferred 2026-05-08 (gated on Phase 2 Redis + #54)
 
-**Symptom:** v1's `processJob` runs synchronously in-process, in a
-single function call, updating the job row every 10 items. For
-Xavia-scale (~1.3k variations, completes in <100ms in B-8 Test 5)
-this is fine. For 50k-item jobs it would block the Node event loop
-for minutes.
+**Status:** No active impact. Xavia-scale runs (~1.3k variations) complete in <100ms in-process per B-8 Test 5; the synchronous `processJob` is fine. The fix would prevent event-loop blocking on 50k-item jobs, which neither Xavia nor any current operator runs.
 
-**Workaround:** "We're not at that scale yet."
+**Triple-blocked on:**
+1. Operator scale crossing ~10k items per bulk job (not happening today).
+2. Resolution of #54 (BullMQ Queue.add() hang from bulk-action context — dev-fixed, prod-validation pending).
+3. Phase 2 Redis enabled on Railway (currently the queue is BullMQ-Proxy backed).
 
-**Proper fix:** Move `processJob` body into a BullMQ worker. The HTTP
-endpoint enqueues, returns immediately; worker processes in chunks of
-N with `WORKER_CONCURRENCY` set; cancel flag becomes a Redis-backed
-check that the worker polls between chunks. Same gating as 34b —
-needs Phase 2.
+When these unblock, move `processJob` body into a BullMQ worker; the HTTP endpoint enqueues + returns immediately; worker processes in chunks of N with `WORKER_CONCURRENCY` set; cancel flag becomes Redis-backed.
+
+**Reopen criteria:** A real bulk job hits >5k items in production OR operator reports event-loop stalls during a bulk run.
 
 ### 34d. ⏸ `DELETE` action type — deferred-by-design 2026-05-08
 
@@ -686,7 +687,15 @@ Properties: atomic master+listing+outbox write (crash-safe), bounded request lat
 
 ---
 
-## 43. 🟡 Variant mechanism duplication: `Product.parentId` vs unused `ProductVariation`
+## 43. ⏸ Variant mechanism duplication — deferred 2026-05-08 (3–5 day refactor, no operator-visible impact)
+
+**Status:** No active impact. `Product.parentId` is the canonical variant mechanism (244 children + 15 parents in production). `ProductVariation` table sits empty and dormant. The bulk-action targets that previously routed through `ProductVariation` (PRICING/INVENTORY/STATUS) have all been retargeted to `Product` (Commit 1 of the bulk-ops rebuild) and ATTRIBUTE_UPDATE was retargeted in M.21. So the silent-no-op risk that originally drove this entry has been closed at the bulk-action layer.
+
+**Removal would still take 3–5 focused days** because the listing-wizard reader services (`variations.service.ts`, `submission.service.ts`, `schema-parser.service.ts`) all read via the PV relation; refactoring them to walk `Product.parentId` children is the load-bearing portion. No operator-visible problem to motivate it today.
+
+**Reopen criteria:** Adding new code that needs to query variants and the dual-mechanism causes ambiguity, OR the listing-wizard reader services need a different change anyway.
+
+**Original symptom (kept for context):**
 
 **Symptom:** Two parallel variant mechanisms exist in the schema. Real catalog uses `Product.parentId` self-reference (244 children + 15 parents in DB as of 2026-05-06, including all 244 Xavia variants). The `ProductVariation` table is defined but never populated (0 rows).
 
@@ -859,21 +868,16 @@ Promote to 🔴 when a regression slips past the build gates and into production
 
 ---
 
-## 51. 🟡 No transactional email infrastructure
+## 51. 🟡 Transactional email infrastructure — primitive extracted, surfaces still pending
 
-**Symptom:** Multiple surfaces want to email PDFs / notifications to suppliers and operators, but Nexus has no email sending infrastructure. The `sendEmailAlert` function in `apps/api/src/services/monitoring/alert.service.ts` is a TODO. The H.17 inbound discrepancy report (2026-05-06) ships as a PDF download only — operator forwards to supplier via their own mail client.
+**State as of 2026-05-08:** the shared `sendEmail()` transport now lives in `apps/api/src/services/email/transport.ts`, with `to | to[]`, `subject`, `html`, `text?`, `attachments?`, `tag?` parameters and a single Resend implementation behind the existing `NEXUS_ENABLE_OUTBOUND_EMAILS` dryRun gate. Three callsites consume it: O.30 shipment emails, R6.3 return-event emails, and the previously-stubbed `sendEmailAlert` TODOs in `monitoring/alert.service.ts` + `sync-monitoring.service.ts` (each now renders a minimal severity-tagged HTML body).
 
-**Surfaced at:** H.17 discrepancy report shipped 2026-05-06.
+**Still pending (operator-action / product-decision, not engineering):**
+- H.17 "Send to supplier" button — the transport supports `attachments` already; the UI side is a 1-commit follow-up that wires the discrepancy-report PDF buffer through a new route handler.
+- Domain auth for the brand domain (SPF + DKIM + DMARC) — DNS-side, coordinate with whoever owns `xavia.it`.
+- Flip `NEXUS_ENABLE_OUTBOUND_EMAILS=true` in production once domain auth + a `RESEND_API_KEY` are in place. Until then everything stays dryRun and console-logs.
 
-**Workaround:** Operator downloads PDF, attaches to mail client manually. Works but adds friction for the "ship the report on every receive close-out" use case.
-
-**Proper fix:** Pick an email provider (Resend has a clean API + good deliverability for transactional; SendGrid for higher volume; SES if AWS-aligned). Wire one service: `apps/api/src/services/email.service.ts` with `sendTransactionalEmail({ to, subject, body, attachments })`. Then:
-- Replace the H.17 download-only flow with a "Send to supplier" button that emails the PDF.
-- Wire `sendEmailAlert` in alert.service.ts.
-- Wire low-stock + sync-failure notifications via the same service.
-- Domain auth (SPF + DKIM + DMARC for the brand domain) is required to land in supplier inboxes — coordinate with whoever owns DNS for `xaviaracing.com`.
-
-**Estimated effort:** 1–2 commits. The email service itself is small; the surface area of "what should be emailed" is the time sink.
+**Won't be doing now without product input:** template registry, opt-out / preference center, recipient-side localization heuristics. These are surface-area concerns that aren't blocking any current flow.
 
 ---
 
