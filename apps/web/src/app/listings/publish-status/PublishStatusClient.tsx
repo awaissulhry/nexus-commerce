@@ -14,6 +14,7 @@
 // sync + bulk publish flows) without crowding the main grid.
 
 import { useMemo } from 'react'
+import Link from 'next/link'
 import {
   AlertTriangle,
   CheckCircle2,
@@ -289,7 +290,17 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
                             <Icon size={10} /> {r.outcome}
                           </span>
                         </td>
-                        <td className="px-2 py-1 font-mono text-xs">{r.sku ?? '—'}</td>
+                        <td className="px-2 py-1 font-mono text-xs">
+                          {r.sku ? (
+                            <Link
+                              href={`/listings?search=${encodeURIComponent(r.sku)}`}
+                              className="text-slate-700 hover:text-blue-700 hover:underline"
+                              title={`Open /listings filtered to ${r.sku}`}
+                            >
+                              {r.sku}
+                            </Link>
+                          ) : '—'}
+                        </td>
                         <td className="px-2 py-1 text-xs text-slate-700 max-w-md truncate" title={r.error_excerpt ?? ''}>
                           {r.error_excerpt ?? '—'}
                         </td>
@@ -368,7 +379,17 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
                 <tbody>
                   {status?.repeatAttempts.map((r, i) => (
                     <tr key={i} className="border-t border-slate-100">
-                      <td className="px-2 py-1 font-mono text-xs">{r.sku ?? '—'}</td>
+                      <td className="px-2 py-1 font-mono text-xs">
+                        {r.sku ? (
+                          <Link
+                            href={`/listings?search=${encodeURIComponent(r.sku)}`}
+                            className="text-slate-700 hover:text-blue-700 hover:underline"
+                            title={`Open /listings filtered to ${r.sku}`}
+                          >
+                            {r.sku}
+                          </Link>
+                        ) : '—'}
+                      </td>
                       <td className="px-2 py-1 font-mono text-xs">{r.channel}</td>
                       <td className="px-2 py-1 font-mono text-xs">{r.marketplace ?? '—'}</td>
                       <td className="px-2 py-1 text-right tabular-nums font-semibold">{r.attempts}</td>
