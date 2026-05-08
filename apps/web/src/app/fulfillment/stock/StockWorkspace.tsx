@@ -19,7 +19,7 @@ import {
   Check, Download, Sliders, Undo2, CheckCircle2,
   Lightbulb, Zap, AlertCircle,
   Columns, Maximize2, Minimize2, Keyboard,
-  ClipboardCheck, Bookmark, BookmarkPlus, Trash2,
+  ClipboardCheck, Bookmark, BookmarkPlus, Trash2, Upload,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -409,7 +409,7 @@ export default function StockWorkspace() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [lastSelectedIdx, setLastSelectedIdx] = useState<number | null>(null)
   // Bulk action modal + result toast state
-  const [bulkAction, setBulkAction] = useState<null | 'adjust' | 'threshold' | 'export'>(null)
+  const [bulkAction, setBulkAction] = useState<null | 'adjust' | 'threshold' | 'export' | 'transfer'>(null)
   const [bulkProgress, setBulkProgress] = useState<null | { total: number; done: number; failed: number }>(null)
   const [undoBundle, setUndoBundle] = useState<null | { kind: 'adjust'; entries: Array<{ stockLevelId: string; inverseChange: number }>; expiresAt: number }>(null)
 
@@ -661,6 +661,38 @@ export default function StockWorkspace() {
     fetchSidecar()
   }, [selected, fetchStock, fetchSidecar])
 
+  const runBulkTransfer = useCallback(async (toLocationId: string, notes: string | null) => {
+    const rows = items.filter((it) => selected.has(it.id))
+    if (rows.length === 0 || !toLocationId) return
+    setBulkProgress({ total: rows.length, done: 0, failed: 0 })
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/stock/bulk-transfer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toLocationId,
+          items: rows.map((r) => ({
+            productId: r.product.id,
+            fromLocationId: r.location.id,
+            quantity: r.available > 0 ? r.available : r.quantity,
+            notes,
+          })),
+        }),
+      })
+      const body = await res.json().catch(() => ({}))
+      const succeeded = body.succeeded ?? 0
+      const failed = body.failed ?? rows.length - succeeded
+      setBulkProgress({ total: rows.length, done: succeeded, failed })
+    } catch {
+      setBulkProgress({ total: rows.length, done: 0, failed: rows.length })
+    }
+    setBulkProgress(null)
+    setBulkAction(null)
+    setSelected(new Set())
+    fetchStock()
+    fetchSidecar()
+  }, [items, selected, fetchStock, fetchSidecar])
+
   const runBulkThreshold = useCallback(async (threshold: number | null) => {
     const ids = Array.from(selected)
     setBulkProgress({ total: ids.length, done: 0, failed: 0 })
@@ -840,6 +872,14 @@ export default function StockWorkspace() {
               <Activity size={12} />
               {t('stock.analytics.title')}
             </Link>
+            <Link
+              href="/fulfillment/stock/import"
+              className="h-11 sm:h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5 text-slate-700"
+              title={t('stock.import.title')}
+            >
+              <Upload size={12} />
+              {t('stock.import.title')}
+            </Link>
             {/* S.18 — saved views dropdown */}
             <SavedViewsButton
               savedViews={savedViews}
@@ -1013,10 +1053,12 @@ export default function StockWorkspace() {
           onAdjust={() => setBulkAction('adjust')}
           onThreshold={() => setBulkAction('threshold')}
           onExport={exportSelectedCsv}
+          onTransfer={() => setBulkAction('transfer')}
           labels={{
             adjust: t('stock.bulk.adjust'),
             threshold: t('stock.bulk.threshold'),
             exportCsv: t('stock.bulk.exportCsv'),
+            transfer: t('stock.bulk.transfer'),
             selected: t('stock.bulk.selected'),
           }}
         />
@@ -1048,6 +1090,14 @@ export default function StockWorkspace() {
           selectedItems={items.filter((it) => selected.has(it.id))}
           onCancel={() => setBulkAction(null)}
           onConfirm={runBulkThreshold}
+        />
+      )}
+      {bulkAction === 'transfer' && (
+        <BulkTransferModal
+          selectedItems={items.filter((it) => selected.has(it.id))}
+          locations={locations}
+          onCancel={() => setBulkAction(null)}
+          onConfirm={runBulkTransfer}
         />
       )}
 
@@ -2887,14 +2937,15 @@ function CardsView({
 // Bulk operations — action bar, progress, undo, modals
 // ─────────────────────────────────────────────────────────────────────
 function BulkActionBar({
-  count, onClear, onAdjust, onThreshold, onExport, labels,
+  count, onClear, onAdjust, onThreshold, onExport, onTransfer, labels,
 }: {
   count: number
   onClear: () => void
   onAdjust: () => void
   onThreshold: () => void
   onExport: () => void
-  labels: { adjust: string; threshold: string; exportCsv: string; selected: string }
+  onTransfer: () => void
+  labels: { adjust: string; threshold: string; exportCsv: string; transfer: string; selected: string }
 }) {
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-20 bg-slate-900 text-white rounded-lg shadow-2xl px-4 py-2 flex items-center gap-3 text-md">
@@ -2913,6 +2964,12 @@ function BulkActionBar({
         className="h-11 sm:h-7 px-2.5 inline-flex items-center gap-1.5 rounded hover:bg-slate-800 transition-colors"
       >
         <Sliders size={12} /> {labels.threshold}
+      </button>
+      <button
+        onClick={onTransfer}
+        className="h-11 sm:h-7 px-2.5 inline-flex items-center gap-1.5 rounded hover:bg-slate-800 transition-colors"
+      >
+        <ArrowRightLeft size={12} /> {labels.transfer}
       </button>
       <button
         onClick={onExport}
@@ -3103,6 +3160,96 @@ function BulkAdjustModal({
             className="h-11 sm:h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
           >
             <Check size={12} /> Apply to {selectedItems.length}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function BulkTransferModal({
+  selectedItems, locations, onCancel, onConfirm,
+}: {
+  selectedItems: StockRow[]
+  locations: LocationSummary[]
+  onCancel: () => void
+  onConfirm: (toLocationId: string, notes: string | null) => void
+}) {
+  const { t } = useTranslations()
+  // Pre-select the first location that isn't the source of any
+  // selected row — saves a click for the common single-source case.
+  const sourceIds = new Set(selectedItems.map((it) => it.location.id))
+  const firstNonSource = locations.find((l) => !sourceIds.has(l.id))
+  const [toLocationId, setToLocationId] = useState<string>(firstNonSource?.id ?? '')
+  const [notes, setNotes] = useState('')
+  const valid = toLocationId !== '' && !sourceIds.has(toLocationId)
+
+  return (
+    <Modal title={t('stock.bulk.transferTitle')} onClose={onCancel}>
+      <div className="space-y-3">
+        <div>
+          <label className="text-sm uppercase tracking-wider text-slate-500 font-semibold block mb-1">
+            {t('stock.bulk.transferDest')}
+          </label>
+          <select
+            value={toLocationId}
+            onChange={(e) => setToLocationId(e.target.value)}
+            className="w-full h-9 px-2 text-md border border-slate-200 rounded bg-white"
+          >
+            <option value="">{t('cycleCount.list.modal.locationPlaceholder')}</option>
+            {locations.map((l) => (
+              <option key={l.id} value={l.id} disabled={sourceIds.has(l.id)}>
+                {l.code} — {l.name} {sourceIds.has(l.id) ? '(source)' : ''}
+              </option>
+            ))}
+          </select>
+          <div className="text-sm text-slate-500 mt-1">
+            {t('stock.bulk.transferHelp')}
+          </div>
+        </div>
+        <div>
+          <label className="text-sm uppercase tracking-wider text-slate-500 font-semibold block mb-1">
+            {t('stock.adjust.notesPlaceholder')}
+          </label>
+          <input
+            type="text"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder={t('stock.bulk.transferNotesPlaceholder')}
+            className="w-full h-9 px-2 text-base border border-slate-200 rounded"
+          />
+        </div>
+        <div className="border border-slate-200 rounded p-2 bg-slate-50/50">
+          <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+            {t('stock.bulk.affectedRows', { n: selectedItems.length })}
+          </div>
+          <ul className="space-y-0.5 max-h-[160px] overflow-y-auto">
+            {selectedItems.slice(0, 50).map((it) => (
+              <li key={it.id} className="text-sm flex items-center justify-between gap-2 py-0.5">
+                <span className="truncate">
+                  <span className="font-mono text-slate-600">{it.product.sku}</span>
+                  <span className="text-slate-400"> · {it.location.code}</span>
+                </span>
+                <span className="tabular-nums flex-shrink-0 text-slate-500">
+                  {it.available > 0 ? it.available : it.quantity}u
+                </span>
+              </li>
+            ))}
+            {selectedItems.length > 50 && (
+              <li className="text-sm text-slate-400 italic">+{selectedItems.length - 50} more</li>
+            )}
+          </ul>
+        </div>
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button onClick={onCancel} className="h-11 sm:h-8 px-3 text-base text-slate-500 hover:text-slate-900">
+            {t('stock.list.cancel')}
+          </button>
+          <button
+            onClick={() => valid && onConfirm(toLocationId, notes || null)}
+            disabled={!valid}
+            className="h-11 sm:h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
+          >
+            <ArrowRightLeft size={12} /> {t('stock.bulk.transferApply', { n: selectedItems.length })}
           </button>
         </div>
       </div>

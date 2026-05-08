@@ -1544,6 +1544,165 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── POST /api/stock/bulk-transfer ───────────────────────────────
+  // S.21 — move N units from each (productId × fromLocationId) row
+  // to a single destination. Body shape:
+  //   { toLocationId, items: [{ productId, fromLocationId, quantity }] }
+  // Each item runs through transferStock; results are aggregated so
+  // the operator sees per-row success/failure. Idempotency is left to
+  // transferStock (each transfer creates fresh OUT/IN audit rows).
+  fastify.post('/stock/bulk-transfer', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as {
+        toLocationId?: string
+        items?: Array<{
+          productId: string
+          fromLocationId: string
+          quantity: number
+          notes?: string
+        }>
+      }
+      if (!body.toLocationId || !Array.isArray(body.items) || body.items.length === 0) {
+        return reply.code(400).send({ error: 'toLocationId and items[] required' })
+      }
+      let succeeded = 0
+      let failed = 0
+      const errors: Array<{ productId: string; fromLocationId: string; error: string }> = []
+      for (const it of body.items) {
+        const qty = Number(it.quantity)
+        if (!it.productId || !it.fromLocationId || !Number.isFinite(qty) || qty <= 0) {
+          failed++
+          errors.push({ productId: it.productId, fromLocationId: it.fromLocationId, error: 'invalid item' })
+          continue
+        }
+        if (it.fromLocationId === body.toLocationId) {
+          failed++
+          errors.push({ productId: it.productId, fromLocationId: it.fromLocationId, error: 'from === to' })
+          continue
+        }
+        try {
+          await transferStock({
+            productId: it.productId,
+            fromLocationId: it.fromLocationId,
+            toLocationId: body.toLocationId,
+            quantity: qty,
+            notes: it.notes,
+            actor: 'bulk-transfer',
+          })
+          succeeded++
+        } catch (err: any) {
+          failed++
+          errors.push({
+            productId: it.productId,
+            fromLocationId: it.fromLocationId,
+            error: err?.message ?? String(err),
+          })
+        }
+      }
+      return { succeeded, failed, errors, requested: body.items.length }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/bulk-transfer] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── POST /api/stock/bulk-import ─────────────────────────────────
+  // S.21 — apply a parsed CSV upload as bulk stock adjustments.
+  // Body shape (post-parse — the frontend handles file → JSON):
+  //   {
+  //     dryRun: boolean,
+  //     locationCode: string,    // e.g. 'IT-MAIN'
+  //     items: [{ sku, change, notes? }]
+  //   }
+  // The dryRun flag returns the same response shape (per-item
+  // resolved productId + would-be balance) without calling
+  // applyStockMovement — the frontend uses this for the preview step.
+  fastify.post('/stock/bulk-import', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as {
+        dryRun?: boolean
+        locationCode?: string
+        items?: Array<{ sku: string; change: number; notes?: string }>
+      }
+      const dryRun = !!body.dryRun
+      const locationCode = body.locationCode ?? 'IT-MAIN'
+      const items = Array.isArray(body.items) ? body.items : []
+      if (items.length === 0) {
+        return reply.code(400).send({ error: 'items[] required (non-empty)' })
+      }
+      if (items.length > 5000) {
+        return reply.code(400).send({ error: 'items capped at 5000 per upload' })
+      }
+
+      const location = await prisma.stockLocation.findUnique({
+        where: { code: locationCode },
+        select: { id: true, code: true },
+      })
+      if (!location) return reply.code(404).send({ error: `Location ${locationCode} not found` })
+
+      // Resolve every SKU in one batched query.
+      const skus = Array.from(new Set(items.map((it) => it.sku)))
+      const products = await prisma.product.findMany({
+        where: { sku: { in: skus } },
+        select: { id: true, sku: true, totalStock: true },
+      })
+      const productBySku = new Map(products.map((p) => [p.sku, p]))
+
+      const results: Array<{
+        sku: string
+        change: number
+        productId: string | null
+        currentTotal: number | null
+        wouldBeTotal: number | null
+        applied: boolean
+        error: string | null
+      }> = []
+
+      for (const it of items) {
+        const change = Number(it.change)
+        if (!it.sku || !Number.isFinite(change) || change === 0) {
+          results.push({ sku: it.sku, change, productId: null, currentTotal: null, wouldBeTotal: null, applied: false, error: 'invalid sku/change (must be non-zero number)' })
+          continue
+        }
+        const p = productBySku.get(it.sku)
+        if (!p) {
+          results.push({ sku: it.sku, change, productId: null, currentTotal: null, wouldBeTotal: null, applied: false, error: 'sku not found' })
+          continue
+        }
+        const wouldBe = p.totalStock + change
+        if (wouldBe < 0) {
+          results.push({ sku: it.sku, change, productId: p.id, currentTotal: p.totalStock, wouldBeTotal: wouldBe, applied: false, error: 'would drive totalStock negative' })
+          continue
+        }
+        if (dryRun) {
+          results.push({ sku: it.sku, change, productId: p.id, currentTotal: p.totalStock, wouldBeTotal: wouldBe, applied: false, error: null })
+          continue
+        }
+        try {
+          await applyStockMovement({
+            productId: p.id,
+            locationId: location.id,
+            change,
+            reason: 'MANUAL_ADJUSTMENT',
+            referenceType: 'BulkImport',
+            actor: 'bulk-import',
+            notes: it.notes ?? '[bulk-import]',
+          })
+          results.push({ sku: it.sku, change, productId: p.id, currentTotal: p.totalStock, wouldBeTotal: wouldBe, applied: true, error: null })
+        } catch (err: any) {
+          results.push({ sku: it.sku, change, productId: p.id, currentTotal: p.totalStock, wouldBeTotal: wouldBe, applied: false, error: err?.message ?? String(err) })
+        }
+      }
+
+      const succeeded = results.filter((r) => r.applied).length
+      const failed = results.filter((r) => r.error != null).length
+      return { dryRun, succeeded, failed, total: items.length, results }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/bulk-import] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // ── POST /api/stock/transfer ─────────────────────────────────────
   fastify.post('/stock/transfer', async (request, reply) => {
     try {
