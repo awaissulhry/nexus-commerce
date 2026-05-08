@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import Link from "next/link";
 import { refreshDashboardData } from "./actions";
+import { getBackendUrl } from "@/lib/backend-url";
 
 interface DashboardClientProps {
   recentOrders: {
@@ -86,6 +88,9 @@ export default function DashboardClient({
           {isPending ? "Refreshing…" : "🔄 Refresh Data"}
         </button>
       </div>
+
+      {/* AU.7 — Amazon Account Health (LSR/VTR) widget */}
+      <AccountHealthWidget />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Orders */}
@@ -208,4 +213,128 @@ export default function DashboardClient({
       </div>
     </div>
   );
+}
+
+// ── AU.7: Amazon Account Health widget ────────────────────────────────
+// Surfaces rolling-30d LSR + VTR at the top of /dashboard so an
+// operator sees the brand's seller-account standing the moment they
+// log in. Numbers come from O.16a (computeAmazonAccountHealth) — we
+// don't refetch from SP-API here; the API computes from local FBM
+// Order data, which is what the on-page "ship-by impact" badges
+// elsewhere already reflect.
+//
+// Thresholds match the service constants:
+//   LSR ≥ 10% → red (Amazon ACTION threshold)
+//   LSR ≥  4% → yellow (Amazon WARNING)
+//   VTR < 95% → red (Amazon REQUIREMENT)
+type AccountHealth = {
+  windowStart: string
+  windowEnd: string
+  shippedOrders: number
+  lateShipments: number
+  lsr: number
+  lsrTier: 'green' | 'yellow' | 'red'
+  ordersWithTracking: number
+  vtr: number
+  vtrTier: 'green' | 'red'
+}
+function AccountHealthWidget() {
+  const [data, setData] = useState<AccountHealth | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/amazon/account-health`,
+          { cache: 'no-store' },
+        )
+        if (!res.ok) throw new Error(await res.text())
+        const json = (await res.json()) as AccountHealth
+        if (!cancelled) setData(json)
+      } catch (e: any) {
+        if (!cancelled) setError(e.message ?? 'failed')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const tierBg = (tier: 'green' | 'yellow' | 'red') =>
+    tier === 'green'
+      ? 'bg-emerald-50 border-emerald-200'
+      : tier === 'yellow'
+        ? 'bg-amber-50 border-amber-200'
+        : 'bg-rose-50 border-rose-200'
+  const tierText = (tier: 'green' | 'yellow' | 'red') =>
+    tier === 'green'
+      ? 'text-emerald-700'
+      : tier === 'yellow'
+        ? 'text-amber-700'
+        : 'text-rose-700'
+
+  return (
+    <div className="bg-white rounded-lg shadow border border-gray-200">
+      <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-gray-900">
+          🇮🇹 Amazon Account Health (rolling 30d)
+        </h3>
+        <Link
+          href="/orders?lens=ship-by"
+          className="text-xs text-blue-600 hover:underline"
+        >
+          See orders at risk →
+        </Link>
+      </div>
+      {loading ? (
+        <div className="p-5 text-sm text-gray-500">Loading…</div>
+      ) : error ? (
+        <div className="p-5 text-sm text-rose-600">
+          Failed to load: {error}
+        </div>
+      ) : !data ? null : (
+        <div className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div
+            className={`border rounded-lg p-3 ${tierBg(data.lsrTier)}`}
+            title="Late Shipment Rate. Amazon action threshold ≥10%, warning ≥4%."
+          >
+            <div className="text-xs text-gray-600">LSR (Late Shipment Rate)</div>
+            <div className={`text-2xl font-semibold ${tierText(data.lsrTier)}`}>
+              {(data.lsr * 100).toFixed(2)}%
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              {data.lateShipments} late / {data.shippedOrders} shipped
+            </div>
+          </div>
+          <div
+            className={`border rounded-lg p-3 ${tierBg(data.vtrTier)}`}
+            title="Valid Tracking Rate. Amazon requires ≥95%."
+          >
+            <div className="text-xs text-gray-600">VTR (Valid Tracking Rate)</div>
+            <div className={`text-2xl font-semibold ${tierText(data.vtrTier)}`}>
+              {(data.vtr * 100).toFixed(2)}%
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              {data.ordersWithTracking} tracked / {data.shippedOrders} shipped
+            </div>
+          </div>
+          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+            <div className="text-xs text-gray-600">Window</div>
+            <div className="text-sm font-medium text-gray-900 mt-1">
+              {new Date(data.windowStart).toLocaleDateString()} →{' '}
+              {new Date(data.windowEnd).toLocaleDateString()}
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              Buy Shipping auto-credits VTR.
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
