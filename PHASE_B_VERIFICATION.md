@@ -20,7 +20,14 @@ Before flipping anything, confirm the audit table is reachable + empty
 node scripts/audit-channel-publish-attempts.mjs
 ```
 
-Expected output: section 1–3 should be empty or show only `gated`
+Or from the UI (M.7):
+
+> Open **`/listings/publish-status`** — same eight blocks as the CLI,
+> polled every 30 seconds. The "Publish gate · env" card at the top
+> shows what the running API thinks the master flag + mode are right
+> now (handy for confirming a Railway env-var change has propagated).
+
+Expected output: sections 1–3 should be empty or show only `gated`
 outcomes. Sections 4–7 should be empty. If you see anything else,
 something has been pushing real HTTP — investigate before
 continuing.

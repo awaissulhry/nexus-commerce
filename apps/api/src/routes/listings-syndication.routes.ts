@@ -2303,6 +2303,136 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
   })
 
   // ─────────────────────────────────────────────────────────────────
+  // GET /api/listings/publish-status — live Phase B audit feed.
+  //
+  // M.7 — wraps the V.1 verification script's queries in an API so
+  // the operator can monitor Phase B rollout from the UI instead of
+  // a terminal. Same 7 sections (skipping the env-reminder one); the
+  // /listings/publish-status page polls this every 30s.
+  //
+  // Read-only across the board. Heavy queries; hits go through the
+  // ChannelPublishAttempt table directly via $queryRawUnsafe so the
+  // shapes match the script verbatim.
+  // ─────────────────────────────────────────────────────────────────
+  fastify.get('/listings/publish-status', async (_request, reply) => {
+    try {
+      const [
+        last24h,
+        last7d,
+        rollup30d,
+        recentFailures,
+        trippedCircuits,
+        skuCoverage,
+        repeatAttempts,
+      ] = await Promise.all([
+        prisma.$queryRawUnsafe<any[]>(
+          `SELECT channel, mode, outcome,
+                  count(*)::int AS attempts,
+                  count(DISTINCT sku)::int AS distinct_skus
+           FROM "ChannelPublishAttempt"
+           WHERE "attemptedAt" > NOW() - INTERVAL '24 hours'
+           GROUP BY channel, mode, outcome
+           ORDER BY channel, mode, attempts DESC`,
+        ),
+        prisma.$queryRawUnsafe<any[]>(
+          `SELECT channel, mode, outcome,
+                  count(*)::int AS attempts,
+                  count(DISTINCT sku)::int AS distinct_skus
+           FROM "ChannelPublishAttempt"
+           WHERE "attemptedAt" > NOW() - INTERVAL '7 days'
+           GROUP BY channel, mode, outcome
+           ORDER BY channel, mode, attempts DESC`,
+        ),
+        prisma.$queryRawUnsafe<any[]>(
+          `SELECT channel,
+                  count(*)::int AS attempts,
+                  count(*) FILTER (WHERE outcome = 'success')::int AS succeeded,
+                  count(*) FILTER (WHERE outcome = 'gated')::int AS gated,
+                  count(*) FILTER (WHERE outcome = 'failed')::int AS failed,
+                  count(*) FILTER (WHERE outcome = 'rate-limited')::int AS rate_limited,
+                  count(*) FILTER (WHERE outcome = 'circuit-open')::int AS circuit_open,
+                  count(*) FILTER (WHERE outcome = 'timeout')::int AS timed_out,
+                  ROUND(100.0 * count(*) FILTER (WHERE outcome = 'success') /
+                        NULLIF(count(*), 0)::numeric, 1)::float AS success_pct
+           FROM "ChannelPublishAttempt"
+           WHERE "attemptedAt" > NOW() - INTERVAL '30 days'
+           GROUP BY channel
+           ORDER BY channel`,
+        ),
+        prisma.$queryRawUnsafe<any[]>(
+          `SELECT "attemptedAt" AS at,
+                  channel, marketplace, mode, outcome, sku,
+                  LEFT("errorMessage", 200) AS error_excerpt
+           FROM "ChannelPublishAttempt"
+           WHERE "attemptedAt" > NOW() - INTERVAL '7 days'
+             AND outcome != 'success'
+             AND outcome != 'gated'
+           ORDER BY "attemptedAt" DESC
+           LIMIT 20`,
+        ),
+        prisma.$queryRawUnsafe<any[]>(
+          `SELECT channel, marketplace, "sellerId",
+                  count(*)::int AS recent_failures,
+                  MAX("attemptedAt") AS last_failure
+           FROM "ChannelPublishAttempt"
+           WHERE "attemptedAt" > NOW() - INTERVAL '5 minutes'
+             AND outcome IN ('failed', 'timeout')
+           GROUP BY channel, marketplace, "sellerId"
+           HAVING count(*) >= 3
+           ORDER BY recent_failures DESC, last_failure DESC`,
+        ),
+        prisma.$queryRawUnsafe<any[]>(
+          `SELECT channel, mode,
+                  count(DISTINCT sku)::int AS distinct_skus,
+                  MIN("attemptedAt") AS first_seen,
+                  MAX("attemptedAt") AS last_seen
+           FROM "ChannelPublishAttempt"
+           WHERE "attemptedAt" > NOW() - INTERVAL '30 days'
+           GROUP BY channel, mode
+           ORDER BY channel, mode`,
+        ),
+        prisma.$queryRawUnsafe<any[]>(
+          `SELECT sku, channel, marketplace,
+                  count(*)::int AS attempts,
+                  count(*) FILTER (WHERE outcome = 'success')::int AS succeeded,
+                  count(*) FILTER (WHERE outcome != 'success' AND outcome != 'gated')::int AS unhappy
+           FROM "ChannelPublishAttempt"
+           WHERE "attemptedAt" > NOW() - INTERVAL '7 days'
+           GROUP BY sku, channel, marketplace
+           HAVING count(*) > 1
+           ORDER BY attempts DESC
+           LIMIT 10`,
+        ),
+      ])
+
+      // Operator-facing reminder block (matches the script's section 8).
+      // Surfaces what the runtime READS from the env without exposing
+      // the actual values — the operator already knows what's set.
+      const env = {
+        AMAZON_PUBLISH_ENABLED: process.env.NEXUS_ENABLE_AMAZON_PUBLISH === 'true',
+        AMAZON_PUBLISH_MODE: process.env.AMAZON_PUBLISH_MODE ?? 'dry-run',
+        EBAY_PUBLISH_ENABLED: process.env.NEXUS_ENABLE_EBAY_PUBLISH === 'true',
+        EBAY_PUBLISH_MODE: process.env.EBAY_PUBLISH_MODE ?? 'dry-run',
+      }
+
+      return {
+        last24h,
+        last7d,
+        rollup30d,
+        recentFailures,
+        trippedCircuits,
+        skuCoverage,
+        repeatAttempts,
+        env,
+        fetchedAt: new Date().toISOString(),
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[listings/publish-status] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ─────────────────────────────────────────────────────────────────
   // GET /api/listings/:id/sync-history — paginated sync timeline
   //
   // S.4 — backed by the SyncAttempt audit table. Drawer's Sync tab
