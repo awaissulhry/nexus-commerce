@@ -3,19 +3,96 @@
 // FULFILLMENT B.7 — Returns. RMA → receive → inspect (condition grade) → restock or scrap → refund.
 // Manual refund default (per user choice — they recheck before restock); auto-refund opt-in via toggle.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
-  Undo2, Plus, RefreshCw, X, CheckCircle2, Package,
-  ChevronRight, ArrowDownToLine, Copy, Mail, Tag, Trash2, Truck,
+  Undo2, Plus, RefreshCw, X, CheckCircle2, Package, Search, Download,
+  ChevronRight, ChevronLeft, ChevronsLeft, ChevronsRight,
+  ArrowDownToLine, Copy, Mail, Tag, Trash2, Truck, ArrowUp, ArrowDown,
+  Bookmark, Star, Ban, AlertTriangle, RotateCw, Activity,
+  Camera, Image as ImageIcon, Save,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { Barcode128 } from '@/components/ui/Barcode128'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
+
+// R2.2 — per-item inspection checklist. JSONB on ReturnItem.
+type ItemChecklist = {
+  packagingPresent?: boolean
+  tagsIntact?: boolean
+  visibleDamage?: boolean
+  damageNotes?: string
+  functionalTestPassed?: boolean | null
+  signsOfUse?: 'NONE' | 'LIGHT' | 'HEAVY'
+}
+
+// R2.1 — activity-log entry shown in the drawer timeline.
+type AuditEntry = {
+  id: string
+  userId: string | null
+  action: string
+  before: unknown
+  after: unknown
+  metadata: unknown
+  createdAt: string
+}
+
+const ACTION_LABEL: Record<string, { label: string; tone: 'info' | 'success' | 'warning' | 'danger' }> = {
+  'create':                { label: 'Created',                  tone: 'info' },
+  'receive':               { label: 'Marked received',          tone: 'info' },
+  'inspect':               { label: 'Inspection saved',         tone: 'warning' },
+  'restock':               { label: 'Restocked',                tone: 'success' },
+  'refund':                { label: 'Refund issued',            tone: 'success' },
+  'refund-failed':         { label: 'Refund failed',            tone: 'danger' },
+  'refund-retry-manual':   { label: 'Refund retry (manual)',    tone: 'warning' },
+  'refund-retry-auto':     { label: 'Refund retry (auto)',      tone: 'info' },
+  'scrap':                 { label: 'Scrapped',                 tone: 'danger' },
+  'attach-label':          { label: 'Label attached',           tone: 'info' },
+  'mark-label-emailed':    { label: 'Label emailed to customer', tone: 'info' },
+  'remove-label':          { label: 'Label removed',            tone: 'warning' },
+  'generate-return-label': { label: 'Sendcloud return label generated', tone: 'info' },
+  'carrier-scan':          { label: 'Carrier scan',             tone: 'info' },
+  'edit-notes':            { label: 'Notes edited',             tone: 'info' },
+  'edit-item':             { label: 'Item updated',             tone: 'info' },
+  'upload-item-photo':     { label: 'Photo uploaded',           tone: 'info' },
+  'remove-item-photo':     { label: 'Photo removed',            tone: 'warning' },
+  'bulk-approve':          { label: 'Approved (bulk)',          tone: 'info' },
+  'bulk-deny':             { label: 'Denied (bulk)',            tone: 'danger' },
+  'bulk-receive':          { label: 'Marked received (bulk)',   tone: 'info' },
+  'email-received':        { label: 'Email: received',          tone: 'info' },
+  'email-refunded':        { label: 'Email: refunded',          tone: 'info' },
+  'email-rejected':        { label: 'Email: rejected',          tone: 'warning' },
+}
+
+// R5.1 — refund history shape.
+type RefundAttempt = {
+  id: string
+  attemptedAt: string
+  outcome: string
+  channelRefundId: string | null
+  errorMessage: string | null
+  durationMs: number | null
+}
+type RefundRow = {
+  id: string
+  amountCents: number
+  currencyCode: string
+  kind: 'CASH' | 'STORE_CREDIT' | 'EXCHANGE'
+  channel: string
+  channelStatus: 'PENDING' | 'POSTED' | 'FAILED' | 'MANUAL_REQUIRED' | 'NOT_IMPLEMENTED'
+  channelRefundId: string | null
+  channelError: string | null
+  channelPostedAt: string | null
+  reason: string | null
+  actor: string | null
+  createdAt: string
+  attempts: RefundAttempt[]
+}
 
 type ReturnRow = {
   id: string
@@ -41,7 +118,39 @@ type ReturnRow = {
   returnLabelGeneratedAt: string | null
   returnLabelEmailedAt: string | null
   notes: string | null
-  items: Array<{ id: string; sku: string; productId: string | null; quantity: number; conditionGrade: string | null }>
+  items: Array<{
+    id: string
+    sku: string
+    productId: string | null
+    quantity: number
+    conditionGrade: string | null
+    notes: string | null
+    photoUrls: string[]
+    inspectionChecklist: ItemChecklist | null
+    disposition: string | null
+    scrapReason: string | null
+  }>
+  // R2.1 — drawer-only fields. Populated by GET /returns/:id when
+  // the route includes the order relation; absent on the list response.
+  order?: {
+    id: string
+    channel: string
+    marketplace: string | null
+    channelOrderId: string | null
+    customerName: string | null
+    customerEmail: string | null
+    shippingAddress: Record<string, unknown> | null
+    createdAt: string
+    shipments: Array<{
+      id: string
+      status: string
+      trackingNumber: string | null
+      trackingUrl: string | null
+      carrierCode: string | null
+      shippedAt: string | null
+      deliveredAt: string | null
+    }>
+  } | null
   createdAt: string
 }
 
@@ -65,18 +174,75 @@ const CHANNEL_TONE: Record<string, string> = {
   ETSY: 'bg-rose-50 text-rose-700 border-rose-200',
 }
 
+const CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY'] as const
+const STATUSES = ['ALL', 'REQUESTED', 'AUTHORIZED', 'IN_TRANSIT', 'RECEIVED', 'INSPECTING', 'RESTOCKED', 'REFUNDED', 'REJECTED', 'SCRAPPED'] as const
+
+type SavedView = {
+  id: string
+  name: string
+  filters: Record<string, unknown>
+  isDefault: boolean
+}
+
 export default function ReturnsWorkspace() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [tab, setTab] = useState<'ALL' | 'NON_FBA' | 'FBA'>('ALL')
-  const [statusFilter, setStatusFilter] = useState<string>('ALL')
+  const { toast } = useToast()
+  const askConfirm = useConfirm()
+
+  // R1.1 — URL-driven filters. Each filter has a default value;
+  // the URL only carries non-defaults so links stay short and the
+  // back button lands on a meaningful previous state.
+  const tab = (searchParams.get('tab') ?? 'ALL') as 'ALL' | 'NON_FBA' | 'FBA'
+  const statusFilter = searchParams.get('status') ?? 'ALL'
+  const channelFilter = searchParams.get('channel') ?? ''
+  const search = searchParams.get('q') ?? ''
+  const sortBy = searchParams.get('sortBy') ?? 'createdAt'
+  const sortDir = (searchParams.get('sortDir') ?? 'desc') as 'asc' | 'desc'
+  const page = Math.max(1, Number(searchParams.get('page')) || 1)
+  const pageSize = Math.min(200, Math.max(10, Number(searchParams.get('pageSize')) || 50))
+
+  const setFilters = useCallback(
+    (updates: Record<string, string | null>) => {
+      const next = new URLSearchParams(searchParams.toString())
+      for (const [k, v] of Object.entries(updates)) {
+        if (v === null || v === '' || v === 'ALL') next.delete(k)
+        else next.set(k, v)
+      }
+      router.replace(`?${next.toString()}`, { scroll: false })
+    },
+    [router, searchParams],
+  )
+
+  // Debounced search — local mirror of the URL `q`, push to URL
+  // 250ms after typing-quiet so we don't refire the list query on
+  // every keystroke.
+  const [searchInput, setSearchInput] = useState(search)
+  useEffect(() => { setSearchInput(search) }, [search])
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const onSearchChange = useCallback((value: string) => {
+    setSearchInput(value)
+    if (searchTimer.current) clearTimeout(searchTimer.current)
+    searchTimer.current = setTimeout(() => {
+      setFilters({ q: value, page: '1' })
+    }, 250)
+  }, [setFilters])
+
   const [items, setItems] = useState<ReturnRow[]>([])
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [drawerId, setDrawerId] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
-  // O.76: aggregate KPI strip. Cheap fetch — narrow set of counts +
-  // top-5 reasons. Refreshes whenever the list refreshes so a new
-  // return immediately moves the numbers.
+  const [savedViews, setSavedViews] = useState<SavedView[]>([])
+  const [viewsOpen, setViewsOpen] = useState(false)
+  // R1.2 — bulk selection. Cleared on filter/sort/page change so
+  // hidden selections can't accidentally apply on a different page.
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkBusy, setBulkBusy] = useState(false)
+  // R1.3 — keyboard list nav. -1 = no row highlighted.
+  const [activeIdx, setActiveIdx] = useState(-1)
+
   type Analytics = {
     windowDays: number
     last30: number
@@ -116,17 +282,236 @@ export default function ReturnsWorkspace() {
     try {
       const qs = new URLSearchParams()
       if (statusFilter !== 'ALL') qs.set('status', statusFilter)
+      if (channelFilter) qs.set('channel', channelFilter)
       if (tab === 'FBA') qs.set('fbaOnly', 'true')
       else if (tab === 'NON_FBA') qs.set('fbaOnly', 'false')
+      if (search.trim()) qs.set('q', search.trim())
+      qs.set('sortBy', sortBy)
+      qs.set('sortDir', sortDir)
+      qs.set('page', String(page))
+      qs.set('pageSize', String(pageSize))
       const res = await fetch(`${getBackendUrl()}/api/fulfillment/returns?${qs.toString()}`, { cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
         setItems(data.items ?? [])
+        setTotal(data.total ?? 0)
       }
     } finally { setLoading(false) }
-  }, [tab, statusFilter])
+  }, [tab, statusFilter, channelFilter, search, sortBy, sortDir, page, pageSize])
 
   useEffect(() => { fetchReturns() }, [fetchReturns])
+
+  // R1.1 — saved views (reuse existing /api/saved-views with surface=returns).
+  const fetchSavedViews = useCallback(async () => {
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/saved-views?surface=returns`, { cache: 'no-store' })
+      if (res.ok) {
+        const data = await res.json()
+        setSavedViews((data.items ?? []) as SavedView[])
+      }
+    } catch { /* non-fatal */ }
+  }, [])
+  useEffect(() => { fetchSavedViews() }, [fetchSavedViews])
+
+  const currentFiltersJson = useMemo(
+    () => ({ tab, status: statusFilter, channel: channelFilter, q: search, sortBy, sortDir, pageSize }),
+    [tab, statusFilter, channelFilter, search, sortBy, sortDir, pageSize],
+  )
+  const applyView = useCallback((view: SavedView) => {
+    const f = view.filters as any
+    setFilters({
+      tab: f.tab ?? null,
+      status: f.status ?? null,
+      channel: f.channel ?? null,
+      q: f.q ?? null,
+      sortBy: f.sortBy ?? null,
+      sortDir: f.sortDir ?? null,
+      pageSize: f.pageSize ? String(f.pageSize) : null,
+      page: '1',
+    })
+    setViewsOpen(false)
+  }, [setFilters])
+  const saveView = useCallback(async () => {
+    const name = window.prompt('Save current filters as:')
+    if (!name?.trim()) return
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/saved-views`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ surface: 'returns', name: name.trim(), filters: currentFiltersJson }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        toast.error(err.error ?? 'Save failed')
+        return
+      }
+      toast.success(`Saved view “${name}”`)
+      void fetchSavedViews()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Save failed')
+    }
+  }, [currentFiltersJson, fetchSavedViews, toast])
+  const deleteView = useCallback(async (view: SavedView) => {
+    const ok = await askConfirm({
+      title: `Delete saved view “${view.name}”?`,
+      description: 'Other operators using this view will lose it.',
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    })
+    if (!ok) return
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/saved-views/${view.id}`, { method: 'DELETE' })
+      if (!res.ok) { toast.error('Delete failed'); return }
+      toast.success('Saved view deleted')
+      void fetchSavedViews()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Delete failed')
+    }
+  }, [askConfirm, fetchSavedViews, toast])
+
+  // R1.1 — clickable column headers. Click toggles direction;
+  // clicking a different column resets to desc.
+  const onSort = useCallback((col: string) => {
+    if (sortBy === col) setFilters({ sortDir: sortDir === 'asc' ? 'desc' : 'asc', page: '1' })
+    else setFilters({ sortBy: col, sortDir: 'desc', page: '1' })
+  }, [sortBy, sortDir, setFilters])
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+
+  // R1.2 — clear selection whenever the visible rows change.
+  useEffect(() => { setSelected(new Set()); setActiveIdx(-1) }, [tab, statusFilter, channelFilter, search, sortBy, sortDir, page, pageSize])
+  const toggleOne = useCallback((id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }, [])
+  const allOnPageSelected = items.length > 0 && items.every((r) => selected.has(r.id))
+  const toggleAllOnPage = useCallback(() => {
+    setSelected((prev) => {
+      if (allOnPageSelected) {
+        const next = new Set(prev)
+        for (const r of items) next.delete(r.id)
+        return next
+      }
+      const next = new Set(prev)
+      for (const r of items) next.add(r.id)
+      return next
+    })
+  }, [allOnPageSelected, items])
+
+  const runBulk = useCallback(async (
+    path: 'approve' | 'deny' | 'receive',
+    confirmCopy?: { title: string; description: string; tone?: 'danger' | 'warning' | 'info' },
+  ) => {
+    const ids = Array.from(selected)
+    if (ids.length === 0) return
+    if (confirmCopy) {
+      const ok = await askConfirm({
+        title: confirmCopy.title,
+        description: confirmCopy.description,
+        confirmLabel: 'Confirm',
+        tone: confirmCopy.tone,
+      })
+      if (!ok) return
+    }
+    setBulkBusy(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/returns/bulk/${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(data.error ?? `Bulk ${path} failed`); return }
+      toast.success(`${data.ok ?? 0} updated${data.failed ? ` · ${data.failed} skipped` : ''}`)
+      setSelected(new Set())
+      void fetchReturns()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : `Bulk ${path} failed`)
+    } finally {
+      setBulkBusy(false)
+    }
+  }, [selected, askConfirm, toast, fetchReturns])
+
+  const exportCsv = useCallback(() => {
+    const qs = new URLSearchParams()
+    if (statusFilter !== 'ALL') qs.set('status', statusFilter)
+    if (channelFilter) qs.set('channel', channelFilter)
+    if (tab === 'FBA') qs.set('fbaOnly', 'true')
+    else if (tab === 'NON_FBA') qs.set('fbaOnly', 'false')
+    if (search.trim()) qs.set('q', search.trim())
+    window.open(`${getBackendUrl()}/api/fulfillment/returns/export.csv?${qs.toString()}`, '_blank')
+  }, [statusFilter, channelFilter, tab, search])
+
+  // R1.3 — Cmd+K page event listeners.
+  useEffect(() => {
+    const onNew = () => setCreateOpen(true)
+    const onExport = () => exportCsv()
+    const onFocus = () => searchInputRef.current?.focus()
+    const onFilterPending = () => setFilters({ status: 'REQUESTED', page: '1' })
+    window.addEventListener('nexus:returns:new', onNew)
+    window.addEventListener('nexus:returns:export', onExport)
+    window.addEventListener('nexus:returns:focus-search', onFocus)
+    window.addEventListener('nexus:returns:filter-pending', onFilterPending)
+    return () => {
+      window.removeEventListener('nexus:returns:new', onNew)
+      window.removeEventListener('nexus:returns:export', onExport)
+      window.removeEventListener('nexus:returns:focus-search', onFocus)
+      window.removeEventListener('nexus:returns:filter-pending', onFilterPending)
+    }
+  }, [exportCsv, setFilters])
+
+  // R1.3 — list keyboard navigation (j/k/Enter/Esc/x/⌘N//).
+  useEffect(() => {
+    const isTyping = (e: KeyboardEvent): boolean => {
+      const t = e.target as HTMLElement | null
+      if (!t) return false
+      const tag = t.tagName
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t.isContentEditable
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'n' || e.key === 'N')) {
+        e.preventDefault(); setCreateOpen(true); return
+      }
+      if (e.key === 'Escape') {
+        if (drawerId) { setDrawerId(null); return }
+        if (createOpen) { setCreateOpen(false); return }
+        if (viewsOpen) { setViewsOpen(false); return }
+      }
+      if (isTyping(e)) return
+      if (e.key === '/') {
+        e.preventDefault(); searchInputRef.current?.focus(); return
+      }
+      if (e.key === 'j' || e.key === 'ArrowDown') {
+        if (items.length === 0) return
+        e.preventDefault()
+        setActiveIdx((i) => Math.min(items.length - 1, (i < 0 ? -1 : i) + 1))
+        return
+      }
+      if (e.key === 'k' || e.key === 'ArrowUp') {
+        if (items.length === 0) return
+        e.preventDefault()
+        setActiveIdx((i) => Math.max(0, (i < 0 ? 0 : i) - 1))
+        return
+      }
+      if (e.key === 'Enter') {
+        if (activeIdx >= 0 && activeIdx < items.length) {
+          e.preventDefault(); setDrawerId(items[activeIdx].id)
+        }
+        return
+      }
+      if (e.key === 'x' || e.key === 'X') {
+        if (activeIdx >= 0 && activeIdx < items.length) {
+          e.preventDefault(); toggleOne(items[activeIdx].id)
+        }
+        return
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [items, activeIdx, drawerId, createOpen, viewsOpen, toggleOne])
 
   // O.76: parallel KPI fetch. Same trigger as the list so it stays
   // in sync (e.g., creating a new return bumps the last30 count).
@@ -225,53 +610,235 @@ export default function ReturnsWorkspace() {
         </div>
       )}
 
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="inline-flex items-center bg-slate-100 rounded-md p-0.5">
-          {(['ALL', 'NON_FBA', 'FBA'] as const).map((t) => (
-            <button key={t} onClick={() => setTab(t)} className={`h-7 px-3 text-base font-medium rounded transition-colors ${tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
-              {t === 'NON_FBA' ? 'Warehouse' : t === 'FBA' ? 'FBA (read-only)' : 'All'}
+      <div className="space-y-2">
+        {/* Top row: search + tab + saved-views + actions */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input
+              ref={searchInputRef}
+              type="search"
+              value={searchInput}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="RMA, order, customer, tracking…   /"
+              className="h-8 w-72 pl-8 pr-2 text-base border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-slate-400"
+            />
+          </div>
+
+          <div className="inline-flex items-center bg-slate-100 rounded-md p-0.5">
+            {(['ALL', 'NON_FBA', 'FBA'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setFilters({ tab: t === 'ALL' ? null : t, page: '1' })}
+                className={`h-7 px-3 text-base font-medium rounded transition-colors ${tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+              >
+                {t === 'NON_FBA' ? 'Warehouse' : t === 'FBA' ? 'FBA (read-only)' : 'All'}
+              </button>
+            ))}
+          </div>
+
+          {/* Saved views dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setViewsOpen((v) => !v)}
+              className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+            >
+              <Bookmark size={12} /> Views{savedViews.length > 0 ? ` (${savedViews.length})` : ''}
             </button>
-          ))}
+            {viewsOpen && (
+              <div className="absolute z-20 mt-1 w-72 bg-white border border-slate-200 rounded-md shadow-lg p-2">
+                {savedViews.length === 0 ? (
+                  <div className="text-sm text-slate-500 px-2 py-1.5">No saved views yet.</div>
+                ) : (
+                  <div className="max-h-60 overflow-y-auto">
+                    {savedViews.map((v) => (
+                      <div key={v.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded">
+                        <button
+                          onClick={() => applyView(v)}
+                          className="flex-1 text-left text-base text-slate-800 truncate"
+                          title={`Apply view: ${v.name}`}
+                        >
+                          {v.isDefault && <Star size={11} className="inline -mt-0.5 mr-1 text-amber-500" />}
+                          {v.name}
+                        </button>
+                        <button
+                          onClick={() => deleteView(v)}
+                          className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-rose-600"
+                          title="Delete view"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="border-t border-slate-100 mt-1 pt-1">
+                  <button
+                    onClick={() => { setViewsOpen(false); void saveView() }}
+                    className="w-full text-left text-sm text-blue-700 px-2 py-1.5 hover:bg-blue-50 rounded inline-flex items-center gap-1.5"
+                  >
+                    <Plus size={11} /> Save current filters as…
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="ml-auto flex items-center gap-2">
+            <a
+              href="/fulfillment/returns/analytics"
+              className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+            >
+              <Activity size={12} /> Analytics
+            </a>
+            <button
+              onClick={exportCsv}
+              className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+              title="Export current filtered set as CSV"
+            >
+              <Download size={12} /> Export
+            </button>
+            <button onClick={() => setCreateOpen(true)} className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
+              <Plus size={12} /> New return
+            </button>
+            <button onClick={fetchReturns} className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
+              <RefreshCw size={12} /> Refresh
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-1">
-          {['ALL', 'REQUESTED', 'RECEIVED', 'INSPECTING', 'RESTOCKED', 'REFUNDED'].map((s) => (
-            <button key={s} onClick={() => setStatusFilter(s)} className={`h-7 px-2 text-sm border rounded ${statusFilter === s ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200'}`}>{s.replace(/_/g, ' ')}</button>
-          ))}
-        </div>
-
-        <div className="ml-auto flex items-center gap-2">
-          <button onClick={() => setCreateOpen(true)} className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
-            <Plus size={12} /> New return
-          </button>
-          <button onClick={fetchReturns} className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
-            <RefreshCw size={12} /> Refresh
-          </button>
+        {/* Filter chips row: status + channel */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Status</span>
+          <div className="flex items-center gap-1 flex-wrap">
+            {(STATUSES as readonly string[]).map((s) => (
+              <button
+                key={s}
+                onClick={() => setFilters({ status: s, page: '1' })}
+                className={`h-7 px-2 text-sm border rounded ${statusFilter === s ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+              >
+                {s.replace(/_/g, ' ')}
+              </button>
+            ))}
+          </div>
+          <span className="text-xs uppercase tracking-wider text-slate-500 font-semibold ml-2">Channel</span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setFilters({ channel: null, page: '1' })}
+              className={`h-7 px-2 text-sm border rounded ${!channelFilter ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+            >
+              All
+            </button>
+            {CHANNELS.map((c) => (
+              <button
+                key={c}
+                onClick={() => setFilters({ channel: c, page: '1' })}
+                className={`h-7 px-2 text-sm border rounded ${channelFilter === c ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
+
+      {/* R1.2 — bulk action bar */}
+      {selected.size > 0 && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-slate-900 text-white rounded-md text-base">
+          <span className="font-medium tabular-nums">{selected.size} selected</span>
+          <button
+            onClick={() => setSelected(new Set())}
+            className="h-7 px-2 text-sm text-slate-300 hover:text-white inline-flex items-center gap-1"
+          >
+            <X size={11} /> Clear
+          </button>
+          <div className="ml-auto flex items-center gap-1.5 flex-wrap">
+            <button
+              onClick={() => runBulk('approve')}
+              disabled={bulkBusy}
+              className="h-7 px-2.5 text-sm bg-emerald-600 hover:bg-emerald-500 rounded inline-flex items-center gap-1 disabled:opacity-50"
+            >
+              <CheckCircle2 size={11} /> Approve
+            </button>
+            <button
+              onClick={() => runBulk('receive')}
+              disabled={bulkBusy}
+              className="h-7 px-2.5 text-sm bg-blue-600 hover:bg-blue-500 rounded inline-flex items-center gap-1 disabled:opacity-50"
+            >
+              <ArrowDownToLine size={11} /> Mark received
+            </button>
+            <button
+              onClick={() => runBulk('deny', {
+                title: `Deny ${selected.size} return${selected.size === 1 ? '' : 's'}?`,
+                description: 'This will mark them REJECTED. The customer will need to re-request if they still want a return.',
+                tone: 'danger',
+              })}
+              disabled={bulkBusy}
+              className="h-7 px-2.5 text-sm bg-rose-600 hover:bg-rose-500 rounded inline-flex items-center gap-1 disabled:opacity-50"
+            >
+              <Ban size={11} /> Deny
+            </button>
+          </div>
+        </div>
+      )}
 
       {loading && items.length === 0 ? (
         <Card><div className="text-md text-slate-500 py-8 text-center">Loading returns…</div></Card>
       ) : items.length === 0 ? (
-        <EmptyState icon={Undo2} title="No returns" description="Returns from Amazon FBA mirror automatically. Non-FBA returns are created when customers request RMAs." />
+        <EmptyState
+          icon={Undo2}
+          title={search || statusFilter !== 'ALL' || channelFilter ? 'No matches' : 'No returns'}
+          description={search || statusFilter !== 'ALL' || channelFilter
+            ? 'No returns match the current filters. Clear filters or adjust your search.'
+            : 'Returns from Amazon FBA mirror automatically. Non-FBA returns are created when customers request RMAs.'}
+        />
       ) : (
         <Card noPadding>
           <div className="overflow-x-auto">
             <table className="w-full text-md">
               <thead className="border-b border-slate-200 bg-slate-50">
                 <tr>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">RMA</th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">Channel</th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">Status</th>
+                  <th className="px-3 py-2 w-8">
+                    <input
+                      type="checkbox"
+                      checked={allOnPageSelected}
+                      onChange={toggleAllOnPage}
+                      className="h-4 w-4 cursor-pointer accent-slate-900"
+                      aria-label={allOnPageSelected ? 'Deselect all on page' : 'Select all on page'}
+                    />
+                  </th>
+                  <SortHeader col="rmaNumber"  sortBy={sortBy} sortDir={sortDir} onSort={onSort} className="px-3 py-2 text-left">RMA</SortHeader>
+                  <SortHeader col="channel"    sortBy={sortBy} sortDir={sortDir} onSort={onSort} className="px-3 py-2 text-left">Channel</SortHeader>
+                  <SortHeader col="status"     sortBy={sortBy} sortDir={sortDir} onSort={onSort} className="px-3 py-2 text-left">Status</SortHeader>
                   <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">Items</th>
                   <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">Reason</th>
-                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">Refund</th>
+                  <SortHeader col="refundCents" sortBy={sortBy} sortDir={sortDir} onSort={onSort} className="px-3 py-2 text-right">Refund</SortHeader>
+                  <SortHeader col="createdAt"   sortBy={sortBy} sortDir={sortDir} onSort={onSort} className="px-3 py-2 text-left">Created</SortHeader>
                   <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700"></th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((r) => (
-                  <tr key={r.id} onClick={() => setDrawerId(r.id)} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer">
+                {items.map((r, idx) => (
+                  <tr
+                    key={r.id}
+                    onClick={() => setDrawerId(r.id)}
+                    onMouseEnter={() => setActiveIdx(idx)}
+                    ref={(el) => {
+                      if (el && idx === activeIdx) el.scrollIntoView({ block: 'nearest' })
+                    }}
+                    className={`border-b border-slate-100 hover:bg-slate-50 cursor-pointer ${
+                      selected.has(r.id) ? 'bg-blue-50/40' : ''
+                    } ${idx === activeIdx ? 'ring-1 ring-inset ring-slate-900' : ''}`}
+                  >
+                    <td className="px-3 py-2 w-8" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selected.has(r.id)}
+                        onChange={() => toggleOne(r.id)}
+                        className="h-4 w-4 cursor-pointer accent-slate-900"
+                        aria-label={`Select ${r.rmaNumber ?? r.id}`}
+                      />
+                    </td>
                     <td className="px-3 py-2 font-mono text-base text-slate-700">{r.rmaNumber ?? '—'}</td>
                     <td className="px-3 py-2">
                       <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[r.channel] ?? 'bg-slate-50 text-slate-600 border-slate-200'}`}>{r.channel}</span>
@@ -287,11 +854,72 @@ export default function ReturnsWorkspace() {
                     <td className="px-3 py-2 text-right tabular-nums text-base text-slate-700">
                       {r.refundCents != null ? `€${(r.refundCents / 100).toFixed(2)}` : '—'}
                     </td>
+                    <td className="px-3 py-2 text-base text-slate-500 tabular-nums whitespace-nowrap">
+                      {new Date(r.createdAt).toLocaleDateString('it-IT', { year: '2-digit', month: 'short', day: 'numeric' })}
+                    </td>
                     <td className="px-3 py-2 text-right"><ChevronRight size={14} className="text-slate-400 inline" /></td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* R1.1 — pagination footer */}
+          <div className="flex items-center justify-between px-3 py-2 border-t border-slate-200 bg-slate-50/40 text-base">
+            <div className="text-sm text-slate-600 tabular-nums">
+              {total === 0 ? 'No results' : (
+                <>
+                  Showing <span className="font-medium text-slate-900">{(page - 1) * pageSize + 1}</span>–
+                  <span className="font-medium text-slate-900">{Math.min(page * pageSize, total)}</span>{' '}
+                  of <span className="font-medium text-slate-900">{total}</span>
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              <select
+                value={pageSize}
+                onChange={(e) => setFilters({ pageSize: e.target.value, page: '1' })}
+                className="h-7 px-1.5 text-sm border border-slate-200 rounded bg-white"
+                title="Rows per page"
+              >
+                {[25, 50, 100, 200].map((n) => (
+                  <option key={n} value={n}>{n} / page</option>
+                ))}
+              </select>
+              <button
+                onClick={() => setFilters({ page: '1' })}
+                disabled={page === 1}
+                className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+                title="First page"
+              >
+                <ChevronsLeft size={13} />
+              </button>
+              <button
+                onClick={() => setFilters({ page: String(Math.max(1, page - 1)) })}
+                disabled={page === 1}
+                className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Previous page"
+              >
+                <ChevronLeft size={13} />
+              </button>
+              <span className="text-sm text-slate-600 px-2 tabular-nums">Page {page} of {totalPages}</span>
+              <button
+                onClick={() => setFilters({ page: String(Math.min(totalPages, page + 1)) })}
+                disabled={page >= totalPages}
+                className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Next page"
+              >
+                <ChevronRight size={13} />
+              </button>
+              <button
+                onClick={() => setFilters({ page: String(totalPages) })}
+                disabled={page >= totalPages}
+                className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Last page"
+              >
+                <ChevronsRight size={13} />
+              </button>
+            </div>
           </div>
         </Card>
       )}
@@ -308,18 +936,60 @@ export default function ReturnsWorkspace() {
   )
 }
 
+// R1.1 — sortable column header.
+function SortHeader({
+  col, sortBy, sortDir, onSort, className, children,
+}: {
+  col: string
+  sortBy: string
+  sortDir: 'asc' | 'desc'
+  onSort: (col: string) => void
+  className?: string
+  children: React.ReactNode
+}) {
+  const active = sortBy === col
+  return (
+    <th className={`${className ?? ''} text-sm font-semibold uppercase tracking-wider text-slate-700`}>
+      <button
+        onClick={() => onSort(col)}
+        className={`inline-flex items-center gap-1 hover:text-slate-900 ${active ? 'text-slate-900' : ''}`}
+      >
+        {children}
+        {active && (sortDir === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />)}
+      </button>
+    </th>
+  )
+}
+
 function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
   const { toast } = useToast()
   const [ret, setRet] = useState<ReturnRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [conditions, setConditions] = useState<Record<string, string>>({})
   const [refundCents, setRefundCents] = useState<string>('')
+  // R2.1 + R5.1 — activity log + refund history. Fetched in parallel
+  // with the return detail so the drawer paints once with full
+  // context.
+  const [audit, setAudit] = useState<AuditEntry[]>([])
+  const [refunds, setRefunds] = useState<RefundRow[]>([])
 
   const fetchOne = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`${getBackendUrl()}/api/fulfillment/returns/${id}`, { cache: 'no-store' })
-      if (res.ok) setRet(await res.json())
+      const [retRes, logRes, refundsRes] = await Promise.all([
+        fetch(`${getBackendUrl()}/api/fulfillment/returns/${id}`, { cache: 'no-store' }),
+        fetch(`${getBackendUrl()}/api/fulfillment/returns/${id}/audit-log`, { cache: 'no-store' }),
+        fetch(`${getBackendUrl()}/api/fulfillment/returns/${id}/refunds`, { cache: 'no-store' }),
+      ])
+      if (retRes.ok) setRet(await retRes.json())
+      if (logRes.ok) {
+        const data = await logRes.json()
+        setAudit((data.items ?? []) as AuditEntry[])
+      }
+      if (refundsRes.ok) {
+        const data = await refundsRes.json()
+        setRefunds((data.items ?? []) as RefundRow[])
+      }
     } finally { setLoading(false) }
   }, [id])
 
@@ -421,51 +1091,103 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
         <div className="p-5 space-y-4">
           {loading || !ret ? <div className="text-base text-slate-500">Loading…</div> : (
             <>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[ret.channel] ?? ''}`}>{ret.channel}</span>
                 <Badge variant={STATUS_TONE[ret.status] ?? 'default'} size="sm">{ret.status.replace(/_/g, ' ')}</Badge>
                 {ret.isFbaReturn && <span className="text-xs font-mono text-orange-700">FBA — managed by Amazon</span>}
+                {/* R6.2 — refund deadline countdown badge. Only renders
+                    once the return has been received AND not yet
+                    refunded; the colour tracks safe/approaching/
+                    overdue. Fetched from /returns/:id/policy on
+                    drawer load. */}
+                <RefundDeadlineBadge returnId={ret.id} status={ret.status} refundStatus={ret.refundStatus} />
               </div>
+
+              {/* R2.1 — RMA barcode for warehouse identification */}
+              {ret.rmaNumber && (
+                <div className="bg-white border border-slate-200 rounded p-3 flex justify-center">
+                  <Barcode128 value={ret.rmaNumber} moduleWidthPx={1.4} height={48} />
+                </div>
+              )}
+
+              {/* R2.1 — customer + order + shipment context */}
+              {ret.order && (
+                <div className="bg-slate-50 border border-slate-200 rounded p-3 space-y-2 text-base">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Customer</div>
+                      <div className="text-slate-900 truncate">{ret.order.customerName ?? 'Unknown customer'}</div>
+                      {ret.order.customerEmail && (
+                        <a href={`mailto:${ret.order.customerEmail}`} className="text-sm text-blue-700 hover:underline truncate block">
+                          {ret.order.customerEmail}
+                        </a>
+                      )}
+                      {(() => {
+                        const a = ret.order!.shippingAddress as any
+                        if (!a) return null
+                        const city = a.City ?? a.city
+                        const country = a.CountryCode ?? a.countryCode ?? a.country
+                        if (!city && !country) return null
+                        return <div className="text-sm text-slate-500 truncate">{[city, country].filter(Boolean).join(', ')}</div>
+                      })()}
+                    </div>
+                    <div className="flex flex-col gap-1 shrink-0">
+                      <a
+                        href={`/fulfillment/outbound?drawer=${ret.order.id}`}
+                        className="h-7 px-2 text-sm border border-slate-200 bg-white rounded hover:bg-slate-100 inline-flex items-center gap-1"
+                      >
+                        <Package size={11} /> Open order
+                      </a>
+                      {ret.order.shipments[0] && (
+                        <a
+                          href={`/fulfillment/outbound/pack/${ret.order.shipments[0].id}`}
+                          className="h-7 px-2 text-sm border border-slate-200 bg-white rounded hover:bg-slate-100 inline-flex items-center gap-1"
+                        >
+                          <Truck size={11} /> Shipment
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-slate-500 pt-1.5 border-t border-slate-200">
+                    {ret.order.channelOrderId && (
+                      <span className="inline-flex items-center gap-1">
+                        <span className="uppercase text-xs tracking-wider font-semibold">Order</span>
+                        <span className="font-mono text-slate-700">{ret.order.channelOrderId}</span>
+                      </span>
+                    )}
+                    {ret.order.shipments[0]?.trackingNumber && (
+                      <span className="inline-flex items-center gap-1">
+                        <span className="uppercase text-xs tracking-wider font-semibold">Tracking</span>
+                        <span className="font-mono text-slate-700">{ret.order.shipments[0].trackingNumber}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {ret.reason && <div><div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Reason</div><div className="text-base text-slate-700 mt-0.5">{ret.reason}</div></div>}
 
+              {/* R2.2 — writable Return-level notes (FBA stays read-only) */}
+              {!ret.isFbaReturn && (
+                <ReturnNotesEditor returnId={ret.id} initial={ret.notes ?? ''} onSaved={fetchOne} />
+              )}
+
               <div>
                 <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">Items</div>
-                <table className="w-full text-base">
-                  <thead className="border-b border-slate-200">
-                    <tr>
-                      <th className="px-2 py-1.5 text-left text-xs font-semibold uppercase text-slate-500">SKU</th>
-                      <th className="px-2 py-1.5 text-right text-xs font-semibold uppercase text-slate-500">Qty</th>
-                      <th className="px-2 py-1.5 text-left text-xs font-semibold uppercase text-slate-500">Condition</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ret.items.map((it) => (
-                      <tr key={it.id} className="border-b border-slate-100">
-                        <td className="px-2 py-1.5 font-mono text-slate-700">{it.sku}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">{it.quantity}</td>
-                        <td className="px-2 py-1.5">
-                          {ret.status === 'INSPECTING' || ret.status === 'RECEIVED' ? (
-                            <select
-                              value={conditions[it.id] ?? it.conditionGrade ?? ''}
-                              onChange={(e) => setConditions({ ...conditions, [it.id]: e.target.value })}
-                              className="h-7 px-2 text-sm border border-slate-200 rounded"
-                            >
-                              <option value="">Grade…</option>
-                              <option value="NEW">NEW</option>
-                              <option value="LIKE_NEW">Like new</option>
-                              <option value="GOOD">Good</option>
-                              <option value="DAMAGED">Damaged</option>
-                              <option value="UNUSABLE">Unusable</option>
-                            </select>
-                          ) : (
-                            <span className="text-sm text-slate-600">{it.conditionGrade ?? '—'}</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="space-y-2.5">
+                  {ret.items.map((it) => (
+                    <ReturnItemCard
+                      key={it.id}
+                      returnId={ret.id}
+                      item={it}
+                      isFba={ret.isFbaReturn}
+                      isInspecting={ret.status === 'INSPECTING' || ret.status === 'RECEIVED'}
+                      stagedGrade={conditions[it.id]}
+                      onStageGrade={(grade) => setConditions({ ...conditions, [it.id]: grade })}
+                      onChanged={fetchOne}
+                    />
+                  ))}
+                </div>
               </div>
 
               {/* Return label tracking — only relevant for non-FBA returns
@@ -501,6 +1223,15 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
                       </>
                     )}
                   </div>
+
+                  {/* R5.3 — failed-refund retry surface. Renders
+                      a banner when the channel push failed; the
+                      operator clicks "Retry now" to bypass the cron's
+                      backoff window. The cron also picks the row up
+                      hourly when NEXUS_ENABLE_REFUND_RETRY=1. */}
+                  {ret.refundStatus === 'CHANNEL_FAILED' && (
+                    <RefundRetryBanner returnId={ret.id} onRetried={async () => { await fetchOne(); onChanged() }} />
+                  )}
 
                   {ret.refundStatus !== 'REFUNDED' && (
                     <div className="pt-2 border-t border-slate-100 space-y-2">
@@ -581,6 +1312,12 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
                   )}
                 </div>
               )}
+
+              {/* R5.1 — refund history (multi-attempt + per-channel-status) */}
+              {refunds.length > 0 && <RefundHistory refunds={refunds} />}
+
+              {/* R2.1 — activity log timeline */}
+              {audit.length > 0 && <ActivityTimeline entries={audit} />}
             </>
           )}
         </div>
@@ -731,6 +1468,619 @@ const CARRIER_OPTIONS = [
   { value: 'FEDEX', label: 'FedEx' },
   { value: 'MANUAL', label: 'Manual / Other' },
 ]
+
+// R5.3 — banner shown in the drawer when a channel refund failed.
+// Reads the retry-status endpoint to render the next eligible time
+// (so the operator sees "next retry in 23m" instead of staring at a
+// stuck CHANNEL_FAILED). The "Retry now" button bypasses backoff.
+// R2.1 — activity timeline (newest-first AuditLog entries).
+function ActivityTimeline({ entries }: { entries: AuditEntry[] }) {
+  const fmtRel = (iso: string): string => {
+    const ms = Date.now() - new Date(iso).getTime()
+    const m = Math.floor(ms / 60_000)
+    if (m < 1) return 'just now'
+    if (m < 60) return `${m}m ago`
+    const h = Math.floor(m / 60)
+    if (h < 24) return `${h}h ago`
+    const d = Math.floor(h / 24)
+    if (d < 30) return `${d}d ago`
+    return new Date(iso).toLocaleDateString('it-IT')
+  }
+  const TONE_DOT: Record<string, string> = {
+    info: 'bg-blue-500', success: 'bg-emerald-500', warning: 'bg-amber-500', danger: 'bg-rose-500',
+  }
+  return (
+    <div className="pt-3 border-t border-slate-100">
+      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">Activity</div>
+      <ol className="space-y-2.5 text-base">
+        {entries.map((e) => {
+          const meta = ACTION_LABEL[e.action] ?? { label: e.action, tone: 'info' as const }
+          const after = (e.after ?? {}) as Record<string, unknown>
+          const md = (e.metadata ?? {}) as Record<string, unknown>
+          let detail: string | null = null
+          if (e.action === 'refund' && typeof after.channelOutcome === 'string') {
+            const cents = typeof after.refundCents === 'number' ? `€${(after.refundCents / 100).toFixed(2)} · ` : ''
+            detail = `${cents}${after.channelOutcome}`
+          } else if (e.action === 'inspect' && Array.isArray(after.itemGrades)) {
+            detail = `${(after.itemGrades as Array<{ grade: string }>).length} item(s) graded`
+          } else if (e.action === 'restock' && Array.isArray(after.restockedItems)) {
+            const r = (after.restockedItems as Array<{ qty: number }>).reduce((acc, i) => acc + (i.qty ?? 0), 0)
+            const skipped = Array.isArray(after.skippedItems) ? (after.skippedItems as unknown[]).length : 0
+            detail = `${r} unit${r === 1 ? '' : 's'} restocked${skipped ? ` · ${skipped} skipped` : ''}`
+          } else if (e.action === 'carrier-scan' && typeof md.code === 'string') {
+            detail = md.advancedTo ? `${md.code} → ${md.advancedTo}` : (md.code as string)
+          } else if (e.action === 'attach-label' && typeof after.carrier === 'string') {
+            detail = after.carrier as string
+          }
+          return (
+            <li key={e.id} className="flex items-start gap-3">
+              <div className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${TONE_DOT[meta.tone]}`} />
+              <div className="flex-1 min-w-0">
+                <div className="text-slate-900">
+                  {meta.label}
+                  {detail && <span className="text-slate-500 ml-1.5">— {detail}</span>}
+                </div>
+                <div className="text-xs text-slate-500 tabular-nums">
+                  {fmtRel(e.createdAt)}
+                  {e.userId && <span className="ml-2">· {e.userId}</span>}
+                  {(md as any).bulk && <span className="ml-2 italic">· bulk</span>}
+                </div>
+              </div>
+            </li>
+          )
+        })}
+      </ol>
+    </div>
+  )
+}
+
+// R5.1 — refund history block (multi-refund + multi-attempt audit).
+function RefundHistory({ refunds }: { refunds: RefundRow[] }) {
+  const STATUS_TONE: Record<string, string> = {
+    POSTED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    PENDING: 'bg-slate-50 text-slate-600 border-slate-200',
+    FAILED: 'bg-rose-50 text-rose-700 border-rose-200',
+    MANUAL_REQUIRED: 'bg-amber-50 text-amber-700 border-amber-200',
+    NOT_IMPLEMENTED: 'bg-slate-50 text-slate-600 border-slate-200',
+  }
+  return (
+    <div className="pt-3 border-t border-slate-100">
+      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">
+        Refund history ({refunds.length})
+      </div>
+      <div className="space-y-1.5 text-base">
+        {refunds.map((r) => (
+          <div key={r.id} className="bg-white border border-slate-200 rounded p-2.5 space-y-1">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="inline-flex items-center gap-2">
+                <span className="font-medium tabular-nums text-slate-900">€{(r.amountCents / 100).toFixed(2)}</span>
+                <span className="text-xs font-mono text-slate-500">{r.currencyCode}</span>
+                {r.kind !== 'CASH' && (
+                  <span className="text-xs uppercase tracking-wider px-1 py-0.5 bg-violet-50 text-violet-700 border border-violet-200 rounded">
+                    {r.kind.replace(/_/g, ' ')}
+                  </span>
+                )}
+                <span className={`text-xs uppercase tracking-wider font-semibold px-1.5 py-0.5 border rounded ${STATUS_TONE[r.channelStatus] ?? 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                  {r.channelStatus.replace(/_/g, ' ')}
+                </span>
+              </div>
+              <span className="text-xs text-slate-500 tabular-nums">
+                {new Date(r.createdAt).toLocaleString('it-IT', { year: '2-digit', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </div>
+            {r.channelRefundId && (
+              <div className="text-xs">
+                <span className="text-slate-500">{r.channel} refund id:</span>{' '}
+                <span className="font-mono text-slate-700">{r.channelRefundId}</span>
+              </div>
+            )}
+            {r.channelError && <div className="text-xs font-mono text-rose-700">{r.channelError}</div>}
+            {r.attempts.length > 1 && (
+              <div className="text-xs text-slate-500">
+                {r.attempts.length} attempts · last:{' '}
+                <span className="font-mono">
+                  {r.attempts[0].outcome}
+                  {r.attempts[0].durationMs != null ? ` (${r.attempts[0].durationMs}ms)` : ''}
+                </span>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// R2.2 — writable Return.notes (auto-save on blur).
+function ReturnNotesEditor({
+  returnId, initial, onSaved,
+}: {
+  returnId: string
+  initial: string
+  onSaved: () => void | Promise<void>
+}) {
+  const { toast } = useToast()
+  const [value, setValue] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { setValue(initial) }, [initial])
+  const dirty = value !== initial
+  const save = async () => {
+    if (!dirty) return
+    setBusy(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/returns/${returnId}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ notes: value || null }),
+        },
+      )
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
+      toast.success('Notes saved')
+      await onSaved()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Save failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div>
+      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 inline-flex items-center gap-2">
+        Operator notes
+        {dirty && <span className="text-amber-600 normal-case font-normal text-[11px]">unsaved</span>}
+      </div>
+      <textarea
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={save}
+        rows={2}
+        placeholder="Context for the next operator — anything not captured by the per-item state."
+        className="w-full px-2 py-1.5 text-base border border-slate-200 rounded resize-y focus:outline-none focus:ring-1 focus:ring-slate-400"
+      />
+      {dirty && (
+        <button
+          onClick={save}
+          disabled={busy}
+          className="mt-1 h-7 px-2 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1"
+        >
+          <Save size={11} /> Save
+        </button>
+      )}
+    </div>
+  )
+}
+
+// R2.2 — per-item card: SKU + condition staging + writable notes +
+// inspection checklist + photo gallery + disposition badge.
+function ReturnItemCard({
+  returnId, item, isFba, isInspecting, stagedGrade, onStageGrade, onChanged,
+}: {
+  returnId: string
+  item: ReturnRow['items'][number]
+  isFba: boolean
+  isInspecting: boolean
+  stagedGrade: string | undefined
+  onStageGrade: (grade: string) => void
+  onChanged: () => void | Promise<void>
+}) {
+  const { toast } = useToast()
+  const askConfirm = useConfirm()
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [notes, setNotes] = useState(item.notes ?? '')
+  const [checklist, setChecklist] = useState<ItemChecklist>(item.inspectionChecklist ?? {})
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { setNotes(item.notes ?? '') }, [item.notes])
+  useEffect(() => { setChecklist(item.inspectionChecklist ?? {}) }, [item.inspectionChecklist])
+  const dirty =
+    notes !== (item.notes ?? '') ||
+    JSON.stringify(checklist) !== JSON.stringify(item.inspectionChecklist ?? {})
+
+  const saveItem = async () => {
+    if (!dirty) return
+    setBusy(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/returns/${returnId}/items/${item.id}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            notes: notes || null,
+            inspectionChecklist: Object.keys(checklist).length > 0 ? checklist : null,
+          }),
+        },
+      )
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
+      toast.success(`${item.sku} saved`)
+      await onChanged()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Save failed')
+    } finally { setBusy(false) }
+  }
+
+  const uploadPhoto = async (file: File) => {
+    if (!file) return
+    if (item.photoUrls.length >= 10) { toast.error('Photo cap reached (10 per item)'); return }
+    setBusy(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/returns/${returnId}/items/${item.id}/upload-photo`,
+        { method: 'POST', body: fd },
+      )
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`)
+      toast.success('Photo uploaded')
+      await onChanged()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Upload failed')
+    } finally { setBusy(false) }
+  }
+
+  const removePhoto = async (url: string) => {
+    if (!(await askConfirm({
+      title: 'Remove photo?',
+      description: 'The image stays in Cloudinary but is unlinked from this item.',
+      confirmLabel: 'Remove',
+      tone: 'danger',
+    }))) return
+    setBusy(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/returns/${returnId}/items/${item.id}/photos`,
+        {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+        },
+      )
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
+      toast.success('Photo removed')
+      await onChanged()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Remove failed')
+    } finally { setBusy(false) }
+  }
+
+  const setChk = (patch: Partial<ItemChecklist>) =>
+    setChecklist((prev) => ({ ...prev, ...patch }))
+
+  // R3.2 — disposition badge tone (display-only here; mobile inspect
+  // page is where the operator picks).
+  const DISPOSITION_TONE: Record<string, string> = {
+    SELLABLE: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    SECOND_QUALITY: 'bg-blue-50 text-blue-700 border-blue-200',
+    REFURBISH: 'bg-violet-50 text-violet-700 border-violet-200',
+    QUARANTINE: 'bg-amber-50 text-amber-700 border-amber-200',
+    SCRAP: 'bg-rose-50 text-rose-700 border-rose-200',
+  }
+
+  return (
+    <div className="border border-slate-200 rounded p-3 space-y-2.5 text-base">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="font-mono text-slate-900">{item.sku}</div>
+          <div className="text-sm text-slate-500 tabular-nums">Qty {item.quantity}</div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {item.disposition && (
+            <span
+              className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${DISPOSITION_TONE[item.disposition] ?? 'bg-slate-50 text-slate-600 border-slate-200'}`}
+              title={item.scrapReason ? `Scrap reason: ${item.scrapReason}` : undefined}
+            >
+              {item.disposition.replace(/_/g, ' ')}
+            </span>
+          )}
+          {isInspecting && !isFba ? (
+            <select
+              value={stagedGrade ?? item.conditionGrade ?? ''}
+              onChange={(e) => onStageGrade(e.target.value)}
+              className="h-7 px-2 text-sm border border-slate-200 rounded"
+              aria-label={`Condition grade for ${item.sku}`}
+            >
+              <option value="">Grade…</option>
+              <option value="NEW">NEW</option>
+              <option value="LIKE_NEW">Like new</option>
+              <option value="GOOD">Good</option>
+              <option value="DAMAGED">Damaged</option>
+              <option value="UNUSABLE">Unusable</option>
+            </select>
+          ) : (
+            <span className="text-sm text-slate-600">{item.conditionGrade ?? '—'}</span>
+          )}
+        </div>
+      </div>
+      {item.disposition === 'SCRAP' && item.scrapReason && (
+        <div className="text-xs text-rose-700 italic">Scrap reason: {item.scrapReason}</div>
+      )}
+
+      {isInspecting && !isFba && (
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
+          <label className="inline-flex items-center gap-1.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={!!checklist.packagingPresent}
+              onChange={(e) => setChk({ packagingPresent: e.target.checked })}
+              className="h-3.5 w-3.5 cursor-pointer accent-slate-900"
+            />
+            Original packaging
+          </label>
+          <label className="inline-flex items-center gap-1.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={!!checklist.tagsIntact}
+              onChange={(e) => setChk({ tagsIntact: e.target.checked })}
+              className="h-3.5 w-3.5 cursor-pointer accent-slate-900"
+            />
+            Tags / labels intact
+          </label>
+          <label className="inline-flex items-center gap-1.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={!!checklist.visibleDamage}
+              onChange={(e) => setChk({ visibleDamage: e.target.checked })}
+              className="h-3.5 w-3.5 cursor-pointer accent-slate-900"
+            />
+            Visible damage
+          </label>
+          <label className="inline-flex items-center gap-1.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={!!checklist.functionalTestPassed}
+              onChange={(e) => setChk({ functionalTestPassed: e.target.checked })}
+              className="h-3.5 w-3.5 cursor-pointer accent-slate-900"
+            />
+            Functional test passed
+          </label>
+          <div className="col-span-2 inline-flex items-center gap-2">
+            <span className="text-slate-500">Signs of use:</span>
+            {(['NONE', 'LIGHT', 'HEAVY'] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setChk({ signsOfUse: s })}
+                className={`h-6 px-2 text-sm rounded border ${
+                  checklist.signsOfUse === s
+                    ? 'bg-slate-900 text-white border-slate-900'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!isFba && (
+        <div>
+          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-0.5">Notes</div>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            placeholder="Per-item observations, defect location, etc."
+            className="w-full px-2 py-1 text-base border border-slate-200 rounded resize-y focus:outline-none focus:ring-1 focus:ring-slate-400"
+          />
+        </div>
+      )}
+
+      {!isFba && (
+        <div>
+          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 inline-flex items-center gap-1.5">
+            <ImageIcon size={11} /> Photos ({item.photoUrls.length}/10)
+          </div>
+          {item.photoUrls.length > 0 && (
+            <div className="grid grid-cols-4 gap-1.5 mb-1.5">
+              {item.photoUrls.map((u) => (
+                <div key={u} className="relative group">
+                  <a href={u} target="_blank" rel="noopener noreferrer">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={u} alt="Item condition" className="w-full h-16 object-cover rounded border border-slate-200" />
+                  </a>
+                  <button
+                    onClick={() => removePhoto(u)}
+                    className="absolute top-0.5 right-0.5 h-5 w-5 inline-flex items-center justify-center rounded bg-white/80 hover:bg-rose-50 text-slate-600 hover:text-rose-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Remove photo"
+                  >
+                    <X size={11} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) void uploadPhoto(f)
+              e.target.value = ''
+            }}
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={busy || item.photoUrls.length >= 10}
+            className="h-7 px-2 text-sm border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1"
+          >
+            <Camera size={11} /> Add photo
+          </button>
+        </div>
+      )}
+
+      {dirty && !isFba && (
+        <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+          <button
+            onClick={saveItem}
+            disabled={busy}
+            className="h-7 px-2.5 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1"
+          >
+            <Save size={11} /> Save item
+          </button>
+          <span className="text-xs text-amber-600">Unsaved per-item changes</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RefundRetryBanner({
+  returnId, onRetried,
+}: {
+  returnId: string
+  onRetried: () => Promise<void> | void
+}) {
+  const { toast } = useToast()
+  const [status, setStatus] = useState<{
+    ready: boolean
+    priorAttempts: number
+    nextEligibleAt: string | null
+    reason?: 'max_attempts' | 'backoff' | 'not_failed'
+  } | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const r = await fetch(
+        `${getBackendUrl()}/api/fulfillment/returns/${returnId}/refund/retry-status`,
+        { cache: 'no-store' },
+      )
+      if (r.ok) setStatus(await r.json())
+    } catch { /* non-fatal */ }
+  }, [returnId])
+  useEffect(() => { void fetchStatus() }, [fetchStatus])
+
+  const retry = async () => {
+    setBusy(true)
+    try {
+      const r = await fetch(
+        `${getBackendUrl()}/api/fulfillment/returns/${returnId}/refund/retry`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ force: true }),
+        },
+      )
+      const j = await r.json()
+      if (r.ok && (j.outcome === 'OK' || j.outcome === 'OK_MANUAL_REQUIRED' || j.outcome === 'NOT_IMPLEMENTED')) {
+        toast.success('Refund retry posted')
+      } else if (j.outcome === 'SKIPPED') {
+        toast.error(`Skipped: ${j.reason ?? 'unknown'}`)
+      } else {
+        toast.error(j.error ?? 'Retry failed')
+      }
+      await fetchStatus()
+      await onRetried()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Retry failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const fmtRel = (iso: string | null): string => {
+    if (!iso) return ''
+    const ms = new Date(iso).getTime() - Date.now()
+    if (ms <= 0) return 'now'
+    const m = Math.ceil(ms / 60_000)
+    if (m < 60) return `in ${m}m`
+    return `in ${Math.ceil(m / 60)}h`
+  }
+
+  return (
+    <div className="bg-rose-50 border border-rose-200 rounded p-3 space-y-1.5 text-base">
+      <div className="flex items-start gap-2">
+        <AlertTriangle size={14} className="text-rose-600 shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0 space-y-0.5">
+          <div className="font-medium text-rose-900">Channel refund failed</div>
+          <div className="text-sm text-rose-700">
+            {status?.priorAttempts ?? 0} / 5 attempts
+            {status?.reason === 'max_attempts' && ' — gave up after 5 retries'}
+            {status?.reason === 'backoff' && status?.nextEligibleAt && ` — next auto retry ${fmtRel(status.nextEligibleAt)}`}
+            {status?.ready && ' — ready to retry'}
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 pt-1 border-t border-rose-200">
+        <button
+          onClick={retry}
+          disabled={busy || status?.reason === 'max_attempts'}
+          className="h-7 px-2.5 text-sm bg-rose-600 hover:bg-rose-500 text-white rounded inline-flex items-center gap-1 disabled:opacity-50"
+          title={status?.reason === 'max_attempts' ? 'Max retries reached — investigate the failure before manually retrying' : 'Override backoff and retry now'}
+        >
+          <RotateCw size={11} className={busy ? 'animate-spin' : ''} /> {busy ? 'Retrying…' : 'Retry now'}
+        </button>
+        <span className="text-xs text-rose-600">
+          Auto-retry runs hourly via cron (when enabled)
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// R6.2 — refund deadline countdown badge.
+// Reads /returns/:id/policy and renders the days-until-deadline if
+// the return is in a relevant state. Hidden for FBA (Amazon owns
+// the deadline), already-refunded, or pre-receipt returns —
+// nothing to count down to in those cases.
+function RefundDeadlineBadge({
+  returnId, status, refundStatus,
+}: {
+  returnId: string
+  status: string
+  refundStatus: string
+}) {
+  const [data, setData] = useState<{
+    daysUntilDeadline: number | null
+    refundDeadlineDays: number
+    status: 'safe' | 'approaching' | 'overdue' | 'no_receive_date'
+  } | null>(null)
+  // Only fetch when the badge could be relevant.
+  const relevant =
+    refundStatus !== 'REFUNDED' &&
+    (status === 'RECEIVED' || status === 'INSPECTING')
+  useEffect(() => {
+    if (!relevant) { setData(null); return }
+    let cancelled = false
+    void (async () => {
+      try {
+        const r = await fetch(
+          `${getBackendUrl()}/api/fulfillment/returns/${returnId}/policy`,
+          { cache: 'no-store' },
+        )
+        if (!r.ok || cancelled) return
+        const j = await r.json()
+        if (!cancelled) setData(j.deadline ?? null)
+      } catch { /* non-fatal */ }
+    })()
+    return () => { cancelled = true }
+  }, [returnId, relevant])
+
+  if (!data || data.status === 'no_receive_date' || data.status === 'safe') return null
+
+  const isOverdue = data.status === 'overdue'
+  const tone = isOverdue
+    ? 'bg-rose-50 text-rose-700 border-rose-200'
+    : 'bg-amber-50 text-amber-700 border-amber-200'
+  const label = isOverdue
+    ? `Overdue ${Math.abs(data.daysUntilDeadline ?? 0)}d`
+    : `Refund due in ${data.daysUntilDeadline}d`
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${tone}`}
+      title={`Italian consumer law: refund within ${data.refundDeadlineDays} days of receipt`}
+    >
+      <AlertTriangle size={11} /> {label}
+    </span>
+  )
+}
 
 function ReturnLabelPanel({
   returnRow,

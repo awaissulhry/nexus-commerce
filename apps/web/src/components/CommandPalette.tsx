@@ -67,6 +67,7 @@ const COMMANDS: Command[] = [
   { id: 'goto-routing-rules', label: 'Go to Order Routing Rules', icon: FileEdit, href: '/fulfillment/routing-rules', group: 'Navigation' },
   { id: 'goto-cycle-count', label: 'Go to Cycle Counts (physical inventory)', icon: ClipboardList, href: '/fulfillment/stock/cycle-count', group: 'Navigation' },
   { id: 'goto-returns', label: 'Go to Returns (RMA + refund workflow)', icon: RefreshCw, href: '/fulfillment/returns', group: 'Navigation', chord: 'g t' },
+  { id: 'goto-returns-analytics', label: 'Go to Returns Analytics (rates, top SKUs, processing time)', icon: Activity, href: '/fulfillment/returns/analytics', group: 'Navigation', keywords: 'returns rate sku processing analytics' },
   { id: 'goto-activity', label: 'Go to Activity Log', icon: Activity, href: '/sync-logs', group: 'Navigation' },
   { id: 'goto-audit-log', label: 'Go to Audit Log (every mutation)', icon: History, href: '/audit-log', group: 'Navigation', chord: 'g a' },
   { id: 'goto-health', label: 'Go to Sync Health', icon: HeartPulse, href: '/dashboard/health', group: 'Navigation', chord: 'g h' },
