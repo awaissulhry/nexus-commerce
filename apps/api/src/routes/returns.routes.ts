@@ -39,7 +39,12 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const since = new Date(Date.now() - 30 * 86_400_000)
       const priorSince = new Date(Date.now() - 60 * 86_400_000)
-      const [last30, prior30, byChannelRows, byReasonRows, fbaCount, totalCount] = await Promise.all([
+      // R7.1 — additive: keep the original shape (workspace KPI
+      // strip + audit/dashboard consumers depend on it) and append
+      // returnRateByChannel / topReturnSkus / avgProcessingDays /
+      // dailyTrend. The /fulfillment/returns/analytics page reads
+      // the new fields; old consumers ignore them.
+      const [last30, prior30, byChannelRows, byReasonRows, fbaCount, totalCount, ordersByChannel, topSkuRows, processingTimeAgg, dailyRows] = await Promise.all([
         prisma.return.count({ where: { createdAt: { gte: since } } }),
         prisma.return.count({
           where: { createdAt: { gte: priorSince, lt: since } },
@@ -58,10 +63,75 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
         }),
         prisma.return.count({ where: { isFbaReturn: true } }),
         prisma.return.count(),
+        // R7.1 — orders-per-channel for the rate-% denominator.
+        prisma.order.groupBy({
+          by: ['channel'],
+          _count: { _all: true },
+          where: { createdAt: { gte: since } },
+        }),
+        // R7.1 — top 10 SKUs by return count in the last 30d.
+        prisma.returnItem.groupBy({
+          by: ['sku'],
+          _count: { _all: true },
+          _sum: { quantity: true },
+          where: { return: { createdAt: { gte: since } } },
+          orderBy: { _count: { sku: 'desc' } },
+          take: 10,
+        }),
+        // R7.1 — avg processing time (createdAt → refundedAt) in
+        // ms, for refunded-only rows in the window. Used as a
+        // basic SLA indicator on the page.
+        prisma.$queryRaw<Array<{ avg_ms: number | null; n: bigint }>>`
+          SELECT
+            AVG(EXTRACT(EPOCH FROM ("refundedAt" - "createdAt"))) * 1000 AS avg_ms,
+            COUNT(*)::bigint AS n
+          FROM "Return"
+          WHERE "refundedAt" IS NOT NULL
+            AND "createdAt" >= ${since}
+        `,
+        // R7.1 — daily counts for the trend chart (last 30 days).
+        // groupBy on day-truncated createdAt requires raw SQL because
+        // Prisma's groupBy doesn't have a date_trunc helper.
+        prisma.$queryRaw<Array<{ day: Date; count: bigint }>>`
+          SELECT date_trunc('day', "createdAt") AS day, COUNT(*)::bigint AS count
+          FROM "Return"
+          WHERE "createdAt" >= ${since}
+          GROUP BY day
+          ORDER BY day ASC
+        `,
       ])
       // % change vs prior window. null when prior window is 0 to
       // avoid divide-by-zero "+Infinity%" in the UI.
       const trendPct = prior30 > 0 ? ((last30 - prior30) / prior30) * 100 : null
+
+      // R7.1 — fold orders count into the per-channel return rows.
+      // Order.channel is an enum but the values are strings ('AMAZON'
+      // / 'EBAY' / etc.) — coerce both sides to a string Map key.
+      const ordersByCh = new Map<string, number>(
+        ordersByChannel.map((r) => [String(r.channel), r._count._all]),
+      )
+      const returnRateByChannel = byChannelRows.map((r) => {
+        const orders = ordersByCh.get(String(r.channel)) ?? 0
+        const ratePct = orders > 0 ? (r._count._all / orders) * 100 : null
+        return { channel: r.channel, returns: r._count._all, orders, ratePct }
+      }).sort((a, b) => (b.ratePct ?? 0) - (a.ratePct ?? 0))
+
+      const avgMs = processingTimeAgg[0]?.avg_ms ?? null
+      const avgProcessingDays = avgMs != null ? Number(avgMs) / 86_400_000 : null
+
+      // R7.1 — fill in zero-count days so the chart has a continuous
+      // x-axis. Otherwise sparse-day periods misrepresent the trend.
+      const trendByDay = new Map<string, number>()
+      for (const r of dailyRows) {
+        trendByDay.set(r.day.toISOString().slice(0, 10), Number(r.count))
+      }
+      const dailyTrend: Array<{ date: string; count: number }> = []
+      for (let d = 29; d >= 0; d--) {
+        const dt = new Date(Date.now() - d * 86_400_000)
+        const key = dt.toISOString().slice(0, 10)
+        dailyTrend.push({ date: key, count: trendByDay.get(key) ?? 0 })
+      }
+
       return {
         windowDays: 30,
         last30,
@@ -77,6 +147,17 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
         fbaCount,
         warehouseCount: totalCount - fbaCount,
         totalCount,
+        // R7.1 — new fields. Workspace KPI strip ignores; analytics
+        // page consumes.
+        returnRateByChannel,
+        topReturnSkus: topSkuRows.map((r) => ({
+          sku: r.sku,
+          returnCount: r._count._all,
+          unitsReturned: r._sum.quantity ?? 0,
+        })),
+        avgProcessingDays,
+        avgProcessingSampleSize: Number(processingTimeAgg[0]?.n ?? 0),
+        dailyTrend,
       }
     } catch (error: any) {
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -144,9 +225,38 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // R2.1 — drawer detail include. Pulls the parent Order's customer
+  // info, shipping address, channelOrderId + the latest shipment for
+  // back-link rendering. Narrow select keeps the payload small.
   fastify.get('/fulfillment/returns/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const ret = await prisma.return.findUnique({ where: { id }, include: { items: true } })
+    const ret = await prisma.return.findUnique({
+      where: { id },
+      include: {
+        items: true,
+        order: {
+          select: {
+            id: true,
+            channel: true,
+            marketplace: true,
+            channelOrderId: true,
+            customerName: true,
+            customerEmail: true,
+            shippingAddress: true,
+            createdAt: true,
+            shipments: {
+              select: {
+                id: true, status: true,
+                trackingNumber: true, trackingUrl: true,
+                carrierCode: true, shippedAt: true, deliveredAt: true,
+              },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
+          },
+        },
+      },
+    })
     if (!ret) return reply.code(404).send({ error: 'Return not found' })
     return ret
   })
@@ -274,17 +384,42 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
     return updated
   })
 
+  // R3.2 — accepts per-item disposition + scrapReason. Auto-derives
+  // disposition from grade when operator omits it (NEW/LIKE_NEW/GOOD
+  // → SELLABLE; DAMAGED/UNUSABLE → SCRAP). Restock route uses
+  // disposition to route per-item to the matching warehouse kind.
   fastify.post('/fulfillment/returns/:id/inspect', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
       const body = request.body as {
-        items: Array<{ itemId: string; conditionGrade: string; notes?: string }>
+        items: Array<{
+          itemId: string
+          conditionGrade: string
+          notes?: string
+          disposition?: string
+          scrapReason?: string
+        }>
         overallCondition?: string
       }
+      const VALID_DISPOSITIONS = new Set([
+        'SELLABLE', 'SECOND_QUALITY', 'REFURBISH', 'QUARANTINE', 'SCRAP',
+      ])
+      const inferDisposition = (grade: string): string => {
+        if (grade === 'NEW' || grade === 'LIKE_NEW' || grade === 'GOOD') return 'SELLABLE'
+        return 'SCRAP'
+      }
       for (const it of body.items ?? []) {
+        const disposition = it.disposition && VALID_DISPOSITIONS.has(it.disposition)
+          ? it.disposition
+          : inferDisposition(it.conditionGrade)
         await prisma.returnItem.update({
           where: { id: it.itemId },
-          data: { conditionGrade: it.conditionGrade as any, notes: it.notes ?? null },
+          data: {
+            conditionGrade: it.conditionGrade as any,
+            notes: it.notes ?? null,
+            disposition,
+            scrapReason: disposition === 'SCRAP' ? (it.scrapReason ?? null) : null,
+          },
         })
       }
       const updated = await prisma.return.update({
@@ -308,6 +443,7 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
           itemGrades: (body.items ?? []).map((it) => ({
             itemId: it.itemId,
             grade: it.conditionGrade,
+            disposition: it.disposition ?? inferDisposition(it.conditionGrade),
           })),
         },
       })
@@ -872,6 +1008,803 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
       return updated
     } catch (error: any) {
       fastify.log.error({ err: error }, '[returns/:id/scrap] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ─── R6.3 — Italian customer comms ──────────────────────────────
+  //
+  // Two surfaces:
+  //   1. GET /returns/:id/modulo-recesso.pdf
+  //      Streams an A4 Italian withdrawal form (D.Lgs. 21/2014 +
+  //      Direttiva 2011/83/UE) with the order's details pre-filled.
+  //      Bilingual IT/EN copy. The drawer renders a "Download
+  //      Modulo" button for direct-channel returns (Shopify);
+  //      Amazon/eBay don't need it because those marketplaces
+  //      enforce withdrawal rights independently.
+  //
+  //   2. POST /returns/:id/send-email
+  //      Body: { kind: 'received' | 'refunded' | 'rejected', locale?: 'it' | 'en', reason? }
+  //      Sends a transactional email to the buyer. dryRun by
+  //      default (logs to console) until NEXUS_ENABLE_OUTBOUND_-
+  //      EMAILS=true + RESEND_API_KEY are set in production.
+
+  fastify.get('/fulfillment/returns/:id/modulo-recesso.pdf', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const ret = await prisma.return.findUnique({
+        where: { id },
+        include: {
+          items: true,
+          order: {
+            select: {
+              channelOrderId: true,
+              customerName: true,
+              customerEmail: true,
+              shippingAddress: true,
+              purchaseDate: true,
+              deliveredAt: true,
+            },
+          },
+        },
+      })
+      if (!ret) return reply.code(404).send({ error: 'Return not found' })
+
+      const { buildModuloRecessoPdf } = await import(
+        '../services/return-comms/modulo-recesso.service.js'
+      )
+      const pdf = await buildModuloRecessoPdf({
+        rmaNumber: ret.rmaNumber,
+        channelOrderId: ret.order?.channelOrderId ?? null,
+        customerName: ret.order?.customerName ?? null,
+        customerEmail: ret.order?.customerEmail ?? null,
+        shippingAddress: (ret.order?.shippingAddress ?? null) as Record<string, unknown> | null,
+        items: ret.items.map((it) => ({
+          sku: it.sku,
+          quantity: it.quantity,
+          productName: null,
+        })),
+        orderDate: ret.order?.purchaseDate ?? null,
+        deliveredAt: ret.order?.deliveredAt ?? null,
+      })
+      const filename = `modulo-recesso-${ret.rmaNumber ?? id.slice(-6)}.pdf`
+      return reply
+        .header('Content-Type', 'application/pdf')
+        .header('Content-Disposition', `attachment; filename="${filename}"`)
+        .send(pdf)
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[returns/:id/modulo-recesso] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.post('/fulfillment/returns/:id/send-email', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as {
+        kind?: 'received' | 'refunded' | 'rejected'
+        locale?: 'it' | 'en'
+        reason?: string
+        toOverride?: string
+      }
+      if (!body.kind || !['received', 'refunded', 'rejected'].includes(body.kind)) {
+        return reply.code(400).send({ error: 'kind must be received | refunded | rejected' })
+      }
+      const ret = await prisma.return.findUnique({
+        where: { id },
+        include: {
+          order: { select: { channelOrderId: true, customerName: true, customerEmail: true } },
+        },
+      })
+      if (!ret) return reply.code(404).send({ error: 'Return not found' })
+
+      const to = body.toOverride?.trim() || ret.order?.customerEmail
+      if (!to) return reply.code(400).send({ error: 'Customer email unknown — pass toOverride' })
+
+      // Resolve refund deadline for the receipt-stage copy.
+      const { resolveReturnPolicy } = await import(
+        '../services/return-policies/resolver.service.js'
+      )
+      const policy = await resolveReturnPolicy({
+        channel: ret.channel,
+        marketplace: ret.marketplace,
+      })
+
+      const { sendReturnEmail } = await import(
+        '../services/return-comms/return-emails.service.js'
+      )
+      const result = await sendReturnEmail(body.kind, {
+        to,
+        customerName: ret.order?.customerName ?? null,
+        rmaNumber: ret.rmaNumber,
+        channelOrderId: ret.order?.channelOrderId ?? null,
+        channel: ret.channel,
+        refundCents: ret.refundCents,
+        currencyCode: ret.currencyCode,
+        reason: body.reason ?? ret.reason ?? null,
+        refundDeadlineDays: policy.refundDeadlineDays,
+        locale: body.locale ?? 'it',
+      })
+
+      void auditLogService.write({
+        ...auditCtx(request),
+        entityType: 'Return',
+        entityId: id,
+        action: `email-${body.kind}`,
+        after: {
+          to,
+          locale: body.locale ?? 'it',
+          provider: result.provider,
+          dryRun: result.dryRun,
+          ok: result.ok,
+        },
+      })
+      return reply.send(result)
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // R7.2 — predictive risk: per-SKU return-rate scoring with
+  // within-productType z-scores. Surfaces SKUs > category mean +
+  // 2σ as candidates for PIM content review (wrong size chart,
+  // bad photos, defective batch). The analytics page renders the
+  // flagged subset; PIM can consume the same endpoint for inline
+  // badges (follow-up).
+  fastify.get('/fulfillment/returns/risk-scores', async (request, reply) => {
+    try {
+      const q = request.query as { windowDays?: string }
+      const windowDays = q.windowDays ? Math.max(7, Math.min(365, Number(q.windowDays))) : 90
+      const { computeReturnRiskScores } = await import(
+        '../services/return-policies/risk-scores.service.js'
+      )
+      const result = await computeReturnRiskScores({ windowDays })
+      return reply.send(result)
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // R6.2 — refund-deadline summary. Returns approaching/overdue
+  // counts + 5-row preview lists so the workspace KPI strip can
+  // render an "Italian compliance: X overdue" tile without a
+  // second fetch.
+  fastify.get('/fulfillment/returns/refund-deadline-summary', async (_request, reply) => {
+    try {
+      const { summarizeRefundDeadlines } = await import(
+        '../services/return-policies/deadline-tracker.service.js'
+      )
+      const summary = await summarizeRefundDeadlines()
+      return reply.send(summary)
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // R5.3 — manual retry for a failed refund. Bypasses the cron's
+  // backoff window when force=true (default) so the operator can
+  // try again immediately. Returns the same outcome shape the cron
+  // sweep produces; the drawer surfaces channelMessage / error.
+  fastify.post('/fulfillment/returns/:id/refund/retry', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as { force?: boolean }
+      const { retryRefund } = await import('../services/refunds/retry.service.js')
+      const result = await retryRefund(id, {
+        force: body.force !== false, // default true for manual button
+        actor: (request.headers['x-user-id'] as string | undefined) ?? null,
+      })
+      // SKIPPED outcomes are 200 with the reason — operator UI
+      // shows "still in backoff (next at HH:MM)". FAILED returns
+      // 502 so the drawer can show a toast. OK and friends are
+      // 200.
+      if (result.outcome === 'FAILED') {
+        return reply.code(502).send(result)
+      }
+      return reply.send(result)
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // R5.3 — retry status (used by the drawer to render "next retry
+  // in 23m" badges + "give up" UI when max attempts reached).
+  fastify.get('/fulfillment/returns/:id/refund/retry-status', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const { isRetryReady } = await import('../services/refunds/retry.service.js')
+      const decision = await isRetryReady(id)
+      return reply.send(decision)
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // R5.2 — refund-adapter status diagnostic.
+  //
+  // Tells operators which channels' refund button actually posts to
+  // the channel vs returns a mock vs forces them to finish in the
+  // back office. Surfaced in a settings/diagnostics tab so a
+  // mocked-Shopify-refund situation is one click away from the
+  // truth, not buried in source. Cheap pure read — no DB hit.
+  fastify.get('/fulfillment/returns/refund-channel-status', async (_request, reply) => {
+    try {
+      const { getRefundChannelAdapterStatus } = await import(
+        '../services/refunds/refund-publisher.service.js'
+      )
+      const items = getRefundChannelAdapterStatus()
+      // Group by mode for the UI's "what's real / what's mocked"
+      // summary card. Keep the raw list too.
+      const byMode = items.reduce<Record<string, number>>((acc, it) => {
+        acc[it.mode] = (acc[it.mode] ?? 0) + 1
+        return acc
+      }, {})
+      return reply.send({ items, byMode })
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ─── R6.1 — Return policies CRUD + window resolution ─────────────
+  //
+  // ReturnPolicy rows drive: 14-day window enforcement (Italian
+  // consumer law), refund-deadline tracking (R6.2), restocking-fee
+  // math, and auto-approval rules. Seeded by R0.1 with EU defaults
+  // for AMAZON / EBAY / SHOPIFY; operators add per-marketplace or
+  // per-productType overrides through these endpoints.
+
+  fastify.get('/fulfillment/return-policies', async (_request, reply) => {
+    try {
+      const items = await prisma.returnPolicy.findMany({
+        orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }, { productType: 'asc' }],
+      })
+      return { items }
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.post('/fulfillment/return-policies', async (request, reply) => {
+    try {
+      const body = (request.body ?? {}) as {
+        channel?: string
+        marketplace?: string | null
+        productType?: string | null
+        windowDays?: number
+        refundDeadlineDays?: number
+        buyerPaysReturn?: boolean
+        restockingFeePct?: number | null
+        autoApprove?: boolean
+        highValueThresholdCents?: number | null
+        notes?: string | null
+      }
+      if (!body.channel) return reply.code(400).send({ error: 'channel required' })
+      const created = await prisma.returnPolicy.create({
+        data: {
+          channel: body.channel.toUpperCase(),
+          marketplace: body.marketplace ?? null,
+          productType: body.productType ?? null,
+          windowDays: typeof body.windowDays === 'number' ? body.windowDays : 14,
+          refundDeadlineDays: typeof body.refundDeadlineDays === 'number' ? body.refundDeadlineDays : 14,
+          buyerPaysReturn: !!body.buyerPaysReturn,
+          restockingFeePct: body.restockingFeePct ?? null,
+          autoApprove: !!body.autoApprove,
+          highValueThresholdCents: body.highValueThresholdCents ?? null,
+          notes: body.notes ?? null,
+        },
+      })
+      void auditLogService.write({
+        ...auditCtx(request),
+        entityType: 'ReturnPolicy',
+        entityId: created.id,
+        action: 'create',
+        after: created as any,
+      })
+      return reply.send(created)
+    } catch (error: any) {
+      // P2002 = unique-constraint violation on (channel, marketplace, productType)
+      if (error?.code === 'P2002') {
+        return reply.code(409).send({
+          error: 'A policy already exists for that (channel, marketplace, productType) tuple — edit it instead of creating a new one',
+        })
+      }
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.patch('/fulfillment/return-policies/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as Record<string, unknown>
+      const allowed = [
+        'windowDays', 'refundDeadlineDays', 'buyerPaysReturn',
+        'restockingFeePct', 'autoApprove', 'highValueThresholdCents',
+        'isActive', 'notes',
+      ] as const
+      const data: Record<string, unknown> = {}
+      for (const k of allowed) if (k in body) data[k] = body[k]
+      const updated = await prisma.returnPolicy.update({
+        where: { id },
+        data,
+      })
+      void auditLogService.write({
+        ...auditCtx(request),
+        entityType: 'ReturnPolicy',
+        entityId: id,
+        action: 'update',
+        after: { changedKeys: Object.keys(data) },
+      })
+      return reply.send(updated)
+    } catch (error: any) {
+      const msg = error instanceof Error ? error.message : String(error)
+      if (msg.includes('Record to update not found')) {
+        return reply.code(404).send({ error: 'Policy not found' })
+      }
+      return reply.code(500).send({ error: msg })
+    }
+  })
+
+  fastify.delete('/fulfillment/return-policies/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      // Don't let operators delete the seeded baseline policies —
+      // those are the "EU default" anchor; deleting them would
+      // make the resolver fall back to the hard-coded baseline,
+      // which is not what an operator typing "delete" wants.
+      const row = await prisma.returnPolicy.findUnique({
+        where: { id },
+        select: { id: true, marketplace: true, productType: true },
+      })
+      if (!row) return reply.code(404).send({ error: 'Policy not found' })
+      if (id.startsWith('seed_')) {
+        return reply.code(409).send({
+          error: 'Seeded baseline policy — toggle isActive instead of deleting',
+        })
+      }
+      await prisma.returnPolicy.delete({ where: { id } })
+      void auditLogService.write({
+        ...auditCtx(request),
+        entityType: 'ReturnPolicy',
+        entityId: id,
+        action: 'delete',
+      })
+      return reply.send({ ok: true })
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // Resolution helper exposed for the frontend so the create-return
+  // modal can show "this return is 18 days post-delivery — outside
+  // 14-day window" before the operator submits.
+  fastify.get('/fulfillment/return-policies/resolve', async (request, reply) => {
+    try {
+      const q = request.query as {
+        channel?: string
+        marketplace?: string
+        productType?: string
+        deliveredAt?: string
+      }
+      if (!q.channel) return reply.code(400).send({ error: 'channel required' })
+      const { resolveReturnPolicy, checkReturnWindow } = await import(
+        '../services/return-policies/resolver.service.js'
+      )
+      const policy = await resolveReturnPolicy({
+        channel: q.channel,
+        marketplace: q.marketplace ?? null,
+        productType: q.productType ?? null,
+      })
+      const window = await checkReturnWindow({
+        channel: q.channel,
+        marketplace: q.marketplace ?? null,
+        productType: q.productType ?? null,
+        deliveredAt: q.deliveredAt ? new Date(q.deliveredAt) : null,
+      })
+      return reply.send({ policy, window })
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // Per-return policy view: drawer shows the matched policy +
+  // refund-deadline countdown for the loaded Return.
+  fastify.get('/fulfillment/returns/:id/policy', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const ret = await prisma.return.findUnique({
+        where: { id },
+        include: {
+          order: { select: { deliveredAt: true, purchaseDate: true } },
+        },
+      })
+      if (!ret) return reply.code(404).send({ error: 'Return not found' })
+
+      const { checkReturnWindow, checkRefundDeadline } = await import(
+        '../services/return-policies/resolver.service.js'
+      )
+      const window = await checkReturnWindow({
+        channel: ret.channel,
+        marketplace: ret.marketplace,
+        deliveredAt: ret.order?.deliveredAt ?? ret.order?.purchaseDate ?? null,
+      })
+      const deadline = await checkRefundDeadline({
+        channel: ret.channel,
+        marketplace: ret.marketplace,
+        receivedAt: ret.receivedAt,
+      })
+      return reply.send({ window, deadline })
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ─── R2.1 — Per-return audit log (drawer activity timeline) ─────
+  fastify.get('/fulfillment/returns/:id/audit-log', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const rows = await prisma.auditLog.findMany({
+        where: { entityType: 'Return', entityId: id },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        select: {
+          id: true, userId: true, action: true,
+          before: true, after: true, metadata: true, createdAt: true,
+        },
+      })
+      return { items: rows }
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ─── R2.2 — Operator notes + per-item PATCH + photo gallery ─────
+  fastify.patch<{ Params: { id: string }; Body: { notes?: string | null } }>(
+    '/fulfillment/returns/:id',
+    async (request, reply) => {
+      try {
+        const { id } = request.params
+        const body = request.body ?? {}
+        const updated = await prisma.return.update({
+          where: { id },
+          data: { notes: body.notes ?? null, version: { increment: 1 } },
+        })
+        void auditLogService.write({
+          ...auditCtx(request),
+          entityType: 'Return',
+          entityId: id,
+          action: 'edit-notes',
+          after: { notes: updated.notes },
+        })
+        return updated
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (msg.includes('Record to update not found')) return reply.code(404).send({ error: 'Return not found' })
+        return reply.code(500).send({ error: msg })
+      }
+    },
+  )
+
+  fastify.patch<{
+    Params: { id: string; itemId: string }
+    Body: {
+      notes?: string | null
+      conditionGrade?: string | null
+      inspectionChecklist?: Record<string, unknown> | null
+      disposition?: string | null
+      scrapReason?: string | null
+    }
+  }>('/fulfillment/returns/:id/items/:itemId', async (request, reply) => {
+    try {
+      const { id, itemId } = request.params
+      const body = request.body ?? {}
+      const item = await prisma.returnItem.findUnique({ where: { id: itemId }, select: { returnId: true } })
+      if (!item) return reply.code(404).send({ error: 'Item not found' })
+      if (item.returnId !== id) return reply.code(400).send({ error: 'Item does not belong to this return' })
+      const data: Record<string, unknown> = {}
+      for (const k of ['notes', 'conditionGrade', 'inspectionChecklist', 'disposition', 'scrapReason'] as const) {
+        if (k in body) data[k] = body[k]
+      }
+      const updated = await prisma.returnItem.update({ where: { id: itemId }, data })
+      void auditLogService.write({
+        ...auditCtx(request),
+        entityType: 'Return',
+        entityId: id,
+        action: 'edit-item',
+        after: { itemId, sku: updated.sku, changedKeys: Object.keys(data) },
+      })
+      return updated
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.post('/fulfillment/returns/:id/items/:itemId/upload-photo', async (request, reply) => {
+    try {
+      const { id, itemId } = request.params as { id: string; itemId: string }
+      const { isCloudinaryConfigured, uploadBufferToCloudinary } = await import(
+        '../services/cloudinary.service.js'
+      )
+      if (!isCloudinaryConfigured()) {
+        return reply.code(503).send({ error: 'Cloudinary not configured (CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET)' })
+      }
+      const data = await (request as any).file?.()
+      if (!data) return reply.code(400).send({ error: 'multipart file required' })
+      const buffer = await data.toBuffer()
+      if (buffer.length > 10 * 1024 * 1024) return reply.code(413).send({ error: 'file too large (max 10MB)' })
+      const item = await prisma.returnItem.findUnique({
+        where: { id: itemId },
+        select: { id: true, returnId: true, photoUrls: true },
+      })
+      if (!item) return reply.code(404).send({ error: 'Item not found' })
+      if (item.returnId !== id) return reply.code(400).send({ error: 'Item does not belong to this return' })
+      if (item.photoUrls.length >= 10) return reply.code(409).send({ error: 'Photo cap reached (10 per item)' })
+      const result = await uploadBufferToCloudinary(buffer, { folder: `returns/${id}/items/${itemId}` })
+      const updated = await prisma.returnItem.update({
+        where: { id: itemId },
+        data: { photoUrls: { push: result.url } },
+      })
+      void auditLogService.write({
+        ...auditCtx(request),
+        entityType: 'Return', entityId: id, action: 'upload-item-photo',
+        after: { itemId, sku: updated.sku, photoCount: updated.photoUrls.length },
+      })
+      return { ok: true, url: result.url, photoUrls: updated.photoUrls }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[returns/:id/items/:id/upload-photo] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.delete<{ Params: { id: string; itemId: string }; Body: { url: string } }>(
+    '/fulfillment/returns/:id/items/:itemId/photos',
+    async (request, reply) => {
+      try {
+        const { id, itemId } = request.params
+        const body = request.body ?? ({} as any)
+        if (!body.url) return reply.code(400).send({ error: 'url required' })
+        const item = await prisma.returnItem.findUnique({
+          where: { id: itemId },
+          select: { returnId: true, photoUrls: true, sku: true },
+        })
+        if (!item) return reply.code(404).send({ error: 'Item not found' })
+        if (item.returnId !== id) return reply.code(400).send({ error: 'Item does not belong to this return' })
+        const next = item.photoUrls.filter((u) => u !== body.url)
+        const updated = await prisma.returnItem.update({ where: { id: itemId }, data: { photoUrls: next } })
+        void auditLogService.write({
+          ...auditCtx(request),
+          entityType: 'Return', entityId: id, action: 'remove-item-photo',
+          after: { itemId, sku: item.sku, photoCount: updated.photoUrls.length },
+        })
+        return { ok: true, photoUrls: updated.photoUrls }
+      } catch (error: any) {
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
+  // ─── R1.2 — Bulk operations + CSV export ────────────────────────
+  type BulkBody = { ids: string[] }
+
+  async function bulkApply(
+    request: FastifyRequest,
+    body: BulkBody,
+    apply: (id: string) => Promise<{ ok: true } | { ok: false; error: string }>,
+    auditAction: string,
+  ) {
+    const ids = Array.isArray(body.ids) ? body.ids.filter((s) => typeof s === 'string') : []
+    if (ids.length === 0) return { ok: 0, failed: 0, results: [] as any[] }
+    const ctx = auditCtx(request)
+    const results: Array<{ id: string; ok: boolean; error?: string }> = []
+    for (const id of ids) {
+      try {
+        const r = await apply(id)
+        if (r.ok === true) {
+          results.push({ id, ok: true })
+          void auditLogService.write({
+            ...ctx, entityType: 'Return', entityId: id,
+            action: auditAction, metadata: { bulk: true },
+          })
+        } else {
+          results.push({ id, ok: false, error: (r as { ok: false; error: string }).error })
+        }
+      } catch (e) {
+        results.push({ id, ok: false, error: e instanceof Error ? e.message : String(e) })
+      }
+    }
+    return {
+      ok: results.filter((r) => r.ok).length,
+      failed: results.filter((r) => !r.ok).length,
+      results,
+    }
+  }
+
+  fastify.post<{ Body: BulkBody }>('/fulfillment/returns/bulk/approve', async (request) =>
+    bulkApply(request, request.body, async (id) => {
+      const r = await prisma.return.updateMany({
+        where: { id, status: 'REQUESTED' },
+        data: { status: 'AUTHORIZED', version: { increment: 1 } },
+      })
+      return r.count > 0 ? { ok: true } : { ok: false, error: 'Not in REQUESTED state' }
+    }, 'bulk-approve'),
+  )
+
+  fastify.post<{ Body: BulkBody }>('/fulfillment/returns/bulk/deny', async (request) =>
+    bulkApply(request, request.body, async (id) => {
+      const r = await prisma.return.updateMany({
+        where: { id, status: 'REQUESTED' },
+        data: { status: 'REJECTED', version: { increment: 1 } },
+      })
+      return r.count > 0 ? { ok: true } : { ok: false, error: 'Not in REQUESTED state' }
+    }, 'bulk-deny'),
+  )
+
+  fastify.post<{ Body: BulkBody }>('/fulfillment/returns/bulk/receive', async (request) =>
+    bulkApply(request, request.body, async (id) => {
+      const r = await prisma.return.updateMany({
+        where: { id, status: { in: ['REQUESTED', 'AUTHORIZED', 'IN_TRANSIT'] } },
+        data: { status: 'RECEIVED', receivedAt: new Date(), version: { increment: 1 } },
+      })
+      return r.count > 0 ? { ok: true } : { ok: false, error: 'Already received or not authorized' }
+    }, 'bulk-receive'),
+  )
+
+  fastify.get('/fulfillment/returns/export.csv', async (request, reply) => {
+    const q = request.query as any
+    const where: any = {}
+    if (q.status && q.status !== 'ALL') where.status = q.status
+    if (q.channel) where.channel = q.channel
+    if (q.fbaOnly === 'true') where.isFbaReturn = true
+    if (q.fbaOnly === 'false') where.isFbaReturn = false
+    if (q.refundStatus) where.refundStatus = q.refundStatus
+    const search = typeof q.q === 'string' ? q.q.trim() : ''
+    if (search) {
+      where.OR = [
+        { rmaNumber: { contains: search, mode: 'insensitive' } },
+        { reason: { contains: search, mode: 'insensitive' } },
+        { notes: { contains: search, mode: 'insensitive' } },
+        { returnTrackingNumber: { contains: search, mode: 'insensitive' } },
+        { channelReturnId: { contains: search, mode: 'insensitive' } },
+        { order: { channelOrderId: { contains: search, mode: 'insensitive' } } },
+        { order: { customerName: { contains: search, mode: 'insensitive' } } },
+      ]
+    }
+    const rows = await prisma.return.findMany({
+      where,
+      include: {
+        items: true,
+        order: { select: { channelOrderId: true, customerName: true, customerEmail: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 10_000,
+    })
+    const esc = (v: unknown): string => {
+      const s = v == null ? '' : String(v)
+      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return `"${s.replace(/"/g, '""')}"`
+      }
+      return s
+    }
+    const header = [
+      'RMA', 'Order ID', 'Channel Order ID', 'Channel', 'Marketplace',
+      'Status', 'Refund Status', 'Refund EUR', 'Currency', 'FBA',
+      'Customer Name', 'Customer Email',
+      'Reason', 'Items SKUs', 'Item Count',
+      'Tracking Number', 'Carrier',
+      'Created At', 'Received At', 'Inspected At', 'Refunded At', 'Restocked At',
+      'Notes',
+    ]
+    const lines = [header.join(',')]
+    for (const r of rows) {
+      const skus = r.items.map((i) => `${i.sku}×${i.quantity}`).join(' | ')
+      lines.push([
+        esc(r.rmaNumber), esc(r.orderId), esc(r.order?.channelOrderId),
+        esc(r.channel), esc(r.marketplace),
+        esc(r.status), esc(r.refundStatus),
+        esc(r.refundCents != null ? (r.refundCents / 100).toFixed(2) : ''),
+        esc(r.currencyCode),
+        esc(r.isFbaReturn ? 'true' : 'false'),
+        esc(r.order?.customerName), esc(r.order?.customerEmail),
+        esc(r.reason), esc(skus),
+        esc(r.items.reduce((n, i) => n + i.quantity, 0)),
+        esc(r.returnTrackingNumber), esc(r.returnLabelCarrier),
+        esc(r.createdAt?.toISOString() ?? ''),
+        esc(r.receivedAt?.toISOString() ?? ''),
+        esc(r.inspectedAt?.toISOString() ?? ''),
+        esc(r.refundedAt?.toISOString() ?? ''),
+        esc(r.restockedAt?.toISOString() ?? ''),
+        esc(r.notes),
+      ].join(','))
+    }
+    const filename = `returns-export-${new Date().toISOString().slice(0, 10)}.csv`
+    return reply
+      .header('Content-Type', 'text/csv; charset=utf-8')
+      .header('Content-Disposition', `attachment; filename="${filename}"`)
+      .send(lines.join('\n') + '\n')
+  })
+
+  // ─── R5.1 — Refund history (read-only list of Refund rows) ──────
+  fastify.get('/fulfillment/returns/:id/refunds', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const refunds = await prisma.refund.findMany({
+        where: { returnId: id },
+        include: { attempts: { orderBy: { attemptedAt: 'desc' } } },
+        orderBy: { createdAt: 'desc' },
+      })
+      return { items: refunds }
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ─── R4.2 / R4.3 — Channel webhook test endpoints (env-gated) ──
+  fastify.post('/fulfillment/returns/ebay/ingest-test', async (request, reply) => {
+    if ((process.env.NEXUS_ENV ?? '').toLowerCase() === 'production') {
+      return reply.code(404).send({ error: 'Not found' })
+    }
+    try {
+      const { ingestEbayReturn } = await import('../services/ebay-returns/ingest.service.js')
+      const out = await ingestEbayReturn(request.body as any)
+      return reply.send({ success: true, ...out })
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.post('/fulfillment/returns/ebay/poll-test', async (request, reply) => {
+    if ((process.env.NEXUS_ENV ?? '').toLowerCase() === 'production') {
+      return reply.code(404).send({ error: 'Not found' })
+    }
+    try {
+      const body = (request.body ?? {}) as { members?: unknown[] }
+      const members = Array.isArray(body.members) ? body.members : []
+      const fakeFetch: typeof fetch = async () =>
+        new Response(JSON.stringify({ members }), {
+          status: 200, headers: { 'Content-Type': 'application/json' },
+        })
+      const { pollEbayReturns } = await import('../services/ebay-returns/ingest.service.js')
+      const result = await pollEbayReturns({ fetchImpl: fakeFetch })
+      return reply.send({ success: true, ...result })
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.post('/fulfillment/returns/amazon/ingest-test', async (request, reply) => {
+    if ((process.env.NEXUS_ENV ?? '').toLowerCase() === 'production') {
+      return reply.code(404).send({ error: 'Not found' })
+    }
+    try {
+      const body = (request.body ?? {}) as { row?: unknown; isFba?: boolean; marketplace?: string }
+      const { ingestAmazonReturnRow } = await import('../services/amazon-returns/ingest.service.js')
+      const out = await ingestAmazonReturnRow(body.row as any, {
+        isFba: !!body.isFba,
+        marketplace: body.marketplace,
+      })
+      return reply.send({ success: true, ...out })
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.post('/fulfillment/returns/amazon/poll-test', async (request, reply) => {
+    if ((process.env.NEXUS_ENV ?? '').toLowerCase() === 'production') {
+      return reply.code(404).send({ error: 'Not found' })
+    }
+    try {
+      const body = (request.body ?? {}) as {
+        fbmRows?: unknown[]
+        fbaRows?: unknown[]
+        marketplaceId?: string
+      }
+      const { pollAmazonReturns } = await import('../services/amazon-returns/ingest.service.js')
+      const result = await pollAmazonReturns({
+        fbmRows: Array.isArray(body.fbmRows) ? (body.fbmRows as any[]) : undefined,
+        fbaRows: Array.isArray(body.fbaRows) ? (body.fbaRows as any[]) : undefined,
+        marketplaceId: body.marketplaceId,
+      })
+      return reply.send({ success: true, ...result })
+    } catch (error: any) {
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })

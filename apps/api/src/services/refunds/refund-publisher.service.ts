@@ -1,46 +1,51 @@
 /**
- * H.14 — channel refund publisher.
+ * Channel refund publisher (H.14, R5.x).
  *
  * Posts the local Return's refund decision back to the originating
- * marketplace so the buyer is actually refunded. The previous
+ * marketplace so the buyer is actually refunded. Pre-H.14 the
  * /fulfillment/returns/:id/refund endpoint only flipped local
  * status; without channel push, the operator had to re-issue the
- * refund manually in Seller Central / eBay back office, easy to
- * forget and easy to double-pay.
+ * refund manually in Seller Central / eBay back office.
  *
- * Per-channel state of the world (2026-05):
+ * Per-channel adapter state (current — see getRefundChannelAdapter-
+ * Status() for the live machine-readable shape):
  *
- *   eBay        — Real implementation. POST /sell/fulfillment/v1/
- *                 order/{orderId}/issue_refund returns refundId.
- *                 Supports full + partial refunds via refundItems[].
+ *   eBay        — REAL. POST /sell/fulfillment/v1/order/{orderId}/
+ *                 issue_refund. Supports full refunds today; per-
+ *                 line refundItems[] mapping requires storing eBay
+ *                 lineItemIds on OrderItem (a follow-up).
  *
- *   Amazon FBA  — Amazon issues refunds automatically per their
- *                 policy. Our adapter no-ops with a confirmation
- *                 message; the operator only marks local status.
+ *   Amazon FBA  — MANUAL_REQUIRED. Amazon issues refunds
+ *                 automatically when the unit hits their warehouse;
+ *                 we no-op with a confirmation message.
  *
- *   Amazon FBM  — SP-API has NO seller-issued refund endpoint.
- *                 The legacy MWS POST_PAYMENT_ADJUSTMENT_DATA feed
- *                 was deprecated. Path forward is Seller Central
- *                 manual issuance; we surface a deep link to the
- *                 order so the operator finishes there. Adapter
- *                 returns ok=true with channelMessage, no
- *                 channelRefundId.
+ *   Amazon FBM  — MANUAL_REQUIRED. SP-API has no seller-issued
+ *                 refund endpoint (the legacy POST_PAYMENT_-
+ *                 ADJUSTMENT_DATA feed is dead). Operator finishes
+ *                 in Seller Central; we surface a deep link.
  *
- *   Shopify     — Stub today. Implementation needs Shopify Admin
- *                 GraphQL `refundCreate` mutation against the
- *                 ShopifyService client. Returns NOT_IMPLEMENTED.
+ *   Shopify     — REAL behind NEXUS_ENABLE_SHOPIFY_REFUND=true
+ *                 (default-OFF). Real path uses Admin GraphQL
+ *                 `refundCreate` against the order's capture/sale
+ *                 transactions, refunding proportionally. Default
+ *                 dryRun returns a mock refundGid so the surface
+ *                 can be exercised without live credentials.
  *
- *   WooCommerce — Stub today. Implementation needs POST
- *                 /wp-json/wc/v3/orders/{id}/refunds. Returns
- *                 NOT_IMPLEMENTED.
+ *   WooCommerce — NOT_IMPLEMENTED. Out of active-channel scope
+ *                 (Xavia is Amazon + eBay + Shopify). Adapter
+ *                 returns NOT_IMPLEMENTED with the path-forward
+ *                 hint so operators don't get a silent failure.
  *
- *   Etsy        — Stub today. Etsy refunds via API only available
- *                 to specific seller programs. Returns
- *                 NOT_IMPLEMENTED.
+ *   Etsy        — NOT_IMPLEMENTED. Same reason as Woo.
  *
  * Caller contract: publish() never throws. Returns a structured
  * result so the route handler can persist (or surface) the outcome
  * without bubbling exceptions through the refund button.
+ *
+ * Env flags:
+ *   NEXUS_ENABLE_SHOPIFY_REFUND=true  → Shopify real path
+ *   (eBay needs no flag; the adapter goes live as soon as a working
+ *    OAuth-managed eBay ChannelConnection exists.)
  */
 
 import prisma from '../../db.js'
@@ -61,6 +66,86 @@ export interface RefundPublishResult {
   channelMessage?: string
   /** Provider error when outcome=FAILED. */
   error?: string
+}
+
+/**
+ * R5.2 — adapter-state report.
+ *
+ * Tells operators (via /fulfillment/returns/refund-channel-status)
+ * whether each channel's refund adapter is real, mocked, manual, or
+ * not implemented at all. Useful for "why did my refund button
+ * give me a fake confirmation?" debugging without grepping the
+ * source.
+ *
+ * mode meanings:
+ *   real             — adapter posts to the live channel API
+ *   dryRun           — adapter returns a structurally-valid mock
+ *                      (set NEXUS_ENABLE_*=true to flip to real)
+ *   manual_required  — channel doesn't support API refunds; we
+ *                      surface a deep link to the back office
+ *   not_implemented  — adapter is a stub, no support planned in
+ *                      the active-channel scope
+ */
+export type RefundAdapterMode =
+  | 'real'
+  | 'dryRun'
+  | 'manual_required'
+  | 'not_implemented'
+
+export interface RefundChannelAdapterStatus {
+  channel: 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'WOOCOMMERCE' | 'ETSY'
+  mode: RefundAdapterMode
+  /** Sub-mode for channels with split FBM/FBA semantics (Amazon). */
+  variant?: string
+  /** Operator-facing one-liner explaining the current state. */
+  notes: string
+  /** Env flag that flips this adapter mode (when applicable). */
+  envFlag?: string
+}
+
+export function getRefundChannelAdapterStatus(): RefundChannelAdapterStatus[] {
+  return [
+    {
+      channel: 'EBAY',
+      mode: 'real',
+      notes:
+        'POST /sell/fulfillment/v1/order/{orderId}/issue_refund. Activates as soon as an OAuth eBay ChannelConnection exists.',
+    },
+    {
+      channel: 'AMAZON',
+      mode: 'manual_required',
+      variant: 'FBM',
+      notes:
+        'SP-API has no seller-issued refund endpoint. Operator finishes in Seller Central; we surface a deep link.',
+    },
+    {
+      channel: 'AMAZON',
+      mode: 'manual_required',
+      variant: 'FBA',
+      notes:
+        'Amazon issues refunds automatically when the unit reaches their warehouse. Adapter no-ops with a confirmation message.',
+    },
+    {
+      channel: 'SHOPIFY',
+      mode: isShopifyRefundReal() ? 'real' : 'dryRun',
+      notes: isShopifyRefundReal()
+        ? 'Admin GraphQL refundCreate mutation, refunding proportionally across capture/sale transactions.'
+        : 'Mocked refundGid. Set NEXUS_ENABLE_SHOPIFY_REFUND=true to flip to the real GraphQL refundCreate path.',
+      envFlag: 'NEXUS_ENABLE_SHOPIFY_REFUND',
+    },
+    {
+      channel: 'WOOCOMMERCE',
+      mode: 'not_implemented',
+      notes:
+        'Out of active-channel scope (Xavia ships Amazon + eBay + Shopify). Path forward: POST /wp-json/wc/v3/orders/{id}/refunds with basic-auth from the existing Woo connection.',
+    },
+    {
+      channel: 'ETSY',
+      mode: 'not_implemented',
+      notes:
+        'Out of active-channel scope. Etsy refund API is also restricted to specific seller programs, so this would need an Etsy partner-app review even when scope expands.',
+    },
+  ]
 }
 
 interface RefundPublishInput {
