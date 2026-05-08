@@ -261,6 +261,23 @@ export default function ProductsWorkspace() {
   const [totalPages, setTotalPages] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // R7.2 — flagged-SKU set from /returns/risk-scores. Cached once
+  // per page lifetime; refreshed on workspace reload. Empty Set
+  // when the endpoint errors so the badge code can ask `.has()`
+  // without nullity guards.
+  const [riskFlaggedSkus, setRiskFlaggedSkus] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetch(`${getBackendUrl()}/api/fulfillment/returns/risk-scores`, { cache: 'no-store' })
+        if (!res.ok || cancelled) return
+        const data = await res.json() as { flagged?: Array<{ sku: string }> }
+        if (!cancelled) setRiskFlaggedSkus(new Set((data.flagged ?? []).map((r) => r.sku)))
+      } catch { /* non-fatal */ }
+    })()
+    return () => { cancelled = true }
+  }, [])
   const [selected, setSelected] = useState<Set<string>>(new Set())
   // E.8 — filtersOpen replaced by FilterBar-local addMenuOpen + editingDim.
   // The bare-F shortcut now fires nexus:open-filter-menu instead.
@@ -829,6 +846,7 @@ export default function ProductsWorkspace() {
     // bounded by the same 250ms debounce that gates the URL update,
     // so cells re-highlight at most once per typing pause.
     <SearchContext.Provider value={search}>
+    <RiskFlaggedContext.Provider value={riskFlaggedSkus}>
     <div className="space-y-5">
       <PageHeader
         title="Products"
@@ -1135,6 +1153,7 @@ export default function ProductsWorkspace() {
         onChanged={fetchProducts}
       />
     </div>
+    </RiskFlaggedContext.Provider>
     </SearchContext.Provider>
   )
 }
@@ -4374,6 +4393,31 @@ function buildPageRange(current: number, total: number): Array<number | 'gap'> {
 // so re-renders are bounded.
 const SearchContext = createContext<string>('')
 
+// R7.2 — flagged-SKU context. ProductCell reads it to render the
+// "high return rate" badge on the SKU cell when the product's SKU
+// is in the set. Same context-not-prop reasoning as SearchContext:
+// avoids busting the cell's memo when the set is otherwise stable
+// across the workspace lifetime.
+const RiskFlaggedContext = createContext<Set<string>>(new Set())
+
+// R7.2 — small inline badge surfaced on flagged SKUs. Click jumps
+// to the returns analytics page where the operator sees the bucket
+// math (rate vs mean, σ above) and decides whether to act on the
+// listing (size chart, photos, copy).
+function RiskBadge({ sku }: { sku: string }) {
+  const flagged = useContext(RiskFlaggedContext)
+  if (!flagged.has(sku)) return null
+  return (
+    <Link
+      href="/fulfillment/returns/analytics"
+      className="inline-flex items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wider px-1 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded hover:bg-rose-100"
+      title="High return rate (>2σ above productType mean) — click for analytics"
+    >
+      ↩ HI
+    </Link>
+  )
+}
+
 function Highlight({ text, query }: { text: string; query: string }) {
   if (!query || !text) return <>{text}</>
   // Case-insensitive split on the query. Escape regex metachars so
@@ -4512,9 +4556,17 @@ const ProductCell = memo(function ProductCell({ col, product, onTagEdit, onChang
       )
     case 'sku':
       return (
-        <Link href={`/products/${p.id}/edit`} className="text-base font-mono text-slate-700 hover:text-blue-600 truncate block">
-          <Highlight text={p.sku} query={searchQuery} />
-        </Link>
+        <div className="inline-flex items-center gap-1.5 min-w-0">
+          <Link href={`/products/${p.id}/edit`} className="text-base font-mono text-slate-700 hover:text-blue-600 truncate">
+            <Highlight text={p.sku} query={searchQuery} />
+          </Link>
+          {/* R7.2 — high-return-rate badge. The /returns/risk-scores
+              endpoint flags SKUs >2σ above their productType's mean
+              return rate (with min-bucket gates). Click → analytics
+              page where the operator can drill into the SKU's
+              context. */}
+          <RiskBadge sku={p.sku} />
+        </div>
       )
     case 'name':
       return (

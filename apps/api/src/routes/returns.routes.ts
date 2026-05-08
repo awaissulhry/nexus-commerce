@@ -532,35 +532,95 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
    *   reason           — optional override for the channel reason
    *                      enum (passed through to publisher).
    */
+  // R5.1 — refund engine cutover.
+  //
+  // Every /refund call (skip-channel + channel-push + failed)
+  // creates a Refund row and a RefundAttempt row. Refund table
+  // becomes the source of truth; Return.refund* columns are kept
+  // as a write-through cache for fast list rendering. Multi-refund
+  // history (partials, retries that finally posted, store-credit
+  // alongside cash) all sit on the same Return as separate Refund
+  // rows.
+  //
+  // Body shape:
+  //   refundCents      number — amount to refund. Required (or stage
+  //                     on Return.refundCents first).
+  //   kind             'CASH' | 'STORE_CREDIT' | 'EXCHANGE'.
+  //                     Defaults to CASH.
+  //   skipChannelPush  true when the operator already refunded in
+  //                     the channel back office and just wants
+  //                     Nexus to reflect.
+  //   reason           channel-reason text override (for eBay's
+  //                     `comment` field, etc.).
   fastify.post('/fulfillment/returns/:id/refund', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
       const body = (request.body ?? {}) as {
         refundCents?: number
+        kind?: 'CASH' | 'STORE_CREDIT' | 'EXCHANGE'
         skipChannelPush?: boolean
         reason?: string
       }
 
-      // Snapshot refundCents up front so the publisher reads the
-      // amount we intend to issue. If the body didn't carry one,
-      // leave the existing value (the operator may have set it on
-      // an earlier inspect step).
-      if (typeof body.refundCents === 'number' && body.refundCents > 0) {
+      // Resolve the Return so we know channel + currency.
+      const ret = await prisma.return.findUnique({
+        where: { id },
+        select: { id: true, channel: true, currencyCode: true, refundCents: true },
+      })
+      if (!ret) return reply.code(404).send({ error: 'Return not found' })
+
+      // Determine the amount: prefer body, fall back to staged
+      // Return.refundCents (legacy callers + the inspect-then-
+      // refund flow that stages the amount in advance).
+      const amountCents = typeof body.refundCents === 'number' && body.refundCents > 0
+        ? body.refundCents
+        : ret.refundCents
+      if (!amountCents || amountCents <= 0) {
+        return reply.code(400).send({ error: 'refundCents required (or stage on Return first)' })
+      }
+
+      // Stage the cache up-front so the channel publisher (which
+      // reads ret.refundCents) sees the amount we intend to issue.
+      if (ret.refundCents !== amountCents) {
         await prisma.return.update({
           where: { id },
-          data: { refundCents: body.refundCents },
+          data: { refundCents: amountCents },
         })
       }
 
-      // Skip-channel path: operator already refunded in Seller
-      // Central / eBay back office and just wants Nexus to reflect.
+      // 1) Always create the Refund row (PENDING). This is the
+      //    canonical record; channel attempts decorate it.
+      const refund = await prisma.refund.create({
+        data: {
+          returnId: id,
+          amountCents,
+          currencyCode: ret.currencyCode || 'EUR',
+          kind: (body.kind ?? 'CASH') as any,
+          reason: body.reason ?? null,
+          channel: ret.channel,
+          channelStatus: 'PENDING',
+          actor: (request.headers['x-user-id'] as string | undefined) ?? null,
+        },
+      })
+
+      // 2) Skip-channel path: operator already refunded externally.
+      //    Mark Refund POSTED with no channelRefundId, project
+      //    to Return cache, audit.
       if (body.skipChannelPush) {
+        const now = new Date()
+        await prisma.refundAttempt.create({
+          data: { refundId: refund.id, outcome: 'SKIPPED' },
+        })
+        await prisma.refund.update({
+          where: { id: refund.id },
+          data: { channelStatus: 'POSTED', channelPostedAt: now },
+        })
         const updated = await prisma.return.update({
           where: { id },
           data: {
             status: 'REFUNDED',
             refundStatus: 'REFUNDED',
-            refundedAt: new Date(),
+            refundedAt: now,
             channelRefundError: null,
             version: { increment: 1 },
           },
@@ -572,13 +632,17 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
           action: 'refund',
           after: {
             status: updated.status,
-            refundCents: updated.refundCents,
+            refundId: refund.id,
+            refundCents: amountCents,
             channelOutcome: 'SKIPPED',
           },
         })
-        return { ...updated, channelOutcome: 'SKIPPED' }
+        return { ...updated, refundId: refund.id, channelOutcome: 'SKIPPED' }
       }
 
+      // 3) Channel publish. The publisher returns a structured
+      //    outcome and never throws (per its caller contract).
+      const t0 = Date.now()
       const { publishRefundToChannel } = await import(
         '../services/refunds/refund-publisher.service.js'
       )
@@ -586,9 +650,44 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
         returnId: id,
         reasonText: body.reason,
       })
+      const durationMs = Date.now() - t0
 
-      // Channel push failed → record the error, leave the row
-      // unmodified status-wise so the operator can retry.
+      // 4) Record the attempt (OK / OK_MANUAL_REQUIRED /
+      //    NOT_IMPLEMENTED / FAILED) regardless of outcome.
+      await prisma.refundAttempt.create({
+        data: {
+          refundId: refund.id,
+          outcome: publish.outcome,
+          channelRefundId: publish.channelRefundId ?? null,
+          errorMessage: publish.error ?? null,
+          durationMs,
+          rawResponse: {
+            outcome: publish.outcome,
+            channelRefundId: publish.channelRefundId ?? null,
+            channelMessage: publish.channelMessage ?? null,
+          } as any,
+        },
+      })
+
+      // 5) Update the Refund row from the publish result.
+      const channelStatus =
+        publish.outcome === 'FAILED' ? 'FAILED' :
+        publish.outcome === 'NOT_IMPLEMENTED' ? 'NOT_IMPLEMENTED' :
+        publish.outcome === 'OK_MANUAL_REQUIRED' ? 'MANUAL_REQUIRED' :
+        'POSTED'
+      await prisma.refund.update({
+        where: { id: refund.id },
+        data: {
+          channelStatus: channelStatus as any,
+          channelRefundId: publish.channelRefundId ?? null,
+          channelError: publish.outcome === 'FAILED' ? (publish.error ?? 'Unknown channel error') : null,
+          channelPostedAt: publish.outcome === 'OK' ? new Date() : null,
+        },
+      })
+
+      // 6) FAILED → keep Return.status untouched so the operator
+      //    can retry; mark refundStatus=CHANNEL_FAILED and surface
+      //    the error.
       if (publish.outcome === 'FAILED') {
         const updated = await prisma.return.update({
           where: { id },
@@ -604,6 +703,7 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
           entityId: id,
           action: 'refund-failed',
           after: {
+            refundId: refund.id,
             refundStatus: updated.refundStatus,
             channelError: publish.error,
             channelOutcome: 'FAILED',
@@ -611,15 +711,15 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
         })
         return reply.code(502).send({
           ...updated,
+          refundId: refund.id,
           channelOutcome: 'FAILED',
           channelError: publish.error,
         })
       }
 
-      // OK / OK_MANUAL_REQUIRED / NOT_IMPLEMENTED → mark REFUNDED
-      // locally. NOT_IMPLEMENTED carries the operator-facing message
-      // so the UI can prompt them to finish in the channel back
-      // office. OK_MANUAL_REQUIRED (Amazon FBM) is the same shape.
+      // 7) OK / OK_MANUAL_REQUIRED / NOT_IMPLEMENTED → mark
+      //    Return REFUNDED + project Refund channelRefundId to
+      //    the cache.
       const updated = await prisma.return.update({
         where: { id },
         data: {
@@ -627,8 +727,7 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
           refundStatus: 'REFUNDED',
           refundedAt: new Date(),
           channelRefundId: publish.channelRefundId ?? null,
-          channelRefundedAt:
-            publish.outcome === 'OK' ? new Date() : null,
+          channelRefundedAt: publish.outcome === 'OK' ? new Date() : null,
           channelRefundError: null,
           version: { increment: 1 },
         },
@@ -640,13 +739,15 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
         action: 'refund',
         after: {
           status: updated.status,
-          refundCents: updated.refundCents,
+          refundId: refund.id,
+          refundCents: amountCents,
           channelOutcome: publish.outcome,
           channelRefundId: publish.channelRefundId,
         },
       })
       return {
         ...updated,
+        refundId: refund.id,
         channelOutcome: publish.outcome,
         channelMessage: publish.channelMessage,
         channelRefundId: publish.channelRefundId,

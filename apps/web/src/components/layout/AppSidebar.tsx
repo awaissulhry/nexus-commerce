@@ -484,6 +484,18 @@ export default function AppSidebar() {
             label="Returns"
             active={pathname === '/fulfillment/returns'}
           />
+          {/* R7.1 — analytics sub-link, same conditional-rendering
+              pattern as outbound. Surfaces only while the operator
+              is anywhere in the returns section so the top-level
+              stays calm for non-active users. */}
+          {pathname.startsWith('/fulfillment/returns') && (
+            <NavItem
+              href="/fulfillment/returns/analytics"
+              icon={BarChart3}
+              label="↳ Returns Analytics"
+              active={pathname === '/fulfillment/returns/analytics'}
+            />
+          )}
         </NavGroup>
 
         <NavGroup label="Marketing">
