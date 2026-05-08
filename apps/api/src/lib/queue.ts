@@ -1,24 +1,41 @@
 /**
  * BullMQ Queue Configuration
  *
- * Enterprise-grade Redis message broker for the Autopilot
+ * Eager Queue / QueueEvents construction (post-TECH_DEBT-#54). The Redis
+ * connection itself stays lazy via the `redis.connection` getter so the
+ * original Railway boot-failure (module-load Redis dial-out before
+ * REDIS_URL was in env) is still avoided — index.ts loads dotenv first
+ * via db.js, but the lazy Redis getter is the safety net.
  *
- * IMPORTANT: every Redis-touching object (Redis client, Queue, QueueEvents)
- * is lazy-initialized. Module load must NEVER open a Redis connection — that
- * caused boot failures on Railway when REDIS_URL wasn't yet in env. Queues
- * are created on first property access via the getters below.
+ * History: queues used to be wrapped in a `makeQueueProxy(getter)`
+ * Proxy that constructed the Queue on first property access. That
+ * proxy interacted badly with BullMQ's internals when `Queue.add(...)`
+ * was awaited from bulk-action's processJob context — Queue.add never
+ * resolved, the per-job loop wedged, and the API box went unhealthy
+ * within ~2 min. The bulk-list service's eager `new Queue(...)`
+ * pattern (services/bulk-list.service.ts) was the proof point: same
+ * BullMQ version + same redis.connection, no hang.
+ *
+ * The discriminator is the proxy itself. JavaScript getters on the
+ * Queue prototype (e.g. internal `client`, ready-state accessors)
+ * resolve with `this = receiver = proxy` rather than the underlying
+ * Queue instance, so internal state reads silently return undefined
+ * and BullMQ waits for events that never fire. `value.bind(q)` only
+ * fixes function-call `this`, not getter-resolution `this`.
+ *
+ * This file now constructs Queue + QueueEvents eagerly via the
+ * `redis.connection` getter (mirrors bulk-list.service.ts). Boot-time
+ * cost: one ioredis client + four queue clients open at module load
+ * time. That's ~5 sockets in production where Redis is reachable, and
+ * graceful retries when it's not (maxRetriesPerRequest: null).
  */
 
 import { Queue, QueueEvents } from 'bullmq'
 import Redis from 'ioredis'
 import { logger } from '../utils/logger.js'
 
-// ── Lazy singletons ──────────────────────────────────────────────────────
+// ── Lazy Redis client (the only thing that stays lazy) ────────────────────
 let _redis: Redis | null = null
-let _outboundSyncQueue: Queue | null = null
-let _channelSyncQueue: Queue | null = null
-let _queueEvents: QueueEvents | null = null
-let _channelSyncQueueEvents: QueueEvents | null = null
 let _eventListenersAttached = false
 
 function getRedisConnection(): Redis {
@@ -42,6 +59,12 @@ function getRedisConnection(): Redis {
   return _redis
 }
 
+export const redis = {
+  get connection() {
+    return getRedisConnection()
+  },
+}
+
 const defaultJobOptions = {
   attempts: 3,
   backoff: {
@@ -52,44 +75,31 @@ const defaultJobOptions = {
   removeOnFail: { age: 86400 },
 }
 
-function getOutboundSyncQueue(): Queue {
-  if (!_outboundSyncQueue) {
-    _outboundSyncQueue = new Queue('outbound-sync', {
-      connection: getRedisConnection(),
-      defaultJobOptions,
-    })
-  }
-  return _outboundSyncQueue
-}
+// ── Eager Queue + QueueEvents construction ────────────────────────────────
+// Mirrors services/bulk-list.service.ts (which never hung in production).
+// `connection: redis.connection` resolves the getter at module-load time —
+// dotenv has already loaded by import order (index.ts:1 imports db.js
+// which loads dotenv before any other side-effecting import).
 
-function getChannelSyncQueue(): Queue {
-  if (!_channelSyncQueue) {
-    _channelSyncQueue = new Queue('channel-sync', {
-      connection: getRedisConnection(),
-      defaultJobOptions,
-    })
-  }
-  return _channelSyncQueue
-}
+export const outboundSyncQueue: Queue = new Queue('outbound-sync', {
+  connection: redis.connection,
+  defaultJobOptions,
+})
 
-function getQueueEvents(): QueueEvents {
-  if (!_queueEvents) {
-    _queueEvents = new QueueEvents('outbound-sync', {
-      connection: getRedisConnection(),
-    })
-    attachEventListeners(_queueEvents)
-  }
-  return _queueEvents
-}
+export const channelSyncQueue: Queue = new Queue('channel-sync', {
+  connection: redis.connection,
+  defaultJobOptions,
+})
 
-function getChannelSyncQueueEvents(): QueueEvents {
-  if (!_channelSyncQueueEvents) {
-    _channelSyncQueueEvents = new QueueEvents('channel-sync', {
-      connection: getRedisConnection(),
-    })
-  }
-  return _channelSyncQueueEvents
-}
+export const queueEvents: QueueEvents = new QueueEvents('outbound-sync', {
+  connection: redis.connection,
+})
+
+export const channelSyncQueueEvents: QueueEvents = new QueueEvents('channel-sync', {
+  connection: redis.connection,
+})
+
+attachEventListeners(queueEvents)
 
 function attachEventListeners(events: QueueEvents) {
   if (_eventListenersAttached) return
@@ -105,53 +115,6 @@ function attachEventListeners(events: QueueEvents) {
   })
 }
 
-// ── Public proxy exports ─────────────────────────────────────────────────
-// These wrap the lazy getters so existing call sites (e.g. `outboundSyncQueue.add(...)`)
-// keep working unchanged. The first method invocation triggers initialization.
-//
-// SUSPECT SITE — TECH_DEBT #54.  `outboundSyncQueue.add()` awaited from
-// bulk-action's processJob (and from its request-scoped POST handler) hangs
-// indefinitely. `bulkListQueue` (constructed eagerly via `new Queue(...)` in
-// services/bulk-list.service.ts) does NOT hang from the same BullMQ version
-// + same redis.connection — strongly suggesting the discriminator is THIS
-// proxy. Hypothesis worth testing on a focused investigation session: rip
-// out the proxy for outboundSyncQueue and switch to the eager pattern,
-// keeping it lazy for the remaining queues. The lazy pattern was added to
-// prevent module-load Redis dial-out before REDIS_URL was in env on
-// Railway (boot failure); index.ts:1 now loads dotenv first via db.js so
-// the original race may no longer apply, but verify before changing.
-
-function makeQueueProxy(getter: () => Queue): Queue {
-  return new Proxy({} as Queue, {
-    get(_target, prop, receiver) {
-      const q = getter()
-      const value = Reflect.get(q, prop, receiver)
-      return typeof value === 'function' ? value.bind(q) : value
-    },
-  })
-}
-
-function makeQueueEventsProxy(getter: () => QueueEvents): QueueEvents {
-  return new Proxy({} as QueueEvents, {
-    get(_target, prop, receiver) {
-      const e = getter()
-      const value = Reflect.get(e, prop, receiver)
-      return typeof value === 'function' ? value.bind(e) : value
-    },
-  })
-}
-
-export const redis = {
-  get connection() {
-    return getRedisConnection()
-  },
-}
-
-export const outboundSyncQueue: Queue = makeQueueProxy(getOutboundSyncQueue)
-export const channelSyncQueue: Queue = makeQueueProxy(getChannelSyncQueue)
-export const queueEvents: QueueEvents = makeQueueEventsProxy(getQueueEvents)
-export const channelSyncQueueEvents: QueueEvents = makeQueueEventsProxy(getChannelSyncQueueEvents)
-
 /**
  * Initialize queue and verify Redis connection
  */
@@ -165,9 +128,7 @@ export async function initializeQueue() {
       port: !process.env.REDIS_URL ? parseInt(process.env.REDIS_PORT || '6379') : undefined,
     })
 
-    // Force queue creation + attach event listeners
-    getQueueEvents()
-    const counts = await getOutboundSyncQueue().getJobCounts()
+    const counts = await outboundSyncQueue.getJobCounts()
     logger.info('📊 Queue initialized', {
       waiting: counts.waiting,
       active: counts.active,
@@ -190,10 +151,10 @@ export async function initializeQueue() {
  */
 export async function closeQueue() {
   try {
-    if (_outboundSyncQueue) await _outboundSyncQueue.close()
-    if (_channelSyncQueue) await _channelSyncQueue.close()
-    if (_queueEvents) await _queueEvents.close()
-    if (_channelSyncQueueEvents) await _channelSyncQueueEvents.close()
+    await outboundSyncQueue.close()
+    await channelSyncQueue.close()
+    await queueEvents.close()
+    await channelSyncQueueEvents.close()
     if (_redis) await _redis.quit()
     logger.info('✅ Queue and Redis connection closed')
   } catch (error) {
@@ -208,9 +169,8 @@ export async function closeQueue() {
  */
 export async function getQueueStats() {
   try {
-    const queue = getOutboundSyncQueue()
-    const counts = await queue.getJobCounts()
-    const isPaused = await queue.isPaused()
+    const counts = await outboundSyncQueue.getJobCounts()
+    const isPaused = await outboundSyncQueue.isPaused()
 
     return {
       waiting: counts.waiting,

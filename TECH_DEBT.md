@@ -969,7 +969,53 @@ The flow is asynchronous — each step polls an `operationId` until the operatio
 
 ---
 
-## 54. 🔴 BullMQ `Queue.add()` hangs from bulk-action context (both detached AND request-scoped)
+## 54. 🟡 BullMQ `Queue.add()` hangs from bulk-action context — root cause fixed in dev; production validation pending
+
+**Resolution applied (2026-05-08, dev-verified):** Replaced the lazy
+`makeQueueProxy()` wrapping `outboundSyncQueue` + `channelSyncQueue` +
+their `QueueEvents` with eager `new Queue(...)` construction at module
+load — same pattern `bulk-list.service.ts` has shipped without hangs.
+The `redis.connection` getter still defers Redis dial-out until the
+property is accessed, which preserves the original Railway boot-
+failure protection.
+
+**Why the proxy hung:** `Reflect.get(q, prop, receiver)` inside the
+proxy resolved JavaScript getter accessors with `this = receiver =
+proxy` rather than the underlying Queue instance. BullMQ's internal
+state-reads via getters returned `undefined` from the empty proxy
+target, so `Queue.add()` waited for ready/connection events that
+never fired. `value.bind(q)` only fixes function-call `this`, not
+getter-resolution `this`.
+
+**Verified locally:**
+- `/api/health` 200 in <2s post-refactor (no boot wedge from eager
+  construction)
+- `PATCH /api/products/:id { basePrice }` (the cascading product
+  update path that exercises `MasterPriceService.update` →
+  `outboundSyncQueue.add()`) returns 200 in ~1.2s; pre-fix it
+  hung 20+s
+- Returns smoke (26-gate cross-cutting test) still 26/26 — no
+  regression elsewhere
+- Verification script: `scripts/verify-tech-debt-54.mjs`
+
+**Remaining work (this is why the marker is 🟡 P1, not ✅):**
+1. Production validation with real Redis + a real bulk-action job.
+   The verification above doesn't exercise the failing context
+   directly — bulk-action still has `skipBullMQEnqueue: true` at
+   every callsite as a safety net. Recommended next step: on a
+   staging branch with `ENABLE_QUEUE_WORKERS=1` + Redis up, flip
+   one bulk-action callsite to `skipBullMQEnqueue: false`, run a
+   100-item bulk PRICING_UPDATE, watch logs.
+2. Once production-validated, sweep the 6 `skipBullMQEnqueue: true`
+   callsites in `bulk-action.service.ts` + the 1 in `products-
+   catalog.routes.ts` and remove the flag (it becomes dead weight).
+3. Drop the `skipBullMQEnqueue` field from the three service input
+   types (`MasterPriceUpdateContext`, `MasterStatusUpdateContext`,
+   `StockMovementInput`).
+
+---
+
+**Original symptoms (kept for archival context):**
 
 **Symptom (Commit 1, detached):** When `BulkActionService.processJob` (running detached after the route returns 202) calls `MasterPriceService.update`, the in-transaction work completes correctly (AuditLog row written, ChannelListing cascaded, OutboundSyncQueue row inserted), but the post-commit `await outboundSyncQueue.add(...)` never resolves. The bulk-action loop never advances past `processedItems++`. Within ~60–120s the Railway API box becomes unresponsive to /api/health and Railway restarts it.
 
