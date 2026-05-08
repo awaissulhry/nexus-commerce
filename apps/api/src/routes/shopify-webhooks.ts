@@ -418,9 +418,24 @@ async function handleOrderUpdate(payload: ShopifyWebhookPayload): Promise<void> 
       return;
     }
 
-    const newStatus = mapShopifyOrderStatus(order.financial_status, order.fulfillment_status);
-    const newlyShipped = newStatus === 'SHIPPED' && dbOrder.status !== 'SHIPPED';
-    const newlyCancelled = newStatus === 'CANCELLED' && dbOrder.status !== 'CANCELLED';
+    const channelStatus = mapShopifyOrderStatus(order.financial_status, order.fulfillment_status);
+
+    // O.7: terminal-status downgrade guard. Shopify webhook delivery
+    // isn't ordered with respect to the orderCancel mutation we send
+    // on local cancel — orders/updated can arrive carrying pre-cancel
+    // state moments after we issued the cancel. Preserve the local
+    // terminal status when the channel still reports a non-terminal
+    // one.
+    const { shouldPreserveTerminalStatus } = await import('../services/order-status-guards.js');
+    const preserveStatus = shouldPreserveTerminalStatus(dbOrder.status, channelStatus);
+    if (preserveStatus) {
+      logger.info('[ShopifyWebhooks] preserving local terminal status (webhook reports non-terminal)', {
+        shopifyOrderId, localStatus: dbOrder.status, channelStatus,
+      });
+    }
+    const newStatus = preserveStatus ? dbOrder.status : channelStatus;
+    const newlyShipped = !preserveStatus && newStatus === 'SHIPPED' && dbOrder.status !== 'SHIPPED';
+    const newlyCancelled = !preserveStatus && newStatus === 'CANCELLED' && dbOrder.status !== 'CANCELLED';
 
     await prisma.order.update({
       where: { id: dbOrder.id },

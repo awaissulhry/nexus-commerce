@@ -279,6 +279,23 @@ export class EbayOrdersService {
       },
     })
 
+    // O.7: terminal-status downgrade guard. Same race as Amazon —
+    // operator cancels locally; ebay-cancel pushback in flight; next
+    // ebay-orders cron tick reads pre-cancel state from the
+    // Fulfillment API; without this guard, channel-state regression
+    // silently overwrites the local CANCELLED.
+    const { shouldPreserveTerminalStatus } = await import(
+      './order-status-guards.js'
+    )
+    if (shouldPreserveTerminalStatus(existing?.status, orderData.status)) {
+      logger.info('ebay-orders: preserving local terminal status (channel still reports non-terminal)', {
+        orderId: order.orderId,
+        localStatus: existing?.status,
+        channelStatus: orderData.status,
+      })
+      orderData.status = existing!.status as any
+    }
+
     let dbOrder
     // O.45: did we just transition to CANCELLED?
     const newlyCancelled =

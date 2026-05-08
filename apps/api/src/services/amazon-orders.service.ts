@@ -273,8 +273,28 @@ export class AmazonOrdersService {
     // started" from the customer's perspective.
     const isShippedLike = status === 'SHIPPED' || status === 'PARTIALLY_SHIPPED'
 
-    const updateData = {
+    // O.7: terminal-status downgrade guard. If the local row is
+    // already in a terminal state (operator cancelled before the
+    // channel-cancel pushback completed) and SP-API still reports a
+    // non-terminal status, preserve the local status + lifecycle
+    // timestamps. Metadata still refreshes.
+    const { shouldPreserveTerminalStatus } = await import(
+      './order-status-guards.js'
+    )
+    const preserveStatus = shouldPreserveTerminalStatus(
+      existing?.status,
       status,
+    )
+    if (preserveStatus) {
+      logger.info('amazon-orders: preserving local terminal status (channel still reports non-terminal)', {
+        orderId: raw.AmazonOrderId,
+        localStatus: existing?.status,
+        channelStatus: status,
+      })
+    }
+
+    const updateData = {
+      status: preserveStatus ? (existing!.status as any) : status,
       totalPrice,
       currencyCode,
       customerName: pickCustomerName(raw),
@@ -283,9 +303,18 @@ export class AmazonOrdersService {
       fulfillmentMethod,
       marketplace,
       purchaseDate,
-      shippedAt: isShippedLike ? new Date(raw.LastUpdateDate ?? raw.PurchaseDate) : undefined,
-      cancelledAt: status === 'CANCELLED' ? new Date(raw.LastUpdateDate ?? raw.PurchaseDate) : undefined,
-      deliveredAt: status === 'DELIVERED' ? new Date(raw.LastUpdateDate ?? raw.PurchaseDate) : undefined,
+      shippedAt:
+        !preserveStatus && isShippedLike
+          ? new Date(raw.LastUpdateDate ?? raw.PurchaseDate)
+          : undefined,
+      cancelledAt:
+        !preserveStatus && status === 'CANCELLED'
+          ? new Date(raw.LastUpdateDate ?? raw.PurchaseDate)
+          : undefined,
+      deliveredAt:
+        !preserveStatus && status === 'DELIVERED'
+          ? new Date(raw.LastUpdateDate ?? raw.PurchaseDate)
+          : undefined,
       // O.1: ship-by deadline + Prime SFP gating. SP-API delivers all of
       // these as ISO-8601 strings — parse defensively so a malformed
       // value doesn't fail the whole upsert.
