@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   MapPin,
   Pin,
@@ -130,11 +130,28 @@ const STATUS_VARIANT: Record<
   RETURNED: 'danger',
 }
 
+type CustTab = 'orders' | 'notes' | 'risk'
+
 export default function CustomerDetailClient({ customerId }: { customerId: string }) {
   const { t, locale } = useTranslations()
   const { toast } = useToast()
   const askConfirm = useConfirm()
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  // Header card (LTV / risk badges / tags editor) + sidebar (addresses
+  // + fiscal data) stay always-visible; tabs gate only the main-column
+  // workspace below.
+  const tabParam = (searchParams.get('tab') as CustTab) || 'orders'
+  const setTab = useCallback(
+    (t: CustTab) => {
+      const next = new URLSearchParams(searchParams.toString())
+      if (t === 'orders') next.delete('tab')
+      else next.set('tab', t)
+      router.replace(`${pathname}?${next.toString()}`, { scroll: false })
+    },
+    [router, pathname, searchParams],
+  )
 
   const [customer, setCustomer] = useState<CustomerDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -344,6 +361,31 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
         }
       />
 
+      {/* AU.2 — tab nav. Header card (header + risk + tags) and the
+          sidebar (addresses + fiscal data) stay always-visible —
+          orientation context shouldn't disappear when an operator
+          clicks a tab. Tabs gate only the main-column workspace. */}
+      <div role="tablist" aria-label="Customer detail sections" className="inline-flex items-center bg-slate-100 rounded-md p-0.5 flex-wrap gap-0.5">
+        {(['orders', 'notes', 'risk'] as const).map((k) => (
+          <button
+            key={k}
+            role="tab"
+            aria-selected={tabParam === k}
+            onClick={() => setTab(k)}
+            className={`h-7 px-3 text-base font-medium rounded transition-colors capitalize ${
+              tabParam === k
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            {k}
+          </button>
+        ))}
+      </div>
+
+      {/* Header card stays always-visible across tabs — operator
+          orientation (LTV / orders count / risk badges / channels)
+          shouldn't disappear when they click a tab. */}
       <Card>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div>
@@ -462,6 +504,8 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <div className="lg:col-span-2 space-y-3">
+          {/* AU.2 — Orders tab (default) */}
+          {tabParam === 'orders' && (
           <Card noPadding>
             <div className="px-3 py-2 border-b border-slate-200 flex items-center justify-between">
               <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 inline-flex items-center gap-1.5">
@@ -558,6 +602,137 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
               </div>
             )}
           </Card>
+          )}
+
+          {/* AU.2 — Risk tab. Drills into per-order risk-score
+              breakdown the operator needs to triage flagged
+              customers. The header card already shows the rolled-up
+              flag + Approve/Reject buttons; this panel shows the
+              evidence behind that flag. */}
+          {tabParam === 'risk' && (
+          <Card>
+            <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 mb-2 inline-flex items-center gap-1.5">
+              Risk breakdown
+            </div>
+            {(() => {
+              const flagged = customer.orders.filter(
+                (o: any) => o.riskScore && o.riskScore.flag !== 'LOW',
+              )
+              if (flagged.length === 0) {
+                return (
+                  <div className="text-md text-slate-500 text-center py-3">
+                    No flagged orders. {customer.riskFlag === null
+                      ? 'Customer is unscored — first order will trigger the engine.'
+                      : `Current rollup: ${customer.riskFlag}.`}
+                  </div>
+                )
+              }
+              return (
+                <ul className="space-y-2">
+                  {flagged.map((o: any) => (
+                    <li
+                      key={o.id}
+                      className={`border rounded p-3 ${
+                        o.riskScore.flag === 'HIGH'
+                          ? 'border-rose-200 bg-rose-50'
+                          : 'border-amber-200 bg-amber-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <Link
+                          href={`/orders/${o.id}`}
+                          className="font-mono text-base text-blue-600 hover:underline"
+                        >
+                          {o.channelOrderId}
+                        </Link>
+                        <span
+                          className={`text-xs font-semibold uppercase px-1.5 py-0.5 border rounded ${
+                            o.riskScore.flag === 'HIGH'
+                              ? 'bg-rose-100 text-rose-700 border-rose-300'
+                              : 'bg-amber-100 text-amber-700 border-amber-300'
+                          }`}
+                        >
+                          {o.riskScore.flag} {o.riskScore.score}
+                        </span>
+                      </div>
+                      {o.riskScore.reasons?.length > 0 && (
+                        <ul className="mt-1.5 space-y-0.5 text-sm text-slate-700">
+                          {o.riskScore.reasons.map((r: string, i: number) => (
+                            <li key={i}>· {r}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )
+            })()}
+          </Card>
+          )}
+
+          {/* AU.2 — Notes tab. Larger editor surface than the
+              sidebar; sidebar Notes card stays visible too as
+              a synced mini-view. */}
+          {tabParam === 'notes' && (
+          <Card>
+            <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 mb-2 inline-flex items-center gap-1.5">
+              <User size={12} /> {t('customers.detail.notesTitle')}
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-start gap-2">
+                <textarea
+                  value={noteDraft}
+                  onChange={(e) => setNoteDraft(e.target.value)}
+                  placeholder={t('customers.notes.placeholder')}
+                  className="flex-1 h-32 px-2 py-1.5 text-base border border-slate-200 rounded"
+                />
+                <button
+                  onClick={addNote}
+                  disabled={!noteDraft.trim()}
+                  className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
+                >
+                  <Plus size={12} /> {t('common.save')}
+                </button>
+              </div>
+              {customer.notes.length === 0 ? (
+                <div className="text-md text-slate-500 text-center py-3">
+                  {t('customers.notes.empty')}
+                </div>
+              ) : (
+                <ul className="space-y-2">
+                  {customer.notes.map((n) => (
+                    <li
+                      key={n.id}
+                      className={`text-sm border rounded p-2 ${
+                        n.pinned
+                          ? 'border-amber-200 bg-amber-50'
+                          : 'border-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="text-slate-800 whitespace-pre-wrap flex-1">
+                          {n.body}
+                        </div>
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <IconButton aria-label={n.pinned ? 'Unpin note' : 'Pin note'} size="sm" onClick={() => togglePinned(n)}>
+                            {n.pinned ? <PinOff size={12} /> : <Pin size={12} />}
+                          </IconButton>
+                          <IconButton aria-label="Delete note" size="sm" tone="danger" onClick={() => deleteNote(n)}>
+                            <Trash2 size={12} />
+                          </IconButton>
+                        </div>
+                      </div>
+                      <div className="text-xs text-slate-500 mt-1">
+                        {n.authorEmail ?? 'system'} ·{' '}
+                        {new Date(n.createdAt).toLocaleString(dateLocale)}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </Card>
+          )}
         </div>
 
         <div className="space-y-3">
