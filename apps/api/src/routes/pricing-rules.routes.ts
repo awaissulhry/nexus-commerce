@@ -61,37 +61,65 @@ const pricingRulesRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
       const priority = Number.isFinite(body.priority) ? Number(body.priority) : 100
-      const rule = await prisma.pricingRule.create({
-        data: {
-          name: body.name,
-          type: body.type,
-          description: body.description ?? null,
-          priority,
-          minMarginPercent:
-            body.minMarginPercent != null
-              ? new Prisma.Decimal(body.minMarginPercent)
-              : null,
-          maxMarginPercent:
-            body.maxMarginPercent != null
-              ? new Prisma.Decimal(body.maxMarginPercent)
-              : null,
-          parameters: (body.parameters ?? {}) as Prisma.InputJsonValue,
-          isActive: true,
-          products:
-            body.productIds && body.productIds.length > 0
-              ? {
-                  create: body.productIds.map((productId) => ({ productId })),
-                }
-              : undefined,
-          variations:
-            body.variationIds && body.variationIds.length > 0
-              ? {
-                  create: body.variationIds.map((variationId) => ({
-                    variationId,
-                  })),
-                }
-              : undefined,
-        },
+      // D.3 — Wrap rule create + AuditLog write in one transaction so the
+      // audit row never desyncs from the catalog state. Same pattern
+      // MasterPriceService uses for basePrice mutations.
+      const rule = await prisma.$transaction(async (tx) => {
+        const created = await tx.pricingRule.create({
+          data: {
+            name: body.name!,
+            type: body.type!,
+            description: body.description ?? null,
+            priority,
+            minMarginPercent:
+              body.minMarginPercent != null
+                ? new Prisma.Decimal(body.minMarginPercent)
+                : null,
+            maxMarginPercent:
+              body.maxMarginPercent != null
+                ? new Prisma.Decimal(body.maxMarginPercent)
+                : null,
+            parameters: (body.parameters ?? {}) as Prisma.InputJsonValue,
+            isActive: true,
+            products:
+              body.productIds && body.productIds.length > 0
+                ? {
+                    create: body.productIds.map((productId) => ({ productId })),
+                  }
+                : undefined,
+            variations:
+              body.variationIds && body.variationIds.length > 0
+                ? {
+                    create: body.variationIds.map((variationId) => ({
+                      variationId,
+                    })),
+                  }
+                : undefined,
+          },
+        })
+        await tx.auditLog.create({
+          data: {
+            entityType: 'PricingRule',
+            entityId: created.id,
+            action: 'create',
+            before: null,
+            // Slim after — only the operator-meaningful fields, not full
+            // join-row dumps. Schema notes the table balloons otherwise.
+            after: {
+              name: created.name,
+              type: created.type,
+              priority: created.priority,
+              minMarginPercent: created.minMarginPercent?.toString() ?? null,
+              maxMarginPercent: created.maxMarginPercent?.toString() ?? null,
+              parameters: created.parameters,
+            },
+            metadata: {
+              productCount: body.productIds?.length ?? 0,
+              variationCount: body.variationIds?.length ?? 0,
+            },
+          },
+        })
+        return created
       })
       return rule
     } catch (error: any) {
@@ -171,9 +199,46 @@ const pricingRulesRoutes: FastifyPluginAsync = async (fastify) => {
           data.parameters = body.parameters as Prisma.InputJsonValue
         }
         if (body.isActive !== undefined) data.isActive = body.isActive
-        const rule = await prisma.pricingRule.update({
-          where: { id: request.params.id },
-          data,
+
+        // D.3 — capture before snapshot + write audit row in same tx.
+        const rule = await prisma.$transaction(async (tx) => {
+          const before = await tx.pricingRule.findUnique({
+            where: { id: request.params.id },
+          })
+          if (!before) {
+            // Force the inner update to throw P2025 — caught below as 404.
+            throw Object.assign(new Error('not found'), { code: 'P2025' })
+          }
+          const updated = await tx.pricingRule.update({
+            where: { id: request.params.id },
+            data,
+          })
+          await tx.auditLog.create({
+            data: {
+              entityType: 'PricingRule',
+              entityId: updated.id,
+              action: 'update',
+              before: {
+                name: before.name,
+                type: before.type,
+                priority: before.priority,
+                minMarginPercent: before.minMarginPercent?.toString() ?? null,
+                maxMarginPercent: before.maxMarginPercent?.toString() ?? null,
+                parameters: before.parameters,
+                isActive: before.isActive,
+              },
+              after: {
+                name: updated.name,
+                type: updated.type,
+                priority: updated.priority,
+                minMarginPercent: updated.minMarginPercent?.toString() ?? null,
+                maxMarginPercent: updated.maxMarginPercent?.toString() ?? null,
+                parameters: updated.parameters,
+                isActive: updated.isActive,
+              },
+            },
+          })
+          return updated
         })
         return rule
       } catch (error: any) {
@@ -193,9 +258,28 @@ const pricingRulesRoutes: FastifyPluginAsync = async (fastify) => {
         // Soft delete: flip isActive=false. Preserves the audit trail (the
         // engine's PRICING_RULE source path filters by isActive=true so a
         // deactivated rule has no functional effect, just an archive entry).
-        const rule = await prisma.pricingRule.update({
-          where: { id: request.params.id },
-          data: { isActive: false },
+        const rule = await prisma.$transaction(async (tx) => {
+          const before = await tx.pricingRule.findUnique({
+            where: { id: request.params.id },
+          })
+          if (!before) {
+            throw Object.assign(new Error('not found'), { code: 'P2025' })
+          }
+          const updated = await tx.pricingRule.update({
+            where: { id: request.params.id },
+            data: { isActive: false },
+          })
+          await tx.auditLog.create({
+            data: {
+              entityType: 'PricingRule',
+              entityId: updated.id,
+              action: 'delete',
+              before: { isActive: before.isActive },
+              after: { isActive: false },
+              metadata: { soft: true, ruleName: before.name },
+            },
+          })
+          return updated
         })
         return rule
       } catch (error: any) {
