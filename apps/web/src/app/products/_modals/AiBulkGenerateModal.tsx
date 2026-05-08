@@ -28,7 +28,7 @@
  * Gemini is cheap and the user explicitly opted in.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Sparkles, X, Loader2, AlertCircle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
@@ -89,6 +89,39 @@ export default function AiBulkGenerateModal({
   }, [productLookup])
   const [phase, setPhase] = useState<AiPhase>('configure')
   const [marketplace, setMarketplace] = useState('IT')
+  // F.4 — provider selector. Empty string = let server pick (env
+  // default + fallback). Populated from GET /api/ai/providers on
+  // mount; only "configured" providers appear as selectable.
+  const [provider, setProvider] = useState<string>('')
+  const [providers, setProviders] = useState<
+    Array<{ name: string; configured: boolean; defaultModel: string }>
+  >([])
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetch(`${getBackendUrl()}/api/ai/providers`)
+        if (!res.ok) return
+        const json = (await res.json()) as {
+          providers?: Array<{
+            name: string
+            configured: boolean
+            defaultModel: string
+          }>
+        }
+        if (!cancelled && Array.isArray(json.providers)) {
+          setProviders(json.providers)
+        }
+      } catch {
+        // Provider selector silently degrades to "Auto" only if the
+        // list endpoint fails. The bulk-generate route still works
+        // with provider=undefined (server uses env default).
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
   const [fields, setFields] = useState<Set<string>>(
     new Set(['description', 'bullets']),
   )
@@ -144,6 +177,10 @@ export default function AiBulkGenerateModal({
           marketplace: marketplace.toUpperCase(),
           fields: Array.from(fields),
           dryRun,
+          // F.4 — only send provider when explicitly chosen; empty
+          // string lets the server fallback (env default → first
+          // configured) per its existing rule.
+          ...(provider ? { provider } : {}),
         }),
       },
     )
@@ -296,6 +333,40 @@ export default function AiBulkGenerateModal({
                 FR, ES, UK, US, NL, SE, PL, CA, MX).
               </p>
             </div>
+
+            {/* F.4 — provider selector. Hidden when only one provider is
+                configured (auto-pick is unambiguous). When 2+ are wired
+                up, the operator can override the env default. */}
+            {providers.filter((p) => p.configured).length > 1 && (
+              <div>
+                <label className="text-sm font-semibold text-slate-700 uppercase tracking-wider block mb-1">
+                  AI provider
+                </label>
+                <select
+                  value={provider}
+                  onChange={(e) => setProvider(e.target.value)}
+                  className="w-44 h-8 px-2 text-base border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-300"
+                >
+                  <option value="">Auto (server default)</option>
+                  {providers
+                    .filter((p) => p.configured)
+                    .map((p) => (
+                      <option key={p.name} value={p.name}>
+                        {p.name === 'gemini'
+                          ? 'Gemini'
+                          : p.name === 'anthropic'
+                            ? 'Claude'
+                            : p.name}{' '}
+                        ({p.defaultModel})
+                      </option>
+                    ))}
+                </select>
+                <p className="text-sm text-slate-500 mt-1">
+                  Override the server default. Cost + tokens still log
+                  per-call to AiUsageLog.
+                </p>
+              </div>
+            )}
 
             <div>
               <label className="text-sm font-semibold text-slate-700 uppercase tracking-wider block mb-1">
