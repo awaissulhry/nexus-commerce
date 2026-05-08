@@ -24,6 +24,7 @@ import { useMemo } from 'react'
 import { X, ExternalLink, ChevronRight } from 'lucide-react'
 import { CHANNEL_TONE } from '@/lib/products/theme'
 import { IconButton } from '@/components/ui/IconButton'
+import { Modal } from '@/components/ui/Modal'
 
 export interface CompareProduct {
   id: string
@@ -105,17 +106,19 @@ export default function CompareProductsModal({
   }, [products])
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-slate-900/40 flex items-start justify-center pt-[8vh]"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Compare products"
+    // U.3c — Modal primitive replaces hand-rolled overlay. placement="top"
+    // matches the prior pt-[8vh] anchor; size="3xl" gives the same
+    // ~768px panel width (was custom w-[920px], slight narrowing —
+    // acceptable for the standard size scale; columns fit fine for
+    // 2-4 products which is the eligible range).
+    <Modal
+      open
+      onClose={onClose}
+      placement="top"
+      size="3xl"
+      header={null}
+      className="overflow-hidden"
     >
-      <div
-        className="bg-white rounded-lg shadow-2xl w-[920px] max-w-[95vw] max-h-[85vh] overflow-hidden border border-slate-200 flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
         <header className="flex items-center justify-between px-4 py-3 border-b border-slate-200 flex-shrink-0">
           <div className="text-lg font-semibold text-slate-900">
             Compare {products.length} products
@@ -291,7 +294,6 @@ export default function CompareProductsModal({
             ))}
           </div>
         </footer>
-      </div>
-    </div>
+    </Modal>
   )
 }

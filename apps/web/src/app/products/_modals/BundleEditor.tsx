@@ -18,6 +18,7 @@ import { Package, Plus, Trash2, X } from 'lucide-react'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
+import { Modal } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -120,14 +121,16 @@ export default function BundleEditor({
   }
 
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center p-6" onClick={onClose}>
-      <div className="absolute inset-0 bg-slate-900/40" />
-      <div onClick={(e) => e.stopPropagation()} className="relative bg-white rounded-lg shadow-2xl w-full max-w-3xl max-h-[80vh] overflow-y-auto">
-        <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
-          <div className="text-lg font-semibold text-slate-900 inline-flex items-center gap-2"><Package size={16} /> Bundles</div>
+    // U.3b — Modal primitive replaces hand-rolled overlay + panel.
+    // Custom header retained (Package icon + "Bundles" title) since
+    // Modal's default `title` prop renders text-only; header={null}
+    // keeps the existing sticky-top header with the close X.
+    <Modal open onClose={onClose} placement="centered" size="3xl" header={null}>
+        <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10 dark:bg-slate-900 dark:border-slate-800">
+          <div className="text-lg font-semibold text-slate-900 inline-flex items-center gap-2 dark:text-slate-100"><Package size={16} /> Bundles</div>
           <IconButton onClick={onClose} aria-label="Close" size="md" className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"><X size={16} /></IconButton>
         </header>
-        <div className="p-5 space-y-4">
+        <div className="p-5 space-y-4 overflow-y-auto">
           {!creating ? (
             <>
               <Button
@@ -252,7 +255,6 @@ export default function BundleEditor({
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

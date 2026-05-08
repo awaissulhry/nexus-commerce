@@ -34,6 +34,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
+import { Modal } from '@/components/ui/Modal'
 
 type AiPhase = 'configure' | 'preview' | 'applying' | 'done'
 
@@ -246,16 +247,17 @@ export default function AiBulkGenerateModal({
   ]
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-slate-900/40 flex items-start justify-center pt-[12vh]"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
+    // U.3d — Modal primitive replaces hand-rolled overlay. placement="top"
+    // matches prior pt-[12vh] anchor (Modal's "top" pads to pt-[12vh]
+    // on sm+); size="xl" gives ~576px panel width (was custom w-[560px]).
+    <Modal
+      open
+      onClose={onClose}
+      placement="top"
+      size="xl"
+      header={null}
+      className="overflow-hidden"
     >
-      <div
-        className="bg-white rounded-lg shadow-2xl w-[560px] max-w-[92vw] overflow-hidden border border-slate-200"
-        onClick={(e) => e.stopPropagation()}
-      >
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-purple-600" />
@@ -617,7 +619,6 @@ export default function AiBulkGenerateModal({
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </Modal>
   )
 }
