@@ -16,7 +16,6 @@ import {
   AlertCircle,
   AlertTriangle,
   Box,
-  CheckCircle2,
   ChevronRight,
   Clock,
   Loader2,
@@ -31,6 +30,9 @@ import {
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Button } from '@/components/ui/Button'
+import { Modal, ModalBody } from '@/components/ui/Modal'
+import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -104,7 +106,7 @@ export default function PricingMatrixClient() {
   const [bulkMode, setBulkMode] = useState<'SET_FIXED' | 'SET_PERCENT_DISCOUNT' | 'CLEAR'>('SET_FIXED')
   const [bulkValue, setBulkValue] = useState('')
   const [bulkApplying, setBulkApplying] = useState(false)
-  const [bulkResult, setBulkResult] = useState<string | null>(null)
+  const { toast } = useToast()
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -203,7 +205,6 @@ export default function PricingMatrixClient() {
   const applyBulkOverride = async () => {
     if (selected.size === 0) return
     setBulkApplying(true)
-    setBulkResult(null)
     try {
       const res = await fetch(`${getBackendUrl()}/api/pricing/bulk-override`, {
         method: 'POST',
@@ -216,14 +217,18 @@ export default function PricingMatrixClient() {
       })
       const json = await res.json()
       if (json.ok) {
-        setBulkResult(`Updated ${json.updated} listing${json.updated === 1 ? '' : 's'}, refreshed ${json.snapshotsRefreshed} snapshot${json.snapshotsRefreshed === 1 ? '' : 's'}.`)
+        toast.success(
+          `Updated ${json.updated} listing${json.updated === 1 ? '' : 's'}, refreshed ${json.snapshotsRefreshed} snapshot${json.snapshotsRefreshed === 1 ? '' : 's'}.`,
+        )
         setSelected(new Set())
-        await fetchData()
+        await Promise.all([fetchData(), fetchKpis()])
       } else {
-        setBulkResult(`Error: ${json.error ?? `HTTP ${res.status}`}`)
+        toast.error(`Bulk override failed: ${json.error ?? `HTTP ${res.status}`}`)
       }
     } catch (e) {
-      setBulkResult(`Error: ${e instanceof Error ? e.message : String(e)}`)
+      toast.error(
+        `Bulk override failed: ${e instanceof Error ? e.message : String(e)}`,
+      )
     } finally {
       setBulkApplying(false)
     }
@@ -313,33 +318,31 @@ export default function PricingMatrixClient() {
             Clamped only
           </label>
           <div className="ml-auto flex items-center gap-2">
-            <button
+            <Button
+              variant="secondary"
+              size="md"
               onClick={fetchData}
               disabled={loading}
-              className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
+              icon={<RefreshCw size={12} />}
             >
-              <RefreshCw size={12} /> Refresh
-            </button>
-            <button
+              Refresh
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
               onClick={refreshAll}
+              loading={refreshing}
               disabled={refreshing}
-              className="h-8 px-3 text-base bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+              icon={refreshing ? null : <Zap size={12} />}
             >
-              {refreshing ? (
-                <>
-                  <Loader2 className="w-3 h-3 animate-spin" /> Recomputing…
-                </>
-              ) : (
-                <>
-                  <Zap size={12} /> Recompute all
-                </>
-              )}
-            </button>
+              {refreshing ? 'Recomputing…' : 'Recompute all'}
+            </Button>
           </div>
         </div>
       </Card>
 
-      {/* Bulk action bar */}
+      {/* Bulk action bar — Toast handles success/error feedback so the bar
+          stays minimal: count + mode + value + Apply + Deselect. */}
       {selected.size > 0 && (
         <div className="sticky top-2 z-20 bg-slate-900 text-white rounded-lg px-4 py-3 flex items-center gap-3 flex-wrap shadow-lg">
           <span className="text-base font-semibold tabular-nums">
@@ -368,43 +371,25 @@ export default function PricingMatrixClient() {
               className="h-7 w-24 px-2 rounded border border-slate-600 bg-slate-800 text-white text-base tabular-nums"
             />
           )}
-          <button
+          <Button
+            variant="primary"
+            size="sm"
             onClick={applyBulkOverride}
+            loading={bulkApplying}
             disabled={bulkApplying || (bulkMode !== 'CLEAR' && !bulkValue)}
-            className="h-7 px-3 rounded bg-white text-slate-900 text-base font-semibold hover:bg-slate-100 disabled:opacity-50 inline-flex items-center gap-1.5"
+            className="bg-white text-slate-900 hover:bg-slate-100 border-white"
           >
-            {bulkApplying ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            ) : null}
             Apply
-          </button>
-          <button
-            onClick={() => {
-              setSelected(new Set())
-              setBulkResult(null)
-            }}
-            className="h-7 px-2 rounded text-slate-400 hover:text-white text-base inline-flex items-center gap-1"
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSelected(new Set())}
+            icon={<X size={12} />}
+            className="text-slate-400 hover:text-white hover:bg-slate-800"
           >
-            <X size={12} /> Deselect
-          </button>
-          {bulkResult && (
-            <>
-              <div className="h-4 w-px bg-slate-700" />
-              <span
-                className={cn(
-                  'text-base inline-flex items-center gap-1',
-                  bulkResult.startsWith('Error') ? 'text-rose-400' : 'text-emerald-400',
-                )}
-              >
-                {bulkResult.startsWith('Error') ? (
-                  <AlertCircle size={12} />
-                ) : (
-                  <CheckCircle2 size={12} />
-                )}
-                {bulkResult}
-              </span>
-            </>
-          )}
+            Deselect
+          </Button>
         </div>
       )}
 
@@ -578,20 +563,22 @@ export default function PricingMatrixClient() {
               )}
             </span>
             <div className="flex items-center gap-1">
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={page === 0 || loading}
-                className="h-7 px-2 border border-slate-200 rounded text-base disabled:opacity-40"
               >
                 Prev
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => setPage((p) => p + 1)}
                 disabled={page + 1 >= totalPages || loading}
-                className="h-7 px-2 border border-slate-200 rounded text-base disabled:opacity-40"
               >
                 Next
-              </button>
+              </Button>
             </div>
           </div>
         </Card>
@@ -619,11 +606,10 @@ function PricingDetailDrawer({
   onPushed: () => void
 }) {
   const [pushing, setPushing] = useState(false)
-  const [pushResult, setPushResult] = useState<string | null>(null)
+  const { toast } = useToast()
 
   const push = async () => {
     setPushing(true)
-    setPushResult(null)
     try {
       const res = await fetch(`${getBackendUrl()}/api/pricing/push`, {
         method: 'POST',
@@ -637,157 +623,127 @@ function PricingDetailDrawer({
       })
       const json = await res.json()
       if (json.ok) {
-        setPushResult(`Pushed ${json.pushedPrice} ${json.currency} to ${json.channel}:${json.marketplace}.`)
+        toast.success(
+          `Pushed ${json.pushedPrice} ${json.currency} to ${json.channel}:${json.marketplace}.`,
+        )
         onPushed()
       } else {
-        setPushResult(json.error ?? `HTTP ${res.status}`)
+        toast.error(`Push failed: ${json.error ?? `HTTP ${res.status}`}`)
       }
     } catch (e) {
-      setPushResult(e instanceof Error ? e.message : String(e))
+      toast.error(`Push failed: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setPushing(false)
     }
   }
 
   const breakdown = (row.breakdown ?? {}) as any
-
-  return (
-    <div className="fixed inset-0 z-50 flex">
-      <div
-        className="flex-1 bg-slate-900/30 backdrop-blur-sm"
-        onClick={onClose}
-        aria-hidden
-      />
-      <div className="w-full max-w-xl bg-white border-l border-slate-200 shadow-xl flex flex-col">
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
-          <div className="min-w-0">
-            <div className="text-md font-semibold text-slate-900 truncate font-mono">
-              {row.sku}
-            </div>
-            <div className="text-sm text-slate-500 mt-0.5">
-              {row.channel} · {row.marketplace}
-              {row.fulfillmentMethod ? ` · ${row.fulfillmentMethod}` : ''}
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded hover:bg-slate-100 text-slate-500"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          {/* Resolved */}
-          <div className="bg-slate-50 rounded p-3">
-            <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1">
-              Resolved price
-            </div>
-            <div className="text-[24px] font-semibold tabular-nums text-slate-900">
-              {Number(row.computedPrice).toFixed(2)}{' '}
-              <span className="text-lg font-normal text-slate-500">
-                {row.currency}
-              </span>
-            </div>
-            <div className="text-sm text-slate-500 mt-1">
-              Source:{' '}
-              <span className="font-mono">{row.source}</span>
-              {row.isClamped && (
-                <span className="ml-2 text-amber-700">
-                  · clamped from {row.clampedFrom}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Breakdown */}
-          <div>
-            <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
-              Breakdown
-            </div>
-            <dl className="grid grid-cols-2 gap-y-1 text-base">
-              <Item label="Master price" value={breakdown.masterPrice} suffix="EUR" />
-              <Item label="FX rate" value={breakdown.fxRate} format="rate" />
-              <Item label="Cost" value={breakdown.costPrice} suffix="EUR" />
-              <Item label="FBA fee" value={breakdown.fbaFee} suffix={row.currency} />
-              <Item label="Referral fee" value={breakdown.referralFee} suffix={row.currency} />
-              <Item label="VAT rate" value={breakdown.vatRate} suffix="%" />
-              <Item label="Min margin" value={breakdown.minMarginPercent} suffix="%" />
-              <Item label="Tax-inclusive" value={breakdown.taxInclusive ? 'Yes' : 'No'} />
-              {breakdown.appliedRule && (
-                <>
-                  <Item
-                    label="Applied rule"
-                    value={`${breakdown.appliedRule.type}${breakdown.appliedRule.adjustment != null ? ` (${breakdown.appliedRule.adjustment >= 0 ? '+' : ''}${breakdown.appliedRule.adjustment}%)` : ''}`}
-                  />
-                </>
-              )}
-            </dl>
-          </div>
-
-          {/* Warnings */}
-          {row.warnings.length > 0 && (
-            <div className="border border-amber-200 bg-amber-50 rounded p-3">
-              <div className="text-sm uppercase tracking-wider text-amber-800 font-semibold mb-1">
-                Warnings
-              </div>
-              <ul className="text-base text-amber-800 space-y-0.5">
-                {row.warnings.map((w, i) => (
-                  <li key={i}>• {w}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Push action */}
-          <div className="border border-slate-200 rounded p-3">
-            <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-2">
-              Push to marketplace
-            </div>
-            <div className="text-base text-slate-600 mb-2">
-              Sends this resolved price to {row.channel} via the channel API.
-              Logs to ChannelListingOverride for audit; respects 5-minute
-              hold window if the channel is configured for it.
-            </div>
-            <button
-              type="button"
-              onClick={push}
-              disabled={pushing}
-              className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
-            >
-              {pushing ? (
-                <>
-                  <Loader2 className="w-3 h-3 animate-spin" /> Pushing…
-                </>
-              ) : (
-                <>
-                  <Send size={12} /> Push price
-                </>
-              )}
-            </button>
-            {pushResult && (
-              <div
-                className={cn(
-                  'mt-2 text-base inline-flex items-center gap-1.5',
-                  pushResult.startsWith('Pushed') ? 'text-emerald-700' : 'text-rose-700',
-                )}
-              >
-                {pushResult.startsWith('Pushed') ? (
-                  <CheckCircle2 size={12} />
-                ) : (
-                  <AlertCircle size={12} />
-                )}
-                {pushResult}
-              </div>
-            )}
-          </div>
-
-          <div className="text-sm text-slate-400">
-            Last computed {new Date(row.computedAt).toLocaleString()}
-          </div>
-        </div>
+  const headerTitle = (
+    <div className="min-w-0">
+      <div className="text-md font-semibold text-slate-900 truncate font-mono">
+        {row.sku}
+      </div>
+      <div className="text-sm text-slate-500 mt-0.5">
+        {row.channel} · {row.marketplace}
+        {row.fulfillmentMethod ? ` · ${row.fulfillmentMethod}` : ''}
       </div>
     </div>
+  )
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      placement="drawer-right"
+      size="xl"
+      title={headerTitle}
+    >
+      <ModalBody className="space-y-4">
+        {/* Resolved */}
+        <div className="bg-slate-50 rounded p-3">
+          <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1">
+            Resolved price
+          </div>
+          <div className="text-[24px] font-semibold tabular-nums text-slate-900">
+            {Number(row.computedPrice).toFixed(2)}{' '}
+            <span className="text-lg font-normal text-slate-500">
+              {row.currency}
+            </span>
+          </div>
+          <div className="text-sm text-slate-500 mt-1">
+            Source: <span className="font-mono">{row.source}</span>
+            {row.isClamped && (
+              <span className="ml-2 text-amber-700">
+                · clamped from {row.clampedFrom}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Breakdown */}
+        <div>
+          <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
+            Breakdown
+          </div>
+          <dl className="grid grid-cols-2 gap-y-1 text-base">
+            <Item label="Master price" value={breakdown.masterPrice} suffix="EUR" />
+            <Item label="FX rate" value={breakdown.fxRate} format="rate" />
+            <Item label="Cost" value={breakdown.costPrice} suffix="EUR" />
+            <Item label="FBA fee" value={breakdown.fbaFee} suffix={row.currency} />
+            <Item label="Referral fee" value={breakdown.referralFee} suffix={row.currency} />
+            <Item label="VAT rate" value={breakdown.vatRate} suffix="%" />
+            <Item label="Min margin" value={breakdown.minMarginPercent} suffix="%" />
+            <Item label="Tax-inclusive" value={breakdown.taxInclusive ? 'Yes' : 'No'} />
+            {breakdown.appliedRule && (
+              <Item
+                label="Applied rule"
+                value={`${breakdown.appliedRule.type}${breakdown.appliedRule.adjustment != null ? ` (${breakdown.appliedRule.adjustment >= 0 ? '+' : ''}${breakdown.appliedRule.adjustment}%)` : ''}`}
+              />
+            )}
+          </dl>
+        </div>
+
+        {/* Warnings */}
+        {row.warnings.length > 0 && (
+          <div className="border border-amber-200 bg-amber-50 rounded p-3">
+            <div className="text-sm uppercase tracking-wider text-amber-800 font-semibold mb-1">
+              Warnings
+            </div>
+            <ul className="text-base text-amber-800 space-y-0.5">
+              {row.warnings.map((w, i) => (
+                <li key={i}>• {w}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Push action */}
+        <div className="border border-slate-200 rounded p-3">
+          <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-2">
+            Push to marketplace
+          </div>
+          <div className="text-base text-slate-600 mb-2">
+            Sends this resolved price to {row.channel} via the channel API.
+            Logs to ChannelListingOverride for audit; respects 5-minute
+            hold window if the channel is configured for it.
+          </div>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={push}
+            loading={pushing}
+            icon={pushing ? null : <Send size={12} />}
+            className="bg-slate-900 hover:bg-slate-800 border-slate-900"
+          >
+            {pushing ? 'Pushing…' : 'Push price'}
+          </Button>
+        </div>
+
+        <div className="text-sm text-slate-400">
+          Last computed {new Date(row.computedAt).toLocaleString()}
+        </div>
+      </ModalBody>
+    </Modal>
   )
 }
 

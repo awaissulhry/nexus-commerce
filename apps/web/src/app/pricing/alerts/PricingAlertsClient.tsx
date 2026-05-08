@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -142,12 +143,14 @@ export default function PricingAlertsClient() {
 
       {/* Refresh */}
       <div className="flex items-center justify-end">
-        <button
+        <Button
+          variant="secondary"
+          size="md"
           onClick={fetchData}
-          className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+          icon={<RefreshCw size={12} />}
         >
-          <RefreshCw size={12} /> Refresh
-        </button>
+          Refresh
+        </Button>
       </div>
 
       {/* B.2 — Drift table. Shown above engine alerts because drift means
