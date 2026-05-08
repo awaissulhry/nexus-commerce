@@ -28,9 +28,17 @@ import { Card } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 
+interface DailyTrendPoint {
+  day: string
+  success: number
+  failed: number
+  gated: number
+}
+
 interface PublishStatusResponse {
   last24h: Array<{ channel: string; mode: string; outcome: string; attempts: number; distinct_skus: number }>
   last7d: Array<{ channel: string; mode: string; outcome: string; attempts: number; distinct_skus: number }>
+  dailyTrend: Record<string, DailyTrendPoint[]>
   rollup30d: Array<{
     channel: string
     attempts: number
@@ -199,11 +207,14 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
                     : 'border-emerald-200 bg-emerald-50/30'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center justify-between mb-1.5 gap-2">
                     <span className="font-mono font-semibold text-slate-900">{c.channel}</span>
-                    <span className="text-xs tabular-nums text-slate-600">
-                      {c.success_pct != null ? `${c.success_pct.toFixed(1)}% success` : 'no data'}
-                    </span>
+                    <div className="inline-flex items-center gap-2">
+                      <Sparkline points={status?.dailyTrend?.[c.channel] ?? []} />
+                      <span className="text-xs tabular-nums text-slate-600 whitespace-nowrap">
+                        {c.success_pct != null ? `${c.success_pct.toFixed(1)}% success` : 'no data'}
+                      </span>
+                    </div>
                   </div>
                   <div className="grid grid-cols-7 gap-1 text-center">
                     <Stat label="attempts" value={c.attempts} />
@@ -521,4 +532,85 @@ function ActivityTable({ rows }: { rows: Array<{ channel: string; mode: string; 
 
 function EmptyText({ text }: { text: string }) {
   return <div className="text-sm text-slate-500 py-3">{text}</div>
+}
+
+// M.10 — 14-day sparkline. Each day is one column; success (emerald)
+// is bottom-stacked, failed (rose) on top. Empty days render as a
+// thin baseline. Hover surfaces the day-by-day breakdown so the
+// operator can see exactly when something happened.
+function Sparkline({ points }: { points: DailyTrendPoint[] }) {
+  const max = useMemo(() => {
+    let m = 1
+    for (const p of points) {
+      const total = p.success + p.failed
+      if (total > m) m = total
+    }
+    return m
+  }, [points])
+
+  if (points.length === 0) {
+    return (
+      <div className="h-7 w-[112px] flex items-center justify-center text-[10px] text-slate-400">
+        no 14d data
+      </div>
+    )
+  }
+
+  const W = 112
+  const H = 28
+  const colW = W / points.length
+  const barW = Math.max(2, colW - 1)
+
+  return (
+    <svg
+      width={W}
+      height={H}
+      viewBox={`0 0 ${W} ${H}`}
+      role="img"
+      aria-label={`14-day publish trend: ${points
+        .map((p) => `${p.day}: ${p.success} ok, ${p.failed} failed`)
+        .join('; ')}`}
+    >
+      {/* Baseline */}
+      <line x1={0} y1={H - 0.5} x2={W} y2={H - 0.5} stroke="#e2e8f0" strokeWidth={1} />
+      {points.map((p, i) => {
+        const total = p.success + p.failed
+        if (total === 0) return null
+        const totalH = (total / max) * (H - 1)
+        const failedH = (p.failed / total) * totalH
+        const successH = totalH - failedH
+        const x = i * colW + (colW - barW) / 2
+        return (
+          <g key={p.day}>
+            {/* Success (bottom) */}
+            {successH > 0 && (
+              <rect
+                x={x}
+                y={H - successH - 0.5}
+                width={barW}
+                height={successH}
+                fill="#10b981"
+                opacity={0.75}
+              >
+                <title>{`${p.day}: ${p.success} ok, ${p.failed} failed`}</title>
+              </rect>
+            )}
+            {/* Failed (stacked on top) */}
+            {failedH > 0 && (
+              <rect
+                x={x}
+                y={H - totalH - 0.5}
+                width={barW}
+                height={failedH}
+                fill="#f43f5e"
+                opacity={0.85}
+              >
+                <title>{`${p.day}: ${p.success} ok, ${p.failed} failed`}</title>
+              </rect>
+            )}
+          </g>
+        )
+      })}
+    </svg>
+  )
 }

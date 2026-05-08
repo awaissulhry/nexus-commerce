@@ -2324,6 +2324,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         trippedCircuits,
         skuCoverage,
         repeatAttempts,
+        dailyTrend,
       ] = await Promise.all([
         prisma.$queryRawUnsafe<any[]>(
           `SELECT channel, mode, outcome,
@@ -2403,6 +2404,42 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
            ORDER BY attempts DESC
            LIMIT 10`,
         ),
+        // M.10 — 14-day daily trend per channel. Bucketed by date so
+        // a sparkline can render success vs failed counts as stacked
+        // bars. Generate-series over the date range fills gaps
+        // (otherwise a quiet day would just be missing from the
+        // result and the sparkline would mislead by squeezing).
+        prisma.$queryRawUnsafe<any[]>(
+          `WITH days AS (
+             SELECT generate_series(
+               (CURRENT_DATE - INTERVAL '13 days')::date,
+               CURRENT_DATE::date,
+               INTERVAL '1 day'
+             )::date AS day
+           ),
+           channels AS (
+             SELECT DISTINCT channel FROM "ChannelPublishAttempt"
+             WHERE "attemptedAt" > NOW() - INTERVAL '14 days'
+           )
+           SELECT c.channel,
+                  d.day,
+                  COALESCE(s.success, 0)::int AS success,
+                  COALESCE(s.failed, 0)::int AS failed,
+                  COALESCE(s.gated, 0)::int AS gated
+           FROM channels c
+           CROSS JOIN days d
+           LEFT JOIN (
+             SELECT channel,
+                    "attemptedAt"::date AS day,
+                    count(*) FILTER (WHERE outcome = 'success')::int AS success,
+                    count(*) FILTER (WHERE outcome IN ('failed', 'timeout', 'rate-limited', 'circuit-open'))::int AS failed,
+                    count(*) FILTER (WHERE outcome = 'gated')::int AS gated
+             FROM "ChannelPublishAttempt"
+             WHERE "attemptedAt" > NOW() - INTERVAL '14 days'
+             GROUP BY channel, "attemptedAt"::date
+           ) s ON s.channel = c.channel AND s.day = d.day
+           ORDER BY c.channel, d.day`,
+        ),
       ])
 
       // Operator-facing reminder block (matches the script's section 8).
@@ -2415,6 +2452,21 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         EBAY_PUBLISH_MODE: process.env.EBAY_PUBLISH_MODE ?? 'dry-run',
       }
 
+      // M.10 — group dailyTrend by channel for the sparkline component.
+      // Comes out of the SQL ordered by (channel, day) so we can
+      // bucket in a single pass without sort.
+      const trendByChannel: Record<string, Array<{ day: string; success: number; failed: number; gated: number }>> = {}
+      for (const row of dailyTrend) {
+        const ch = row.channel as string
+        if (!trendByChannel[ch]) trendByChannel[ch] = []
+        trendByChannel[ch].push({
+          day: row.day instanceof Date ? row.day.toISOString().slice(0, 10) : String(row.day).slice(0, 10),
+          success: row.success,
+          failed: row.failed,
+          gated: row.gated,
+        })
+      }
+
       return {
         last24h,
         last7d,
@@ -2423,6 +2475,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         trippedCircuits,
         skuCoverage,
         repeatAttempts,
+        dailyTrend: trendByChannel,
         env,
         fetchedAt: new Date().toISOString(),
       }
