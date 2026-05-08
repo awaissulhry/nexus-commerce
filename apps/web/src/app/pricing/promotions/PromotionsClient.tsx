@@ -27,6 +27,7 @@ import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Button } from '@/components/ui/Button'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
+import { IconButton } from '@/components/ui/IconButton'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useTranslations } from '@/lib/i18n/use-translations'
@@ -446,7 +447,7 @@ function EventSection({
                     </td>
                     <td className="px-3 py-2">
                       {e.priceActions.length === 0 ? (
-                        <span className="text-sm text-slate-400 dark:text-slate-500 dark:text-slate-400">
+                        <span className="text-sm text-slate-400 dark:text-slate-500">
                           {t('pricing.promotions.action.none')}
                         </span>
                       ) : (
@@ -486,13 +487,15 @@ function EventSection({
                       >
                         →
                       </Link>
-                      <button
+                      <IconButton
+                        aria-label={t('pricing.promotions.deleteTitle')}
                         onClick={() => onDelete(e.id, e.name)}
-                        className="text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950 rounded p-1"
-                        title={t('pricing.promotions.deleteTitle')}
+                        variant="ghost"
+                        size="sm"
+                        tone="danger"
                       >
                         <Trash2 size={12} />
-                      </button>
+                      </IconButton>
                     </td>
                   </tr>
                 )
@@ -620,7 +623,7 @@ function CreatePromotionModal({
               className="w-full h-9 px-3 border border-slate-300 dark:border-slate-700 rounded-md text-base"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 {t('pricing.promotions.form.start')}
@@ -719,7 +722,7 @@ function CreatePromotionModal({
               {t('pricing.promotions.form.applyAction')}
             </label>
             {form.includeAction && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                     {t('pricing.promotions.form.actionType')}

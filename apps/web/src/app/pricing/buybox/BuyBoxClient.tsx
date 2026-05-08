@@ -129,8 +129,10 @@ export default function BuyBoxClient() {
           <button
             key={w.days}
             onClick={() => setDays(w.days)}
+            aria-pressed={days === w.days}
+            aria-label={w.label}
             className={cn(
-              'h-8 px-3 text-base border rounded-md',
+              'h-8 px-3 text-base border rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
               days === w.days
                 ? 'bg-slate-900 text-white border-slate-900'
                 : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800',
@@ -304,7 +306,7 @@ export default function BuyBoxClient() {
                       </td>
                       <td className="px-3 py-2 text-base text-slate-700 dark:text-slate-300">
                         {c.fulfillmentMethod ?? (
-                          <span className="text-slate-400 dark:text-slate-500 dark:text-slate-400">—</span>
+                          <span className="text-slate-400 dark:text-slate-500">—</span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums text-slate-800 dark:text-slate-200">
@@ -324,7 +326,7 @@ export default function BuyBoxClient() {
 
 function WinRateBar({ pct }: { pct: number | null }) {
   if (pct == null) {
-    return <span className="text-sm text-slate-400 dark:text-slate-500 dark:text-slate-400">—</span>
+    return <span className="text-sm text-slate-400 dark:text-slate-500">—</span>
   }
   const tone =
     pct < 50 ? 'rose' : pct < 80 ? 'amber' : 'emerald'

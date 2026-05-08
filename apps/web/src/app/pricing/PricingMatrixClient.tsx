@@ -261,10 +261,10 @@ export default function PricingMatrixClient() {
           <div className="relative flex-1 min-w-[240px] max-w-sm">
             <Search
               size={12}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 dark:text-slate-400"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
             />
             <Input
-              placeholder="Search SKU…"
+              placeholder={t('pricing.search.placeholder')}
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value)
@@ -281,7 +281,7 @@ export default function PricingMatrixClient() {
             }}
             className="h-8 px-2 border border-slate-200 dark:border-slate-800 rounded-md text-base bg-white dark:bg-slate-900"
           >
-            <option value="">All channels</option>
+            <option value="">{t('pricing.filter.allChannels')}</option>
             <option value="AMAZON">Amazon</option>
             <option value="EBAY">eBay</option>
             <option value="SHOPIFY">Shopify</option>
@@ -296,7 +296,7 @@ export default function PricingMatrixClient() {
             }}
             className="h-8 px-2 border border-slate-200 dark:border-slate-800 rounded-md text-base bg-white dark:bg-slate-900"
           >
-            <option value="">All marketplaces</option>
+            <option value="">{t('pricing.filter.allMarketplaces')}</option>
             <option value="IT">IT</option>
             <option value="DE">DE</option>
             <option value="FR">FR</option>
@@ -313,14 +313,14 @@ export default function PricingMatrixClient() {
             }}
             className="h-8 px-2 border border-slate-200 dark:border-slate-800 rounded-md text-base bg-white dark:bg-slate-900"
           >
-            <option value="">All sources</option>
-            <option value="SCHEDULED_SALE">Sale</option>
-            <option value="OFFER_OVERRIDE">Offer</option>
-            <option value="CHANNEL_OVERRIDE">Manual</option>
-            <option value="CHANNEL_RULE">Channel rule</option>
-            <option value="PRICING_RULE">Engine rule</option>
-            <option value="MASTER_INHERIT">Master</option>
-            <option value="FALLBACK">Fallback</option>
+            <option value="">{t('pricing.filter.allSources')}</option>
+            <option value="SCHEDULED_SALE">{t('pricing.source.SCHEDULED_SALE')}</option>
+            <option value="OFFER_OVERRIDE">{t('pricing.source.OFFER_OVERRIDE')}</option>
+            <option value="CHANNEL_OVERRIDE">{t('pricing.source.CHANNEL_OVERRIDE')}</option>
+            <option value="CHANNEL_RULE">{t('pricing.source.CHANNEL_RULE')}</option>
+            <option value="PRICING_RULE">{t('pricing.source.PRICING_RULE')}</option>
+            <option value="MASTER_INHERIT">{t('pricing.source.MASTER_INHERIT')}</option>
+            <option value="FALLBACK">{t('pricing.source.FALLBACK')}</option>
           </select>
           <label className="inline-flex items-center gap-1.5 text-base text-slate-700 dark:text-slate-300 ml-2">
             <input
@@ -331,7 +331,7 @@ export default function PricingMatrixClient() {
                 setPage(0)
               }}
             />
-            Clamped only
+            {t('pricing.filter.clampedOnly')}
           </label>
           <div className="ml-auto flex items-center gap-2">
             <Button
@@ -363,6 +363,17 @@ export default function PricingMatrixClient() {
           stays minimal: count + mode + value + Apply + Deselect. */}
       {selected.size > 0 && (
         <div className="sticky top-2 z-20 bg-slate-900 text-white rounded-lg px-4 py-3 flex items-center gap-3 flex-wrap shadow-lg">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSelected(new Set())}
+            icon={<X size={12} />}
+            aria-label={t('pricing.bulk.deselect')}
+            className="text-slate-300 hover:text-white hover:bg-slate-800 border-transparent"
+          >
+            {t('pricing.bulk.deselect')}
+          </Button>
+          <div className="h-4 w-px bg-slate-700" />
           <span className="text-base font-semibold tabular-nums">
             {t('pricing.bulk.selected', {
               n: selected.size,
@@ -398,18 +409,9 @@ export default function PricingMatrixClient() {
             onClick={applyBulkOverride}
             loading={bulkApplying}
             disabled={bulkApplying || (bulkMode !== 'CLEAR' && !bulkValue)}
-            className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 border-white"
+            className="ml-auto bg-white text-slate-900 hover:bg-slate-100 border-white"
           >
             {t('pricing.bulk.apply')}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSelected(new Set())}
-            icon={<X size={12} />}
-            className="text-slate-400 dark:text-slate-500 dark:text-slate-400 hover:text-white hover:bg-slate-800"
-          >
-            {t('pricing.bulk.deselect')}
           </Button>
         </div>
       )}
@@ -418,7 +420,7 @@ export default function PricingMatrixClient() {
       {loading && !data ? (
         <Card>
           <div className="text-md text-slate-500 dark:text-slate-400 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
-            <Loader2 className="w-4 h-4 animate-spin" /> Loading snapshots…
+            <Loader2 className="w-4 h-4 animate-spin" /> {t('pricing.matrix.loading')}
           </div>
         </Card>
       ) : error ? (
@@ -429,8 +431,8 @@ export default function PricingMatrixClient() {
       ) : !data || data.rows.length === 0 ? (
         <EmptyState
           icon={Box}
-          title="No pricing snapshots yet"
-          description="Click Recompute all to materialize prices from the engine."
+          title={t('pricing.matrix.empty')}
+          description={t('pricing.matrix.emptyHint')}
         />
       ) : (
         <Card noPadding>
@@ -506,7 +508,7 @@ export default function PricingMatrixClient() {
                         onClick={() => setDrawerKey(r.id)}
                       >
                         <span className="font-medium">{r.channel}</span>
-                        <span className="text-slate-400 dark:text-slate-500 dark:text-slate-400"> · </span>
+                        <span className="text-slate-400 dark:text-slate-500"> · </span>
                         <span className="font-mono text-sm">{r.marketplace}</span>
                       </td>
                       <td
@@ -557,11 +559,11 @@ export default function PricingMatrixClient() {
                             <AlertCircle size={11} /> {r.warnings.length}
                           </span>
                         ) : (
-                          <span className="text-sm text-slate-400 dark:text-slate-500 dark:text-slate-400">—</span>
+                          <span className="text-sm text-slate-400 dark:text-slate-500">—</span>
                         )}
                       </td>
                       <td
-                        className="px-3 py-2 text-slate-400 dark:text-slate-500 dark:text-slate-400 cursor-pointer"
+                        className="px-3 py-2 text-slate-400 dark:text-slate-500 cursor-pointer"
                         onClick={() => setDrawerKey(r.id)}
                       >
                         <ChevronRight size={14} />
@@ -590,7 +592,7 @@ export default function PricingMatrixClient() {
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={page === 0 || loading}
               >
-                Prev
+                {t('pricing.pagination.prev')}
               </Button>
               <Button
                 variant="secondary"
@@ -598,7 +600,7 @@ export default function PricingMatrixClient() {
                 onClick={() => setPage((p) => p + 1)}
                 disabled={page + 1 >= totalPages || loading}
               >
-                Next
+                {t('pricing.pagination.next')}
               </Button>
             </div>
           </div>
@@ -774,7 +776,7 @@ function PricingDetailDrawer({
           </Button>
         </div>
 
-        <div className="text-sm text-slate-400 dark:text-slate-500 dark:text-slate-400">
+        <div className="text-sm text-slate-400 dark:text-slate-500">
           {t('pricing.drawer.lastComputed', {
             when: new Date(row.computedAt).toLocaleString(),
           })}
@@ -807,7 +809,7 @@ function Item({
       <dt className="text-slate-500 dark:text-slate-400">{label}</dt>
       <dd className="font-mono text-slate-800 dark:text-slate-200 text-right tabular-nums">
         {display}
-        {suffix ? <span className="text-slate-400 dark:text-slate-500 dark:text-slate-400 ml-1">{suffix}</span> : null}
+        {suffix ? <span className="text-slate-400 dark:text-slate-500 ml-1">{suffix}</span> : null}
       </dd>
     </>
   )

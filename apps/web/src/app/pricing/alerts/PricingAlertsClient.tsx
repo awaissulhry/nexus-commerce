@@ -182,7 +182,7 @@ export default function PricingAlertsClient() {
           onClick={fetchData}
           icon={<RefreshCw size={12} />}
         >
-          Refresh
+          {t('pricing.action.refresh')}
         </Button>
       </div>
 
@@ -236,7 +236,7 @@ export default function PricingAlertsClient() {
                       </td>
                       <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
                         {d.channel}{' '}
-                        <span className="text-slate-400 dark:text-slate-500 dark:text-slate-400">·</span>{' '}
+                        <span className="text-slate-400 dark:text-slate-500">·</span>{' '}
                         <span className="font-mono text-sm">
                           {d.marketplace}
                         </span>
@@ -280,7 +280,7 @@ export default function PricingAlertsClient() {
             {t('pricing.alerts.section.lowMargin', {
               n: data.lowMarginRows.length,
             })}
-            <span className="ml-2 normal-case font-normal text-slate-400 dark:text-slate-500 dark:text-slate-400">
+            <span className="ml-2 normal-case font-normal text-slate-400 dark:text-slate-500">
               {t('pricing.alerts.section.lowMarginSuffix', {
                 pct: data.thresholds.lowMarginPct,
               })}
@@ -335,7 +335,7 @@ export default function PricingAlertsClient() {
                         </td>
                         <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
                           {m.channel}{' '}
-                          <span className="text-slate-400 dark:text-slate-500 dark:text-slate-400">·</span>{' '}
+                          <span className="text-slate-400 dark:text-slate-500">·</span>{' '}
                           <span className="font-mono text-sm">
                             {m.marketplace}
                           </span>
@@ -450,7 +450,7 @@ export default function PricingAlertsClient() {
                     </td>
                     <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
                       {r.channel}{' '}
-                      <span className="text-slate-400 dark:text-slate-500 dark:text-slate-400">·</span>{' '}
+                      <span className="text-slate-400 dark:text-slate-500">·</span>{' '}
                       <span className="font-mono text-sm">{r.marketplace}</span>
                       {r.fulfillmentMethod && (
                         <span className="ml-1 text-xs text-slate-500 dark:text-slate-400">

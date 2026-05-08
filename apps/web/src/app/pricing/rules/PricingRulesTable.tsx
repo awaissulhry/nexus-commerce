@@ -138,7 +138,7 @@ export default function PricingRulesTable({
               {Number(value).toFixed(1)}%
             </span>
           ) : (
-            <span className="text-sm text-slate-400 dark:text-slate-500 dark:text-slate-400">—</span>
+            <span className="text-sm text-slate-400 dark:text-slate-500">—</span>
           );
         },
       },
@@ -152,7 +152,7 @@ export default function PricingRulesTable({
               {Number(value).toFixed(1)}%
             </span>
           ) : (
-            <span className="text-sm text-slate-400 dark:text-slate-500 dark:text-slate-400">—</span>
+            <span className="text-sm text-slate-400 dark:text-slate-500">—</span>
           );
         },
       },
@@ -273,7 +273,7 @@ export default function PricingRulesTable({
                             ? (header.column.columnDef.header as () => string)()
                             : (header.column.columnDef.header as string)}
                           {header.column.getCanSort() && (
-                            <span className="text-xs text-slate-400 dark:text-slate-500 dark:text-slate-400">
+                            <span className="text-xs text-slate-400 dark:text-slate-500">
                               {header.column.getIsSorted() === 'desc'
                                 ? '↓'
                                 : header.column.getIsSorted() === 'asc'

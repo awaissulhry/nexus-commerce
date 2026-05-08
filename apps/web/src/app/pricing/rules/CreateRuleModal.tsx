@@ -177,7 +177,7 @@ export default function CreateRuleModal({
       open
       onClose={onClose}
       title={t('pricing.rules.modal.createTitle')}
-      size="2xl"
+      size="xl"
     >
       <form onSubmit={handleSubmit}>
         <ModalBody className="space-y-3">
@@ -319,7 +319,7 @@ export default function CreateRuleModal({
             )}
 
             {formData.type === 'DYNAMIC_MARGIN' && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                     {t('pricing.rules.modal.baseMargin')}
@@ -352,7 +352,7 @@ export default function CreateRuleModal({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 {t('pricing.rules.modal.minMarginLabel')}
@@ -475,7 +475,7 @@ export default function CreateRuleModal({
                           <td
                             className={`px-2 py-1 text-right tabular-nums ${
                               r.delta == null
-                                ? 'text-slate-400 dark:text-slate-500 dark:text-slate-400'
+                                ? 'text-slate-400 dark:text-slate-500'
                                 : r.delta > 0
                                   ? 'text-emerald-700 dark:text-emerald-300'
                                   : r.delta < 0

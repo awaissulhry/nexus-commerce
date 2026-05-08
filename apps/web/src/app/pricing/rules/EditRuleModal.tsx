@@ -61,7 +61,7 @@ export default function EditRuleModal({
   };
 
   return (
-    <Modal open onClose={onClose} title={t('pricing.rules.modal.editTitle')} size="md">
+    <Modal open onClose={onClose} title={t('pricing.rules.modal.editTitle')} size="xl">
       <form onSubmit={handleSubmit}>
         <ModalBody className="space-y-3">
           {error && (
@@ -118,7 +118,7 @@ export default function EditRuleModal({
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 {t('pricing.rules.modal.minMarginLabel')}
