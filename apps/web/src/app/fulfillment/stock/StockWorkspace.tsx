@@ -835,7 +835,7 @@ export default function StockWorkspace() {
                 session is DRAFT or IN_PROGRESS. */}
             <Link
               href="/fulfillment/stock/cycle-count"
-              className="relative h-11 sm:h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5 text-slate-700"
+              className="relative h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
               title={t('stock.action.cycleCountsTitle')}
             >
               <ClipboardCheck size={12} />
@@ -854,28 +854,28 @@ export default function StockWorkspace() {
                 heavy lifting still happens in the per-product drawer. */}
             <Link
               href="/fulfillment/stock/transfers"
-              className="h-11 sm:h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5 text-slate-700"
+              className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
             >
               <ArrowRightLeft size={12} />
               {t('stock.transfers.title')}
             </Link>
             <Link
               href="/fulfillment/stock/reservations"
-              className="h-11 sm:h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5 text-slate-700"
+              className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
             >
               <LockIcon size={12} />
               {t('stock.reservations.title')}
             </Link>
             <Link
               href="/fulfillment/stock/analytics"
-              className="h-11 sm:h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5 text-slate-700"
+              className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
             >
               <Activity size={12} />
               {t('stock.analytics.title')}
             </Link>
             <Link
               href="/fulfillment/stock/import"
-              className="h-11 sm:h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5 text-slate-700"
+              className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
               title={t('stock.import.title')}
             >
               <Upload size={12} />
@@ -883,7 +883,7 @@ export default function StockWorkspace() {
             </Link>
             <Link
               href="/fulfillment/stock/shopify-locations"
-              className="h-11 sm:h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5 text-slate-700"
+              className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
               title={t('stock.shopifyLocations.title')}
             >
               <Store size={12} />
@@ -891,7 +891,7 @@ export default function StockWorkspace() {
             </Link>
             <Link
               href="/fulfillment/stock/mcf"
-              className="h-11 sm:h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5 text-slate-700"
+              className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
               title={t('stock.mcf.title')}
             >
               <Truck size={12} />
@@ -899,7 +899,7 @@ export default function StockWorkspace() {
             </Link>
             <Link
               href="/fulfillment/stock/fba-pan-eu"
-              className="h-11 sm:h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5 text-slate-700"
+              className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
               title={t('stock.fbaPanEu.title')}
             >
               <Activity size={12} />
@@ -917,7 +917,7 @@ export default function StockWorkspace() {
             />
             <button
               onClick={() => setShortcutsOpen(true)}
-              className="h-11 w-11 sm:h-8 sm:w-8 inline-flex items-center justify-center border border-slate-200 rounded-md hover:bg-slate-50 text-slate-600"
+              className="h-11 w-11 sm:h-8 sm:w-8 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
               title="Keyboard shortcuts (?)"
               aria-label="Keyboard shortcuts"
             >
@@ -925,7 +925,7 @@ export default function StockWorkspace() {
             </button>
             <button
               onClick={() => { fetchStock(); fetchSidecar() }}
-              className="h-11 sm:h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+              className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
             >
               <RefreshCw size={12} /> {t('stock.action.refresh')}
             </button>
@@ -951,13 +951,13 @@ export default function StockWorkspace() {
         <div className="space-y-3">
           {/* Location chips */}
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold mr-1">{t('stock.filters.location')}</span>
+            <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mr-1">{t('stock.filters.location')}</span>
             <button
               onClick={() => updateUrl({ location: undefined, page: undefined })}
               className={`h-11 sm:h-7 px-3 text-sm rounded-full font-medium border ${
                 !locationCode
                   ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 border-slate-200 dark:border-slate-700 hover:border-slate-300'
               }`}
             >{t('stock.filters.locationAll')}</button>
             {locations.map((loc) => (
@@ -967,7 +967,7 @@ export default function StockWorkspace() {
                 className={`h-11 sm:h-7 px-3 text-sm rounded-full font-medium border inline-flex items-center gap-1.5 ${
                   locationCode === loc.code
                     ? 'bg-slate-900 text-white border-slate-900'
-                    : `bg-white text-slate-600 border-slate-200 hover:border-slate-300`
+                    : `bg-white dark:bg-slate-900 text-slate-600 border-slate-200 dark:border-slate-700 hover:border-slate-300`
                 }`}
               >
                 {loc.code}
@@ -979,7 +979,7 @@ export default function StockWorkspace() {
           </div>
 
           {/* Search + status chips */}
-          <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-slate-100">
+          <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-slate-100 dark:border-slate-800">
             <div className="flex-1 min-w-[240px] max-w-md relative">
               <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <Input
@@ -989,7 +989,7 @@ export default function StockWorkspace() {
                 className="pl-7"
               />
             </div>
-            <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold ml-1">{t('stock.filters.status')}</span>
+            <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold ml-1">{t('stock.filters.status')}</span>
             {STATUS_OPTIONS.map((s) => {
               const active = status === s.value
               const toneActive: Record<string, string> = {
@@ -1003,7 +1003,7 @@ export default function StockWorkspace() {
                   key={s.value}
                   onClick={() => updateUrl({ status: active ? undefined : s.value, page: undefined })}
                   className={`h-11 sm:h-7 px-3 text-sm border rounded-full font-medium ${
-                    active ? toneActive[s.tone] : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+                    active ? toneActive[s.tone] : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300'
                   }`}
                 >{t(s.labelKey)}</button>
               )
@@ -1011,13 +1011,13 @@ export default function StockWorkspace() {
             {filterCount > 0 && (
               <button
                 onClick={() => updateUrl({ location: undefined, status: undefined, search: undefined, page: undefined })}
-                className="h-11 sm:h-7 px-2 text-base text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
+                className="h-11 sm:h-7 px-2 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 inline-flex items-center gap-1"
               >
                 <X size={12} /> {t('stock.filters.clear')}
               </button>
             )}
-            <div className="ml-auto text-base text-slate-500">
-              <span className="font-semibold text-slate-700 tabular-nums">{total}</span> {t('stock.filters.rowsCount')}
+            <div className="ml-auto text-base text-slate-500 dark:text-slate-400">
+              <span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">{total}</span> {t('stock.filters.rowsCount')}
             </div>
           </div>
         </div>
@@ -1036,7 +1036,7 @@ export default function StockWorkspace() {
           )
         }
         if (loading && noResults) {
-          return <Card><div className="text-md text-slate-500 py-8 text-center">{t('stock.loading')}</div></Card>
+          return <Card><div className="text-md text-slate-500 dark:text-slate-400 py-8 text-center">{t('stock.loading')}</div></Card>
         }
         if (noResults) {
           return (
@@ -1127,7 +1127,7 @@ export default function StockWorkspace() {
       )}
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between text-base text-slate-500">
+        <div className="flex items-center justify-between text-base text-slate-500 dark:text-slate-400">
           <span>
             {t('stock.pagination.pageOf', { page, total: totalPages })}
           </span>
@@ -1135,12 +1135,12 @@ export default function StockWorkspace() {
             <button
               onClick={() => updateUrl({ page: page <= 2 ? undefined : String(page - 1) })}
               disabled={page === 1}
-              className="h-11 sm:h-7 px-3 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="h-11 sm:h-7 px-3 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
             >{t('stock.pagination.previous')}</button>
             <button
               onClick={() => updateUrl({ page: String(Math.min(totalPages, page + 1)) })}
               disabled={page >= totalPages}
-              className="h-11 sm:h-7 px-3 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="h-11 sm:h-7 px-3 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
             >{t('stock.pagination.next')}</button>
           </div>
         </div>
@@ -1163,7 +1163,7 @@ export default function StockWorkspace() {
         <Modal title={t('stock.savedViews.saveTitle')} onClose={() => { setSaveViewModalOpen(false); setSaveViewName('') }}>
           <div className="space-y-3">
             <div>
-              <label className="text-sm uppercase tracking-wider text-slate-500 font-semibold block mb-1">
+              <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1">
                 {t('stock.savedViews.nameLabel')}
               </label>
               <input
@@ -1173,20 +1173,20 @@ export default function StockWorkspace() {
                 onKeyDown={(e) => { if (e.key === 'Enter' && saveViewName.trim()) saveCurrentAsView() }}
                 placeholder={t('stock.savedViews.namePlaceholder')}
                 autoFocus
-                className="w-full h-9 px-2 text-md border border-slate-200 rounded"
+                className="w-full h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded"
               />
             </div>
-            <div className="text-sm text-slate-500">
+            <div className="text-sm text-slate-500 dark:text-slate-400">
               {t('stock.savedViews.willCapture')}: {view}
               {locationCode && `, ${locationCode}`}
               {status && `, ${status.toLowerCase()}`}
               {search && `, "${search.slice(0, 24)}"`}
               {`, ${density}, ${visibleColumns.length} ${t('stock.savedViews.columns')}`}
             </div>
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               <button
                 onClick={() => { setSaveViewModalOpen(false); setSaveViewName('') }}
-                className="h-11 sm:h-8 px-3 text-base text-slate-500 hover:text-slate-900"
+                className="h-11 sm:h-8 px-3 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100"
               >{t('stock.list.cancel')}</button>
               <button
                 onClick={saveCurrentAsView}
@@ -1208,11 +1208,11 @@ export default function StockWorkspace() {
           z-index above this nav. */}
       {selected.size === 0 && !drawerProductId && (
         <nav
-          className="sm:hidden fixed inset-x-0 bottom-0 z-20 bg-white border-t border-slate-200 shadow-lg flex items-stretch text-sm font-medium"
+          className="sm:hidden fixed inset-x-0 bottom-0 z-20 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 shadow-lg flex items-stretch text-sm font-medium"
           aria-label="Stock navigation"
         >
           <span
-            className="flex-1 inline-flex flex-col items-center justify-center gap-0.5 py-2 text-slate-900 border-t-2 border-blue-600"
+            className="flex-1 inline-flex flex-col items-center justify-center gap-0.5 py-2 text-slate-900 dark:text-slate-100 border-t-2 border-blue-600"
             aria-current="page"
           >
             <Boxes size={16} />
@@ -1220,7 +1220,7 @@ export default function StockWorkspace() {
           </span>
           <Link
             href="/fulfillment/stock/cycle-count"
-            className="relative flex-1 inline-flex flex-col items-center justify-center gap-0.5 py-2 text-slate-600 border-t-2 border-transparent active:bg-slate-50"
+            className="relative flex-1 inline-flex flex-col items-center justify-center gap-0.5 py-2 text-slate-600 border-t-2 border-transparent active:bg-slate-50 dark:bg-slate-800"
           >
             <ClipboardCheck size={16} />
             Cycle counts
@@ -1271,14 +1271,14 @@ function KpiStrip({ kpis, t }: { kpis: Kpis | null; t: (k: string, v?: Record<st
       label: t('stock.kpi.stockouts'),
       value: kpis.stockouts.toLocaleString(),
       detail: t('stock.kpi.stockoutsDetail', { n: kpis.totalSkus.toLocaleString() }),
-      tone: kpis.stockouts > 0 ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 text-slate-600',
+      tone: kpis.stockouts > 0 ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 dark:bg-slate-800 text-slate-600',
     },
     {
       icon: TrendingDown,
       label: t('stock.kpi.critical'),
       value: kpis.critical.toLocaleString(),
       detail: t('stock.kpi.criticalDetail', { n: kpis.low.toLocaleString() }),
-      tone: kpis.critical > 0 ? 'bg-orange-50 text-orange-600' : 'bg-slate-50 text-slate-600',
+      tone: kpis.critical > 0 ? 'bg-orange-50 text-orange-600' : 'bg-slate-50 dark:bg-slate-800 text-slate-600',
     },
     {
       icon: Layers,
@@ -1298,9 +1298,9 @@ function KpiStrip({ kpis, t }: { kpis: Kpis | null; t: (k: string, v?: Record<st
               <c.icon size={16} />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">{c.label}</div>
-              <div className="text-[20px] font-semibold tabular-nums text-slate-900 mt-0.5">{c.value}</div>
-              <div className="text-sm text-slate-500 mt-0.5 truncate">{c.detail}</div>
+              <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">{c.label}</div>
+              <div className="text-[20px] font-semibold tabular-nums text-slate-900 dark:text-slate-100 mt-0.5">{c.value}</div>
+              <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 truncate">{c.detail}</div>
             </div>
           </div>
         </Card>
@@ -1329,8 +1329,8 @@ function InsightsPanel({
       <div className="flex items-center justify-between">
         <div className="inline-flex items-center gap-2">
           <Lightbulb size={14} className="text-amber-500" />
-          <span className="text-md font-semibold text-slate-900">Insights</span>
-          <span className="text-sm text-slate-500">
+          <span className="text-md font-semibold text-slate-900 dark:text-slate-100">Insights</span>
+          <span className="text-sm text-slate-500 dark:text-slate-400">
             {insights.stockoutRisk.length > 0 && (
               <span className="inline-flex items-center gap-1 mr-3">
                 <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
@@ -1353,7 +1353,7 @@ function InsightsPanel({
         </div>
         <button
           onClick={onToggle}
-          className="h-11 sm:h-7 px-2 text-sm text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
+          className="h-11 sm:h-7 px-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 inline-flex items-center gap-1"
         >
           {collapsed ? 'Show' : 'Hide'}
           <ChevronRight
@@ -1364,7 +1364,7 @@ function InsightsPanel({
       </div>
 
       {!collapsed && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-3 pt-3 border-t border-slate-100">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
           {/* Stockout risk */}
           <InsightCategory
             icon={AlertCircle}
@@ -1378,7 +1378,7 @@ function InsightsPanel({
               <button
                 key={p.id}
                 onClick={() => onOpenProduct(p.id)}
-                className="w-full text-left flex items-center gap-2 py-1 px-1.5 -mx-1.5 rounded hover:bg-slate-50"
+                className="w-full text-left flex items-center gap-2 py-1 px-1.5 -mx-1.5 rounded hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800"
               >
                 {p.thumbnailUrl ? (
                   <img src={p.thumbnailUrl} alt="" className="w-7 h-7 rounded object-cover bg-slate-100 flex-shrink-0" />
@@ -1388,8 +1388,8 @@ function InsightsPanel({
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <div className="text-base font-medium text-slate-900 truncate">{p.name}</div>
-                  <div className="text-xs text-slate-500 font-mono truncate">{p.sku}</div>
+                  <div className="text-base font-medium text-slate-900 dark:text-slate-100 truncate">{p.name}</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">{p.sku}</div>
                 </div>
                 <div className={`text-base font-semibold tabular-nums ${
                   p.totalStock === 0 ? 'text-rose-600' : 'text-orange-600'
@@ -1417,7 +1417,7 @@ function InsightsPanel({
               <button
                 key={g.productId}
                 onClick={() => onOpenProduct(g.productId)}
-                className="w-full text-left flex items-center gap-2 py-1 px-1.5 -mx-1.5 rounded hover:bg-slate-50"
+                className="w-full text-left flex items-center gap-2 py-1 px-1.5 -mx-1.5 rounded hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800"
               >
                 {g.thumbnailUrl ? (
                   <img src={g.thumbnailUrl} alt="" className="w-7 h-7 rounded object-cover bg-slate-100 flex-shrink-0" />
@@ -1427,8 +1427,8 @@ function InsightsPanel({
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <div className="text-base font-medium text-slate-900 truncate">{g.name}</div>
-                  <div className="text-xs text-slate-500 inline-flex items-center gap-1.5">
+                  <div className="text-base font-medium text-slate-900 dark:text-slate-100 truncate">{g.name}</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
                     <span className="font-mono">{g.surplusLocation.code}</span>
                     <span className="tabular-nums">{g.surplusLocation.quantity}</span>
                     <ArrowRightLeft size={9} className="text-slate-400" />
@@ -1461,11 +1461,11 @@ function InsightsPanel({
               <button
                 key={c.id}
                 onClick={() => c.productId && onOpenProduct(c.productId)}
-                className="w-full text-left flex items-center gap-2 py-1 px-1.5 -mx-1.5 rounded hover:bg-slate-50"
+                className="w-full text-left flex items-center gap-2 py-1 px-1.5 -mx-1.5 rounded hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="text-base font-medium text-slate-900 truncate">{c.name ?? c.sku ?? 'Unknown'}</div>
-                  <div className="text-xs text-slate-500 font-mono truncate">
+                  <div className="text-base font-medium text-slate-900 dark:text-slate-100 truncate">{c.name ?? c.sku ?? 'Unknown'}</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
                     {c.locationCode && <span>{c.locationCode} · </span>}
                     {c.quantityBefore != null ? `${c.quantityBefore}` : '?'}
                     {' → '}
@@ -1473,7 +1473,7 @@ function InsightsPanel({
                   </div>
                 </div>
                 <div className={`text-sm font-semibold tabular-nums flex-shrink-0 ${
-                  c.change > 0 ? 'text-emerald-600' : c.change < 0 ? 'text-rose-600' : 'text-slate-500'
+                  c.change > 0 ? 'text-emerald-600' : c.change < 0 ? 'text-rose-600' : 'text-slate-500 dark:text-slate-400'
                 }`}>
                   {c.change > 0 ? '+' : ''}{c.change}
                 </div>
@@ -1511,9 +1511,9 @@ function InsightCategory({
     <div className="space-y-1.5">
       <div className="inline-flex items-center gap-1.5">
         <Icon size={12} className={iconTone} />
-        <span className="text-sm font-semibold uppercase tracking-wider text-slate-700">{title}</span>
+        <span className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{title}</span>
       </div>
-      <div className="text-xs text-slate-500 leading-snug">{description}</div>
+      <div className="text-xs text-slate-500 dark:text-slate-400 leading-snug">{description}</div>
       <div className="space-y-0.5 pt-1">
         {isEmpty ? (
           <div className="text-sm text-slate-400 py-1.5">{empty}</div>
@@ -1728,14 +1728,14 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
       <aside
         ref={containerRef}
         onClick={(e) => e.stopPropagation()}
-        className="relative h-full w-full max-w-2xl bg-white shadow-2xl overflow-y-auto"
+        className="relative h-full w-full max-w-2xl bg-white dark:bg-slate-900 shadow-2xl overflow-y-auto"
       >
-        <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
-          <div className="text-md font-semibold text-slate-900 inline-flex items-center gap-2">
+        <header className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 z-10">
+          <div className="text-md font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2">
             <Boxes size={14} /> Stock detail
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={fetchBundle} className="h-11 sm:h-7 px-2 text-sm text-slate-500 hover:text-slate-900 inline-flex items-center gap-1">
+            <button onClick={fetchBundle} className="h-11 sm:h-7 px-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 inline-flex items-center gap-1">
               <RefreshCw size={11} /> Refresh
             </button>
             <button onClick={onClose} className="h-11 w-11 sm:h-7 sm:w-7 inline-flex items-center justify-center rounded hover:bg-slate-100">
@@ -1752,7 +1752,7 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
           )}
 
           {loading && !bundle ? (
-            <div className="text-md text-slate-500 py-8 text-center">Loading…</div>
+            <div className="text-md text-slate-500 dark:text-slate-400 py-8 text-center">Loading…</div>
           ) : bundle ? (
             <>
               {/* Product header */}
@@ -1765,8 +1765,8 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <div className="text-lg font-semibold text-slate-900">{bundle.product.name}</div>
-                  <div className="text-sm text-slate-500 font-mono">
+                  <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{bundle.product.name}</div>
+                  <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">
                     {bundle.product.sku}
                     {bundle.product.amazonAsin && <span> · {bundle.product.amazonAsin}</span>}
                   </div>
@@ -1788,16 +1788,16 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                 <button
                   onClick={() => setAction({ kind: 'transfer' })}
                   disabled={bundle.stockLevels.length < 1}
-                  className="h-11 sm:h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-40"
+                  className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-40"
                 ><ArrowRightLeft size={12} /> Transfer</button>
                 <button
                   onClick={() => setAction({ kind: 'reserve' })}
                   disabled={bundle.stockLevels.length < 1}
-                  className="h-11 sm:h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-40"
+                  className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-40"
                 ><LockIcon size={12} /> Reserve</button>
                 <Link
                   href={`/products/${productId}/edit`}
-                  className="h-11 sm:h-8 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+                  className="h-11 sm:h-8 px-3 text-base bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
                 ><ExternalLink size={12} /> Open in editor</Link>
               </div>
 
@@ -1834,21 +1834,21 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                 ) : (
                   <ul className="space-y-1.5">
                     {bundle.stockLevels.map((sl) => (
-                      <li key={sl.id} className="flex items-center justify-between gap-3 py-2 px-3 border border-slate-200 rounded">
+                      <li key={sl.id} className="flex items-center justify-between gap-3 py-2 px-3 border border-slate-200 dark:border-slate-700 rounded">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${LOCATION_TONE[sl.location.type] ?? 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                            <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${LOCATION_TONE[sl.location.type] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 border-slate-200 dark:border-slate-700'}`}>
                               {sl.location.code}
                             </span>
-                            <span className="text-base text-slate-700">{sl.location.name}</span>
+                            <span className="text-base text-slate-700 dark:text-slate-300">{sl.location.name}</span>
                             {sl.activeReservations > 0 && (
                               <span className="text-xs text-violet-700 bg-violet-50 px-1.5 py-0.5 rounded">
                                 {sl.activeReservations} active reservation{sl.activeReservations === 1 ? '' : 's'}
                               </span>
                             )}
                           </div>
-                          <div className="mt-1 text-sm text-slate-500 inline-flex items-center gap-3">
-                            <span><span className="font-semibold tabular-nums text-slate-700">{sl.quantity}</span> on hand</span>
+                          <div className="mt-1 text-sm text-slate-500 dark:text-slate-400 inline-flex items-center gap-3">
+                            <span><span className="font-semibold tabular-nums text-slate-700 dark:text-slate-300">{sl.quantity}</span> on hand</span>
                             <span><span className="tabular-nums">{sl.reserved}</span> reserved</span>
                             <span><span className="tabular-nums">{sl.available}</span> available</span>
                             <span className="text-slate-400">· {formatRelative(sl.lastUpdatedAt)}</span>
@@ -1856,7 +1856,7 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                         </div>
                         <button
                           onClick={() => setAction({ kind: 'adjust', stockLevelId: sl.id, locationCode: sl.location.code })}
-                          className="h-11 sm:h-7 px-2 text-sm border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1"
+                          className="h-11 sm:h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1"
                         >
                           <Plus size={11} className="-mr-0.5" /><Minus size={11} /> Adjust
                         </button>
@@ -1884,10 +1884,10 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                       // S.26 — find this listing's per-channel ATP row.
                       const atp = bundle.atpPerChannel?.find((r) => r.channelListingId === cl.id)
                       return (
-                        <li key={cl.id} className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 border-b border-slate-100 last:border-0">
+                        <li key={cl.id} className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-semibold text-slate-700">{cl.channel} · {cl.marketplace}</span>
+                              <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">{cl.channel} · {cl.marketplace}</span>
                               <span className={`text-xs uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded ${toneCls[tone]}`}>
                                 {cl.listingStatus}
                               </span>
@@ -1898,8 +1898,8 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                             </div>
                             {/* S.26 — ATP breakdown: on-hand − reserved − buffer = available */}
                             {atp && (
-                              <div className="text-xs text-slate-500 mt-0.5 tabular-nums">
-                                {t('stock.atpPerChannel.onHand')} <span className="text-slate-700 font-semibold">{atp.onHand}</span>
+                              <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 tabular-nums">
+                                {t('stock.atpPerChannel.onHand')} <span className="text-slate-700 dark:text-slate-300 font-semibold">{atp.onHand}</span>
                                 {atp.reservedForChannel > 0 && <> · −<span className="text-violet-700">{atp.reservedForChannel}</span> {t('stock.atpPerChannel.reserved')}</>}
                                 {atp.stockBuffer > 0 && <> · −<span className="text-amber-700">{atp.stockBuffer}</span> {t('stock.atpPerChannel.buffer')}</>}
                                 <> = <span className="text-emerald-700 font-semibold">{atp.available}</span> {t('stock.atpPerChannel.available')}</>
@@ -1911,8 +1911,8 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                               </div>
                             )}
                           </div>
-                          <div className="text-right flex-shrink-0 text-sm text-slate-500 tabular-nums">
-                            {cl.quantity == null ? <span className="text-slate-400">follows master</span> : <><span className="font-semibold text-slate-700">{cl.quantity}</span> shown</>}
+                          <div className="text-right flex-shrink-0 text-sm text-slate-500 dark:text-slate-400 tabular-nums">
+                            {cl.quantity == null ? <span className="text-slate-400">follows master</span> : <><span className="font-semibold text-slate-700 dark:text-slate-300">{cl.quantity}</span> shown</>}
                             {cl.stockBuffer > 0 && <span className="text-slate-400"> · −{cl.stockBuffer} buffer</span>}
                           </div>
                         </li>
@@ -1928,7 +1928,7 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                 icon={TrendingDown}
                 right={
                   bundle.salesVelocity.last30Units > 0 ? (
-                    <span className="text-sm text-slate-500">
+                    <span className="text-sm text-slate-500 dark:text-slate-400">
                       {bundle.salesVelocity.avgDailyUnits.toFixed(2)}/day avg
                     </span>
                   ) : null
@@ -1938,17 +1938,17 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                   <div className="text-base text-slate-400 py-2">No sales in the last 30 days.</div>
                 ) : (
                   <div className="space-y-2">
-                    <div className="flex items-center gap-4 text-base text-slate-700">
+                    <div className="flex items-center gap-4 text-base text-slate-700 dark:text-slate-300">
                       <div>
                         <span className="font-semibold tabular-nums">{bundle.salesVelocity.last30Units}</span>
-                        <span className="text-slate-500 text-sm"> units</span>
+                        <span className="text-slate-500 dark:text-slate-400 text-sm"> units</span>
                       </div>
                       <div>
                         <span className="font-semibold tabular-nums">€{bundle.salesVelocity.last30Revenue.toFixed(2)}</span>
-                        <span className="text-slate-500 text-sm"> revenue</span>
+                        <span className="text-slate-500 dark:text-slate-400 text-sm"> revenue</span>
                       </div>
                       {bundle.salesVelocity.daysOfStock != null && (
-                        <div className={bundle.salesVelocity.daysOfStock <= 7 ? 'text-rose-700' : bundle.salesVelocity.daysOfStock <= 21 ? 'text-amber-700' : 'text-slate-700'}>
+                        <div className={bundle.salesVelocity.daysOfStock <= 7 ? 'text-rose-700' : bundle.salesVelocity.daysOfStock <= 21 ? 'text-amber-700' : 'text-slate-700 dark:text-slate-300'}>
                           <span className="font-semibold tabular-nums">{bundle.salesVelocity.daysOfStock}</span>
                           <span className="text-sm"> days of stock</span>
                         </div>
@@ -1962,7 +1962,7 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
               {/* ATP / reorder */}
               {bundle.atp && (bundle.atp.totalOpenInbound > 0 || bundle.atp.leadTimeSource !== 'FALLBACK') && (
                 <Section title="Replenishment" icon={Truck}>
-                  <div className="text-base text-slate-700 space-y-1">
+                  <div className="text-base text-slate-700 dark:text-slate-300 space-y-1">
                     <div>
                       Lead time:{' '}
                       <span className="font-semibold tabular-nums">{bundle.atp.leadTimeDays} days</span>
@@ -1972,7 +1972,7 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                       <div>
                         Inbound:{' '}
                         <span className="font-semibold tabular-nums">{bundle.atp.totalOpenInbound}</span>
-                        <span className="text-slate-500 text-sm"> units</span>
+                        <span className="text-slate-500 dark:text-slate-400 text-sm"> units</span>
                         {bundle.atp.inboundWithinLeadTime !== bundle.atp.totalOpenInbound && (
                           <span className="text-slate-400 text-sm"> ({bundle.atp.inboundWithinLeadTime} within lead time)</span>
                         )}
@@ -1981,7 +1981,7 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                     {bundle.atp.openShipments.length > 0 && (
                       <ul className="mt-1 space-y-0.5">
                         {bundle.atp.openShipments.slice(0, 5).map((s) => (
-                          <li key={s.shipmentId} className="text-sm text-slate-500 inline-flex items-center gap-2">
+                          <li key={s.shipmentId} className="text-sm text-slate-500 dark:text-slate-400 inline-flex items-center gap-2">
                             <span className="font-mono">{s.reference ?? s.shipmentId.slice(0, 8)}</span>
                             <span>·</span>
                             <span>{s.type} {s.status.toLowerCase()}</span>
@@ -2001,11 +2001,11 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                 <Section title="Active reservations" icon={LockIcon}>
                   <ul className="space-y-1">
                     {bundle.reservations.map((r) => (
-                      <li key={r.id} className="flex items-center justify-between gap-2 py-1.5 px-2 -mx-2 border-b border-slate-100 last:border-0">
+                      <li key={r.id} className="flex items-center justify-between gap-2 py-1.5 px-2 -mx-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
                         <div className="min-w-0">
-                          <div className="text-base text-slate-700">
+                          <div className="text-base text-slate-700 dark:text-slate-300">
                             <span className="font-semibold tabular-nums">{r.quantity}</span> at{' '}
-                            <span className="text-xs uppercase tracking-wider font-semibold text-slate-500">{r.location.code}</span>
+                            <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{r.location.code}</span>
                             <span className="text-slate-400 text-sm"> · {r.reason}</span>
                           </div>
                           <div className="text-xs text-slate-400">
@@ -2022,7 +2022,7 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                               handleActionDone()
                             } catch (e: any) { toast.error(e.message) }
                           }}
-                          className="h-6 px-2 text-xs text-slate-500 hover:text-slate-900 border border-slate-200 rounded"
+                          className="h-6 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded"
                         >Release</button>
                       </li>
                     ))}
@@ -2036,16 +2036,16 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                   history is available via /api/stock/cost-layers/:id. */}
               {bundle.costing && (
                 <Section title={t('stock.costLayers.section')} icon={Boxes}>
-                  <div className="text-sm text-slate-500 mb-2 inline-flex items-center gap-3 flex-wrap">
+                  <div className="text-sm text-slate-500 dark:text-slate-400 mb-2 inline-flex items-center gap-3 flex-wrap">
                     <span className="inline-flex items-center gap-1">
-                      <span className="text-xs uppercase tracking-wider font-semibold text-slate-700">
+                      <span className="text-xs uppercase tracking-wider font-semibold text-slate-700 dark:text-slate-300">
                         {t(`stock.costLayers.method.${bundle.costing.method}` as string) ?? bundle.costing.method}
                       </span>
                     </span>
                     {bundle.costing.weightedAvgCostCents != null && (
                       <span>
                         {t('stock.costLayers.currentWac')}:{' '}
-                        <span className="font-semibold text-slate-900 tabular-nums">
+                        <span className="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
                           €{(bundle.costing.weightedAvgCostCents / 100).toFixed(4)}
                         </span>
                       </span>
@@ -2060,21 +2060,21 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                       {bundle.costing.layers.slice(0, 10).map((l) => (
                         <li
                           key={l.id}
-                          className="flex items-center justify-between gap-2 py-1.5 px-2 -mx-2 border-b border-slate-100 last:border-0"
+                          className="flex items-center justify-between gap-2 py-1.5 px-2 -mx-2 border-b border-slate-100 dark:border-slate-800 last:border-0"
                         >
                           <div className="min-w-0 flex-1">
                             <div className="text-sm">
-                              <span className="font-semibold tabular-nums text-slate-900">
+                              <span className="font-semibold tabular-nums text-slate-900 dark:text-slate-100">
                                 €{(l.unitCostCents / 100).toFixed(4)}
                               </span>
-                              <span className="text-slate-500"> · {l.unitsReceived}u</span>
+                              <span className="text-slate-500 dark:text-slate-400"> · {l.unitsReceived}u</span>
                               {l.unitsRemaining < l.unitsReceived && (
                                 <span className="text-slate-400 text-xs">
                                   {' '}({l.unitsRemaining}/{l.unitsReceived} left)
                                 </span>
                               )}
                               {l.locationCode && (
-                                <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 ml-1">
+                                <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 ml-1">
                                   {l.locationCode}
                                 </span>
                               )}
@@ -2085,7 +2085,7 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                             </div>
                           </div>
                           {l.unitsRemaining === 0 && (
-                            <span className="text-xs uppercase tracking-wider font-semibold text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded">
+                            <span className="text-xs uppercase tracking-wider font-semibold text-slate-400 bg-slate-50 dark:bg-slate-800 px-1.5 py-0.5 rounded">
                               depleted
                             </span>
                           )}
@@ -2103,7 +2103,7 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                 ) : (
                   <ul className="space-y-1">
                     {bundle.movements.map((m) => (
-                      <li key={m.id} className="flex items-start justify-between gap-3 py-1.5 px-2 -mx-2 border-b border-slate-100 last:border-0">
+                      <li key={m.id} className="flex items-start justify-between gap-3 py-1.5 px-2 -mx-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <span className={`text-xs uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded ${REASON_TONE[m.reason] ?? 'bg-slate-100 text-slate-600'}`}>
@@ -2119,7 +2119,7 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                           </div>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <div className={`text-lg font-semibold tabular-nums ${m.change > 0 ? 'text-emerald-600' : m.change < 0 ? 'text-rose-600' : 'text-slate-500'}`}>
+                          <div className={`text-lg font-semibold tabular-nums ${m.change > 0 ? 'text-emerald-600' : m.change < 0 ? 'text-rose-600' : 'text-slate-500 dark:text-slate-400'}`}>
                             {m.change > 0 ? '+' : ''}{m.change}
                           </div>
                           <div className="text-xs text-slate-400 tabular-nums">→ {m.balanceAfter}</div>
@@ -2141,7 +2141,7 @@ function Section({ title, icon: Icon, right, children }: { title: string; icon: 
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 inline-flex items-center gap-1.5">
+        <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
           <Icon size={11} className="text-slate-400" />
           {title}
         </div>
@@ -2199,20 +2199,20 @@ function AdjustPanel({ stockLevelId, locationCode, onCancel, onDone }: { stockLe
   }
 
   return (
-    <div className="border border-slate-300 rounded-md p-3 bg-slate-50 space-y-2">
-      <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 inline-flex items-center gap-1.5">
-        {t('stock.drawer.adjustAt')} <span className="text-slate-700">{locationCode}</span>
+    <div className="border border-slate-300 rounded-md p-3 bg-slate-50 dark:bg-slate-800 space-y-2">
+      <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
+        {t('stock.drawer.adjustAt')} <span className="text-slate-700 dark:text-slate-300">{locationCode}</span>
       </div>
       <div className="flex items-center gap-2 flex-wrap">
         <input
           type="number" value={change} onChange={(e) => setChange(e.target.value)}
           placeholder="±n" autoFocus
-          className="h-11 sm:h-8 w-24 px-2 text-md border border-slate-200 rounded font-mono tabular-nums"
+          className="h-11 sm:h-8 w-24 px-2 text-md border border-slate-200 dark:border-slate-700 rounded font-mono tabular-nums"
         />
         <select
           value={subReason}
           onChange={(e) => setSubReason(e.target.value as AdjustSubReason)}
-          className="h-11 sm:h-8 px-2 text-base border border-slate-200 rounded bg-white min-w-[140px]"
+          className="h-11 sm:h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 min-w-[140px]"
         >
           {SUB_REASON_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
@@ -2221,10 +2221,10 @@ function AdjustPanel({ stockLevelId, locationCode, onCancel, onDone }: { stockLe
         <input
           type="text" value={notes} onChange={(e) => setNotes(e.target.value)}
           placeholder={t('stock.adjust.notesPlaceholder')}
-          className="flex-1 min-w-[120px] h-11 sm:h-8 px-2 text-base border border-slate-200 rounded"
+          className="flex-1 min-w-[120px] h-11 sm:h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded"
         />
         <button onClick={submit} disabled={submitting} className="h-11 sm:h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">{t('stock.drawer.adjustApply')}</button>
-        <button onClick={onCancel} className="h-11 sm:h-8 px-2 text-base text-slate-500 hover:text-slate-900">{t('stock.list.cancel')}</button>
+        <button onClick={onCancel} className="h-11 sm:h-8 px-2 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">{t('stock.list.cancel')}</button>
       </div>
     </div>
   )
@@ -2258,18 +2258,18 @@ function TransferPanel({
   }
 
   return (
-    <div className="border border-slate-300 rounded-md p-3 bg-slate-50 space-y-2">
-      <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 inline-flex items-center gap-1.5">
+    <div className="border border-slate-300 rounded-md p-3 bg-slate-50 dark:bg-slate-800 space-y-2">
+      <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
         <ArrowRightLeft size={11} /> Transfer between locations
       </div>
       <div className="flex items-center gap-2">
-        <select value={fromId} onChange={(e) => setFromId(e.target.value)} className="h-11 sm:h-8 flex-1 px-2 text-base border border-slate-200 rounded">
+        <select value={fromId} onChange={(e) => setFromId(e.target.value)} className="h-11 sm:h-8 flex-1 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
           {stockLevels.map((sl) => (
             <option key={sl.id} value={sl.location.id}>From {sl.location.code} ({sl.available} avail)</option>
           ))}
         </select>
         <ArrowRightLeft size={12} className="text-slate-400" />
-        <select value={toId} onChange={(e) => setToId(e.target.value)} className="h-11 sm:h-8 flex-1 px-2 text-base border border-slate-200 rounded">
+        <select value={toId} onChange={(e) => setToId(e.target.value)} className="h-11 sm:h-8 flex-1 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
           {stockLevels.map((sl) => (
             <option key={sl.id} value={sl.location.id}>To {sl.location.code}</option>
           ))}
@@ -2277,14 +2277,14 @@ function TransferPanel({
         <input
           type="number" value={qty} onChange={(e) => setQty(e.target.value)}
           placeholder="qty"
-          className="h-11 sm:h-8 w-20 px-2 text-md border border-slate-200 rounded font-mono tabular-nums"
+          className="h-11 sm:h-8 w-20 px-2 text-md border border-slate-200 dark:border-slate-700 rounded font-mono tabular-nums"
         />
       </div>
       <div className="flex items-center justify-end gap-2">
-        <button onClick={onCancel} className="h-11 sm:h-8 px-2 text-base text-slate-500 hover:text-slate-900">Cancel</button>
+        <button onClick={onCancel} className="h-11 sm:h-8 px-2 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">Cancel</button>
         <button onClick={submit} disabled={submitting} className="h-11 sm:h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">Transfer</button>
       </div>
-      <div className="text-xs text-slate-500">
+      <div className="text-xs text-slate-500 dark:text-slate-400">
         If the target location has no StockLevel row, one is created with the transferred quantity.
       </div>
     </div>
@@ -2319,17 +2319,17 @@ function ReservePanel({
   }
 
   return (
-    <div className="border border-slate-300 rounded-md p-3 bg-slate-50 space-y-2">
-      <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 inline-flex items-center gap-1.5">
+    <div className="border border-slate-300 rounded-md p-3 bg-slate-50 dark:bg-slate-800 space-y-2">
+      <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
         <LockIcon size={11} /> Reserve stock
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        <select value={locId} onChange={(e) => setLocId(e.target.value)} className="h-11 sm:h-8 px-2 text-base border border-slate-200 rounded">
+        <select value={locId} onChange={(e) => setLocId(e.target.value)} className="h-11 sm:h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
           {stockLevels.map((sl) => (
             <option key={sl.id} value={sl.location.id}>{sl.location.code} ({sl.available} avail)</option>
           ))}
         </select>
-        <select value={reason} onChange={(e) => setReason(e.target.value as any)} className="h-11 sm:h-8 px-2 text-base border border-slate-200 rounded">
+        <select value={reason} onChange={(e) => setReason(e.target.value as any)} className="h-11 sm:h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded">
           <option value="MANUAL_HOLD">Manual hold</option>
           <option value="PENDING_ORDER">Pending order</option>
           <option value="PROMOTION">Promotion</option>
@@ -2337,19 +2337,19 @@ function ReservePanel({
         <input
           type="number" value={qty} onChange={(e) => setQty(e.target.value)}
           placeholder="quantity"
-          className="h-11 sm:h-8 px-2 text-md border border-slate-200 rounded font-mono tabular-nums"
+          className="h-11 sm:h-8 px-2 text-md border border-slate-200 dark:border-slate-700 rounded font-mono tabular-nums"
         />
         <input
           type="text" value={orderId} onChange={(e) => setOrderId(e.target.value)}
           placeholder="Order ID (optional)"
-          className="h-11 sm:h-8 px-2 text-base border border-slate-200 rounded"
+          className="h-11 sm:h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded"
         />
       </div>
       <div className="flex items-center justify-end gap-2">
-        <button onClick={onCancel} className="h-11 sm:h-8 px-2 text-base text-slate-500 hover:text-slate-900">Cancel</button>
+        <button onClick={onCancel} className="h-11 sm:h-8 px-2 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">Cancel</button>
         <button onClick={submit} disabled={submitting} className="h-11 sm:h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">Reserve</button>
       </div>
-      <div className="text-xs text-slate-500">
+      <div className="text-xs text-slate-500 dark:text-slate-400">
         PENDING_ORDER reservations expire after 24h. Manual holds and promotions never expire automatically.
       </div>
     </div>
@@ -2370,7 +2370,7 @@ function DensityToggle({ density, onChange }: { density: Density; onChange: (d: 
   return (
     <button
       onClick={next}
-      className="h-11 w-11 sm:h-8 sm:w-8 inline-flex items-center justify-center border border-slate-200 rounded-md hover:bg-slate-50 text-slate-600"
+      className="h-11 w-11 sm:h-8 sm:w-8 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
       title={`Density: ${density}`}
       aria-label={`Density: ${density}`}
     >
@@ -2397,7 +2397,7 @@ function SavedViewsButton({
     <div className="relative">
       <button
         onClick={onToggle}
-        className="h-11 sm:h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5 text-slate-700"
+        className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
         title={t('stock.savedViews.title')}
       >
         <Bookmark size={12} />
@@ -2410,23 +2410,23 @@ function SavedViewsButton({
         <>
           <div className="fixed inset-0 z-10" onClick={onToggle} />
           <div
-            className="absolute right-0 top-full mt-1 w-72 z-20 bg-white border border-slate-200 rounded-md shadow-lg p-1 text-base"
+            className="absolute right-0 top-full mt-1 w-72 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg p-1 text-base"
             onClick={(e) => e.stopPropagation()}
           >
             {savedViews.length === 0 ? (
-              <div className="px-3 py-3 text-sm text-slate-500 italic">
+              <div className="px-3 py-3 text-sm text-slate-500 dark:text-slate-400 italic">
                 {t('stock.savedViews.empty')}
               </div>
             ) : (
               <ul className="divide-y divide-slate-100">
                 {savedViews.map((v) => (
-                  <li key={v.id} className="flex items-center gap-2 hover:bg-slate-50 rounded">
+                  <li key={v.id} className="flex items-center gap-2 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 rounded">
                     <button
                       onClick={() => onApply(v)}
                       className="flex-1 text-left min-h-[44px] sm:min-h-0 px-3 py-2 text-sm"
                     >
-                      <div className="font-medium text-slate-900 truncate">{v.name}</div>
-                      <div className="text-xs text-slate-500 truncate">
+                      <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{v.name}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
                         {v.view}
                         {v.location && ` · ${v.location}`}
                         {v.status && ` · ${v.status.toLowerCase()}`}
@@ -2447,7 +2447,7 @@ function SavedViewsButton({
             )}
             <button
               onClick={onOpenSaveModal}
-              className="w-full mt-1 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 rounded inline-flex items-center gap-2 border-t border-slate-100"
+              className="w-full mt-1 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 rounded inline-flex items-center gap-2 border-t border-slate-100 dark:border-slate-800"
             >
               <BookmarkPlus size={12} />
               {t('stock.savedViews.saveCurrent')}
@@ -2465,7 +2465,7 @@ function ColumnPicker({ visible, onChange }: { visible: ColumnKey[]; onChange: (
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="h-11 sm:h-8 px-2.5 text-base inline-flex items-center gap-1.5 border border-slate-200 rounded-md hover:bg-slate-50 text-slate-600"
+        className="h-11 sm:h-8 px-2.5 text-base inline-flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
         title="Show / hide columns"
       >
         <Columns size={12} /> Columns
@@ -2474,16 +2474,16 @@ function ColumnPicker({ visible, onChange }: { visible: ColumnKey[]; onChange: (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div
-            className="absolute right-0 top-full mt-1 w-56 z-20 bg-white border border-slate-200 rounded-md shadow-lg p-2 text-base"
+            className="absolute right-0 top-full mt-1 w-56 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg p-2 text-base"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold px-1.5 pb-1.5">Columns</div>
+            <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold px-1.5 pb-1.5">Columns</div>
             {ALL_COLUMNS.map((col) => {
               const checked = visible.includes(col.key)
               return (
                 <label
                   key={col.key}
-                  className={`flex items-center justify-between gap-2 px-1.5 py-1 rounded cursor-pointer ${col.alwaysOn ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50'}`}
+                  className={`flex items-center justify-between gap-2 px-1.5 py-1 rounded cursor-pointer ${col.alwaysOn ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800'}`}
                 >
                   <span className="inline-flex items-center gap-2">
                     <input
@@ -2508,7 +2508,7 @@ function ColumnPicker({ visible, onChange }: { visible: ColumnKey[]; onChange: (
             })}
             <button
               onClick={() => onChange(DEFAULT_VISIBLE_COLUMNS)}
-              className="w-full mt-1.5 pt-1.5 border-t border-slate-100 text-sm text-slate-500 hover:text-slate-900 text-left px-1.5 py-1"
+              className="w-full mt-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 text-left px-1.5 py-1"
             >
               Reset to default
             </button>
@@ -2534,13 +2534,13 @@ function ShortcutsHelp({ onClose }: { onClose: () => void }) {
     <Modal title="Keyboard shortcuts" onClose={onClose}>
       <div className="space-y-1">
         {rows.map(([key, desc]) => (
-          <div key={key} className="flex items-center justify-between gap-3 py-1 border-b border-slate-100 last:border-0">
-            <span className="text-base text-slate-700">{desc}</span>
-            <kbd className="px-2 py-0.5 text-sm font-mono bg-slate-100 border border-slate-200 rounded text-slate-700">{key}</kbd>
+          <div key={key} className="flex items-center justify-between gap-3 py-1 border-b border-slate-100 dark:border-slate-800 last:border-0">
+            <span className="text-base text-slate-700 dark:text-slate-300">{desc}</span>
+            <kbd className="px-2 py-0.5 text-sm font-mono bg-slate-100 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-300">{key}</kbd>
           </div>
         ))}
       </div>
-      <div className="text-sm text-slate-400 mt-3 pt-3 border-t border-slate-100">
+      <div className="text-sm text-slate-400 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
         Shortcuts skipped when focus is in an input — type freely without hijacking.
       </div>
     </Modal>
@@ -2564,7 +2564,7 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
   const tone =
     failed ? 'bg-rose-50 text-rose-700 border-rose-200' :
     stale ? 'bg-amber-50 text-amber-700 border-amber-200' :
-    fbaConfiguredButDisabled ? 'bg-slate-50 text-slate-500 border-slate-200' :
+    fbaConfiguredButDisabled ? 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700' :
     'bg-emerald-50 text-emerald-700 border-emerald-200'
 
   const label =
@@ -2590,20 +2590,20 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
       </button>
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 w-80 z-20 bg-white border border-slate-200 rounded-md shadow-lg p-3 text-base space-y-2"
+          className="absolute right-0 top-full mt-1 w-80 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg p-3 text-base space-y-2"
           onClick={(e) => e.stopPropagation()}
         >
           <div>
-            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Amazon FBA cron</div>
-            <div className="text-slate-700 mt-0.5">
+            <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Amazon FBA cron</div>
+            <div className="text-slate-700 dark:text-slate-300 mt-0.5">
               {status.amazonFbaCron.enabled
                 ? <span className="text-emerald-700">Enabled · 15-min cadence</span>
                 : status.amazonFbaCron.configured
                   ? <span className="text-amber-700">Configured but disabled</span>
-                  : <span className="text-slate-500">Not configured</span>}
+                  : <span className="text-slate-500 dark:text-slate-400">Not configured</span>}
             </div>
             {status.amazonFbaCron.lastReconciliationAt && (
-              <div className="text-sm text-slate-500 mt-0.5">
+              <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
                 Last reconciliation {formatRelative(status.amazonFbaCron.lastReconciliationAt)}
                 {status.amazonFbaCron.lastReconciliationDelta != null && (
                   <span className={status.amazonFbaCron.lastReconciliationDelta > 0 ? ' text-emerald-700' : status.amazonFbaCron.lastReconciliationDelta < 0 ? ' text-rose-700' : ''}>
@@ -2612,45 +2612,45 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
                 )}
               </div>
             )}
-            <div className="text-sm text-slate-500">
+            <div className="text-sm text-slate-500 dark:text-slate-400">
               {status.recentReconciliationCount} reconciliation{status.recentReconciliationCount === 1 ? '' : 's'} in last 24h
             </div>
           </div>
-          <div className="border-t border-slate-100 pt-2">
-            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Outbound queue</div>
+          <div className="border-t border-slate-100 dark:border-slate-800 pt-2">
+            <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Outbound queue</div>
             <div className="grid grid-cols-3 gap-2 mt-1 text-center">
               <div>
-                <div className={`text-lg font-semibold tabular-nums ${status.outboundQueue.pending > 0 ? 'text-amber-700' : 'text-slate-900'}`}>
+                <div className={`text-lg font-semibold tabular-nums ${status.outboundQueue.pending > 0 ? 'text-amber-700' : 'text-slate-900 dark:text-slate-100'}`}>
                   {status.outboundQueue.pending}
                 </div>
-                <div className="text-xs text-slate-500">pending</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">pending</div>
               </div>
               <div>
-                <div className={`text-lg font-semibold tabular-nums ${status.outboundQueue.failed > 0 ? 'text-rose-700' : 'text-slate-900'}`}>
+                <div className={`text-lg font-semibold tabular-nums ${status.outboundQueue.failed > 0 ? 'text-rose-700' : 'text-slate-900 dark:text-slate-100'}`}>
                   {status.outboundQueue.failed}
                 </div>
-                <div className="text-xs text-slate-500">failed</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">failed</div>
               </div>
               <div>
-                <div className="text-lg font-semibold tabular-nums text-slate-700">{status.outboundQueue.synced}</div>
-                <div className="text-xs text-slate-500">synced</div>
+                <div className="text-lg font-semibold tabular-nums text-slate-700 dark:text-slate-300">{status.outboundQueue.synced}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">synced</div>
               </div>
             </div>
             {status.outboundQueue.oldestPendingAt && (
-              <div className="text-xs text-slate-500 mt-1">
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                 Oldest pending {formatRelative(status.outboundQueue.oldestPendingAt)}
               </div>
             )}
           </div>
-          <div className="border-t border-slate-100 pt-2">
-            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Reservation sweep</div>
-            <div className="text-slate-700 mt-0.5">
+          <div className="border-t border-slate-100 dark:border-slate-800 pt-2">
+            <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Reservation sweep</div>
+            <div className="text-slate-700 dark:text-slate-300 mt-0.5">
               {status.reservationSweep.scheduled
                 ? <span className="text-emerald-700">Scheduled · 5-min cadence</span>
-                : <span className="text-slate-500">Not scheduled</span>}
+                : <span className="text-slate-500 dark:text-slate-400">Not scheduled</span>}
             </div>
             {status.reservationSweep.lastRunAt && (
-              <div className="text-sm text-slate-500 mt-0.5">
+              <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
                 Last run {formatRelative(status.reservationSweep.lastRunAt)}
                 {status.reservationSweep.lastReleasedCount > 0 && (
                   <span> · {status.reservationSweep.lastReleasedCount} released</span>
@@ -2677,7 +2677,7 @@ function ViewToggle({ view, onChange }: { view: ViewMode; onChange: (v: ViewMode
           key={t.key}
           onClick={() => onChange(t.key)}
           className={`h-11 sm:h-7 px-2.5 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${
-            view === t.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            view === t.key ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-600 hover:text-slate-900 dark:text-slate-100'
           }`}
         >
           <t.icon size={12} />
@@ -2709,7 +2709,7 @@ function TableView({
     <Card noPadding>
       <div className="overflow-x-auto">
         <table className="w-full text-md">
-          <thead className="border-b border-slate-200 bg-slate-50">
+          <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
             <tr>
               <th className={`px-3 ${padY} w-10`}>
                 <input
@@ -2721,16 +2721,16 @@ function TableView({
                   className="cursor-pointer"
                 />
               </th>
-              {visible('thumb')     && <th className={`px-3 ${padY} text-left text-sm font-semibold uppercase tracking-wider text-slate-700 w-10`}></th>}
-              {visible('product')   && <th className={`px-3 ${padY} text-left text-sm font-semibold uppercase tracking-wider text-slate-700`}>Product</th>}
-              {visible('location')  && <th className={`px-3 ${padY} text-left text-sm font-semibold uppercase tracking-wider text-slate-700`}>Location</th>}
-              {visible('onHand')    && <th className={`px-3 ${padY} text-right text-sm font-semibold uppercase tracking-wider text-slate-700`}>On hand</th>}
-              {visible('reserved')  && <th className={`px-3 ${padY} text-right text-sm font-semibold uppercase tracking-wider text-slate-700`}>Reserved</th>}
-              {visible('available') && <th className={`px-3 ${padY} text-right text-sm font-semibold uppercase tracking-wider text-slate-700`}>Available</th>}
-              {visible('threshold') && <th className={`px-3 ${padY} text-right text-sm font-semibold uppercase tracking-wider text-slate-700`}>Threshold</th>}
-              {visible('cost')      && <th className={`px-3 ${padY} text-right text-sm font-semibold uppercase tracking-wider text-slate-700`}>Cost</th>}
-              {visible('updated')   && <th className={`px-3 ${padY} text-right text-sm font-semibold uppercase tracking-wider text-slate-700`}>Updated</th>}
-              <th className={`px-3 ${padY} text-right text-sm font-semibold uppercase tracking-wider text-slate-700`}></th>
+              {visible('thumb')     && <th className={`px-3 ${padY} text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 w-10`}></th>}
+              {visible('product')   && <th className={`px-3 ${padY} text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300`}>Product</th>}
+              {visible('location')  && <th className={`px-3 ${padY} text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300`}>Location</th>}
+              {visible('onHand')    && <th className={`px-3 ${padY} text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300`}>On hand</th>}
+              {visible('reserved')  && <th className={`px-3 ${padY} text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300`}>Reserved</th>}
+              {visible('available') && <th className={`px-3 ${padY} text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300`}>Available</th>}
+              {visible('threshold') && <th className={`px-3 ${padY} text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300`}>Threshold</th>}
+              {visible('cost')      && <th className={`px-3 ${padY} text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300`}>Cost</th>}
+              {visible('updated')   && <th className={`px-3 ${padY} text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300`}>Updated</th>}
+              <th className={`px-3 ${padY} text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300`}></th>
             </tr>
           </thead>
           <tbody>
@@ -2739,13 +2739,13 @@ function TableView({
               const stockTone =
                 it.quantity === 0 ? 'text-rose-600' :
                 it.quantity <= 5 ? 'text-orange-600' :
-                it.quantity <= threshold ? 'text-amber-600' : 'text-slate-900'
+                it.quantity <= threshold ? 'text-amber-600' : 'text-slate-900 dark:text-slate-100'
               const isSelected = selected.has(it.id)
               return (
                 <tr
                   key={it.id}
                   onClick={() => onOpenProduct(it.product.id)}
-                  className={`border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors ${isSelected ? 'bg-blue-50/40' : ''}`}
+                  className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 cursor-pointer transition-colors ${isSelected ? 'bg-blue-50/40' : ''}`}
                 >
                   <td className={`px-3 ${padY}`} onClick={(e) => { e.stopPropagation(); onToggleSelect(it.id, idx, e) }}>
                     <input
@@ -2769,11 +2769,11 @@ function TableView({
                   )}
                   {visible('product') && (
                     <td className={`px-3 ${padY}`}>
-                      <div className="text-md font-medium text-slate-900 truncate max-w-md inline-flex items-center gap-1.5">
+                      <div className="text-md font-medium text-slate-900 dark:text-slate-100 truncate max-w-md inline-flex items-center gap-1.5">
                         {it.product.name}
                         {it.product.abcClass && <AbcBadge cls={it.product.abcClass} />}
                       </div>
-                      <div className="text-sm text-slate-500 font-mono">
+                      <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">
                         {it.product.sku}
                         {it.variation && <span> · {it.variation.sku}</span>}
                         {it.product.amazonAsin && <span> · {it.product.amazonAsin}</span>}
@@ -2783,16 +2783,16 @@ function TableView({
                   {visible('location') && (
                     <td className={`px-3 ${padY}`}>
                       <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${
-                        LOCATION_TONE[it.location.type] ?? 'bg-slate-50 text-slate-600 border-slate-200'
+                        LOCATION_TONE[it.location.type] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 border-slate-200 dark:border-slate-700'
                       }`} title={it.location.name}>
                         {it.location.code}
                       </span>
                     </td>
                   )}
                   {visible('onHand')    && <td className={`px-3 ${padY} text-right tabular-nums font-semibold ${stockTone}`}>{it.quantity}</td>}
-                  {visible('reserved')  && <td className={`px-3 ${padY} text-right tabular-nums text-slate-500`}>{it.reserved}</td>}
-                  {visible('available') && <td className={`px-3 ${padY} text-right tabular-nums text-slate-700`}>{it.available}</td>}
-                  {visible('threshold') && <td className={`px-3 ${padY} text-right tabular-nums text-slate-500`}>{threshold}</td>}
+                  {visible('reserved')  && <td className={`px-3 ${padY} text-right tabular-nums text-slate-500 dark:text-slate-400`}>{it.reserved}</td>}
+                  {visible('available') && <td className={`px-3 ${padY} text-right tabular-nums text-slate-700 dark:text-slate-300`}>{it.available}</td>}
+                  {visible('threshold') && <td className={`px-3 ${padY} text-right tabular-nums text-slate-500 dark:text-slate-400`}>{threshold}</td>}
                   {visible('cost') && (
                     <td className={`px-3 ${padY} text-right tabular-nums text-slate-600`}>
                       {it.product.costPrice != null ? `€${it.product.costPrice.toFixed(2)}` : <span className="text-slate-400">—</span>}
@@ -2833,21 +2833,21 @@ function MatrixView({
     <Card noPadding>
       <div className="overflow-x-auto">
         <table className="w-full text-md">
-          <thead className="border-b border-slate-200 bg-slate-50 sticky top-0">
+          <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 sticky top-0">
             <tr>
-              <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 sticky left-0 bg-slate-50 z-10 min-w-[280px]">
+              <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 sticky left-0 bg-slate-50 dark:bg-slate-800 z-10 min-w-[280px]">
                 Product
               </th>
               {locations.map((loc) => (
                 <th
                   key={loc.id}
-                  className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 min-w-[80px]"
+                  className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 min-w-[80px]"
                   title={loc.name}
                 >
                   {loc.code}
                 </th>
               ))}
-              <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">Total</th>
+              <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -2857,9 +2857,9 @@ function MatrixView({
                 <tr
                   key={p.id}
                   onClick={() => onOpenProduct(p.id)}
-                  className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors"
+                  className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 cursor-pointer transition-colors"
                 >
-                  <td className="px-3 py-2 sticky left-0 bg-white hover:bg-slate-50 z-10 min-w-[280px]">
+                  <td className="px-3 py-2 sticky left-0 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 z-10 min-w-[280px]">
                     <div className="flex items-center gap-2">
                       {p.thumbnailUrl ? (
                         <img src={p.thumbnailUrl} alt="" className="w-8 h-8 rounded object-cover bg-slate-100 flex-shrink-0" />
@@ -2869,8 +2869,8 @@ function MatrixView({
                         </div>
                       )}
                       <div className="min-w-0">
-                        <div className="text-md font-medium text-slate-900 truncate max-w-[220px]">{p.name}</div>
-                        <div className="text-sm text-slate-500 font-mono">{p.sku}</div>
+                        <div className="text-md font-medium text-slate-900 dark:text-slate-100 truncate max-w-[220px]">{p.name}</div>
+                        <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">{p.sku}</div>
                       </div>
                     </div>
                   </td>
@@ -2889,7 +2889,7 @@ function MatrixView({
                       </td>
                     )
                   })}
-                  <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900">
+                  <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900 dark:text-slate-100">
                     {p.totalStock}
                   </td>
                 </tr>
@@ -2934,7 +2934,7 @@ function CardsView({
         const stockTone =
           p.totalStock === 0 ? 'text-rose-600' :
           p.totalStock <= 5 ? 'text-orange-600' :
-          p.totalStock <= p.lowStockThreshold ? 'text-amber-600' : 'text-slate-900'
+          p.totalStock <= p.lowStockThreshold ? 'text-amber-600' : 'text-slate-900 dark:text-slate-100'
         return (
           <Card
             key={p.id}
@@ -2948,11 +2948,11 @@ function CardsView({
                   <Package size={28} />
                 </div>
               )}
-              <div className="text-md font-medium text-slate-900 line-clamp-2 min-h-[36px]">{p.name}</div>
-              <div className="text-sm text-slate-500 font-mono mt-0.5 truncate">{p.sku}</div>
+              <div className="text-md font-medium text-slate-900 dark:text-slate-100 line-clamp-2 min-h-[36px]">{p.name}</div>
+              <div className="text-sm text-slate-500 dark:text-slate-400 font-mono mt-0.5 truncate">{p.sku}</div>
               <div className={`text-[24px] font-semibold tabular-nums mt-2 ${stockTone}`}>
                 {p.totalStock}
-                <span className="text-sm text-slate-500 font-normal ml-1.5">total</span>
+                <span className="text-sm text-slate-500 dark:text-slate-400 font-normal ml-1.5">total</span>
               </div>
               <div className="mt-2 flex items-center gap-1 flex-wrap">
                 {locations.map((loc) => {
@@ -2961,7 +2961,7 @@ function CardsView({
                     return (
                       <span
                         key={loc.id}
-                        className="text-xs font-mono uppercase px-1.5 py-0.5 border border-slate-200 rounded bg-slate-50 text-slate-300"
+                        className="text-xs font-mono uppercase px-1.5 py-0.5 border border-slate-200 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-800 text-slate-300"
                         title={`No stock at ${loc.code}`}
                       >
                         {loc.code} —
@@ -3051,11 +3051,11 @@ function BulkActionBar({
 function BulkProgressToast({ progress }: { progress: { total: number; done: number; failed: number } }) {
   const pct = progress.total === 0 ? 0 : Math.round(((progress.done + progress.failed) / progress.total) * 100)
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 bg-white border border-slate-200 rounded-lg shadow-2xl px-4 py-3 text-base text-slate-700 min-w-[280px]">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl px-4 py-3 text-base text-slate-700 dark:text-slate-300 min-w-[280px]">
       <div className="flex items-center gap-2 mb-1.5">
         <RefreshCw size={12} className="animate-spin text-blue-600" />
         <span className="font-semibold">Processing…</span>
-        <span className="ml-auto tabular-nums text-slate-500">
+        <span className="ml-auto tabular-nums text-slate-500 dark:text-slate-400">
           {progress.done + progress.failed}/{progress.total}
         </span>
       </div>
@@ -3130,16 +3130,16 @@ function BulkAdjustModal({
     <Modal title="Bulk adjust quantity" onClose={onCancel}>
       <div className="space-y-3">
         <div>
-          <label className="text-sm uppercase tracking-wider text-slate-500 font-semibold block mb-1">Change (signed)</label>
+          <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1">Change (signed)</label>
           <input
             type="number"
             value={change}
             onChange={(e) => setChange(e.target.value)}
             placeholder="±n  (e.g. +5 or -3)"
             autoFocus
-            className="w-full h-9 px-2 text-md border border-slate-200 rounded font-mono tabular-nums"
+            className="w-full h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded font-mono tabular-nums"
           />
-          <div className="text-sm text-slate-500 mt-1">
+          <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             Same delta applied to every selected row. Use negative numbers to remove stock.
           </div>
         </div>
@@ -3148,11 +3148,11 @@ function BulkAdjustModal({
             applied in runBulkAdjust so the schema-level reason +
             structured notes prefix flow consistently. */}
         <div>
-          <label className="text-sm uppercase tracking-wider text-slate-500 font-semibold block mb-1">Reason</label>
+          <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1">Reason</label>
           <select
             value={subReason}
             onChange={(e) => setSubReason(e.target.value as AdjustSubReason)}
-            className="w-full h-9 px-2 text-base border border-slate-200 rounded bg-white"
+            className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
           >
             {SUB_REASON_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
@@ -3160,18 +3160,18 @@ function BulkAdjustModal({
           </select>
         </div>
         <div>
-          <label className="text-sm uppercase tracking-wider text-slate-500 font-semibold block mb-1">Notes (optional)</label>
+          <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1">Notes (optional)</label>
           <input
             type="text"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="e.g. cycle count adjustment 2026-05-06"
-            className="w-full h-9 px-2 text-base border border-slate-200 rounded"
+            className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded"
           />
         </div>
 
-        <div className="border border-slate-200 rounded p-2 bg-slate-50/50">
-          <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+        <div className="border border-slate-200 dark:border-slate-700 rounded p-2 bg-slate-50 dark:bg-slate-800/50">
+          <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
             Affected rows ({selectedItems.length})
           </div>
           <ul className="space-y-0.5 max-h-[160px] overflow-y-auto">
@@ -3185,11 +3185,11 @@ function BulkAdjustModal({
                     <span className="text-slate-400"> · {it.location.code}</span>
                   </span>
                   <span className="tabular-nums flex-shrink-0">
-                    <span className="text-slate-500">{it.quantity}</span>
+                    <span className="text-slate-500 dark:text-slate-400">{it.quantity}</span>
                     {valid && (
                       <>
                         <span className="text-slate-400 mx-1">→</span>
-                        <span className={negativeBound ? 'text-rose-600 font-semibold' : 'text-slate-700 font-semibold'}>
+                        <span className={negativeBound ? 'text-rose-600 font-semibold' : 'text-slate-700 dark:text-slate-300 font-semibold'}>
                           {after}
                         </span>
                       </>
@@ -3211,8 +3211,8 @@ function BulkAdjustModal({
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-          <button onClick={onCancel} className="h-11 sm:h-8 px-3 text-base text-slate-500 hover:text-slate-900">Cancel</button>
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <button onClick={onCancel} className="h-11 sm:h-8 px-3 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">Cancel</button>
           <button
             onClick={() => valid && onConfirm(n, subReason, notes || null)}
             disabled={!valid}
@@ -3247,13 +3247,13 @@ function BulkTransferModal({
     <Modal title={t('stock.bulk.transferTitle')} onClose={onCancel}>
       <div className="space-y-3">
         <div>
-          <label className="text-sm uppercase tracking-wider text-slate-500 font-semibold block mb-1">
+          <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1">
             {t('stock.bulk.transferDest')}
           </label>
           <select
             value={toLocationId}
             onChange={(e) => setToLocationId(e.target.value)}
-            className="w-full h-9 px-2 text-md border border-slate-200 rounded bg-white"
+            className="w-full h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
           >
             <option value="">{t('cycleCount.list.modal.locationPlaceholder')}</option>
             {locations.map((l) => (
@@ -3262,12 +3262,12 @@ function BulkTransferModal({
               </option>
             ))}
           </select>
-          <div className="text-sm text-slate-500 mt-1">
+          <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             {t('stock.bulk.transferHelp')}
           </div>
         </div>
         <div>
-          <label className="text-sm uppercase tracking-wider text-slate-500 font-semibold block mb-1">
+          <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1">
             {t('stock.adjust.notesPlaceholder')}
           </label>
           <input
@@ -3275,11 +3275,11 @@ function BulkTransferModal({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder={t('stock.bulk.transferNotesPlaceholder')}
-            className="w-full h-9 px-2 text-base border border-slate-200 rounded"
+            className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded"
           />
         </div>
-        <div className="border border-slate-200 rounded p-2 bg-slate-50/50">
-          <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+        <div className="border border-slate-200 dark:border-slate-700 rounded p-2 bg-slate-50 dark:bg-slate-800/50">
+          <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
             {t('stock.bulk.affectedRows', { n: selectedItems.length })}
           </div>
           <ul className="space-y-0.5 max-h-[160px] overflow-y-auto">
@@ -3289,7 +3289,7 @@ function BulkTransferModal({
                   <span className="font-mono text-slate-600">{it.product.sku}</span>
                   <span className="text-slate-400"> · {it.location.code}</span>
                 </span>
-                <span className="tabular-nums flex-shrink-0 text-slate-500">
+                <span className="tabular-nums flex-shrink-0 text-slate-500 dark:text-slate-400">
                   {it.available > 0 ? it.available : it.quantity}u
                 </span>
               </li>
@@ -3299,8 +3299,8 @@ function BulkTransferModal({
             )}
           </ul>
         </div>
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-          <button onClick={onCancel} className="h-11 sm:h-8 px-3 text-base text-slate-500 hover:text-slate-900">
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <button onClick={onCancel} className="h-11 sm:h-8 px-3 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">
             {t('stock.list.cancel')}
           </button>
           <button
@@ -3340,22 +3340,22 @@ function BulkThresholdModal({
             onChange={(e) => setThreshold(e.target.value)}
             placeholder="threshold (≥ 0)"
             autoFocus
-            className="flex-1 h-9 px-2 text-md border border-slate-200 rounded font-mono tabular-nums disabled:bg-slate-100 disabled:text-slate-400"
+            className="flex-1 h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded font-mono tabular-nums disabled:bg-slate-100 disabled:text-slate-400"
           />
           <label className="text-base text-slate-600 inline-flex items-center gap-1.5">
             <input type="checkbox" checked={clearMode} onChange={(e) => setClearMode(e.target.checked)} />
             Clear (use master)
           </label>
         </div>
-        <div className="text-sm text-slate-500">
+        <div className="text-sm text-slate-500 dark:text-slate-400">
           The reorder threshold per StockLevel overrides Product.lowStockThreshold for that location only.
           Clearing reverts to the product master.
         </div>
-        <div className="text-base text-slate-700 border border-slate-200 rounded p-2 bg-slate-50/50">
+        <div className="text-base text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded p-2 bg-slate-50 dark:bg-slate-800/50">
           Will update <span className="font-semibold tabular-nums">{selectedItems.length}</span> row{selectedItems.length === 1 ? '' : 's'}.
         </div>
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-          <button onClick={onCancel} className="h-11 sm:h-8 px-3 text-base text-slate-500 hover:text-slate-900">Cancel</button>
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <button onClick={onCancel} className="h-11 sm:h-8 px-3 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">Cancel</button>
           <button
             onClick={() => valid && onConfirm(clearMode ? null : Math.floor(n))}
             disabled={!valid}
@@ -3373,9 +3373,9 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" />
-      <div onClick={(e) => e.stopPropagation()} className="relative bg-white rounded-lg shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
-        <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
-          <div className="text-lg font-semibold text-slate-900">{title}</div>
+      <div onClick={(e) => e.stopPropagation()} className="relative bg-white dark:bg-slate-900 rounded-lg shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+        <header className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+          <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{title}</div>
           <button onClick={onClose} className="h-11 w-11 sm:h-7 sm:w-7 inline-flex items-center justify-center rounded hover:bg-slate-100">
             <X size={16} />
           </button>

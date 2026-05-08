@@ -415,7 +415,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
       {loading && !data && (
         <div className="space-y-2">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-10 bg-white border border-slate-200 rounded animate-pulse" />
+            <div key={i} className="h-10 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded animate-pulse" />
           ))}
         </div>
       )}
@@ -423,27 +423,27 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
       {data && (
         <>
           {/* Header card */}
-          <div className="bg-white border border-slate-200 rounded-lg p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4">
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <ClipboardCheck className="w-5 h-5 text-slate-500" />
+                  <ClipboardCheck className="w-5 h-5 text-slate-500 dark:text-slate-400" />
                   <Badge variant={statusVariant(data.status)} size="sm">
                     {data.status.replace(/_/g, ' ')}
                   </Badge>
-                  <span className="text-lg font-semibold text-slate-900">
+                  <span className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                     {data.location.name}
                   </span>
-                  <span className="text-sm font-mono text-slate-500">
+                  <span className="text-sm font-mono text-slate-500 dark:text-slate-400">
                     ({data.location.code})
                   </span>
                 </div>
                 {data.notes && (
-                  <div className="text-base text-slate-600 mt-1 italic">
+                  <div className="text-base text-slate-600 dark:text-slate-400 mt-1 italic">
                     {data.notes}
                   </div>
                 )}
-                <div className="text-sm text-slate-500 mt-1">
+                <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                   {data.startedAt && <>Started {new Date(data.startedAt).toLocaleString()}</>}
                   {data.completedAt && <> · Completed {new Date(data.completedAt).toLocaleString()}</>}
                   {data.cancelledAt && (
@@ -468,7 +468,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                       type="button"
                       onClick={handleCancel}
                       disabled={busyTopAction !== null}
-                      className="inline-flex items-center gap-1 min-h-[44px] sm:min-h-0 px-2.5 py-1 text-sm font-medium text-red-700 bg-white border border-red-200 rounded hover:bg-red-50 disabled:opacity-50"
+                      className="inline-flex items-center gap-1 min-h-[44px] sm:min-h-0 px-2.5 py-1 text-sm font-medium text-red-700 bg-white dark:bg-slate-900 border border-red-200 rounded hover:bg-red-50 disabled:opacity-50"
                     >
                       <Ban className="w-3 h-3" />
                       Cancel
@@ -499,7 +499,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                       type="button"
                       onClick={handleCancel}
                       disabled={busyTopAction !== null}
-                      className="inline-flex items-center gap-1 min-h-[44px] sm:min-h-0 px-2.5 py-1 text-sm font-medium text-red-700 bg-white border border-red-200 rounded hover:bg-red-50 disabled:opacity-50"
+                      className="inline-flex items-center gap-1 min-h-[44px] sm:min-h-0 px-2.5 py-1 text-sm font-medium text-red-700 bg-white dark:bg-slate-900 border border-red-200 rounded hover:bg-red-50 disabled:opacity-50"
                     >
                       <Ban className="w-3 h-3" />
                       Cancel
@@ -515,7 +515,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
             {/* Progress bar */}
             {data.items.length > 0 && data.status !== 'CANCELLED' && (
               <div className="mt-3">
-                <div className="flex items-center justify-between text-sm text-slate-500 mb-1">
+                <div className="flex items-center justify-between text-sm text-slate-500 dark:text-slate-400 mb-1">
                   <span>
                     {(counts.RECONCILED ?? 0) + (counts.IGNORED ?? 0)} of {data.items.length} resolved
                   </span>
@@ -525,7 +525,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                     )}%
                   </span>
                 </div>
-                <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                   <div
                     className={cn(
                       'h-full transition-all',
@@ -551,7 +551,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                   'min-h-[44px] sm:min-h-0 px-2.5 py-1 text-sm font-medium rounded border transition-colors',
                   filter === f.key
                     ? 'bg-slate-900 text-white border-slate-900'
-                    : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300',
+                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
                 )}
               >
                 {f.label}
@@ -566,14 +566,14 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
               handleScan → row is scrolled into view + count input
               focused. Camera mode (mobile) is enabled by default. */}
           {isInProgress && (
-            <div className="bg-white border border-slate-200 rounded-lg p-3">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
               <BarcodeScanInput
                 label="Scan SKU to count"
                 placeholder="Aim scanner here or type SKU…"
                 onScan={handleScan}
                 autoFocus={false}
               />
-              <div className="text-sm text-slate-500 mt-1.5">
+              <div className="text-sm text-slate-500 dark:text-slate-400 mt-1.5">
                 Scan or type a SKU to jump to its count input. Camera mode (📷) works on phones.
               </div>
             </div>
@@ -587,7 +587,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
               filters above continue to work. */}
           <div className="sm:hidden space-y-2">
             {filteredItems.length === 0 ? (
-              <div className="bg-white border border-slate-200 rounded-lg px-4 py-6 text-center text-base text-slate-500">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-6 text-center text-base text-slate-500 dark:text-slate-400">
                 No items match this filter.
               </div>
             ) : (
@@ -605,13 +605,13 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                 return (
                   <div
                     key={it.id}
-                    className="bg-white border border-slate-200 rounded-lg p-3 space-y-2"
+                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3 space-y-2"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <div className="font-mono text-sm text-slate-900 break-all">{it.sku}</div>
+                        <div className="font-mono text-sm text-slate-900 dark:text-slate-100 break-all">{it.sku}</div>
                         {it.productName && (
-                          <div className="text-sm text-slate-500 mt-0.5">{it.productName}</div>
+                          <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{it.productName}</div>
                         )}
                       </div>
                       <Badge variant={statusVariant(it.status)} size="sm">
@@ -620,11 +620,11 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                     </div>
                     <div className="flex items-center gap-3 text-sm">
                       <div>
-                        <div className="text-xs uppercase tracking-wider text-slate-500">Expected</div>
-                        <div className="tabular-nums text-slate-700 text-base">{it.expectedQuantity}</div>
+                        <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">Expected</div>
+                        <div className="tabular-nums text-slate-700 dark:text-slate-300 text-base">{it.expectedQuantity}</div>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs uppercase tracking-wider text-slate-500">Counted</div>
+                        <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">Counted</div>
                         {showInput ? (
                           <input
                             type="number"
@@ -642,21 +642,21 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                               }
                             }}
                             disabled={actingId === it.id}
-                            className="mt-0.5 w-24 h-11 px-2 text-right tabular-nums text-base border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            className="mt-0.5 w-24 h-11 px-2 text-right tabular-nums text-base border border-slate-200 dark:border-slate-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-300"
                             placeholder="—"
                           />
                         ) : (
-                          <div className="tabular-nums text-slate-700 text-base">{it.countedQuantity ?? '—'}</div>
+                          <div className="tabular-nums text-slate-700 dark:text-slate-300 text-base">{it.countedQuantity ?? '—'}</div>
                         )}
                       </div>
                       <div>
-                        <div className="text-xs uppercase tracking-wider text-slate-500">Variance</div>
+                        <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">Variance</div>
                         <div className={cn(
                           'tabular-nums text-base font-semibold',
                           it.variance == null
-                            ? 'text-slate-400'
+                            ? 'text-slate-400 dark:text-slate-500'
                             : isVarianceZero
-                              ? 'text-slate-400'
+                              ? 'text-slate-400 dark:text-slate-500'
                               : it.variance > 0
                                 ? 'text-amber-700'
                                 : 'text-red-700',
@@ -685,7 +685,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                             type="button"
                             onClick={() => handleIgnore(it)}
                             disabled={actingId === it.id}
-                            className="flex-1 inline-flex items-center justify-center gap-1 min-h-[44px] px-3 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
+                            className="flex-1 inline-flex items-center justify-center gap-1 min-h-[44px] px-3 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
                           >
                             <SkipForward className="w-3.5 h-3.5" />
                             Ignore
@@ -700,9 +700,9 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
           </div>
 
           {/* Items table — hidden on mobile (cards above). */}
-          <div className="hidden sm:block bg-white border border-slate-200 rounded-lg overflow-hidden">
+          <div className="hidden sm:block bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
             <table className="w-full text-base">
-              <thead className="bg-slate-50 text-sm text-slate-600 border-b border-slate-200">
+              <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
                 <tr>
                   <th className="text-left font-medium px-3 py-2">SKU</th>
                   <th className="text-right font-medium px-3 py-2 w-24">Expected</th>
@@ -715,7 +715,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
               <tbody>
                 {filteredItems.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-3 py-8 text-center text-base text-slate-500">
+                    <td colSpan={6} className="px-3 py-8 text-center text-base text-slate-500 dark:text-slate-400">
                       No items match this filter.
                     </td>
                   </tr>
@@ -732,16 +732,16 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                         : ''
                   const isVarianceZero = it.variance === 0
                   return (
-                    <tr key={it.id} className="border-b border-slate-100 last:border-0 align-middle">
+                    <tr key={it.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0 align-middle">
                       <td className="px-3 py-2">
-                        <div className="font-mono text-sm text-slate-900">{it.sku}</div>
+                        <div className="font-mono text-sm text-slate-900 dark:text-slate-100">{it.sku}</div>
                         {it.productName && (
-                          <div className="text-sm text-slate-500 truncate max-w-md">
+                          <div className="text-sm text-slate-500 dark:text-slate-400 truncate max-w-md">
                             {it.productName}
                           </div>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">
                         {it.expectedQuantity}
                       </td>
                       <td className="px-3 py-2 text-right">
@@ -762,24 +762,24 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                               }
                             }}
                             disabled={actingId === it.id}
-                            className="w-24 h-11 sm:h-8 px-2 text-right tabular-nums text-base border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            className="w-24 h-11 sm:h-8 px-2 text-right tabular-nums text-base border border-slate-200 dark:border-slate-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-300"
                             placeholder="—"
                           />
                         ) : (
-                          <span className="tabular-nums text-slate-700">
+                          <span className="tabular-nums text-slate-700 dark:text-slate-300">
                             {it.countedQuantity ?? '—'}
                           </span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">
                         {it.variance == null ? (
-                          <span className="text-slate-400">—</span>
+                          <span className="text-slate-400 dark:text-slate-500">—</span>
                         ) : (
                           <span
                             className={cn(
                               'font-semibold',
                               isVarianceZero
-                                ? 'text-slate-400'
+                                ? 'text-slate-400 dark:text-slate-500'
                                 : it.variance > 0
                                   ? 'text-amber-700'
                                   : 'text-red-700',
@@ -821,7 +821,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                                 type="button"
                                 onClick={() => handleIgnore(it)}
                                 disabled={actingId === it.id}
-                                className="inline-flex items-center gap-1 min-h-[44px] sm:min-h-0 px-2 py-1 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
+                                className="inline-flex items-center gap-1 min-h-[44px] sm:min-h-0 px-2 py-1 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
                                 title="Don't apply this variance"
                               >
                                 <SkipForward className="w-3 h-3" />
@@ -865,8 +865,8 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
         size="md"
       >
         <ModalBody>
-          <label className="text-sm font-medium text-slate-700 block mb-1">
-            Reason <span className="text-slate-400 font-normal">(optional)</span>
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">
+            Reason <span className="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
           </label>
           <textarea
             value={reasonInput}
@@ -877,7 +877,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                 ? 'e.g. recount tomorrow with new operator'
                 : 'e.g. damaged unit pulled separately'
             }
-            className="w-full px-3 py-2 text-base border border-slate-200 rounded focus:border-slate-400 focus:outline-none"
+            className="w-full px-3 py-2 text-base border border-slate-200 dark:border-slate-700 rounded focus:border-slate-400 focus:outline-none"
             disabled={reasonSubmitting}
           />
         </ModalBody>

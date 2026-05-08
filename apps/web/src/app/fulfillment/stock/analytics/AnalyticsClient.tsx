@@ -274,7 +274,7 @@ export default function AnalyticsClient() {
           <div className="flex items-center gap-2">
             <Link
               href="/fulfillment/stock"
-              className="inline-flex items-center gap-1.5 h-11 sm:h-8 px-3 text-base text-slate-600 hover:text-slate-900"
+              className="inline-flex items-center gap-1.5 h-11 sm:h-8 px-3 text-base text-slate-600 hover:text-slate-900 dark:text-slate-100"
             >
               <ArrowLeft size={14} /> {t('stock.title')}
             </Link>
@@ -288,7 +288,7 @@ export default function AnalyticsClient() {
 
       {/* Period selector */}
       <div className="flex items-center gap-1 flex-wrap">
-        <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold mr-2">
+        <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mr-2">
           {t('stock.analytics.period')}
         </span>
         {PERIOD_OPTIONS.map((d) => (
@@ -300,7 +300,7 @@ export default function AnalyticsClient() {
               'min-h-[44px] sm:min-h-0 px-3 py-1 text-sm font-medium rounded border transition-colors',
               days === d
                 ? 'bg-slate-900 text-white border-slate-900'
-                : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300',
+                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300',
             )}
           >
             {d}d
@@ -335,13 +335,13 @@ export default function AnalyticsClient() {
                   <TrendingUp size={16} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+                  <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
                     {t('stock.analytics.kpi.turnover')}
                   </div>
-                  <div className="text-[20px] font-semibold tabular-nums text-slate-900 mt-0.5">
+                  <div className="text-[20px] font-semibold tabular-nums text-slate-900 dark:text-slate-100 mt-0.5">
                     {data.overall.turnoverRatio == null ? '—' : data.overall.turnoverRatio.toFixed(2)}×
                   </div>
-                  <div className="text-sm text-slate-500 mt-0.5">
+                  <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
                     {t('stock.analytics.kpi.turnoverDetail', { days })}
                   </div>
                 </div>
@@ -353,13 +353,13 @@ export default function AnalyticsClient() {
                   <Activity size={16} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+                  <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
                     {t('stock.analytics.kpi.doh')}
                   </div>
                   <div className={`text-[20px] font-semibold tabular-nums mt-0.5 ${dohTone(data.overall.daysOfInventory)}`}>
                     {data.overall.daysOfInventory == null ? '—' : `${data.overall.daysOfInventory}d`}
                   </div>
-                  <div className="text-sm text-slate-500 mt-0.5">
+                  <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
                     {t('stock.analytics.kpi.dohDetail')}
                   </div>
                 </div>
@@ -371,13 +371,13 @@ export default function AnalyticsClient() {
                   <TrendingDown size={16} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+                  <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
                     {t('stock.analytics.kpi.cogs')}
                   </div>
-                  <div className="text-[20px] font-semibold tabular-nums text-slate-900 mt-0.5">
+                  <div className="text-[20px] font-semibold tabular-nums text-slate-900 dark:text-slate-100 mt-0.5">
                     {formatCents(data.overall.cogsCents)}
                   </div>
-                  <div className="text-sm text-slate-500 mt-0.5">
+                  <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
                     {t('stock.analytics.kpi.cogsDetail', { units: data.overall.unitsSold.toLocaleString() })}
                   </div>
                 </div>
@@ -389,13 +389,13 @@ export default function AnalyticsClient() {
                   <Boxes size={16} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+                  <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
                     {t('stock.analytics.kpi.inventoryValue')}
                   </div>
-                  <div className="text-[20px] font-semibold tabular-nums text-slate-900 mt-0.5">
+                  <div className="text-[20px] font-semibold tabular-nums text-slate-900 dark:text-slate-100 mt-0.5">
                     {formatCents(data.overall.currentInventoryValueCents)}
                   </div>
-                  <div className="text-sm text-slate-500 mt-0.5">
+                  <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
                     {t('stock.analytics.kpi.inventoryValueDetail', { n: data.overall.productsTracked.toLocaleString() })}
                   </div>
                 </div>
@@ -406,19 +406,19 @@ export default function AnalyticsClient() {
           {/* Per-channel sales breakdown */}
           {data.byChannel.length > 0 && (
             <Card>
-              <div className="text-md font-semibold text-slate-900 mb-3">{t('stock.analytics.byChannel.title')}</div>
+              <div className="text-md font-semibold text-slate-900 dark:text-slate-100 mb-3">{t('stock.analytics.byChannel.title')}</div>
               <ul className="divide-y divide-slate-100">
                 {data.byChannel.map((ch) => (
                   <li key={`${ch.channel}_${ch.marketplace}`} className="flex items-center justify-between py-2">
                     <div className="inline-flex items-center gap-2">
                       <Badge variant="default" size="sm">{ch.channel}</Badge>
-                      <span className="text-sm text-slate-500">{ch.marketplace}</span>
+                      <span className="text-sm text-slate-500 dark:text-slate-400">{ch.marketplace}</span>
                     </div>
                     <div className="text-right text-sm">
-                      <div className="font-semibold tabular-nums text-slate-900">
+                      <div className="font-semibold tabular-nums text-slate-900 dark:text-slate-100">
                         {ch.units.toLocaleString()} {t('stock.analytics.byChannel.units')}
                       </div>
-                      <div className="text-slate-500">
+                      <div className="text-slate-500 dark:text-slate-400">
                         {formatCents(ch.revenueCents)} · {ch.orders.toLocaleString()} {t('stock.analytics.byChannel.orders')}
                       </div>
                     </div>
@@ -435,25 +435,25 @@ export default function AnalyticsClient() {
           {eoq && eoq.recommendations.some((r) => r.recommendation.rop != null) && (
             <Card>
               <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-                <div className="text-md font-semibold text-slate-900 inline-flex items-center gap-2">
+                <div className="text-md font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2">
                   <Calculator size={14} className="text-blue-500" />
                   {t('stock.eoq.title')}
                 </div>
-                <div className="text-xs text-slate-500">
+                <div className="text-xs text-slate-500 dark:text-slate-400">
                   {t('stock.eoq.windowSummary', { days: eoq.windowDays })}
                 </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-md">
-                  <thead className="border-b border-slate-200 bg-slate-50">
+                  <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                     <tr>
-                      <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.eoq.col.product')}</th>
-                      <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.eoq.col.location')}</th>
-                      <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.eoq.col.demand')}</th>
-                      <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.eoq.col.currentRop')}</th>
-                      <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.eoq.col.recommendedRop')}</th>
-                      <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.eoq.col.recommendedEoq')}</th>
-                      <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700"></th>
+                      <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.eoq.col.product')}</th>
+                      <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.eoq.col.location')}</th>
+                      <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.eoq.col.demand')}</th>
+                      <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.eoq.col.currentRop')}</th>
+                      <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.eoq.col.recommendedRop')}</th>
+                      <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.eoq.col.recommendedEoq')}</th>
+                      <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -461,7 +461,7 @@ export default function AnalyticsClient() {
                       const ropChanged = rec.recommendation.rop != null
                         && rec.recommendation.rop !== rec.currentReorderThreshold
                       return (
-                        <tr key={rec.stockLevelId} className="border-b border-slate-100 hover:bg-slate-50">
+                        <tr key={rec.stockLevelId} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-800">
                           <td className="px-3 py-2">
                             <div className="flex items-center gap-2">
                               {rec.thumbnailUrl ? (
@@ -472,17 +472,17 @@ export default function AnalyticsClient() {
                                 </div>
                               )}
                               <div className="min-w-0">
-                                <div className="text-md font-medium text-slate-900 truncate max-w-md">{rec.name}</div>
-                                <div className="text-sm text-slate-500 font-mono">{rec.sku}</div>
+                                <div className="text-md font-medium text-slate-900 dark:text-slate-100 truncate max-w-md">{rec.name}</div>
+                                <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">{rec.sku}</div>
                               </div>
                             </div>
                           </td>
                           <td className="px-3 py-2">
-                            <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded bg-slate-50 text-slate-700 border-slate-200" title={rec.location.name}>
+                            <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700" title={rec.location.name}>
                               {rec.location.code}
                             </span>
                           </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                          <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">
                             {rec.inputs.unitsSoldInWindow > 0
                               ? `${rec.inputs.unitsSoldInWindow}`
                               : <span className="text-slate-300">0</span>}
@@ -490,7 +490,7 @@ export default function AnalyticsClient() {
                               {rec.inputs.dailyDemand.toFixed(2)}/day
                             </div>
                           </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-slate-500">
+                          <td className="px-3 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400">
                             {rec.currentReorderThreshold ?? <span className="text-slate-300">—</span>}
                           </td>
                           <td className={cn(
@@ -499,7 +499,7 @@ export default function AnalyticsClient() {
                           )}>
                             {rec.recommendation.rop ?? <span className="text-slate-300">—</span>}
                           </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                          <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">
                             {rec.recommendation.eoq ?? <span className="text-slate-300">—</span>}
                           </td>
                           <td className="px-3 py-2 text-right">
@@ -520,8 +520,8 @@ export default function AnalyticsClient() {
                   </tbody>
                 </table>
               </div>
-              <div className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-500 leading-relaxed">
-                <span className="font-semibold text-slate-700">{t('stock.eoq.formula.title')}: </span>
+              <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                <span className="font-semibold text-slate-700 dark:text-slate-300">{t('stock.eoq.formula.title')}: </span>
                 {t('stock.eoq.formula.body')}
               </div>
             </Card>
@@ -533,11 +533,11 @@ export default function AnalyticsClient() {
           {abc && (
             <Card>
               <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-                <div className="text-md font-semibold text-slate-900 inline-flex items-center gap-2">
+                <div className="text-md font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2">
                   <BarChart3 size={14} className="text-violet-500" />
                   {t('stock.abc.title')}
                 </div>
-                <div className="text-xs text-slate-500">
+                <div className="text-xs text-slate-500 dark:text-slate-400">
                   {abc.snapshotAt
                     ? t('stock.abc.snapshotAt', { when: new Date(abc.snapshotAt).toLocaleString() })
                     : t('stock.abc.notRun')}
@@ -545,7 +545,7 @@ export default function AnalyticsClient() {
               </div>
 
               {abc.productsClassified === 0 ? (
-                <div className="text-sm text-slate-500 italic py-3">
+                <div className="text-sm text-slate-500 dark:text-slate-400 italic py-3">
                   {t('stock.abc.empty')}
                 </div>
               ) : (
@@ -556,7 +556,7 @@ export default function AnalyticsClient() {
                       const tone =
                         cls === 'A' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                         cls === 'B' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                        cls === 'C' ? 'bg-slate-50 text-slate-600 border-slate-200' :
+                        cls === 'C' ? 'bg-slate-50 dark:bg-slate-800 text-slate-600 border-slate-200 dark:border-slate-700' :
                         'bg-rose-50 text-rose-700 border-rose-200'
                       return (
                         <div key={cls} className={`border rounded-md p-3 ${tone}`}>
@@ -576,7 +576,7 @@ export default function AnalyticsClient() {
                   {/* Top samples per band — collapsed by default to one
                       row per band; the full per-band drill-down lives
                       in S.18 saved-views (filter by abcClass). */}
-                  <div className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-500">
+                  <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
                     {t('stock.abc.totalClassified', { n: abc.productsClassified })}
                   </div>
                 </>
@@ -591,12 +591,12 @@ export default function AnalyticsClient() {
           {deadStock && (deadStock.dead.length > 0 || deadStock.slow.length > 0) && (
             <Card>
               <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-                <div className="text-md font-semibold text-slate-900 inline-flex items-center gap-2">
+                <div className="text-md font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2">
                   <Snowflake size={14} className="text-blue-500" />
                   {t('stock.deadStock.title')}
                 </div>
                 <div className="flex items-center gap-1 flex-wrap">
-                  <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold mr-1">
+                  <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mr-1">
                     {t('stock.deadStock.threshold')}
                   </span>
                   {[30, 60, 90, 180].map((d) => (
@@ -608,7 +608,7 @@ export default function AnalyticsClient() {
                         'min-h-[44px] sm:min-h-0 px-2.5 py-1 text-sm font-medium rounded border transition-colors',
                         deadDays === d
                           ? 'bg-slate-900 text-white border-slate-900'
-                          : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300',
+                          : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300',
                       )}
                     >
                       {d}d
@@ -623,7 +623,7 @@ export default function AnalyticsClient() {
                   <div className="text-sm uppercase tracking-wider font-semibold text-rose-700 inline-flex items-center gap-1.5 mb-2">
                     <AlertTriangle size={12} />
                     {t('stock.deadStock.dead.title', { days: deadDays })}
-                    <span className="text-slate-500 font-normal">· {deadStock.dead.length}</span>
+                    <span className="text-slate-500 dark:text-slate-400 font-normal">· {deadStock.dead.length}</span>
                   </div>
                   {deadStock.dead.length === 0 ? (
                     <div className="text-sm text-slate-400 italic py-2">
@@ -632,7 +632,7 @@ export default function AnalyticsClient() {
                   ) : (
                     <ul className="space-y-1 max-h-[420px] overflow-y-auto pr-1">
                       {deadStock.dead.slice(0, 50).map((p) => (
-                        <li key={p.productId} className="flex items-center gap-2 py-1.5 px-2 -mx-2 border-b border-slate-100 last:border-0">
+                        <li key={p.productId} className="flex items-center gap-2 py-1.5 px-2 -mx-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
                           {p.thumbnailUrl ? (
                             <img src={p.thumbnailUrl} alt="" className="w-7 h-7 rounded object-cover bg-slate-100 flex-shrink-0" />
                           ) : (
@@ -641,8 +641,8 @@ export default function AnalyticsClient() {
                             </div>
                           )}
                           <div className="min-w-0 flex-1">
-                            <div className="text-sm font-medium text-slate-900 truncate">{p.name}</div>
-                            <div className="text-xs text-slate-500 font-mono truncate">
+                            <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{p.name}</div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
                               {p.sku} · {p.totalStock} on hand
                               {p.daysSinceLastMovement != null && (
                                 <span className="text-rose-600"> · {p.daysSinceLastMovement}d ago</span>
@@ -674,7 +674,7 @@ export default function AnalyticsClient() {
                   <div className="text-sm uppercase tracking-wider font-semibold text-amber-700 inline-flex items-center gap-1.5 mb-2">
                     <TrendingDown size={12} />
                     {t('stock.deadStock.slow.title', { v: deadStock.slowVelocityThreshold })}
-                    <span className="text-slate-500 font-normal">· {deadStock.slow.length}</span>
+                    <span className="text-slate-500 dark:text-slate-400 font-normal">· {deadStock.slow.length}</span>
                   </div>
                   {deadStock.slow.length === 0 ? (
                     <div className="text-sm text-slate-400 italic py-2">
@@ -683,7 +683,7 @@ export default function AnalyticsClient() {
                   ) : (
                     <ul className="space-y-1 max-h-[420px] overflow-y-auto pr-1">
                       {deadStock.slow.slice(0, 50).map((p) => (
-                        <li key={p.productId} className="flex items-center gap-2 py-1.5 px-2 -mx-2 border-b border-slate-100 last:border-0">
+                        <li key={p.productId} className="flex items-center gap-2 py-1.5 px-2 -mx-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
                           {p.thumbnailUrl ? (
                             <img src={p.thumbnailUrl} alt="" className="w-7 h-7 rounded object-cover bg-slate-100 flex-shrink-0" />
                           ) : (
@@ -692,8 +692,8 @@ export default function AnalyticsClient() {
                             </div>
                           )}
                           <div className="min-w-0 flex-1">
-                            <div className="text-sm font-medium text-slate-900 truncate">{p.name}</div>
-                            <div className="text-xs text-slate-500 font-mono truncate">
+                            <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{p.name}</div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
                               {p.sku} · {p.totalStock} on hand · {p.dailyVelocity}/day
                             </div>
                           </div>
@@ -711,8 +711,8 @@ export default function AnalyticsClient() {
               </div>
 
               {/* Recommended actions footer */}
-              <div className="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-500 leading-relaxed">
-                <span className="font-semibold text-slate-700">{t('stock.deadStock.recommended.title')}: </span>
+              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                <span className="font-semibold text-slate-700 dark:text-slate-300">{t('stock.deadStock.recommended.title')}: </span>
                 {t('stock.deadStock.recommended.body')}
               </div>
             </Card>
@@ -730,31 +730,31 @@ export default function AnalyticsClient() {
             <Card noPadding>
               <div className="overflow-x-auto">
                 <table className="w-full text-md">
-                  <thead className="border-b border-slate-200 bg-slate-50">
+                  <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                     <tr>
-                      <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                      <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                         {t('stock.analytics.col.product')}
                       </th>
                       <th
-                        className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 cursor-pointer hover:text-slate-900"
+                        className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 cursor-pointer hover:text-slate-900 dark:text-slate-100"
                         onClick={() => setSortKey('units')}
                       >
                         {t('stock.analytics.col.units')}{sortKey === 'units' && ' ↓'}
                       </th>
                       <th
-                        className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 cursor-pointer hover:text-slate-900"
+                        className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 cursor-pointer hover:text-slate-900 dark:text-slate-100"
                         onClick={() => setSortKey('value')}
                       >
                         {t('stock.analytics.col.invValue')}{sortKey === 'value' && ' ↓'}
                       </th>
                       <th
-                        className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 cursor-pointer hover:text-slate-900"
+                        className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 cursor-pointer hover:text-slate-900 dark:text-slate-100"
                         onClick={() => setSortKey('turnover')}
                       >
                         {t('stock.analytics.col.turnover')}{sortKey === 'turnover' && ' ↓'}
                       </th>
                       <th
-                        className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 cursor-pointer hover:text-slate-900"
+                        className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 cursor-pointer hover:text-slate-900 dark:text-slate-100"
                         onClick={() => setSortKey('doh')}
                       >
                         {t('stock.analytics.col.doh')}{sortKey === 'doh' && ' ↑'}
@@ -763,7 +763,7 @@ export default function AnalyticsClient() {
                   </thead>
                   <tbody>
                     {sortedProducts.map((p) => (
-                      <tr key={p.productId} className="border-b border-slate-100 hover:bg-slate-50">
+                      <tr key={p.productId} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-800">
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
                             {p.thumbnailUrl ? (
@@ -774,22 +774,22 @@ export default function AnalyticsClient() {
                               </div>
                             )}
                             <div className="min-w-0">
-                              <div className="text-md font-medium text-slate-900 truncate max-w-md">{p.name}</div>
-                              <div className="text-sm text-slate-500 font-mono">
+                              <div className="text-md font-medium text-slate-900 dark:text-slate-100 truncate max-w-md">{p.name}</div>
+                              <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">
                                 {p.sku}
                                 {p.amazonAsin && <span> · {p.amazonAsin}</span>}
                               </div>
                             </div>
                           </div>
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                        <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">
                           {p.unitsSold.toLocaleString()}
                           <div className="text-xs text-slate-400">{p.totalStock} on hand</div>
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                        <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">
                           {p.costPriceCents === 0 ? <span className="text-slate-300">—</span> : formatCents(p.currentInventoryValueCents)}
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                        <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">
                           {p.turnoverRatio == null ? <span className="text-slate-300">—</span> : `${p.turnoverRatio.toFixed(2)}×`}
                         </td>
                         <td className={`px-3 py-2 text-right tabular-nums font-semibold ${dohTone(p.daysOfInventory)}`}>

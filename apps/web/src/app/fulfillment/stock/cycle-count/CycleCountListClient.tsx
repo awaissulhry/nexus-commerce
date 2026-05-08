@@ -201,7 +201,7 @@ export default function CycleCountListClient() {
                 'px-3 py-1 text-sm font-medium rounded border transition-colors',
                 statusFilter === f.key
                   ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300',
+                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
               )}
             >
               {t(f.labelKey)}
@@ -245,7 +245,7 @@ export default function CycleCountListClient() {
       {loading && !counts && (
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-16 bg-white border border-slate-200 rounded-lg animate-pulse" />
+            <div key={i} className="h-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg animate-pulse" />
           ))}
         </div>
       )}
@@ -270,24 +270,24 @@ export default function CycleCountListClient() {
               <Link
                 key={c.id}
                 href={`/fulfillment/stock/cycle-count/${c.id}`}
-                className="block bg-white border border-slate-200 rounded-lg p-4 hover:border-slate-300 hover:shadow-sm transition-all"
+                className="block bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-sm transition-all"
               >
                 <div className="flex items-start gap-3">
-                  <ClipboardCheck className="w-5 h-5 text-slate-500 flex-shrink-0 mt-0.5" />
+                  <ClipboardCheck className="w-5 h-5 text-slate-500 dark:text-slate-400 flex-shrink-0 mt-0.5" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge variant={statusVariant(c.status)} size="sm">
                         {c.status.replace(/_/g, ' ')}
                       </Badge>
-                      <span className="font-medium text-slate-900 inline-flex items-center gap-1">
-                        <WarehouseIcon className="w-3.5 h-3.5 text-slate-400" />
+                      <span className="font-medium text-slate-900 dark:text-slate-100 inline-flex items-center gap-1">
+                        <WarehouseIcon className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
                         {c.location.name}
-                        <span className="text-sm font-mono text-slate-500 ml-1">
+                        <span className="text-sm font-mono text-slate-500 dark:text-slate-400 ml-1">
                           ({c.location.code})
                         </span>
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 mt-1 text-sm text-slate-500 flex-wrap">
+                    <div className="flex items-center gap-3 mt-1 text-sm text-slate-500 dark:text-slate-400 flex-wrap">
                       <span>
                         {t('cycleCount.list.row.itemsSummary', {
                           n: c.totalItems,
@@ -314,13 +314,13 @@ export default function CycleCountListClient() {
                       )}
                     </div>
                     {c.notes && (
-                      <div className="text-sm text-slate-600 mt-1 italic truncate">
+                      <div className="text-sm text-slate-600 dark:text-slate-400 mt-1 italic truncate">
                         {c.notes}
                       </div>
                     )}
                     {/* Progress bar */}
                     {c.totalItems > 0 && c.status !== 'CANCELLED' && (
-                      <div className="mt-2 h-1 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="mt-2 h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                         <div
                           className={cn(
                             'h-full transition-all',
@@ -347,16 +347,16 @@ export default function CycleCountListClient() {
           aria-modal="true"
         >
           <div
-            className="bg-white rounded-lg shadow-xl border border-slate-200 w-full max-w-md"
+            className="bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 w-full max-w-md"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-900">{t('cycleCount.list.modal.title')}</h2>
+            <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('cycleCount.list.modal.title')}</h2>
               <button
                 type="button"
                 onClick={() => setCreateOpen(false)}
                 disabled={creating}
-                className="text-slate-400 hover:text-slate-700 disabled:opacity-50"
+                className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:text-slate-300 disabled:opacity-50"
                 aria-label="Close"
               >
                 <X className="w-4 h-4" />
@@ -364,13 +364,13 @@ export default function CycleCountListClient() {
             </div>
             <div className="p-5 space-y-3">
               <div>
-                <label className="text-sm font-medium text-slate-700 uppercase tracking-wide">
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 uppercase tracking-wide">
                   {t('cycleCount.list.modal.locationLabel')} <span className="text-red-600">*</span>
                 </label>
                 <select
                   value={newLocationId}
                   onChange={(e) => setNewLocationId(e.target.value)}
-                  className="mt-1 w-full px-3 py-1.5 text-md border border-slate-200 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  className="mt-1 w-full px-3 py-1.5 text-md border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-300"
                 >
                   <option value="">{t('cycleCount.list.modal.locationPlaceholder')}</option>
                   {locations.map((l) => (
@@ -379,12 +379,12 @@ export default function CycleCountListClient() {
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                   {t('cycleCount.list.modal.locationHelp')}
                 </p>
               </div>
               <div>
-                <label className="text-sm font-medium text-slate-700 uppercase tracking-wide">
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 uppercase tracking-wide">
                   {t('cycleCount.list.modal.notesLabel')}
                 </label>
                 <Input
@@ -395,7 +395,7 @@ export default function CycleCountListClient() {
                   className="mt-1"
                 />
               </div>
-              <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
                 <Button variant="primary" size="sm" onClick={handleCreate} disabled={creating}>
                   {creating ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />

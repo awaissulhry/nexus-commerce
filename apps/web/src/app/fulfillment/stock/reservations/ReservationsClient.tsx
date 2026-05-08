@@ -154,7 +154,7 @@ export default function ReservationsClient() {
           <div className="flex items-center gap-2">
             <Link
               href="/fulfillment/stock"
-              className="inline-flex items-center gap-1.5 h-11 sm:h-8 px-3 text-base text-slate-600 hover:text-slate-900"
+              className="inline-flex items-center gap-1.5 h-11 sm:h-8 px-3 text-base text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100"
             >
               <ArrowLeft size={14} /> {t('stock.title')}
             </Link>
@@ -177,7 +177,7 @@ export default function ReservationsClient() {
               'min-h-[44px] sm:min-h-0 px-3 py-1 text-sm font-medium rounded border transition-colors',
               filter === f.key
                 ? 'bg-slate-900 text-white border-slate-900'
-                : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300',
+                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
             )}
           >
             {t(f.labelKey)}
@@ -195,7 +195,7 @@ export default function ReservationsClient() {
       {loading && reservations === null && (
         <div className="space-y-2">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="h-16 bg-white border border-slate-200 rounded-lg animate-pulse" />
+            <div key={i} className="h-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg animate-pulse" />
           ))}
         </div>
       )}
@@ -213,45 +213,45 @@ export default function ReservationsClient() {
         <Card noPadding>
           <div className="overflow-x-auto">
             <table className="w-full text-md">
-              <thead className="border-b border-slate-200 bg-slate-50">
+              <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                 <tr>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.reservations.col.product')}</th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.reservations.col.location')}</th>
-                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.reservations.col.quantity')}</th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.reservations.col.reason')}</th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.reservations.col.status')}</th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.reservations.col.when')}</th>
-                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700"></th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.reservations.col.product')}</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.reservations.col.location')}</th>
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.reservations.col.quantity')}</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.reservations.col.reason')}</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.reservations.col.status')}</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.reservations.col.when')}</th>
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300"></th>
                 </tr>
               </thead>
               <tbody>
                 {reservations.map((r) => (
-                  <tr key={r.id} className="border-b border-slate-100 hover:bg-slate-50">
+                  <tr key={r.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-2">
                         {r.product?.thumbnailUrl ? (
-                          <img src={r.product.thumbnailUrl} alt="" className="w-8 h-8 rounded object-cover bg-slate-100" />
+                          <img src={r.product.thumbnailUrl} alt="" className="w-8 h-8 rounded object-cover bg-slate-100 dark:bg-slate-800" />
                         ) : (
-                          <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-slate-400">
+                          <div className="w-8 h-8 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500">
                             <Package size={14} />
                           </div>
                         )}
                         <div className="min-w-0">
-                          <div className="text-md font-medium text-slate-900 truncate max-w-md">{r.product?.name ?? '—'}</div>
-                          <div className="text-sm text-slate-500 font-mono">
+                          <div className="text-md font-medium text-slate-900 dark:text-slate-100 truncate max-w-md">{r.product?.name ?? '—'}</div>
+                          <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">
                             {r.product?.sku ?? ''}
-                            {r.orderId && <span className="ml-1.5 text-slate-400">· order {r.orderId.slice(0, 8)}</span>}
+                            {r.orderId && <span className="ml-1.5 text-slate-400 dark:text-slate-500">· order {r.orderId.slice(0, 8)}</span>}
                           </div>
                         </div>
                       </div>
                     </td>
                     <td className="px-3 py-2">
-                      <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded bg-slate-50 text-slate-700 border-slate-200" title={r.location.name}>
+                      <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700" title={r.location.name}>
                         {r.location.code}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900">{r.quantity}</td>
-                    <td className="px-3 py-2 text-slate-700 text-sm">{r.reason}</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900 dark:text-slate-100">{r.quantity}</td>
+                    <td className="px-3 py-2 text-slate-700 dark:text-slate-300 text-sm">{r.reason}</td>
                     <td className="px-3 py-2">
                       <Badge
                         variant={
@@ -268,7 +268,7 @@ export default function ReservationsClient() {
                         {t(`stock.reservations.status.${r.status}`)}
                       </Badge>
                     </td>
-                    <td className="px-3 py-2 text-sm text-slate-500">
+                    <td className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">
                       {r.consumedAt && <span title={new Date(r.consumedAt).toLocaleString()}>{formatRelative(r.consumedAt)}</span>}
                       {!r.consumedAt && r.releasedAt && <span title={new Date(r.releasedAt).toLocaleString()}>{formatRelative(r.releasedAt)}</span>}
                       {!r.consumedAt && !r.releasedAt && r.ttlMs != null && (
@@ -284,7 +284,7 @@ export default function ReservationsClient() {
                           type="button"
                           onClick={() => handleRelease(r)}
                           disabled={actingId === r.id}
-                          className="inline-flex items-center gap-1 min-h-[44px] sm:min-h-0 px-2 py-1 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
+                          className="inline-flex items-center gap-1 min-h-[44px] sm:min-h-0 px-2 py-1 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
                         >
                           <X size={11} /> {t('stock.drawer.release')}
                         </button>

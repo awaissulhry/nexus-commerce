@@ -92,7 +92,7 @@ export default function TransfersClient() {
           <div className="flex items-center gap-2">
             <Link
               href="/fulfillment/stock"
-              className="inline-flex items-center gap-1.5 h-11 sm:h-8 px-3 text-base text-slate-600 hover:text-slate-900"
+              className="inline-flex items-center gap-1.5 h-11 sm:h-8 px-3 text-base text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100"
             >
               <ArrowLeft size={14} /> {t('stock.title')}
             </Link>
@@ -114,7 +114,7 @@ export default function TransfersClient() {
       {loading && transfers === null && (
         <div className="space-y-2">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="h-16 bg-white border border-slate-200 rounded-lg animate-pulse" />
+            <div key={i} className="h-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg animate-pulse" />
           ))}
         </div>
       )}
@@ -132,33 +132,33 @@ export default function TransfersClient() {
         <Card noPadding>
           <div className="overflow-x-auto">
             <table className="w-full text-md">
-              <thead className="border-b border-slate-200 bg-slate-50">
+              <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                 <tr>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.transfers.col.product')}</th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.transfers.col.from')}</th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.transfers.col.to')}</th>
-                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.transfers.col.quantity')}</th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.transfers.col.status')}</th>
-                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.transfers.col.when')}</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.transfers.col.product')}</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.transfers.col.from')}</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.transfers.col.to')}</th>
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.transfers.col.quantity')}</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.transfers.col.status')}</th>
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.transfers.col.when')}</th>
                 </tr>
               </thead>
               <tbody>
                 {transfers.map((tr) => (
-                  <tr key={tr.id} className="border-b border-slate-100 hover:bg-slate-50">
+                  <tr key={tr.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-2">
                         {tr.product?.thumbnailUrl ? (
-                          <img src={tr.product.thumbnailUrl} alt="" className="w-8 h-8 rounded object-cover bg-slate-100" />
+                          <img src={tr.product.thumbnailUrl} alt="" className="w-8 h-8 rounded object-cover bg-slate-100 dark:bg-slate-800" />
                         ) : (
-                          <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-slate-400">
+                          <div className="w-8 h-8 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500">
                             <Package size={14} />
                           </div>
                         )}
                         <div className="min-w-0">
-                          <div className="text-md font-medium text-slate-900 truncate max-w-md">
+                          <div className="text-md font-medium text-slate-900 dark:text-slate-100 truncate max-w-md">
                             {tr.product?.name ?? '—'}
                           </div>
-                          <div className="text-sm text-slate-500 font-mono">
+                          <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">
                             {tr.product?.sku ?? ''}
                             {tr.product?.amazonAsin && <span> · {tr.product.amazonAsin}</span>}
                           </div>
@@ -167,22 +167,22 @@ export default function TransfersClient() {
                     </td>
                     <td className="px-3 py-2">
                       {tr.from ? (
-                        <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded bg-slate-50 text-slate-700 border-slate-200" title={tr.from.name}>
+                        <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700" title={tr.from.name}>
                           {tr.from.code}
                         </span>
-                      ) : <span className="text-slate-400">—</span>}
+                      ) : <span className="text-slate-400 dark:text-slate-500">—</span>}
                     </td>
                     <td className="px-3 py-2">
                       <span className="inline-flex items-center gap-1">
-                        <ArrowRightLeft size={12} className="text-slate-400" />
+                        <ArrowRightLeft size={12} className="text-slate-400 dark:text-slate-500" />
                         {tr.to ? (
-                          <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded bg-slate-50 text-slate-700 border-slate-200" title={tr.to.name}>
+                          <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700" title={tr.to.name}>
                             {tr.to.code}
                           </span>
-                        ) : <span className="text-slate-400">—</span>}
+                        ) : <span className="text-slate-400 dark:text-slate-500">—</span>}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900">
+                    <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900 dark:text-slate-100">
                       {tr.quantity}
                     </td>
                     <td className="px-3 py-2">
@@ -190,7 +190,7 @@ export default function TransfersClient() {
                         {t(tr.status === 'COMPLETED' ? 'stock.transfers.status.completed' : 'stock.transfers.status.inTransit')}
                       </Badge>
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-500 text-sm" title={new Date(tr.createdAt).toLocaleString()}>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400 text-sm" title={new Date(tr.createdAt).toLocaleString()}>
                       {formatRelative(tr.createdAt)}
                     </td>
                   </tr>

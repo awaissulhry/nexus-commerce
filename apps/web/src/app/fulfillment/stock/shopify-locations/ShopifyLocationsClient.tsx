@@ -122,7 +122,7 @@ export default function ShopifyLocationsClient() {
           <div className="flex items-center gap-2">
             <Link
               href="/fulfillment/stock"
-              className="inline-flex items-center gap-1.5 h-11 sm:h-8 px-3 text-base text-slate-600 hover:text-slate-900"
+              className="inline-flex items-center gap-1.5 h-11 sm:h-8 px-3 text-base text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100"
             >
               <ArrowLeft size={14} /> {t('stock.title')}
             </Link>
@@ -150,7 +150,7 @@ export default function ShopifyLocationsClient() {
       {loading && locations === null && (
         <div className="space-y-2">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="h-16 bg-white border border-slate-200 rounded-lg animate-pulse" />
+            <div key={i} className="h-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg animate-pulse" />
           ))}
         </div>
       )}
@@ -168,27 +168,27 @@ export default function ShopifyLocationsClient() {
         <Card noPadding>
           <div className="overflow-x-auto">
             <table className="w-full text-md">
-              <thead className="border-b border-slate-200 bg-slate-50">
+              <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                 <tr>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.shopifyLocations.col.code')}</th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.shopifyLocations.col.name')}</th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.shopifyLocations.col.shopifyId')}</th>
-                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.shopifyLocations.col.skus')}</th>
-                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.shopifyLocations.col.units')}</th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.shopifyLocations.col.status')}</th>
-                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700"></th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.shopifyLocations.col.code')}</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.shopifyLocations.col.name')}</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.shopifyLocations.col.shopifyId')}</th>
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.shopifyLocations.col.skus')}</th>
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.shopifyLocations.col.units')}</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.shopifyLocations.col.status')}</th>
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300"></th>
                 </tr>
               </thead>
               <tbody>
                 {locations.map((l) => (
-                  <tr key={l.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="px-3 py-2 font-mono text-sm text-slate-700">{l.code}</td>
-                    <td className="px-3 py-2 text-slate-900">{l.name}</td>
-                    <td className="px-3 py-2 font-mono text-xs text-slate-500">
+                  <tr key={l.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
+                    <td className="px-3 py-2 font-mono text-sm text-slate-700 dark:text-slate-300">{l.code}</td>
+                    <td className="px-3 py-2 text-slate-900 dark:text-slate-100">{l.name}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-slate-500 dark:text-slate-400">
                       {l.externalLocationId ?? <span className="text-slate-300">—</span>}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-700">{l.skuCount}</td>
-                    <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900">{l.totalQuantity}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">{l.skuCount}</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900 dark:text-slate-100">{l.totalQuantity}</td>
                     <td className="px-3 py-2">
                       <Badge variant={l.isActive ? 'success' : 'default'} size="sm">
                         {l.isActive ? t('stock.shopifyLocations.active') : t('stock.shopifyLocations.inactive')}
@@ -199,7 +199,7 @@ export default function ShopifyLocationsClient() {
                         type="button"
                         onClick={() => toggleActive(l)}
                         disabled={togglingId === l.id}
-                        className="min-h-[44px] sm:min-h-0 px-2 py-1 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
+                        className="min-h-[44px] sm:min-h-0 px-2 py-1 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
                       >
                         {l.isActive
                           ? t('stock.shopifyLocations.disable')

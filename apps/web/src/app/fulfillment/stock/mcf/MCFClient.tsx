@@ -157,7 +157,7 @@ export default function MCFClient() {
           <div className="flex items-center gap-2">
             <Link
               href="/fulfillment/stock"
-              className="inline-flex items-center gap-1.5 h-11 sm:h-8 px-3 text-base text-slate-600 hover:text-slate-900"
+              className="inline-flex items-center gap-1.5 h-11 sm:h-8 px-3 text-base text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100"
             >
               <ArrowLeft size={14} /> {t('stock.title')}
             </Link>
@@ -179,7 +179,7 @@ export default function MCFClient() {
               'min-h-[44px] sm:min-h-0 px-2.5 py-1 text-sm font-medium rounded border transition-colors',
               filter === f.key
                 ? 'bg-slate-900 text-white border-slate-900'
-                : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300',
+                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
             )}
           >
             {t(f.labelKey)}
@@ -197,7 +197,7 @@ export default function MCFClient() {
       {loading && shipments === null && (
         <div className="space-y-2">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="h-16 bg-white border border-slate-200 rounded-lg animate-pulse" />
+            <div key={i} className="h-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg animate-pulse" />
           ))}
         </div>
       )}
@@ -215,26 +215,26 @@ export default function MCFClient() {
         <Card noPadding>
           <div className="overflow-x-auto">
             <table className="w-full text-md">
-              <thead className="border-b border-slate-200 bg-slate-50">
+              <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                 <tr>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.mcf.col.order')}</th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.mcf.col.amazonId')}</th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.mcf.col.status')}</th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.mcf.col.tracking')}</th>
-                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">{t('stock.mcf.col.requested')}</th>
-                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700"></th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.mcf.col.order')}</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.mcf.col.amazonId')}</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.mcf.col.status')}</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.mcf.col.tracking')}</th>
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('stock.mcf.col.requested')}</th>
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300"></th>
                 </tr>
               </thead>
               <tbody>
                 {shipments.map((s) => (
-                  <tr key={s.id} className="border-b border-slate-100 hover:bg-slate-50">
+                  <tr key={s.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
                     <td className="px-3 py-2">
-                      <div className="text-md font-medium text-slate-900 inline-flex items-center gap-1.5">
+                      <div className="text-md font-medium text-slate-900 dark:text-slate-100 inline-flex items-center gap-1.5">
                         <Badge variant="default" size="sm">{s.channel}</Badge>
                         <span className="font-mono text-sm">{s.channelOrderId}</span>
                       </div>
                     </td>
-                    <td className="px-3 py-2 font-mono text-xs text-slate-500" title={s.amazonFulfillmentOrderId}>
+                    <td className="px-3 py-2 font-mono text-xs text-slate-500 dark:text-slate-400" title={s.amazonFulfillmentOrderId}>
                       {s.amazonFulfillmentOrderId.slice(-16)}
                     </td>
                     <td className="px-3 py-2">
@@ -245,20 +245,20 @@ export default function MCFClient() {
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-sm text-slate-700">
+                    <td className="px-3 py-2 text-sm text-slate-700 dark:text-slate-300">
                       {s.trackingNumber ? (
                         <div>
                           <div className="font-mono">{s.trackingNumber}</div>
-                          {s.carrier && <div className="text-xs text-slate-500">{s.carrier}</div>}
+                          {s.carrier && <div className="text-xs text-slate-500 dark:text-slate-400">{s.carrier}</div>}
                         </div>
                       ) : (
-                        <span className="text-slate-400">—</span>
+                        <span className="text-slate-400 dark:text-slate-500">—</span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-right text-sm text-slate-500" title={new Date(s.requestedAt).toLocaleString()}>
+                    <td className="px-3 py-2 text-right text-sm text-slate-500 dark:text-slate-400" title={new Date(s.requestedAt).toLocaleString()}>
                       {formatRelative(s.requestedAt)}
                       {s.lastSyncedAt && (
-                        <div className="text-xs text-slate-400">
+                        <div className="text-xs text-slate-400 dark:text-slate-500">
                           synced {formatRelative(s.lastSyncedAt)}
                         </div>
                       )}
@@ -269,7 +269,7 @@ export default function MCFClient() {
                           type="button"
                           onClick={() => handleSync(s)}
                           disabled={actingId === s.id}
-                          className="min-h-[44px] sm:min-h-0 px-2 py-1 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
+                          className="min-h-[44px] sm:min-h-0 px-2 py-1 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
                           title={t('stock.mcf.syncTitle')}
                         >
                           <RefreshCw size={11} className={actingId === s.id ? 'animate-spin' : ''} />
@@ -279,7 +279,7 @@ export default function MCFClient() {
                             type="button"
                             onClick={() => handleCancel(s)}
                             disabled={actingId === s.id}
-                            className="min-h-[44px] sm:min-h-0 px-2 py-1 text-sm font-medium text-rose-700 bg-white border border-rose-200 rounded hover:bg-rose-50 disabled:opacity-50"
+                            className="min-h-[44px] sm:min-h-0 px-2 py-1 text-sm font-medium text-rose-700 bg-white dark:bg-slate-900 border border-rose-200 rounded hover:bg-rose-50 disabled:opacity-50"
                           >
                             <X size={11} />
                           </button>
