@@ -1474,6 +1474,7 @@ model Order {
   tags                  OrderTag[]
   mcfShipments          MCFShipment[] // S.24
   riskScore             OrderRiskScore? // O.22 — at most one per order
+  fiscalInvoice         FiscalInvoice?  // F.2 — at most one IT invoice per order
 
   // Metadata
   amazonMetadata      Json?
@@ -1606,6 +1607,45 @@ model CustomerNote {
 
   @@index([customerId])
   @@index([createdAt])
+}
+
+// ── F.2: Italian fiscal-year invoice numbering ───────────────────────
+// Italian law (DPR 633/72 art. 21) requires sequential gap-free
+// invoice numbering reset every fiscal year. FiscalInvoiceCounter
+// tracks the current max per (year, issuer); FiscalInvoice records
+// each assigned number (1:1 with Order, idempotent re-assignment).
+model FiscalInvoiceCounter {
+  fiscalYear Int
+  issuer     String   @default("XAVIA")
+  current    Int      @default(0)
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@id([fiscalYear, issuer])
+}
+
+model FiscalInvoice {
+  id      String @id @default(cuid())
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId String @unique
+
+  issuer         String  @default("XAVIA")
+  fiscalYear     Int
+  sequenceNumber Int
+  // Materialised "NNNNN/YYYY" — computed at insert time so PDF
+  // rendering doesn't have to re-format.
+  invoiceNumber  String
+
+  // F.4 — SDI submission audit. NULL until the FatturaPA XML is
+  // generated + dispatched.
+  sdiTransmissionId String?
+  sdiStatus         String? // 'PENDING' | 'SENT' | 'ACCEPTED' | 'REJECTED'
+
+  issuedAt DateTime @default(now())
+
+  @@unique([issuer, fiscalYear, sequenceNumber])
+  @@index([invoiceNumber])
+  @@index([issuedAt])
+  @@index([sdiStatus])
 }
 
 // ── O.22: Per-order risk audit ───────────────────────────────────────
