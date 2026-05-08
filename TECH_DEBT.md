@@ -374,38 +374,23 @@ N with `WORKER_CONCURRENCY` set; cancel flag becomes a Redis-backed
 check that the worker polls between chunks. Same gating as 34b —
 needs Phase 2.
 
-### 34d. `DELETE` action type
+### 34d. ⏸ `DELETE` action type — deferred-by-design 2026-05-08
 
-**Symptom:** Original Issue B spec listed bulk-delete as an operation;
-Path A-Lite dropped it from scope. Not in the `BulkActionType` enum,
-not in the modal.
+**Decision:** Not shipping. The TECH_DEBT entry itself flagged this as "defer until a user actually asks for it" and three coverage paths exist for the underlying needs:
 
-**Workaround:** Users can multi-select rows in the grid and use the
-existing per-row delete via the bulk-edit grid (the delete UX that
-landed in commit `1b923f2`).
+  1. **Soft-delete** is already possible via the existing `STATUS_UPDATE` bulk action → set Product.status to `INACTIVE`. Listings stay un-published; data preserved.
+  2. **Per-row hard-delete** is in the grid (commit `1b923f2`).
+  3. **Mass-cleanup** of test fixtures is covered by the admin endpoint `DELETE /api/admin/cleanup-bulk-test` (uses `cascadeDeleteProducts`, gated to importSource=PERFORMANCE_TEST so it's safe).
 
-**Proper fix:** Add `DELETE` to `BulkActionType`, implement a handler
-that uses `cascadeDeleteProducts` (the helper added in `9ba5aa4` for
-the cleanup endpoints), wire to a fifth modal config. Defer until a
-user actually asks for it; the per-row grid delete is fine for now.
+Adding a 6th BulkActionType for hard-delete would expand the destructive-action surface for a need the operator hasn't articulated, with no rollback path (cascadeDeleteProducts is irreversible). Keep this row open until Awa or another seller explicitly requests it.
 
-### 34e. "Selected items only" scope
+### 34e. ✅ "Selected items only" scope — resolved 2026-05-08 (M.16)
 
-**Symptom:** The modal currently exposes "All matching filter" or
-"Specific subset (filters)." The grid has row selection state, but
-the modal can't take a selection — `targetVariationIds[]` and
-`targetProductIds[]` are populated only via filter resolution.
+**Resolution:** The bulk-ops modal now exposes a third scope mode "Selected rows (N)" alongside the existing "Current filter result" and "Specific subset…" modes. When chosen, the modal passes `targetProductIds: [...]` directly to `/api/bulk-operations` (and `/preview` and `/check-conflicts`), skipping filter resolution. Backend already supported `targetProductIds` via `CreateBulkJobSchema` — only the UI wiring was missing.
 
-**Workaround:** Users replicate their selection via filters (e.g.
-filter by SKU prefix, then bulk apply to "All matching filter").
+Cross-targeting policy is unchanged: a Product-targeted action given variation IDs walks up to parents; a Variation-targeted action given product IDs expands to every child. The existing `getItemsForJob` handles the direction; the modal just hands over the IDs.
 
-**Proper fix:** Pass `selectedRowIds` from the grid to the modal as a
-prop; add a third scope mode "Selected rows (N)." Resolve the
-question of what "select two parent products" means — operate on
-those two parents (STATUS_UPDATE) or expand to every variation under
-them (PRICING / INVENTORY / ATTRIBUTE)? The cross-targeting policy in
-`getItemsForJob` already handles the expansion direction; what's
-missing is the UI affordance and the scope-mode wiring.
+The `BulkOperationsClient` parent maps its row-range selection (`rangeBounds.minRow..maxRow`) to product IDs via `products.slice(min, max+1).map(p => p.id)`. The new mode is disabled when the operator hasn't picked any rows on the parent grid; the radio label includes the count and a hint when zero ("0 — pick rows on the grid first").
 
 ## 35. 🟡 Listing wizard — channel publish not yet wired
 

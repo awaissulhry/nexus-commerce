@@ -458,7 +458,11 @@ interface ScopeFilters {
   stockMax?: number
 }
 
-type ScopeMode = 'filter' | 'subset'
+// P1 #34e — added 'selected' scope mode so the modal can take a row
+// selection from the grid as the explicit target list, not via filter
+// resolution. Backend already supports `targetProductIds` directly
+// (validation.ts:23) — this just exposes it in the UI.
+type ScopeMode = 'filter' | 'subset' | 'selected'
 
 interface PreviewSample {
   id: string
@@ -498,6 +502,11 @@ interface Props {
    *  skipping the BulkActionService preview/job system. Capped at
    *  1000 by the backend. */
   visibleProductIds?: string[]
+  /** P1 #34e — the operator's row selection from the grid. When
+   *  non-empty, the modal exposes a "Selected rows (N)" scope mode
+   *  that targets these IDs directly via targetProductIds, skipping
+   *  filter resolution. Empty disables that mode. */
+  selectedProductIds?: string[]
 }
 
 export default function BulkOperationModal({
@@ -506,6 +515,7 @@ export default function BulkOperationModal({
   currentFilters,
   marketplaceTargets = [],
   visibleProductIds = [],
+  selectedProductIds = [],
 }: Props) {
   const [opType, setOpType] = useState<OperationType>('PRICING_UPDATE')
   const op = OPERATIONS.find((o) => o.type === opType)
@@ -521,6 +531,16 @@ export default function BulkOperationModal({
   const [subsetFilters, setSubsetFilters] = useState<ScopeFilters>({})
   const activeFilters: ScopeFilters =
     scopeMode === 'filter' ? currentFilters ?? {} : subsetFilters
+
+  // P1 #34e — single source of truth for scope payload going to the
+  // backend. 'selected' mode targets explicit IDs; the other two pass
+  // resolved filters. Backend's CreateBulkJobSchema accepts either.
+  const scopePayload: {
+    filters?: ScopeFilters
+    targetProductIds?: string[]
+  } = scopeMode === 'selected'
+    ? { targetProductIds: selectedProductIds }
+    : { filters: activeFilters }
 
   // R.2 — schema-op-specific state. Field manifest is loaded from a
   // representative product (the first visible id) using the active
@@ -713,9 +733,9 @@ export default function BulkOperationModal({
       JSON.stringify({
         opType,
         payload,
-        filters: activeFilters,
+        scope: scopePayload,
       }),
-    [opType, payload, activeFilters],
+    [opType, payload, scopePayload],
   )
   useEffect(() => {
     if (!open || !payloadValid || isSchemaOp) {
@@ -735,7 +755,7 @@ export default function BulkOperationModal({
             body: JSON.stringify({
               jobName: `${op?.label ?? opType} (preview)`,
               actionType: opType,
-              filters: activeFilters,
+              ...scopePayload,
               actionPayload: payload,
               sampleSize: 8,
             }),
@@ -760,7 +780,7 @@ export default function BulkOperationModal({
       }
     }, 250)
     return () => window.clearTimeout(timer)
-  }, [open, payloadValid, previewKey, op?.label, opType, payload, activeFilters, isSchemaOp])
+  }, [open, payloadValid, previewKey, op?.label, opType, payload, scopePayload, isSchemaOp])
 
   // Conflict detection — fires alongside the preview, with the same
   // debounce key. We don't block the preview on it; the warning banner
@@ -785,7 +805,7 @@ export default function BulkOperationModal({
             body: JSON.stringify({
               jobName: `${op?.label ?? opType} (conflict-check)`,
               actionType: opType,
-              filters: activeFilters,
+              ...scopePayload,
               actionPayload: payload,
             }),
           },
@@ -808,7 +828,7 @@ export default function BulkOperationModal({
       }
     }, 350)
     return () => window.clearTimeout(timer)
-  }, [open, payloadValid, previewKey, op?.label, opType, payload, activeFilters, isSchemaOp])
+  }, [open, payloadValid, previewKey, op?.label, opType, payload, scopePayload, isSchemaOp])
 
   // Execute: POST /create → POST /:id/process → poll /:id every 2s.
   const handleExecute = async () => {
@@ -824,7 +844,7 @@ export default function BulkOperationModal({
           body: JSON.stringify({
             jobName: `${op?.label ?? opType} (${new Date().toISOString().slice(0, 19)})`,
             actionType: opType,
-            filters: activeFilters,
+            ...scopePayload,
             actionPayload: payload,
             // Conflicts surface in the modal before the operator clicks
             // Execute; clicking the "Run anyway" button sets conflictsAck
@@ -1104,6 +1124,26 @@ export default function BulkOperationModal({
                 checked={scopeMode === 'subset'}
                 onChange={() => setScopeMode('subset')}
                 label="Specific subset…"
+              />
+              {/* P1 #34e — selected-rows scope. Disabled when the
+                  operator hasn't picked any rows on the parent grid. */}
+              <Radio
+                checked={scopeMode === 'selected'}
+                onChange={() => {
+                  if (selectedProductIds.length > 0) setScopeMode('selected')
+                }}
+                label={
+                  <>
+                    Selected rows{' '}
+                    <span className="text-slate-500">
+                      ({selectedProductIds.length}
+                      {selectedProductIds.length === 0
+                        ? ' — pick rows on the grid first'
+                        : ''}
+                      )
+                    </span>
+                  </>
+                }
               />
               {scopeMode === 'subset' && (
                 <div className="ml-6 mt-2 grid grid-cols-2 gap-3">

@@ -3956,6 +3956,16 @@ export default function BulkOperationsClient() {
         }}
         marketplaceTargets={marketplaceTargets}
         visibleProductIds={products.map((p) => p.id)}
+        selectedProductIds={
+          // P1 #34e — pass the operator's row-range selection as
+          // explicit target IDs so the modal's "Selected rows" scope
+          // mode targets exactly what the grid is highlighting.
+          rangeBounds
+            ? products
+                .slice(rangeBounds.minRow, rangeBounds.maxRow + 1)
+                .map((p) => p.id)
+            : []
+        }
         currentFilters={(() => {
           // Map the grid's filterState (status[]/channels[]/stockLevel)
           // to ScopeFilters. Imperfect but covers the common case.
