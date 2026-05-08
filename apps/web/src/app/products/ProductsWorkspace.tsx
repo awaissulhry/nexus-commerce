@@ -167,6 +167,10 @@ const ALL_COLUMNS: Array<{ key: string; label: string; width: number; locked?: b
   { key: 'tags', label: 'Tags', width: 160 },
   { key: 'photos', label: 'Photos', width: 70 },
   { key: 'variants', label: 'Var.', width: 70 },
+  // F.2 — per-row completeness % computed from name/brand/type/
+  // photos/channel-coverage/tags. Hidden by default; operators
+  // who care about data quality enable it via the Cols picker.
+  { key: 'completeness', label: 'Complete', width: 110 },
   { key: 'updated', label: 'Updated', width: 110 },
   { key: 'actions', label: '', width: 110, locked: true },
 ]
@@ -4963,6 +4967,56 @@ const ProductCell = memo(function ProductCell({ col, product, onTagEdit, onChang
     }
     case 'variants':
       return <span className="text-base tabular-nums text-slate-600">{p.variantCount}</span>
+    case 'completeness': {
+      // F.2 — completeness % from 6 dimensions: name, brand, type,
+      // photos, channel coverage, tags. Each contributes ~16.7%.
+      // Tone breaks at 50/80 for color (rose/amber/emerald) so the
+      // grid surfaces "products that need work" at a glance. Tooltip
+      // (via title attribute) lists what's missing.
+      const checks: Array<[string, boolean]> = [
+        ['name', !!(p.name && p.name.trim().length > 0 && p.name !== 'Untitled product')],
+        ['brand', !!p.brand],
+        ['type', !!p.productType],
+        ['photos', p.photoCount > 0],
+        ['channels', p.channelCount > 0],
+        ['tags', (p.tags?.length ?? 0) > 0],
+      ]
+      const passed = checks.filter(([, ok]) => ok).length
+      const score = Math.round((passed / checks.length) * 100)
+      const missing = checks.filter(([, ok]) => !ok).map(([k]) => k)
+      const tone =
+        score >= 80
+          ? 'bg-emerald-500'
+          : score >= 50
+            ? 'bg-amber-500'
+            : 'bg-rose-500'
+      const textTone =
+        score >= 80
+          ? 'text-emerald-700'
+          : score >= 50
+            ? 'text-amber-700'
+            : 'text-rose-700'
+      return (
+        <div
+          className="flex items-center gap-2 w-full"
+          title={
+            missing.length === 0
+              ? 'All quality checks pass'
+              : `Missing: ${missing.join(', ')}`
+          }
+        >
+          <span className={`text-sm tabular-nums font-semibold ${textTone}`}>
+            {score}%
+          </span>
+          <div className="flex-1 h-1.5 bg-slate-100 rounded overflow-hidden">
+            <div
+              className={`h-full ${tone}`}
+              style={{ width: `${score}%` }}
+            />
+          </div>
+        </div>
+      )
+    }
     case 'updated':
       return <span className="text-sm text-slate-500">{new Date(p.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
     case 'actions':
