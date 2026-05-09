@@ -127,6 +127,42 @@ export function coercePasteValue(
       error: `Must be true/false / 1/0 / yes/no (got "${trimmed}")`,
     }
   }
+  // W2.3 — date / datetime. Accepts ISO 8601 + dd/mm/yyyy +
+  // dd.mm.yyyy (Italian / German operator habit). Bad inputs surface
+  // a clear error instead of silently falling back to text.
+  if (field.type === 'date') {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return { value: trimmed }
+    const eu = trimmed.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/)
+    if (eu) {
+      const [, dd, mm, yyyy] = eu
+      return {
+        value: `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`,
+      }
+    }
+    const parsed = Date.parse(trimmed)
+    if (Number.isFinite(parsed)) {
+      // W2.3 — local components, NOT toISOString: avoids the
+      // CEST-shift bug where local midnight rolls back a day in UTC.
+      const d = new Date(parsed)
+      const pad = (n: number) => String(n).padStart(2, '0')
+      return {
+        value: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+      }
+    }
+    return { value: null, error: 'Use yyyy-mm-dd or dd/mm/yyyy' }
+  }
+  if (field.type === 'datetime') {
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(trimmed)) return { value: trimmed }
+    const parsed = Date.parse(trimmed)
+    if (Number.isFinite(parsed)) {
+      const d = new Date(parsed)
+      const pad = (n: number) => String(n).padStart(2, '0')
+      return {
+        value: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`,
+      }
+    }
+    return { value: null, error: 'Use yyyy-mm-ddTHH:MM' }
+  }
   return { value: trimmed }
 }
 

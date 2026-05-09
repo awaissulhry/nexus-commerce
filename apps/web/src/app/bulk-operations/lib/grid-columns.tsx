@@ -112,6 +112,23 @@ export function fieldToMeta(field: FieldDef): EditableMeta {
       fieldType: 'boolean',
     }
   }
+  // W2.3 — date / datetime fields. Native browser picker in edit
+  // mode, locale-formatted display. Default locale is it-IT to match
+  // every other Xavia surface.
+  if (field.type === 'date') {
+    return {
+      editable: true,
+      fieldType: 'date',
+      locale: 'it-IT',
+    }
+  }
+  if (field.type === 'datetime') {
+    return {
+      editable: true,
+      fieldType: 'datetime',
+      locale: 'it-IT',
+    }
+  }
   // Weight + dimension fields are typed as 'number' in the registry
   // but rendered as text inputs so the user can type "5kg" or "60cm".
   // The smart-parsing in handleCommit splits the unit suffix into the

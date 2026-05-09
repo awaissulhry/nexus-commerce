@@ -59,6 +59,20 @@ export type FieldType =
    * fields hold different currencies per channel).
    */
   | 'currency'
+  /**
+   * W2.3 — date (yyyy-mm-dd, no time). Edit mode renders an
+   * <input type="date">; display formats via Intl.DateTimeFormat in
+   * meta.locale (default it-IT → "9 mag 2026"). The data flows as
+   * an ISO 8601 date string ('2026-05-09') in/out of the changesMap,
+   * keeping clipboard roundtrips clean.
+   */
+  | 'date'
+  /**
+   * W2.3 — datetime. Edit mode renders an <input type="datetime-local">;
+   * display formats with both date + time in the operator's locale.
+   * Data flows as ISO 8601 ('2026-05-09T14:30:00').
+   */
+  | 'datetime'
 
 export interface EditableMeta {
   editable: true
@@ -113,6 +127,116 @@ export function formatCurrency(
     // Unknown ISO currency or runtime missing locale data — degrade
     // gracefully so a typo'd code never blanks the cell.
     return `${currency} ${n.toFixed(2)}`
+  }
+}
+
+/**
+ * W2.3 — coerce a date-ish input into the canonical YYYY-MM-DD wire
+ * format used by the date cell type. Accepts:
+ *   - already-canonical 'YYYY-MM-DD'
+ *   - full ISO 8601 ('2026-05-09T14:30:00.000Z') — date portion wins
+ *   - Date instance
+ *   - common European display forms 'dd/mm/yyyy' / 'dd.mm.yyyy'
+ * Returns null for unparseable input.
+ */
+export function coerceDate(v: unknown): string | null {
+  if (v === null || v === undefined || v === '') return null
+  // Read LOCAL components — not toISOString — so a Date constructed
+  // from a date-only string at local midnight ('2026-05-09T00:00:00')
+  // doesn't shift back a day when the operator is east of UTC. Awa's
+  // CEST timezone made this surface immediately during W2.3 verify.
+  const pad = (n: number) => String(n).padStart(2, '0')
+  if (v instanceof Date) {
+    if (Number.isNaN(v.getTime())) return null
+    return `${v.getFullYear()}-${pad(v.getMonth() + 1)}-${pad(v.getDate())}`
+  }
+  if (typeof v === 'string') {
+    const trimmed = v.trim()
+    if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10)
+    // dd/mm/yyyy or dd.mm.yyyy (Italian / German operator habit)
+    const eu = trimmed.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/)
+    if (eu) {
+      const [, dd, mm, yyyy] = eu
+      return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`
+    }
+    const parsed = Date.parse(trimmed)
+    if (Number.isFinite(parsed)) {
+      const d = new Date(parsed)
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+    }
+  }
+  return null
+}
+
+/**
+ * W2.3 — coerce a datetime-ish input to the canonical ISO 8601 form
+ * the datetime cell type writes back. Same input shapes as
+ * coerceDate plus the time portion. The output uses local time
+ * minutes precision ('YYYY-MM-DDTHH:MM') because that matches what
+ * <input type="datetime-local"> emits.
+ */
+export function coerceDateTime(v: unknown): string | null {
+  if (v === null || v === undefined || v === '') return null
+  if (v instanceof Date) {
+    if (Number.isNaN(v.getTime())) return null
+    // Local-time datetime-local format
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${v.getFullYear()}-${pad(v.getMonth() + 1)}-${pad(v.getDate())}T${pad(v.getHours())}:${pad(v.getMinutes())}`
+  }
+  if (typeof v === 'string') {
+    const trimmed = v.trim()
+    // datetime-local already correct
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(trimmed)) return trimmed
+    // Full ISO with seconds / Z — strip seconds + zone for local form
+    const iso = trimmed.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/)
+    if (iso) return `${iso[1]}T${iso[2]}`
+    const parsed = Date.parse(trimmed)
+    if (Number.isFinite(parsed)) return coerceDateTime(new Date(parsed))
+  }
+  return null
+}
+
+/**
+ * W2.3 — render a date string in the operator's locale. Locale
+ * defaults to 'it-IT'. Empty / unparseable inputs return ''.
+ */
+export function formatDate(value: unknown, locale: string = 'it-IT'): string {
+  const iso = coerceDate(value)
+  if (!iso) return ''
+  // Date-only ISO: append T00:00 so the JS Date parser doesn't drift
+  // into UTC and shift the displayed day.
+  const d = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return ''
+  try {
+    return new Intl.DateTimeFormat(locale, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    }).format(d)
+  } catch {
+    return iso
+  }
+}
+
+/** W2.3 — render a datetime in the operator's locale. */
+export function formatDateTime(
+  value: unknown,
+  locale: string = 'it-IT',
+): string {
+  const iso = coerceDateTime(value)
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  try {
+    return new Intl.DateTimeFormat(locale, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(d)
+  } catch {
+    return iso
   }
 }
 
@@ -337,6 +461,39 @@ export const EditableCell = memo(
           </select>
         )
       }
+      // W2.3 — date / datetime edit: native pickers. The browser's
+      // own popover handles the calendar UI, locale, and keyboard
+      // navigation; we just hand it the canonical wire value.
+      if (meta.fieldType === 'date') {
+        return (
+          <input
+            ref={(el) => {
+              inputRef.current = el
+            }}
+            type="date"
+            value={coerceDate(draftValue) ?? ''}
+            onChange={(e) => setDraftValue(e.target.value || null)}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            className={cn(baseInputClass, 'tabular-nums')}
+          />
+        )
+      }
+      if (meta.fieldType === 'datetime') {
+        return (
+          <input
+            ref={(el) => {
+              inputRef.current = el
+            }}
+            type="datetime-local"
+            value={coerceDateTime(draftValue) ?? ''}
+            onChange={(e) => setDraftValue(e.target.value || null)}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            className={cn(baseInputClass, 'tabular-nums')}
+          />
+        )
+      }
       // W2.2 — currency edit: numeric input on the data side, with the
       // currency code rendered as a non-editable chip on the left edge
       // so the operator never types the symbol. Commit / navigation /
@@ -426,6 +583,33 @@ export const EditableCell = memo(
           onKeyDown={handleKeyDown}
           className={cn(baseInputClass, meta.numeric && 'tabular-nums text-right')}
         />
+      )
+    }
+
+    // W2.3 — date / datetime display: locale-formatted ('9 mag 2026',
+    // '9 mag 2026, 14:30'). Empty values render as the standard dash.
+    if (meta.fieldType === 'date' || meta.fieldType === 'datetime') {
+      const formatted =
+        meta.fieldType === 'date'
+          ? formatDate(draftValue, meta.locale)
+          : formatDateTime(draftValue, meta.locale)
+      return (
+        <div
+          onDoubleClick={() => enterEdit()}
+          title={cellError ?? (cellCascading && isDirty ? 'Will cascade to children' : undefined)}
+          className={cn(
+            'w-full h-full px-2 flex items-center text-md cursor-cell tabular-nums',
+            isDirty && !cellError && !cellCascading && 'bg-yellow-50',
+            isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
+            cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
+          )}
+        >
+          {formatted ? (
+            <span className="truncate">{formatted}</span>
+          ) : (
+            <span className="text-slate-300">—</span>
+          )}
+        </div>
       )
     }
 
