@@ -1,5 +1,6 @@
 import "./db.js"; // ensure dotenv loads before anything else
 import Fastify from "fastify";
+import { runWithRequestId } from "./utils/request-context.js";
 import cors from "@fastify/cors";
 import compress from "@fastify/compress";
 import multipart from "@fastify/multipart";
@@ -76,6 +77,7 @@ import { jobMonitorRoutes } from "./routes/job-monitor.routes.js";
 import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
 import { startSalesReportIngestCron } from "./jobs/sales-report-ingest.job.js";
 import { startForecastCron } from "./jobs/forecast.job.js";
+import { startDashboardDigestCron } from "./jobs/dashboard-digest.job.js";
 import { startPricingCron } from "./jobs/pricing-refresh.job.js";
 import { startRepricerCron } from "./jobs/repricer.job.js";
 import { startCatalogRefreshCron } from "./jobs/catalog-refresh.job.js";
@@ -239,6 +241,26 @@ async function tryStartQueueWorkers(): Promise<void> {
 }
 
 const app = Fastify({ logger: true });
+
+// L.12.0 — request context. Every HTTP request runs the handler
+// inside an AsyncLocalStorage scope keyed by Fastify's request.id
+// (or an incoming x-request-id header). Deep service calls — most
+// importantly recordApiCall — read the ID via getRequestId() and
+// stamp it on every OutboundApiCallLog row, giving an operator
+// the ability to ask "show me every channel API call this one
+// order ingestion made".
+app.addHook('onRequest', (request, reply, done) => {
+  const id =
+    typeof request.headers['x-request-id'] === 'string' &&
+    request.headers['x-request-id'].length > 0
+      ? request.headers['x-request-id']
+      : request.id
+  reply.header('x-request-id', id)
+  // Bind the context for the lifetime of this request. The done()
+  // callback completes inside the scope so async work the route
+  // handler dispatches still sees it.
+  runWithRequestId(id, 'http', () => done())
+});
 
 // Compress responses (gzip / brotli). Threshold 1KB so small payloads
 // don't pay the compression cost. Critical for /products/bulk-fetch
@@ -439,6 +461,15 @@ async function start() {
     // POST /api/fulfillment/forecast/run.
     if (process.env.NEXUS_ENABLE_FORECAST_CRON === '1') {
       startForecastCron();
+    }
+
+    // DO.40 — hourly dashboard digest dispatcher. Reads
+    // ScheduledReport rows due at the current Europe/Rome hour and
+    // emails the digest via Resend. Gated by both this cron toggle
+    // AND NEXUS_ENABLE_OUTBOUND_EMAILS in the transport so dryRun
+    // is the safe default in dev.
+    if (process.env.NEXUS_ENABLE_DASHBOARD_DIGEST_CRON === '1') {
+      startDashboardDigestCron();
     }
 
     // G.1 + G.2 — Nightly FX refresh + snapshot recompute. Gated

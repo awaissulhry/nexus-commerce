@@ -21,6 +21,7 @@
 
 import prisma from '../db.js'
 import { logger } from './logger.js'
+import { newTickId, runWithRequestId } from './request-context.js'
 
 export interface CronRunOptions {
   triggeredBy?: 'cron' | 'manual'
@@ -43,6 +44,21 @@ export async function recordCronRun<T extends CronHandlerResult>(
   options: CronRunOptions = {},
 ): Promise<T> {
   const triggeredBy = options.triggeredBy ?? 'cron'
+  // L.12.0 — open a request-context scope for the tick so deep
+  // service calls (recordApiCall, audit writes) can stamp this
+  // tickId on every log row they produce. Operators get a
+  // "show every API call this cron tick made" view in the hub.
+  const tickId = newTickId()
+  return runWithRequestId(tickId, triggeredBy === 'manual' ? 'manual' : 'cron', () =>
+    runCronRunInner(jobName, handler, triggeredBy),
+  )
+}
+
+async function runCronRunInner<T extends CronHandlerResult>(
+  jobName: string,
+  handler: () => Promise<T>,
+  triggeredBy: 'cron' | 'manual',
+): Promise<T> {
   let runId: string | null = null
   try {
     const row = await prisma.cronRun.create({

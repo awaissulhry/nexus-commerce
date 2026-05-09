@@ -64,6 +64,10 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { publishSyncLogEvent } from './sync-logs-events.service.js'
 import { recordErrorOccurrence } from './error-grouping.service.js'
+import {
+  getRequestId,
+  getRequestSource,
+} from '../utils/request-context.js'
 
 type Channel =
   | 'AMAZON'
@@ -242,8 +246,13 @@ export async function recordApiCall<T>(
           errorMessage: errorMessage?.slice(0, ERROR_MESSAGE_MAX),
           errorCode,
           errorType,
-          requestId: ctx.requestId,
-          triggeredBy: ctx.triggeredBy ?? 'api',
+          // L.12.0 — fall back to the AsyncLocalStorage requestId
+          // (populated by the Fastify onRequest hook OR by
+          // recordCronRun's tickId) so callers don't have to pass
+          // it explicitly. Same for triggeredBy.
+          requestId: ctx.requestId ?? getRequestId(),
+          triggeredBy:
+            ctx.triggeredBy ?? getRequestSource() ?? 'api',
           // Retain payloads ONLY on failure to keep table volume sane.
           requestPayload: success
             ? undefined
