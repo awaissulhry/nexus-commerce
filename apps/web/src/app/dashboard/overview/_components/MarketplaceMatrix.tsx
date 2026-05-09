@@ -110,8 +110,12 @@ export default function MarketplaceMatrix({
       }
       noPadding
     >
+      {/* DO.36 — wide table; on mobile it's scrollable horizontally
+          via overflow-x-auto. The Card chrome stays unscrolled so
+          the heading + metric toggle stay anchored above the
+          scroll area. */}
       <div className="overflow-x-auto">
-        <table className="w-full text-base">
+        <table className="w-full text-base min-w-[480px]">
           <thead className="bg-slate-50 dark:bg-slate-900/50">
             <tr>
               <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">

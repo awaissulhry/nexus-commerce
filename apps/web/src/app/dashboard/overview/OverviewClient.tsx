@@ -226,8 +226,16 @@ export default function OverviewClient() {
         {data && (
           <>
             <KpiGrid t={t} totals={data.totals} currency={data.currency} />
+            {/* DO.36 — mobile glanceable order. On a phone the alerts
+                panel + customer / catalog / activity tiles ship in
+                the right column (order-1) right after the KPIs;
+                the wider charts + lists come second (order-2).
+                Operator sees what needs attention first when
+                glancing, then scrolls into the detail. The
+                lg:order-1 / lg:order-2 pair restores desktop
+                left-on-left, right-on-right. */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <div className="lg:col-span-2 space-y-4">
+              <div className="order-2 lg:order-1 lg:col-span-2 space-y-4">
                 <Sparkline
                   t={t}
                   points={data.sparkline}
@@ -263,7 +271,7 @@ export default function OverviewClient() {
                   currency={data.currency.primary}
                 />
               </div>
-              <div className="space-y-4">
+              <div className="order-1 lg:order-2 space-y-4">
                 <AlertsPanel
                   t={t}
                   alerts={data.alerts}
