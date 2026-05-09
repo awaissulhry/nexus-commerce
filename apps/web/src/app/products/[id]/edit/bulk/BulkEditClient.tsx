@@ -19,6 +19,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { IconButton } from '@/components/ui/IconButton'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { cn } from '@/lib/utils'
 import {
@@ -1220,13 +1221,14 @@ export default function BulkEditClient({
       <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-20">
         <div className="px-6 h-14 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <button
-              onClick={() => router.push(`/products/${product.id}/edit`)}
-              className="p-1 -m-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+            <IconButton
               aria-label="Back to edit"
+              size="sm"
+              onClick={() => router.push(`/products/${product.id}/edit`)}
+              className="!h-auto !w-auto p-1 -m-1"
             >
               <ChevronLeft className="w-4 h-4" />
-            </button>
+            </IconButton>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100 truncate max-w-[480px]">
@@ -1384,7 +1386,8 @@ export default function BulkEditClient({
                       <button
                         type="button"
                         onClick={() => toggleGroup(g.key)}
-                        className="inline-flex items-center gap-1"
+                        aria-expanded={open}
+                        className="inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded"
                       >
                         <ChevronRight
                           className={cn(
@@ -1539,15 +1542,16 @@ export default function BulkEditClient({
                       style={{ width: 40 }}
                     >
                       {!isParent && (
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteVariant(row.id)}
-                          className="text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 p-1"
+                        <IconButton
                           aria-label="Delete variant"
+                          size="sm"
+                          tone="danger"
+                          onClick={() => handleDeleteVariant(row.id)}
                           title="Delete this variant"
+                          className="!h-auto !w-auto p-1"
                         >
                           <Trash2 className="w-3 h-3" />
-                        </button>
+                        </IconButton>
                       )}
                     </td>
                   </tr>
@@ -2075,19 +2079,20 @@ function ApplyToMarketplacesMenu({
               >
                 Cancel
               </button>
-              <button
-                type="button"
+              <Button
+                variant="primary"
+                size="sm"
                 disabled={picked.size === 0}
                 onClick={() => void submit(Array.from(picked))}
                 className={cn(
-                  'h-6 px-2 rounded text-sm font-medium',
+                  '!h-6 !px-2 !text-sm',
                   picked.size === 0
-                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed'
-                    : 'bg-blue-600 text-white hover:bg-blue-700',
+                    ? '!bg-slate-100 dark:!bg-slate-800 !text-slate-400 dark:!text-slate-500 !border-slate-100 dark:!border-slate-800'
+                    : '',
                 )}
               >
                 Apply to {picked.size}
-              </button>
+              </Button>
             </div>
           </div>
         </>
