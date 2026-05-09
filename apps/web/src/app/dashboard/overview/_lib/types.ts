@@ -27,6 +27,9 @@ export interface TotalEntry {
 
 export interface OverviewPayload {
   window: { from: string; to: string; label: string; key: string }
+  // DO.11 — backend echoes the comparison range so the client can
+  // tooltip "vs Mar 1 – Apr 1" without recomputing the shift.
+  compare: { key: CompareKey; from: string; to: string }
   // DO.1 — backend reports the primary currency (highest-revenue
   // currency in the window, EUR fallback) plus a per-currency
   // breakdown. The KPI strip renders headline numbers in `primary`
@@ -97,6 +100,19 @@ export const WINDOWS = [
 ] as const
 
 export type WindowKey = (typeof WINDOWS)[number]['id']
+
+// DO.11 — comparison-period options. `prev` shifts by the window's
+// own length (legacy default); the rest shift by a fixed number of
+// days (1 / 7 / 30 / 365).
+export const COMPARES = [
+  { id: 'prev' },
+  { id: 'dod' },
+  { id: 'wow' },
+  { id: 'mom' },
+  { id: 'yoy' },
+] as const
+
+export type CompareKey = (typeof COMPARES)[number]['id']
 
 export const CHANNEL_TONES: Record<string, { bg: string; text: string }> = {
   AMAZON: { bg: 'bg-orange-50 border-orange-200', text: 'text-orange-700' },

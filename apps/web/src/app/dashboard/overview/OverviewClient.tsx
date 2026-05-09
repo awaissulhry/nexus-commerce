@@ -23,11 +23,16 @@ import AlertsPanel from './_components/AlertsPanel'
 import CatalogSnapshot from './_components/CatalogSnapshot'
 import ActivityFeed from './_components/ActivityFeed'
 import QuickActions from './_components/QuickActions'
-import type { OverviewPayload, WindowKey } from './_lib/types'
+import type {
+  CompareKey,
+  OverviewPayload,
+  WindowKey,
+} from './_lib/types'
 
 export default function OverviewClient() {
   const { t } = useTranslations()
   const [window, setWindow] = useState<WindowKey>('30d')
+  const [compare, setCompare] = useState<CompareKey>('prev')
   const [data, setData] = useState<OverviewPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -41,7 +46,7 @@ export default function OverviewClient() {
       setError(null)
       try {
         const res = await fetch(
-          `${getBackendUrl()}/api/dashboard/overview?window=${window}`,
+          `${getBackendUrl()}/api/dashboard/overview?window=${window}&compare=${compare}`,
           { cache: 'no-store' },
         )
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -55,7 +60,7 @@ export default function OverviewClient() {
         setRefreshing(false)
       }
     },
-    [window],
+    [window, compare],
   )
 
   useEffect(() => {
@@ -95,6 +100,8 @@ export default function OverviewClient() {
         t={t}
         currentWindow={window}
         onWindowChange={setWindow}
+        currentCompare={compare}
+        onCompareChange={setCompare}
         lastRefreshed={lastRefreshed}
         refreshing={refreshing}
         onRefresh={() => void fetchPayload({ silent: true })}

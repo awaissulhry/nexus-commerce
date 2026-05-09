@@ -5,12 +5,18 @@ import PageHeader from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import RelativeTimestamp from './RelativeTimestamp'
-import { WINDOWS, type T, type WindowKey } from '../_lib/types'
+import {
+  COMPARES,
+  WINDOWS,
+  type CompareKey,
+  type T,
+  type WindowKey,
+} from '../_lib/types'
 
 /**
  * Command Center page header. Title + subtitle on the left, window
- * selector + refresh + last-refreshed timestamp on the right via
- * PageHeader's `actions` slot.
+ * selector + comparison-period dropdown + refresh + last-refreshed
+ * timestamp on the right via PageHeader's `actions` slot.
  *
  * Window selector stays as a custom inline pill cluster — Button
  * carries chrome (border, focus ring, h-7) that would break the
@@ -21,6 +27,8 @@ export default function Header({
   t,
   currentWindow,
   onWindowChange,
+  currentCompare,
+  onCompareChange,
   lastRefreshed,
   refreshing,
   onRefresh,
@@ -28,6 +36,8 @@ export default function Header({
   t: T
   currentWindow: WindowKey
   onWindowChange: (w: WindowKey) => void
+  currentCompare: CompareKey
+  onCompareChange: (c: CompareKey) => void
   lastRefreshed: number
   refreshing: boolean
   onRefresh: () => void
@@ -62,6 +72,28 @@ export default function Header({
               </button>
             ))}
           </div>
+          {/* DO.11 — comparison-period dropdown. Native <select> is
+              the right primitive here: it wears the platform's
+              keyboard / screen-reader affordances for free, mobile
+              gives a wheel picker, and the option set is small. */}
+          <select
+            aria-label={t('overview.compare.aria')}
+            value={currentCompare}
+            onChange={(e) => onCompareChange(e.target.value as CompareKey)}
+            className={cn(
+              'h-7 pl-2 pr-7 text-sm rounded-md border bg-white dark:bg-slate-900',
+              'border-slate-200 dark:border-slate-700',
+              'text-slate-700 dark:text-slate-300',
+              'hover:bg-slate-50 dark:hover:bg-slate-800',
+              'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
+            )}
+          >
+            {COMPARES.map((c) => (
+              <option key={c.id} value={c.id}>
+                {t('overview.compare.prefix')} {t(`overview.compare.${c.id}`)}
+              </option>
+            ))}
+          </select>
           <Button
             variant="secondary"
             size="sm"

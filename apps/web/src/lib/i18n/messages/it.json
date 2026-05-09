@@ -1622,5 +1622,13 @@
   "overview.relTime.justNow": "adesso",
   "overview.relTime.seconds": "{n}s fa",
   "overview.relTime.minutes": "{n}m fa",
-  "overview.relTime.hours": "{n}h fa"
+  "overview.relTime.hours": "{n}h fa",
+
+  "overview.compare.aria": "Periodo di confronto",
+  "overview.compare.prefix": "vs",
+  "overview.compare.prev": "periodo precedente",
+  "overview.compare.dod": "giorno precedente",
+  "overview.compare.wow": "settimana precedente",
+  "overview.compare.mom": "mese precedente",
+  "overview.compare.yoy": "anno precedente"
 }

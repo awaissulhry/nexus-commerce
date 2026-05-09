@@ -25,6 +25,18 @@ import prisma from '../db.js'
 
 type Window = 'today' | '7d' | '30d' | '90d' | 'ytd'
 
+// DO.11 — comparison-period keys. `prev` is the legacy "previous of
+// equal length" behavior; the others apply a fixed shift in days
+// regardless of window length.
+type Compare = 'prev' | 'dod' | 'wow' | 'mom' | 'yoy'
+
+const COMPARE_SHIFT_DAYS: Record<Exclude<Compare, 'prev'>, number> = {
+  dod: 1,
+  wow: 7,
+  mom: 30,
+  yoy: 365,
+}
+
 // DO.2 — Italian operator timezone is Europe/Rome (UTC+1 winter,
 // UTC+2 DST). Server runs in UTC, so the previous code's `today`
 // = `from.setHours(0,0,0,0)` resolved to UTC midnight, meaning
@@ -95,7 +107,10 @@ function zonedStartOfYear(at: Date, timeZone: string): Date {
   return zonedMidnight(y, 0, 1, timeZone)
 }
 
-function windowBounds(window: Window): {
+function windowBounds(
+  window: Window,
+  compare: Compare = 'prev',
+): {
   from: Date
   to: Date
   prevFrom: Date
@@ -133,9 +148,19 @@ function windowBounds(window: Window): {
       break
     }
   }
+  // DO.11 — compute the comparison range. For `prev`, shift by the
+  // window length (legacy behavior). For dod/wow/mom/yoy, shift by
+  // a fixed number of days; the comparison range has the same
+  // length as the current window so deltas remain comparable.
   const length = to.getTime() - from.getTime()
-  const prevTo = new Date(from)
-  const prevFrom = new Date(from.getTime() - length)
+  let shiftMs: number
+  if (compare === 'prev') {
+    shiftMs = length
+  } else {
+    shiftMs = COMPARE_SHIFT_DAYS[compare] * 24 * 60 * 60 * 1000
+  }
+  const prevTo = new Date(to.getTime() - shiftMs)
+  const prevFrom = new Date(from.getTime() - shiftMs)
   return { from, to, prevFrom, prevTo, label }
 }
 
@@ -145,11 +170,22 @@ function deltaPct(current: number, previous: number): number | null {
 }
 
 const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get<{ Querystring: { window?: string } }>(
+  fastify.get<{ Querystring: { window?: string; compare?: string } }>(
     '/dashboard/overview',
     async (request, reply) => {
       const window = ((request.query?.window ?? '30d') as Window)
-      const { from, to, prevFrom, prevTo, label } = windowBounds(window)
+      const rawCompare = request.query?.compare
+      const compare: Compare =
+        rawCompare === 'dod' ||
+        rawCompare === 'wow' ||
+        rawCompare === 'mom' ||
+        rawCompare === 'yoy'
+          ? rawCompare
+          : 'prev'
+      const { from, to, prevFrom, prevTo, label } = windowBounds(
+        window,
+        compare,
+      )
 
       // ── Period totals ─────────────────────────────────────────────
       const [
@@ -613,6 +649,13 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           to: to.toISOString(),
           label,
           key: window,
+        },
+        compare: {
+          key: compare,
+          // ISO bounds of the comparison range so the client can
+          // surface "vs Mar 1 – Apr 1" tooltips when needed.
+          from: prevFrom.toISOString(),
+          to: prevTo.toISOString(),
         },
         currency: {
           primary: primaryCurrency,
