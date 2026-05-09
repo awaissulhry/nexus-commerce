@@ -2882,6 +2882,15 @@
   "replenishment.automation.toast.toggleError": "Toggle failed: {message}",
   "replenishment.automation.toast.deleted": "Deleted \"{name}\"",
   "replenishment.automation.toast.deleteError": "Delete failed: {message}",
+  "replenishment.automation.killSwitchButton": "Stop all",
+  "replenishment.automation.killSwitchTooltip": "Emergency: disable every active automation rule in this domain.",
+  "replenishment.automation.killSwitchAriaLabel": "Emergency: disable all automation rules",
+  "replenishment.automation.confirm.killSwitchTitle": "Disable every active rule?",
+  "replenishment.automation.confirm.killSwitchDescription": "Flips enabled=false on every active replenishment automation rule. Rules can be re-enabled individually; their dry-run setting is preserved.",
+  "replenishment.automation.confirm.killSwitchConfirm": "Disable all",
+  "replenishment.automation.toast.killSwitchSuccess": "{count} rule(s) disabled",
+  "replenishment.automation.toast.killSwitchFailed": "Emergency disable failed",
+  "replenishment.automation.toast.killSwitchError": "Emergency disable error: {message}",
   "stock.lots.section": "Lots",
   "stock.lots.recalledBadge": "Recalled",
   "stock.lots.expiringSoon": "Expires in {days}d",
@@ -2990,7 +2999,5 @@
   "products.drawer.forecast.velocityUnit": "{value}/d",
   "products.drawer.forecast.basis.forecast": "Based on {days} days of demand data.",
   "products.drawer.forecast.basis.threshold": "No demand signal yet — using stock threshold.",
-  "products.drawer.forecast.basis.none": "No demand signal yet. Generate sales history to project a stockout date.",
-  "stock.serials.section": "Serials ({available}/{total})",
-  "stock.serials.onOrder": "on order {id}"
+  "products.drawer.forecast.basis.none": "No demand signal yet. Generate sales history to project a stockout date."
 }

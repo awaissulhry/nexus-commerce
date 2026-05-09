@@ -2870,6 +2870,15 @@
   "replenishment.automation.toast.toggleError": "Cambio stato fallito: {message}",
   "replenishment.automation.toast.deleted": "Eliminata \"{name}\"",
   "replenishment.automation.toast.deleteError": "Eliminazione fallita: {message}",
+  "replenishment.automation.killSwitchButton": "Stop totale",
+  "replenishment.automation.killSwitchTooltip": "Emergenza: disattiva ogni regola di automazione attiva in questo dominio.",
+  "replenishment.automation.killSwitchAriaLabel": "Emergenza: disattiva tutte le regole di automazione",
+  "replenishment.automation.confirm.killSwitchTitle": "Disattivare ogni regola attiva?",
+  "replenishment.automation.confirm.killSwitchDescription": "Imposta enabled=false su ogni regola di automazione attiva del riassortimento. Le regole possono essere riattivate singolarmente; la loro impostazione dry-run viene preservata.",
+  "replenishment.automation.confirm.killSwitchConfirm": "Disattiva tutto",
+  "replenishment.automation.toast.killSwitchSuccess": "{count} regola/e disattivata/e",
+  "replenishment.automation.toast.killSwitchFailed": "Disattivazione emergenza fallita",
+  "replenishment.automation.toast.killSwitchError": "Errore disattivazione emergenza: {message}",
   "stock.lots.section": "Lotti",
   "stock.lots.recalledBadge": "Richiamato",
   "stock.lots.expiringSoon": "Scade tra {days}g",
@@ -2978,7 +2987,5 @@
   "products.drawer.forecast.velocityUnit": "{value}/g",
   "products.drawer.forecast.basis.forecast": "Basato su {days} giorni di dati di domanda.",
   "products.drawer.forecast.basis.threshold": "Nessun segnale di domanda ancora — usando la soglia stock.",
-  "products.drawer.forecast.basis.none": "Nessun segnale di domanda ancora. Genera la storia vendite per proiettare una data di esaurimento.",
-  "stock.serials.section": "Seriali ({available}/{total})",
-  "stock.serials.onOrder": "su ordine {id}"
+  "products.drawer.forecast.basis.none": "Nessun segnale di domanda ancora. Genera la storia vendite per proiettare una data di esaurimento."
 }

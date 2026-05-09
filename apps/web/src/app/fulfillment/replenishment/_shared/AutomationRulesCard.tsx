@@ -20,7 +20,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Sparkles, Play, Pause, Loader2, Trash2 } from 'lucide-react'
+import { Sparkles, Play, Pause, Loader2, Trash2, AlertOctagon } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
@@ -80,6 +80,44 @@ export function AutomationRulesCard() {
   useEffect(() => {
     void fetchRules()
   }, [fetchRules])
+
+  const emergencyDisableAll = useCallback(async () => {
+    const ok = await askConfirm({
+      title: t('replenishment.automation.confirm.killSwitchTitle'),
+      description: t('replenishment.automation.confirm.killSwitchDescription'),
+      confirmLabel: t('replenishment.automation.confirm.killSwitchConfirm'),
+      tone: 'danger',
+    })
+    if (!ok) return
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/replenishment/automation/emergency-disable-all`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ domain: 'replenishment' }),
+          cache: 'no-store',
+        },
+      )
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(t('replenishment.automation.toast.killSwitchFailed'))
+      } else {
+        toast.success(
+          t('replenishment.automation.toast.killSwitchSuccess', {
+            count: json.disabledCount ?? 0,
+          }),
+        )
+        await fetchRules()
+      }
+    } catch (err) {
+      toast.error(
+        t('replenishment.automation.toast.killSwitchError', {
+          message: err instanceof Error ? err.message : String(err),
+        }),
+      )
+    }
+  }, [askConfirm, fetchRules, t, toast])
 
   const seedTemplates = useCallback(async () => {
     setSeeding(true)
@@ -250,7 +288,7 @@ export function AutomationRulesCard() {
             dryRun: dryRunCount,
           })}
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => void seedTemplates()}
@@ -264,6 +302,18 @@ export function AutomationRulesCard() {
             )}
             {t('replenishment.automation.header.reseedButton')}
           </button>
+          {activeCount > 0 && (
+            <button
+              type="button"
+              onClick={() => void emergencyDisableAll()}
+              className="text-xs px-2 py-1 rounded ring-1 ring-inset bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900 hover:bg-rose-100 dark:hover:bg-rose-950/60 inline-flex items-center gap-1"
+              title={t('replenishment.automation.killSwitchTooltip')}
+              aria-label={t('replenishment.automation.killSwitchAriaLabel')}
+            >
+              <AlertOctagon className="h-3 w-3" aria-hidden="true" />
+              {t('replenishment.automation.killSwitchButton')}
+            </button>
+          )}
         </div>
       </div>
 

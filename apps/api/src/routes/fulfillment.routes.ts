@@ -8076,6 +8076,52 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // W4.7 — Emergency disable-all. The failsafe the operator reaches
+  // for when an automation rule is misbehaving in production. Flips
+  // enabled=false on every rule in the domain (or all domains when
+  // body.allDomains=true). Returns the count + the affected rule
+  // ids so the audit trail / toast can show what changed.
+  //
+  // Reversible: rules can be re-enabled individually from the card.
+  // Their dryRun setting is preserved — the operator's intent ("I
+  // wanted this rule to fire side effects") survives the kill.
+  fastify.post(
+    '/fulfillment/replenishment/automation/emergency-disable-all',
+    async (request) => {
+      const body = (request.body ?? {}) as {
+        domain?: string
+        allDomains?: boolean
+        reason?: string
+        userId?: string
+      }
+      const where: { enabled: true; domain?: string } = { enabled: true }
+      if (!body.allDomains) where.domain = body.domain ?? 'replenishment'
+      const affected = await prisma.automationRule.findMany({
+        where,
+        select: { id: true, name: true, domain: true },
+      })
+      const result = await prisma.automationRule.updateMany({
+        where,
+        data: { enabled: false },
+      })
+      fastify.log.warn(
+        {
+          count: result.count,
+          domain: body.allDomains ? 'ALL' : (body.domain ?? 'replenishment'),
+          reason: body.reason,
+          userId: body.userId,
+        },
+        '[automation] EMERGENCY_DISABLE_ALL fired',
+      )
+      return {
+        ok: true,
+        disabledCount: result.count,
+        rules: affected,
+        domain: body.allDomains ? 'ALL' : (body.domain ?? 'replenishment'),
+      }
+    },
+  )
+
   // W4.4 — Pre-built rule template catalogue. Read-only; the seeder
   // endpoint below idempotently creates them. Operators browse this
   // to pick a starting point in the rule builder ("Start from
