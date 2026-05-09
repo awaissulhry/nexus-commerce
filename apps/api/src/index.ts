@@ -125,6 +125,7 @@ import { startPurgeSoftDeletedCron } from "./jobs/purge-soft-deleted-products.jo
 import { startAmazonMCFStatusCron } from "./jobs/amazon-mcf-status.job.js";
 import { startFbaPanEuSyncCron } from "./jobs/fba-pan-eu-sync.job.js";
 import { startFbaRestockCron } from "./jobs/fba-restock-ingestion.job.js";
+import { startAutomationRuleEvaluatorCron } from "./jobs/automation-rule-evaluator.job.js";
 import { startObservabilityRetentionCron } from "./jobs/observability-retention.job.js";
 import { startAlertEvaluatorCron } from "./jobs/alert-evaluator.job.js";
 import { startRepricingEvaluatorCron } from "./jobs/repricing-evaluator.job.js";
@@ -736,6 +737,17 @@ async function start() {
     // NEXUS_ENABLE_ABC_CRON=0.
     if (process.env.NEXUS_ENABLE_ABC_CRON !== '0') {
       startAbcClassificationCron();
+    }
+
+    // W4.6 — automation rule evaluator. Every 15 minutes, walks
+    // enabled rules grouped by trigger and fires the evaluator
+    // against the appropriate context payloads. All seeded templates
+    // default to dryRun=true so a fresh install only writes audit
+    // rows. Default-OFF — opt in via NEXUS_ENABLE_AUTOMATION_RULE_CRON=1
+    // because actions can fire side effects (auto-approve, create-PO)
+    // once a rule is taken out of dry-run.
+    if (process.env.NEXUS_ENABLE_AUTOMATION_RULE_CRON === '1') {
+      startAutomationRuleEvaluatorCron();
     }
 
     // S.17 — daily ABC-driven cycle-count scheduler. 02:30 UTC.
