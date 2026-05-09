@@ -286,6 +286,7 @@ model Product {
   translations              ProductTranslation[] // H.10: per-language master content
   relationsFrom             ProductRelation[]             @relation("ProductRelationFrom") // H.11
   relationsTo               ProductRelation[]             @relation("ProductRelationTo") // H.11
+  seoEntries                ProductSeo[]                  // W12: per-locale SEO metadata
   recommendations           ReplenishmentRecommendation[] // R.3
   stockoutEvents            StockoutEvent[] // R.12
   substitutionsAsPrimary    ProductSubstitution[]         @relation("SubstitutionPrimary") // R.17
@@ -7488,6 +7489,49 @@ model ProductRelation {
   @@unique([fromProductId, toProductId, type])
   @@index([fromProductId, type])
   @@index([toProductId, type])
+}
+
+/// W12 — ProductSeo: per-locale SEO metadata (meta title, meta description,
+/// URL handle, Open Graph overrides).
+///
+/// One row per (productId, locale). The `locale` is the BCP 47 tag used by
+/// Shopify / Next.js / hreflang (e.g. "it", "en", "de", "fr"). When locale
+/// is 'default' the row is the canonical/master SEO entry and other rows
+/// inherit from it unless they override.
+///
+/// URL handle must be unique per locale to avoid duplicate-content penalties
+/// (enforced at the application layer — not a DB unique since the same slug
+/// could appear on different domains/storefronts).
+model ProductSeo {
+  id              String    @id @default(cuid())
+  productId       String
+  product         Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  /// BCP 47 locale, lowercase. 'default' = canonical/master entry.
+  locale          String
+  /// <title> tag; max 60 chars for SERP truncation. Inherits from
+  /// product.name when null.
+  metaTitle       String?
+  /// <meta name="description"> content; max 160 chars.
+  metaDescription String?
+  /// Shopify-style URL handle (slug), e.g. "giacca-moto-xavia-touring".
+  /// Null = auto-generated from name on publish.
+  urlHandle       String?
+  /// Open Graph overrides (null → fall back to meta title/description)
+  ogTitle         String?
+  ogDescription   String?
+  /// OG image URL override (null → first MAIN ProductImage)
+  ogImageUrl      String?
+  /// Canonical URL override (null → storefront default)
+  canonicalUrl    String?
+  /// schema.org Product JSON-LD override (null → auto-generated)
+  schemaOrgJson   Json?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([productId, locale])
+  @@index([productId])
+  @@index([locale])
+  @@index([urlHandle])
 }
 
 /// W7.1 — ProductCertificate: CE, EN-13595, REACH, RoHS, WEEE and
