@@ -147,6 +147,13 @@ model Product {
   // duplicate upload. Migration plan in a follow-up Wave 4 commit.
   assetUsages AssetUsage[]
 
+  // ── W4.6 — Repricing rules (Rithum cornerstone) ───────────────
+  // Per-(product, channel, marketplace) repricing config: min/max
+  // price + strategy + schedule. The repricing engine (W4.7+) reads
+  // these to decide what price to push. Decisions are logged in
+  // RepricingDecision rows for the audit trail.
+  repricingRules RepricingRule[]
+
   // Pricing intelligence
   costPrice       Decimal? @db.Decimal(10, 2) // Cost of goods for margin calc
   minMargin       Decimal? @db.Decimal(5, 2) // Minimum acceptable margin percentage (e.g., 15 for 15%)
@@ -854,6 +861,126 @@ model AssetUsage {
   @@index([assetId])
   @@index([scope, productId])
   @@index([productId])
+}
+
+/// W4.6 — RepricingRule (Rithum cornerstone).
+///
+/// Per-(product, channel, marketplace) repricing config. The
+/// repricing engine (W4.7+) reads these rows on each tick + decides
+/// what price to push. Decisions are logged to RepricingDecision
+/// for the audit trail — operator can answer "why did my price
+/// drop yesterday at 14:00?" by reading the decision history.
+///
+/// Strategies (stored as string, not enum, for forward compat):
+///   match_buy_box           — track the marketplace buy-box winner
+///   beat_lowest_by_pct      — undercut the lowest competitor by %
+///   beat_lowest_by_amount   — undercut by absolute amount
+///   fixed_to_buy_box_minus  — buy-box winner minus fixed amount
+///   manual                  — disabled; operator sets the price
+///                              themselves (rule survives so the
+///                              min/max floor/ceiling still applies
+///                              if the engine is re-enabled)
+///
+/// Floor/ceiling are HARD constraints — every strategy clamps its
+/// computed price to [minPrice, maxPrice]. A clamp is logged as
+/// `capped: 'floor' | 'ceiling'` on the decision so the operator
+/// can see "we wanted to undercut at $79.99 but the floor held
+/// us at $85.00".
+///
+/// Marketplace is optional — null means "this rule applies to
+/// every marketplace under the channel" (e.g., one Amazon rule
+/// for IT/DE/FR/ES/UK). When operator wants per-marketplace
+/// divergence (Amazon IT pricing different from Amazon DE), they
+/// create separate rows.
+///
+/// Schedule: activeFromHour/activeToHour are inclusive UTC hours.
+/// activeDays is 0-6 (Sunday=0). When all three are null/empty the
+/// rule is always-on. Operator-set "only reprice during business
+/// hours" is the canonical use case.
+model RepricingRule {
+  id          String  @id @default(cuid())
+  productId   String
+  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  channel     String  // 'AMAZON' | 'EBAY' | 'SHOPIFY'
+  marketplace String? // 'IT' | 'DE' | etc. (null = all marketplaces under the channel)
+
+  enabled Boolean @default(true)
+
+  // Hard floor + ceiling. Every strategy clamps to this range.
+  minPrice Decimal @db.Decimal(10, 2)
+  maxPrice Decimal @db.Decimal(10, 2)
+
+  // Strategy. See file header for the enum-as-string list.
+  strategy String
+
+  // Strategy params. Each strategy reads what it needs; null when
+  // not relevant.
+  beatPct    Decimal? @db.Decimal(5, 2) // 'beat_lowest_by_pct'
+  beatAmount Decimal? @db.Decimal(10, 2) // 'beat_lowest_by_amount' / 'fixed_to_buy_box_minus'
+
+  // Schedule. UTC. activeDays is 0-6 (Sunday=0). null/empty = always
+  // on.
+  activeFromHour Int?
+  activeToHour   Int?
+  activeDays     Int[]
+
+  notes String?
+
+  // Last evaluation snapshot — denormalised for quick reads on the
+  // operator UI ("last reprice was at 14:00, decided $89.99 because
+  // we matched the buy box"). Source of truth is the
+  // RepricingDecision history.
+  lastEvaluatedAt    DateTime?
+  lastDecisionPrice  Decimal?  @db.Decimal(10, 2)
+  lastDecisionReason String?
+
+  decisions RepricingDecision[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One rule per (product, channel, marketplace). To diverge across
+  // marketplaces under the same channel, create separate rows
+  // (with explicit marketplace values rather than null).
+  @@unique([productId, channel, marketplace])
+  @@index([productId])
+  @@index([channel, marketplace])
+  @@index([enabled])
+}
+
+/// W4.6 — RepricingDecision (append-only audit log).
+///
+/// One row per repricing engine tick that produced a decision.
+/// Captures market context (buy box price, lowest competitor,
+/// competitor count) so the operator can answer "why did this
+/// happen?" without replaying the engine state.
+///
+/// `applied=false` means the engine considered the price but didn't
+/// push it (typically because the price didn't change vs the
+/// previous tick — engine emits the decision row anyway for
+/// observability). `capped` indicates whether the floor or ceiling
+/// held back a more aggressive price.
+model RepricingDecision {
+  id     String @id @default(cuid())
+  ruleId String
+  rule   RepricingRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  oldPrice Decimal @db.Decimal(10, 2)
+  newPrice Decimal @db.Decimal(10, 2)
+  reason   String  // Free-form: 'matched buy box at €89.99', 'undercut competitor by 2%', 'capped at ceiling €120'
+
+  // Market context at decision time.
+  buyBoxPrice     Decimal? @db.Decimal(10, 2)
+  lowestCompPrice Decimal? @db.Decimal(10, 2)
+  competitorCount Int?
+
+  applied Boolean
+  capped  String? // 'floor' | 'ceiling' | null
+
+  createdAt DateTime @default(now())
+
+  @@index([ruleId, createdAt])
 }
 
 /// @deprecated Wave 2 PIM rebuild — superseded by Product self-relation
