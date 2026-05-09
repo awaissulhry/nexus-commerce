@@ -1236,6 +1236,52 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         }),
       )
 
+      // ── DO.42 — day-of-week × hour-of-day heatmap ─────────────────
+      //
+      // 7 × 24 cell grid showing revenue density across the active
+      // window. Indices: row 0 = Monday (Italian week start),
+      // col 0 = 00:00 Europe/Rome. Each cell is the SUM of order
+      // totals filtered to primary currency, so the heatmap is in
+      // the same units as the headline KPIs.
+      //
+      // Postgres EXTRACT(DOW) returns 0=Sun..6=Sat; we shift by
+      // (dow + 6) % 7 to get Mon=0..Sun=6 for the Italian operator.
+      // EXTRACT(HOUR) is computed against the timestamptz at
+      // Europe/Rome via AT TIME ZONE so 00:00 in the cell is
+      // 00:00 local, not 00:00 UTC.
+      let heatmapRows: Array<{
+        dow: number
+        hour: number
+        revenue: number
+      }> = []
+      try {
+        heatmapRows = (await prisma.$queryRawUnsafe(
+          `SELECT
+             ((EXTRACT(DOW FROM ("createdAt" AT TIME ZONE 'Europe/Rome'))::int + 6) % 7) AS dow,
+             EXTRACT(HOUR FROM ("createdAt" AT TIME ZONE 'Europe/Rome'))::int AS hour,
+             COALESCE(SUM("totalPrice"), 0)::float AS revenue
+           FROM "Order"
+           WHERE "createdAt" >= $1 AND "createdAt" <= $2
+             AND COALESCE("currencyCode", 'EUR') = $3
+           GROUP BY 1, 2`,
+          from,
+          to,
+          primaryCurrency,
+        )) as Array<{ dow: number; hour: number; revenue: number }>
+      } catch (err) {
+        request.log.warn({ err }, '[dashboard] heatmap raw query failed')
+      }
+      const heatmap: number[][] = Array.from({ length: 7 }, () =>
+        new Array<number>(24).fill(0),
+      )
+      for (const r of heatmapRows) {
+        const d = Number(r.dow)
+        const h = Number(r.hour)
+        if (d >= 0 && d < 7 && h >= 0 && h < 24) {
+          heatmap[d][h] = r.revenue
+        }
+      }
+
       // ── DO.31 — predictive insights ───────────────────────────────
       //
       // Surface the daily forecast cron's ReplenishmentForecast
@@ -1637,6 +1683,9 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         // DO.31 — forecast cron output: 7d / 30d unit forecasts +
         // stock-out-at-risk SKU count.
         predictive,
+        // DO.42 — 7 (Mon..Sun) × 24 hour-of-day revenue grid in
+        // primary currency, zoned Europe/Rome.
+        heatmap,
         // DO.30 — operator-set goals + computed progress against
         // each goal's period bounds.
         goals: goalProgress,

@@ -137,6 +137,10 @@ export interface OverviewPayload {
     periodFrom: string
     periodTo: string
   }>
+  // DO.42 — day-of-week × hour-of-day revenue density grid.
+  // 7 rows (Mon..Sun) × 24 columns (00..23, Europe/Rome local).
+  // All values in primary currency.
+  heatmap: number[][]
   // DO.31 — predictive insights from the forecast cron. Empty
   // when no ReplenishmentForecast rows exist; UI hides the panel
   // until the cron has produced data.

@@ -25,6 +25,7 @@ import CatalogSnapshot from './_components/CatalogSnapshot'
 import CustomerPanel from './_components/CustomerPanel'
 import FinancialPanel from './_components/FinancialPanel'
 import GoalsPanel from './_components/GoalsPanel'
+import HeatmapPanel from './_components/HeatmapPanel'
 import PredictivePanel from './_components/PredictivePanel'
 import OverviewSkeleton from './_components/OverviewSkeleton'
 import CustomizeSheet, {
@@ -375,6 +376,15 @@ export default function OverviewClient() {
                       key={id}
                       t={t}
                       predictive={data.predictive}
+                    />
+                  )
+                case 'heatmap':
+                  return (
+                    <HeatmapPanel
+                      key={id}
+                      t={t}
+                      heatmap={data.heatmap}
+                      currency={data.currency.primary}
                     />
                   )
                 case 'topProducts':

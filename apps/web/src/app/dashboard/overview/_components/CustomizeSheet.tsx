@@ -59,6 +59,7 @@ export const TOGGLEABLE_WIDGETS: ToggleableWidget[] = [
   { id: 'marketplaceMatrix', labelKey: 'overview.customize.widget.marketplaceMatrix', column: 'left' },
   { id: 'financial', labelKey: 'overview.customize.widget.financial', column: 'left' },
   { id: 'predictive', labelKey: 'overview.customize.widget.predictive', column: 'left' },
+  { id: 'heatmap', labelKey: 'overview.customize.widget.heatmap', column: 'left' },
   { id: 'topProducts', labelKey: 'overview.customize.widget.topProducts', column: 'left' },
   // Right column (panels)
   { id: 'goals', labelKey: 'overview.customize.widget.goals', column: 'right' },
