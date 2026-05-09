@@ -163,6 +163,29 @@ export function coercePasteValue(
     }
     return { value: null, error: 'Use yyyy-mm-ddTHH:MM' }
   }
+  // W2.4 — URL: accept any string that the URL constructor parses,
+  // either as-is or with a https:// prefix. Reject obvious garbage.
+  if (field.type === 'url') {
+    try {
+      const u = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)
+        ? new URL(trimmed)
+        : new URL(`https://${trimmed}`)
+      return { value: u.toString().replace(/\/$/, '') }
+    } catch {
+      return { value: null, error: 'Not a valid URL' }
+    }
+  }
+  // W2.4 — email: lightweight RFC-5322-ish check.
+  if (field.type === 'email') {
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return { value: trimmed }
+    return { value: null, error: 'Not a valid email' }
+  }
+  // W2.4 — phone: strip spaces / dashes / parens and re-check.
+  if (field.type === 'phone') {
+    const cleaned = trimmed.replace(/[\s().-]/g, '')
+    if (/^\+?\d{4,15}$/.test(cleaned)) return { value: cleaned }
+    return { value: null, error: 'Use a phone number with optional + prefix' }
+  }
   return { value: trimmed }
 }
 

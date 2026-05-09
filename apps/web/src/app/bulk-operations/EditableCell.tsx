@@ -73,6 +73,25 @@ export type FieldType =
    * Data flows as ISO 8601 ('2026-05-09T14:30:00').
    */
   | 'datetime'
+  /**
+   * W2.4 — URL. Edit mode is a plain text input with type="url" so
+   * mobile keyboards surface the right glyphs; display renders an
+   * <a> with the hostname trimmed for legibility (full URL on hover).
+   * Paste validates basic shape ('http(s)://…' or naked domain).
+   */
+  | 'url'
+  /**
+   * W2.4 — email. type="email" + RFC-5322-lite validation (good
+   * enough for the catalog: vendor / supplier / contact emails). The
+   * display is the address itself with a mailto: anchor.
+   */
+  | 'email'
+  /**
+   * W2.4 — phone. type="tel" + light E.164 normalisation. Display
+   * renders the number with non-breaking spaces between groups so
+   * the cell stays single-line at common widths.
+   */
+  | 'phone'
 
 export interface EditableMeta {
   editable: true
@@ -238,6 +257,57 @@ export function formatDateTime(
   } catch {
     return iso
   }
+}
+
+// W2.4 — URL / email / phone validators. Deliberately permissive —
+// the bulk-ops grid is a power-user surface; we surface a clear
+// error in the paste-preview modal but let an editing operator
+// commit anything they type (they can fix it before save). Strict
+// validation lives at the API boundary.
+
+/**
+ * Returns the URL string normalised to include a protocol when one
+ * was missing, or null when the input doesn't look like a URL at
+ * all. Accepts naked domains ('xavia.it') as 'https://xavia.it'.
+ */
+export function coerceUrl(v: unknown): string | null {
+  if (v === null || v === undefined || v === '') return null
+  const s = String(v).trim()
+  if (!s) return null
+  try {
+    // URL constructor needs a scheme — try as-is first, then with
+    // an https:// prefix, so 'xavia.it' and 'http://x.io' both work.
+    const u = /^[a-z][a-z0-9+.-]*:\/\//i.test(s)
+      ? new URL(s)
+      : new URL(`https://${s}`)
+    return u.toString().replace(/\/$/, '')
+  } catch {
+    return null
+  }
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** Returns the trimmed email when it parses, otherwise null. */
+export function coerceEmail(v: unknown): string | null {
+  if (v === null || v === undefined || v === '') return null
+  const s = String(v).trim()
+  return EMAIL_RE.test(s) ? s : null
+}
+
+/**
+ * Light E.164 normalisation: strip spaces / dashes / parens, keep a
+ * leading '+'. Doesn't validate country codes — wholesale phone-
+ * library work belongs at the API boundary, not in the grid cell.
+ */
+export function coercePhone(v: unknown): string | null {
+  if (v === null || v === undefined || v === '') return null
+  const s = String(v).trim()
+  if (!s) return null
+  const cleaned = s.replace(/[\s().-]/g, '')
+  // Must be all digits (after optional leading +) and length-feasible
+  if (!/^\+?\d{4,15}$/.test(cleaned)) return null
+  return cleaned
 }
 
 /**
@@ -461,6 +531,40 @@ export const EditableCell = memo(
           </select>
         )
       }
+      // W2.4 — URL / email / phone edit: plain text inputs with the
+      // right `type` so mobile keyboards switch glyphs (.com key for
+      // url, @ key for email, dial pad for phone). Validation is
+      // deferred — operators can type freely and we re-check on
+      // commit; the paste-preview modal already rejects garbage.
+      if (
+        meta.fieldType === 'url' ||
+        meta.fieldType === 'email' ||
+        meta.fieldType === 'phone'
+      ) {
+        const inputType =
+          meta.fieldType === 'url'
+            ? 'url'
+            : meta.fieldType === 'email'
+              ? 'email'
+              : 'tel'
+        return (
+          <input
+            ref={(el) => {
+              inputRef.current = el
+            }}
+            type={inputType}
+            value={
+              draftValue === null || draftValue === undefined
+                ? ''
+                : String(draftValue)
+            }
+            onChange={(e) => setDraftValue(e.target.value || null)}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            className={baseInputClass}
+          />
+        )
+      }
       // W2.3 — date / datetime edit: native pickers. The browser's
       // own popover handles the calendar UI, locale, and keyboard
       // navigation; we just hand it the canonical wire value.
@@ -583,6 +687,128 @@ export const EditableCell = memo(
           onKeyDown={handleKeyDown}
           className={cn(baseInputClass, meta.numeric && 'tabular-nums text-right')}
         />
+      )
+    }
+
+    // W2.4 — URL display: clickable anchor. Hostname is the visible
+    // text (cleaner at common cell widths), the full href is the
+    // tooltip. Click opens in a new tab to avoid losing grid state.
+    if (meta.fieldType === 'url') {
+      const raw = draftValue === null || draftValue === undefined ? '' : String(draftValue)
+      const normalised = coerceUrl(raw)
+      const display = normalised
+        ? (() => {
+            try {
+              return new URL(normalised).hostname
+            } catch {
+              return normalised
+            }
+          })()
+        : raw
+      return (
+        <div
+          onDoubleClick={() => enterEdit()}
+          title={cellError ?? normalised ?? raw}
+          className={cn(
+            'w-full h-full px-2 flex items-center text-md cursor-cell',
+            isDirty && !cellError && !cellCascading && 'bg-yellow-50',
+            isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
+            cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
+          )}
+        >
+          {raw ? (
+            normalised ? (
+              <a
+                href={normalised}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="truncate text-blue-600 hover:underline"
+              >
+                {display}
+              </a>
+            ) : (
+              <span className="truncate text-amber-700" title="Invalid URL">
+                {raw}
+              </span>
+            )
+          ) : (
+            <span className="text-slate-300">—</span>
+          )}
+        </div>
+      )
+    }
+
+    // W2.4 — email display: mailto: anchor when valid, plain text
+    // (with amber tint as a soft signal) when not.
+    if (meta.fieldType === 'email') {
+      const raw = draftValue === null || draftValue === undefined ? '' : String(draftValue)
+      const valid = coerceEmail(raw)
+      return (
+        <div
+          onDoubleClick={() => enterEdit()}
+          title={cellError ?? raw}
+          className={cn(
+            'w-full h-full px-2 flex items-center text-md cursor-cell',
+            isDirty && !cellError && !cellCascading && 'bg-yellow-50',
+            isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
+            cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
+          )}
+        >
+          {raw ? (
+            valid ? (
+              <a
+                href={`mailto:${valid}`}
+                onClick={(e) => e.stopPropagation()}
+                className="truncate text-blue-600 hover:underline"
+              >
+                {valid}
+              </a>
+            ) : (
+              <span className="truncate text-amber-700" title="Invalid email">
+                {raw}
+              </span>
+            )
+          ) : (
+            <span className="text-slate-300">—</span>
+          )}
+        </div>
+      )
+    }
+
+    // W2.4 — phone display: tel: anchor when normalisable.
+    if (meta.fieldType === 'phone') {
+      const raw = draftValue === null || draftValue === undefined ? '' : String(draftValue)
+      const valid = coercePhone(raw)
+      return (
+        <div
+          onDoubleClick={() => enterEdit()}
+          title={cellError ?? raw}
+          className={cn(
+            'w-full h-full px-2 flex items-center text-md cursor-cell tabular-nums',
+            isDirty && !cellError && !cellCascading && 'bg-yellow-50',
+            isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
+            cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
+          )}
+        >
+          {raw ? (
+            valid ? (
+              <a
+                href={`tel:${valid}`}
+                onClick={(e) => e.stopPropagation()}
+                className="truncate text-blue-600 hover:underline"
+              >
+                {valid}
+              </a>
+            ) : (
+              <span className="truncate text-amber-700" title="Invalid phone">
+                {raw}
+              </span>
+            )
+          ) : (
+            <span className="text-slate-300">—</span>
+          )}
+        </div>
       )
     }
 

@@ -129,6 +129,12 @@ export function fieldToMeta(field: FieldDef): EditableMeta {
       locale: 'it-IT',
     }
   }
+  // W2.4 — URL / email / phone. Plain text input with the right
+  // type= for mobile keyboards. Display renders an anchor when
+  // validation passes.
+  if (field.type === 'url') return { editable: true, fieldType: 'url' }
+  if (field.type === 'email') return { editable: true, fieldType: 'email' }
+  if (field.type === 'phone') return { editable: true, fieldType: 'phone' }
   // Weight + dimension fields are typed as 'number' in the registry
   // but rendered as text inputs so the user can type "5kg" or "60cm".
   // The smart-parsing in handleCommit splits the unit suffix into the
