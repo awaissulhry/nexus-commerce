@@ -110,10 +110,10 @@ export default function FamiliesClient({ initial, initialError }: Props) {
           const body = await res.json().catch(() => ({}))
           throw new Error(body.error ?? `HTTP ${res.status}`)
         }
-        toast.success(`Deleted family "${f.label}"`)
+        toast.success(t('pim.toasts.deleted.family', { label: f.label }))
         refresh()
       } catch (e: any) {
-        toast.error(`Delete failed: ${e?.message ?? String(e)}`)
+        toast.error(t('pim.toasts.failed.delete', { msg: e?.message ?? String(e) }))
       } finally {
         setBusy(null)
       }
@@ -279,6 +279,7 @@ function CreateFamilyModal({
   const [submitting, setSubmitting] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const { toast } = useToast()
+  const { t } = useTranslations()
 
   const codeValid = !code || CODE_PATTERN.test(code)
   const canSubmit =
@@ -302,7 +303,7 @@ function CreateFamilyModal({
         const body = await res.json().catch(() => ({}))
         throw new Error(body.error ?? `HTTP ${res.status}`)
       }
-      toast.success(`Created family "${label}"`)
+      toast.success(t('pim.toasts.created.family', { label }))
       onCreated()
     } catch (e: any) {
       setErr(e?.message ?? String(e))

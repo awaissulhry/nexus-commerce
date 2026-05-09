@@ -183,13 +183,13 @@ export default function DamClient({
           const body = await res.json().catch(() => ({}))
           throw new Error(body.error ?? `HTTP ${res.status}`)
         }
-        toast.success(`Deleted "${a.label}"`)
+        toast.success(t('pim.toasts.deleted.asset', { label: a.label }))
         refresh()
       } catch (e: any) {
-        toast.error(`Delete failed: ${e?.message ?? String(e)}`)
+        toast.error(t('pim.toasts.failed.delete', { msg: e?.message ?? String(e) }))
       }
     },
-    [confirm, refresh, toast],
+    [confirm, refresh, toast, t],
   )
 
   return (
@@ -371,6 +371,7 @@ function AssetDetailModal({
   const [labelDraft, setLabelDraft] = useState('')
   const [saving, setSaving] = useState(false)
   const { toast } = useToast()
+  const { t } = useTranslations()
 
   useEffect(() => {
     let cancelled = false
@@ -405,7 +406,7 @@ function AssetDetailModal({
         const body = await res.json().catch(() => ({}))
         throw new Error(body.error ?? `HTTP ${res.status}`)
       }
-      toast.success('Saved')
+      toast.success(t('pim.toasts.saved'))
       setAsset((prev) =>
         prev ? { ...prev, label: labelDraft.trim() } : prev,
       )

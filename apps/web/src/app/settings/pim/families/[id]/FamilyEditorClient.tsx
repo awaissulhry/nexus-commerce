@@ -156,13 +156,13 @@ export default function FamilyEditorClient({
           const body = await res.json().catch(() => ({}))
           throw new Error(body.error ?? `HTTP ${res.status}`)
         }
-        toast.success(`Detached "${attrLabel}"`)
+        toast.success(t('pim.toasts.detached', { label: attrLabel }))
         refresh()
       } catch (e: any) {
-        toast.error(`Detach failed: ${e?.message ?? String(e)}`)
+        toast.error(t('pim.toasts.failed.detach', { msg: e?.message ?? String(e) }))
       }
     },
-    [confirm, refresh, toast],
+    [confirm, refresh, toast, t],
   )
 
   const onToggleRequired = useCallback(
@@ -182,10 +182,10 @@ export default function FamilyEditorClient({
         }
         refresh()
       } catch (e: any) {
-        toast.error(`Update failed: ${e?.message ?? String(e)}`)
+        toast.error(t('pim.toasts.failed.update', { msg: e?.message ?? String(e) }))
       }
     },
-    [refresh, toast],
+    [refresh, toast, t],
   )
 
   const onUpdateChannels = useCallback(
@@ -205,10 +205,10 @@ export default function FamilyEditorClient({
         }
         refresh()
       } catch (e: any) {
-        toast.error(`Update failed: ${e?.message ?? String(e)}`)
+        toast.error(t('pim.toasts.failed.update', { msg: e?.message ?? String(e) }))
       }
     },
-    [refresh, toast],
+    [refresh, toast, t],
   )
 
   // W5.2 — drag-drop reorder handler. Receives the new ordered list
@@ -232,12 +232,12 @@ export default function FamilyEditorClient({
         )
         refresh()
       } catch (e: any) {
-        toast.error(`Reorder failed: ${e?.message ?? String(e)}`)
+        toast.error(t('pim.toasts.failed.reorder', { msg: e?.message ?? String(e) }))
         // Refresh to revert the optimistic UI to server truth.
         refresh()
       }
     },
-    [refresh, toast],
+    [refresh, toast, t],
   )
 
   // attributeIds already attached or inherited — exclude from picker.
@@ -458,6 +458,7 @@ function AddAttributeModal({
   const [submitting, setSubmitting] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const { toast } = useToast()
+  const { t } = useTranslations()
 
   const submit = async () => {
     setErr(null)
@@ -479,7 +480,7 @@ function AddAttributeModal({
         const body = await res.json().catch(() => ({}))
         throw new Error(body.error ?? `HTTP ${res.status}`)
       }
-      toast.success('Attached')
+      toast.success(t('pim.toasts.attached'))
       onAdded()
     } catch (e: any) {
       setErr(e?.message ?? String(e))
@@ -684,6 +685,7 @@ function ReparentModal({
   const [submitting, setSubmitting] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const { toast } = useToast()
+  const { t } = useTranslations()
 
   // Load all families for the picker. The server-side
   // PATCH /families/:id walks the candidate's chain to detect a
@@ -726,8 +728,8 @@ function ReparentModal({
       }
       toast.success(
         parentId
-          ? `Reparented "${familyLabel}"`
-          : `Promoted "${familyLabel}" to root`,
+          ? t('pim.toasts.reparented', { label: familyLabel })
+          : t('pim.toasts.promotedToRoot', { label: familyLabel }),
       )
       onUpdated()
     } catch (e: any) {

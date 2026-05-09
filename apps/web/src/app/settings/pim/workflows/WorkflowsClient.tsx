@@ -111,10 +111,10 @@ export default function WorkflowsClient({ initial, initialError }: Props) {
           const body = await res.json().catch(() => ({}))
           throw new Error(body.error ?? `HTTP ${res.status}`)
         }
-        toast.success(`Deleted workflow "${w.label}"`)
+        toast.success(t('pim.toasts.deleted.workflow', { label: w.label }))
         refresh()
       } catch (e: any) {
-        toast.error(`Delete failed: ${e?.message ?? String(e)}`)
+        toast.error(t('pim.toasts.failed.delete', { msg: e?.message ?? String(e) }))
       } finally {
         setBusy(null)
       }
@@ -246,6 +246,7 @@ function CreateWorkflowModal({
   const [submitting, setSubmitting] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const { toast } = useToast()
+  const { t } = useTranslations()
 
   const codeValid = !code || CODE_PATTERN.test(code)
   const initialCount = stages.filter((s) => s.isInitial).length
@@ -292,7 +293,7 @@ function CreateWorkflowModal({
           : ''
         throw new Error((body.error ?? `HTTP ${res.status}`) + detail)
       }
-      toast.success(`Created workflow "${label}"`)
+      toast.success(t('pim.toasts.created.workflow', { label }))
       onCreated()
     } catch (e: any) {
       setErr(e?.message ?? String(e))

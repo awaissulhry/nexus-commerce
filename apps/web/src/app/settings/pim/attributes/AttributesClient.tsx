@@ -169,14 +169,14 @@ export default function AttributesClient({
           const body = await res.json().catch(() => ({}))
           throw new Error(body.error ?? `HTTP ${res.status}`)
         }
-        toast.success(`Deleted group "${g.label}"`)
+        toast.success(t('pim.toasts.deleted.group', { label: g.label }))
         if (selectedGroupId === g.id) setSelectedGroupId(null)
         refresh()
       } catch (e: any) {
-        toast.error(`Delete failed: ${e?.message ?? String(e)}`)
+        toast.error(t('pim.toasts.failed.delete', { msg: e?.message ?? String(e) }))
       }
     },
-    [confirm, refresh, toast, selectedGroupId],
+    [confirm, refresh, toast, t, selectedGroupId],
   )
 
   const onDeleteAttr = useCallback(
@@ -206,13 +206,13 @@ export default function AttributesClient({
           const body = await res.json().catch(() => ({}))
           throw new Error(body.error ?? `HTTP ${res.status}`)
         }
-        toast.success(`Deleted attribute "${a.label}"`)
+        toast.success(t('pim.toasts.deleted.attribute', { label: a.label }))
         refresh()
       } catch (e: any) {
-        toast.error(`Delete failed: ${e?.message ?? String(e)}`)
+        toast.error(t('pim.toasts.failed.delete', { msg: e?.message ?? String(e) }))
       }
     },
-    [confirm, refresh, toast],
+    [confirm, refresh, toast, t],
   )
 
   return (
@@ -471,6 +471,7 @@ function CreateGroupModal({
   const [submitting, setSubmitting] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const { toast } = useToast()
+  const { t } = useTranslations()
 
   const codeValid = !code || CODE_PATTERN.test(code)
   const canSubmit = CODE_PATTERN.test(code) && label.trim().length > 0
@@ -488,7 +489,7 @@ function CreateGroupModal({
         const body = await res.json().catch(() => ({}))
         throw new Error(body.error ?? `HTTP ${res.status}`)
       }
-      toast.success(`Created group "${label}"`)
+      toast.success(t('pim.toasts.created.group', { label }))
       onCreated()
     } catch (e: any) {
       setErr(e?.message ?? String(e))
@@ -577,6 +578,7 @@ function CreateAttributeModal({
   const [submitting, setSubmitting] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const { toast } = useToast()
+  const { t } = useTranslations()
 
   const codeValid = !code || CODE_PATTERN.test(code)
   const canSubmit =
@@ -602,7 +604,7 @@ function CreateAttributeModal({
         const body = await res.json().catch(() => ({}))
         throw new Error(body.error ?? `HTTP ${res.status}`)
       }
-      toast.success(`Created attribute "${label}"`)
+      toast.success(t('pim.toasts.created.attribute', { label }))
       onCreated()
     } catch (e: any) {
       setErr(e?.message ?? String(e))
@@ -747,6 +749,7 @@ function OptionsModal({
   const [submitting, setSubmitting] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const { toast } = useToast()
+  const { t } = useTranslations()
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -814,7 +817,7 @@ function OptionsModal({
       refresh()
       onChanged()
     } catch (e: any) {
-      toast.error(`Delete failed: ${e?.message ?? String(e)}`)
+      toast.error(t('pim.toasts.failed.delete', { msg: e?.message ?? String(e) }))
     }
   }
 
