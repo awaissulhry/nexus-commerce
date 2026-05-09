@@ -73,6 +73,7 @@ import { CommandCenterKpis } from './_shared/CommandCenterKpis'
 import { ScenariosCard } from './_shared/ScenariosCard'
 import { SlowMoversCard } from './_shared/SlowMoversCard'
 import { PanEuDistributionCard } from './_shared/PanEuDistributionCard'
+import { SupplierSpendCard } from './_shared/SupplierSpendCard'
 
 type Urgency = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
 
@@ -813,6 +814,13 @@ export default function ReplenishmentWorkspace() {
           shortage transfer suggestions across IT/DE/FR/ES/NL. */}
       <div id="pan-eu" className="scroll-mt-4">
         <PanEuDistributionCard />
+      </div>
+
+      {/* W9.3 — supplier spend dashboard. Hides itself when no PO
+          history exists; otherwise lists per-supplier 30/90/365d
+          spend + open commitment, sorted by 90d spend desc. */}
+      <div id="supplier-spend" className="scroll-mt-4">
+        <SupplierSpendCard />
       </div>
 
       {/* W3.2 — command-center KPI strip. Five tiles answering

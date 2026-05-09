@@ -8513,6 +8513,106 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // W9.3 — Per-supplier spend summary. Closes the audit's
+  // Brightpearl-tier "per-supplier spend analytics" gap. Aggregates
+  // PurchaseOrder by supplierId across 30/90/365 day windows, plus
+  // an open-commitment column that captures EUR cents committed
+  // but not yet received.
+  //
+  // 30s cache.
+  fastify.get(
+    '/fulfillment/replenishment/suppliers/spend-summary',
+    async (request, reply) => {
+      const q = (request.query ?? {}) as { limit?: string }
+      const limit = Math.max(
+        1,
+        Math.min(parseInt(q.limit ?? '50', 10) || 50, 200),
+      )
+
+      // Three time windows in one query so we don't fan out 3x.
+      // currencyCode column on PurchaseOrder preserves multi-currency
+      // procurement (R.15) — we report EUR-cents AND surface the
+      // currency mix per supplier so the operator sees when a
+      // supplier sits in a non-EUR currency.
+      const rows = await prisma.$queryRaw<
+        Array<{
+          supplier_id: string
+          supplier_name: string
+          country: string | null
+          lead_time_days: number | null
+          payment_terms: string | null
+          default_currency: string | null
+          open_po_count: bigint
+          open_commitment_cents: bigint
+          spend_30d_cents: bigint
+          spend_90d_cents: bigint
+          spend_365d_cents: bigint
+          currencies: string[]
+        }>
+      >`
+        SELECT
+          s.id AS supplier_id,
+          s.name AS supplier_name,
+          s.country,
+          s."leadTimeDays" AS lead_time_days,
+          s."paymentTerms" AS payment_terms,
+          s."defaultCurrency" AS default_currency,
+          count(po.id) FILTER (WHERE po.status NOT IN ('CANCELLED', 'RECEIVED'))::bigint AS open_po_count,
+          COALESCE(SUM(po."totalCents") FILTER (WHERE po.status NOT IN ('CANCELLED', 'RECEIVED')), 0)::bigint AS open_commitment_cents,
+          COALESCE(SUM(po."totalCents") FILTER (WHERE po."createdAt" >= NOW() - INTERVAL '30 days' AND po.status != 'CANCELLED'), 0)::bigint AS spend_30d_cents,
+          COALESCE(SUM(po."totalCents") FILTER (WHERE po."createdAt" >= NOW() - INTERVAL '90 days' AND po.status != 'CANCELLED'), 0)::bigint AS spend_90d_cents,
+          COALESCE(SUM(po."totalCents") FILTER (WHERE po."createdAt" >= NOW() - INTERVAL '365 days' AND po.status != 'CANCELLED'), 0)::bigint AS spend_365d_cents,
+          COALESCE(array_agg(DISTINCT po."currencyCode") FILTER (WHERE po.id IS NOT NULL), ARRAY[]::text[]) AS currencies
+        FROM "Supplier" s
+        LEFT JOIN "PurchaseOrder" po ON po."supplierId" = s.id
+        WHERE s."isActive" = true
+        GROUP BY s.id, s.name, s.country, s."leadTimeDays", s."paymentTerms", s."defaultCurrency"
+        HAVING count(po.id) > 0
+        ORDER BY SUM(po."totalCents") FILTER (WHERE po."createdAt" >= NOW() - INTERVAL '90 days' AND po.status != 'CANCELLED') DESC NULLS LAST
+        LIMIT ${limit}
+      `
+
+      const totals = {
+        suppliers: rows.length,
+        openCommitmentCents: rows.reduce(
+          (s, r) => s + Number(r.open_commitment_cents ?? 0),
+          0,
+        ),
+        spend30dCents: rows.reduce(
+          (s, r) => s + Number(r.spend_30d_cents ?? 0),
+          0,
+        ),
+        spend90dCents: rows.reduce(
+          (s, r) => s + Number(r.spend_90d_cents ?? 0),
+          0,
+        ),
+        spend365dCents: rows.reduce(
+          (s, r) => s + Number(r.spend_365d_cents ?? 0),
+          0,
+        ),
+      }
+
+      reply.header('Cache-Control', 'private, max-age=30')
+      return {
+        totals,
+        suppliers: rows.map((r) => ({
+          supplierId: r.supplier_id,
+          supplierName: r.supplier_name,
+          country: r.country,
+          leadTimeDays: r.lead_time_days,
+          paymentTerms: r.payment_terms,
+          defaultCurrency: r.default_currency,
+          openPoCount: Number(r.open_po_count ?? 0),
+          openCommitmentCents: Number(r.open_commitment_cents ?? 0),
+          spend30dCents: Number(r.spend_30d_cents ?? 0),
+          spend90dCents: Number(r.spend_90d_cents ?? 0),
+          spend365dCents: Number(r.spend_365d_cents ?? 0),
+          currencies: r.currencies ?? [],
+        })),
+      }
+    },
+  )
+
   // W7.1 — Pan-EU FBA distribution recommender. Aggregates
   // FbaInventoryDetail by (sku, marketplaceId), cross-references
   // 30d AMAZON DailySalesAggregate for per-marketplace velocity,
