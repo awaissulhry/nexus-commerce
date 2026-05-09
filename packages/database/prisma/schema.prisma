@@ -117,6 +117,21 @@ model Product {
   familyId String?
   family   ProductFamily? @relation("ProductFamily", fields: [familyId], references: [id], onDelete: SetNull)
 
+  // ── W3.1 — ProductWorkflow stage tracking (Salesforce parity) ────
+  // Current stage in the content-quality pipeline (DRAFT → REVIEW →
+  // APPROVED → PUBLISHED). Distinct from `status` (which is the
+  // operational ACTIVE/INACTIVE/DRAFT lifecycle that cascades to
+  // marketplaces): workflowStage is the *internal* gate before the
+  // operator flips status to ACTIVE.
+  //
+  // SetNull on stage delete so removing a stage from a workflow
+  // doesn't cascade-wipe products (they fall off the workflow but
+  // keep their data — re-attaching via family is the recovery path).
+  workflowStageId String?
+  workflowStage   WorkflowStage? @relation("ProductCurrentStage", fields: [workflowStageId], references: [id], onDelete: SetNull)
+  workflowTransitions WorkflowTransition[] @relation("ProductWorkflowTransitions")
+  workflowComments    WorkflowComment[]    @relation("ProductWorkflowComments")
+
   // Pricing intelligence
   costPrice       Decimal? @db.Decimal(10, 2) // Cost of goods for margin calc
   minMargin       Decimal? @db.Decimal(5, 2) // Minimum acceptable margin percentage (e.g., 15 for 15%)
@@ -302,6 +317,7 @@ model Product {
   @@index([isParent])
   @@index([fulfillmentMethod])
   @@index([familyId])
+  @@index([workflowStageId])
 }
 
 /// W2.1 — Product family (Akeneo cornerstone PIM template).
@@ -345,10 +361,20 @@ model ProductFamily {
   // Attributes attached to this family (W2.3).
   familyAttributes FamilyAttribute[]
 
+  // ── W3.1 — Optional default workflow ──────────────────────────
+  // When a product joins this family (W2.13 bulk-attach), it lands
+  // on the workflow's initial stage. SetNull on workflow delete so
+  // detaching the workflow from a family is non-destructive —
+  // products keep their current workflowStageId until manually
+  // moved. Multiple families can share the same workflow.
+  workflowId String?
+  workflow   ProductWorkflow? @relation(fields: [workflowId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([parentFamilyId])
+  @@index([workflowId])
 }
 
 /// W2.2 — AttributeGroup (Akeneo + Magento parity).
@@ -497,6 +523,135 @@ model FamilyAttribute {
   @@unique([familyId, attributeId])
   @@index([familyId])
   @@index([attributeId])
+}
+
+/// W3.1 — ProductWorkflow (Salesforce-parity content-quality
+/// pipeline, simplified for single-operator MVP).
+///
+/// A Workflow is a configurable named pipeline of stages — e.g.
+/// 'standard_pim': DRAFT_CONTENT → IN_REVIEW → APPROVED →
+/// PUBLISHED. Each ProductFamily can OPTIONALLY reference one
+/// workflow (Family.workflowId); products that join such a family
+/// land on the workflow's initial stage and progress through
+/// transitions (W3.x).
+///
+/// Distinct from Product.status (the ACTIVE/INACTIVE/DRAFT
+/// operational lifecycle that cascades to marketplaces). status
+/// is what the marketplace sees; workflowStage is the internal
+/// content-quality gate before the operator flips status to ACTIVE.
+///
+/// Wave 3 follow-up (each its own commit per H.1):
+///   W3.2: WorkflowService — moveStage / canTransition / SLA
+///   W3.3: Workflow CRUD API
+///   W3.4: Stage transition + comment API
+///   W3.5+: Workflow lens + drawer tab on /products
+model ProductWorkflow {
+  id          String  @id @default(cuid())
+  // Lower-snake_case identifier ('standard_pim', 'b2b_approval').
+  code        String  @unique
+  label       String
+  description String?
+
+  stages   WorkflowStage[]
+  families ProductFamily[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// W3.1 — WorkflowStage. Per-workflow stage definition. Stages are
+/// ordered by sortOrder; the stage with isInitial=true is where new
+/// products land when joining the workflow. isTerminal=true marks
+/// a successful-completion stage. isPublishable=true is a UI hint
+/// for "this stage means the product is ready to go live"; the
+/// workflow does NOT directly mutate Product.status — that stays
+/// a manual operator action so cascade-to-marketplace stays
+/// explicit.
+model WorkflowStage {
+  id          String  @id @default(cuid())
+  workflowId  String
+  workflow    ProductWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  // Stable code within this workflow ('draft', 'in_review',
+  // 'approved', 'published'). Unique per (workflow, code).
+  code        String
+  label       String
+  description String?
+  sortOrder   Int     @default(0)
+
+  // Optional SLA: hours from entry to expected next transition.
+  // Surfaces as overdue badges in the workflow lens.
+  slaHours      Int?
+  // Operator hint: this stage represents "ready to publish".
+  isPublishable Boolean @default(false)
+  // Stage products land on when joining this workflow. Exactly one
+  // per workflow — write-time service enforces this invariant.
+  isInitial     Boolean @default(false)
+  // Stage that represents successful completion. Zero or one per
+  // workflow.
+  isTerminal    Boolean @default(false)
+
+  productsHere     Product[]            @relation("ProductCurrentStage")
+  transitionsFrom  WorkflowTransition[] @relation("TransitionFromStage")
+  transitionsTo    WorkflowTransition[] @relation("TransitionToStage")
+  comments         WorkflowComment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workflowId, code])
+  @@index([workflowId])
+}
+
+/// W3.1 — WorkflowTransition log. Append-only record of every
+/// stage move per product. Drives the audit trail + the per-product
+/// activity timeline. fromStage is nullable (initial entry into a
+/// workflow has no `from`).
+///
+/// Cascade rules:
+///   product → CASCADE (transitions are owned by the product)
+///   fromStage → SET NULL (preserve history when a stage is renamed
+///                          / removed; the transition record stays)
+///   toStage → RESTRICT (refuse to delete a stage with transitions
+///                        landing on it; the operator must rewire
+///                        first)
+model WorkflowTransition {
+  id          String  @id @default(cuid())
+  productId   String
+  product     Product @relation("ProductWorkflowTransitions", fields: [productId], references: [id], onDelete: Cascade)
+  fromStageId String?
+  fromStage   WorkflowStage? @relation("TransitionFromStage", fields: [fromStageId], references: [id], onDelete: SetNull)
+  toStageId   String
+  toStage     WorkflowStage  @relation("TransitionToStage", fields: [toStageId], references: [id], onDelete: Restrict)
+
+  userId  String?
+  comment String?
+
+  createdAt DateTime @default(now())
+
+  @@index([productId, createdAt])
+  @@index([toStageId])
+}
+
+/// W3.1 — WorkflowComment. Per-product-per-stage discussion thread.
+/// Survives stage transitions (the comment stays attached to the
+/// stage where it was made, even after the product moves on) so the
+/// audit trail reads chronologically per stage.
+model WorkflowComment {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation("ProductWorkflowComments", fields: [productId], references: [id], onDelete: Cascade)
+  stageId   String
+  stage     WorkflowStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  userId String?
+  body   String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId, createdAt])
+  @@index([stageId])
 }
 
 /// @deprecated Wave 2 PIM rebuild — superseded by Product self-relation
