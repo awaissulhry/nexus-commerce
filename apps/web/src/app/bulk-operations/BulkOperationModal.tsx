@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Globe,
   Loader2,
+  Sparkles,
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
@@ -23,6 +24,10 @@ import type { MarketplaceContext } from './components/MarketplaceSelector'
 import { OPERATIONS } from './_operations/configs'
 import { Field, inputCls } from './_operations/_helpers'
 import type { OperationType as BulkOperationType } from './_operations/types'
+import {
+  TemplateLibrary,
+  type ServerTemplate,
+} from './components/TemplateLibrary'
 
 // ── Operation contract ─────────────────────────────────────────────
 //
@@ -107,6 +112,16 @@ export default function BulkOperationModal({
   const [opType, setOpType] = useState<OperationType>('PRICING_UPDATE')
   const op = OPERATIONS.find((o) => o.type === opType)
   const isSchemaOp = opType === 'SCHEMA_FIELD_UPDATE'
+
+  // W5.3 — Template library + apply state. The library opens as a
+  // modal-on-modal: picking a template fills the modal's op + payload
+  // (so the operator sees what's about to fire) and stashes the
+  // template id in `appliedTemplateId` for the apply path to bump
+  // the usageCount.
+  const [templateLibraryOpen, setTemplateLibraryOpen] = useState(false)
+  const [appliedTemplateId, setAppliedTemplateId] = useState<string | null>(
+    null,
+  )
 
   const [payload, setPayload] = useState<Record<string, unknown>>(
     op?.initialPayload ?? {},
@@ -560,16 +575,47 @@ export default function BulkOperationModal({
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
             Bulk apply
+            {appliedTemplateId && (
+              <span
+                className="ml-2 inline-flex items-center gap-1 text-xs font-normal text-amber-700 dark:text-amber-400"
+                title="Loaded from template"
+              >
+                <Sparkles className="w-3 h-3" />
+                from template
+              </span>
+            )}
           </h2>
-          <button
-            type="button"
-            onClick={() => !executing && onClose()}
-            className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 disabled:opacity-50"
-            disabled={executing}
-            aria-label="Close"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            {/* W5.3 — Templates trigger. Opens the library where the
+                operator can browse / save / apply reusable bulk-action
+                presets. The library is modal-on-modal — eats clicks
+                outside to close, returns control to this modal on
+                template-select. */}
+            <button
+              type="button"
+              onClick={() => setTemplateLibraryOpen(true)}
+              disabled={executing}
+              className={cn(
+                'h-7 px-2 inline-flex items-center gap-1 rounded border text-xs font-medium transition-colors',
+                'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100',
+                'dark:bg-amber-950/40 dark:border-amber-900 dark:text-amber-400',
+                'disabled:opacity-50',
+              )}
+              title="Browse + apply saved templates"
+            >
+              <Sparkles className="w-3 h-3" />
+              Templates
+            </button>
+            <button
+              type="button"
+              onClick={() => !executing && onClose()}
+              className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 disabled:opacity-50 ml-1"
+              disabled={executing}
+              aria-label="Close"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
@@ -1107,6 +1153,43 @@ export default function BulkOperationModal({
           )}
         </div>
       </div>
+      {/* W5.3 — Template library / save panel. Modal-on-modal; the
+          parent's backdrop click is suppressed by the library's own
+          stopPropagation, so closing the library returns control to
+          the bulk-apply modal cleanly. */}
+      <TemplateLibrary
+        open={templateLibraryOpen}
+        onClose={() => setTemplateLibraryOpen(false)}
+        onSelect={(template: ServerTemplate) => {
+          // Load the template into the modal: switch to its
+          // actionType (when it's one of the OPERATIONS we render)
+          // and seed the payload. SCHEMA_FIELD_UPDATE templates would
+          // need extra wiring (schemaFieldId/value); not in scope for
+          // v0. Operators see the modal pre-filled with the
+          // template's defaults and can tweak before applying.
+          if (
+            ['PRICING_UPDATE', 'INVENTORY_UPDATE', 'STATUS_UPDATE',
+              'ATTRIBUTE_UPDATE', 'LISTING_SYNC',
+              'MARKETPLACE_OVERRIDE_UPDATE'].includes(template.actionType)
+          ) {
+            setOpType(template.actionType as OperationType)
+            setPayload(template.actionPayload as Record<string, unknown>)
+          }
+          setAppliedTemplateId(template.id)
+          setTemplateLibraryOpen(false)
+        }}
+        currentDraft={
+          payloadValid
+            ? {
+                actionType: opType,
+                channel: null,
+                actionPayload: payload,
+                defaultFilters:
+                  activeFilters as unknown as Record<string, unknown>,
+              }
+            : null
+        }
+      />
     </div>
   )
 }
