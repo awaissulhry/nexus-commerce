@@ -2730,14 +2730,43 @@ export default function BulkOperationsClient() {
     [],
   )
 
-  // W3.2 — replace-cell stub. W3.4 will swap this for a real
-  // writeChange + history-batch integration; for now the bar's
-  // Replace buttons no-op so we can ship the find UI standalone.
+  // W3.4 — Replace flow.
+  //
+  // For Replace-One, the bar passes no batch and writeChange pushes a
+  // single-cell history entry on the spot. For Replace-All, the bar
+  // collects every per-cell delta into one batch array, then calls
+  // handleFindReplaceCommitBatch which pushes the combined entry — so
+  // Cmd+Z reverts the whole replace-all in one step (same pattern as
+  // paste / drag-fill / clear-range).
+  //
+  // Cells in the matches list have already been confirmed as
+  // non-empty + matching; writeChange itself drops no-op writes (new
+  // value === current) so we don't pollute the changes Map.
   const handleFindReplaceCell = useCallback(
-    (_rowId: string, _columnId: string, _newValue: unknown) => {
-      // Intentionally empty — wired up in W3.4.
+    (
+      rowId: string,
+      columnId: string,
+      newValue: unknown,
+      batch?: unknown[],
+    ) => {
+      writeChange(
+        rowId,
+        columnId,
+        newValue,
+        false,
+        batch as HistoryDelta[] | undefined,
+      )
     },
-    [],
+    [writeChange],
+  )
+
+  const handleFindReplaceCommitBatch = useCallback(
+    (batch: unknown[]) => {
+      const typed = batch as HistoryDelta[]
+      if (typed.length === 0) return
+      pushHistoryEntry({ cells: typed, timestamp: Date.now() })
+    },
+    [pushHistoryEntry],
   )
   const activeRect = (() => {
     if (!selection.active) return null
@@ -2999,6 +3028,7 @@ export default function BulkOperationsClient() {
         onActivate={handleFindActivate}
         onMatchSetChange={handleMatchSetChange}
         onReplaceCell={handleFindReplaceCell}
+        onCommitReplaceBatch={handleFindReplaceCommitBatch}
       />
       {!online && (
         <div className="flex-shrink-0 mb-3 flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-base text-amber-800">
