@@ -135,16 +135,16 @@ const ACTION_TKEY: Record<string, string> = {
 }
 
 const TRACKING_TONE: Record<string, string> = {
-  ANNOUNCED: 'text-slate-500 bg-slate-100',
-  PICKED_UP: 'text-blue-700 bg-blue-100',
-  IN_TRANSIT: 'text-blue-700 bg-blue-100',
-  OUT_FOR_DELIVERY: 'text-amber-700 bg-amber-100',
-  DELIVERED: 'text-emerald-700 bg-emerald-100',
-  DELIVERY_ATTEMPTED: 'text-amber-700 bg-amber-100',
-  EXCEPTION: 'text-rose-700 bg-rose-100',
-  RETURNED_TO_SENDER: 'text-rose-700 bg-rose-100',
-  CANCELLED: 'text-slate-500 bg-slate-100',
-  INFO: 'text-slate-500 bg-slate-100',
+  ANNOUNCED: 'text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800',
+  PICKED_UP: 'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/60',
+  IN_TRANSIT: 'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/60',
+  OUT_FOR_DELIVERY: 'text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/60',
+  DELIVERED: 'text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/60',
+  DELIVERY_ATTEMPTED: 'text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/60',
+  EXCEPTION: 'text-rose-700 dark:text-rose-300 bg-rose-100 dark:bg-rose-900/60',
+  RETURNED_TO_SENDER: 'text-rose-700 dark:text-rose-300 bg-rose-100 dark:bg-rose-900/60',
+  CANCELLED: 'text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800',
+  INFO: 'text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800',
 }
 
 const CHANNEL_LABEL: Record<string, string> = {
@@ -183,8 +183,8 @@ function urgencyOf(d: string | null): { tint: string; tKey: string } | null {
   const t = new Date(d).getTime()
   const now = Date.now()
   const diffH = (t - now) / 3_600_000
-  if (diffH < 0) return { tint: 'bg-rose-50 text-rose-700 border-rose-200', tKey: 'outbound.drawer.urgency.overdue' }
-  if (diffH < 24) return { tint: 'bg-amber-50 text-amber-700 border-amber-200', tKey: 'outbound.drawer.urgency.today' }
+  if (diffH < 0) return { tint: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900', tKey: 'outbound.drawer.urgency.overdue' }
+  if (diffH < 24) return { tint: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900', tKey: 'outbound.drawer.urgency.today' }
   if (diffH < 48) return { tint: 'bg-yellow-50 text-yellow-700 border-yellow-200', tKey: 'outbound.drawer.urgency.tomorrow' }
   return null
 }
@@ -516,14 +516,14 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
       aria-label={t('outbound.drawer.lifecycle')}
     >
       <div
-        className="w-full max-w-[640px] bg-white shadow-2xl border-l border-slate-200 flex flex-col h-full animate-slide-from-right"
+        className="w-full max-w-[640px] bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col h-full animate-slide-from-right"
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Header ───────────────────────────────────────────── */}
-        <div className="flex items-start gap-3 px-5 py-4 border-b border-slate-200">
+        <div className="flex items-start gap-3 px-5 py-4 border-b border-slate-200 dark:border-slate-700">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-lg font-semibold text-slate-900 truncate">
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 truncate">
                 {data?.customerName || (loading ? t('common.loading') : t('outbound.pending.col.order'))}
               </h2>
               {data && (
@@ -535,13 +535,13 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
               {data?.isPrime && (
                 <span
                   title="Amazon Prime SFP"
-                  className="inline-flex items-center gap-0.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5"
+                  className="inline-flex items-center gap-0.5 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded px-1.5 py-0.5"
                 >
                   <Crown size={10} /> Prime
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2 text-sm text-slate-500 font-mono mt-0.5">
+            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 font-mono mt-0.5">
               {/* O.87: click-to-copy on channel order id. Operators
                   paste this constantly into Amazon Seller Central /
                   eBay support / Shopify admin. Uses the existing
@@ -557,7 +557,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                     }
                   }}
                   title={t('outbound.drawer.copyChannelOrderId.title')}
-                  className="hover:text-slate-700 hover:underline"
+                  className="hover:text-slate-700 dark:hover:text-slate-300 hover:underline"
                 >
                   {data.channelOrderId}
                 </button>
@@ -565,13 +565,13 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                 <span>—</span>
               )}
               {data?.fulfillmentMethod && (
-                <span className="text-slate-400">{data.fulfillmentMethod}</span>
+                <span className="text-slate-400 dark:text-slate-500">{data.fulfillmentMethod}</span>
               )}
             </div>
           </div>
           <button
             onClick={onClose}
-            className="h-8 w-8 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded"
+            className="h-8 w-8 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
             aria-label={t('common.close')}
           >
             <X size={16} />
@@ -630,7 +630,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                 }
                 if (ship.status === 'ON_HOLD') {
                   return (
-                    <div className="flex items-start gap-2 py-2 bg-amber-50 border border-amber-200 rounded px-3">
+                    <div className="flex items-start gap-2 py-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded px-3">
                       <Badge variant="warning" size="sm">ON HOLD</Badge>
                       <div className="flex-1 text-sm">
                         {/* O.83: surface heldReason inline so the
@@ -639,10 +639,10 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                         {ship.heldReason ? (
                           <div className="text-amber-900">{ship.heldReason}</div>
                         ) : (
-                          <div className="text-amber-700">{t('outbound.drawer.held.noReason')}</div>
+                          <div className="text-amber-700 dark:text-amber-300">{t('outbound.drawer.held.noReason')}</div>
                         )}
                         {ship.heldAt && (
-                          <div className="text-xs text-amber-700 tabular-nums">
+                          <div className="text-xs text-amber-700 dark:text-amber-300 tabular-nums">
                             {t('outbound.drawer.held.since', {
                               date: new Date(ship.heldAt).toLocaleString('it-IT', {
                                 month: 'short',
@@ -669,7 +669,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                           emitInvalidation({ type: 'shipment.updated', meta: { shipmentId: ship.id } })
                           fetchDetail()
                         }}
-                        className="h-7 px-3 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700 inline-flex items-center gap-1"
+                        className="h-7 px-3 text-sm bg-emerald-600 dark:bg-emerald-700 text-white rounded hover:bg-emerald-700 inline-flex items-center gap-1"
                       >
                         {t('outbound.drawer.held.release')}
                       </button>
@@ -703,15 +703,15 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                                 isPast
                                   ? 'bg-emerald-500 text-white'
                                   : isCurrent
-                                  ? 'bg-blue-600 text-white ring-4 ring-blue-100'
-                                  : 'bg-slate-100 text-slate-400 border border-slate-300'
+                                  ? 'bg-blue-600 dark:bg-blue-700 text-white ring-4 ring-blue-100'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-300 dark:border-slate-600'
                               }`}
                             >
                               {isPast ? '✓' : idx + 1}
                             </div>
                             <span
                               className={`text-[10px] uppercase tracking-wider whitespace-nowrap ${
-                                isCurrent ? 'text-blue-700 font-semibold' : isPast ? 'text-slate-700' : 'text-slate-400'
+                                isCurrent ? 'text-blue-700 dark:text-blue-300 font-semibold' : isPast ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-500'
                               }`}
                             >
                               {step.label}
@@ -720,7 +720,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                           {!isLast && (
                             <div
                               className={`flex-1 h-0.5 mx-1 -mt-4 ${
-                                isPast ? 'bg-emerald-500' : 'bg-slate-200'
+                                isPast ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700'
                               }`}
                             />
                           )}
@@ -747,11 +747,11 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
               {/* Customer + address */}
               <Card>
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                     <User size={12} /> {t('outbound.drawer.customer')}
                   </div>
-                  <div className="text-md text-slate-900">{data.customerName || '—'}</div>
-                  <div className="text-base text-slate-600">{data.customerEmail || '—'}</div>
+                  <div className="text-md text-slate-900 dark:text-slate-100">{data.customerName || '—'}</div>
+                  <div className="text-base text-slate-600 dark:text-slate-400">{data.customerEmail || '—'}</div>
                   {ship && (() => {
                     // O.68: copy-address affordance. Operators paste
                     // shipping addresses into manual carrier portals,
@@ -767,8 +767,8 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                       [ship.StateOrRegion ?? ship.stateOrProvince ?? ship.state, ship.CountryCode ?? ship.countryCode ?? ship.country].filter(Boolean).join(' · '),
                     ].filter(Boolean) as string[]
                     return (
-                      <div className="pt-2 border-t border-slate-100">
-                        <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                           <MapPin size={12} /> {t('outbound.drawer.shipTo')}
                           <button
                             onClick={async () => {
@@ -780,12 +780,12 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                               }
                             }}
                             title={t('outbound.drawer.copyAddress.title')}
-                            className="ml-auto h-5 w-5 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 rounded normal-case"
+                            className="ml-auto h-5 w-5 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded normal-case"
                           >
                             <Copy size={11} />
                           </button>
                         </div>
-                        <div className="text-base text-slate-700 whitespace-pre-line">
+                        <div className="text-base text-slate-700 dark:text-slate-300 whitespace-pre-line">
                           {addressLines.slice(1).join('\n')}
                         </div>
                       </div>
@@ -797,7 +797,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
               {/* Lifecycle timeline */}
               <Card>
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                     <Clock size={12} /> {t('outbound.drawer.lifecycle')}
                   </div>
                   <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-base">
@@ -826,7 +826,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
               {data.marketplace === 'IT' && (
                 <Card>
                   <div className="space-y-2">
-                    <div className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                    <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                       Documenti fiscali
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
@@ -834,7 +834,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                         href={`${getBackendUrl()}/api/orders/${data.id}/invoice.html`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="h-7 px-3 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center gap-1.5"
+                        className="h-7 px-3 text-sm bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 rounded hover:bg-blue-100 dark:hover:bg-blue-900/60 inline-flex items-center gap-1.5"
                       >
                         <ExternalLink size={11} /> Fattura
                       </a>
@@ -842,7 +842,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                         <>
                           <a
                             href={`${getBackendUrl()}/api/orders/${data.id}/fattura-pa.xml`}
-                            className="h-7 px-3 text-sm border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+                            className="h-7 px-3 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
                             download
                           >
                             <ExternalLink size={11} /> XML SDI
@@ -861,7 +861,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                                 toast.error(e.message)
                               }
                             }}
-                            className="h-7 px-3 text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5"
+                            className="h-7 px-3 text-sm bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/60 inline-flex items-center gap-1.5"
                           >
                             Invia SDI
                           </button>
@@ -876,40 +876,40 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
               <Card>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                       <Package size={12} /> {t('outbound.drawer.items', { n: data.items.length })}
                     </div>
-                    <div className="text-md font-semibold text-slate-900 tabular-nums">
+                    <div className="text-md font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
                       {formatMoney(data.totalPrice, data.currencyCode)}
                     </div>
                   </div>
                   <div className="divide-y divide-slate-100">
                     {data.items.map((it) => (
                       <div key={it.id} className="flex items-center gap-3 py-2">
-                        <div className="flex-shrink-0 w-10 h-10 rounded bg-slate-100 flex items-center justify-center overflow-hidden">
+                        <div className="flex-shrink-0 w-10 h-10 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
                           {it.product?.imageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img src={it.product.imageUrl} alt="" className="w-full h-full object-cover" />
                           ) : (
-                            <Package className="w-4 h-4 text-slate-400" />
+                            <Package className="w-4 h-4 text-slate-400 dark:text-slate-500" />
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-base text-slate-900 truncate">
+                          <div className="text-base text-slate-900 dark:text-slate-100 truncate">
                             {it.product?.name ?? it.sku}
                           </div>
-                          <div className="text-sm text-slate-500 font-mono">{it.sku}</div>
+                          <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">{it.sku}</div>
                         </div>
-                        <div className="text-base text-slate-700 tabular-nums">
+                        <div className="text-base text-slate-700 dark:text-slate-300 tabular-nums">
                           ×{it.quantity}
                         </div>
-                        <div className="text-base text-slate-700 tabular-nums w-20 text-right">
+                        <div className="text-base text-slate-700 dark:text-slate-300 tabular-nums w-20 text-right">
                           {formatMoney(it.price * it.quantity, data.currencyCode)}
                         </div>
                         {it.productId && (
                           <Link
                             href={`/products/${it.productId}`}
-                            className="text-slate-400 hover:text-blue-600"
+                            className="text-slate-400 dark:text-slate-500 hover:text-blue-600"
                             title="Open product"
                           >
                             <ExternalLink size={12} />
@@ -924,11 +924,11 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
               {/* Shipments */}
               <Card>
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                     <Truck size={12} /> {t('outbound.drawer.shipments', { n: data.shipments.length })}
                   </div>
                   {data.shipments.length === 0 ? (
-                    <div className="text-base text-slate-500 py-2">
+                    <div className="text-base text-slate-500 dark:text-slate-400 py-2">
                       {t('outbound.drawer.noShipmentYet')}
                     </div>
                   ) : (
@@ -936,16 +936,16 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                       {data.shipments.map((s) => (
                         <div
                           key={s.id}
-                          className="flex items-center gap-2 px-3 py-2 border border-slate-100 rounded"
+                          className="flex items-center gap-2 px-3 py-2 border border-slate-100 dark:border-slate-800 rounded"
                         >
                           <Badge variant={SHIPMENT_TONE[s.status] ?? 'default'} size="sm">
                             {s.status.replace(/_/g, ' ')}
                           </Badge>
                           <div className="flex-1 min-w-0">
-                            <div className="text-base text-slate-700">
+                            <div className="text-base text-slate-700 dark:text-slate-300">
                               {s.carrierCode}
                               {s.warehouse && (
-                                <span className="text-sm text-slate-500"> · {s.warehouse.code}</span>
+                                <span className="text-sm text-slate-500 dark:text-slate-400"> · {s.warehouse.code}</span>
                               )}
                             </div>
                             {/* O.28: rate-compare button — only for shipments
@@ -953,7 +953,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                             {!['LABEL_PRINTED', 'SHIPPED', 'IN_TRANSIT', 'DELIVERED'].includes(s.status) && (
                               <button
                                 onClick={() => compareRates(s.id)}
-                                className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1 mt-0.5"
+                                className="text-xs text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1 mt-0.5"
                               >
                                 <TrendingDown size={9} /> {t('rates.compare')}
                               </button>
@@ -964,18 +964,18 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                                   href={s.trackingUrl}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="text-sm font-mono text-blue-600 hover:underline inline-flex items-center gap-1"
+                                  className="text-sm font-mono text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
                                 >
                                   {s.trackingNumber}
                                   <ExternalLink size={9} />
                                 </a>
                               ) : (
-                                <span className="text-sm font-mono text-slate-600">{s.trackingNumber}</span>
+                                <span className="text-sm font-mono text-slate-600 dark:text-slate-400">{s.trackingNumber}</span>
                               )
                             )}
                           </div>
                           {s.costCents != null && (
-                            <span className="text-sm tabular-nums text-slate-600">
+                            <span className="text-sm tabular-nums text-slate-600 dark:text-slate-400">
                               €{(s.costCents / 100).toFixed(2)}
                             </span>
                           )}
@@ -987,7 +987,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                             href={`${getBackendUrl()}/api/fulfillment/shipments/${s.id}/pack-slip.html`}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-slate-400 hover:text-blue-600"
+                            className="text-slate-400 dark:text-slate-500 hover:text-blue-600"
                             title={t('outbound.drawer.printPackSlip')}
                           >
                             <FileText size={12} />
@@ -997,7 +997,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                               href={s.labelUrl}
                               target="_blank"
                               rel="noreferrer"
-                              className="text-slate-400 hover:text-blue-600"
+                              className="text-slate-400 dark:text-slate-500 hover:text-blue-600"
                               title={t('outbound.drawer.printLabel.button')}
                             >
                               <Printer size={12} />
@@ -1015,21 +1015,21 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                 <Card>
                   <div className="space-y-3">
                     <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                         <TrendingDown size={12} /> {t('rates.title')}
                       </div>
                       <button
                         onClick={() => { setRatesShipmentId(null); setRates(null) }}
-                        className="ml-auto h-6 w-6 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded"
+                        className="ml-auto h-6 w-6 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
                         aria-label={t('common.close')}
                       >
                         <X size={12} />
                       </button>
                     </div>
                     {ratesLoading ? (
-                      <div className="text-md text-slate-500 py-4 text-center">{t('common.loading')}</div>
+                      <div className="text-md text-slate-500 dark:text-slate-400 py-4 text-center">{t('common.loading')}</div>
                     ) : !rates || rates.length === 0 ? (
-                      <div className="text-md text-slate-500 py-4 text-center">
+                      <div className="text-md text-slate-500 dark:text-slate-400 py-4 text-center">
                         {t('rates.empty')}
                       </div>
                     ) : (
@@ -1038,20 +1038,20 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                           <button
                             key={`${r.source}-${r.serviceCode}`}
                             onClick={() => applyRate(r)}
-                            className={`w-full flex items-center gap-3 px-3 py-2 border rounded hover:bg-slate-50 text-left transition-colors ${
-                              idx === 0 ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-200'
+                            className={`w-full flex items-center gap-3 px-3 py-2 border rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-left transition-colors ${
+                              idx === 0 ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/50' : 'border-slate-200 dark:border-slate-700'
                             }`}
                           >
                             {idx === 0 && (
                               <Badge variant="success" size="sm">{t('rates.cheapest')}</Badge>
                             )}
                             <div className="flex-1 min-w-0">
-                              <div className="text-md text-slate-900 truncate">{r.serviceName}</div>
-                              <div className="text-xs text-slate-500">
+                              <div className="text-md text-slate-900 dark:text-slate-100 truncate">{r.serviceName}</div>
+                              <div className="text-xs text-slate-500 dark:text-slate-400">
                                 {r.carrier} · {r.source === 'AMAZON_BUY_SHIPPING' ? 'Amazon Buy Shipping' : 'Sendcloud'}
                               </div>
                             </div>
-                            <div className="tabular-nums text-md font-semibold text-slate-900">
+                            <div className="tabular-nums text-md font-semibold text-slate-900 dark:text-slate-100">
                               €{r.priceEur.toFixed(2)}
                             </div>
                           </button>
@@ -1075,7 +1075,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
               ) && (
                 <Card>
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                       <Globe size={12} /> {t('outbound.drawer.customs.title')}
                     </div>
                     {Object.values(customsByShipment)
@@ -1089,20 +1089,20 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                         const errors = c.issues.filter((i) => i.severity === 'error')
                         const warnings = c.issues.filter((i) => i.severity === 'warning')
                         return (
-                          <div key={c.shipmentId} className="space-y-2 border border-slate-200 rounded p-2">
+                          <div key={c.shipmentId} className="space-y-2 border border-slate-200 dark:border-slate-700 rounded p-2">
                             <div className="flex items-center gap-2 text-xs">
-                              <span className="text-slate-500">{t('outbound.drawer.customs.destination')}</span>
-                              <span className="font-mono font-medium text-slate-900">{c.destinationCountry ?? '—'}</span>
+                              <span className="text-slate-500 dark:text-slate-400">{t('outbound.drawer.customs.destination')}</span>
+                              <span className="font-mono font-medium text-slate-900 dark:text-slate-100">{c.destinationCountry ?? '—'}</span>
                               <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                                 c.ready
-                                  ? 'bg-emerald-50 text-emerald-700'
-                                  : 'bg-rose-50 text-rose-700'
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
+                                  : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300'
                               }`}>
                                 {c.ready
                                   ? t('outbound.drawer.customs.ready')
                                   : t('outbound.drawer.customs.blocked')}
                               </span>
-                              <span className="ml-auto text-xs text-slate-500 tabular-nums">
+                              <span className="ml-auto text-xs text-slate-500 dark:text-slate-400 tabular-nums">
                                 {c.currency} {c.totalValue.toFixed(2)}
                               </span>
                             </div>
@@ -1111,12 +1111,12 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                                 right form based on weight + value. Opens
                                 in a new tab and auto-prints. */}
                             {c.isInternational && (
-                              <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                              <div className="flex items-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
                                 <a
                                   href={`${getBackendUrl()}/api/fulfillment/shipments/${c.shipmentId}/customs-declaration.html`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-xs px-2 py-1 border border-slate-300 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+                                  className="text-xs px-2 py-1 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
                                   title={t('outbound.drawer.customs.printCnHint')}
                                 >
                                   <Globe size={11} />
@@ -1126,7 +1126,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                                   href={`${getBackendUrl()}/api/fulfillment/shipments/${c.shipmentId}/customs-declaration.html?category=RETURNED_GOODS`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-xs px-2 py-1 border border-slate-300 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+                                  className="text-xs px-2 py-1 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
                                 >
                                   {t('outbound.drawer.customs.printCnReturn')}
                                 </a>
@@ -1135,7 +1135,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                             {errors.length > 0 && (
                               <ul className="space-y-1 text-xs">
                                 {errors.map((iss, idx) => (
-                                  <li key={`e-${idx}`} className="flex items-start gap-1.5 text-rose-700">
+                                  <li key={`e-${idx}`} className="flex items-start gap-1.5 text-rose-700 dark:text-rose-300">
                                     <AlertTriangle size={11} className="mt-0.5 flex-shrink-0" />
                                     <span>{iss.message}</span>
                                   </li>
@@ -1153,14 +1153,14 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                               if (w.severity === 'pending') {
                                 if (w.declaredGrams == null) {
                                   return (
-                                    <div className="text-xs text-slate-500">
+                                    <div className="text-xs text-slate-500 dark:text-slate-400">
                                       {t('outbound.drawer.weight.pendingPack')}
                                     </div>
                                   )
                                 }
                                 if (w.missingWeightMaster) {
                                   return (
-                                    <div className="text-xs text-amber-700">
+                                    <div className="text-xs text-amber-700 dark:text-amber-300">
                                       {t('outbound.drawer.weight.masterMissing')}
                                     </div>
                                   )
@@ -1168,10 +1168,10 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                               }
                               const tone =
                                 w.severity === 'error'
-                                  ? 'text-rose-700'
+                                  ? 'text-rose-700 dark:text-rose-300'
                                   : w.severity === 'warning'
-                                  ? 'text-amber-700'
-                                  : 'text-emerald-700'
+                                  ? 'text-amber-700 dark:text-amber-300'
+                                  : 'text-emerald-700 dark:text-emerald-300'
                               const tKey =
                                 w.severity === 'error'
                                   ? 'outbound.drawer.weight.error'
@@ -1193,7 +1193,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                             {warnings.length > 0 && (
                               <ul className="space-y-1 text-xs">
                                 {warnings.map((iss, idx) => (
-                                  <li key={`w-${idx}`} className="flex items-start gap-1.5 text-amber-700">
+                                  <li key={`w-${idx}`} className="flex items-start gap-1.5 text-amber-700 dark:text-amber-300">
                                     <AlertTriangle size={11} className="mt-0.5 flex-shrink-0" />
                                     <span>{iss.message}</span>
                                   </li>
@@ -1203,7 +1203,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                             {c.isInternational && c.lines.length > 0 && (
                               <table className="w-full text-xs">
                                 <thead>
-                                  <tr className="text-slate-500 border-b border-slate-100">
+                                  <tr className="text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">
                                     <th className="text-left font-normal py-1">{t('outbound.drawer.customs.col.sku')}</th>
                                     <th className="text-right font-normal py-1">{t('outbound.drawer.customs.col.qty')}</th>
                                     <th className="text-left font-normal py-1 px-2">{t('outbound.drawer.customs.col.hs')}</th>
@@ -1216,28 +1216,28 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                                     const missing = !l.hsCode || !l.originCountry
                                     return (
                                       <tr key={`${l.sku}-${idx}`} className="border-b border-slate-50 last:border-0">
-                                        <td className="py-1 font-mono text-slate-700">
+                                        <td className="py-1 font-mono text-slate-700 dark:text-slate-300">
                                           {/* O.66: deep-link to product edit
                                               when master data is missing —
                                               one click to fix the gap. */}
                                           {missing && l.productId ? (
                                             <Link
                                               href={`/products/${l.productId}/edit`}
-                                              className="hover:underline text-blue-600 inline-flex items-center gap-0.5"
+                                              className="hover:underline text-blue-600 dark:text-blue-400 inline-flex items-center gap-0.5"
                                               title={t('outbound.drawer.customs.fixProduct')}
                                             >
                                               {l.sku} <ExternalLink size={9} />
                                             </Link>
                                           ) : l.sku}
                                         </td>
-                                        <td className="py-1 text-right tabular-nums text-slate-700">{l.quantity}</td>
-                                        <td className={`py-1 px-2 font-mono ${l.hsCode ? 'text-slate-700' : 'text-rose-600'}`}>
+                                        <td className="py-1 text-right tabular-nums text-slate-700 dark:text-slate-300">{l.quantity}</td>
+                                        <td className={`py-1 px-2 font-mono ${l.hsCode ? 'text-slate-700 dark:text-slate-300' : 'text-rose-600 dark:text-rose-400'}`}>
                                           {l.hsCode ?? '—'}
                                         </td>
-                                        <td className={`py-1 ${l.originCountry ? 'text-slate-700' : 'text-amber-600'}`}>
+                                        <td className={`py-1 ${l.originCountry ? 'text-slate-700 dark:text-slate-300' : 'text-amber-600 dark:text-amber-400'}`}>
                                           {l.originCountry ?? '—'}
                                         </td>
-                                        <td className="py-1 text-right tabular-nums text-slate-700">
+                                        <td className="py-1 text-right tabular-nums text-slate-700 dark:text-slate-300">
                                           {l.totalValue.toFixed(2)}
                                         </td>
                                       </tr>
@@ -1260,7 +1260,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
               {data.shipments.some((s) => s.activity.length > 0) && (
                 <Card>
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                       <Clock size={12} /> {t('outbound.drawer.activity')}
                     </div>
                     <div className="space-y-1.5">
@@ -1277,17 +1277,17 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                           const afterStatus = (a.after as any)?.status
                           const tone =
                             a.action.includes('void') || a.action.includes('cancel')
-                              ? 'text-rose-700 bg-rose-50'
+                              ? 'text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40'
                               : a.action.includes('hold')
-                              ? 'text-amber-700 bg-amber-50'
+                              ? 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40'
                               : a.action.includes('release') || a.action.includes('shipped') || a.action.includes('print')
-                              ? 'text-emerald-700 bg-emerald-50'
-                              : 'text-slate-700 bg-slate-100'
+                              ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40'
+                              : 'text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800'
                           const tKey = ACTION_TKEY[a.action]
                           const label = tKey ? t(tKey) : a.action
                           return (
                             <div key={a.id} className="flex items-start gap-3 text-sm">
-                              <div className="text-slate-500 tabular-nums w-32 flex-shrink-0">
+                              <div className="text-slate-500 dark:text-slate-400 tabular-nums w-32 flex-shrink-0">
                                 {new Date(a.createdAt).toLocaleString('it-IT', {
                                   month: 'short',
                                   day: 'numeric',
@@ -1307,7 +1307,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                               >
                                 {label}
                               </Link>
-                              <div className="flex-1 min-w-0 text-slate-600 space-y-0.5">
+                              <div className="flex-1 min-w-0 text-slate-600 dark:text-slate-400 space-y-0.5">
                                 <div>
                                   {a.userId ? `by ${a.userId}` : t('outbound.activity.bySystem')}
                                   {reason ? ` · ${reason}` : ''}
@@ -1318,7 +1318,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                                     actually different. Operator-readable
                                     visual: BEFORE → AFTER with arrow. */}
                                 {beforeStatus && afterStatus && beforeStatus !== afterStatus && (
-                                  <div className="text-xs text-slate-500 font-mono">
+                                  <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">
                                     {beforeStatus.replace(/_/g, ' ')} → {afterStatus.replace(/_/g, ' ')}
                                   </div>
                                 )}
@@ -1340,7 +1340,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                       return (
                         <Link
                           href={href}
-                          className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1"
+                          className="text-xs text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
                         >
                           {t('outbound.drawer.activityViewAll')}
                           <ExternalLink size={9} />
@@ -1356,7 +1356,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
               {data.shipments.some((s) => s.trackingEvents.length > 0) && (
                 <Card>
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                       <Clock size={12} /> {t('outbound.drawer.timeline')}
                     </div>
                     <div className="space-y-1.5">
@@ -1368,7 +1368,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                         .slice(0, 30)
                         .map((e) => (
                           <div key={e.id} className="flex items-start gap-3 text-sm">
-                            <div className="text-slate-500 tabular-nums w-32 flex-shrink-0">
+                            <div className="text-slate-500 dark:text-slate-400 tabular-nums w-32 flex-shrink-0">
                               {new Date(e.occurredAt).toLocaleString('it-IT', {
                                 month: 'short',
                                 day: 'numeric',
@@ -1378,14 +1378,14 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                             </div>
                             <span
                               className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
-                                TRACKING_TONE[e.code] ?? 'text-slate-500 bg-slate-100'
+                                TRACKING_TONE[e.code] ?? 'text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800'
                               }`}
                             >
                               {e.code.replace(/_/g, ' ')}
                             </span>
                             <div className="flex-1 min-w-0">
-                              <div className="text-slate-700">{e.description}</div>
-                              {e.location && <div className="text-xs text-slate-500">{e.location}</div>}
+                              <div className="text-slate-700 dark:text-slate-300">{e.description}</div>
+                              {e.location && <div className="text-xs text-slate-500 dark:text-slate-400">{e.location}</div>}
                             </div>
                           </div>
                         ))}
@@ -1397,11 +1397,11 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
               {/* Channel metadata (collapsed by default — operator-debug surface) */}
               {channelMetadata && (
                 <details className="group">
-                  <summary className="cursor-pointer text-sm font-semibold text-slate-500 uppercase tracking-wider hover:text-slate-700">
+                  <summary className="cursor-pointer text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider hover:text-slate-700 dark:hover:text-slate-300">
                     <CreditCard size={12} className="inline mr-1" />
                     {t('outbound.drawer.channelMeta')}
                   </summary>
-                  <pre className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded text-xs text-slate-700 overflow-x-auto max-h-64 overflow-y-auto">
+                  <pre className="mt-2 p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-700 dark:text-slate-300 overflow-x-auto max-h-64 overflow-y-auto">
                     {JSON.stringify(channelMetadata, null, 2)}
                   </pre>
                 </details>
@@ -1412,12 +1412,12 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
 
         {/* ── Footer ───────────────────────────────────────────── */}
         {data && (
-          <div className="flex items-center gap-2 px-5 py-3 border-t border-slate-200 bg-slate-50">
+          <div className="flex items-center gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
             {!hasActiveShipment ? (
               <button
                 onClick={createShipment}
                 disabled={creating}
-                className="h-11 md:h-8 px-4 md:px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+                className="h-11 md:h-8 px-4 md:px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 inline-flex items-center gap-1.5"
               >
                 <Plus size={12} /> {t('outbound.drawer.createShipment')}
               </button>
@@ -1433,7 +1433,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                 return (
                   <Link
                     href={`/fulfillment/outbound/pack/${ship.id}`}
-                    className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5"
+                    className="h-8 px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 inline-flex items-center gap-1.5"
                   >
                     <Plus size={12} /> {t('outbound.drawer.packAndReady')}
                   </Link>
@@ -1458,14 +1458,14 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                       emitInvalidation({ type: 'shipment.updated', meta: { shipmentId: ship.id } })
                       fetchDetail()
                     }}
-                    className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5"
+                    className="h-8 px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 inline-flex items-center gap-1.5"
                   >
                     <Printer size={12} /> {t('outbound.drawer.printLabel.button')}
                   </button>
                 )
               }
               return (
-                <span className="inline-flex items-center gap-1.5 h-8 px-3 text-base text-emerald-700 bg-emerald-50 border border-emerald-200 rounded">
+                <span className="inline-flex items-center gap-1.5 h-8 px-3 text-base text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 rounded">
                   <CheckCircle2 size={12} />
                   {t('outbound.drawer.shipmentInFlight')}
                 </span>
@@ -1485,7 +1485,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                   {returns.length > 0 && (
                     <Link
                       href={`/fulfillment/returns?orderId=${data.id}`}
-                      className="h-8 px-3 text-base text-amber-700 bg-amber-50 border border-amber-200 rounded hover:bg-amber-100 inline-flex items-center gap-1.5"
+                      className="h-8 px-3 text-base text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded hover:bg-amber-100 dark:hover:bg-amber-900/60 inline-flex items-center gap-1.5"
                       title={t('outbound.drawer.viewReturnsTooltip', {
                         n: returns.length,
                       })}
@@ -1502,7 +1502,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                   {hasActiveShipment && (
                     <Link
                       href={`/fulfillment/returns?new=1&orderId=${data.id}`}
-                      className="h-8 px-3 text-base text-slate-700 border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1.5"
+                      className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1.5"
                     >
                       <Undo2 size={11} />
                       {returns.length > 0
@@ -1517,7 +1517,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
             {data.status !== 'CANCELLED' && data.status !== 'DELIVERED' && (
               <button
                 onClick={cancelOrder}
-                className="h-8 px-3 text-base text-rose-700 border border-rose-200 rounded hover:bg-rose-50 inline-flex items-center gap-1.5"
+                className="h-8 px-3 text-base text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 inline-flex items-center gap-1.5"
                 title={t('outbound.drawer.cancel.confirm')}
               >
                 <X size={11} /> {t('outbound.drawer.cancel.button')}
@@ -1525,7 +1525,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
             )}
             <Link
               href={`/orders/${data.id}`}
-              className="ml-auto h-8 px-3 text-base text-slate-700 border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1.5"
+              className="ml-auto h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1.5"
             >
               {t('outbound.drawer.openFullOrder')}
               <ExternalLink size={11} />
@@ -1540,8 +1540,8 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
 function Row({ label, value, highlight = false }: { label: string; value: string | null; highlight?: boolean }) {
   return (
     <>
-      <dt className="text-slate-500">{label}</dt>
-      <dd className={`tabular-nums ${highlight ? 'text-rose-700 font-semibold' : 'text-slate-700'}`}>
+      <dt className="text-slate-500 dark:text-slate-400">{label}</dt>
+      <dd className={`tabular-nums ${highlight ? 'text-rose-700 dark:text-rose-300 font-semibold' : 'text-slate-700 dark:text-slate-300'}`}>
         {value ? new Date(value).toLocaleString('it-IT') : '—'}
       </dd>
     </>

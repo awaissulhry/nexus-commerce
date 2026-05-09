@@ -69,12 +69,12 @@ type Response = {
 }
 
 const URGENCY_TONE: Record<Urgency, { tint: string; icon: typeof Clock }> = {
-  OVERDUE: { tint: 'text-rose-700 bg-rose-50 border-rose-200', icon: AlertTriangle },
-  TODAY: { tint: 'text-amber-700 bg-amber-50 border-amber-200', icon: Clock },
+  OVERDUE: { tint: 'text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900', icon: AlertTriangle },
+  TODAY: { tint: 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900', icon: Clock },
   TOMORROW: { tint: 'text-yellow-700 bg-yellow-50 border-yellow-200', icon: Clock },
-  THIS_WEEK: { tint: 'text-slate-700 bg-slate-50 border-slate-200', icon: Clock },
-  LATER: { tint: 'text-slate-500 bg-slate-50 border-slate-200', icon: Clock },
-  UNKNOWN: { tint: 'text-slate-500 bg-slate-50 border-slate-200', icon: Clock },
+  THIS_WEEK: { tint: 'text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700', icon: Clock },
+  LATER: { tint: 'text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700', icon: Clock },
+  UNKNOWN: { tint: 'text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700', icon: Clock },
 }
 
 const CHANNEL_LABEL: Record<string, string> = {
@@ -634,33 +634,33 @@ export default function PendingShipmentsClient() {
       {showOnboarding && (
         <Card>
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-md bg-blue-50 text-blue-600 inline-flex items-center justify-center flex-shrink-0">
+            <div className="w-10 h-10 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 inline-flex items-center justify-center flex-shrink-0">
               <Sparkles size={18} />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-md font-semibold text-slate-900">
+              <div className="text-md font-semibold text-slate-900 dark:text-slate-100">
                 {t('outbound.onboarding.title')}
               </div>
-              <div className="text-base text-slate-600 mt-1">
+              <div className="text-base text-slate-600 dark:text-slate-400 mt-1">
                 {t('outbound.onboarding.body')}
               </div>
               <div className="flex flex-wrap gap-2 mt-3">
                 <Link
                   href="/fulfillment/carriers"
-                  className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5"
+                  className="h-8 px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 inline-flex items-center gap-1.5"
                 >
                   {t('outbound.onboarding.connectCarrier')}
                   <ArrowRight size={11} />
                 </Link>
                 <Link
                   href="/fulfillment/outbound/rules"
-                  className="h-8 px-3 text-base text-slate-700 border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+                  className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
                 >
                   {t('outbound.onboarding.defineRules')}
                 </Link>
                 <Link
                   href="/fulfillment/routing-rules"
-                  className="h-8 px-3 text-base text-slate-700 border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+                  className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
                 >
                   {t('outbound.onboarding.warehouseRouting')}
                 </Link>
@@ -691,15 +691,15 @@ export default function PendingShipmentsClient() {
               onClick={() => setParam('urgency', f.key === 'ALL' ? null : f.key)}
               className={`h-7 px-3 text-base border rounded-full inline-flex items-center gap-1.5 transition-colors ${
                 isActive
-                  ? 'bg-slate-900 text-white border-slate-900'
+                  ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
                   : isOverdue && !isActive
-                  ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
-                  : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                  ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900 hover:bg-rose-100 dark:hover:bg-rose-900/60'
+                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
               }`}
             >
               {t(f.tKey)}
               {count != null && (
-                <span className={`tabular-nums ${isActive ? 'text-slate-300' : 'text-slate-400'}`}>
+                <span className={`tabular-nums ${isActive ? 'text-slate-300 dark:text-slate-600' : 'text-slate-400 dark:text-slate-500'}`}>
                   {count}
                 </span>
               )}
@@ -708,7 +708,7 @@ export default function PendingShipmentsClient() {
         })}
         <div className="ml-auto flex items-center gap-2">
           <div className="relative">
-            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
             <Input
               placeholder={t('outbound.pending.searchPlaceholder')}
               value={searchInput}
@@ -726,7 +726,7 @@ export default function PendingShipmentsClient() {
           <select
             value={sort}
             onChange={(e) => setParam('sort', e.target.value === 'ship-by-asc' ? null : e.target.value)}
-            className="h-8 px-2 text-base border border-slate-200 rounded-md bg-white"
+            className="h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
           >
             <option value="ship-by-asc">{t('outbound.pending.sort.shipBy')}</option>
             <option value="value-desc">{t('outbound.pending.sort.value')}</option>
@@ -736,21 +736,21 @@ export default function PendingShipmentsClient() {
           <div className="relative">
             <button
               onClick={() => setShowViewsMenu((v) => !v)}
-              className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
             >
               <Bookmark size={12} /> {t('savedViews.label')}
               {views.length > 0 && (
-                <span className="ml-1 tabular-nums text-slate-400">{views.length}</span>
+                <span className="ml-1 tabular-nums text-slate-400 dark:text-slate-500">{views.length}</span>
               )}
               <ChevronDown size={11} />
             </button>
             {showViewsMenu && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowViewsMenu(false)} />
-                <div className="absolute right-0 mt-1 w-72 bg-white border border-slate-200 rounded-md shadow-lg z-20">
+                <div className="absolute right-0 mt-1 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-20">
                   <div className="p-1 max-h-72 overflow-y-auto">
                     {views.length === 0 ? (
-                      <div className="text-sm text-slate-500 px-3 py-2">
+                      <div className="text-sm text-slate-500 dark:text-slate-400 px-3 py-2">
                         {t('savedViews.empty')}
                       </div>
                     ) : (
@@ -760,11 +760,11 @@ export default function PendingShipmentsClient() {
                         return (
                           <div
                             key={v.id}
-                            className="flex items-center gap-1 px-2 py-1.5 hover:bg-slate-50 rounded group"
+                            className="flex items-center gap-1 px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 rounded group"
                           >
                             <button
                               onClick={() => applyView(v)}
-                              className="flex-1 text-left text-md text-slate-700 truncate"
+                              className="flex-1 text-left text-md text-slate-700 dark:text-slate-300 truncate"
                               title={
                                 hasAlert
                                   ? t('outbound.alerts.viewHasAlert', {
@@ -776,7 +776,7 @@ export default function PendingShipmentsClient() {
                             >
                               {v.name}
                               {hasAlert && (
-                                <span className="ml-1 text-xs text-amber-600">●</span>
+                                <span className="ml-1 text-xs text-amber-600 dark:text-amber-400">●</span>
                               )}
                             </button>
                             {/* O.52 + O.61: alerts manager. Single click on the
@@ -790,7 +790,7 @@ export default function PendingShipmentsClient() {
                                 title={t('outbound.alerts.manage', {
                                   n: alerts.filter((a) => a.isActive).length,
                                 })}
-                                className="h-6 inline-flex items-center justify-center gap-0.5 px-1 text-amber-500 hover:text-amber-700 rounded"
+                                className="h-6 inline-flex items-center justify-center gap-0.5 px-1 text-amber-500 hover:text-amber-700 dark:hover:text-amber-300 rounded"
                               >
                                 <Bell size={11} fill="currentColor" />
                                 {alerts.filter((a) => a.isActive).length > 1 && (
@@ -803,7 +803,7 @@ export default function PendingShipmentsClient() {
                               <button
                                 onClick={() => { setShowViewsMenu(false); setAlertsModalView(v) }}
                                 title={t('outbound.alerts.subscribe')}
-                                className="h-6 w-6 inline-flex items-center justify-center text-slate-300 hover:text-amber-500 rounded"
+                                className="h-6 w-6 inline-flex items-center justify-center text-slate-300 dark:text-slate-600 hover:text-amber-500 rounded"
                               >
                                 <BellOff size={11} />
                               </button>
@@ -812,7 +812,7 @@ export default function PendingShipmentsClient() {
                               onClick={() => toggleDefault(v)}
                               title={v.isDefault ? t('savedViews.unsetDefault') : t('savedViews.setDefault')}
                               className={`h-6 w-6 inline-flex items-center justify-center rounded ${
-                                v.isDefault ? 'text-amber-500' : 'text-slate-300 hover:text-amber-500'
+                                v.isDefault ? 'text-amber-500' : 'text-slate-300 dark:text-slate-600 hover:text-amber-500'
                               }`}
                             >
                               <Star size={11} fill={v.isDefault ? 'currentColor' : 'none'} />
@@ -820,7 +820,7 @@ export default function PendingShipmentsClient() {
                             <button
                               onClick={() => deleteView(v.id)}
                               title={t('common.delete')}
-                              className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-rose-600 rounded opacity-0 group-hover:opacity-100"
+                              className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-rose-600 rounded opacity-0 group-hover:opacity-100"
                             >
                               <Trash2 size={11} />
                             </button>
@@ -829,10 +829,10 @@ export default function PendingShipmentsClient() {
                       })
                     )}
                   </div>
-                  <div className="border-t border-slate-200 p-1">
+                  <div className="border-t border-slate-200 dark:border-slate-700 p-1">
                     <button
                       onClick={saveCurrentAsView}
-                      className="w-full px-2 py-1.5 text-md text-blue-600 hover:bg-blue-50 rounded inline-flex items-center gap-1.5"
+                      className="w-full px-2 py-1.5 text-md text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded inline-flex items-center gap-1.5"
                     >
                       <BookmarkPlus size={11} /> {t('savedViews.saveCurrent')}
                     </button>
@@ -856,8 +856,8 @@ export default function PendingShipmentsClient() {
                   onClick={() => setShowSnoozed((s) => !s)}
                   className={`h-8 px-3 text-base border rounded-l-md inline-flex items-center gap-1.5 ${
                     showSnoozed
-                      ? 'bg-amber-50 text-amber-700 border-amber-200'
-                      : 'text-slate-600 border-slate-200 hover:bg-slate-50'
+                      ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900'
+                      : 'text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
                   }`}
                 >
                   <Clock size={12} />
@@ -870,7 +870,7 @@ export default function PendingShipmentsClient() {
                     setShowSnoozed(false)
                     toast.success(t('outbound.pending.snooze.wakeAllToast', { n: activeSnoozeCount }))
                   }}
-                  className="h-8 w-8 inline-flex items-center justify-center border border-l-0 border-slate-200 rounded-r-md text-slate-500 hover:text-slate-900 hover:bg-slate-50"
+                  className="h-8 w-8 inline-flex items-center justify-center border border-l-0 border-slate-200 dark:border-slate-700 rounded-r-md text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800"
                   title={t('outbound.pending.snooze.wakeAllTooltip')}
                 >
                   <X size={12} />
@@ -880,7 +880,7 @@ export default function PendingShipmentsClient() {
           })()}
           <button
             onClick={fetchData}
-            className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+            className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
           >
             <RefreshCw size={12} /> {t('common.refresh')}
           </button>
@@ -890,7 +890,7 @@ export default function PendingShipmentsClient() {
       {/* ── Channel filter chips ────────────────────────────────────────── */}
       {channelChips.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm text-slate-500 uppercase tracking-wider">{t('outbound.pending.channelLabel')}</span>
+          <span className="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('outbound.pending.channelLabel')}</span>
           {channelChips.map(([code, count]) => {
             const isActive = channelFilter.includes(code)
             return (
@@ -899,12 +899,12 @@ export default function PendingShipmentsClient() {
                 onClick={() => toggleChannel(code)}
                 className={`h-6 px-2.5 text-sm border rounded-full inline-flex items-center gap-1 transition-colors ${
                   isActive
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                    ? 'bg-blue-600 dark:bg-blue-700 text-white border-blue-600'
+                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                 }`}
               >
                 {CHANNEL_LABEL[code] ?? code}
-                <span className={`tabular-nums ${isActive ? 'text-blue-100' : 'text-slate-400'}`}>
+                <span className={`tabular-nums ${isActive ? 'text-blue-100' : 'text-slate-400 dark:text-slate-500'}`}>
                   {count}
                 </span>
               </button>
@@ -913,7 +913,7 @@ export default function PendingShipmentsClient() {
           {channelFilter.length > 0 && (
             <button
               onClick={() => setParam('channel', null)}
-              className="h-6 px-2 text-sm text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
+              className="h-6 px-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1"
             >
               <X size={11} /> {t('outbound.pending.clearFilter')}
             </button>
@@ -926,21 +926,21 @@ export default function PendingShipmentsClient() {
         <div className="sticky top-2 z-20">
           <Card>
             <div className="flex items-center gap-3">
-              <span className="text-base font-semibold text-slate-700">
+              <span className="text-base font-semibold text-slate-700 dark:text-slate-300">
                 {t('outbound.pending.selectedCount', { n: selected.size })}
               </span>
-              <div className="h-4 w-px bg-slate-200" />
+              <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
               <button
                 onClick={bulkCreateShipments}
                 disabled={creating}
-                className="h-11 md:h-7 px-4 md:px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+                className="h-11 md:h-7 px-4 md:px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 inline-flex items-center gap-1.5"
               >
                 <Plus size={12} /> {t('outbound.pending.bulkCreate', { n: selected.size })}
               </button>
               <button
                 onClick={runPreflight}
                 disabled={preflightLoading}
-                className="h-11 md:h-7 px-4 md:px-3 text-base bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-white disabled:opacity-50 inline-flex items-center gap-1.5"
+                className="h-11 md:h-7 px-4 md:px-3 text-base bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-white disabled:opacity-50 inline-flex items-center gap-1.5"
                 title={t('outbound.pending.preflight.tooltip')}
               >
                 <AlertTriangle size={12} />
@@ -966,7 +966,7 @@ export default function PendingShipmentsClient() {
                     t('outbound.pending.snooze.bulkToast', { n: ids.length, hours: 1 }),
                   )
                 }}
-                className="h-11 md:h-7 px-4 md:px-3 text-base bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1.5"
+                className="h-11 md:h-7 px-4 md:px-3 text-base bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1.5"
                 title={t('outbound.pending.snooze.bulkTooltip')}
               >
                 <Clock size={12} /> {t('outbound.pending.snooze.bulkButton')}
@@ -1018,14 +1018,14 @@ export default function PendingShipmentsClient() {
                   URL.revokeObjectURL(url)
                   toast.success(t('outbound.pending.exportCsv.toast', { n: rows.length }))
                 }}
-                className="h-11 md:h-7 px-4 md:px-3 text-base bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1.5"
+                className="h-11 md:h-7 px-4 md:px-3 text-base bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1.5"
                 title={t('outbound.pending.exportCsv.tooltip')}
               >
                 <Download size={12} /> {t('outbound.pending.exportCsv.button')}
               </button>
               <button
                 onClick={() => setSelected(new Set())}
-                className="ml-auto h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded"
+                className="ml-auto h-7 w-7 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
               >
                 <X size={14} />
               </button>
@@ -1037,7 +1037,7 @@ export default function PendingShipmentsClient() {
       {/* ── List ────────────────────────────────────────────────────────── */}
       {loading && !data ? (
         <Card>
-          <div className="text-md text-slate-500 py-8 text-center">{t('common.loading')}</div>
+          <div className="text-md text-slate-500 dark:text-slate-400 py-8 text-center">{t('common.loading')}</div>
         </Card>
       ) : !data || data.items.length === 0 ? (
         <EmptyState
@@ -1053,7 +1053,7 @@ export default function PendingShipmentsClient() {
         <Card noPadding>
           <div className="overflow-x-auto">
             <table className="w-full text-md">
-              <thead className="border-b border-slate-200 bg-slate-50">
+              <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                 <tr>
                   <th className="px-3 py-2 w-8">
                     <input
@@ -1063,16 +1063,16 @@ export default function PendingShipmentsClient() {
                       aria-label="Select all"
                     />
                   </th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     {t('outbound.pending.col.order')}
                   </th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     {t('outbound.pending.col.channel')}
                   </th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     {t('outbound.pending.col.customer')}
                   </th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     {t('outbound.pending.col.items')}
                   </th>
                   {/* O.88: clickable sort headers. The sort dropdown
@@ -1083,19 +1083,19 @@ export default function PendingShipmentsClient() {
                       arrow indicates the active column. */}
                   <th
                     onClick={() => setParam('sort', 'value-desc')}
-                    className={`px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider cursor-pointer select-none ${sort === 'value-desc' ? 'text-blue-700' : 'text-slate-700 hover:text-slate-900'}`}
+                    className={`px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider cursor-pointer select-none ${sort === 'value-desc' ? 'text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100'}`}
                   >
                     {t('outbound.pending.col.value')}
                     <span className={`ml-1 ${sort === 'value-desc' ? 'opacity-100' : 'opacity-0'}`}>↓</span>
                   </th>
                   <th
                     onClick={() => setParam('sort', null)}
-                    className={`px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider cursor-pointer select-none ${sort === 'ship-by-asc' ? 'text-blue-700' : 'text-slate-700 hover:text-slate-900'}`}
+                    className={`px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider cursor-pointer select-none ${sort === 'ship-by-asc' ? 'text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100'}`}
                   >
                     {t('outbound.pending.col.shipBy')}
                     <span className={`ml-1 ${sort === 'ship-by-asc' ? 'opacity-100' : 'opacity-0'}`}>↑</span>
                   </th>
-                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     {t('outbound.pending.col.action')}
                   </th>
                 </tr>
@@ -1121,7 +1121,7 @@ export default function PendingShipmentsClient() {
                   return (
                     <tr
                       key={o.id}
-                      className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
+                      className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
                       onClick={openDrawer}
                     >
                       <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
@@ -1136,7 +1136,7 @@ export default function PendingShipmentsClient() {
                       <td className="px-3 py-2">
                         <button
                           type="button"
-                          className="text-base font-mono text-blue-600 hover:underline"
+                          className="text-base font-mono text-blue-600 dark:text-blue-400 hover:underline"
                           onClick={(e) => { e.stopPropagation(); openDrawer() }}
                         >
                           {o.channelOrderId.length > 18
@@ -1146,33 +1146,33 @@ export default function PendingShipmentsClient() {
                         {o.isPrime && (
                           <span
                             title="Amazon Prime SFP"
-                            className="ml-1.5 inline-flex items-center gap-0.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-1 py-0.5"
+                            className="ml-1.5 inline-flex items-center gap-0.5 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded px-1 py-0.5"
                           >
                             <Crown size={10} /> Prime
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-base text-slate-700">
+                      <td className="px-3 py-2 text-base text-slate-700 dark:text-slate-300">
                         <Badge variant="info" size="sm">
                           {CHANNEL_LABEL[o.channel] ?? o.channel}
                           {o.marketplace ? ` · ${o.marketplace}` : ''}
                         </Badge>
                       </td>
                       <td className="px-3 py-2">
-                        <div className="text-base text-slate-900 truncate max-w-[180px]">
+                        <div className="text-base text-slate-900 dark:text-slate-100 truncate max-w-[180px]">
                           {o.customerName || '—'}
                         </div>
-                        <div className="text-sm text-slate-500 truncate max-w-[180px]">
+                        <div className="text-sm text-slate-500 dark:text-slate-400 truncate max-w-[180px]">
                           {country ?? o.customerEmail}
                         </div>
                       </td>
-                      <td className="px-3 py-2 text-base text-slate-700">
+                      <td className="px-3 py-2 text-base text-slate-700 dark:text-slate-300">
                         {t(o.itemCount === 1 ? 'outbound.pending.itemSummary' : 'outbound.pending.itemSummaryPlural', {
                           units: o.totalQuantity,
                           skus: o.itemCount,
                         })}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-base text-slate-900">
+                      <td className="px-3 py-2 text-right tabular-nums text-base text-slate-900 dark:text-slate-100">
                         {formatMoney(o.totalPrice, o.currencyCode)}
                       </td>
                       <td className="px-3 py-2">
@@ -1192,7 +1192,7 @@ export default function PendingShipmentsClient() {
                             <button
                               onClick={() => unsnooze(o.id)}
                               title={t('outbound.pending.snooze.wake')}
-                              className="h-6 px-2 text-sm bg-slate-100 text-slate-600 rounded hover:bg-slate-200 inline-flex items-center gap-1"
+                              className="h-6 px-2 text-sm bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded hover:bg-slate-200 inline-flex items-center gap-1"
                             >
                               <Clock size={11} /> {t('outbound.pending.snooze.wakeLabel')}
                             </button>
@@ -1200,7 +1200,7 @@ export default function PendingShipmentsClient() {
                             <button
                               onClick={() => snooze(o.id, 1)}
                               title={t('outbound.pending.snooze.tooltip')}
-                              className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded"
+                              className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
                             >
                               <Clock size={11} />
                             </button>
@@ -1213,7 +1213,7 @@ export default function PendingShipmentsClient() {
                                 bulkCreateShipments()
                               })()
                             }}
-                            className="h-6 px-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center gap-1"
+                            className="h-6 px-2 text-sm bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 rounded hover:bg-blue-100 dark:hover:bg-blue-900/60 inline-flex items-center gap-1"
                           >
                             <Package size={11} /> {t('outbound.pending.createShipment')}
                           </button>
@@ -1321,15 +1321,15 @@ function PreflightModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
-        className="bg-white rounded-md shadow-xl w-full max-w-xl mx-4 max-h-[80vh] overflow-y-auto"
+        className="bg-white dark:bg-slate-900 rounded-md shadow-xl w-full max-w-xl mx-4 max-h-[80vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
           <div>
-            <div className="text-sm font-medium text-slate-900">
+            <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
               {t('outbound.pending.preflight.title')}
             </div>
-            <div className="text-sm text-slate-500">
+            <div className="text-sm text-slate-500 dark:text-slate-400">
               {t('outbound.pending.preflight.summary', {
                 ready: report.ready,
                 total: report.total,
@@ -1339,33 +1339,33 @@ function PreflightModal({
           </div>
           <button
             onClick={onClose}
-            className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 rounded"
+            className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded"
           >
             <X size={12} />
           </button>
         </div>
         <div className="px-4 py-3 space-y-1.5">
           {blocked.length === 0 ? (
-            <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+            <div className="text-sm text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 rounded px-3 py-2">
               {t('outbound.pending.preflight.allReady')}
             </div>
           ) : (
             blocked.map((o) => (
               <div
                 key={o.orderId}
-                className="flex items-start gap-2 px-2 py-1.5 border border-rose-200 bg-rose-50 rounded"
+                className="flex items-start gap-2 px-2 py-1.5 border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 rounded"
               >
                 <AlertTriangle size={11} className="text-rose-500 mt-0.5 flex-shrink-0" />
                 <div className="flex-1 min-w-0 text-sm">
-                  <div className="font-mono text-slate-900">
+                  <div className="font-mono text-slate-900 dark:text-slate-100">
                     {o.channelOrderId}
                     {o.country && (
-                      <span className="ml-2 text-xs text-slate-500 font-sans">
+                      <span className="ml-2 text-xs text-slate-500 dark:text-slate-400 font-sans">
                         → {o.country}
                       </span>
                     )}
                   </div>
-                  <ul className="text-xs text-rose-700 list-disc list-inside">
+                  <ul className="text-xs text-rose-700 dark:text-rose-300 list-disc list-inside">
                     {o.issues.map((iss, idx) => (
                       <li key={`${iss.code}-${idx}`}>
                         {ISSUE_TKEY[iss.code]
@@ -1377,7 +1377,7 @@ function PreflightModal({
                 </div>
                 <button
                   onClick={() => onOpenDrawer(o.orderId)}
-                  className="text-xs px-2 py-0.5 text-slate-700 border border-slate-200 rounded hover:bg-white"
+                  className="text-xs px-2 py-0.5 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-white"
                 >
                   {t('common.open')}
                 </button>
@@ -1385,17 +1385,17 @@ function PreflightModal({
             ))
           )}
         </div>
-        <div className="flex items-center gap-2 px-4 py-3 border-t border-slate-200">
+        <div className="flex items-center gap-2 px-4 py-3 border-t border-slate-200 dark:border-slate-700">
           <button
             onClick={onClose}
-            className="h-7 px-3 text-sm text-slate-600 border border-slate-200 rounded hover:bg-slate-50"
+            className="h-7 px-3 text-sm text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             {t('common.close')}
           </button>
           <button
             onClick={onProceed}
             disabled={report.ready === 0}
-            className="ml-auto h-7 px-3 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1"
+            className="ml-auto h-7 px-3 text-sm bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 inline-flex items-center gap-1"
           >
             <Plus size={11} />
             {t('outbound.pending.preflight.proceedReady', { n: report.ready })}
@@ -1435,15 +1435,15 @@ function BulkCreateResultsModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
-        className="bg-white rounded-md shadow-xl w-full max-w-xl mx-4 max-h-[80vh] overflow-y-auto"
+        className="bg-white dark:bg-slate-900 rounded-md shadow-xl w-full max-w-xl mx-4 max-h-[80vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
           <div>
-            <div className="text-sm font-medium text-slate-900">
+            <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
               {t('outbound.pending.bulkResults.title')}
             </div>
-            <div className="text-sm text-slate-500">
+            <div className="text-sm text-slate-500 dark:text-slate-400">
               {t('outbound.pending.bulkResults.summary', {
                 ok: results.created,
                 total: results.total,
@@ -1453,7 +1453,7 @@ function BulkCreateResultsModal({
           </div>
           <button
             onClick={onClose}
-            className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 rounded"
+            className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded"
           >
             <X size={12} />
           </button>
@@ -1465,18 +1465,18 @@ function BulkCreateResultsModal({
               return (
                 <li
                   key={err.orderId}
-                  className="flex items-start gap-2 px-2 py-1.5 border border-rose-200 bg-rose-50 rounded"
+                  className="flex items-start gap-2 px-2 py-1.5 border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 rounded"
                 >
                   <AlertTriangle size={11} className="text-rose-500 mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0 text-sm">
-                    <div className="font-mono text-slate-900">
+                    <div className="font-mono text-slate-900 dark:text-slate-100">
                       {o?.channelOrderId ?? err.orderId.slice(0, 12)}
                     </div>
-                    <div className="text-rose-700 text-xs">{err.reason}</div>
+                    <div className="text-rose-700 dark:text-rose-300 text-xs">{err.reason}</div>
                   </div>
                   <button
                     onClick={() => onOpenDrawer(err.orderId)}
-                    className="text-xs px-2 py-0.5 text-slate-700 border border-slate-200 rounded hover:bg-white"
+                    className="text-xs px-2 py-0.5 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-white"
                   >
                     {t('common.open')}
                   </button>
@@ -1536,19 +1536,19 @@ function AlertsModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
-        className="bg-white rounded-md shadow-xl w-full max-w-md mx-4 max-h-[80vh] overflow-y-auto"
+        className="bg-white dark:bg-slate-900 rounded-md shadow-xl w-full max-w-md mx-4 max-h-[80vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
           <div>
-            <div className="text-sm font-medium text-slate-900">
+            <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
               {t('outbound.alerts.modalTitle')}
             </div>
-            <div className="text-sm text-slate-500 truncate">{view.name}</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400 truncate">{view.name}</div>
           </div>
           <button
             onClick={onClose}
-            className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 rounded"
+            className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded"
           >
             <X size={12} />
           </button>
@@ -1556,7 +1556,7 @@ function AlertsModal({
 
         <div className="px-4 py-3">
           {alerts.length === 0 ? (
-            <div className="text-sm text-slate-500 py-2">
+            <div className="text-sm text-slate-500 dark:text-slate-400 py-2">
               {t('outbound.alerts.empty')}
             </div>
           ) : (
@@ -1565,15 +1565,15 @@ function AlertsModal({
                 <li
                   key={a.id}
                   className={`flex items-center gap-2 px-2 py-1.5 border rounded ${
-                    a.isActive ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50 opacity-60'
+                    a.isActive ? 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40' : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 opacity-60'
                   }`}
                 >
-                  <Bell size={11} className={a.isActive ? 'text-amber-500' : 'text-slate-400'} fill="currentColor" />
-                  <span className="text-sm text-slate-700 flex-1">
+                  <Bell size={11} className={a.isActive ? 'text-amber-500' : 'text-slate-400 dark:text-slate-500'} fill="currentColor" />
+                  <span className="text-sm text-slate-700 dark:text-slate-300 flex-1">
                     {t(`outbound.alerts.comparison.${a.comparison}`)}
                     {' '}
-                    <span className="tabular-nums font-medium text-slate-900">{a.threshold}</span>
-                    <span className="text-xs text-slate-500 ml-2">
+                    <span className="tabular-nums font-medium text-slate-900 dark:text-slate-100">{a.threshold}</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400 ml-2">
                       {t('outbound.alerts.lastCount', { count: a.lastCount })}
                     </span>
                   </span>
@@ -1589,13 +1589,13 @@ function AlertsModal({
                       if (n === a.threshold) return
                       await onEditThreshold(a.id, n)
                     }}
-                    className="text-xs px-2 py-0.5 text-slate-600 border border-slate-200 rounded hover:bg-white"
+                    className="text-xs px-2 py-0.5 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded hover:bg-white"
                   >
                     {t('common.edit')}
                   </button>
                   <button
                     onClick={() => onRemove(a.id)}
-                    className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-rose-600 rounded"
+                    className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-rose-600 rounded"
                     title={t('common.delete')}
                   >
                     <Trash2 size={11} />
@@ -1606,15 +1606,15 @@ function AlertsModal({
           )}
         </div>
 
-        <form onSubmit={submit} className="border-t border-slate-200 px-4 py-3 space-y-2">
-          <div className="text-sm font-medium text-slate-700">
+        <form onSubmit={submit} className="border-t border-slate-200 dark:border-slate-700 px-4 py-3 space-y-2">
+          <div className="text-sm font-medium text-slate-700 dark:text-slate-300">
             {t('outbound.alerts.addAnother')}
           </div>
           <div className="flex gap-1.5 items-center">
             <select
               value={comparison}
               onChange={(e) => setComparison(e.target.value as typeof comparison)}
-              className="text-sm border border-slate-200 rounded px-2 py-1 bg-white"
+              className="text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900"
             >
               <option value="GT">{t('outbound.alerts.comparison.GT')}</option>
               <option value="LT">{t('outbound.alerts.comparison.LT')}</option>
@@ -1627,13 +1627,13 @@ function AlertsModal({
               step={1}
               value={thresholdInput}
               onChange={(e) => setThresholdInput(e.target.value)}
-              className="text-sm border border-slate-200 rounded px-2 py-1 w-24 tabular-nums"
+              className="text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1 w-24 tabular-nums"
               placeholder="5"
             />
             <button
               type="submit"
               disabled={submitting}
-              className="ml-auto h-7 px-3 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1 disabled:opacity-60"
+              className="ml-auto h-7 px-3 text-sm bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 inline-flex items-center gap-1 disabled:opacity-60"
             >
               <Plus size={11} /> {t('common.add')}
             </button>
