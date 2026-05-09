@@ -3966,6 +3966,7 @@
   "listWizard.stepper.title.withBlockerOne": "Passaggio {id}: {title} — {n} blocco",
   "listWizard.stepper.title.withBlockerOther": "Passaggio {id}: {title} — {n} blocchi",
   "listWizard.stepper.title.plain": "Passaggio {id}: {title}",
+  "listWizard.stepper.mobileProgress": "Passaggio {current} di {total}",
 
   "listWizard.nav.saveExit": "Salva ed esci",
   "listWizard.nav.discard": "Scarta",
