@@ -239,6 +239,133 @@ const familiesRoutes: FastifyPluginAsync = async (fastify) => {
       throw err
     }
   })
+
+  // ── W2.7 — FamilyAttribute attach/detach ────────────────────────
+  //
+  // The cornerstone parent-wins write-time enforcement. POST refuses
+  // any attribute that already appears (directly or by inheritance)
+  // in the family's effective set — that's the Akeneo-strict
+  // additive invariant the resolver assumes.
+
+  // POST /api/families/:id/attributes — attach attribute to family.
+  //
+  // Refuses with 409 if the attribute is already declared by this
+  // family OR by any ancestor. The ancestor case is what makes
+  // inheritance work: a child can never re-declare (and thereby
+  // attempt to override) what a parent has already locked in.
+  fastify.post('/families/:id/attributes', async (request, reply) => {
+    const { id: familyId } = request.params as { id: string }
+    const body = request.body as {
+      attributeId?: string
+      required?: boolean
+      channels?: string[]
+      sortOrder?: number
+    }
+    if (!body.attributeId)
+      return reply.code(400).send({ error: 'attributeId is required' })
+
+    const attribute = await prisma.customAttribute.findUnique({
+      where: { id: body.attributeId },
+      select: { id: true },
+    })
+    if (!attribute)
+      return reply.code(400).send({ error: 'attributeId does not exist' })
+
+    let chain
+    try {
+      chain = await familyHierarchyService.walkFamilyChain(familyId)
+    } catch (err: any) {
+      const msg = err?.message ?? String(err)
+      if (/cycle|depth exceeded/i.test(msg))
+        return reply.code(409).send({ error: msg })
+      throw err
+    }
+    if (chain.length === 0)
+      return reply.code(404).send({ error: 'family not found' })
+
+    // Akeneo-strict additive: refuse if any ancestor (or self)
+    // already has this attributeId. Walking the entire chain (incl.
+    // self) is correct — the unique constraint at the DB protects
+    // self-duplicates too, but checking up front gives a clearer
+    // error than a P2002 collision.
+    for (const node of chain) {
+      const conflict = node.familyAttributes.find(
+        (fa) => fa.attributeId === body.attributeId,
+      )
+      if (conflict) {
+        const isSelf = node.id === familyId
+        return reply.code(409).send({
+          error: isSelf
+            ? 'attribute already attached to this family'
+            : `attribute already inherited from ancestor family ${node.id}; child cannot redeclare it (Akeneo-strict additive invariant)`,
+          conflictFamilyId: node.id,
+          isInherited: !isSelf,
+        })
+      }
+    }
+
+    const created = await prisma.familyAttribute.create({
+      data: {
+        familyId,
+        attributeId: body.attributeId,
+        required: body.required ?? false,
+        channels: Array.isArray(body.channels) ? body.channels : [],
+        sortOrder: typeof body.sortOrder === 'number' ? body.sortOrder : 0,
+      },
+    })
+    return reply.code(201).send({ familyAttribute: created })
+  })
+
+  // PATCH /api/family-attributes/:id — update required/channels/order.
+  // attributeId + familyId are immutable (would invalidate the
+  // ancestor-conflict check that gated the original create).
+  fastify.patch('/family-attributes/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const body = request.body as {
+      required?: boolean
+      channels?: string[]
+      sortOrder?: number
+    }
+    const data: Record<string, unknown> = {}
+    if (body.required !== undefined) data.required = body.required
+    if (body.channels !== undefined) {
+      if (!Array.isArray(body.channels))
+        return reply.code(400).send({ error: 'channels must be an array' })
+      data.channels = body.channels
+    }
+    if (body.sortOrder !== undefined) data.sortOrder = body.sortOrder
+    if (Object.keys(data).length === 0)
+      return reply.code(400).send({ error: 'no mutable fields supplied' })
+    try {
+      const familyAttribute = await prisma.familyAttribute.update({
+        where: { id },
+        data,
+      })
+      return { familyAttribute }
+    } catch (err: any) {
+      if (err?.code === 'P2025')
+        return reply.code(404).send({ error: 'family-attribute not found' })
+      throw err
+    }
+  })
+
+  // DELETE /api/family-attributes/:id — detach attribute from family.
+  // Note: removing a parent's attribute means children stop
+  // inheriting it. Stored values on Products are NOT touched (the
+  // attribute itself still exists; only the family→attribute link
+  // breaks). Callers who want to wipe values must call into a
+  // separate "purge values" service which doesn't exist yet (W2.x).
+  fastify.delete('/family-attributes/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      await prisma.familyAttribute.delete({ where: { id } })
+      return { ok: true, id }
+    } catch (err: any) {
+      if (err?.code === 'P2025')
+        return reply.code(404).send({ error: 'family-attribute not found' })
+      throw err
+    }
+  })
 }
 
 export default familiesRoutes
