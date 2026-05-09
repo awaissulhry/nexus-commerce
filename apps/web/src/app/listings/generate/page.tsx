@@ -393,13 +393,13 @@ export default function GeneratorPage() {
         <div className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
                 Channel
               </label>
               <select
                 value={channel}
                 onChange={(e) => setChannel(e.target.value as Channel)}
-                className="w-full h-9 px-2 text-md border border-slate-200 rounded"
+                className="w-full h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded"
               >
                 <option value="AMAZON">Amazon</option>
                 <option value="EBAY">eBay</option>
@@ -407,13 +407,13 @@ export default function GeneratorPage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
                 Provider
               </label>
               <select
                 value={provider}
                 onChange={(e) => setProvider(e.target.value)}
-                className="w-full h-9 px-2 text-md border border-slate-200 rounded"
+                className="w-full h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded"
               >
                 {PROVIDER_OPTIONS.map((opt) => (
                   <option key={opt.id} value={opt.id}>{opt.label}</option>
@@ -421,7 +421,7 @@ export default function GeneratorPage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
                 Fields
               </label>
               <div className="flex flex-wrap gap-1.5 mt-1">
@@ -431,8 +431,8 @@ export default function GeneratorPage() {
                     onClick={() => toggleField(f.id)}
                     className={`h-7 px-2 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
                       fields.includes(f.id)
-                        ? 'bg-blue-50 border-blue-300 text-blue-700'
-                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                        ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-300 text-blue-700 dark:text-blue-300'
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
                     }`}
                     aria-pressed={fields.includes(f.id)}
                     aria-label={`Toggle ${f.label} field`}
@@ -446,10 +446,10 @@ export default function GeneratorPage() {
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Marketplaces
                 {marketplaces.length > 1 && (
-                  <span className="ml-2 text-xs font-normal normal-case text-blue-600">
+                  <span className="ml-2 text-xs font-normal normal-case text-blue-600 dark:text-blue-400">
                     {marketplaces.length} selected — one Generate click fans out to all
                   </span>
                 )}
@@ -457,7 +457,7 @@ export default function GeneratorPage() {
               {MARKETPLACE_OPTIONS[channel].length > 1 && (
                 <button
                   onClick={selectAllMarketplaces}
-                  className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 font-medium"
                 >
                   Select all
                 </button>
@@ -470,14 +470,14 @@ export default function GeneratorPage() {
                   onClick={() => toggleMarketplace(opt.id)}
                   className={`h-7 px-2.5 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
                     marketplaces.includes(opt.id)
-                      ? 'bg-blue-50 border-blue-300 text-blue-700'
-                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                      ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-300 text-blue-700 dark:text-blue-300'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
                   }`}
                   aria-pressed={marketplaces.includes(opt.id)}
                   aria-label={`Toggle ${opt.label} marketplace`}
                 >
                   {opt.label}{' '}
-                  <span className="text-xs text-slate-400 ml-0.5 font-mono">
+                  <span className="text-xs text-slate-400 dark:text-slate-500 ml-0.5 font-mono">
                     {opt.id}
                   </span>
                 </button>
@@ -490,7 +490,7 @@ export default function GeneratorPage() {
       {/* Search + cost rollup */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2 flex-1 min-w-[200px] max-w-md">
-          <Search size={14} className="text-slate-400" />
+          <Search size={14} className="text-slate-400 dark:text-slate-500" />
           <Input
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -498,17 +498,17 @@ export default function GeneratorPage() {
           />
         </div>
         {generationCount > 0 && (
-          <div className="text-sm text-slate-500 ml-auto inline-flex items-center gap-3">
+          <div className="text-sm text-slate-500 dark:text-slate-400 ml-auto inline-flex items-center gap-3">
             <span>
-              <span className="font-semibold text-slate-700 tabular-nums">
+              <span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">
                 {generationCount}
               </span>{' '}
               generated
             </span>
-            <span className="text-slate-300">·</span>
+            <span className="text-slate-300 dark:text-slate-600">·</span>
             <span>
               Total cost{' '}
-              <span className="font-semibold text-slate-700 tabular-nums">
+              <span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">
                 ${totalCost.toFixed(4)}
               </span>
             </span>
@@ -523,7 +523,7 @@ export default function GeneratorPage() {
         </Card>
       ) : filteredProducts.length === 0 ? (
         <Card>
-          <div className="text-center py-8 text-sm text-slate-500">
+          <div className="text-center py-8 text-sm text-slate-500 dark:text-slate-400">
             {searchTerm ? 'No products match the search.' : 'No products available.'}
           </div>
         </Card>
@@ -602,17 +602,17 @@ function ProductRow({
     <Card>
       <div className="flex items-center gap-3">
         <div className="flex-1 min-w-0">
-          <div className="font-medium text-slate-900 truncate">
+          <div className="font-medium text-slate-900 dark:text-slate-100 truncate">
             {product.name}
           </div>
-          <div className="text-sm text-slate-500 font-mono">{product.sku}</div>
+          <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">{product.sku}</div>
         </div>
         <div className="flex items-center gap-2">
           {anyResult && (
             <button
               onClick={onToggle}
               aria-label={expanded ? 'Collapse result' : 'Expand result'}
-              className="h-8 w-8 inline-flex items-center justify-center text-slate-400 hover:text-slate-700"
+              className="h-8 w-8 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
             >
               {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
@@ -627,7 +627,7 @@ function ProductRow({
                   ? `Regenerate content for ${product.sku}`
                   : `Generate AI content for ${product.sku}`
             }
-            className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-60 inline-flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300"
+            className="h-8 px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-60 inline-flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300"
           >
             {anyLoading ? (
               <>
@@ -655,16 +655,16 @@ function ProductRow({
         </div>
       </div>
       {expanded && state && (
-        <div className="mt-3 border-t border-slate-100 pt-3">
+        <div className="mt-3 border-t border-slate-100 dark:border-slate-800 pt-3">
           {/* Marketplace tabs */}
           {Object.keys(state.byMarketplace).length > 1 && (
             <div className="flex items-center gap-1 mb-3 flex-wrap">
               {Object.entries(state.byMarketplace).map(([mp, slice]) => {
                 const tone = slice.error
-                  ? 'border-rose-200 text-rose-700'
+                  ? 'border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300'
                   : slice.loading
-                    ? 'border-slate-200 text-slate-500'
-                    : 'border-emerald-200 text-emerald-700'
+                    ? 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'
+                    : 'border-emerald-200 dark:border-emerald-900 text-emerald-700 dark:text-emerald-300'
                 const isActive = mp === activeTab
                 return (
                   <button
@@ -672,8 +672,8 @@ function ProductRow({
                     onClick={() => onSelectTab(mp)}
                     className={`h-7 px-2.5 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 inline-flex items-center gap-1.5 ${
                       isActive
-                        ? 'bg-blue-50 border-blue-400 text-blue-800 font-semibold'
-                        : `bg-white ${tone} hover:bg-slate-50`
+                        ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-400 text-blue-800 font-semibold'
+                        : `bg-white dark:bg-slate-900 ${tone} hover:bg-slate-50 dark:hover:bg-slate-800`
                     }`}
                     aria-pressed={isActive}
                   >
@@ -694,13 +694,13 @@ function ProductRow({
           {activeSlice && (
             <>
               {activeSlice.loading && (
-                <div className="text-sm text-slate-500 inline-flex items-center gap-2">
+                <div className="text-sm text-slate-500 dark:text-slate-400 inline-flex items-center gap-2">
                   <Loader2 size={12} className="animate-spin" /> Generating with the
                   configured provider…
                 </div>
               )}
               {activeSlice.error && (
-                <div className="text-sm text-rose-700 inline-flex items-center gap-2">
+                <div className="text-sm text-rose-700 dark:text-rose-300 inline-flex items-center gap-2">
                   <AlertCircle size={12} /> {activeSlice.error}
                 </div>
               )}
@@ -740,20 +740,20 @@ function GenerationResultView({ result }: { result: GenerationResult }) {
 
   return (
     <div className="space-y-3">
-      <div className="text-xs text-slate-500 inline-flex items-center gap-3 flex-wrap">
-        <span className="inline-flex items-center gap-1 text-emerald-700">
+      <div className="text-xs text-slate-500 dark:text-slate-400 inline-flex items-center gap-3 flex-wrap">
+        <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300">
           <CheckCircle2 size={11} /> {result.metadata.provider} ·{' '}
           {result.metadata.model}
         </span>
-        <span className="text-slate-300">·</span>
+        <span className="text-slate-300 dark:text-slate-600">·</span>
         <span className="tabular-nums">
           ${totalCost.toFixed(4)} · {totalTokens.toLocaleString()} tokens
         </span>
-        <span className="text-slate-300">·</span>
+        <span className="text-slate-300 dark:text-slate-600">·</span>
         <span className="tabular-nums">
           {result.metadata.elapsedMs} ms
         </span>
-        <span className="text-slate-300">·</span>
+        <span className="text-slate-300 dark:text-slate-600">·</span>
         <span>{result.metadata.marketplace}</span>
       </div>
 
@@ -763,7 +763,7 @@ function GenerationResultView({ result }: { result: GenerationResult }) {
           subtitle={`${result.title.charCount} chars`}
           onCopy={() => copyToClipboard('Title', result.title!.content)}
         >
-          <div className="text-sm text-slate-800">{result.title.content}</div>
+          <div className="text-sm text-slate-800 dark:text-slate-200">{result.title.content}</div>
         </FieldBlock>
       )}
 
@@ -775,11 +775,11 @@ function GenerationResultView({ result }: { result: GenerationResult }) {
             copyToClipboard('Bullets', result.bullets!.content.join('\n'))
           }
         >
-          <ul className="text-sm text-slate-800 list-disc pl-5 space-y-0.5">
+          <ul className="text-sm text-slate-800 dark:text-slate-200 list-disc pl-5 space-y-0.5">
             {result.bullets.content.map((b, i) => (
               <li key={i}>
                 {b}
-                <span className="text-xs text-slate-400 ml-2 tabular-nums">
+                <span className="text-xs text-slate-400 dark:text-slate-500 ml-2 tabular-nums">
                   ({result.bullets!.charCounts[i]})
                 </span>
               </li>
@@ -794,7 +794,7 @@ function GenerationResultView({ result }: { result: GenerationResult }) {
           subtitle={`${result.description.content.length} chars`}
           onCopy={() => copyToClipboard('Description', result.description!.content)}
         >
-          <div className="text-sm text-slate-800 whitespace-pre-wrap">
+          <div className="text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap">
             {result.description.preview}
           </div>
         </FieldBlock>
@@ -806,7 +806,7 @@ function GenerationResultView({ result }: { result: GenerationResult }) {
           subtitle={`${result.keywords.charCount} chars`}
           onCopy={() => copyToClipboard('Keywords', result.keywords!.content)}
         >
-          <div className="text-sm text-slate-800 font-mono">
+          <div className="text-sm text-slate-800 dark:text-slate-200 font-mono">
             {result.keywords.content}
           </div>
         </FieldBlock>
@@ -827,20 +827,20 @@ function FieldBlock({
   children: React.ReactNode
 }) {
   return (
-    <div className="border border-slate-200 rounded p-3">
+    <div className="border border-slate-200 dark:border-slate-700 rounded p-3">
       <div className="flex items-center justify-between mb-1.5">
         <div className="inline-flex items-center gap-2">
-          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
             {label}
           </div>
           {subtitle && (
-            <div className="text-xs text-slate-400">{subtitle}</div>
+            <div className="text-xs text-slate-400 dark:text-slate-500">{subtitle}</div>
           )}
         </div>
         <button
           onClick={onCopy}
           aria-label={`Copy ${label}`}
-          className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-blue-600 rounded"
+          className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-blue-600 rounded"
         >
           <Copy size={11} />
         </button>

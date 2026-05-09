@@ -312,7 +312,7 @@ export default function BulkImageUploadModal({
                 e.stopPropagation()
               }}
               onDrop={onDrop}
-              className="border-2 border-dashed border-slate-300 rounded-lg p-10 text-center text-base text-slate-600 hover:border-purple-300 hover:bg-purple-50/40 transition-colors"
+              className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-10 text-center text-base text-slate-600 dark:text-slate-400 hover:border-purple-300 hover:bg-purple-50/40 transition-colors"
             >
               {resolving ? (
                 <div className="inline-flex items-center gap-2">
@@ -321,25 +321,25 @@ export default function BulkImageUploadModal({
                 </div>
               ) : (
                 <>
-                  <Upload className="w-6 h-6 text-slate-400 mx-auto mb-2" />
-                  <div className="text-slate-700 font-medium mb-1">
+                  <Upload className="w-6 h-6 text-slate-400 dark:text-slate-500 mx-auto mb-2" />
+                  <div className="text-slate-700 dark:text-slate-300 font-medium mb-1">
                     Drop a folder or files here
                   </div>
-                  <div className="text-sm text-slate-500">
+                  <div className="text-sm text-slate-500 dark:text-slate-400">
                     or pick from disk
                   </div>
                   <div className="mt-3 flex items-center justify-center gap-2">
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="h-7 px-3 text-sm border border-slate-200 rounded hover:bg-white"
+                      className="h-7 px-3 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-white"
                     >
                       Choose files
                     </button>
                     <button
                       type="button"
                       onClick={() => folderInputRef.current?.click()}
-                      className="h-7 px-3 text-sm border border-slate-200 rounded hover:bg-white"
+                      className="h-7 px-3 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-white"
                     >
                       Choose folder
                     </button>
@@ -377,12 +377,12 @@ export default function BulkImageUploadModal({
               )}
             </div>
             {error && (
-              <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800 flex items-start gap-2">
+              <div className="border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 rounded-md px-3 py-2 text-base text-rose-800 flex items-start gap-2">
                 <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
                 <span>{error}</span>
               </div>
             )}
-            <div className="text-sm text-slate-500 pt-1 border-t border-slate-100">
+            <div className="text-sm text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
               <div className="font-medium mb-1">Filename conventions</div>
               <ul className="space-y-0.5 list-disc pl-4">
                 <li>
@@ -414,13 +414,13 @@ export default function BulkImageUploadModal({
 
         {(phase === 'preview' || phase === 'uploading') && (
           <>
-            <div className="px-5 py-2 border-b border-slate-100 flex items-center justify-between gap-3 flex-shrink-0 text-base text-slate-700">
+            <div className="px-5 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 flex-shrink-0 text-base text-slate-700 dark:text-slate-300">
               <div>
                 {counts.matched} matched
                 {counts.unmatched > 0 && (
                   <>
                     ,{' '}
-                    <span className="text-rose-700">
+                    <span className="text-rose-700 dark:text-rose-300">
                       {counts.unmatched} unmatched
                     </span>
                   </>
@@ -432,7 +432,7 @@ export default function BulkImageUploadModal({
                       {counts.succeeded}/{counts.selected} done
                     </span>
                     {counts.failed > 0 && (
-                      <span className="text-rose-700">
+                      <span className="text-rose-700 dark:text-rose-300">
                         , {counts.failed} failed
                       </span>
                     )}
@@ -451,7 +451,7 @@ export default function BulkImageUploadModal({
                         })),
                       )
                     }
-                    className="h-7 px-2 text-sm text-slate-700 hover:bg-slate-100 rounded-md"
+                    className="h-7 px-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md"
                   >
                     Select matched
                   </button>
@@ -462,7 +462,7 @@ export default function BulkImageUploadModal({
                         prev.map((q) => ({ ...q, selected: false })),
                       )
                     }
-                    className="h-7 px-2 text-sm text-slate-700 hover:bg-slate-100 rounded-md"
+                    className="h-7 px-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md"
                   >
                     Clear
                   </button>
@@ -479,14 +479,14 @@ export default function BulkImageUploadModal({
                     key={q.filename}
                     className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-base border ${
                       q.status === 'success'
-                        ? 'bg-emerald-50 border-emerald-200'
+                        ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900'
                         : q.status === 'failed'
-                          ? 'bg-rose-50 border-rose-200'
+                          ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900'
                           : q.status === 'uploading'
                             ? 'bg-purple-50 border-purple-200'
                             : matched
-                              ? 'bg-white border-slate-200'
-                              : 'bg-amber-50 border-amber-200'
+                              ? 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700'
+                              : 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900'
                     }`}
                   >
                     {phase === 'preview' && (
@@ -500,28 +500,28 @@ export default function BulkImageUploadModal({
                     {phase === 'uploading' && (
                       <span className="w-4 h-4 inline-flex items-center justify-center">
                         {q.status === 'success' ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                         ) : q.status === 'failed' ? (
-                          <XCircle className="w-4 h-4 text-rose-600" />
+                          <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                         ) : q.status === 'uploading' ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-600" />
                         ) : q.status === 'skipped' ? (
-                          <span className="text-slate-400 text-xs">—</span>
+                          <span className="text-slate-400 dark:text-slate-500 text-xs">—</span>
                         ) : (
-                          <span className="text-slate-300 text-xs">·</span>
+                          <span className="text-slate-300 dark:text-slate-600 text-xs">·</span>
                         )}
                       </span>
                     )}
-                    <span className="font-mono text-sm text-slate-700 min-w-0 flex-1 truncate">
+                    <span className="font-mono text-sm text-slate-700 dark:text-slate-300 min-w-0 flex-1 truncate">
                       {q.filename}
                     </span>
                     {matched ? (
                       <>
-                        <span className="text-slate-400 text-xs">→</span>
-                        <span className="text-slate-900 font-medium">
+                        <span className="text-slate-400 dark:text-slate-500 text-xs">→</span>
+                        <span className="text-slate-900 dark:text-slate-100 font-medium">
                           {sku}
                         </span>
-                        <span className="text-xs text-slate-500 uppercase tracking-wider">
+                        <span className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                           {q.preview.type ?? 'ALT'}
                           {q.preview.position
                             ? ` · #${q.preview.position}`
@@ -537,13 +537,13 @@ export default function BulkImageUploadModal({
                           onChange={(e) =>
                             setOverrideSku(q.file, e.target.value.trim())
                           }
-                          className="h-6 px-1.5 text-sm border border-amber-300 rounded bg-white w-32 font-mono"
+                          className="h-6 px-1.5 text-sm border border-amber-300 rounded bg-white dark:bg-slate-900 w-32 font-mono"
                         />
                       )
                     )}
                     {q.status === 'failed' && (
                       <span
-                        className="text-xs text-rose-700 truncate max-w-[200px]"
+                        className="text-xs text-rose-700 dark:text-rose-300 truncate max-w-[200px]"
                         title={q.error}
                       >
                         {q.error}
@@ -555,14 +555,14 @@ export default function BulkImageUploadModal({
             </div>
 
             {error && (
-              <div className="mx-5 mb-3 border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800 flex items-start gap-2 flex-shrink-0">
+              <div className="mx-5 mb-3 border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 rounded-md px-3 py-2 text-base text-rose-800 flex items-start gap-2 flex-shrink-0">
                 <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
                 <span>{error}</span>
               </div>
             )}
 
             {phase === 'preview' && (
-              <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
+              <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 flex-shrink-0">
                 <button
                   type="button"
                   onClick={() => {
@@ -570,7 +570,7 @@ export default function BulkImageUploadModal({
                     setError(null)
                     setPhase('drop')
                   }}
-                  className="h-8 px-3 text-base text-slate-700 hover:bg-slate-100 rounded-md"
+                  className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md"
                 >
                   Back
                 </button>
@@ -588,9 +588,9 @@ export default function BulkImageUploadModal({
             )}
 
             {phase === 'uploading' && (
-              <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0 text-sm text-slate-500">
+              <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 flex-shrink-0 text-sm text-slate-500 dark:text-slate-400">
                 <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
-                <span className="flex-1 text-slate-700">
+                <span className="flex-1 text-slate-700 dark:text-slate-300">
                   Uploading {counts.inFlight} in flight ·{' '}
                   {counts.succeeded + counts.failed}/{counts.selected} complete
                 </span>
@@ -601,22 +601,22 @@ export default function BulkImageUploadModal({
 
         {phase === 'done' && (
           <div className="p-5 space-y-3">
-            <div className="text-base text-slate-700">
-              <span className="text-emerald-700 font-medium">
+            <div className="text-base text-slate-700 dark:text-slate-300">
+              <span className="text-emerald-700 dark:text-emerald-300 font-medium">
                 {counts.succeeded} uploaded
               </span>
               {counts.failed > 0 && (
-                <span className="text-rose-700">, {counts.failed} failed</span>
+                <span className="text-rose-700 dark:text-rose-300">, {counts.failed} failed</span>
               )}
               {counts.skipped > 0 && (
-                <span className="text-slate-500">
+                <span className="text-slate-500 dark:text-slate-400">
                   {' '}· {counts.skipped} skipped
                 </span>
               )}
               .
             </div>
             {counts.failed > 0 && (
-              <ul className="border border-rose-200 bg-rose-50 rounded-md p-2 max-h-48 overflow-y-auto text-sm text-rose-800 space-y-1">
+              <ul className="border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 rounded-md p-2 max-h-48 overflow-y-auto text-sm text-rose-800 space-y-1">
                 {queue
                   .filter((q) => q.status === 'failed')
                   .map((q) => (
@@ -627,7 +627,7 @@ export default function BulkImageUploadModal({
                   ))}
               </ul>
             )}
-            <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => {
@@ -635,14 +635,14 @@ export default function BulkImageUploadModal({
                   setError(null)
                   setPhase('drop')
                 }}
-                className="h-8 px-3 text-base text-slate-700 hover:bg-slate-100 rounded-md"
+                className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md"
               >
                 Upload more
               </button>
               <button
                 type="button"
                 onClick={onComplete}
-                className="h-8 px-3 text-base bg-slate-900 text-white rounded-md hover:bg-slate-800"
+                className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded-md hover:bg-slate-800"
               >
                 Done
               </button>

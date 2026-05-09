@@ -128,23 +128,23 @@ function ShipmentBlock({
   }
 
   return (
-    <div className="bg-white border border-slate-200 rounded-lg overflow-hidden print:break-inside-avoid print:shadow-none">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden print:break-inside-avoid print:shadow-none">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-slate-50 transition-colors text-left print:cursor-default"
+        className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left print:cursor-default"
       >
         <div className="flex-shrink-0 print:hidden">
           {expanded ? (
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
           ) : (
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+            <ChevronRight className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
           )}
         </div>
-        <Package className="w-4 h-4 text-slate-500 flex-shrink-0" />
+        <Package className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono font-medium text-slate-900 text-md">
+            <span className="font-mono font-medium text-slate-900 dark:text-slate-100 text-md">
               {shipment.orderRef}
             </span>
             <Badge variant="info" size="sm">
@@ -159,7 +159,7 @@ function ShipmentBlock({
               {shipment.carrierCode}
             </Badge>
           </div>
-          <div className="flex items-center gap-3 mt-0.5 text-sm text-slate-500 flex-wrap">
+          <div className="flex items-center gap-3 mt-0.5 text-sm text-slate-500 dark:text-slate-400 flex-wrap">
             {shipment.customerName && (
               <span className="truncate max-w-[260px]">{shipment.customerName}</span>
             )}
@@ -172,7 +172,7 @@ function ShipmentBlock({
               {relativeTime(shipment.createdAt)}
             </span>
             {pickedItems.size > 0 && (
-              <span className="text-green-700 font-medium">
+              <span className="text-green-700 dark:text-green-300 font-medium">
                 · {pickedItems.size}/{shipment.items.length} picked
               </span>
             )}
@@ -181,9 +181,9 @@ function ShipmentBlock({
       </button>
 
       {expanded && (
-        <div className="border-t border-slate-200 print:border-t-2 print:border-slate-400">
+        <div className="border-t border-slate-200 dark:border-slate-700 print:border-t-2 print:border-slate-400">
           <table className="w-full text-base">
-            <thead className="bg-slate-50 text-sm text-slate-600 border-b border-slate-200 print:bg-white">
+            <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 print:bg-white">
               <tr>
                 <th className="text-left font-medium px-3 py-1.5 w-8 print:hidden"></th>
                 <th className="text-left font-medium px-3 py-1.5 w-28">Location</th>
@@ -201,7 +201,7 @@ function ShipmentBlock({
                   <tr
                     key={it.shipmentItemId}
                     className={cn(
-                      'border-b border-slate-100 last:border-0 align-top',
+                      'border-b border-slate-100 dark:border-slate-800 last:border-0 align-top',
                       isPicked && 'bg-green-50/50',
                     )}
                   >
@@ -213,7 +213,7 @@ function ShipmentBlock({
                           'w-5 h-5 rounded border flex items-center justify-center transition-colors',
                           isPicked
                             ? 'bg-green-600 border-green-600 text-white'
-                            : 'bg-white border-slate-300 hover:border-slate-400',
+                            : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 hover:border-slate-400',
                         )}
                         aria-label={isPicked ? 'Mark unpicked' : 'Mark picked'}
                       >
@@ -222,21 +222,21 @@ function ShipmentBlock({
                     </td>
                     <td className="px-3 py-1.5">
                       {it.location ? (
-                        <span className="font-mono text-sm inline-flex items-center gap-1 px-1.5 py-0.5 bg-slate-100 rounded">
+                        <span className="font-mono text-sm inline-flex items-center gap-1 px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded">
                           {it.location.locationCode}
                         </span>
                       ) : (
-                        <span className="text-xs italic text-amber-700">
+                        <span className="text-xs italic text-amber-700 dark:text-amber-300">
                           unlocated
                         </span>
                       )}
                     </td>
                     <td className="px-3 py-1.5">
-                      <div className="font-mono text-sm text-slate-900">
+                      <div className="font-mono text-sm text-slate-900 dark:text-slate-100">
                         {it.sku}
                       </div>
                       {it.productName && (
-                        <div className="text-sm text-slate-500 truncate max-w-md">
+                        <div className="text-sm text-slate-500 dark:text-slate-400 truncate max-w-md">
                           {it.productName}
                         </div>
                       )}
@@ -244,16 +244,16 @@ function ShipmentBlock({
                     <td
                       className={cn(
                         'px-3 py-1.5 text-right tabular-nums font-semibold',
-                        lowStock && 'text-red-700',
+                        lowStock && 'text-red-700 dark:text-red-300',
                       )}
                     >
                       {it.quantity}
                     </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-sm text-slate-500 print:hidden">
+                    <td className="px-3 py-1.5 text-right tabular-nums text-sm text-slate-500 dark:text-slate-400 print:hidden">
                       {it.location ? (
                         <span
                           className={cn(
-                            lowStock && 'text-red-700 font-medium',
+                            lowStock && 'text-red-700 dark:text-red-300 font-medium',
                           )}
                           title={
                             lowStock
@@ -273,8 +273,8 @@ function ShipmentBlock({
             </tbody>
           </table>
 
-          <div className="px-3 py-2 bg-slate-50 border-t border-slate-200 flex items-center justify-between print:hidden">
-            <div className="text-sm text-slate-500">
+          <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between print:hidden">
+            <div className="text-sm text-slate-500 dark:text-slate-400">
               {pickedItems.size === 0
                 ? 'Tick items as you pick them; mark the shipment when complete'
                 : allChecked
@@ -289,7 +289,7 @@ function ShipmentBlock({
                 'inline-flex items-center gap-1.5 px-3 py-1 text-base font-medium rounded border transition-colors disabled:opacity-50',
                 allChecked
                   ? 'bg-green-600 text-white border-green-600 hover:bg-green-700'
-                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50',
+                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800',
               )}
             >
               {picking ? (
@@ -402,8 +402,8 @@ export default function PickListClient() {
               className={cn(
                 'px-3 py-1 text-sm font-medium rounded border transition-colors',
                 statusFilter === f.key
-                  ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300',
+                  ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
               )}
             >
               {f.label}
@@ -424,29 +424,29 @@ export default function PickListClient() {
 
       {/* Totals strip (visible in print, marks the doc) */}
       {data && data.totals.shipments > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-base text-slate-700 flex items-center gap-4 flex-wrap print:bg-white print:border-none print:px-0 print:text-md">
-          <ClipboardList className="w-4 h-4 text-blue-700 flex-shrink-0 print:hidden" />
+        <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-lg px-4 py-2 text-base text-slate-700 dark:text-slate-300 flex items-center gap-4 flex-wrap print:bg-white print:border-none print:px-0 print:text-md">
+          <ClipboardList className="w-4 h-4 text-blue-700 dark:text-blue-300 flex-shrink-0 print:hidden" />
           <span>
-            <span className="font-semibold text-slate-900">{data.totals.shipments}</span>{' '}
+            <span className="font-semibold text-slate-900 dark:text-slate-100">{data.totals.shipments}</span>{' '}
             shipments
           </span>
           <span>·</span>
           <span>
-            <span className="font-semibold text-slate-900">{data.totals.units}</span> units
+            <span className="font-semibold text-slate-900 dark:text-slate-100">{data.totals.units}</span> units
           </span>
           <span>·</span>
           <span>
-            <span className="font-semibold text-slate-900">{data.totals.warehouses}</span>{' '}
+            <span className="font-semibold text-slate-900 dark:text-slate-100">{data.totals.warehouses}</span>{' '}
             warehouses
           </span>
-          <span className="ml-auto text-sm text-slate-500 hidden print:inline">
+          <span className="ml-auto text-sm text-slate-500 dark:text-slate-400 hidden print:inline">
             Generated {new Date().toLocaleString()}
           </span>
         </div>
       )}
 
       {error && (
-        <div className="text-base text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-center gap-2 print:hidden">
+        <div className="text-base text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded px-3 py-2 inline-flex items-center gap-2 print:hidden">
           <AlertCircle className="w-3.5 h-3.5" />
           {error}
         </div>
@@ -457,7 +457,7 @@ export default function PickListClient() {
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="h-32 bg-white border border-slate-200 rounded-lg animate-pulse"
+              className="h-32 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg animate-pulse"
             />
           ))}
         </div>
@@ -479,10 +479,10 @@ export default function PickListClient() {
         <div className="space-y-6">
           {data.warehouses.map((w) => (
             <div key={w.warehouseId ?? 'no-wh'} className="space-y-2">
-              <div className="flex items-center gap-2 text-md font-semibold text-slate-900 print:text-lg">
-                <WarehouseIcon className="w-4 h-4 text-slate-500" />
+              <div className="flex items-center gap-2 text-md font-semibold text-slate-900 dark:text-slate-100 print:text-lg">
+                <WarehouseIcon className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                 {w.name}
-                <span className="text-sm font-normal text-slate-500">
+                <span className="text-sm font-normal text-slate-500 dark:text-slate-400">
                   ({w.code} · {w.shipmentCount}{' '}
                   {w.shipmentCount === 1 ? 'shipment' : 'shipments'})
                 </span>

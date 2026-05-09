@@ -133,7 +133,7 @@ export function GridLens(props: GridLensProps) {
   if (error)
     return (
       <Card>
-        <div className="text-md text-rose-600 py-8 text-center">
+        <div className="text-md text-rose-600 dark:text-rose-400 py-8 text-center">
           Failed to load: {error}
         </div>
       </Card>
@@ -151,13 +151,13 @@ export function GridLens(props: GridLensProps) {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-500">
+          <span className="text-sm text-slate-500 dark:text-slate-400">
             {t('orders.pagination.summary', { total, page, totalPages })}
           </span>
           <select
             value={pageSize}
             onChange={(e) => onPageSize(Number(e.target.value))}
-            className="h-7 px-2 text-sm border border-slate-200 rounded"
+            className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded"
           >
             {[25, 50, 100, 200, 500].map((n) => (
               <option key={n} value={n}>
@@ -169,7 +169,7 @@ export function GridLens(props: GridLensProps) {
         <div className="relative">
           <button
             onClick={() => setColumnPickerOpen(!columnPickerOpen)}
-            className="h-7 px-2 text-base border border-slate-200 rounded inline-flex items-center gap-1.5 hover:bg-slate-50"
+            className="h-7 px-2 text-base border border-slate-200 dark:border-slate-700 rounded inline-flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             <Settings2 size={12} />{' '}
             {t('orders.columns.button', { n: visibleColumns.length })}
@@ -192,7 +192,7 @@ export function GridLens(props: GridLensProps) {
             aria-label={t('orders.title')}
             aria-rowcount={total}
           >
-            <thead className="border-b border-slate-200 bg-slate-50 sticky top-0 z-10">
+            <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 sticky top-0 z-10">
               <tr role="row">
                 {visible.map((col) => {
                   const sortMap: Record<string, string> = {
@@ -218,8 +218,8 @@ export function GridLens(props: GridLensProps) {
                       scope="col"
                       aria-sort={ariaSort}
                       style={{ width: col.width, minWidth: col.width }}
-                      className={`px-3 py-2 text-sm font-semibold uppercase tracking-wider text-slate-700 text-left ${
-                        isSortable ? 'cursor-pointer hover:bg-slate-100' : ''
+                      className={`px-3 py-2 text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 text-left ${
+                        isSortable ? 'cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700' : ''
                       }`}
                       onClick={() => {
                         if (sortMap[col.key]) onSort(sortMap[col.key])
@@ -241,7 +241,7 @@ export function GridLens(props: GridLensProps) {
                           {col.label}
                           {isSorted && (
                             <span
-                              className="text-slate-400"
+                              className="text-slate-400 dark:text-slate-500"
                               aria-hidden="true"
                             >
                               {sortDir === 'asc' ? '↑' : '↓'}
@@ -264,7 +264,7 @@ export function GridLens(props: GridLensProps) {
                     role="row"
                     aria-selected={isSelected}
                     aria-current={isFocused ? 'true' : undefined}
-                    className={`border-b border-slate-100 hover:bg-slate-50 ${
+                    className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 ${
                       isSelected ? 'bg-blue-50/30' : ''
                     } ${
                       isFocused
@@ -295,7 +295,7 @@ export function GridLens(props: GridLensProps) {
       </Card>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between text-base text-slate-500">
+        <div className="flex items-center justify-between text-base text-slate-500 dark:text-slate-400">
           <span className="tabular-nums">
             {t('orders.pagination.pageOf', { page, totalPages })}
           </span>
@@ -303,14 +303,14 @@ export function GridLens(props: GridLensProps) {
             <button
               onClick={() => onPage(Math.max(1, page - 1))}
               disabled={page === 1}
-              className="h-7 px-3 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="h-7 px-3 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {t('orders.pagination.previous')}
             </button>
             <button
               onClick={() => onPage(Math.min(totalPages, page + 1))}
               disabled={page >= totalPages}
-              className="h-7 px-3 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="h-7 px-3 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {t('orders.pagination.next')}
             </button>
@@ -366,14 +366,14 @@ function OrderCell({
                 onClick={(e) => e.stopPropagation()}
                 aria-label={link.label}
                 title={link.label}
-                className="text-slate-400 hover:text-slate-700"
+                className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
               >
                 <ExternalLink size={11} aria-hidden="true" />
               </a>
             )}
           </div>
           {o.marketplace && (
-            <span className="text-xs text-slate-500 font-mono">
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
               {o.marketplace}
             </span>
           )}
@@ -384,7 +384,7 @@ function OrderCell({
       return (
         <Link
           href={`/orders/${o.id}`}
-          className="text-base font-mono text-blue-600 hover:underline truncate block"
+          className="text-base font-mono text-blue-600 dark:text-blue-400 hover:underline truncate block"
         >
           {o.channelOrderId}
         </Link>
@@ -392,7 +392,7 @@ function OrderCell({
     case 'date': {
       const dateLocale = locale === 'it' ? 'it-IT' : 'en-GB'
       return (
-        <span className="text-base text-slate-700">
+        <span className="text-base text-slate-700 dark:text-slate-300">
           {o.purchaseDate
             ? new Date(o.purchaseDate).toLocaleDateString(dateLocale, {
                 day: 'numeric',
@@ -410,23 +410,23 @@ function OrderCell({
     case 'customer':
       return (
         <div className="min-w-0">
-          <div className="text-base text-slate-900 truncate">
+          <div className="text-base text-slate-900 dark:text-slate-100 truncate">
             {o.customerName}
           </div>
-          <div className="text-sm text-slate-500 truncate">
+          <div className="text-sm text-slate-500 dark:text-slate-400 truncate">
             {o.customerEmail}
           </div>
         </div>
       )
     case 'items':
       return (
-        <span className="text-base tabular-nums text-slate-700">
+        <span className="text-base tabular-nums text-slate-700 dark:text-slate-300">
           {o.itemCount}
         </span>
       )
     case 'total':
       return (
-        <span className="text-md tabular-nums font-semibold text-slate-900">
+        <span className="text-md tabular-nums font-semibold text-slate-900 dark:text-slate-100">
           {o.currencyCode === 'EUR' || !o.currencyCode ? '€' : ''}
           {o.totalPrice.toFixed(2)}
           {o.currencyCode && o.currencyCode !== 'EUR'
@@ -449,7 +449,7 @@ function OrderCell({
           {o.fulfillmentMethod}
         </Badge>
       ) : (
-        <span className="text-slate-400 text-sm">—</span>
+        <span className="text-slate-400 dark:text-slate-500 text-sm">—</span>
       )
     case 'returnRefund':
       return (
@@ -457,7 +457,7 @@ function OrderCell({
           {o.hasActiveReturn && (
             <span
               title="Active return"
-              className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded"
+              className="text-xs font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-1 py-0.5 rounded"
             >
               R
             </span>
@@ -465,22 +465,22 @@ function OrderCell({
           {o.hasRefund && (
             <span
               title="Has refund"
-              className="text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-1 py-0.5 rounded"
+              className="text-xs font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 px-1 py-0.5 rounded"
             >
               $
             </span>
           )}
           {!o.hasActiveReturn && !o.hasRefund && (
-            <span className="text-slate-400 text-xs">—</span>
+            <span className="text-slate-400 dark:text-slate-500 text-xs">—</span>
           )}
         </div>
       )
     case 'review': {
       const rr = o.reviewRequests[0]
-      if (!rr) return <span className="text-xs text-slate-400">—</span>
+      if (!rr) return <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
       return (
         <span
-          className={`inline-block text-xs uppercase tracking-wider font-semibold px-1.5 py-0.5 border rounded ${REVIEW_STATUS_TONE[rr.status] ?? 'bg-slate-50 text-slate-500 border-slate-200'}`}
+          className={`inline-block text-xs uppercase tracking-wider font-semibold px-1.5 py-0.5 border rounded ${REVIEW_STATUS_TONE[rr.status] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}
         >
           {rr.status.slice(0, 4)}
         </span>
@@ -490,12 +490,12 @@ function OrderCell({
       return o.customerOrderCount > 1 ? (
         <span
           title={`${o.customerOrderCount} orders from this customer`}
-          className="text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded"
+          className="text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 px-1.5 py-0.5 rounded"
         >
           ×{o.customerOrderCount}
         </span>
       ) : (
-        <span className="text-slate-400 text-xs">new</span>
+        <span className="text-slate-400 dark:text-slate-500 text-xs">new</span>
       )
     case 'tags':
       return (
@@ -518,7 +518,7 @@ function OrderCell({
       return (
         <Link
           href={`/orders/${o.id}`}
-          className="h-6 px-2 text-sm text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded inline-flex items-center gap-1"
+          className="h-6 px-2 text-sm text-slate-600 dark:text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded inline-flex items-center gap-1"
         >
           Open <ChevronRight size={11} />
         </Link>
@@ -551,15 +551,15 @@ function ColumnPickerMenu({
   return (
     <div
       ref={ref}
-      className="absolute right-0 top-full mt-1 w-56 bg-white border border-slate-200 rounded-md shadow-lg z-20 p-1.5"
+      className="absolute right-0 top-full mt-1 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-20 p-1.5"
     >
-      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1.5">
+      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1.5">
         Visible columns
       </div>
       {togglable.map((c) => (
         <label
           key={c.key}
-          className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-base cursor-pointer"
+          className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 rounded text-base cursor-pointer"
         >
           <input
             type="checkbox"
@@ -570,19 +570,19 @@ function ColumnPickerMenu({
                 : setVisible([...visible, c.key])
             }
           />
-          <span className="text-slate-700">{c.label}</span>
+          <span className="text-slate-700 dark:text-slate-300">{c.label}</span>
         </label>
       ))}
-      <div className="border-t border-slate-100 mt-1.5 pt-1.5 px-2 py-1 flex items-center justify-between">
+      <div className="border-t border-slate-100 dark:border-slate-800 mt-1.5 pt-1.5 px-2 py-1 flex items-center justify-between">
         <button
           onClick={() => setVisible(DEFAULT_VISIBLE)}
-          className="text-sm text-slate-500 hover:text-slate-900"
+          className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
         >
           Reset
         </button>
         <button
           onClick={onClose}
-          className="text-sm text-slate-500 hover:text-slate-900"
+          className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
         >
           Close
         </button>

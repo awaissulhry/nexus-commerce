@@ -253,8 +253,8 @@ export default function Step7Images({
     <div className="max-w-3xl mx-auto py-10 px-6">
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold text-slate-900">Images</h2>
-          <p className="text-md text-slate-600 mt-1">
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Images</h2>
+          <p className="text-md text-slate-600 dark:text-slate-400 mt-1">
             Quick-reorder the master gallery for this listing. Per-channel
             and per-variation overrides live on the dedicated image-manager
             page — open it in another tab to edit those without leaving the
@@ -265,7 +265,7 @@ export default function Step7Images({
           href={`/products/${product.id}/images`}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-base text-blue-600 hover:underline flex-shrink-0"
+          className="inline-flex items-center gap-1 text-base text-blue-600 dark:text-blue-400 hover:underline flex-shrink-0"
         >
           Open image manager
           <ExternalLink className="w-3 h-3" />
@@ -274,7 +274,7 @@ export default function Step7Images({
 
       {loading && (
         <div
-          className="border border-slate-200 rounded-lg bg-white px-6 py-6 space-y-3"
+          className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-6 space-y-3"
           aria-busy="true"
           aria-label="Loading images"
         >
@@ -288,7 +288,7 @@ export default function Step7Images({
       )}
 
       {error && !loading && (
-        <div className="border border-rose-200 rounded-lg bg-rose-50 px-4 py-3 text-md text-rose-700 flex items-start gap-2">
+        <div className="border border-rose-200 dark:border-rose-900 rounded-lg bg-rose-50 dark:bg-rose-950/40 px-4 py-3 text-md text-rose-700 dark:text-rose-300 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           {error}
         </div>
@@ -298,8 +298,8 @@ export default function Step7Images({
         <>
           {/* Per-channel validation summary */}
           {channels.length > 0 && (
-            <div className="border border-slate-200 rounded-lg bg-white mb-4">
-              <div className="px-3 py-2 border-b border-slate-200 text-base font-medium text-slate-700">
+            <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 mb-4">
+              <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700 text-base font-medium text-slate-700 dark:text-slate-300">
                 Per-channel resolved set
               </div>
               <div className="px-3 py-2 space-y-1.5">
@@ -334,14 +334,14 @@ export default function Step7Images({
           )}
 
           {data.images.length === 0 ? (
-            <div className="border border-slate-200 rounded-lg bg-white px-6 py-12 text-center">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 text-slate-400 mb-4">
+            <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-12 text-center">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 mb-4">
                 <ImageOff className="w-6 h-6" />
               </div>
-              <p className="text-lg text-slate-700">
+              <p className="text-lg text-slate-700 dark:text-slate-300">
                 No images on this product yet.
               </p>
-              <p className="mt-1 text-base text-slate-500">
+              <p className="mt-1 text-base text-slate-500 dark:text-slate-400">
                 Add images on the product edit page or open the image
                 manager — then come back here.
               </p>
@@ -349,8 +349,8 @@ export default function Step7Images({
           ) : (
             <>
               {/* Quick-reorder list */}
-              <div className="border border-slate-200 rounded-lg bg-white overflow-hidden">
-                <div className="px-3 py-2 border-b border-slate-200 flex items-center justify-between text-base text-slate-600">
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden">
+                <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between text-base text-slate-600 dark:text-slate-400">
                   <span>
                     <span className="font-medium">{orderedUrls.length}</span>{' '}
                     / {MAX_IMAGES} images included in master order
@@ -359,7 +359,7 @@ export default function Step7Images({
                     <button
                       type="button"
                       onClick={restoreAll}
-                      className="text-blue-600 hover:underline"
+                      className="text-blue-600 dark:text-blue-400 hover:underline"
                     >
                       Restore all
                     </button>
@@ -371,54 +371,54 @@ export default function Step7Images({
                     <div
                       key={url}
                       className={cn(
-                        'flex items-center gap-3 px-3 py-2 border-b border-slate-100 last:border-b-0',
+                        'flex items-center gap-3 px-3 py-2 border-b border-slate-100 dark:border-slate-800 last:border-b-0',
                         idx === 0 && 'bg-blue-50/40',
                       )}
                     >
-                      <span className="text-sm font-mono text-slate-400 w-5 tabular-nums">
+                      <span className="text-sm font-mono text-slate-400 dark:text-slate-500 w-5 tabular-nums">
                         {idx + 1}
                       </span>
                       <Thumb url={url} alt={img?.alt ?? ''} />
                       <div className="flex-1 min-w-0">
-                        <div className="text-base text-slate-700 truncate">
+                        <div className="text-base text-slate-700 dark:text-slate-300 truncate">
                           {img?.alt ?? '(no alt text)'}
                         </div>
-                        <div className="text-sm text-slate-400 truncate">
+                        <div className="text-sm text-slate-400 dark:text-slate-500 truncate">
                           {url}
                         </div>
                       </div>
                       {idx === 0 ? (
-                        <span className="text-xs font-medium text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+                        <span className="text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/60 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
                           <Crown className="w-3 h-3" /> Main
                         </span>
                       ) : (
                         <button
                           type="button"
                           onClick={() => setMain(idx)}
-                          className="text-sm text-slate-500 hover:text-slate-900 hover:underline"
+                          className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:underline"
                         >
                           Set as main
                         </button>
                       )}
-                      <div className="flex items-center gap-0.5 border border-slate-200 rounded">
+                      <div className="flex items-center gap-0.5 border border-slate-200 dark:border-slate-700 rounded">
                         <button
                           type="button"
                           onClick={() => move(idx, -1)}
                           disabled={idx === 0}
                           title="Move up"
                           aria-label="Move image up"
-                          className="h-6 w-6 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed"
+                          className="h-6 w-6 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                           <ChevronUp className="w-3.5 h-3.5" />
                         </button>
-                        <div className="w-px h-4 bg-slate-200" />
+                        <div className="w-px h-4 bg-slate-200 dark:bg-slate-700" />
                         <button
                           type="button"
                           onClick={() => move(idx, 1)}
                           disabled={idx === orderedUrls.length - 1}
                           title="Move down"
                           aria-label="Move image down"
-                          className="h-6 w-6 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed"
+                          className="h-6 w-6 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                           <ChevronDown className="w-3.5 h-3.5" />
                         </button>
@@ -426,7 +426,7 @@ export default function Step7Images({
                       <button
                         type="button"
                         onClick={() => remove(idx)}
-                        className="text-sm text-slate-500 hover:text-rose-700 hover:underline"
+                        className="text-sm text-slate-500 dark:text-slate-400 hover:text-rose-700 dark:hover:text-rose-300 hover:underline"
                       >
                         Remove
                       </button>
@@ -437,8 +437,8 @@ export default function Step7Images({
 
               {/* Available-but-not-selected pool */}
               {removedAvailable.length > 0 && (
-                <div className="mt-4 border border-dashed border-slate-200 rounded-lg bg-slate-50 px-3 py-2">
-                  <div className="text-sm uppercase tracking-wide text-slate-500 mb-2">
+                <div className="mt-4 border border-dashed border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 px-3 py-2">
+                  <div className="text-sm uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">
                     Available but excluded
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -454,7 +454,7 @@ export default function Step7Images({
                           )
                         }
                         disabled={orderedUrls.length >= MAX_IMAGES}
-                        className="flex items-center gap-2 px-2 py-1 text-sm text-slate-600 bg-white border border-slate-200 rounded hover:border-blue-300 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="flex items-center gap-2 px-2 py-1 text-sm text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded hover:border-blue-300 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         <Thumb url={img.url} alt={img.alt ?? ''} small />
                         <span className="truncate max-w-[140px]">
@@ -503,10 +503,10 @@ function ChannelValidationRow({
   const status = validation?.status ?? 'ok'
   const tone =
     status === 'blocked'
-      ? 'border-rose-200 bg-rose-50'
+      ? 'border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40'
       : status === 'warned'
-      ? 'border-amber-200 bg-amber-50'
-      : 'border-slate-200'
+      ? 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40'
+      : 'border-slate-200 dark:border-slate-700'
   const Icon =
     status === 'blocked'
       ? AlertCircle
@@ -515,31 +515,31 @@ function ChannelValidationRow({
       : CheckCircle2
   const iconTone =
     status === 'blocked'
-      ? 'text-rose-600'
+      ? 'text-rose-600 dark:text-rose-400'
       : status === 'warned'
-      ? 'text-amber-600'
-      : 'text-emerald-600'
+      ? 'text-amber-600 dark:text-amber-400'
+      : 'text-emerald-600 dark:text-emerald-400'
   return (
     <div className={cn('border rounded px-2 py-1.5 text-sm', tone)}>
       <div className="flex items-center gap-2">
         <Icon className={cn('w-3.5 h-3.5 flex-shrink-0', iconTone)} />
-        <span className="font-mono text-slate-700 font-medium">
+        <span className="font-mono text-slate-700 dark:text-slate-300 font-medium">
           {channelKey}
         </span>
-        <span className="text-slate-500">
+        <span className="text-slate-500 dark:text-slate-400">
           · {imageCount} image{imageCount === 1 ? '' : 's'}
         </span>
-        <span className="text-slate-400">· source: {humanSource(source)}</span>
+        <span className="text-slate-400 dark:text-slate-500">· source: {humanSource(source)}</span>
       </div>
       {validation && (validation.blocking.length > 0 || validation.warnings.length > 0) && (
         <ul className="mt-1 ml-5 space-y-0.5">
           {validation.blocking.map((b, i) => (
-            <li key={`b-${i}`} className="text-rose-700">
+            <li key={`b-${i}`} className="text-rose-700 dark:text-rose-300">
               {b.message}
             </li>
           ))}
           {validation.warnings.map((w, i) => (
-            <li key={`w-${i}`} className="text-amber-700">
+            <li key={`w-${i}`} className="text-amber-700 dark:text-amber-300">
               {w.message}
             </li>
           ))}
@@ -580,11 +580,11 @@ function ContinueStatus({
   channels: string[]
 }) {
   if (channels.length === 0) {
-    return <span className="text-base text-slate-500">No channels</span>
+    return <span className="text-base text-slate-500 dark:text-slate-400">No channels</span>
   }
   if (blockingChannels.length > 0) {
     return (
-      <span className="text-base text-rose-700 inline-flex items-center gap-1.5">
+      <span className="text-base text-rose-700 dark:text-rose-300 inline-flex items-center gap-1.5">
         <AlertCircle className="w-3.5 h-3.5" />
         Blocked on {blockingChannels.length} channel
         {blockingChannels.length === 1 ? '' : 's'}:{' '}
@@ -593,7 +593,7 @@ function ContinueStatus({
     )
   }
   return (
-    <span className="text-base text-emerald-700 inline-flex items-center gap-1.5">
+    <span className="text-base text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-1.5">
       <CheckCircle2 className="w-3.5 h-3.5" />
       Resolved set passes every channel's hard requirements.
     </span>
@@ -615,7 +615,7 @@ function Thumb({
       src={url}
       alt={alt}
       className={cn(
-        'rounded border border-slate-200 object-cover bg-slate-50 flex-shrink-0',
+        'rounded border border-slate-200 dark:border-slate-700 object-cover bg-slate-50 dark:bg-slate-800 flex-shrink-0',
         small ? 'w-8 h-8' : 'w-12 h-12',
       )}
       onError={(e) => {

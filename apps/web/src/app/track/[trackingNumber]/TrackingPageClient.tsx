@@ -55,14 +55,14 @@ const EVENT_LABEL_IT: Record<string, string> = {
 }
 
 const STATUS_TONE: Record<string, string> = {
-  DRAFT: 'bg-slate-100 text-slate-700',
-  PACKED: 'bg-blue-100 text-blue-700',
-  LABEL_PRINTED: 'bg-blue-100 text-blue-700',
-  SHIPPED: 'bg-amber-100 text-amber-700',
-  IN_TRANSIT: 'bg-amber-100 text-amber-700',
-  DELIVERED: 'bg-emerald-100 text-emerald-700',
-  CANCELLED: 'bg-slate-100 text-slate-500',
-  RETURNED: 'bg-rose-100 text-rose-700',
+  DRAFT: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300',
+  PACKED: 'bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300',
+  LABEL_PRINTED: 'bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300',
+  SHIPPED: 'bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300',
+  IN_TRANSIT: 'bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300',
+  DELIVERED: 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300',
+  CANCELLED: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400',
+  RETURNED: 'bg-rose-100 dark:bg-rose-900/60 text-rose-700 dark:text-rose-300',
 }
 
 export default function TrackingPageClient({ trackingNumber }: { trackingNumber: string }) {
@@ -99,19 +99,19 @@ export default function TrackingPageClient({ trackingNumber }: { trackingNumber:
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="text-md text-slate-500">Caricamento…</div>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-800 flex items-center justify-center p-4">
+        <div className="text-md text-slate-500 dark:text-slate-400">Caricamento…</div>
       </div>
     )
   }
 
   if (error || !data) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-sm border border-slate-200 p-6 text-center space-y-3">
-          <AlertTriangle size={28} className="mx-auto text-amber-600" />
-          <div className="text-md text-slate-700">{error ?? 'Tracking non disponibile.'}</div>
-          <div className="text-sm text-slate-500 font-mono">{trackingNumber}</div>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-800 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6 text-center space-y-3">
+          <AlertTriangle size={28} className="mx-auto text-amber-600 dark:text-amber-400" />
+          <div className="text-md text-slate-700 dark:text-slate-300">{error ?? 'Tracking non disponibile.'}</div>
+          <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">{trackingNumber}</div>
         </div>
       </div>
     )
@@ -125,29 +125,29 @@ export default function TrackingPageClient({ trackingNumber }: { trackingNumber:
       <div className="max-w-2xl mx-auto p-4 md:p-8 space-y-5">
         {/* Brand header — minimal Xavia branding placeholder */}
         <div className="flex items-center justify-between">
-          <div className="text-xl font-bold text-slate-900">Xavia</div>
-          <div className="text-xs text-slate-500">Tracking</div>
+          <div className="text-xl font-bold text-slate-900 dark:text-slate-100">Xavia</div>
+          <div className="text-xs text-slate-500 dark:text-slate-400">Tracking</div>
         </div>
 
         {/* Status hero */}
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-5 md:p-6 space-y-3">
+        <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-5 md:p-6 space-y-3">
           <div className="flex items-start gap-3">
             {isDelivered ? (
-              <CheckCircle2 size={32} className="text-emerald-600 flex-shrink-0" />
+              <CheckCircle2 size={32} className="text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
             ) : isException ? (
-              <AlertTriangle size={32} className="text-rose-600 flex-shrink-0" />
+              <AlertTriangle size={32} className="text-rose-600 dark:text-rose-400 flex-shrink-0" />
             ) : (
-              <Truck size={32} className="text-blue-600 flex-shrink-0" />
+              <Truck size={32} className="text-blue-600 dark:text-blue-400 flex-shrink-0" />
             )}
             <div className="flex-1">
               <span
                 className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-                  STATUS_TONE[data.status] ?? 'bg-slate-100 text-slate-700'
+                  STATUS_TONE[data.status] ?? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                 }`}
               >
                 {STATUS_LABEL_IT[data.status] ?? data.status}
               </span>
-              <div className="text-2xl font-semibold text-slate-900 mt-1">
+              <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mt-1">
                 {isDelivered
                   ? 'Consegnato!'
                   : isException
@@ -155,7 +155,7 @@ export default function TrackingPageClient({ trackingNumber }: { trackingNumber:
                   : 'In viaggio'}
               </div>
               {data.estimatedDelivery && !isDelivered && (
-                <div className="text-md text-slate-600 mt-1 flex items-center gap-1.5">
+                <div className="text-md text-slate-600 dark:text-slate-400 mt-1 flex items-center gap-1.5">
                   <Clock size={14} />
                   Consegna stimata:{' '}
                   <span className="tabular-nums">
@@ -168,7 +168,7 @@ export default function TrackingPageClient({ trackingNumber }: { trackingNumber:
                 </div>
               )}
               {data.destinationCity && (
-                <div className="text-sm text-slate-500 mt-1 flex items-center gap-1.5">
+                <div className="text-sm text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1.5">
                   <MapPin size={12} />
                   Destinazione: {data.destinationCity}
                 </div>
@@ -176,16 +176,16 @@ export default function TrackingPageClient({ trackingNumber }: { trackingNumber:
             </div>
           </div>
 
-          <div className="border-t border-slate-100 pt-3 flex items-center gap-3 text-sm">
-            <Package size={14} className="text-slate-400" />
-            <div className="flex-1 font-mono text-slate-700">{data.trackingNumber}</div>
-            <div className="text-slate-500 uppercase tracking-wider text-xs">{data.carrier}</div>
+          <div className="border-t border-slate-100 dark:border-slate-800 pt-3 flex items-center gap-3 text-sm">
+            <Package size={14} className="text-slate-400 dark:text-slate-500" />
+            <div className="flex-1 font-mono text-slate-700 dark:text-slate-300">{data.trackingNumber}</div>
+            <div className="text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">{data.carrier}</div>
             {data.carrierTrackingUrl && (
               <a
                 href={data.carrierTrackingUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="text-blue-600 hover:underline inline-flex items-center gap-1 text-xs"
+                className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1 text-xs"
               >
                 Sito corriere <ExternalLink size={10} />
               </a>
@@ -194,12 +194,12 @@ export default function TrackingPageClient({ trackingNumber }: { trackingNumber:
         </div>
 
         {/* Timeline */}
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-5 md:p-6">
-          <div className="text-sm font-semibold text-slate-700 uppercase tracking-wider mb-3">
+        <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-5 md:p-6">
+          <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-3">
             Cronologia
           </div>
           {data.events.length === 0 ? (
-            <div className="text-md text-slate-500 py-4 text-center">
+            <div className="text-md text-slate-500 dark:text-slate-400 py-4 text-center">
               In attesa del primo aggiornamento dal corriere.
             </div>
           ) : (
@@ -216,13 +216,13 @@ export default function TrackingPageClient({ trackingNumber }: { trackingNumber:
                       : undefined
                   } />
                   <div className="flex-1 min-w-0">
-                    <div className="text-md text-slate-900">
+                    <div className="text-md text-slate-900 dark:text-slate-100">
                       {EVENT_LABEL_IT[e.code] ?? e.description}
                     </div>
                     {e.location && (
-                      <div className="text-sm text-slate-500">{e.location}</div>
+                      <div className="text-sm text-slate-500 dark:text-slate-400">{e.location}</div>
                     )}
-                    <div className="text-xs text-slate-400 tabular-nums">
+                    <div className="text-xs text-slate-400 dark:text-slate-500 tabular-nums">
                       {new Date(e.occurredAt).toLocaleString('it-IT', {
                         day: 'numeric',
                         month: 'short',
@@ -237,9 +237,9 @@ export default function TrackingPageClient({ trackingNumber }: { trackingNumber:
           )}
         </div>
 
-        <div className="text-center text-xs text-slate-400">
+        <div className="text-center text-xs text-slate-400 dark:text-slate-500">
           Hai domande? Scrivi a{' '}
-          <a href="mailto:support@xavia.it" className="text-blue-600 hover:underline">
+          <a href="mailto:support@xavia.it" className="text-blue-600 dark:text-blue-400 hover:underline">
             support@xavia.it
           </a>
         </div>

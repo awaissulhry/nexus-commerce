@@ -247,7 +247,7 @@ export default function PackStationClient({ shipmentId }: Props) {
           ]}
         />
         <Card>
-          <div className="text-md text-slate-500 py-8 text-center">
+          <div className="text-md text-slate-500 dark:text-slate-400 py-8 text-center">
             <Loader2 size={20} className="inline animate-spin mr-2" />
             {t('pack.loading')}
           </div>
@@ -261,9 +261,9 @@ export default function PackStationClient({ shipmentId }: Props) {
       <div className="space-y-5">
         <PageHeader title={t('pack.title')} />
         <Card>
-          <div className="text-md text-rose-700 py-8 text-center">
+          <div className="text-md text-rose-700 dark:text-rose-300 py-8 text-center">
             {t('pack.notFound')}{' '}
-            <Link href="/fulfillment/outbound" className="text-blue-600 hover:underline">
+            <Link href="/fulfillment/outbound" className="text-blue-600 dark:text-blue-400 hover:underline">
               {t('pack.backToOutbound')}
             </Link>
           </div>
@@ -286,7 +286,7 @@ export default function PackStationClient({ shipmentId }: Props) {
           <div className="flex items-center gap-2">
             <button
               onClick={() => window.open(`${getBackendUrl()}/api/fulfillment/shipments/${shipment.id}/pack-slip.html`, '_blank')}
-              className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
             >
               <FileText size={12} /> {t('pack.printPackSlip')}
             </button>
@@ -296,7 +296,7 @@ export default function PackStationClient({ shipmentId }: Props) {
                   ? `/fulfillment/outbound?drawer=${shipment.orderId}`
                   : '/fulfillment/outbound'
               }
-              className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
             >
               <ArrowLeft size={12} /> {t('common.back')}
             </Link>
@@ -307,14 +307,14 @@ export default function PackStationClient({ shipmentId }: Props) {
       {/* ── Scan-to-verify ───────────────────────────────────────── */}
       <Card>
         <div className="space-y-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
             <Package size={12} /> {t('pack.scanItems')}
             <button
               onClick={() => {
                 setSplitMode((v) => !v)
                 setSplitQty({})
               }}
-              className="ml-auto h-6 px-2 text-xs text-slate-600 border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1 normal-case font-normal tracking-normal"
+              className="ml-auto h-6 px-2 text-xs text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1 normal-case font-normal tracking-normal"
             >
               <Split size={11} />
               {splitMode ? t('common.cancel') : t('pack.split.cta')}
@@ -329,7 +329,7 @@ export default function PackStationClient({ shipmentId }: Props) {
             />
           )}
           {splitMode && (
-            <div className="text-sm text-slate-600 bg-blue-50 px-3 py-2 rounded border border-blue-200">
+            <div className="text-sm text-slate-600 dark:text-slate-400 bg-blue-50 dark:bg-blue-950/40 px-3 py-2 rounded border border-blue-200 dark:border-blue-900">
               {t('pack.split.hint')}
             </div>
           )}
@@ -345,28 +345,28 @@ export default function PackStationClient({ shipmentId }: Props) {
                   className={`flex items-center gap-3 px-3 py-2 border rounded transition-colors ${
                     splitMode
                       ? splitVal > 0
-                        ? 'bg-blue-50 border-blue-200'
-                        : 'bg-white border-slate-200'
+                        ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900'
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700'
                       : verified
-                      ? 'bg-emerald-50 border-emerald-200'
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900'
                       : count > 0
-                      ? 'bg-amber-50 border-amber-200'
-                      : 'bg-white border-slate-200'
+                      ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700'
                   }`}
                 >
                   {splitMode ? (
-                    <Boxes size={14} className="text-blue-600" />
+                    <Boxes size={14} className="text-blue-600 dark:text-blue-400" />
                   ) : verified ? (
-                    <CheckCircle2 size={14} className="text-emerald-600" />
+                    <CheckCircle2 size={14} className="text-emerald-600 dark:text-emerald-400" />
                   ) : (
-                    <Package size={14} className="text-slate-400" />
+                    <Package size={14} className="text-slate-400 dark:text-slate-500" />
                   )}
                   <div className="flex-1 min-w-0">
-                    <div className="text-md font-mono text-slate-900">{it.sku}</div>
+                    <div className="text-md font-mono text-slate-900 dark:text-slate-100">{it.sku}</div>
                   </div>
                   {splitMode ? (
                     <div className="flex items-center gap-2 text-sm">
-                      <span className="text-slate-500">{t('pack.split.move')}</span>
+                      <span className="text-slate-500 dark:text-slate-400">{t('pack.split.move')}</span>
                       <input
                         type="number"
                         min={0}
@@ -378,20 +378,20 @@ export default function PackStationClient({ shipmentId }: Props) {
                             [it.id]: Math.min(Math.max(0, Number(e.target.value) || 0), it.quantity),
                           }))
                         }
-                        className="w-16 h-7 px-2 text-md tabular-nums border border-slate-300 rounded outline-none focus:border-blue-500 text-right"
+                        className="w-16 h-7 px-2 text-md tabular-nums border border-slate-300 dark:border-slate-600 rounded outline-none focus:border-blue-500 text-right"
                       />
-                      <span className="text-slate-400">/ {it.quantity}</span>
+                      <span className="text-slate-400 dark:text-slate-500">/ {it.quantity}</span>
                     </div>
                   ) : (
                     <div className="text-md tabular-nums">
                       <span
                         className={
-                          overscan ? 'text-rose-700 font-semibold' : verified ? 'text-emerald-700' : 'text-slate-700'
+                          overscan ? 'text-rose-700 dark:text-rose-300 font-semibold' : verified ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-700 dark:text-slate-300'
                         }
                       >
                         {count}
                       </span>
-                      <span className="text-slate-400"> / {it.quantity}</span>
+                      <span className="text-slate-400 dark:text-slate-500"> / {it.quantity}</span>
                     </div>
                   )}
                 </div>
@@ -403,11 +403,11 @@ export default function PackStationClient({ shipmentId }: Props) {
               <button
                 onClick={submitSplit}
                 disabled={splitTotal === 0}
-                className="h-11 md:h-8 px-4 md:px-3 text-md bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+                className="h-11 md:h-8 px-4 md:px-3 text-md bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 inline-flex items-center gap-1.5"
               >
                 <Boxes size={12} /> {t('pack.split.confirm', { n: splitTotal })}
               </button>
-              <span className="text-sm text-slate-500">
+              <span className="text-sm text-slate-500 dark:text-slate-400">
                 {t('pack.split.willCreate')}
               </span>
             </div>
@@ -418,7 +418,7 @@ export default function PackStationClient({ shipmentId }: Props) {
       {/* ── Measurements ─────────────────────────────────────────── */}
       <Card>
         <div className="space-y-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
             <Scale size={12} /> {t('pack.measurements')}
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -444,7 +444,7 @@ export default function PackStationClient({ shipmentId }: Props) {
             const declared = Number(weightGrams)
             if (!Number.isFinite(declared) || declared <= 0) {
               return (
-                <div className="text-sm text-slate-500 inline-flex items-center gap-1.5">
+                <div className="text-sm text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
                   <Scale size={11} />
                   {t('pack.weightCheck.expected', {
                     expected: (expected / 1000).toFixed(2),
@@ -456,10 +456,10 @@ export default function PackStationClient({ shipmentId }: Props) {
             const pct = Math.round(variance * 1000) / 10
             const tone =
               variance > 0.2
-                ? 'text-rose-700 bg-rose-50 border-rose-200'
+                ? 'text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900'
                 : variance > 0.1
-                ? 'text-amber-700 bg-amber-50 border-amber-200'
-                : 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                ? 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900'
+                : 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900'
             const tKey =
               variance > 0.2
                 ? 'pack.weightCheck.error'
@@ -478,7 +478,7 @@ export default function PackStationClient({ shipmentId }: Props) {
             )
           })()}
           {!measurementsComplete && (
-            <div className="flex items-start gap-2 text-sm text-amber-700">
+            <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
               <AlertTriangle size={12} className="mt-0.5" />
               {t('pack.weightRequired')}
             </div>
@@ -490,12 +490,12 @@ export default function PackStationClient({ shipmentId }: Props) {
       {customs?.isInternational && (
         <Card>
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
               <Globe size={12} /> {t('pack.customs.title')}
               <Badge variant={customs.ready ? 'success' : 'warning'} size="sm">
                 {customs.ready ? t('pack.customs.ready') : t('pack.customs.actionRequired')}
               </Badge>
-              <span className="ml-auto text-xs text-slate-500 font-normal normal-case tabular-nums">
+              <span className="ml-auto text-xs text-slate-500 dark:text-slate-400 font-normal normal-case tabular-nums">
                 {t('pack.customs.destination')} · {customs.destinationCountry ?? '—'} · {t('pack.customs.total')}{' '}
                 {new Intl.NumberFormat('it-IT', {
                   style: 'currency',
@@ -510,17 +510,17 @@ export default function PackStationClient({ shipmentId }: Props) {
                   <div
                     key={l.sku}
                     className={`flex items-center gap-3 px-3 py-1.5 border rounded text-sm ${
-                      hasIssue ? 'bg-rose-50 border-rose-200' : 'bg-white border-slate-200'
+                      hasIssue ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700'
                     }`}
                   >
-                    <span className="font-mono text-slate-900 min-w-[120px]">{l.sku}</span>
-                    <span className={`tabular-nums ${l.hsCode ? 'text-slate-700' : 'text-rose-700 font-semibold'}`}>
+                    <span className="font-mono text-slate-900 dark:text-slate-100 min-w-[120px]">{l.sku}</span>
+                    <span className={`tabular-nums ${l.hsCode ? 'text-slate-700 dark:text-slate-300' : 'text-rose-700 dark:text-rose-300 font-semibold'}`}>
                       HS: {l.hsCode ?? t('pack.customs.hsMissing')}
                     </span>
-                    <span className={`text-slate-600 ${l.originCountry ? '' : 'text-amber-700'}`}>
+                    <span className={`text-slate-600 dark:text-slate-400 ${l.originCountry ? '' : 'text-amber-700 dark:text-amber-300'}`}>
                       Origin: {l.originCountry ?? '—'}
                     </span>
-                    <span className="ml-auto tabular-nums text-slate-700">
+                    <span className="ml-auto tabular-nums text-slate-700 dark:text-slate-300">
                       ×{l.quantity} · {l.totalValue.toFixed(2)} {customs.currency}
                     </span>
                   </div>
@@ -533,7 +533,7 @@ export default function PackStationClient({ shipmentId }: Props) {
                   <div
                     key={i}
                     className={`flex items-start gap-2 text-sm ${
-                      iss.severity === 'error' ? 'text-rose-700' : 'text-amber-700'
+                      iss.severity === 'error' ? 'text-rose-700 dark:text-rose-300' : 'text-amber-700 dark:text-amber-300'
                     }`}
                   >
                     <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
@@ -543,7 +543,7 @@ export default function PackStationClient({ shipmentId }: Props) {
               </div>
             )}
             {!customs.ready && (
-              <div className="text-sm text-slate-600 bg-slate-50 px-3 py-2 rounded border border-slate-200">
+              <div className="text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded border border-slate-200 dark:border-slate-700">
                 {t('pack.customs.hint')}
               </div>
             )}
@@ -554,13 +554,13 @@ export default function PackStationClient({ shipmentId }: Props) {
       {/* ── Notes ────────────────────────────────────────────────── */}
       <Card>
         <div className="space-y-2">
-          <label className="text-sm font-semibold text-slate-700 uppercase tracking-wider">{t('pack.notes')}</label>
+          <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">{t('pack.notes')}</label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
             placeholder={t('pack.notesPlaceholder')}
-            className="w-full px-3 py-2 text-md border border-slate-300 rounded outline-none focus:border-blue-500"
+            className="w-full px-3 py-2 text-md border border-slate-300 dark:border-slate-600 rounded outline-none focus:border-blue-500"
           />
         </div>
       </Card>
@@ -581,7 +581,7 @@ export default function PackStationClient({ shipmentId }: Props) {
             <button
               onClick={submit}
               disabled={!canPack}
-              className="ml-auto h-11 md:h-9 px-5 md:px-4 text-md bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+              className="ml-auto h-11 md:h-9 px-5 md:px-4 text-md bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
               {t('pack.markPacked')}
@@ -611,7 +611,7 @@ function NumberField({
   const invalid = !isEmpty && (!Number.isFinite(numeric) || numeric < min)
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-xs uppercase tracking-wider text-slate-500">
+      <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
         {label}
         {required && <span className="text-rose-500 ml-0.5">*</span>}
       </span>
@@ -622,7 +622,7 @@ function NumberField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className={`px-3 h-10 text-md tabular-nums border rounded outline-none ${
-          invalid ? 'border-rose-400' : 'border-slate-300 focus:border-blue-500'
+          invalid ? 'border-rose-400' : 'border-slate-300 dark:border-slate-600 focus:border-blue-500'
         }`}
       />
     </label>
