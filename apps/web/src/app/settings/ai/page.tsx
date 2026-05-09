@@ -15,18 +15,26 @@ export const revalidate = 0
 export default async function AiSettingsPage() {
   const backend = getBackendUrl()
 
-  // AI-1.7 — budget posture round-trip ships alongside the existing
-  // providers + usage summary fetches so the first paint already
-  // shows the kill-switch banner + budget-posture card without any
-  // client-side spinner.
-  const [providersRes, summary7Res, summary30Res, recentRes, postureRes] =
-    await Promise.all([
-      fetch(`${backend}/api/ai/providers`, { cache: 'no-store' }),
-      fetch(`${backend}/api/ai/usage/summary?days=7`, { cache: 'no-store' }),
-      fetch(`${backend}/api/ai/usage/summary?days=30`, { cache: 'no-store' }),
-      fetch(`${backend}/api/ai/usage/recent?limit=50`, { cache: 'no-store' }),
-      fetch(`${backend}/api/ai/usage/budget-posture`, { cache: 'no-store' }),
-    ])
+  // AI-1.7 + AI-1.8 — providers + budget posture + per-wizard ROI
+  // round-trip together. First paint renders every card without a
+  // client spinner.
+  const [
+    providersRes,
+    summary7Res,
+    summary30Res,
+    recentRes,
+    postureRes,
+    topWizardsRes,
+  ] = await Promise.all([
+    fetch(`${backend}/api/ai/providers`, { cache: 'no-store' }),
+    fetch(`${backend}/api/ai/usage/summary?days=7`, { cache: 'no-store' }),
+    fetch(`${backend}/api/ai/usage/summary?days=30`, { cache: 'no-store' }),
+    fetch(`${backend}/api/ai/usage/recent?limit=50`, { cache: 'no-store' }),
+    fetch(`${backend}/api/ai/usage/budget-posture`, { cache: 'no-store' }),
+    fetch(`${backend}/api/ai/usage/top-wizards?days=30&limit=10`, {
+      cache: 'no-store',
+    }),
+  ])
 
   const providersJson = providersRes.ok ? await providersRes.json() : null
   const providers = providersJson?.providers ?? []
@@ -37,6 +45,7 @@ export default async function AiSettingsPage() {
   const summary30 = summary30Res.ok ? await summary30Res.json() : null
   const recent = recentRes.ok ? (await recentRes.json()).rows ?? [] : []
   const posture = postureRes.ok ? await postureRes.json() : null
+  const topWizards = topWizardsRes.ok ? await topWizardsRes.json() : null
 
   return (
     <AiUsageClient
@@ -46,6 +55,7 @@ export default async function AiSettingsPage() {
       summary30={summary30}
       recent={recent}
       posture={posture}
+      topWizards={topWizards}
     />
   )
 }

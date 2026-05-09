@@ -22,7 +22,9 @@ import {
   Loader2,
   ShieldAlert,
   Wallet,
+  TrendingUp,
 } from 'lucide-react'
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -73,6 +75,38 @@ interface BudgetPosture {
   asOf: string
 }
 
+// AI-1.8 — per-wizard ROI rollup from /api/ai/usage/top-wizards.
+interface TopWizardRow {
+  wizardId: string | null
+  productId: string | null
+  productSku: string | null
+  productName: string | null
+  channels: number
+  status: string
+  currentStep: number | null
+  createdAt: string | null
+  updatedAt: string | null
+  completedAt: string | null
+  aiCalls: number
+  inputTokens: number
+  outputTokens: number
+  aiCostUSD: number
+  minutesSaved: number
+  timeSavedUSD: number
+  roi: number | null
+}
+
+interface TopWizards {
+  range: { days: number; since: string }
+  rates: { hourlyUSD: number; minutesPerChannel: number }
+  rows: TopWizardRow[]
+  totals: {
+    aiCostUSD: number
+    minutesSaved: number
+    timeSavedUSD: number
+  }
+}
+
 interface RecentCall {
   id: string
   provider: string
@@ -119,6 +153,7 @@ export default function AiUsageClient({
   summary30: initialSummary30,
   recent: initialRecent,
   posture: initialPosture,
+  topWizards: initialTopWizards,
 }: {
   providers: Provider[]
   killSwitch: boolean
@@ -126,12 +161,14 @@ export default function AiUsageClient({
   summary30: UsageSummary | null
   recent: RecentCall[]
   posture: BudgetPosture | null
+  topWizards: TopWizards | null
 }) {
   const [killSwitch, setKillSwitch] = useState(initialKillSwitch)
   const [summary7, setSummary7] = useState(initialSummary7)
   const [summary30, setSummary30] = useState(initialSummary30)
   const [recent, setRecent] = useState(initialRecent)
   const [posture, setPosture] = useState(initialPosture)
+  const [topWizards, setTopWizards] = useState(initialTopWizards)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -140,12 +177,15 @@ export default function AiUsageClient({
     setError(null)
     try {
       const backend = getBackendUrl()
-      const [s7, s30, rec, post, prov] = await Promise.all([
+      const [s7, s30, rec, post, prov, tw] = await Promise.all([
         fetch(`${backend}/api/ai/usage/summary?days=7`, { cache: 'no-store' }),
         fetch(`${backend}/api/ai/usage/summary?days=30`, { cache: 'no-store' }),
         fetch(`${backend}/api/ai/usage/recent?limit=50`, { cache: 'no-store' }),
         fetch(`${backend}/api/ai/usage/budget-posture`, { cache: 'no-store' }),
         fetch(`${backend}/api/ai/providers`, { cache: 'no-store' }),
+        fetch(`${backend}/api/ai/usage/top-wizards?days=30&limit=10`, {
+          cache: 'no-store',
+        }),
       ])
       if (s7.ok) setSummary7(await s7.json())
       if (s30.ok) setSummary30(await s30.json())
@@ -158,6 +198,7 @@ export default function AiUsageClient({
         const j = await prov.json()
         if (typeof j?.killSwitch === 'boolean') setKillSwitch(j.killSwitch)
       }
+      if (tw.ok) setTopWizards(await tw.json())
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -238,6 +279,13 @@ export default function AiUsageClient({
           to dig to find their cost ceilings; surfaces hitWarn as an
           amber tone on whichever horizon is at ≥90%. */}
       {posture && <BudgetPostureCard posture={posture} />}
+
+      {/* AI-1.8 — per-wizard ROI. Operators see "AI cost vs operator
+          time saved" per wizard, sorted by AI spend desc. Time saved
+          counts only for SUBMITTED / LIVE wizards. */}
+      {topWizards && topWizards.rows.length > 0 && (
+        <TopWizardsCard topWizards={topWizards} />
+      )}
 
       {/* Providers */}
       <section className="space-y-2">
@@ -647,5 +695,173 @@ function BudgetHorizonCard({
         </div>
       )}
     </div>
+  )
+}
+
+// AI-1.8 — per-wizard ROI surface. Sortable would be nice but the
+// backend already returns rows cost-desc, which is the "where's my
+// money going?" sort 99% of operators want. Status pill + ROI ratio
+// + deep-link to the wizard for the few wizards burning the most AI.
+function TopWizardsCard({ topWizards }: { topWizards: TopWizards }) {
+  const { rows, totals, rates, range } = topWizards
+  const overallRoi =
+    totals.aiCostUSD > 0 ? totals.timeSavedUSD / totals.aiCostUSD : null
+  return (
+    <section className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-md font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider inline-flex items-center gap-1.5">
+          <TrendingUp className="w-3 h-3" />
+          Top wizards by AI cost · last {range.days}d
+        </h2>
+        <div className="text-sm text-slate-500 dark:text-slate-400 tabular-nums">
+          {fmtUSD(totals.aiCostUSD)} spent · {fmtUSD(totals.timeSavedUSD)}{' '}
+          time saved
+          {overallRoi != null && (
+            <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-300 tabular-nums">
+              {overallRoi >= 100
+                ? `${overallRoi.toFixed(0)}×`
+                : `${overallRoi.toFixed(1)}×`}{' '}
+              ROI
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden bg-white dark:bg-slate-900">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+            <tr>
+              <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                Product
+              </th>
+              <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-24">
+                Status
+              </th>
+              <th className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-16">
+                Channels
+              </th>
+              <th className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-16">
+                Calls
+              </th>
+              <th className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-20">
+                AI cost
+              </th>
+              <th className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-20">
+                Time saved
+              </th>
+              <th className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-16">
+                ROI
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <TopWizardRowView key={r.wizardId ?? Math.random()} row={r} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="text-sm text-slate-500 dark:text-slate-400 px-1">
+        Time saved assumes{' '}
+        <span className="font-mono">
+          {rates.minutesPerChannel} min/channel
+        </span>{' '}
+        of manual publishing avoided · operator hourly{' '}
+        <span className="font-mono">{fmtUSD(rates.hourlyUSD)}/hr</span>.
+        Counts only SUBMITTED / LIVE wizards. Override via{' '}
+        <span className="font-mono">NEXUS_OPERATOR_HOURLY_USD</span> +{' '}
+        <span className="font-mono">NEXUS_PUBLISH_MINUTES_PER_CHANNEL</span>.
+      </div>
+    </section>
+  )
+}
+
+function TopWizardRowView({ row }: { row: TopWizardRow }) {
+  const statusTone =
+    row.status === 'LIVE'
+      ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-300'
+      : row.status === 'SUBMITTED'
+        ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900 text-blue-800 dark:text-blue-300'
+        : row.status === 'FAILED'
+          ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-300'
+          : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+  const isPublished = row.status === 'LIVE' || row.status === 'SUBMITTED'
+  const productHref = row.productId
+    ? `/products/${row.productId}/list-wizard`
+    : null
+  return (
+    <tr
+      className="border-b border-slate-100 dark:border-slate-800 last:border-b-0"
+    >
+      <td className="px-3 py-1.5">
+        {productHref ? (
+          <Link
+            href={productHref}
+            className="text-blue-700 dark:text-blue-300 hover:underline"
+          >
+            <span className="font-mono text-slate-900 dark:text-slate-100">
+              {row.productSku ?? 'unknown'}
+            </span>
+            {row.productName && (
+              <span className="ml-2 text-slate-600 dark:text-slate-400 truncate">
+                {row.productName}
+              </span>
+            )}
+          </Link>
+        ) : (
+          <span className="text-slate-500 dark:text-slate-400 italic">
+            wizard {row.wizardId?.slice(0, 8) ?? 'unknown'}…
+          </span>
+        )}
+      </td>
+      <td className="px-3 py-1.5">
+        <span
+          className={cn(
+            'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border',
+            statusTone,
+          )}
+        >
+          {row.status}
+        </span>
+      </td>
+      <td className="px-3 py-1.5 text-right tabular-nums text-slate-700 dark:text-slate-300">
+        {row.channels}
+      </td>
+      <td className="px-3 py-1.5 text-right tabular-nums text-slate-600 dark:text-slate-400">
+        {row.aiCalls}
+      </td>
+      <td className="px-3 py-1.5 text-right tabular-nums text-slate-900 dark:text-slate-100 font-medium">
+        {fmtUSD(row.aiCostUSD)}
+      </td>
+      <td className="px-3 py-1.5 text-right tabular-nums">
+        {isPublished && row.minutesSaved > 0 ? (
+          <span className="text-slate-700 dark:text-slate-300">
+            {fmtUSD(row.timeSavedUSD)}
+          </span>
+        ) : (
+          <span className="text-slate-400 dark:text-slate-500 italic">
+            —
+          </span>
+        )}
+      </td>
+      <td className="px-3 py-1.5 text-right tabular-nums">
+        {row.roi != null ? (
+          <span
+            className={cn(
+              'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium tabular-nums',
+              row.roi >= 1
+                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
+                : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300',
+            )}
+            title={`AI cost ${fmtUSD(row.aiCostUSD)} vs time saved ${fmtUSD(row.timeSavedUSD)}`}
+          >
+            {row.roi >= 100 ? `${row.roi.toFixed(0)}×` : `${row.roi.toFixed(1)}×`}
+          </span>
+        ) : (
+          <span className="text-slate-400 dark:text-slate-500 italic">
+            —
+          </span>
+        )}
+      </td>
+    </tr>
   )
 }

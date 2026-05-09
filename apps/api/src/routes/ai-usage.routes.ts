@@ -164,6 +164,150 @@ const aiUsageRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // AI-1.8 — per-wizard ROI rollup. Caller picks the window (days,
+  // capped to MAX_DAYS) and how many wizards to return (limit, capped
+  // to 100). Response carries enough context to surface a Salesforce-
+  // tier "this wizard cost $X in AI, saved Y minutes of manual work,
+  // ROI Z×" card on the settings page without a second round-trip.
+  //
+  // Time saved is computed from two env-tunable knobs:
+  //   NEXUS_OPERATOR_HOURLY_USD       — default $50/hr
+  //   NEXUS_PUBLISH_MINUTES_PER_CHANNEL — default 30 minutes
+  //
+  // Both default to neutral values; raise the hourly to your actual
+  // loaded operator cost + minutes to the actual time per channel
+  // (Amazon Seller Central direct vs Nexus wizard) for accurate ROI.
+  // Only SUBMITTED / LIVE wizards count toward time-saved (a DRAFT
+  // wizard hasn't published anything, so AI spend on it is not yet
+  // ROI-positive).
+  fastify.get<{
+    Querystring: { days?: string; limit?: string }
+  }>('/ai/usage/top-wizards', async (request, reply) => {
+    const daysRaw = parseInt(request.query?.days ?? '30', 10) || 30
+    const days = Math.min(Math.max(daysRaw, 1), MAX_DAYS)
+    const limitRaw = parseInt(request.query?.limit ?? '20', 10) || 20
+    const limit = Math.min(Math.max(limitRaw, 1), 100)
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+
+    const hourlyUSD = (() => {
+      const raw = process.env.NEXUS_OPERATOR_HOURLY_USD
+      if (raw == null || raw.trim() === '') return 50
+      const n = Number(raw)
+      return Number.isFinite(n) && n >= 0 ? n : 50
+    })()
+    const minutesPerChannel = (() => {
+      const raw = process.env.NEXUS_PUBLISH_MINUTES_PER_CHANNEL
+      if (raw == null || raw.trim() === '') return 30
+      const n = Number(raw)
+      return Number.isFinite(n) && n >= 0 ? n : 30
+    })()
+
+    // 1. Group AiUsageLog by entityId where entityType='ListingWizard'.
+    const grouped = await prisma.aiUsageLog.groupBy({
+      by: ['entityId'],
+      where: {
+        entityType: 'ListingWizard',
+        createdAt: { gte: since },
+        entityId: { not: null },
+      },
+      _count: { _all: true },
+      _sum: { inputTokens: true, outputTokens: true, costUSD: true },
+      orderBy: { _sum: { costUSD: 'desc' } },
+      take: limit,
+    })
+
+    if (grouped.length === 0) {
+      reply.header('Cache-Control', 'private, max-age=30')
+      return {
+        range: { days, since: since.toISOString() },
+        rates: { hourlyUSD, minutesPerChannel },
+        rows: [],
+        totals: {
+          aiCostUSD: 0,
+          minutesSaved: 0,
+          timeSavedUSD: 0,
+        },
+      }
+    }
+
+    // 2. Join with ListingWizard rows for status + channels count +
+    //    product context. Channels is JSONB; we read it as JsonValue
+    //    and array-length client-side rather than try to teach Prisma
+    //    to count JSONB array elements.
+    const wizardIds = grouped
+      .map((g) => g.entityId)
+      .filter((id): id is string => typeof id === 'string')
+    const wizards = await prisma.listingWizard.findMany({
+      where: { id: { in: wizardIds } },
+      select: {
+        id: true,
+        productId: true,
+        channels: true,
+        status: true,
+        currentStep: true,
+        createdAt: true,
+        updatedAt: true,
+        completedAt: true,
+        product: { select: { sku: true, name: true } },
+      },
+    })
+    const wizardById = new Map(wizards.map((w) => [w.id, w]))
+
+    // 3. Compose rows in the groupBy order (already cost-desc).
+    const rows = grouped.map((g) => {
+      const w = g.entityId ? wizardById.get(g.entityId) : null
+      const channels = Array.isArray(w?.channels)
+        ? (w!.channels as unknown[]).length
+        : 0
+      const status = w?.status ?? 'UNKNOWN'
+      const isPublished = status === 'SUBMITTED' || status === 'LIVE'
+      const minutesSaved = isPublished ? channels * minutesPerChannel : 0
+      const timeSavedUSD = (minutesSaved / 60) * hourlyUSD
+      const aiCostUSD = Number(g._sum.costUSD ?? 0)
+      const roi =
+        aiCostUSD > 0 && timeSavedUSD > 0
+          ? timeSavedUSD / aiCostUSD
+          : null
+      return {
+        wizardId: g.entityId,
+        productId: w?.productId ?? null,
+        productSku: w?.product?.sku ?? null,
+        productName: w?.product?.name ?? null,
+        channels,
+        status,
+        currentStep: w?.currentStep ?? null,
+        createdAt: w?.createdAt?.toISOString() ?? null,
+        updatedAt: w?.updatedAt?.toISOString() ?? null,
+        completedAt: w?.completedAt?.toISOString() ?? null,
+        aiCalls: g._count._all,
+        inputTokens: g._sum.inputTokens ?? 0,
+        outputTokens: g._sum.outputTokens ?? 0,
+        aiCostUSD,
+        minutesSaved,
+        timeSavedUSD,
+        roi,
+      }
+    })
+
+    const totals = rows.reduce(
+      (acc, r) => {
+        acc.aiCostUSD += r.aiCostUSD
+        acc.minutesSaved += r.minutesSaved
+        acc.timeSavedUSD += r.timeSavedUSD
+        return acc
+      },
+      { aiCostUSD: 0, minutesSaved: 0, timeSavedUSD: 0 },
+    )
+
+    reply.header('Cache-Control', 'private, max-age=30')
+    return {
+      range: { days, since: since.toISOString() },
+      rates: { hourlyUSD, minutesPerChannel },
+      rows,
+      totals,
+    }
+  })
+
   fastify.get<{ Querystring: { limit?: string } }>(
     '/ai/usage/recent',
     async (request) => {
