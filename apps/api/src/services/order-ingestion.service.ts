@@ -248,6 +248,15 @@ export async function ingestMockOrders(): Promise<IngestionStats> {
       // cascade all stay consistent. The audit row now also links to
       // the Order via orderId, which the legacy processSale path didn't.
       //
+      // L.12 — when the product has lots, switch to consumeWithFefo so
+      // the consume picks lots in (expiresAt ASC, receivedAt ASC) order
+      // and decrements lot.unitsRemaining atomically. Recalled lots are
+      // automatically excluded. Falls back to a single non-lot
+      // applyStockMovement when no lots exist (existing behavior).
+      // allowShortfall=true so lot-tracked products don't block orders
+      // when lot stock is short — the remainder consumes as non-lot
+      // (legacy behavior, with a clear notes prefix).
+      //
       // P1 #41 — FBA orders are NOT decremented here. Amazon ships
       // from FBA inventory; the 15-min FBA cron syncs
       // fulfillableQuantity into the AMAZON-EU-FBA StockLevel and
@@ -259,6 +268,7 @@ export async function ingestMockOrders(): Promise<IngestionStats> {
           `[ORDER INGESTION] Skipping local stock decrement for FBA order ${order.id} (FBA cron syncs AMAZON-EU-FBA pool every 15min)`,
         )
       } else {
+        const { consumeWithFefo } = await import('./lot.service.js')
         for (const item of orderItems) {
           try {
             logger.info(`[ORDER INGESTION] Processing sale for SKU: ${item.sku}, Qty: ${item.quantity}`)
@@ -272,18 +282,25 @@ export async function ingestMockOrders(): Promise<IngestionStats> {
               continue
             }
 
-            await applyStockMovement({
+            const result = await consumeWithFefo({
               productId: product.id,
-              change: -item.quantity,
+              quantity: item.quantity,
               reason: 'ORDER_PLACED',
               referenceType: 'Order',
               referenceId: order.id,
               orderId: order.id,
               actor: 'mock-order-ingestion',
               notes: `Mock order ingestion (channel=${channel}, fulfillment=${fulfillmentMethod ?? 'n/a'})`,
+              // Don't block orders on partial lot coverage — the
+              // remainder consumes as non-lot stock with a notes
+              // prefix the rimanenze report can split out later.
+              allowShortfall: true,
             })
 
-            logger.info(`[ORDER INGESTION] Inventory decremented for ${item.sku}`)
+            logger.info(
+              `[ORDER INGESTION] Inventory decremented for ${item.sku} ` +
+              `(lots=${result.lotsAllocated}, nonLotShortfall=${result.nonLotShortfall})`,
+            )
           } catch (error: any) {
             logger.warn(
               `[ORDER INGESTION] Failed to decrement inventory for ${item.sku}:`,
