@@ -3623,6 +3623,18 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           aiCalls?: number
           redactionTotal?: number
           error?: string
+          // AI-4.9 — per-group AI content. The frontend reads this
+          // off the orchestrator response and applies via PATCH
+          // /listing-wizard/:id (channelStates merge) when the
+          // operator clicks "Apply all to wizard". Title / bullets
+          // (string-array JSON) / description / keywords; absent
+          // when the group failed.
+          content?: {
+            title?: string
+            bullets?: string
+            description?: string
+            keywords?: string
+          }
         }> = []
         let stepAiCalls = 0
         let stepCostUSD = 0
@@ -3723,6 +3735,35 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
             if (result.budgetWarn && !topBudgetWarn) {
               topBudgetWarn = result.budgetWarn
             }
+            // AI-4.9 — pull the per-field content out of the
+            // GenerationResult so the frontend can render the diff
+            // and apply via PATCH. Bullets is a string[] inside the
+            // result; we JSON-encode it because the wizard's
+            // channelStates.attributes treats string-array fields as
+            // serialised arrays (matches Step 4 / 5 storage shape).
+            const content: {
+              title?: string
+              bullets?: string
+              description?: string
+              keywords?: string
+            } = {}
+            if (typeof result.title?.content === 'string') {
+              content.title = result.title.content
+            }
+            if (Array.isArray(result.bullets?.content)) {
+              const filtered = result.bullets.content.filter(
+                (b): b is string => typeof b === 'string' && b.trim().length > 0,
+              )
+              if (filtered.length > 0) {
+                content.bullets = JSON.stringify(filtered)
+              }
+            }
+            if (typeof result.description?.content === 'string') {
+              content.description = result.description.content
+            }
+            if (typeof result.keywords?.content === 'string') {
+              content.keywords = result.keywords.content
+            }
             groupResults.push({
               groupKey,
               platform: g.platform,
@@ -3733,6 +3774,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
               aiCalls: result.usage.length,
               costUSD: groupCost,
               redactionTotal: result.redactionTotal,
+              content,
             })
           } catch (err) {
             if (err instanceof BudgetExceededError) {

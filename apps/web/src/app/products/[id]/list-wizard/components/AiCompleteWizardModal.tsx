@@ -62,6 +62,28 @@ interface EstimateResponse {
   budget: BudgetSnapshot
 }
 
+// AI-4.9 — per-group AI content the orchestrator returns inside
+// the Step 5 entry's details.groups[]. Frontend reads this to drive
+// the Apply button + preview.
+interface OrchestratorGroupResult {
+  groupKey: string
+  platform: string
+  language: string
+  marketplaces: string[]
+  channelKeys: string[]
+  ok: boolean
+  costUSD?: number
+  aiCalls?: number
+  redactionTotal?: number
+  error?: string
+  content?: {
+    title?: string
+    bullets?: string
+    description?: string
+    keywords?: string
+  }
+}
+
 interface RunStepEntry {
   stepId: number
   action: string
@@ -70,6 +92,7 @@ interface RunStepEntry {
   aiCalls: number
   costUSD: number
   redactionTotal: number
+  details?: { groups?: OrchestratorGroupResult[] }
   error?: string
 }
 
@@ -84,7 +107,15 @@ interface RunResponse {
   budgetWarn?: 'per_wizard' | 'per_day' | 'per_month'
 }
 
-type Phase = 'idle' | 'estimating' | 'ready' | 'running' | 'result' | 'error'
+type Phase =
+  | 'idle'
+  | 'estimating'
+  | 'ready'
+  | 'running'
+  | 'result'
+  | 'applying'
+  | 'applied'
+  | 'error'
 
 const fmtUSD = (n: number): string =>
   n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`
@@ -163,11 +194,99 @@ export default function AiCompleteWizardButton({
   }, [open, phase, wizardId])
 
   const onClose = useCallback(() => {
-    if (phase === 'running') return // don't let user close mid-run
+    // AI-4.8/4.9 — block close during the heavy phases. running =
+    // orchestrator firing AI; applying = PATCHing wizard state.
+    // applied = reload pending, ignore close.
+    if (phase === 'running' || phase === 'applying' || phase === 'applied') return
     setOpen(false)
     // Defer reset until after Modal animates out.
     window.setTimeout(reset, 250)
   }, [phase, reset])
+
+  // AI-4.9 — apply all AI content to the wizard. Walks the
+  // orchestrator's per-group results, builds a channelStates patch
+  // (one entry per channelKey, attributes filled from the group's
+  // AI content), PATCHes /listing-wizard/:id, and reloads the page
+  // so ListWizardClient picks up the new initialWizard. Reload is
+  // brutal but reliable; soft-refresh via cross-tab event lands in
+  // a follow-up.
+  const onApplyAll = useCallback(async () => {
+    if (!result) return
+    setPhase('applying')
+    setError(null)
+    try {
+      // Per-channel attributes patch built from every successful
+      // group's content. Field name mapping mirrors what the wizard
+      // stores in channelStates[ck].attributes today (see Step 4
+      // Attributes overrides).
+      const channelStatesPatch: Record<
+        string,
+        { attributes: Record<string, string> }
+      > = {}
+      for (const step of result.steps) {
+        if (step.stepId !== 5) continue
+        const groups = step.details?.groups ?? []
+        for (const g of groups) {
+          if (!g.ok || !g.content) continue
+          const attrs: Record<string, string> = {}
+          if (g.content.title) attrs.item_name = g.content.title
+          if (g.content.bullets) attrs.bullet_point = g.content.bullets
+          if (g.content.description)
+            attrs.product_description = g.content.description
+          if (g.content.keywords) attrs.generic_keyword = g.content.keywords
+          if (Object.keys(attrs).length === 0) continue
+          for (const channelKey of g.channelKeys) {
+            // Merge with anything already accumulated for this
+            // channelKey from a sibling group (shouldn't happen
+            // since groups dedupe by language:platform but be safe).
+            const existing = channelStatesPatch[channelKey]?.attributes ?? {}
+            channelStatesPatch[channelKey] = {
+              attributes: { ...existing, ...attrs },
+            }
+          }
+        }
+      }
+      if (Object.keys(channelStatesPatch).length === 0) {
+        // Nothing to apply (every group failed or no content).
+        // Surface as applied=true so the operator can dismiss; the
+        // result-view already shows the failed status.
+        setPhase('applied')
+        window.setTimeout(() => window.location.reload(), 800)
+        return
+      }
+      const res = await fetch(
+        `${getBackendUrl()}/api/listing-wizard/${wizardId}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channelStates: channelStatesPatch }),
+        },
+      )
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}))
+        throw new Error(errBody.error ?? `HTTP ${res.status}`)
+      }
+      setPhase('applied')
+      toast({
+        tone: 'success',
+        title: t('listWizard.aiComplete.applied'),
+        durationMs: 4000,
+      })
+      // Reload so ListWizardClient picks up the patched initialWizard.
+      // Brutal but the soft-refresh path requires plumbing through to
+      // the parent client; defer that to a follow-up.
+      window.setTimeout(() => window.location.reload(), 600)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      setPhase('error')
+      toast({
+        tone: 'error',
+        title: t('listWizard.aiComplete.applyError'),
+        description: err instanceof Error ? err.message : String(err),
+        durationMs: 8000,
+      })
+    }
+  }, [result, wizardId, t, toast])
 
   const onConfirm = useCallback(async () => {
     if (phase !== 'ready' || !estimate) return
@@ -298,6 +417,20 @@ export default function AiCompleteWizardButton({
 
           {phase === 'result' && result && <ResultView result={result} t={t} />}
 
+          {phase === 'applying' && (
+            <div className="flex items-center gap-2 text-base text-slate-700 dark:text-slate-300">
+              <Loader2 className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" />
+              {t('listWizard.aiComplete.applying')}
+            </div>
+          )}
+
+          {phase === 'applied' && (
+            <div className="flex items-center gap-2 text-base text-emerald-700 dark:text-emerald-300">
+              <CheckCircle2 className="w-4 h-4" />
+              {t('listWizard.aiComplete.applied')}
+            </div>
+          )}
+
           {phase === 'error' && (
             <div className="border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 rounded-md px-3 py-2 inline-flex items-start gap-2 text-base text-rose-800 dark:text-rose-200">
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
@@ -318,7 +451,11 @@ export default function AiCompleteWizardButton({
             variant="secondary"
             size="sm"
             onClick={onClose}
-            disabled={phase === 'running'}
+            disabled={
+              phase === 'running' ||
+              phase === 'applying' ||
+              phase === 'applied'
+            }
           >
             {phase === 'result' || phase === 'error'
               ? t('listWizard.aiComplete.close')
@@ -342,10 +479,34 @@ export default function AiCompleteWizardButton({
               })}
             </Button>
           )}
+          {/* AI-4.9 — Apply only enabled when the orchestrator
+              actually produced content for at least one group. The
+              button is hidden in error / running / applying / applied
+              phases since it'd either be a no-op or unsafe. */}
+          {phase === 'result' && hasApplicableContent(result) && (
+            <Button variant="primary" size="sm" onClick={onApplyAll}>
+              <Sparkles className="w-3 h-3" />
+              {t('listWizard.aiComplete.applyAll')}
+            </Button>
+          )}
         </ModalFooter>
       </Modal>
     </>
   )
+}
+
+function hasApplicableContent(result: RunResponse | null): boolean {
+  if (!result) return false
+  for (const step of result.steps) {
+    if (step.stepId !== 5) continue
+    const groups = step.details?.groups ?? []
+    for (const g of groups) {
+      if (g.ok && g.content && Object.values(g.content).some((v) => v)) {
+        return true
+      }
+    }
+  }
+  return false
 }
 
 function EstimateView({
