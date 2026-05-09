@@ -3333,6 +3333,7 @@
   "products.edit.master.basePriceLabel": "Base price",
   "products.edit.master.skuLabel": "Master SKU",
   "products.edit.master.nameLabel": "Product name",
+  "products.edit.master.nameCount": "{len} / {ebayLimit} (eBay)",
   "products.edit.master.brandLabel": "Brand",
   "products.edit.master.manufacturerLabel": "Manufacturer",
   "products.edit.master.upcLabel": "UPC",

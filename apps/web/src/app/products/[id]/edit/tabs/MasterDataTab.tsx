@@ -421,6 +421,7 @@ export default function MasterDataTab({
               onClick={() => void aiSuggest('name')}
               tooltip={t('products.edit.master.aiSuggestTitle')}
             />
+            <NameCounter value={data.name} t={t} />
           </div>
           <Input
             label={t('products.edit.master.brandLabel')}
@@ -763,6 +764,56 @@ function AiSuggestInline({
       )}
       {label}
     </button>
+  )
+}
+
+// W14.7 — character counter for the master product name.
+//
+// eBay's 80-char title limit is the most restrictive across our
+// channels; Amazon 200; Shopify unlimited. We surface eBay as the
+// headline so an operator writing for "all channels in one shot"
+// stays inside the tightest envelope. Channel-specific overrides
+// can still extend per-channel.
+const NAME_LIMITS = [
+  { channel: 'eBay', limit: 80 },
+  { channel: 'Amazon', limit: 200 },
+] as const
+
+function NameCounter({
+  value,
+  t,
+}: {
+  value: string
+  t: (key: string, vars?: Record<string, string | number>) => string
+}) {
+  const len = value.length
+  const ebayLimit = NAME_LIMITS[0].limit
+  const tone =
+    len === 0
+      ? 'idle'
+      : len > ebayLimit
+        ? 'over'
+        : len > ebayLimit * 0.9
+          ? 'near'
+          : 'ok'
+  return (
+    <div className="mt-1 text-right">
+      <span
+        className={cn(
+          'inline-block tabular-nums font-mono text-[10px] px-1.5 py-px rounded',
+          tone === 'over' &&
+            'text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40',
+          tone === 'near' &&
+            'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40',
+          tone === 'ok' &&
+            'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40',
+          tone === 'idle' && 'text-slate-500 dark:text-slate-400',
+        )}
+        title={NAME_LIMITS.map((c) => `${c.channel}: ${c.limit}`).join(' · ')}
+      >
+        {t('products.edit.master.nameCount', { len, ebayLimit })}
+      </span>
+    </div>
   )
 }
 
