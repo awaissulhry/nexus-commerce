@@ -42,6 +42,7 @@ import {
   RotateCcw,
   Calendar,
   Pencil,
+  Folder,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
@@ -73,6 +74,13 @@ const ScheduleChangeModal = dynamic(
 const SetFieldModal = dynamic(() => import('../_modals/SetFieldModal'), {
   ssr: false,
 })
+// W2.13 — bulk attach-family modal. Lazy because the family list +
+// detach/attach form is unused on a typical /products page load
+// (most operators don't reach for it on every visit).
+const AttachFamilyModal = dynamic(
+  () => import('../_modals/AttachFamilyModal'),
+  { ssr: false },
+)
 
 interface Tag {
   id: string
@@ -121,6 +129,7 @@ export function BulkActionBar({
   // F.3.b — bulk-schedule modal state. Always available (any
   // selection ≥ 1) in the active scope; hidden in the recycle bin.
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false)
+  const [attachFamilyModalOpen, setAttachFamilyModalOpen] = useState(false)
   // U.28 — bulk-set-field modal state. Active scope only.
   const [setFieldModalOpen, setSetFieldModalOpen] = useState(false)
   const compareEligible = selectedIds.length >= 2 && selectedIds.length <= 4
@@ -565,6 +574,21 @@ export function BulkActionBar({
             Schedule
           </Button>
 
+          {/* W2.13 — bulk attach a PIM family (Akeneo-style template).
+              Opens a modal that lists existing families + a "Detach"
+              option. Hits POST /products/bulk-attach-family which runs
+              one $transaction with one AuditLog row per change. */}
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setAttachFamilyModalOpen(true)}
+            disabled={busy || !hasSelection}
+            title="Attach or detach a PIM family on selected products"
+            icon={<Folder size={12} />}
+          >
+            Family
+          </Button>
+
           {hasSelection ? (
             <Link
               href={`/bulk-operations?productIds=${selectedIds.join(',')}`}
@@ -651,6 +675,16 @@ export function BulkActionBar({
           onClose={() => setSetFieldModalOpen(false)}
           onComplete={() => {
             setSetFieldModalOpen(false)
+            onComplete()
+          }}
+        />
+      )}
+      {attachFamilyModalOpen && (
+        <AttachFamilyModal
+          productIds={selectedIds}
+          onClose={() => setAttachFamilyModalOpen(false)}
+          onComplete={() => {
+            setAttachFamilyModalOpen(false)
             onComplete()
           }}
         />
