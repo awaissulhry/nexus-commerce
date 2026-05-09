@@ -10,7 +10,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertCircle, Loader2 } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import Header from './_components/Header'
@@ -25,6 +25,7 @@ import CatalogSnapshot from './_components/CatalogSnapshot'
 import CustomerPanel from './_components/CustomerPanel'
 import FinancialPanel from './_components/FinancialPanel'
 import PredictivePanel from './_components/PredictivePanel'
+import OverviewSkeleton from './_components/OverviewSkeleton'
 import ActivityFeed from './_components/ActivityFeed'
 import QuickActions from './_components/QuickActions'
 import type {
@@ -201,12 +202,11 @@ export default function OverviewClient() {
       />
 
       <div className="space-y-6">
-        {loading && !data && (
-          <div className="border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 px-6 py-12 text-center text-md text-slate-500 dark:text-slate-400 inline-flex items-center justify-center gap-2 w-full">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            {t('overview.loading')}
-          </div>
-        )}
+        {/* DO.35 — first paint shows the section grid as
+            shimmer-skeletons instead of a single spinner. The
+            layout shape stays stable from the first byte; when
+            real data arrives the swap is essentially invisible. */}
+        {loading && !data && <OverviewSkeleton />}
 
         {error && !loading && (
           <div className="border border-rose-200 dark:border-rose-900 rounded-lg bg-rose-50 dark:bg-rose-950/30 px-4 py-3 text-md text-rose-700 dark:text-rose-400 flex items-start gap-2">
