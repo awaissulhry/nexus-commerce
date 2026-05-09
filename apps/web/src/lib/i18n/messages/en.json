@@ -973,6 +973,7 @@
   "stock.bulkThreshold.help": "The reorder threshold per StockLevel overrides Product.lowStockThreshold for that location only. Clearing reverts to the product master.",
   "stock.bulkThreshold.willUpdate": "Will update {n} row(s).",
   "stock.bulkThreshold.apply": "Apply",
+  "stock.bulk.transferSourceTag": "(source)",
   "stock.drawer.release": "Release",
   "stock.drawer.releaseConfirm": "Release {n} units?",
   "stock.transfers.title": "Transfers",

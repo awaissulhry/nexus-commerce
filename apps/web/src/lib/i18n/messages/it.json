@@ -961,6 +961,7 @@
   "stock.bulkThreshold.help": "La soglia di riordino per StockLevel sovrascrive Product.lowStockThreshold solo per quella sede. Cancellandola si torna al master del prodotto.",
   "stock.bulkThreshold.willUpdate": "Aggiornerà {n} riga(/he).",
   "stock.bulkThreshold.apply": "Applica",
+  "stock.bulk.transferSourceTag": "(origine)",
   "stock.drawer.release": "Rilascia",
   "stock.drawer.releaseConfirm": "Rilasciare {n} unità?",
   "stock.transfers.title": "Trasferimenti",

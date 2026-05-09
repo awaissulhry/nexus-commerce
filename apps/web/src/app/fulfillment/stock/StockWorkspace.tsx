@@ -3502,24 +3502,26 @@ function BulkTransferModal({
             id="bulk-transfer-destination"
             value={toLocationId}
             onChange={(e) => setToLocationId(e.target.value)}
+            aria-describedby="bulk-transfer-help"
             className="w-full h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
           >
             <option value="">{t('cycleCount.list.modal.locationPlaceholder')}</option>
             {locations.map((l) => (
               <option key={l.id} value={l.id} disabled={sourceIds.has(l.id)}>
-                {l.code} — {l.name} {sourceIds.has(l.id) ? '(source)' : ''}
+                {l.code} — {l.name} {sourceIds.has(l.id) ? t('stock.bulk.transferSourceTag') : ''}
               </option>
             ))}
           </select>
-          <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          <div id="bulk-transfer-help" className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             {t('stock.bulk.transferHelp')}
           </div>
         </div>
         <div>
-          <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1">
-            {t('stock.adjust.notesPlaceholder')}
+          <label htmlFor="bulk-transfer-notes" className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1">
+            {t('stock.bulkAdjust.notesLabel')}
           </label>
           <input
+            id="bulk-transfer-notes"
             type="text"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -3544,7 +3546,7 @@ function BulkTransferModal({
               </li>
             ))}
             {selectedItems.length > 50 && (
-              <li className="text-sm text-slate-400 italic">+{selectedItems.length - 50} more</li>
+              <li className="text-sm text-slate-400 italic">{t('stock.bulkAdjust.moreRows', { n: selectedItems.length - 50 })}</li>
             )}
           </ul>
         </div>
@@ -3557,7 +3559,7 @@ function BulkTransferModal({
             disabled={!valid}
             className="h-11 sm:h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
           >
-            <ArrowRightLeft size={12} /> {t('stock.bulk.transferApply', { n: selectedItems.length })}
+            <ArrowRightLeft size={12} aria-hidden="true" /> {t('stock.bulk.transferApply', { n: selectedItems.length })}
           </button>
         </div>
       </div>
