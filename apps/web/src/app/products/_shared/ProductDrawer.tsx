@@ -2017,19 +2017,16 @@ function ScheduleTab({ productId }: { productId: string }) {
                 {renderPayload(r.kind, r.payload)}
               </span>
               {r.status === 'PENDING' && (
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => cancel(r.id)}
-                  disabled={cancelling === r.id}
-                  className="ml-auto h-7 px-2 text-sm text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded inline-flex items-center gap-1 disabled:opacity-50"
+                  loading={cancelling === r.id}
+                  icon={cancelling === r.id ? undefined : <X size={11} />}
+                  className="ml-auto !h-7 !px-2 !text-sm !text-rose-600 hover:!bg-rose-50 dark:hover:!bg-rose-950/40"
                 >
-                  {cancelling === r.id ? (
-                    <Loader2 size={11} className="animate-spin" />
-                  ) : (
-                    <X size={11} />
-                  )}
                   Cancel
-                </button>
+                </Button>
               )}
             </div>
             <div className="text-sm text-slate-500 dark:text-slate-400 mt-1 inline-flex items-center gap-2 flex-wrap">
@@ -3000,7 +2997,8 @@ function TranslationRowCard({
       <button
         type="button"
         onClick={onToggle}
-        className="w-full px-3 py-2 flex items-start gap-2 text-left hover:bg-slate-50"
+        aria-expanded={expanded}
+        className="w-full px-3 py-2 flex items-start gap-2 text-left hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded"
       >
         <span className="text-xs uppercase tracking-wider font-semibold text-slate-700 bg-slate-100 rounded px-1.5 py-0.5 flex-shrink-0 mt-0.5">
           {row.language.toUpperCase()}
@@ -3091,31 +3089,35 @@ function TranslationRowCard({
 
           <div className="flex items-center gap-1.5 pt-1">
             {needsReview && (
-              <button
-                type="button"
+              <Button
+                size="sm"
                 onClick={onReview}
                 disabled={busy}
-                className="h-7 px-2 text-sm bg-amber-50 text-amber-800 border border-amber-200 rounded hover:bg-amber-100 inline-flex items-center gap-1"
+                icon={<Check className="w-3 h-3" />}
+                className="!h-7 !px-2 !text-sm !bg-amber-50 !text-amber-800 !border-amber-200 hover:!bg-amber-100"
               >
-                <Check className="w-3 h-3" /> Mark reviewed
-              </button>
+                Mark reviewed
+              </Button>
             )}
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={onDelete}
               disabled={busy}
-              className="h-7 px-2 text-sm text-rose-700 hover:bg-rose-50 rounded inline-flex items-center gap-1"
+              icon={<Trash2 className="w-3 h-3" />}
+              className="!h-7 !px-2 !text-sm !text-rose-700 hover:!bg-rose-50"
             >
-              <Trash2 className="w-3 h-3" /> Delete
-            </button>
-            <button
-              type="button"
+              Delete
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
               onClick={save}
               disabled={busy || !dirty}
-              className="ml-auto h-7 px-3 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-40"
+              className="ml-auto !h-7 !px-3 !text-sm !bg-slate-900 hover:!bg-slate-800 !border-slate-900"
             >
               Save
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -3418,16 +3420,17 @@ function RelatedTab({
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                   </button>
-                  <button
-                    type="button"
+                  <IconButton
+                    aria-label="Remove related"
+                    size="md"
+                    tone="danger"
                     onClick={() => remove(r.id)}
                     disabled={busy}
                     title="Remove"
-                    aria-label="Remove related"
-                    className="h-7 w-7 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-400 hover:text-rose-600 rounded"
+                    className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  </IconButton>
                 </div>
               )
             })}
@@ -3537,14 +3540,14 @@ function RelatedTab({
                     {selectedTo.sku}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedTo(null)}
+                <IconButton
                   aria-label="Clear selection"
-                  className="h-6 w-6 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 rounded"
+                  size="sm"
+                  onClick={() => setSelectedTo(null)}
+                  className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
                 >
                   <X className="w-3.5 h-3.5" />
-                </button>
+                </IconButton>
               </div>
             )}
           </div>
@@ -3564,26 +3567,28 @@ function RelatedTab({
             </div>
           </label>
           <div className="flex items-center justify-end gap-1.5 pt-1">
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => {
                 setAdding(false)
                 setSelectedTo(null)
                 setSearch('')
                 setResults([])
               }}
-              className="h-7 px-2 text-sm text-slate-600 hover:bg-slate-100 rounded"
+              className="!h-7 !px-2 !text-sm"
             >
               Cancel
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
               onClick={create}
               disabled={busy || !selectedTo}
-              className="h-7 px-3 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+              className="!h-7 !px-3 !text-sm !bg-purple-600 hover:!bg-purple-700 !border-purple-600"
             >
               Add
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
