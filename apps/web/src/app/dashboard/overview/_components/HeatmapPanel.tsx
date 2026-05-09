@@ -58,7 +58,11 @@ export default function HeatmapPanel({
         </span>
       }
     >
-      <div className="overflow-x-auto">
+      {/* DO.50 — Desktop: 24-hour grid (sm:block).
+          Mobile: 6 four-hour bucket grid (sm:hidden), each cell is the
+          sum of its bucket so the operator gets the same shape at a
+          glance without horizontal scroll. */}
+      <div className="hidden sm:block overflow-x-auto">
         <table
           className="border-separate"
           style={{ borderSpacing: '2px' }}
@@ -120,6 +124,85 @@ export default function HeatmapPanel({
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile: 6 buckets × 7 days. Each bucket is the sum of 4
+          consecutive hours; max recomputed against the bucketed
+          values so the colour scale fills properly even when the
+          peak bucket isn't a single peak hour. */}
+      <div className="sm:hidden">
+        {(() => {
+          const bucketed = heatmap.map((row) => {
+            const out: number[] = []
+            for (let b = 0; b < 6; b++) {
+              let sum = 0
+              for (let h = 0; h < 4; h++) sum += row[b * 4 + h] ?? 0
+              out.push(sum)
+            }
+            return out
+          })
+          const bucketMax = Math.max(0, ...bucketed.flat())
+          const labels = ['00–04', '04–08', '08–12', '12–16', '16–20', '20–24']
+          return (
+            <table
+              className="border-separate w-full"
+              style={{ borderSpacing: '3px' }}
+              role="presentation"
+              aria-label={t('overview.heatmap.heading')}
+            >
+              <thead>
+                <tr>
+                  <th className="w-10"></th>
+                  {labels.map((l) => (
+                    <th
+                      key={l}
+                      className="text-[10px] font-mono text-slate-400 dark:text-slate-500 text-center font-normal"
+                    >
+                      {l}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {bucketed.map((row, d) => (
+                  <tr key={d}>
+                    <td className="text-xs font-medium text-slate-500 dark:text-slate-400 pr-2 text-right whitespace-nowrap">
+                      {t(dayKeys[d])}
+                    </td>
+                    {row.map((value, b) => {
+                      const ratio = bucketMax > 0 ? value / bucketMax : 0
+                      return (
+                        <td
+                          key={b}
+                          title={
+                            value > 0
+                              ? `${t(dayKeys[d])} ${labels[b]} — ${formatCurrency(value, currency)}`
+                              : undefined
+                          }
+                          className={cn(
+                            'rounded-sm transition-colors',
+                            ratio === 0 &&
+                              'bg-slate-100 dark:bg-slate-800/50',
+                          )}
+                          style={{
+                            height: 22,
+                            backgroundColor:
+                              ratio > 0 ? heatColor(ratio) : undefined,
+                          }}
+                          aria-label={
+                            value > 0
+                              ? `${t(dayKeys[d])} ${labels[b]} ${formatCurrency(value, currency)}`
+                              : undefined
+                          }
+                        />
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )
+        })()}
       </div>
 
       {/* Scale legend */}
