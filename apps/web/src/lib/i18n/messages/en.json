@@ -3034,6 +3034,8 @@
   "replenishment.panEu.col.newCover": "New cover",
   "replenishment.panEu.cell.unitsCover": "{units} units · {cover}",
   "replenishment.panEu.openProduct": "Open product",
+  "replenishment.panEu.cell.mcfVelocity": "+ {v}/d MCF",
+  "replenishment.panEu.cell.mcfTooltip": "Multi-Channel Fulfillment demand: orders from non-Amazon channels fulfilled by FBA. Apportioned across marketplaces by Amazon-velocity share.",
   "replenishment.supplierSpend.loading": "Loading supplier spend…",
   "replenishment.supplierSpend.header.title": "Supplier spend",
   "replenishment.supplierSpend.header.summary": "{n} suppliers · {open} open commitment · {spend90} (90d)",

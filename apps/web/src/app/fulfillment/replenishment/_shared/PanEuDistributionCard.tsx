@@ -39,6 +39,7 @@ interface PanEuRec {
   transferUnits: number
   newDaysOfCoverSurplus: number | null
   newDaysOfCoverShortage: number | null
+  mcfVelocityPerDay?: number
 }
 
 interface PanEuResponse {
@@ -155,6 +156,16 @@ export function PanEuDistributionCard() {
                   {rec.productName && (
                     <div className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-1">
                       {rec.productName}
+                    </div>
+                  )}
+                  {rec.mcfVelocityPerDay && rec.mcfVelocityPerDay > 0 && (
+                    <div
+                      className="text-[10px] text-violet-700 dark:text-violet-400 mt-0.5"
+                      title={t('replenishment.panEu.cell.mcfTooltip')}
+                    >
+                      {t('replenishment.panEu.cell.mcfVelocity', {
+                        v: rec.mcfVelocityPerDay.toFixed(2),
+                      })}
                     </div>
                   )}
                 </td>

@@ -3022,6 +3022,8 @@
   "replenishment.panEu.col.newCover": "Nuova copertura",
   "replenishment.panEu.cell.unitsCover": "{units} unità · {cover}",
   "replenishment.panEu.openProduct": "Apri prodotto",
+  "replenishment.panEu.cell.mcfVelocity": "+ {v}/g MCF",
+  "replenishment.panEu.cell.mcfTooltip": "Domanda Multi-Channel Fulfillment: ordini da canali non-Amazon evasi via FBA. Ripartita tra marketplace in base alla quota di velocità Amazon.",
   "replenishment.supplierSpend.loading": "Caricamento spesa fornitori…",
   "replenishment.supplierSpend.header.title": "Spesa fornitori",
   "replenishment.supplierSpend.header.summary": "{n} fornitori · {open} impegno aperto · {spend90} (90g)",

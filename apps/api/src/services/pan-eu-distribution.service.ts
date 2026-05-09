@@ -47,6 +47,11 @@ export interface PanEuRecommendation {
   /** Resulting cover (units / velocity) at each marketplace after transfer. */
   newDaysOfCoverSurplus: number | null
   newDaysOfCoverShortage: number | null
+  /** W7.3 — Multi-Channel Fulfillment velocity for this SKU. MCF orders
+   *  consume FBA stock but originate from non-Amazon channels (Shopify,
+   *  eBay manual, etc.). Reported separately so the operator sees the
+   *  full draw on Amazon's storage shelves, not just Amazon-channel sales. */
+  mcfVelocityPerDay?: number
 }
 
 export interface DetectImbalancesArgs {
@@ -162,6 +167,41 @@ export async function detectPanEuImbalances(
     })
   }
 
+  // W7.3 — MCF (Multi-Channel Fulfillment) velocity. MCF orders
+  // consume FBA stock but originate from non-Amazon channels
+  // (Shopify storefront orders fulfilled by FBA, manual MCF
+  // submissions, etc.). Without this, FBA inventory looks
+  // under-utilised because the velocity query only counts AMAZON-
+  // channel sales.
+  //
+  // We aggregate Order rows directly (DSA doesn't track
+  // fulfillmentMethod). One query, grouped by SKU; not by
+  // marketplace because MCF orders don't carry an Amazon
+  // marketplace tag — they're consumed from the regional FBA pool
+  // closest to the customer. The recommender allocates this MCF
+  // demand evenly across marketplaces that have non-zero AMAZON
+  // velocity for the same SKU (proxy for "where FBA likely picked
+  // the units").
+  const mcfRows = await prisma.$queryRaw<
+    Array<{ sku: string; units: bigint }>
+  >`
+    SELECT
+      oi.sku,
+      SUM(oi.quantity)::bigint AS units
+    FROM "OrderItem" oi
+    JOIN "Order" o ON o.id = oi."orderId"
+    WHERE o."fulfillmentMethod" = 'FBA'
+      AND o.channel::text != 'AMAZON'
+      AND o.status != 'CANCELLED'
+      AND COALESCE(o."purchaseDate", o."createdAt") >= ${windowStart}
+    GROUP BY oi.sku
+  `
+  const mcfVelocityBySku = new Map<string, number>()
+  for (const row of mcfRows) {
+    const units = Number(row.units ?? 0)
+    if (units > 0) mcfVelocityBySku.set(row.sku, units / window)
+  }
+
   // Group inventory rows by SKU for the per-SKU rebalance pass.
   const bySku = new Map<
     string,
@@ -179,8 +219,7 @@ export async function detectPanEuImbalances(
 
   for (const inv of inventoryRows) {
     const v = velocityByKey.get(`${inv.sku}:${inv.marketplaceId}`)
-    const velocity = v?.velocityPerDay ?? 0
-    const daysOfCover = velocity > 0 ? inv.sellable / velocity : null
+    const amazonVelocity = v?.velocityPerDay ?? 0
     if (!bySku.has(inv.sku)) {
       bySku.set(inv.sku, {
         productId: inv.productId,
@@ -191,9 +230,39 @@ export async function detectPanEuImbalances(
     bySku.get(inv.sku)!.perMarket.push({
       marketplaceId: inv.marketplaceId,
       sellable: inv.sellable,
-      velocity,
-      daysOfCover,
+      velocity: amazonVelocity, // W7.3 — MCF added below after we know N_markets per SKU
+      daysOfCover: null, // recomputed after MCF apportionment
     })
+  }
+
+  // W7.3 — apportion MCF velocity across marketplaces that have
+  // non-zero Amazon velocity (proxy for "where FBA likely picked
+  // the units"). When NO marketplace has Amazon velocity, MCF is
+  // split evenly across all marketplaces with stock — a fallback
+  // that prefers under-attribution to over-attribution.
+  for (const [sku, ctx] of bySku) {
+    const mcf = mcfVelocityBySku.get(sku) ?? 0
+    if (mcf <= 0) {
+      // Still compute daysOfCover.
+      for (const m of ctx.perMarket) {
+        m.daysOfCover = m.velocity > 0 ? m.sellable / m.velocity : null
+      }
+      continue
+    }
+    const withVelocity = ctx.perMarket.filter((m) => m.velocity > 0)
+    const splitTargets = withVelocity.length > 0 ? withVelocity : ctx.perMarket
+    const totalAmazonVelocity = withVelocity.reduce((s, m) => s + m.velocity, 0)
+
+    for (const m of splitTargets) {
+      const share =
+        totalAmazonVelocity > 0
+          ? m.velocity / totalAmazonVelocity
+          : 1 / splitTargets.length
+      m.velocity += mcf * share
+    }
+    for (const m of ctx.perMarket) {
+      m.daysOfCover = m.velocity > 0 ? m.sellable / m.velocity : null
+    }
   }
 
   // Per-SKU rebalance pass. For each SKU:
@@ -245,6 +314,7 @@ export async function detectPanEuImbalances(
     const newDoCdst =
       dst.velocity > 0 ? (dst.sellable + transferUnits) / dst.velocity : null
 
+    const mcfForSku = mcfVelocityBySku.get(sku) ?? 0
     recommendations.push({
       productId: ctx.productId,
       sku,
@@ -268,6 +338,7 @@ export async function detectPanEuImbalances(
         newDoCsrc != null ? Number(newDoCsrc.toFixed(1)) : null,
       newDaysOfCoverShortage:
         newDoCdst != null ? Number(newDoCdst.toFixed(1)) : null,
+      mcfVelocityPerDay: mcfForSku > 0 ? Number(mcfForSku.toFixed(3)) : undefined,
     })
 
     totalSurplusUnits += src.sellable
