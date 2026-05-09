@@ -71,6 +71,7 @@ import { cn } from '@/lib/utils'
 import { AutomationRulesCard } from './_shared/AutomationRulesCard'
 import { CommandCenterKpis } from './_shared/CommandCenterKpis'
 import { ScenariosCard } from './_shared/ScenariosCard'
+import { SlowMoversCard } from './_shared/SlowMoversCard'
 
 type Urgency = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
 
@@ -792,6 +793,11 @@ export default function ReplenishmentWorkspace() {
           creates a what-if scenario it lists with last-run summary
           and a Run button. Pure analysis — never modifies real recs. */}
       <ScenariosCard />
+
+      {/* W6.1 — slow-mover / dead-stock dashboard. Hides itself when
+          no DORMANT inventory exists; otherwise lists top 50 by
+          capital tied up with bucket switcher. */}
+      <SlowMoversCard />
 
       {/* W3.2 — command-center KPI strip. Five tiles answering
           "what should I do today?" — open POs / awaiting review /

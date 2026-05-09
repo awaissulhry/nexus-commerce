@@ -7933,6 +7933,127 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // W6.1 — Slow-mover / dead-stock surface. The audit found 264
+  // D-class SKUs (no movement) but no UI surfaces them; that
+  // capital is just sitting on the shelf. This endpoint ranks the
+  // dormant inventory by EUR-cents tied up so the operator sees the
+  // biggest write-off / markdown candidates first.
+  //
+  // Includes:
+  //   - abcClass + daysSinceLastMovement (from StockMovement, or
+  //     null if there's never been a movement row)
+  //   - totalStock + unitCost (most recent rec snapshot, falls back
+  //     to product.cost when no rec exists)
+  //   - capitalTiedUpCents = totalStock × unitCost
+  //   - bucket: DORMANT (>180d) | SLOW (>90d) | OK (<=90d)
+  //
+  // 30s cache.
+  fastify.get(
+    '/fulfillment/replenishment/slow-movers',
+    async (request, reply) => {
+      const q = (request.query ?? {}) as {
+        limit?: string
+        bucket?: 'DORMANT' | 'SLOW' | 'OK' | 'ALL'
+        minCapitalCents?: string
+      }
+      const limit = Math.max(1, Math.min(parseInt(q.limit ?? '100', 10) || 100, 500))
+      const bucket = q.bucket ?? 'DORMANT'
+      const minCapital = Math.max(0, parseInt(q.minCapitalCents ?? '0', 10) || 0)
+
+      // Single aggregation. LATERAL join to ReplenishmentRecommendation
+      // grabs the most recent unit cost per SKU; LEFT JOIN to
+      // StockMovement aggregate gets last-movement timestamp without
+      // an N+1 row read.
+      const rows = await prisma.$queryRaw<
+        Array<{
+          id: string
+          sku: string
+          name: string | null
+          abcClass: string | null
+          totalStock: number
+          unit_cost_cents: number | null
+          last_movement_at: Date | null
+          days_since_last_movement: number | null
+          capital_cents: number | null
+        }>
+      >`
+        SELECT
+          p.id,
+          p.sku,
+          p.name,
+          p."abcClass",
+          p."totalStock",
+          rec_cost.cents AS unit_cost_cents,
+          mv.last_at AS last_movement_at,
+          CASE
+            WHEN mv.last_at IS NULL THEN NULL
+            ELSE EXTRACT(EPOCH FROM (NOW() - mv.last_at))::bigint / 86400
+          END AS days_since_last_movement,
+          CASE
+            WHEN rec_cost.cents IS NULL THEN 0
+            ELSE p."totalStock" * rec_cost.cents
+          END AS capital_cents
+        FROM "Product" p
+        LEFT JOIN LATERAL (
+          SELECT COALESCE("landedCostPerUnitCents", "unitCostCents") AS cents
+          FROM "ReplenishmentRecommendation"
+          WHERE "productId" = p.id AND status = 'ACTIVE'
+          ORDER BY "generatedAt" DESC
+          LIMIT 1
+        ) rec_cost ON true
+        LEFT JOIN (
+          SELECT "productId", MAX("createdAt") AS last_at
+          FROM "StockMovement"
+          GROUP BY "productId"
+        ) mv ON mv."productId" = p.id
+        WHERE p."isParent" = false
+          AND p.status = 'ACTIVE'
+          AND p."totalStock" > 0
+        ORDER BY capital_cents DESC NULLS LAST
+        LIMIT ${limit}
+      `
+
+      const filtered = rows
+        .map((r) => {
+          const days = r.days_since_last_movement ?? null
+          const dormancy: 'DORMANT' | 'SLOW' | 'OK' =
+            days == null
+              ? 'DORMANT'
+              : days > 180
+                ? 'DORMANT'
+                : days > 90
+                  ? 'SLOW'
+                  : 'OK'
+          return {
+            id: r.id,
+            sku: r.sku,
+            name: r.name,
+            abcClass: r.abcClass,
+            totalStock: r.totalStock,
+            unitCostCents: r.unit_cost_cents,
+            capitalTiedUpCents: Number(r.capital_cents ?? 0),
+            lastMovementAt: r.last_movement_at,
+            daysSinceLastMovement: days,
+            bucket: dormancy,
+          }
+        })
+        .filter((r) => bucket === 'ALL' || r.bucket === bucket)
+        .filter((r) => r.capitalTiedUpCents >= minCapital)
+
+      const totals = {
+        rows: filtered.length,
+        totalCapitalTiedUpCents: filtered.reduce(
+          (s, r) => s + r.capitalTiedUpCents,
+          0,
+        ),
+        totalUnits: filtered.reduce((s, r) => s + r.totalStock, 0),
+      }
+
+      reply.header('Cache-Control', 'private, max-age=30')
+      return { totals, rows: filtered }
+    },
+  )
+
   // ── W5.3 — Scenarios CRUD + run ────────────────────────────────
   // What-if planning surface. Pure read/write against the W5.1
   // schema; planner work happens in scenario-planner.service.
