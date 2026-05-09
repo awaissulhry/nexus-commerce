@@ -3007,5 +3007,8 @@
   "products.drawer.forecast.velocityUnit": "{value}/g",
   "products.drawer.forecast.basis.forecast": "Basato su {days} giorni di dati di domanda.",
   "products.drawer.forecast.basis.threshold": "Nessun segnale di domanda ancora — usando la soglia stock.",
-  "products.drawer.forecast.basis.none": "Nessun segnale di domanda ancora. Genera la storia vendite per proiettare una data di esaurimento."
+  "products.drawer.forecast.basis.none": "Nessun segnale di domanda ancora. Genera la storia vendite per proiettare una data di esaurimento.",
+  "stock.recallDetail.tabsAria": "Sezioni richiamo",
+  "stock.recallDetail.tabAffected": "Ordini interessati ({n})",
+  "stock.recallDetail.tabProvenance": "Provenienza"
 }

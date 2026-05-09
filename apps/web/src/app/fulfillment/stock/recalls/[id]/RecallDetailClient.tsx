@@ -107,6 +107,8 @@ export default function RecallDetailClient({ recallId }: { recallId: string }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [closing, setClosing] = useState(false)
+  // PL.1 — tab between affected orders + provenance
+  const [activeTab, setActiveTab] = useState<'affected' | 'provenance'>('affected')
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -281,8 +283,38 @@ export default function RecallDetailClient({ recallId }: { recallId: string }) {
         </Card>
       )}
 
+      {/* PL.1 — Tab strip between Provenance + Affected orders. Both
+          sections are large; stacking made the page scroll forever.
+          Default to "affected" since recall workflow is read-affected
+          first, source-trace second. */}
+      {(backward || forward) && (
+        <div role="tablist" aria-label={t('stock.recallDetail.tabsAria')} className="border-b border-slate-200 dark:border-slate-700 -mx-3 px-3 sm:mx-0 sm:px-0 flex items-center gap-0">
+          {[
+            { key: 'affected' as const, label: t('stock.recallDetail.tabAffected', { n: forward?.affected.orderIds.length ?? 0 }) },
+            { key: 'provenance' as const, label: t('stock.recallDetail.tabProvenance') },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              role="tab"
+              aria-selected={activeTab === tab.key}
+              aria-controls={`tab-panel-${tab.key}`}
+              id={`tab-${tab.key}`}
+              onClick={() => setActiveTab(tab.key)}
+              className={
+                'h-11 px-4 text-sm font-medium border-b-2 -mb-px transition-colors ' +
+                (activeTab === tab.key
+                  ? 'border-blue-600 text-slate-900 dark:text-slate-100 dark:border-blue-400'
+                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200')
+              }
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Backward trace — provenance */}
-      {backward && (
+      {backward && activeTab === 'provenance' && (
         <Card title={t('stock.recallDetail.backwardTitle')} description={t('stock.recallDetail.backwardDescription')}>
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             <div>
@@ -324,7 +356,7 @@ export default function RecallDetailClient({ recallId }: { recallId: string }) {
       )}
 
       {/* Forward trace — affected orders */}
-      {forward && (
+      {forward && activeTab === 'affected' && (
         <Card
           title={t('stock.recallDetail.forwardTitle', {
             n: forward.affected.orderIds.length,

@@ -3019,5 +3019,8 @@
   "products.drawer.forecast.velocityUnit": "{value}/d",
   "products.drawer.forecast.basis.forecast": "Based on {days} days of demand data.",
   "products.drawer.forecast.basis.threshold": "No demand signal yet — using stock threshold.",
-  "products.drawer.forecast.basis.none": "No demand signal yet. Generate sales history to project a stockout date."
+  "products.drawer.forecast.basis.none": "No demand signal yet. Generate sales history to project a stockout date.",
+  "stock.recallDetail.tabsAria": "Recall sections",
+  "stock.recallDetail.tabAffected": "Affected orders ({n})",
+  "stock.recallDetail.tabProvenance": "Provenance"
 }
